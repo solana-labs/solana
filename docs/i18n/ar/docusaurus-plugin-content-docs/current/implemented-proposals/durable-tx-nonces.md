@@ -1,38 +1,28 @@
 ---
-title: Durable Transaction Nonces
+title: الرقم الخاص المُستدام للمُعاملات (Durable Transaction Nonces)
 ---
 
-## Problem
+## المُشكل (Problem)
 
-To prevent replay, Solana transactions contain a nonce field populated with a
-"recent" blockhash value. A transaction containing a blockhash that is too old
-(~2min as of this writing) is rejected by the network as invalid. Unfortunately
-certain use cases, such as custodial services, require more time to produce a
-signature for the transaction. A mechanism is needed to enable these potentially
-offline network participants.
+لمنع إعادة التشغيل، تحتوي مُعاملات Solana على حقل الرقم الخاص المُستدام (nonce) يتم ملؤه بقيمة تجزئة الكتلة (Blockhash) "الأخيرة". تم رفض مُعاملة تحتوي على تجزئة كتلة (blockhash) قديم جدًا (حوالي دقيقتان حتى كتابة هذه السطور) من قبل الشبكة بإعتبارها غير صالحة. لسوء الحظ، تتطلب بعض حالات الإستخدام، مثل خدمات الحراسة، مزيدًا من الوقت لإنتاج توقيع للمُعاملة. هناك حاجة إلى آلية لتمكين هؤلاء المشاركين غير المتصلين بالشبكة.
 
-## Requirements
+## المُتطلبات (Requirements)
 
-1. The transaction's signature needs to cover the nonce value
-2. The nonce must not be reusable, even in the case of signing key disclosure
+1. يجب أن يغطي توقيع المُعاملة قيمة الرقم الخاص المُستدام (nonce)
+2. يجب ألا يكون الرقم الخاص المُستدام (nonce) قابلاً لإعادة الإستخدام، حتى في حالة توقيع الكشف عن مفتاح
 
-## A Contract-based Solution
+## حل قائم على العقد (A Contract-based Solution)
 
-Here we describe a contract-based solution to the problem, whereby a client can
-"stash" a nonce value for future use in a transaction's `recent_blockhash`
-field. This approach is akin to the Compare and Swap atomic instruction,
-implemented by some CPU ISAs.
+هنا نصف حلاً قائمًا على العقد للمُشكلة، حيث يمكن للعميل "إخفاء" قيمة الرقم الخاص المُستدام (nonce) للإستخدام المُستقبلي في حقل تجزئة الكتلة الحديثة `recent_blockhash` للمُعاملة. يشبه هذا النهج تعليمة المُقارنة والمُبادلة الذرية (Swap atomic)، التي تنفذها بعض ISAs لوحدة المُعالجة المركزية.
 
-When making use of a durable nonce, the client must first query its value from
-account data. A transaction is now constructed in the normal way, but with the
-following additional requirements:
+عند إستخدام الرقم الخاص المُستدام (nonce) دائم، يجب على العميل أولاً الإستعلام عن قيمته من بيانات الحساب. يتم الآن إنشاء المُعاملة بالطريقة العادية، ولكن مع المُتطلبات الإضافية التالية:
 
-1. The durable nonce value is used in the `recent_blockhash` field
-2. An `AdvanceNonceAccount` instruction is the first issued in the transaction
+1. يتم إستخدام قيمة الـ nonce الدائمة في الحقل تجزئة الكتلة الحديثة `recent_blockhash`
+2. يُعد أمر `AdvanceNonceAccount` هو أول أمر يتم إصداره في المُعاملة
 
-### Contract Mechanics
+### ميكانيكا العقود (Contract Mechanics)
 
-TODO: svgbob this into a flowchart
+للقيام بذلك: svgbob هذا في مُخطط إنسيابي
 
 ```text
 Start
@@ -65,67 +55,30 @@ WithdrawInstruction(to, lamports)
   success
 ```
 
-A client wishing to use this feature starts by creating a nonce account under
-the system program. This account will be in the `Uninitialized` state with no
-stored hash, and thus unusable.
+يبدأ العميل الذي يرغب في إستخدام هذه الميزة بإنشاء حساب الرقم الخاص المُستدام (nonce) ضمن برنامج النظام. سيكون هذا الحساب في حالة غير مُهيئة `Uninitialized` بدون تجزئة (hash) مخزنة، وبالتالي غير قابل للإستخدام.
 
-To initialize a newly created account, an `InitializeNonceAccount` instruction must be
-issued. This instruction takes one parameter, the `Pubkey` of the account's
-[authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
-must be [rent-exempt](rent.md#two-tiered-rent-regime) to meet the data-persistence
-requirements of the feature, and as such, require that sufficient lamports be
-deposited before they can be initialized. Upon successful initialization, the
-cluster's most recent blockhash is stored along with specified nonce authority
-`Pubkey`.
+لتهيئة حساب تم إنشاؤه حديثًا، يجب إصدار أمر `InitializeNonceAccount`. تأخذ هذه التعليمات مُعلمة (parameter) واحدة، المفتاح العمومي `Pubkey` لحساب [authority](../offline-signing/durable-nonce.md#nonce-authority). يجب أن تكون حسابات الرقم الخاص المُستدام (nonce) مُعفاة من الإيجار [rent-exempt](rent.md#two-tiered-rent-regime) لتوفي بمتطلبات إستمرارية البيانات للميزة، وعلى هذا النحو، تتطلب إيداع lamports كافية قبل أن يتم تهيئتها. عند التهيئة الناجحة، يتم تخزين أحدث تجزئة كتلة (Blockhash) جنبًا إلى جنب مع سلطة الـ nonce المفتاح العمومي `Pubkey` المُحددة.
 
-The `AdvanceNonceAccount` instruction is used to manage the account's stored nonce
-value. It stores the cluster's most recent blockhash in the account's state data,
-failing if that matches the value already stored there. This check prevents
-replaying transactions within the same block.
+تُستخدم تعليمات `AdvanceNonceAccount` لإدارة قيمة الرقم الخاص المُستدام (nonce) المُخزنة في الحساب. تُخزن أحدث تجزئة للكتلة (Blockhash) للكتلة في بيانات حالة الحساب، ويفشل إذا كان ذلك يتطابق مع القيمة المُخزنة بالفعل هناك. يمنع هذا الإختيار إعادة تشغيل المُعاملات داخل نفس الكتلة (block).
 
-Due to nonce accounts' [rent-exempt](rent.md#two-tiered-rent-regime) requirement,
-a custom withdraw instruction is used to move funds out of the account.
-The `WithdrawNonceAccount` instruction takes a single argument, lamports to withdraw,
-and enforces rent-exemption by preventing the account's balance from falling
-below the rent-exempt minimum. An exception to this check is if the final balance
-would be zero lamports, which makes the account eligible for deletion. This
-account closure detail has an additional requirement that the stored nonce value
-must not match the cluster's most recent blockhash, as per `AdvanceNonceAccount`.
+نظرًا لمُتطلبات nonce حسابات المُعفاة من الإيجار [rent-exempt](rent.md#two-tiered-rent-regime)، يتم إستخدام تعليمات سحب مُخصصة لنقل الأموال خارج الحساب. تأخذ تعليمات `WithdrawNonceAccount` وسيطة واحدة وسحب الـ lamports وتفرض الإعفاء من الإيجار (rent-exemption) عن طريق منع رصيد الحساب من الإنخفاض إلى أقل من الحد الأدنى للإعفاء من الإيجار. الإستثناء من هذا الفحص هو ما إذا كان الرصيد النهائي سيكون صفراً من الـ lamports، مما يجعل الحساب مُؤهلاً للحذف. تحتوي تفاصيل إغلاق الحساب هذه على مطلب إضافي مفاده أن قيمة الـ nonce المُخزنة يجب ألا تتطابق مع تجزئة الكتلة (Blockhash) الأحدث للكتلة، وفقًا لـ `AdvanceNonceAccount`.
 
-The account's [nonce authority](../offline-signing/durable-nonce.md#nonce-authority)
-can be changed using the `AuthorizeNonceAccount` instruction. It takes one parameter,
-the `Pubkey` of the new authority. Executing this instruction grants full
-control over the account and its balance to the new authority.
+يمكن تغيير الحساب [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) بإستخدام التعليمات `AuthorizeNonceAccount`. يتطلب مُعلِّمة (parameter) واحدة، المفتاح العمومي `Pubkey` للسلطة الجديدة. يمنح تنفيذ هذه التعليمات سيطرة كاملة على الحساب ورصيده للسلطة الجديدة.
 
-> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
+> تتطلب كل من `AdvanceNonceAccount` ، `WithdrawNonceAccount` و `AuthorizeNonceAccount` الرقم الحالي [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) للحساب لتوقيع المُعاملة.
 
-### Runtime Support
+### دعم وقت التشغيل (Runtime Support)
 
-The contract alone is not sufficient for implementing this feature. To enforce
-an extant `recent_blockhash` on the transaction and prevent fee theft via
-failed transaction replay, runtime modifications are necessary.
+العقد (contract) وحده لا يكفي لتنفيذ هذه الميزة. لفرض وجود `recent_blockhash` على المُعاملة ومنع سرقة الرسوم عبر إعادة تشغيل المُعاملة الفاشلة، تُعد تعديلات وقت التشغيل ضرورية.
 
-Any transaction failing the usual `check_hash_age` validation will be tested
-for a Durable Transaction Nonce. This is signaled by including a `AdvanceNonceAccount`
-instruction as the first instruction in the transaction.
+سيتم إختبار أي مُعاملة تفشل في التحقق المُعتاد من عمر التجزئة `check_hash_age` للحصول على Nonce مُعاملة متينة. تتم الإشارة إلى ذلك من خلال تضمين تعليمات `AdvanceNonceAccount` كأول تعليمات في المُعاملة.
 
-If the runtime determines that a Durable Transaction Nonce is in use, it will
-take the following additional actions to validate the transaction:
+إذا حدد وقت التشغيل أن المُعاملات المتينة قيد الإستخدام، فسيتخذ الإجراءات الإضافية التالية للتحقق من صحة المُعاملة:
 
-1. The `NonceAccount` specified in the `Nonce` instruction is loaded.
-2. The `NonceState` is deserialized from the `NonceAccount`'s data field and
-   confirmed to be in the `Initialized` state.
-3. The nonce value stored in the `NonceAccount` is tested to match against the
-   one specified in the transaction's `recent_blockhash` field.
+1. تم تحميل `NonceAccount` المُحدد في تعليمات `Nonce`.
+2. تم إلغاء تسلسل `NonceState` من حقل البيانات `NonceAccount` والتأكيد على أنها في حالة `Initialized`.
+3. يتم إختبار القيمة nonce المُخزنة في `NonceAccount` لمُطابقة القيمة المُحددة في الحقل `recent_blockhash` للمُعاملة.
 
-If all three of the above checks succeed, the transaction is allowed to continue
-validation.
+في حالة نجاح عمليات التحقق الثلاثة المذكورة أعلاه ، يُسمح للمُعاملة بمُواصلة التحقق من المُصادقة (validation).
 
-Since transactions that fail with an `InstructionError` are charged a fee and
-changes to their state rolled back, there is an opportunity for fee theft if an
-`AdvanceNonceAccount` instruction is reverted. A malicious validator could replay the
-failed transaction until the stored nonce is successfully advanced. Runtime
-changes prevent this behavior. When a durable nonce transaction fails with an
-`InstructionError` aside from the `AdvanceNonceAccount` instruction, the nonce account
-is rolled back to its pre-execution state as usual. Then the runtime advances
-its nonce value and the advanced nonce account stored as if it succeeded.
+نظرًا لأن المُعاملات التي تفشل بإستخدام `InstructionError` يتم تحصيل رسوم منها والتراجع عن التغييرات التي تطرأ على حالتها، فهناك فرصة لسرقة الرسوم إذا تم إرجاع تعليمات `AdvanceNonceAccount`. يمكن أن يعيد المُدقّق (validator) الضار تشغيل المُعاملة الفاشلة حتى يتم التقدم بنجاح في الـ nonce المُخزنة. تمنع تغييرات وقت التشغيل هذا السلوك. عندما تفشل مُعاملة غير مُتوقعة دائمة (durable nonce transaction) مع `InstructionError` بصرف النظر عن التعليمات `AdvanceNonceAccount`، يتم إرجاع الحساب nonce إلى حالة ما قبل التنفيذ كالمُعتاد. ثم يقوم وقت التشغيل بتقديم قيمة الـ nonce الخاصة به ويتم تخزين حساب الـ nonce المُتقدم كما لو كان قد نجح.

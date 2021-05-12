@@ -1,26 +1,26 @@
 ---
-title: Cluster Test Framework
+title: Тестовый фреймворк для кластера
 ---
 
-This document proposes the Cluster Test Framework \(CTF\). CTF is a test harness that allows tests to execute against a local, in-process cluster or a deployed cluster.
+В этом документе предлагается структура кластерного тестирования \ (CTF \). CTF это тестовая среда, которая позволяет тестировать выполнение с локальным, процессным кластером или развернутым кластером.
 
-## Motivation
+## Мотивация
 
-The goal of CTF is to provide a framework for writing tests independent of where and how the cluster is deployed. Regressions can be captured in these tests and the tests can be run against deployed clusters to verify the deployment. The focus of these tests should be on cluster stability, consensus, fault tolerance, API stability.
+Цель CTF - предоставить основу для написания тестов независимо от того, где и как развернут кластер. В этих тестах могут быть зафиксированы регрессии, и тесты могут быть запущены на развернутых кластерах для проверки развертывания. В центре внимания этих тестов должны быть стабильность кластера, консенсус, отказоустойчивость, стабильность API.
 
-Tests should verify a single bug or scenario, and should be written with the least amount of internal plumbing exposed to the test.
+Тесты должны проверять единственную ошибку или сценарий и должны быть написаны с наименьшим количеством внутренних трубопроводов, подверженных тестированию.
 
-## Design Overview
+## Обзор дизайна
 
-Tests are provided an entry point, which is a `contact_info::ContactInfo` structure, and a keypair that has already been funded.
+Тесты предоставляют точку входа, которая представляет собой структуру ` contact_info:: ContactInfo `, и пару ключей, которая уже была профинансирована.
 
-Each node in the cluster is configured with a `validator::ValidatorConfig` at boot time. At boot time this configuration specifies any extra cluster configuration required for the test. The cluster should boot with the configuration when it is run in-process or in a data center.
+Каждый узел в кластере настраивается с валидатором `:ValidatorConfig` во время загрузки. Во время загрузки эта конфигурация определяет любую дополнительную конфигурацию кластера, необходимую для тестирования. Кластер должен загружаться с конфигурацией, когда он запускается в процессе или в центре обработки данных.
 
-Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via validator RPC.
+После загрузки тест найдет кластер через точку входа gossip и настроет любые поведения, выполняемые через RPC валидатор.
 
-## Test Interface
+## Тестирование интерфейса
 
-Each CTF test starts with an opaque entry point and a funded keypair. The test should not depend on how the cluster is deployed, and should be able to exercise all the cluster functionality through the publicly available interfaces.
+Каждый тест CTF начинается с непрозрачной точки входа и финансируемой пары ключей. Тест не должен зависеть от того, как установлен кластер, и должен быть способен осуществлять всю функциональность кластера через общедоступные интерфейсы.
 
 ```text
 use crate::contact_info::ContactInfo;
@@ -32,9 +32,9 @@ pub fn test_this_behavior(
 )
 ```
 
-## Cluster Discovery
+## Открытие кластера
 
-At test start, the cluster has already been established and is fully connected. The test can discover most of the available nodes over a few second.
+На момент запуска теста кластер уже был установлен и полностью подключен. Тест может обнаружить большинство доступных узлов за несколько секунд.
 
 ```text
 use crate::gossip_service::discover_nodes;
@@ -43,14 +43,15 @@ use crate::gossip_service::discover_nodes;
 let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 ```
 
-## Cluster Configuration
+## Конфигурация кластера
 
-To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `validator::ValidatorConfig`.
+Для включения конкретных сценариев кластер должен загружаться со специальными конфигурациями. Эти конфигурации могут быть зафиксированы в `validator::ValidatorConfig`.
 
-For example:
+Пример:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
+validator_config.rpc_config.enable_validator_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
@@ -59,11 +60,11 @@ let local = LocalCluster::new_with_config(
                 );
 ```
 
-## How to design a new test
+## Как создать новый тест
 
-For example, there is a bug that shows that the cluster fails when it is flooded with invalid advertised gossip nodes. Our gossip library and protocol may change, but the cluster still needs to stay resilient to floods of invalid advertised gossip nodes.
+Например, есть ошибка, которая показывает, что кластер выходит из строя, когда он заполнен недействительными объявленными узлами gossip. Наша библиотека и протокол Gossip может измениться, но кластер все еще должен оставаться устойчивым к заполнениям недействительных объявленных узлов Gossip.
 
-Configure the RPC service:
+Настройка RPC сервиса:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
@@ -71,7 +72,7 @@ validator_config.rpc_config.enable_rpc_gossip_push = true;
 validator_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
 ```
 
-Wire the RPCs and write a new test:
+Подключите RPC и напишите новый тест:
 
 ```text
 pub fn test_large_invalid_gossip_nodes(

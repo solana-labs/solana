@@ -1,89 +1,35 @@
 ---
-title: Optimistic Confirmation and Slashing
+title: 낙관적 확인 및 슬래싱
 ---
 
-Progress on optimistic confirmation can be tracked here
+낙관적 확인에 대한 진행 상황은 여기에서 추적 할 수 있습니다.
 
 https://github.com/solana-labs/solana/projects/52
 
-At the end of May, the mainnet-beta is moving to 1.1, and testnet is
-moving to 1.2. With 1.2, testnet will behave as if it has optimistic
-finality as long as at least no more than 4.66% of the validators are
-acting maliciously. Applications can assume that 2/3+ votes observed in
-gossip confirm a block or that at least 4.66% of the network is violating
-the protocol.
+5 월 말 메인 넷 베타는 1.1로, 테스트 넷은 1.2로 이동합니다. 1.2에서 테스트 넷은 밸리데이터의 4.66 % 이상이 악의적으로 행동하는 한 낙관적 인 최종성을 가진 것처럼 작동합니다. 애플리케이션은 가십에서 관찰 된 2/3 이상의 투표가 블록을 확인하거나 네트워크의 4.66 % 이상이 프로토콜을 위반하고 있다고 가정 할 수 있습니다.
 
-## How does it work?
+## 어떻게 작동하나요?
 
-The general idea is that validators must continue voting following their
-last fork, unless the validator can construct a proof that their current
-fork may not reach finality. The way validators construct this proof is
-by collecting votes for all the forks excluding their own. If the set
-of valid votes represents over 1/3+X of the epoch stake weight, there
-may not be a way for the validators current fork to reach 2/3+ finality.
-The validator hashes the proof (creates a witness) and submits it with
-their vote for the alternative fork. But if 2/3+ votes for the same
-block, it is impossible for any of the validators to construct this proof,
-and therefore no validator is able to switch forks and this block will
-be eventually finalized.
+일반적인 아이디어는 밸리데이터가 현재 포크가 최종성에 도달하지 못할 수 있다는 증거를 구성 할 수없는 한, 밸리데이터은 마지막 포크 이후에 계속 투표해야한다는 것입니다. 밸리데이터가이 증명을 구성하는 방법은 자신을 제외한 모든 포크에 대한 투표를 수집하는 것입니다. 유효한 투표 세트가 epoch 지분 가중치의 1 / 3 + X 이상을 나타내는 경우 유효성 검사기 현재 포크가 2/3 이상의 최종성에 도달 할 수있는 방법이 없을 수 있습니다. 밸리데이터는 증명을 해시 (증인 생성)하고 대체 포크에 대한 투표와 함께 제출합니다. 그러나 동일한 블록에 대해 2/3 이상이 투표하면 밸리데이터이이 증명을 구성하는 것이 불가능하므로 밸리데이터이 포크를 전환 할 수 없으며이 블록은 최종적으로 완성됩니다.
 
-## Tradeoffs
+## 트레이드 오프
 
-The safety margin is 1/3+X, where X represents the minimum amount of stake
-that will be slashed in case the protocol is violated. The tradeoff is
-that liveness is now reduced by 2X in the worst case. If more than 1/3 -
-2X of the network is unavailable, the network may stall and will only
-resume finalizing blocks after the network recovers below 1/3 - 2X of
-failing nodes. So far, we haven’t observed a large unavailability hit
-on our mainnet, cosmos, or tezos. For our network, which is primarily
-composed of high availability systems, this seems unlikely. Currently,
-we have set the threshold percentage to 4.66%, which means that if 23.68%
-have failed the network may stop finalizing blocks. For our network,
-which is primarily composed of high availability systems a 23.68% drop
-in availabilty seems unlinkely. 1:10^12 odds assuming five 4.7% staked
-nodes with 0.995 of uptime.
+안전 마진은 1 / 3 + X이며, 여기서 X는 프로토콜 위반시 삭감되는 최소 지분 금액을 나타냅니다. 단점은 최악의 경우 라이브 니스가 2 배 감소한다는 것입니다. 네트워크의 1/3-2X 이상을 사용할 수없는 경우 네트워크가 중단 될 수 있으며 네트워크가 실패한 노드의 1/3-2X 미만으로 복구 된 후에 만 ​​블록 마무리를 재개합니다. So far, we haven’t observed a large unavailability hit on our mainnet, cosmos, or tezos. 주로 고 가용성 시스템으로 구성된 우리 네트워크의 경우, 이는 가능성이 낮은 것 같습니다. 현재 임계 값 비율을 4.66 %로 설정했습니다. 즉, 23.68 %가 실패하면 네트워크가 블록 마무리를 중지 할 수 있습니다. 주로 고 가용성 시스템으로 구성된 우리 네트워크의 경우 가용성이 23.68 % 감소하는 것이 연관성이없는 것처럼 보입니다. 가동 시간이 0.995 인 4.7 % 스테이킹 노드 5 개를 가정하면 1 : 10 ^ 12 확률입니다.
 
-## Security
+## 보안
 
-Long term average votes per slot has been 670,000,000 votes / 12,000,000
-slots, or 55 out of 64 voting validators. This includes missed blocks due
-to block producer failures. When a client sees 55/64, or ~86% confirming
-a block, it can expect that ~24% or `(86 - 66.666.. + 4.666..)%` of
-the network must be slashed for this block to fail full finalization.
+슬롯 당 장기 평균 투표 수는 670,000,000 개 / 12,000,000 개 슬롯 또는 64 개 투표 밸리데이터 중 55 개입니다. 여기에는 블록 생산자 실패로 인해 누락 된 블록이 포함됩니다. 클라이언트가 55/64 또는 ~ 86 %가 블록을 확인하는 것을 볼 때이 블록이 완전히 실패하려면 네트워크의 ~ 24 % 또는`(86-66.666 .. + 4.666 ..) %`가 슬래시되어야한다고 예상 할 수 있습니다. + 4.666..)%</code> of the network must be slashed for this block to fail full finalization.
 
-## Why Solana?
+## 왜 솔라나인가?
 
-This approach can be built on other networks, but the implementation
-complexity is significantly reduced on Solana because our votes
-have provable VDF-based timeouts. It’s not clear if switching proofs
-can be easily constructed in networks with weak assumptions about
-time.
+이 접근 방식은 다른 네트워크에서 구축 할 수 있지만, 우리의 투표에는 검증 가능한 VDF 기반 시간 제한이 있기 때문에 Solana에서 구현 복잡성이 크게 감소합니다. 시간에 대한 가정이 약한 네트워크에서 스위칭 증명을 쉽게 구성 할 수 있는지 여부는 명확하지 않습니다.
 
-## Slashing roadmap
+## 슬래싱 로드맵
 
-Slashing is a hard problem, and it becomes harder when the goal of
-the network is to have the lowest possible latency. The tradeoffs are
-especially apparent when optimizing for latency. For example, ideally
-validators should cast and propagate their votes before the
-memory has been synced to disk, which means that the risk of local state
-corruption is much higher.
+슬래싱은 어려운 문제이며 네트워크의 목표가 지연 시간을 최소화하는 것이라면 더욱 어려워집니다. 트레이드 오프는 특히 지연 시간을 최적화 할 때 분명합니다. 예를 들어 이상적으로 유효성 검사기는 메모리가 디스크에 동기화되기 전에 투표를 전송하고 전파해야합니다. 이는 로컬 상태 손상의 위험이 훨씬 더 높다는 것을 의미합니다.
 
-Fundamentally, our goal for slashing is to slash 100% in cases where
-the node is maliciously trying to violate safety rules and 0% during
-routine operation. How we aim to achieve that is to first implement
-slashing proofs without any automatic slashing whatsoever.
+기본적으로 슬래싱의 목표는 노드가 악의적으로 안전 규칙을 위반하려는 경우 100 %, 일상적인 작업 중에는 0 %를 줄이는 것입니다. 이를 달성하는 방법은 자동 슬래싱없이 슬래싱 증명을 먼저 구현하는 것입니다.
 
-Right now, for regular consensus, after a safety violation, the
-network will halt. We can analyze the data and figure out who was
-responsible and propose that the stake should be slashed after
-restart. A similar approach will be used with a optimistic conf.
-An optimistic conf safety violation is easily observable, but under
-normal circumstances, an optimistic confirmation safety violation
-may not halt the network. Once the violation has been observed, the
-validators will freeze the affected stake in the next epoch and
-will decide on the next upgrade if the violation requires slashing.
+지금은 정기 합의를 위해 안전 위반 이후 네트워크가 중단됩니다. 우리는 데이터를 분석하고 누가 책임을 졌는지 파악할 수 있으며 재시작 후 지분을 삭감해야한다고 제안 할 수 있습니다. ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ ㅇㅇㅇ 비슷한 접근 방식이 낙관적 conf와 함께 사용됩니다. 낙관적 conf 안전 위반은 쉽게 관찰 할 수 있지만 정상적인 상황에서는 낙관적 확인 안전 위반이 네트워크를 중지하지 않을 수 있습니다. 위반이 관찰되면 밸리데이터은 다음 세대에 영향을받은 지분을 동결하고 위반에 슬래싱이 필요한 경우 다음 업그레이드를 결정할 것입니다.
 
-In the long term, transactions should be able to recover a portion
-of the slashing collateral if the optimistic safety violation is
-proven. In that scenario, each block is effectively insured by the
-network.
+장기적으로는 낙관적 안전 위반이 입증되면 거래에서 삭감하는 담보의 일부를 회수 할 수 있어야합니다. 이 시나리오에서 각 블록은 네트워크에 의해 효과적으로 보장됩니다.

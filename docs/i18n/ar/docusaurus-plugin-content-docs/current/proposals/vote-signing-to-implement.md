@@ -1,116 +1,116 @@
 ---
-title: Secure Vote Signing
+title: التوقيع الآمن على التصويت (Secure Vote Signing)
 ---
 
-## Secure Vote Signing
+## التوقيع الآمن على التصويت (Secure Vote Signing)
 
-This design describes additional vote signing behavior that will make the process more secure.
+يصف هذا التصميم سلوك توقيع التصويت الإضافي الذي سيجعل العملية أكثر أمانًا.
 
-Currently, Solana implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
+تطبق Solana حاليًا خدمة توقيع التصويت التي تُقيّم كل صوت للتأكد من أنها لا تنتهك شرط الإقتطاع (slashing). يُمكن أن يكون للخدمة فروق مُختلفة، إعتمادًا على إمكانيات النظام الأساسي للأجهزة. على وجه الخصوص، يُمكن إستخدامه بالإقتران مع جيب (enclave) آمن \ (مثل SGX \). يُمكن أن يُنشئ الجَيْب (enclave) مفتاحًا غير مُتماثل، مما يعرض واجهة برمجة التطبيقات (API) لكود المُستخدم \ (غير موثوق به \) للتوقيع على مُعاملات التصويت، مع الإحتفاظ المفتاح الخاص (private key) لتوقيع التصويت في ذاكرته المحمية.
 
-The following sections outline how this architecture would work:
+توضح الأقسام التالية كيفية عمل هذه البنية:
 
-### Message Flow
+### تدفق الرسائل (Message Flow)
 
-1. The node initializes the enclave at startup
+1. تُهيئ العُقدة (node) الجَيْب (enclave) عند بدء التشغيل
 
-   - The enclave generates an asymmetric key and returns the public key to the
+   - يُنشئ الجَيْب (enclave) مفتاحًا غير مُتماثل ويُعيد المفتاح المفتاح العمومي (public key) إلى
 
-     node
+     العُقدة (node)
 
-   - The keypair is ephemeral. A new keypair is generated on node bootup. A
+   - زوج المفاتيح (keypair) سريع الزوال. يتم إنشاء زوج مفاتيح (keypair) جديد عند بدأ إشتغال أو تمهيد (bootup) العُقدة (node). يُمكن أيضًا إنشاء
 
-     new keypair might also be generated at runtime based on some to be determined
+     زوج مفاتيح (keypair) جديد في وقت التشغيل بناءً على بعض
 
-     criteria.
+     المعايير التي سيتم تحديدها.
 
-   - The enclave returns its attestation report to the node
+   - يُعيد الجَيْب (enclave) تقرير التَصدِيق الخاص به إلى العُقدة (node)
 
-2. The node performs attestation of the enclave \(e.g using Intel's IAS APIs\)
+2. تقوم العُقدة (node) بتَصدِيق الجَيْب (Enclave) \ (على سبيل المثال، إستخدام واجهات برمجة تطبيقات الـ IAS الخاصة بشركة Intel\)
 
-   - The node ensures that the Secure Enclave is running on a TPM and is
+   - تضمن العُقدة (node) تشغيل جَيْب آمن (Secure Enclave) على TPM
 
-     signed by a trusted party
+     وتوقيعه بواسطة جهة موثوقة
 
-3. The stakeholder of the node grants ephemeral key permission to use its stake.
+3. يمنح صاحب المصلحة في العُقدة (node) إذن مفتاح مُؤَقّت (ephemeral key) لإستخدام حِصّته (stake). يجب تحديد هذه العملية.
 
-   This process is to be determined.
+   لا بد من تحديد هذه العملية.
 
-4. The node's untrusted, non-enclave software calls trusted enclave software
+4. يستدعي برنامج العُقدة (node) غير الموثوق به وغير المُحاصر (non-enclave) برنامج الجيب الموثوق به
 
-   using its interface to sign transactions and other data.
+   بإستخدام واجهته لتوقيع المُعاملات والبيانات الأخرى.
 
-   - In case of vote signing, the node needs to verify the PoH. The PoH
+   - في حالة توقيع التصويت، تحتاج العُقدة (node) إلى التحقق من PoH. التحقق من PoH
 
-     verification is an integral part of signing. The enclave would be
+     جزء لا يتجزأ من التوقيع. سيتم تزويد الجيب المُحاصر (enclave)
 
-     presented with some verifiable data to check before signing the vote.
+     ببعض البيانات التي يُمكن التحقق منها للتحقق قبل التوقيع على التصويت.
 
-   - The process of generating the verifiable data in untrusted space is to be determined
+   - يجب تحديد عملية إنشاء البيانات التي يُمكن التحقق منها في مساحة غير موثوق بها
 
-### PoH Verification
+### التحقق من PoH
 
-1. When the node votes on an en entry `X`, there's a lockout period `N`, for
+1. عندما تصوت العُقدة (node) على مُدخل `X`، فهناك فترة إغلاق `N`،
 
-   which it cannot vote on a fork that does not contain `X` in its history.
+   التي لا يُمكنها التصويت على إنقسام أو شوكة (Fork) لا تحتوي على `X` في سجلها.
 
-2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout
+2. في كل مرة تصوت العُقدة (node) على مُشتق `X`، لنقل `X+y`، فترة الإغلاق
 
-   period for `X` increases by a factor `F` \(i.e. the duration node cannot vote on
+   تزداد لـ `X` بمُعامل `F` \ (أي أن مدة العُقدة لا يُمكنها التصويت على
 
-   a fork that does not contain `X` increases\).
+   إنقسام أو شوكة (fork) لا تحتوي على زيادات `X` \).
 
-   - The lockout period for `X+y` is still `N` until the node votes again.
+   - فترة الإغلاق لـ `X+y` لا تزال `N` حتى تُصوت العُقدة مرة أخرى.
 
-3. The lockout period increment is capped \(e.g. factor `F` applies maximum 32
+3. تم تحديد زيادة فترة الإغلاق \ (على سبيل المثال، ينطبق العامل `F` بحد أقصى 32
 
-   times\).
+   مرة \).
 
-4. The signing enclave must not sign a vote that violates this policy. This
+4. يجب ألا يُوقع الجيب المُحاصر (enclave) على تصويت ينتهك هذه السياسة. هذا
 
-   means
+   يعنى
 
-   - Enclave is initialized with `N`, `F` and `Factor cap`
-   - Enclave stores `Factor cap` number of entry IDs on which the node had
+   - تمت تهيئة الجيب المُحاصر (enclave) بـ `N` و `F` و `Factor cap`
+   - مخازن الجيب المُحاصر (enclave) بحد أقصى `Factor cap` رقم مُعرفات الإدخال (entry ID) التي صوتت العُقدة (node)
 
-     previously voted
+     عليها مُسبقًا
 
-   - The sign request contains the entry ID for the new vote
-   - Enclave verifies that new vote's entry ID is on the correct fork
+   - يحتوي طلب التوقيع على مُعرف المُدخل (entry ID) للتصويت الجديد
+   - يقوم الجيب المُحاصر (enclave) بالتحقق من أن مُعرف المُدخل (entry ID) الخاص بالتصويت الجديد على الإنقسام أو الشوكة (fork) الصحيحة
 
-     \(following the rules \#1 and \#2 above\)
+     \(إتباع القاعدتين \#1 و \#2 أعلاه\)
 
-### Ancestor Verification
+### التحقق من السلف المُشترك (Ancestor Verification)
 
-This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last_tick at which each node voted 4. It sends new vote request to vote-signing service
+هذا هو نهج بديل، وإن كان أقل تأكيدًا للتحقق من إنقسام أو شوكة التصويت (voting fork). 1. يحتفظ المُدقّق (validator) بمجموعة نشطة من العُقد (nodes) في المجموعة (cluster) عدد 2. يُراقب الأصوات من المجموعة النشطة في فترة التصويت الأخيرة 3. تُخزن السلف المُشترك / علامة (last_tick) صوتت عليها كل عُقدة 4. يُرسل طلب تصويت جديد لخدمة توقيع التصويت (vote-signing service)
 
-- It includes previous votes from nodes in the active set, and their
+- تتضمن الأصوات السابقة من العُقد (nodes) في المجموعة النشطة، و
 
-  corresponding ancestors
+  الأسلاف المُشتركة (ancestors) المُناسبة
 
-  1. The signer checks if the previous votes contains a vote from the validator,
+  1. يتحقق المُوَقِّع (signer) مما إذا كانت الأصوات السابقة تحتوي على تصويت من المُدقّق (validator)،
 
-     and the vote ancestor matches with majority of the nodes
+     ويتطابق تصويت السلف (ancestor) مع غالبية العُقد (nodes)
 
-- It signs the new vote if the check is successful
-- It asserts \(raises an alarm of some sort\) if the check is unsuccessful
+- يُوقع على التصويت الجديد إذا كان التحقق ناجحًا
+- يُؤكد \ (يُثير إنذارًا من نوع ما\) إذا كان التَحَقُّق غير ناجح
 
-The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH \(as it'll be rejected by the cluster\). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing \(as part of
+الفرضية هي أنه يُمكن مُخادعة المُدقّق (validator) مرة واحدة على الأكثر للتصويت على بيانات غير صحيحة. إذا قام شخص ما بإختطاف المُدقّق (validator) وإرسال طلب تصويت للحصول على بيانات زائفة، فلن يتم تضمين هذا التصويت في PoH \ (حيث سيتم رفضه من قبل المجموعة \). في المرة التالية التي يُرسل فيها المُدقّق (validator) طلبًا للتوقيع على التصويت، ستكتشف خدمة التوقيع أن التصويت الأخير للمُدقّق مفقود \ (كجزء من
 
-## 5 above\).
+## 5 المذكور أعلاه\).
 
-### Fork determination
+### تحديد الإنقسام أو الشوكة (Fork determination)
 
-Due to the fact that the enclave cannot process PoH, it has no direct knowledge of fork history of a submitted validator vote. Each enclave should be initiated with the current _active set_ of public keys. A validator should submit its current vote along with the votes of the active set \(including itself\) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the fork being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
+نظرًا لحقيقة أن الجيب المُحاصر (enclave) لا يُمكنه مُعالجة PoH، لإنه ليس لديه معرفة مُباشرة بتاريخ الإنقسام أو الشوكة (fork) لتصويت المُدقّق (validator) المُقدم. يجب أن يبدأ كل جيب المُحاصر (enclave) بالمجموعة النَشِطة _active set_ الحالية من المفاتيح العمومية (public keys). يجب على المُدقّق (validator) إرسال تصويته الحالي جنبًا إلى جنب مع أصوات المجموعة النشطة \ (بما في ذلك نفسها \) التي لاحظها في فُتحة (Slot) التصويت السابقة. بهذه الطريقة، يُمكن للجيب المُحاصر (enclave) أن يُخمن الأصوات المُصاحبة للتصويت السابق للمُدقّق (validator) وبالتالي يتم التصويت على الإنقسام أو الشوكة (fork). هذا غير مُمكن للتصويت الأولي المُقدم من المُدقّق (validator)، حيث لن يحتوي على فُتحة (Slot) "سابقة" للرجوع إليها. لحساب ذلك، يجب تطبيق تجميد قصير للتصويت حتى يتم إرسال التصويت الثاني الذي يحتوي على الأصوات داخل المجموعة النشطة، إلى جانب التصويت الخاص به، في ذروة التصويت الأولي.
 
-### Enclave configuration
+### إعدادات الجيب المُحاصر (Enclave configuration)
 
-A staking client should be configurable to prevent voting on inactive forks. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted fork. This configuration should take the form of a rule such that the client will only vote on a fork if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted fork at a depth where an additional vote would create a lockout for an undesirable amount of time if that fork turns out not to be live.
+يجب أن يكون عميل إثبات الحِصَّة أو التَّحْصِيص (staking client) قابلاً للإعداد لمنع التصويت على إنقسامات أو شوكات (forks) غير نشطة. يجب أن تستخدم هذه الآلية المجموعة النشطة المعروفة للعميل `N_active` جنبًا إلى جنب مع الحد الأدنى للتصويت `N_vote` وعمق الحد الأدنى `N_depth` لتحديد ما إذا كنت ستستمر في التصويت على الإنقسام أو الشوكة (fork) المُقدم أم لا. يجب أن يأخذ هذا الإعداد شكل قاعدة بحيث يُصوت العميل (client) فقط على إنقسام أو شوكة (fork) إذا لاحظ أكثر من `N_vote` عند `N_depth`. عمليًا، هذا يُمثل العميل (client) من التأكيد على أنه قد لاحظ بعض الإحتمالات الإقتصادية النهائية للإنقسام أو الشوكة (fork) المُقدمة على عمق حيث سيُؤدي التصويت الإضافي إلى إغلاق لفترة غير مرغوب فيها من الوقت إذا تبين أن هذا الإنقسام أو الشوكة (fork) ليست شغالة.
 
-### Challenges
+### التحديات (Challenges)
 
-1. Generation of verifiable data in untrusted space for PoH verification in the
+1. توليد بيانات يُمكن التحقق منها في مساحة غير موثوق بها للتحقق من PoH في
 
-   enclave.
+   الجَيْب المُحاصر (enclave).
 
-2. Need infrastructure for granting stake to an ephemeral key.
+2. بحاجة إلى بنية تحتية لمنح حِصَّة (stake) لمفتاح مُؤَقّت (ephemeral key).

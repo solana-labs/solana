@@ -1,69 +1,69 @@
 ---
-title: Rent
+title: تأجير
 ---
 
-Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
+قد يكون للحسابات في Solana حالة يتحكم فيها المالك \(`Account::data`\) مُنفصلة عن رصيد الحساب \(`Account::lamports`\). بما أن المُدقّقين على الشبكة يحتاجون إلى الإحتفاظ بنسخة عملية من هذه الحالة في الذاكرة، تفرض الشبكة رسوما تستند إلى الوقت والمساحة لهذا الإستهلاك من الموارد، تعرف أيضا بإسم الإيجار.
 
-## Two-tiered rent regime
+## نظام الإيجار ذو المستويين
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
+تُعفى الحسابات التي تحتفظ برصيد أدنى يعادل سنتين من مدفوعات الإيجار. السنتين _2 years_ مُستمّدة من إنخفاض تكلفة المُعدات بنسبة 50٪ في السعر كل سنتين والتقارب الناتج عن ذلك بسبب كونه سلسلة هندسية. الحسابات التي يقل رصيدها عن هذا الحد يتم تحصيل إيجارها بسعر محدد أثناء عملية التكوين أو Genesis، بإحتساب الـ lamports بمعدل byte لكل سنة. تتقاضى الشبكة الإيجار على أساس كل فترة أو epoch على حدة، في شكل إئتمان للفترة أو الـ epoch التالية، و `Account::rent_epoch` تتبع الإيجار التالي الذي يجب جمعه من الحساب.
 
-Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
+في الوقت الراهن، تتحدد تكلفة الإيجار منذ لحظة التكوين أو Genesis. لكن، من المتوقع أن تكون ديناميكية، تعكس تكلفة تخزين المعدات الأساسية في ذلك الوقت. لذا من المُتَوَقَّع عموماً أن ينخفض السعر مع إنخفاض تكلفة المعدّات مع تقدم التكنولوجيا.
 
-## Timings of collecting rent
+## توقيت تحصيل الإيجار
 
-There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
+هناك توقيتان لتحصيل الإيجار من الحسابات: \(1\) عند الإشارة إليها بواسطة المعاملة، \(2\) دوريا بمعدل مرة وحدة لكل فترة أو epoch. \(1\) يشمل المعاملة لإنشاء الحساب الجديد نفسه، ويحدث ذلك أثناء عملية التجهيز العادية للمعاملة التي يقوم بها المصرف كجزء من مرحلة التحميل. \(2\) موجود للتأكد من جمع الإيجارات من الحسابات القديمة، والتي لم يتم التأشير عليها على الإطلاق في الفترات الأخيرة. \(2\) يتطلب مسح الحسابات بأكملها ويتم توزيعه على فترة أو epoch بناء على بادئة أو prefix عنوان الحساب لتجنب زيادة التحميل بسبب عملية جمع الإيجار هذه.
 
-On the contrary, rent collection isn't applied to accounts that are directly manipulated by any of protocol-level bookkeeping processes including:
+على العكس من ذلك، فإن تحصيل الإيجار لا يطبق على الحسابات التي يتم التلاعب بها مباشرة بأي من عمليات مسك الدفاتر على مستوى البروتوكول أو protocol-level bookkeeping، بما في ذلك:
 
-- The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
-- The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
-- The distribution of transaction fee at the end of every slot
+- توزيع الإيجار بنفسه (وإلا فإن ذلك قد يسبب عملية جمع متكررة للإيجار)
+- توزيع مكافآت إثبات الحصة أو الstaking في بداية كل فترة أو epoch (لتقليل حجم المعالجة في بداية فترة أو epoch جديدة)
+- توزيع رسوم المعاملات في نهاية كل فتحة أو slot
 
-Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
+حتى إذا كانت هذه العمليات خارج نطاق تحصيل الإيجار، فإن جميع الحسابات التي يتم التلاعب بها ستتناولها في نهاية المطاف آلية \(2\).
 
-## Actual processing of collecting rent
+## التجهيز الفعلي لتحصيل الإيجار
 
-Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
+الإيجار مستحق لفترة أو epoch واحدة، والحسابات لديها `Account::rent_epoch` من `current_epoch` أو `current_epoch + 1` إعتمادا على نظام الإيجار.
 
-If the account is in the exempt regime, `Account::rent_epoch` is simply updated to `current_epoch`.
+إذا كان الحساب في نظام الإعفاء، `Account::rent_epoch` يتم تحديثه ببساطة إلى `current_epoch`.
 
-If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to `current_epoch + 1` (= next epoch). If the amount of rent due is less than one lamport, no changes are made to the account.
+إذا كان الحساب غير معفي، يتم إستخدام الفرق بين الفترة التالية و `Account::rent_epoch` لحساب مبلغ الإيجار المستحق على هذا الحساب \(via `Rent::due()`\). أي حسابات lamports كسرية تكون مجتزأة. يتم خصم الإيجار المُستحق من `Account::lamports` و `Account::rent_epoch` يتم تحديثه إلى `current_epoch + 1` (= next epoch). إذا كان مبلغ الإيجار المُستحق أقل من واحد lamport، لا تدخل أي تغييرات على الحساب.
 
-Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
+الحسابات التي لا يكفي رصيدها للوفاء بالإيجار المستحق لها ببساطة هي حسابات فشلت في التحميل.
 
-A percentage of the rent collected is destroyed. The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
+تم تدمير نسبة مئوية من الإيجار الذي تم تحصيله. يتم توزيع الباقي على حسابات التدقيق حسب وزن الحِصَّة، رسوم المُعاملة، في نهاية كل فتحة.
 
-Finally, rent collection happens according to the protocol-level account updates like the rent distribution to validators, meaning there is no corresponding transaction for rent deductions. So, rent collection is rather invisible, only implicitly observable by a recent transaction or predetermined timing given its account address prefix.
+أخيراً، يتم تحصيل الإيجار وفقاً لتحديثات الحساب على مُستوى-البروتوكول مثل توزيع الإيجار على المُدقّقين، بمعنى أنه لا توجد مُعاملة مُقابلة لخصم الإيجار. بالتالي فإن تحصيل الإيجار غير مرئي نوعا ما، ولا يمكن ملاحظته ضمنا إلا من خلال معاملة حديثة أو من خلال توقيت مُحَدَّدَ مُسبقا نظرا لبادئة عنوان الحساب الخاص بها.
 
-## Design considerations
+## الإعتبارات المتعلقة بالتصميم
 
-### Current design rationale
+### الأساس المنطقي للتصميم الحالي
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
+في إطار التصميم السابق، ليس من الممكن الحصول على حسابات تتباطأ، لا تُلمس أبداً، ولا يتوجب عليها دفع الإيجار. تدفع الحسابات الإيجار دائماً ومرة واحدة لكل فترة، بإستثناء الحسابات المُعفاة من الإيجار، وحسابات مُتغير النظام أو sysvar والحسابات القابلة للتنفيذ.
 
-This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
+هذا هو خيار التصميم المقصود. خلاف ذلك، سيكون من الممكن إثارة عملية جمع الإيجار غير المرخصة لها بتوجيه من `Noop` من أي شخص قد يربح الإيجار بشكل غير منصف (زعيم أو leader في الوقت الحاضر) أو توفير الإيجار بالنظر إلى تقلب تكاليف الإيجار المتوقعة.
 
-As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
+وكأثر جانبي آخر لهذا الإختيار، يلاحظ أيضا أن التحصيل الدوري للإيجارات يجبر المددق فعليا على عدم تخزين الحسابات القديمة في مخزن بارد أو cold storage على نحو متفائل وعلى توفير تكلفة التخزين، وهو أمر ليس في صالح مالكي الحسابات وقد يتسبب في توقف المعاملات معهم لفترة أطول من الآخرين. على الجانب الآخر، يمنع هذا المستخدمين المخادعين من تكديس كمية كبيرة من الحسابات الغير ضرورية، وهو ما يثقل كاهل المدققين أو الvalidators.
 
-As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
+كنتيجة عامة لهذا التصميم، يتم تخزين جميع الحسابات بالتساوي كمجموعة عمل للمدقق لها نفس خصائص الأداء، ويعكس بشكل مباشر الهيكل الموحد لتسعير الإيجار.
 
-### Ad-hoc collection
+### المجموعة المخصصة
 
-Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
+تم النظر في تحصيل الإيجار حسب الحاجة \(أي كلما تم تحميل/الوصول إلى الحسابات\). المسائل التي ينطوي عليها هذا النهج هي:
 
-- accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
+- الحسابات المُحمّلة على أنها إئتمانية فقط أو "credit only" لمُعاملة ما يمكن أن يتم توقُّعه بشكل معقول جدا أن يكون الإيجار مُستحقًّا عليها،
 
-  but would not be writable during any such transaction
+  ولكن لن تكون قابلة للكتابة خلال أي معاملة من هذا القبيل
 
-- a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
+- آلية "التغلب على الشجيرات" أو "beat the bushes" \(أي البحث عن الحسابات التي تحتاج إلى دفع الإيجار\) محبذة،
 
-  lest accounts that are loaded infrequently get a free ride
+  تجنبا للحسابات التي يتم تحميلها بشكل غير متكرر تحصل على رحلة مجانية
 
-### System instruction for collecting rent
+### تعليمات النظام المتعلقة بجمع الإيجار
 
-Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
+جرى النظر في تحصيل الإيجار عن طريق تعليمات للنظام، وبما أنه كان من الطبيعي أن يوزع الإيجار على العُقَد النشطة والمُرَجَّحة بالحِصَّة أو stake-weighted وكان من المُمكن أن يتم ذلك تدريجيا. مع ذلك:
 
-- it would have adversely affected network throughput
-- it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
-- someone would have to issue the transactions
+- كان من الممكن أن يؤثر سلبا على إنتاجية الشبكة
+- سيتطلب ذلك وضع غلاف خاص في وقت التشغيل، لأن الحسابات مع أصحاب البرامج غير النظامية (non-non-SystemProgram owners) قد تُخصم من هذه التعليمات
+- يجب على شخص ما أن يصدر المعاملات

@@ -1,198 +1,129 @@
 ---
-title: Paper Wallet
+title: Бумажный кошелек
 ---
 
-This document describes how to create and use a paper wallet with the Solana CLI
-tools.
+Этот документ описывает, как создавать и использовать файловый кошелек с инструментами Solana CLI.
 
-> We do not intend to advise on how to _securely_ create or manage paper wallets. Please research the security concerns carefully.
+> В этом разделе мы не описываем как _безопасно_ создавать и управлять бумажными кошельками. Пожалуйста, внимательно изучите проблемы безопасности.
 
-## Overview
+## Обзор
 
-Solana provides a key generation tool to derive keys from BIP39 compliant seed
-phrases. Solana CLI commands for running a validator and staking tokens all
-support keypair input via seed phrases.
+Solana предоставляет инструмент для получения ключей из мнемонической фразы, соответствующей стандарту BIP39. Команды Solana CLI для запуска валидатора и стейкинга токенов - все поддерживают ввод ключ-пары с помощью мнемо-фразы.
 
-To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
-[here](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
+Чтобы узнать больше о стандарте BIP39, посетите [репозиторий Bitcoin BIP на Github](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
 
-## Paper Wallet Usage
+## Использование бумажного кошелька
 
-Solana commands can be run without ever saving a keypair to disk on a machine.
-If avoiding writing a private key to disk is a security concern of yours, you've
-come to the right place.
+Команды Solana можно запускать без сохранения ключ-пары на устройстве. Если вы обеспокоены сохранением вашего приватного ключа прямо на устройстве, то вы в нужном месте.
 
-> Even using this secure input method, it's still possible that a private key gets written to disk by unencrypted memory swaps. It is the user's responsibility to protect against this scenario.
+> Даже при использовании этого безопасного метода ввода все еще существует вероятность, что ваш приватный ключ будет записан на диск во время незашифрованной подкачки памяти. Ответственность за защиту от этого сценария лежит на пользователе.
 
-## Before You Begin
+## Прежде чем начать
 
-- [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
+- [Установите иснтурменты командной строки Solana](../cli/install-solana-cli-tools.md)
 
-### Check your installation
+### Проверьте установку
 
-Check that `solana-keygen` is installed correctly by running:
+Чтобы проверить, что `solana-keygen` установленны правилно, запустите команду:
 
 ```bash
 solana-keygen --version
 ```
 
-## Creating a Paper Wallet
+## Создание бумажного кошелька
 
-Using the `solana-keygen` tool, it is possible to generate new seed phrases as
-well as derive a keypair from an existing seed phrase and (optional) passphrase.
-The seed phrase and passphrase can be used together as a paper wallet. As long
-as you keep your seed phrase and passphrase stored safely, you can use them to
-access your account.
+Используя инструмент `solana-keygen`, можно сгенерировать новую мнемоническую фразу, так же как и извлечь ключ-пару из уже существующей мнемо-фразы (с опциональным шифрованием паролем). Мнемо-фраза и пароль, могут использоваться вместе в качестве бумажного кошелька. До тех пор, пока вы храните мнемо-фразу и пароль в безопасности, вы можете использовать их для доступа к своему аккаунту.
 
-> For more information about how seed phrases work, review this [Bitcoin Wiki page](https://en.bitcoin.it/wiki/Seed_phrase).
+> Для получения дополнительной информации о том, как работают мнемонические фразы, ознакомьтесь с [Вики-страницей Bitcoin](https://en.bitcoin.it/wiki/Seed_phrase).
 
-### Seed Phrase Generation
+### Генерация мнемо-фразы
 
-Generating a new keypair can be done using the `solana-keygen new` command. The
-command will generate a random seed phrase, ask you to enter an optional
-passphrase, and then will display the derived public key and the generated seed
-phrase for your paper wallet.
+Создание нового ключа может быть выполнена с помощью команды `solana-keygen new`. Команда сгенерирует случайную мнемоническую фразу, попросит вас ввести необязательный пароль, а затем отобразит производный открытый ключ и сгенерированную мнемо-фразу для вашего бумажного кошелька.
 
-After copying down your seed phrase, you can use the
-[public key derivation](#public-key-derivation) instructions to verify that you
-have not made any errors.
+После того, как вы запишете и сохраните вашу мнемо-фразу, вы можете воспользоваться командой [public key derivation](#public-key-derivation), чтобы убедиться, что вы не допустили где-то ошибку.
 
 ```bash
 solana-keygen new --no-outfile
 ```
 
-> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](file-system-wallet.md)
+> Если флаг `--no-outfile` **не указан**, по-умолчанию будет произведено создание ключ-пары, которая будет записана в файл `~/.config/solana/id.json`, что фактически является [файловым кошельком](file-system-wallet.md)
 
-The output of this command will display a line like this:
+Результатом работы команды, станет строка вроде этой:
 
 ```bash
 pubkey: 9ZNTfG4NyQgxy2SWjSiQoUyBPEvXT2xo7fKc5hPYYJ7b
 ```
 
-The value shown after `pubkey:` is your _wallet address_.
+Значение, показанное после `pubkey:` это и есть ваш _адрес кошелька_.
 
-**Note:** In working with paper wallets and file system wallets, the terms "pubkey"
-and "wallet address" are sometimes used interchangably.
+**Примечание:** При работе с бумажными кошельками и файловыми кошельками, термины "pubkey" и "адрес кошелька" являются взаимозаменяемыми.
 
-> For added security, increase the seed phrase word count using the `--word-count` argument
+> Чтобы повысить безопасность мнемо-фразы, можно увеличить количество содержащихся слов. Делается это с помощью аргумента `--word-count`
 
-For full usage details run:
+Для вывода дополнительной информации, запустите:
 
 ```bash
 solana-keygen new --help
 ```
 
-### Public Key Derivation
+### Извлечение публичного ключа
 
-Public keys can be derived from a seed phrase and a passphrase if you choose to
-use one. This is useful for using an offline-generated seed phrase to derive a
-valid public key. The `solana-keygen pubkey` command will walk you through how
-to use your seed phrase (and a passphrase if you chose to use one) as a signer
-with the solana command-line tools using the `ask` uri scheme.
+Публичный ключ может быть извлечен из мнемо-фразы и пароля, если последний был использован. Это полезно для использования мнемо-фраз сгенерированных оффлайн, чтобы извлечь настоящий публичный ключ. Команда `solana-keygen pubkey ASK` поможет вам узнать публичный ключ, используя мнемо-фразу, включая зашифрованную паролем.
 
 ```bash
-solana-keygen pubkey prompt://
+solana-keygen pubkey ASK
 ```
 
-> Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
+> Заметьте, что вы можете потенциально использовать различные пароли для одной и той же seed фразы. Каждый уникальный пароль создает разную ключ-пару.
 
-The `solana-keygen` tool uses the same BIP39 standard English word list as it
-does to generate seed phrases. If your seed phrase was generated with another
-tool that uses a different word list, you can still use `solana-keygen`, but
-will need to pass the `--skip-seed-phrase-validation` argument and forego this
-validation.
+Интсрументы `solana-keygen` используют тот же стандарт BIP39 со стандартным набором английских слов, который используется для генерации мнемонических фраз. Если ваша исходная мнемо-фраза была сгенерирована с помощью других инструментов, которые используют другой стандарт, вы все равно можете использовать `solana-keygen`, но вам нужно будет передать аргумент `--skip-seed-phrase-validation`, чтобы отменить проверку на валидность соответствие стандарту BIP39.
 
 ```bash
-solana-keygen pubkey prompt:// --skip-seed-phrase-validation
+solana-keygen pubkey ASK --skip-seed-phrase-validation
 ```
 
-After entering your seed phrase with `solana-keygen pubkey prompt://` the console
-will display a string of base-58 character. This is the base _wallet address_
-associated with your seed phrase.
+После ввода мнемо-фразы с `solana-keygen pubkey ASK` консоль отобразит строку в кодировке base-58. Это _адрес кошелька_, ассоциированный с вашей мнемо-фразой.
 
-> Copy the derived address to a USB stick for easy usage on networked computers
+> Скопируйте полученный адрес, например на USB-накопитель, для легкого использования на сетевых компьютерах
 
-> A common next step is to [check the balance](#checking-account-balance) of the account associated with a public key
+> Обычно, следующим шагом является [проверка баланса](#checking-account-balance) аккаунта, связанного с публичным ключом
 
-For full usage details run:
+Для вывода дополнительной информации, запустите:
 
 ```bash
 solana-keygen pubkey --help
 ```
 
-### Hierarchical Derivation
+## Проверка ключ-пары
 
-The solana-cli supports
-[BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and
-[BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-hierarchical derivation of private keys from your seed phrase and passphrase by
-adding either the `?key=` query string or the `?full-path=` query string.
-
-By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To
-derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
+Чтобы убдиться, что вы владеете приватным ключом от какого либо адреса, используйте команду `solana-keygen verify`:
 
 ```bash
-solana-keygen pubkey prompt://?key=0/1
+solana-keygen verify <PUBKEY> ASK
 ```
 
-To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+где `<PUBKEY>` заменяется на адрес кошелька, а ключевое слово `ASK` говорит команде, чтобы попросить вас о вводе мнемо-фразы с клавиатуры. Обратите внимание, что по соображениям безопасности, ваша мнемо-фраза не будет отображаться на экране по её ввода. После ввода вашей мнемонической фразы команда выдаст «Success», если данный адресс соответствует ключ-паре, созданной из исходной мнемо-фразы, и «Failed» в противном случае.
 
-```bash
-solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
-```
+## Проверка баланса аккаунта
 
-Because Solana uses Ed25519 keypairs, as per
-[SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all
-derivation-path indexes will be promoted to hardened indexes -- eg.
-`?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are
-included in the query-string input.
+Всё что необходимо для проверки баланса аккаунта - это публичный ключ аккаунта его адрес. Чтобы безопасно получить публичный ключи из бумажного кошелька, следуйте инструкции по [извлечению публичного ключа](#public-key-derivation) на [физически изолированном устройстве](https://en.wikipedia.org/wiki/Air_gap_(networking)). Публичные ключи затем можно ввести вручную или передать через USB-накопитель на компьютер подключенный к сети.
 
-## Verifying the Keypair
-
-To verify you control the private key of a paper wallet address, use
-`solana-keygen verify`:
-
-```bash
-solana-keygen verify <PUBKEY> prompt://
-```
-
-where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://`
-tells the command to prompt you for the keypair's seed phrase; `key` and
-`full-path` query-strings accepted. Note that for security reasons, your seed
-phrase will not be displayed as you type. After entering your seed phrase, the
-command will output "Success" if the given public key matches the keypair
-generated from your seed phrase, and "Failed" otherwise.
-
-## Checking Account Balance
-
-All that is needed to check an account balance is the public key of an account.
-To retrieve public keys securely from a paper wallet, follow the
-[Public Key Derivation](#public-key-derivation) instructions on an
-[air gapped computer](<https://en.wikipedia.org/wiki/Air_gap_(networking)>).
-Public keys can then be typed manually or transferred via a USB stick to a
-networked machine.
-
-Next, configure the `solana` CLI tool to
-[connect to a particular cluster](../cli/choose-a-cluster.md):
+Далее, настройте инструменты `Solana CLI` для работы с [определенным кластером](../cli/choose-a-cluster.md):
 
 ```bash
 solana config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.solana.com)
 ```
 
-Finally, to check the balance, run the following command:
+Наконец, чтобы проверить баланс, выполните следующую команду:
 
 ```bash
 solana balance <PUBKEY>
 ```
 
-## Creating Multiple Paper Wallet Addresses
+## Создание нескольких бумажных кошельков
 
-You can create as many wallet addresses as you like. Simply re-run the
-steps in [Seed Phrase Generation](#seed-phrase-generation) or
-[Public Key Derivation](#public-key-derivation) to create a new address.
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes.
+Вы можете создать столько кошельков, сколько захотите. Просто повторите шаги из раздела [Генерация мнемо-фразы](#seed-phrase-generation) или [Извлечение публичного ключа](#public-key-derivation), чтобы создать новый адрес. Несколько кошельков могут пригодится в случае, если вы хотите хранить ваши токены на кошельках, которые предназначены для разных целей.
 
-## Support
+## Поддержка
 
-Check out our [Wallet Support Page](support.md) for ways to get help.
+Для получения дополнительной помощи посетите страницу [Поддержка / Устранение проблем](support.md).

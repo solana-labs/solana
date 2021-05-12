@@ -1,31 +1,24 @@
 ---
-title: Add Solana to Your Exchange
+title: Añadir Solana a tu Exchange
 ---
 
-This guide describes how to add Solana's native token SOL to your cryptocurrency
-exchange.
+Esta guía describe cómo agregar el token nativo SOL de Solana a su intercambio de criptomonedas.
 
-## Node Setup
+## Configuración de Nodo
 
-We highly recommend setting up at least two nodes on high-grade computers/cloud
-instances, upgrading to newer versions promptly, and keeping an eye on service
-operations with a bundled monitoring tool.
+Recomendamos encarecidamente configurar al menos dos nodos en instancias de computadoras/nube de alto nivel, actualizando a versiones más recientes con rapidez, y vigilando las operaciones de servicio con una herramienta de monitoreo integrada.
 
-This setup enables you:
+Esta configuración le permite:
+- para tener una puerta de enlace de confianza con el clúster Solana mainnet-beta para obtener datos y enviar transacciones de retiro
+- para tener control total sobre la cantidad de datos históricos que se conservan
+- para mantener la disponibilidad del servicio incluso si un nodo falla
 
-- to have a trusted gateway to the Solana mainnet-beta cluster to get data and
-  submit withdrawal transactions
-- to have full control over how much historical block data is retained
-- to maintain your service availability even if one node fails
+Los nodos Solana requieren una potencia de computación relativamente alta para manejar nuestros bloques rápidos y TPS altos.  Para requisitos específicos, consulte [recomendaciones de hardware](../running-validator/validator-reqs.md).
 
-Solana nodes demand relatively high computing power to handle our fast blocks
-and high TPS. For specific requirements, please see
-[hardware recommendations](../running-validator/validator-reqs.md).
+Para ejecutar un nodo Api:
 
-To run an api node:
-
-1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
-2. Start the validator with at least the following parameters:
+1. [Instalar la suite de herramientas de línea de comandos Solana](../cli/install-solana-cli-tools.md)
+2. Iniciar el validador con al menos los siguientes parámetros:
 
 ```bash
 solana-validator \
@@ -40,123 +33,65 @@ solana-validator \
   --no-untrusted-rpc
 ```
 
-Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
+Personalice `--ledger` a la ubicación de almacenamiento deseada del edger y `--rpc-port` al puerto que desea exponer.
 
-The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to the cluster you are joining.
-[Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
+Los parámetros `--entrypoint` y `--expected-genesis-hash` son todos específicos del clúster al que se une. [Parámetros actuales para Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-The `--limit-ledger-size` parameter allows you to specify how many ledger
-[shreds](../terminology.md#shred) your node retains on disk. If you do not
-include this parameter, the validator will keep the entire ledger until it runs
-out of disk space. The default value attempts to keep the ledger disk usage
-under 500GB. More or less disk usage may be requested by adding an argument to
-`--limit-ledger-size` if desired. Check `solana-validator --help` for the
-default limit value used by `--limit-ledger-size`. More information about
-selecting a custom limit value is [available
-here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+El parámetro `--limit-ledger-size` le permite especificar cuántos ledger [shreds](../terminology.md#shred) su nodo retiene en el disco. Si no incluye este parámetro, el validador mantendrá el libro de valores entero hasta que se agote de espacio en disco.  El valor predeterminado intenta mantener el uso del disco ledger por debajo de 500GB.  Se puede solicitar más o menos uso del disco añadiendo un argumento a `--limit-ledger-size` si se desea. Compruebe `solana-validator --help` para conocer el valor límite por defecto utilizado por `--limit-ledger-size`.  Más información sobre seleccionar un valor límite personalizado está [disponible aquí](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
-Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+Especificar uno o más parámetros `--trusted-validator` puede protegerle de arrancar desde una captura maliciosa. [Más sobre el valor del arranque con validadores de confianza](../running-validator/validator-start.md#trusted-validators)
 
-Optional parameters to consider:
+Parámetros opcionales a considerar:
 
-- `--private-rpc` prevents your RPC port from being published for use by other nodes
-- `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
+- `--private-rpc` impide que su puerto RPC sea publicado para su uso por otros nodos
+- `--rpc-bind-address` le permite especificar una dirección IP diferente para enlazar el puerto RPC
 
-### Automatic Restarts and Monitoring
+### Reinicios automáticos y monitorización
 
-We recommend configuring each of your nodes to restart automatically on exit, to
-ensure you miss as little data as possible. Running the solana software as a
-systemd service is one great option.
+Recomendamos configurar cada uno de sus nodos para reiniciar automáticamente al salir, para asegurarse de que pierde la menor cantidad de datos posible. Ejecutar el software solana como un servicio de sistema es una gran opción.
 
-For monitoring, we provide
-[`solana-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
-which can monitor your validator and detect with the `solana-validator` process
-is unhealthy. It can directly be configured to alert you via Slack, Telegram,
-Discord, or Twillio. For details, run `solana-watchtower --help`.
+Para monitorear, proporcionamos [`torre solana-vigilante`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md), que puede monitorizar su validador y detectar con el `proceso de validación de solana` no es saludable. Se puede configurar directamente para alertarle a través de Slack, Telegram, Discord, o Twillio. Para más detalles, ejecuta `solana-watchtower --help`.
 
 ```bash
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
-#### New Software Release Announcements
+#### Nuevos anuncios de lanzamiento de software
 
-We release new software frequently (around 1 release / week).
-Sometimes newer versions include incompatible protocol changes, which
-necessitate timely software update to avoid errors in processing blocks.
+Lanzamos el nuevo software con frecuencia (alrededor de 1 versión / semana). A veces las versiones más recientes incluyen cambios incompatibles del protocolo, que necesita una actualización de software oportuna para evitar errores en el procesamiento de bloques.
 
-Our official release announcements for all kinds of releases (normal and
-security) are communicated via a discord channel called
-[`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
-(`mb` stands for `mainnet-beta`).
+Nuestros anuncios de lanzamiento oficiales para todo tipo de lanzamientos (normal y seguridad) se comunican a través de un canal de discord llamado [`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375) (`mb` significa `mainnet-beta`).
 
-Like staked validators, we expect any exchange-operated validators to be updated
-at your earliest convenience within a business day or two after a normal release
-announcement. For security-related releases, more urgent action may be needed.
+Como validadores con stake, esperamos que cualquier validador operado por el intercambio se actualice lo antes posible en un día hábil o dos después de un anuncio de lanzamiento normal. En el caso de lanzamientos relacionados con la seguridad, puede ser necesario tomar medidas más urgentes.
 
-### Ledger Continuity
+### Continuidad del ledger
 
-By default, each of your nodes will boot from a snapshot provided by one of your
-trusted validators. This snapshot reflects the current state of the chain, but
-does not contain the complete historical ledger. If one of your node exits and
-boots from a new snapshot, there may be a gap in the ledger on that node. In
-order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
-`solana-validator` command to receive historical ledger data instead of a
-snapshot.
+Por defecto, cada uno de sus nodos arrancará desde una captura proporcionada por uno de sus validadores de confianza. Esta captura refleja el estado actual de la cadena, pero no contiene el contorno histórico completo. Si uno de los nodos sale y arranca desde una nueva captura, puede haber un hueco en el ledger en ese nodo. Para evitar este problema, añada el parámetro `--no-snapshot-fetch` a su comando `solana-validator` para recibir datos históricos del ledger en lugar de una captura.
 
-Do not pass the `--no-snapshot-fetch` parameter on your initial boot as it's not
-possible to boot the node all the way from the genesis block. Instead boot from
-a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
+No pase el parámetro `--no-snapshot-fetch` en su arranque inicial ya que no es posible arrancar el nodo desde el bloque genesis.  En su lugar arranque desde primero una captura y luego añadir el parámetro `--no-snapshot-fetch` para reiniciar.
 
-It is important to note that the amount of historical ledger available to your
-nodes from the rest of the network is limited at any point in time. Once
-operational if your validators experience significant downtime they may not be
-able to catch up to the network and will need to download a new snapshot from a
-trusted validator. In doing so your validators will now have a gap in its
-historical ledger data that cannot be filled.
+Es importante tener en cuenta que la cantidad de contable histórico disponible para tus nodos del resto de la red está limitada en cualquier momento.  Una vez operacional si tus validadores experimentan un tiempo de inactividad significativo, pueden no ser capaces de ponerse al día de la red y necesitarán descargar una nueva captura de un validador de confianza.  Al hacerlo, tus validadores ahora tendrán un hueco en sus datos históricos de contabilidad que no se pueden rellenar.
 
-### Minimizing Validator Port Exposure
 
-The validator requires that various UDP and TCP ports be open for inbound
-traffic from all other Solana validators. While this is the most efficient mode of
-operation, and is strongly recommended, it is possible to restrict the
-validator to only require inbound traffic from one other Solana validator.
+### Minimizando exposición de puertos validadores
 
-First add the `--restricted-repair-only-mode` argument. This will cause the
-validator to operate in a restricted mode where it will not receive pushes from
-the rest of the validators, and instead will need to continually poll other
-validators for blocks. The validator will only transmit UDP packets to other
-validators using the _Gossip_ and _ServeR_ ("serve repair") ports, and only
-receive UDP packets on its _Gossip_ and _Repair_ ports.
+El validador requiere que varios puertos UDP y TCP estén abiertos para el tráfico entrante de todos los validadores de Solana.   Aunque este es el modo de funcionamiento más eficiente, y se recomienda encarecidamente, es posible restringir el validador para que sólo requiera tráfico entrante de otro validador Solana.
 
-The _Gossip_ port is bi-directional and allows your validator to remain in
-contact with the rest of the cluster. Your validator transmits on the _ServeR_
-to make repair requests to obtaining new blocks from the rest of the network,
-since Turbine is now disabled. Your validator will then receive repair
-responses on the _Repair_ port from other validators.
+Primero añade el argumento `--restricted-repair-only-mode`.  Esto hará que el validador funcione en un modo restringido en el que no recibirá empujes del resto de validadores, y en su lugar tendrá que sondear continuamente a otros validadores en busca de bloques.  El validador solo transmitirá paquetes UDP a otros validadores usando los puertos *Gossip* y *ServeR* ("serve repair") y sólo recibir paquetes UDP en sus puertos *gossip* y *Reparación*.
 
-To further restrict the validator to only requesting blocks from one or more
-validators, first determine the identity pubkey for that validator and add the
-`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` arguments for each
-PUBKEY. This will cause your validator to be a resource drain on each validator
-that you add, so please do this sparingly and only after consulting with the
-target validator.
+El puerto de *Gossip* es bidireccional y permite a su validador permanecer en contacto con el resto del clúster.  Su validador transmite en el *ServeR* para hacer solicitudes de reparación para obtener nuevos bloques del resto de la red, ya que la Turbina está ahora deshabilitada.  Tu validador recibirá entonces reparaciones en el puerto *Reparar* de otros validadores.
 
-Your validator should now only be communicating with the explicitly listed
-validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
+Para restringir aún más el validador a solo solicitar bloques de uno o más validadores, primero determina el pubkey de identidad para ese validador y añade los argumentos `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` para cada PUBKEY.  Esto hará que su validador sea un drenaje de recursos en cada validador que añada, así que por favor haga esto con moderación y sólo después de consultar con el validador de destino.
 
-## Setting up Deposit Accounts
+Tu validador sólo debería comunicarse ahora con los validadores listados explícitamente y sólo en el gossip **, *Reparar* y *ServeR* puertos.
 
-Solana accounts do not require any on-chain initialization; once they contain
-some SOL, they exist. To set up a deposit account for your exchange, simply
-generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md).
+## Configurar Cuentas de Depósitos
 
-We recommend using a unique deposit account for each of your users.
+Las cuentas Solana no requieren ninguna inicialización en cadena; una vez que contienen algunos SOL, existen. Para configurar una cuenta de depósito para su intercambio, simplemente genere un par de claves Solana usando cualquiera de nuestras [herramientas de monedero](../wallet-guide/cli.md).
 
-Solana accounts are charged [rent](developing/programming-model/accounts.md#rent) on creation and once per
-epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
-SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
-query the
-[`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
+Recomendamos utilizar una cuenta de depósito única para cada uno de sus usuarios.
+
+Las cuentas de Solana se cobran [alquiler](developing/programming-model/accounts.md#rent) al crearse y una vez por época, pero pueden quedar exentas de renta si contienen 2 años de renta en SOL. Para encontrar el saldo mínimo de rent-exempt para sus cuentas de depósito, consulte [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
@@ -164,25 +99,19 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
-### Offline Accounts
+### Cuentas fuera de línea
 
-You may wish to keep the keys for one or more collection accounts offline for
-greater security. If so, you will need to move SOL to hot accounts using our
-[offline methods](../offline-signing.md).
+Es posible que desee mantener las claves de una o más cuentas de colección sin conexión para mayor seguridad. Si es así, necesitarás mover SOL a cuentas en caliente utilizando nuestros [métodos sin conexión](../offline-signing.md).
 
-## Listening for Deposits
+## Escuchando para los depósitos
 
-When a user wants to deposit SOL into your exchange, instruct them to send a
-transfer to the appropriate deposit address.
+Cuando un usuario desee depositar SOL en su intercambio, instruya que envíe una transferencia a la dirección de depósito apropiada.
 
-### Poll for Blocks
+### Encuesta para Bloques
 
-To track all the deposit accounts for your exchange, poll for each confirmed
-block and inspect for addresses of interest, using the JSON-RPC service of your
-Solana API node.
+Para rastrear todas las cuentas de depósito de tu intercambio, consulta por cada bloque confirmado e inspeccionar las direcciones de interés, usando el servicio JSON-RPC de su nodo Solana API.
 
-- To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
-  passing the last block you have already processed as the start-slot parameter:
+- Para identificar qué bloques están disponibles, envía una solicitud de [`getConfirmedBlocks`](developing/clients/jsonrpc-api.md#getconfirmedblocks), pasando el último bloque que ya ha procesado como parámetro de ranura inicial:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
@@ -190,25 +119,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
 ```
 
-Not every slot produces a block, so there may be gaps in the sequence of integers.
+No todas las ranuras producen un bloque, así que puede haber espacios vacíos en la secuencia de enteros.
 
-- For each block, request its contents with a [`getConfirmedBlock` request](developing/clients/jsonrpc-api.md#getconfirmedblock):
+- Para cada bloque, solicite su contenido con una solicitud [`getConfirmedBlock`](developing/clients/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
 
 {
-  "jsonrpc": "2.0",
-  "result": {
+  "jsonrpc": "2. ",
+  "resultado": {
     "blockhash": "2WcrsKSVANoe6xQHKtCcqNdUpCQPQ3vb6QTgi1dcE2oL",
     "parentSlot": 4,
     "previousBlockhash": "7ZDoGW83nXgP14vnn9XhGSaGjbuLdLWkQAoUQ7pg6qDZ",
-    "rewards": [],
-    "transactions": [
+    "recompensas": [],
+    "transacciones": [
       {
         "meta": {
           "err": null,
-          "fee": 5000,
+          "cuota": 5000,
           "postBalances": [
             2033973061360,
             218099990000,
@@ -226,9 +155,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
         "transaction": {
           "message": {
             "accountKeys": [
-              "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "Bbqg1M4YVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
               "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
-              "11111111111111111111111111111111"
+              "111111111111111111111111111111111111"
             ],
             "header": {
               "numReadonlySignedAccounts": 0,
@@ -248,38 +177,26 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
             "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
           },
           "signatures": [
-            "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+            "dhjhJp2V2ybQGVfELWM1aZy98guVVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
           ]
         }
       }
     ]
-  },
+  }, 
+ },
   "id": 1
 }
 ```
 
-The `preBalances` and `postBalances` fields allow you to track the balance
-changes in every account without having to parse the entire transaction. They
-list the starting and ending balances of each account in
-[lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
-example, if the deposit address if interest is
-`47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+Los campos `preBalances` y `postBalances` permiten seguir los cambios de saldo en cada cuenta sin tener que analizar toda la transacción. Ellos listan los balances iniciales y finales de cada cuenta en [lamports](../terminology.md#lamport), indexados a la lista `accountKeys`. Por ejemplo, si la dirección de depósito es `47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, esta transacción representa una transferencia de 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
 
-If you need more information about the transaction type or other specifics, you
-can request the block from RPC in binary format, and parse it using either our
-[Rust SDK](https://github.com/solana-labs/solana) or
-[Javascript SDK](https://github.com/solana-labs/solana-web3.js).
+Si necesita más información sobre el tipo de transacción u otros específicos, puede solicitar el bloque de RPC en formato binario, y lo interprete usando nuestro [Rust SDK](https://github.com/solana-labs/solana) o [Javascript SDK](https://github.com/solana-labs/solana-web3.js).
 
-### Address History
+### Historial de direcciones
 
-You can also query the transaction history of a specific address. This is
-generally _not_ a viable method for tracking all your deposit addresses over all
-slots, but may be useful for examining a few accounts for a specific period of
-time.
+También puede consultar el historial de transacciones de una dirección específica. Este es generalmente *no* un método viable para rastrear todas sus direcciones de depósito en todas las ranuras, pero puede ser útil para examinar algunas cuentas por un período específico de tiempo.
 
-- Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2)
-  request to the api node:
+- Enviar una solicitud [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) al nodo api:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
@@ -310,8 +227,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-- For each signature returned, get the transaction details by sending a
-  [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
+- Para cada firma devuelta, obtenga los detalles de la transacción enviando una solicitud de [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
@@ -371,68 +287,45 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-## Sending Withdrawals
+## Enviando retiros
 
-To accommodate a user's request to withdraw SOL, you must generate a Solana
-transfer transaction, and send it to the api node to be forwarded to your
-cluster.
+Para acomodar la solicitud de un usuario de retirar SOL, debes generar una transacción de transferencia de Solana y envíelo al nodo api para ser reenviado a tu clúster.
 
-### Synchronous
+### Sincrónica
 
-Sending a synchronous transfer to the Solana cluster allows you to easily ensure
-that a transfer is successful and finalized by the cluster.
+Enviar una transferencia sincrónica al clúster de Solana le permite asegurar fácilmente que una transferencia sea exitosa y finalizada por el clúster.
 
-Solana's command-line tool offers a simple command, `solana transfer`, to
-generate, submit, and confirm transfer transactions. By default, this method
-will wait and track progress on stderr until the transaction has been finalized
-by the cluster. If the transaction fails, it will report any transaction errors.
+La herramienta de línea de comandos de Solana ofrece un comando simple, `transferencia solana`, para generar, enviar y confirmar transacciones de transferencia. Por defecto, este método esperará y rastreará el progreso en stderr hasta que la transacción haya sido finalizada por el clúster. Si la transacción falla, informará de cualquier error de transacción.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
-The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js)
-offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build
-a transfer transaction, and submit it using the `sendAndConfirmTransaction`
-method.
+La [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) ofrece un enfoque similar para el ecosistema JS. Utilice el `System Program` para construir una transacción de transferencia, y enviarla usando el método `sendAndConfirmTransaction`.
 
-### Asynchronous
+### Asincrónico
 
-For greater flexibility, you can submit withdrawal transfers asynchronously. In
-these cases, it is your responsibility to verify that the transaction succeeded
-and was finalized by the cluster.
+Para mayor flexibilidad, puede enviar transferencias de retiro de forma asincrónica. En estos casos, es su responsabilidad verificar que la transacción tuvo éxito y fue finalizada por el clúster.
 
-**Note:** Each transaction contains a [recent
-blockhash](developing/programming-model/transactions.md#blockhash-format) to
-indicate its liveness. It is **critical** to wait until this blockhash expires
-before retrying a withdrawal transfer that does not appear to have been
-confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
-more on [blockhash expiration](#blockhash-expiration) below.
+**Nota:** Cada transacción contiene un [blockhash reciente](developing/programming-model/transactions.md#blockhash-format) para indicar su vida. Es **crítico** esperar hasta que este blockhash caduque antes de reintentar una transferencia de retiro que no parece haber sido confirmada o finalizada por el clúster. De lo contrario, corremos el riesgo de un doble gasto. Ver más en [blockhash expiración](#blockhash-expiration) a continuación.
 
-First, get a recent blockhash using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees)
-or the CLI command:
+Primero, obtén un blockhash reciente usando el endpoint [`getFees`](developing/clients/jsonrpc-api.md#getfees) o el comando CLI:
 
 ```bash
 solana fees --url http://localhost:8899
 ```
 
-In the command-line tool, pass the `--no-wait` argument to send a transfer
-asynchronously, and include your recent blockhash with the `--blockhash` argument:
+En la herramienta de línea de comandos, pasa el argumento `--no-wait` para enviar una transferencia de forma asíncrona, e incluya su blockhash reciente con el argumento `--blockhash`:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
-You can also build, sign, and serialize the transaction manually, and fire it off to
-the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
+También puedes construir, firmar y serializar la transacción manualmente, y dispararla a el clúster utilizando el punto final JSON-RPC [`sendTransaction`endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
 
-#### Transaction Confirmations & Finality
+#### Confirmaciones de transacción & Finalidad
 
-Get the status of a batch of transactions using the
-[`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
-The `confirmations` field reports how many
-[confirmed blocks](../terminology.md#confirmed-block) have elapsed since the
-transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
+Obtener el estado de un lote de transacciones usando el extremo [`getSignatureStatuses` JSON-RPC](developing/clients/jsonrpc-api.md#getsignaturestatuses). Los campos de `confirmaciones` reportan cuántos [bloques confirmados](../terminology.md#confirmed-block) han transcurrido desde que la transacción fue procesada. Si `confirmaciones: null`, está [finalizado](../terminology.md#finality).
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
@@ -466,54 +359,23 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 }
 ```
 
-#### Blockhash Expiration
+#### Caducidad de Blockhash
 
-You can check whether a particular blockhash is still valid by sending a
-[`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
-request with the blockhash as a parameter. If the response value is `null`, the
-blockhash is expired, and the withdrawal transaction using that blockhash should
-never succeed.
+Cuando solicite un blockhash reciente para su transacción de retiro usando el endpoint [`getFees`](developing/clients/jsonrpc-api.md#getfees) o `solana fees`, la respuesta incluirá el último espacio `ValidSlot`, el último espacio en el que el blockhash será válido. Puede comprobar el contenedor de clúster con una consulta [`getSlot`](developing/clients/jsonrpc-api.md#getslot); una vez que la ranura de clúster sea mayor que `último Slot`, la transacción de retiro usando ese blockhash nunca debería tener éxito.
 
-### Validating User-supplied Account Addresses for Withdrawals
+También puede verificar si un blockhash en particular sigue siendo válido enviando un [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) solicitud con el blockhash como parámetro. Si el valor de la respuesta es nulo, el blockhash caduca y la transacción de retiro nunca debería tener éxito.
 
-As withdrawals are irreversible, it may be a good practice to validate a
-user-supplied account address before authorizing a withdrawal in order to
-prevent accidental loss of user funds.
+### Validar las direcciones de la cuenta suministradas por el usuario para los Retiros
 
-#### Basic verfication
+Como los retiros son irreversibles, puede ser una buena práctica validar una dirección de cuenta proporcionada por el usuario antes de autorizar un retiro para prevenir la pérdida accidental de fondos del usuario.
 
-Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
-results in an ASCII text string matching the following regular expression:
-
-```
-[1-9A-HJ-NP-Za-km-z]{32,44}
-```
-
-This check is insufficient on its own as Solana addresses are not checksummed, so
-typos cannot be detected. To further validate the user's input, the string can be
-decoded and the resulting byte array's length confirmed to be 32. However, there
-are some addresses that can decode to 32 bytes despite a typo such as a single
-missing character, reversed characters and ignored case
-
-#### Advanced verification
-
-Due to the vulnerability to typos described above, it is recommended that the
-balance be queried for candidate withdraw addresses and the user prompted to
-confirm their intentions if a non-zero balance is discovered.
-
-#### Valid ed25519 pubkey check
-
-The address of a normal account in Solana is a Base58-encoded string of a
-256-bit ed25519 public key. Not all bit patterns are valid public keys for the
-ed25519 curve, so it is possible to ensure user-supplied account addresses are
-at least correct ed25519 public keys.
+La dirección de una cuenta normal en Solana es una cadena codificada en Base58 de una clave pública de ed25519 de 256 bits. No todos los patrones de bits son claves públicas válidas para la curva ed25519, por lo que es posible asegurar que las direcciones de la cuenta proporcionadas por el usuario sean al menos correctas ed25519 claves públicas.
 
 #### Java
 
-Here is a Java example of validating a user-supplied address as a valid ed25519
-public key:
+Aquí está un ejemplo Java de validar una dirección proporcionada por el usuario como una clave pública válida ed25519:
 
-The following code sample assumes you're using the Maven.
+La siguiente muestra de código asume que está utilizando el Maven.
 
 `pom.xml`:
 
@@ -521,7 +383,7 @@ The following code sample assumes you're using the Maven.
 <repositories>
   ...
   <repository>
-    <id>spring</id>
+    <id>primavera</id>
     <url>https://repo.spring.io/libs-release/</url>
   </repository>
 </repositories>
@@ -566,187 +428,125 @@ public class PubkeyValidator
 }
 ```
 
-## Supporting the SPL Token Standard
+## Soportando el estándar SPL Token
 
-[SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
-token creation and exchange on the Solana blockchain.
+[SPL Token](https://spl.solana.com/token) es el estándar para la creación de tokens envuelto/sintético e intercambio en la cadena de bloques Solana.
 
-The SPL Token workflow is similar to that of native SOL tokens, but there are a
-few differences which will be discussed in this section.
+El flujo de trabajo SPL Token es similar al de los token SOL nativos, pero hay unas diferencias que se discutirán en esta sección.
 
 ### Token Mints
 
-Each _type_ of SPL Token is declared by creating a _mint_ account. This account
-stores metadata describing token features like the supply, number of decimals, and
-various authorities with control over the mint. Each SPL Token account references
-its associated mint and may only interact with SPL Tokens of that type.
+Cada *tipo* de token SPL se declara creando una cuenta de *menta*.  Esta cuenta almacena metadatos que describen características como la suministración, el número de decimales y varias autoridades con control sobre la mint.  Cada cuenta SPL Token hace referencia a su menta asociada y solo puede interactuar con las fichas SPL de ese tipo.
 
-### Installing the `spl-token` CLI Tool
+### Instalando la herramienta CLI `spl-token`
 
-SPL Token accounts are queried and modified using the `spl-token` command line
-utility. The examples provided in this section depend upon having it installed
-on the local system.
+Las cuentas de token SPL son consultadas y modificadas usando la utilidad `spl-token` línea de comandos. Los ejemplos que se ofrecen en esta sección dependen de que esté instalado en el sistema local.
 
-`spl-token` is distributed from Rust [crates.io](https://crates.io/crates/spl-token)
-via the Rust `cargo` command line utility. The latest version of `cargo` can be
-installed using a handy one-liner for your platform at [rustup.rs](https://rustup.rs).
-Once `cargo` is installed, `spl-token` can be obtained with the following command:
+`spl-token` se distribuye desde Rust [crates.io](https://crates.io/crates/spl-token) a través de la utilidad de línea de comandos Rust `cargo`. La última versión de `cargo` puede ser instalar utilizando un práctico one-liner para su plataforma en [rustup.rs](https://rustup.rs). Una vez que `carga` está instalada, `spl-token` se puede obtener con el siguiente comando:
 
 ```
-cargo install spl-token-cli
+carga instalar spl-token-cli
 ```
 
-You can then check the installed version to verify
+A continuación, puede comprobar la versión instalada para verificar
 
 ```
 spl-token --version
 ```
 
-Which should result in something like
+Lo que debería resultar en algo como
 
 ```text
 spl-token-cli 2.0.1
 ```
 
-### Account Creation
+### Creación de cuenta
 
-SPL Token accounts carry additional requirements that native System Program
-accounts do not:
+Las cuentas SPL Token llevan requisitos adicionales que las cuentas nativas del Programa de Sistema no:
 
-1. SPL Token accounts must be created before an amount of tokens can be
-   deposited. Token accounts can be created explicitly with the
-   `spl-token create-account` command, or implicitly by the
-   `spl-token transfer --fund-recipient ...` command.
-1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
-   for the duration of their existence and therefore require a small amount of
-   native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-   this amount is 0.00203928 SOL (2,039,280 lamports).
+1. Las cuentas SPL Token deben ser creadas antes de que se pueda depositar una cantidad de tokens.   Las cuentas de token se pueden crear explícitamente con el comando `spl-token create-account` , o implícitamente por la `transferencia spl-token --fund-recipient . .` comando.
+1. Las cuentas de token SPL deben permanecer [exentas de alquiler](developing/programming-model/accounts.md#rent-exemption) durante su existencia y, por lo tanto, requieren que se deposite una pequeña cantidad de tokens SOL nativos sean depositados en la creación de la cuenta. Para cuentas SPL Token v2, esta cantidad es 0.00203928 SOL (2,039,280 lamports).
 
-#### Command Line
-
-To create an SPL Token account with the following properties:
-
-1. Associated with the given mint
-1. Owned by the funding account's keypair
+#### Línea de comando
+Para crear una cuenta SPL Token con las siguientes propiedades:
+1. Asociado con la mint dada
+1. Propiedad del keypair de la cuenta de fondos
 
 ```
-spl-token create-account <TOKEN_MINT_ADDRESS>
+crear-token spl-token <TOKEN_MINT_ADDRESS>
 ```
 
-#### Example
-
+#### Ejemplo
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
-Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
+Creación de la cuenta 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Firma: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVZZPiu5XxyJwS73Vi5WsZL88D7
 ```
 
-Or to create an SPL Token account with a specific keypair:
-
+O para crear una cuenta SPL Token con un keypair específico:
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
-Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
+Creación de la cuenta 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Firma: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVZZPiu5XxyJwS73Vi5WsZL88D7
 ```
 
-### Checking an Account's Balance
+### Comprobando el saldo de una cuenta
 
-#### Command Line
-
+#### Línea de comando
 ```
-spl-token balance <TOKEN_ACCOUNT_ADDRESS>
-```
-
-#### Example
-
-```
-$ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-0
+saldo de spl-token <TOKEN_ACCOUNT_ADDRESS>
 ```
 
-### Token Transfers
-
-The source account for a transfer is the actual token account that contains the
-amount.
-
-The recipient address however can be a normal wallet account. If an associated
-token account for the given mint does not yet exist for that wallet, the
-transfer will create it provided that the `--fund-recipient` argument as
-provided.
-
-#### Command Line
-
+#### Ejemplo
 ```
-spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
+$ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV0
 ```
 
-#### Example
+### Transferencias de Token
 
+La cuenta de origen de una transferencia es la cuenta real del token que contiene la cantidad.
+
+Sin embargo, la dirección del destinatario puede ser una cuenta normal de cartera.  Si todavía no existe una cuenta de tokens asociada para el monedero dado, la transferencia la creará siempre que el argumento `--fund-recipient` como se ha previsto.
+
+#### Línea de comando
 ```
-$ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Transfer 1 tokens
-  Sender: 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN
-  Recipient: 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
-```
-
-### Depositing
-
-Since each `(user, mint)` pair requires a separate account on chain, it is
-recommended that an exchange create batches of token accounts in advance and assign them
-to users on request. These accounts should all be owned by exchange-controlled
-keypairs.
-
-Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
-method described above. Each new block should be scanned for successful transactions
-issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
-or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
-instructions referencing user accounts, then querying the
-[token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance)
-updates.
-
-[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
-made to exend the `preBalance` and `postBalance` transaction status metadata
-fields to include SPL Token balance transfers.
-
-### Withdrawing
-
-The withdrawal address a user provides should be the same address used for
-regular SOL withdrawal.
-
-Before executing a withdrawal [transfer](#token-transfers),
-the exchange should check the address as
-[described above](#validating-user-supplied-account-addresses-for-withdrawals).
-
-From the withdrawal address, the associated token account for the correct mint
-determined and the transfer issued to that account. Note that it's possible
-that the associated token account does not yet exist, at which point the
-exchange should fund the account on behalf of the user. For SPL Token v2
-accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
-lamports).
-
-Template `spl-token transfer` command for a withdrawal:
-
-```
-$ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
+transferencia spl-token <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
-### Other Considerations
+#### Ejemplo
+```
+Transferencia de spl-token 6B199xxzw3PkAm25hGJpj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Transferencia de 1 tokens
+  Remitente: 6B199xxzw3PkAm25hGJpj3Wj3WNYNHzDAnt1tEqg5BN
+  Destinatario: 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Firma: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
+```
 
-#### Freeze Authority
+### Depositando
+Dado que cada par de `(usuario, mint)` requiere una cuenta separada en cadena, es recomendable que un intercambio cree lotes de cuentas de token de antemano y asigne a los usuarios si lo solicitan. Todas estas cuentas deben ser propiedad de keypairs controlados por el intercambio.
 
-For regulatory compliance reasons, an SPL Token issuing entity may optionally
-choose to hold "Freeze Authority" over all accounts created in association with
-its mint. This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
-the assets in a given account at will, rendering the account unusable until thawed.
-If this feature is in use, the freeze authority's pubkey will be registered in
-the SPL Token's mint account.
+El seguimiento de las transacciones de depósito debe seguir el método [de votación de bloques](#poll-for-blocks) descrito arriba. Cada nuevo bloque debe escanearse para transacciones exitosas emisoras de SPL Token [Transferencia](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92) o [Transferencia](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) instrucciones referenciando cuentas de usuario, luego consultar el saldo de la cuenta de tokens [](developing/clients/jsonrpc-api.md#gettokenaccountbalance) actualizaciones.
 
-## Testing the Integration
+[Consideraciones](https://github.com/solana-labs/solana/issues/12318) se hacen para exender los campos `preBalance` y `metadatos de estado de la transacción` postBalance para incluir transferencias de saldo SPL Token.
 
-Be sure to test your complete workflow on Solana devnet and testnet
-[clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
-is the most open and flexible, and ideal for initial development, while testnet
-offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.
+### Retirando
+La dirección de retiro de fondos que proporcione el usuario debe ser la misma que se utiliza para la retirada de fondos regular de SOL.
+
+Antes de ejecutar una transferencia de retiro [](#token-transfers), el intercambio debería verificar la dirección [descrita anteriormente](#validating-user-supplied-account-addresses-for-withdrawals).
+
+Desde la dirección de retiro, la cuenta de token asociada para la moneda correcta determinada y la transferencia emitida a esa cuenta.  Tenga en cuenta que es posible que la cuenta de token asociada aún no existe, en cuyo punto el intercambio debe financiar la cuenta en nombre del usuario.  Para cuentas SPL Token v2, el dinero de la cuenta de retiro requerirá 0.00203928 SOL (2.039,280 lamports).
+
+Plantilla `comando de transferencia de spl-token` para un retiro:
+```
+$ transferencia spl-token --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
+```
+
+### Otras consideraciones
+
+#### Congelar Autoridad
+Por razones de cumplimiento normativo, una entidad emisora de Fichas SPL puede optar por mantener la "Autoridad de Congelación" sobre todas las cuentas creadas en asociación con su ceca.  Esto les permite [congelar](https://spl.solana.com/token#freezing-accounts) los activos de una cuenta determinada a voluntad, haciendo que la cuenta no se pueda utilizar hasta que se descongele. Si esta función está en uso, el pubkey de la autoridad congelada se registrará en la cuenta del SPL Token.
+
+## Probando la integración
+
+Asegúrese de probar su flujo de trabajo completo en Solana devnet y testnet [clusters](../clusters.md) antes de pasar a producción en mainnet-beta. Devnet es el más abierto y flexible, e ideal para el desarrollo inicial, mientras que testnet ofrece una configuración de clúster más realista. Tanto devnet como testnet soportan una faucet, ejecute `solana airdrop 10` para obtener algunos SOL devnet o testnet para el desarrollo y las pruebas.

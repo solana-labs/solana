@@ -1,69 +1,69 @@
 ---
-title: Rent
+title: Rentar
 ---
 
-Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
+Las cuentas en Solana pueden tener un estado controlado por el dueño \(`Account::data`\) que está separado del saldo de la cuenta \(`Account::lamports`\). Dado que los validadores de la red necesitan mantener una copia de trabajo de este estado en la memoria, la red cobra una comisión basada en tiempo y espacio para este consumo de recursos, también conocido como Rent.
 
-## Two-tiered rent regime
+## Régimen de renta en dos niveles
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
+Las cuentas que mantienen un saldo mínimo equivalente a 2 años de pagos por alquiler son exentas. Los _2 years_ se extrae del hecho de que el coste del hardware baja un 50% de precio cada 2 años y de la convergencia resultante por ser una serie geométrica. Las cuentas cuyo saldo cae por debajo de este umbral se cobran a una tasa especificada en en el genesis, en los lamports por byte-año. La red cobra el alquiler por epoch, en crédito para el próximo epoch, y `Account::rent_epoch` mantiene un seguimiento de la próxima vez que el alquiler debe ser cobrado de la cuenta.
 
-Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
+Actualmente, el costo del alquiler se fija en el genesis. Sin embargo, es anticipado a ser dinámico, reflejando el costo de almacenamiento de hardware subyacente en ese momento. De modo que generalmente se espera que el precio disminuya a medida que la tecnología avance.
 
-## Timings of collecting rent
+## Plazos de cobro del alquiler
 
-There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
+Hay dos momentos de cobro de la renta de las cuentas: \(1\) cuando se refiere a una transacción, \(2\) periódicamente una vez por época. \(1\) incluye la transacción para crear la nueva cuenta en sí, y ocurre durante el procesamiento normal de la transacción por el banco como parte de la fase de carga. \(2\) existe para asegurar el cobro de las rentas de las cuentas antiguas, a las que no se hace referencia en las épocas recientes. \(2\) requiere el escaneo completo de las cuentas y se reparte a lo largo de una época en función del prefijo de la dirección de la cuenta para evitar picos de carga debido a esta recogida de rentas.
 
-On the contrary, rent collection isn't applied to accounts that are directly manipulated by any of protocol-level bookkeeping processes including:
+Por el contrario, la recaudación de alquileres no se aplica a cuentas que son directamente manipuladas por cualquiera de los procesos de contabilidad a nivel de protocolos, incluyendo:
 
-- The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
-- The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
-- The distribution of transaction fee at the end of every slot
+- La distribución de la propia colección de alquileres (de lo contrario, puede causar un manejo recursivo de la colección de alquileres)
+- La distribución de las recompensas de stake al comienzo de cada época (Para reducir al máximo el pico de procesamiento al comienzo de la nueva época)
+- La distribución de la cuota de transacción al final de cada ranura
 
-Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
+Incluso si esos procesos están fuera del alcance de la recaudación de rentas, todas las cuentas manipuladas serán eventualmente manejadas por el mecanismo\(2\).
 
-## Actual processing of collecting rent
+## Procesamiento actual de la recolección del alquiler
 
-Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
+El alquiler se debe a una época, y las cuentas tienen `Account::rent_epoch` de`current_epoch` or `current_epoch + 1` dependiendo del régimen de alquiler.
 
-If the account is in the exempt regime, `Account::rent_epoch` is simply updated to `current_epoch`.
+Si la cuenta está en el régimen exento, `Account::rent_epoch` simplemente se actualiza a `current_epoch`.
 
-If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to `current_epoch + 1` (= next epoch). If the amount of rent due is less than one lamport, no changes are made to the account.
+Si la cuenta no está exenta, la diferencia entre la siguiente época y `Account::rent_epoch` se utiliza para calcular la cantidad de alquiler que debe esta cuenta (a través de `Rent::due()`\). Cualquier lamport fraccional del cálculo es truncada. La renta adeudada se deduce de `Account::lamports` y `Account::rent_epoch` se actualiza a `current_epoch + 1` (= próxima época). Si el importe del alquiler es inferior a un lamport, no se realizarán cambios en la cuenta.
 
-Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
+Las cuentas cuyo saldo es insuficiente para satisfacer el alquiler que se deba simplemente no se cargan.
 
-A percentage of the rent collected is destroyed. The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
+Un porcentaje del alquiler recolectado es destruido. El resto se distribuye a cuentas de validadores por el peso del stake, a las comisiones de transacción, al final de cada ranura.
 
-Finally, rent collection happens according to the protocol-level account updates like the rent distribution to validators, meaning there is no corresponding transaction for rent deductions. So, rent collection is rather invisible, only implicitly observable by a recent transaction or predetermined timing given its account address prefix.
+Por último, la recaudación de alquileres se realiza de acuerdo con las actualizaciones de la cuenta a nivel protocolar como la distribución de alquileres a validadores, lo que significa que no hay una transacción correspondiente para las deducciones de alquiler. Así, la recaudación de alquileres es bastante invisible, sólo implícitamente observable por una transacción reciente o temporización predeterminada dado su prefijo de dirección de cuenta.
 
-## Design considerations
+## Consideraciones de diseño
 
-### Current design rationale
+### Justificación del diseño actual
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
+Con el diseño anterior, NO es posible tener cuentas que permanezcan, que nunca se toquen y que nunca tengan que pagar la renta. Las cuentas siempre pagan la renta exactamente una vez por cada época, excepto las cuentas exentas de renta, sysvar y ejecutables.
 
-This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
+Se trata de una elección de diseño. De lo contrario, sería posible desencadenar el cobro de la renta sin autorización con la instrucción `Noop` por parte de cualquiera que pueda beneficiarse injustamente de la renta (un líder en este momento) o ahorrarse la renta dada la fluctuación prevista del coste del alquiler.
 
-As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
+Como otro efecto secundario de esta elección, también hay que tener en cuenta que esta recogida periódica de rentas obliga efectivamente al validador a no almacenar las cuentas antiguas en un almacén frío de forma óptima y ahorrar el coste de almacenamiento, lo que es desfavorable para los propietarios de las cuentas y puede hacer que las transacciones en ellas se paralicen durante más tiempo que las demás. Por otro lado, esto evita que los usuarios malintencionados acumulen una cantidad importante de cuentas basura, lo que supone una carga para los validadores.
 
-As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
+Como consecuencia general de este diseño, todas las cuentas se almacenan por igual como conjunto de trabajo del validador con las mismas características de rendimiento, reflejando directamente la estructura de precios de alquiler uniforme.
 
-### Ad-hoc collection
+### Colección Ad-hoc
 
-Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
+Se consideró la posibilidad de cobrar el alquiler en función de las necesidades (es decir, cada vez que se cargan/acceden las cuentas). Los problemas de este enfoque son:
 
-- accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
+- las cuentas cargadas como "sólo crédito" para una transacción podrían esperar muy razonablemente que tuvieran alquileres adeudados,
 
-  but would not be writable during any such transaction
+  pero no se puede escribir durante ninguna transacción de este tipo
 
-- a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
+- un mecanismo de "golpear los arbustos" (es decir, ir a buscar las cuentas que necesitan pagar la renta)es conveniente,
 
-  lest accounts that are loaded infrequently get a free ride
+  no sea que las cuentas que se cargan con poca frecuencia consigan un viaje gratis
 
-### System instruction for collecting rent
+### Instrucciones del sistema para la recogida del alquiler
 
-Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
+Se consideró la posibilidad de recaudar la renta a través de una instrucción del sistema, ya que, naturalmente, habría distribuido la renta entre los nodos activos y ponderados por la participación y podría haberse hecho de forma incremental. Sin embargo:
 
-- it would have adversely affected network throughput
-- it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
-- someone would have to issue the transactions
+- habría afectado negativamente al rendimiento de la red
+- requeriría una carcasa especial por parte del tiempo de ejecución, ya que las cuentas con propietarios no pertenecientes a SystemProgram pueden ser cargadas por esta instrucción
+- alguien tendría que emitir las transacciones

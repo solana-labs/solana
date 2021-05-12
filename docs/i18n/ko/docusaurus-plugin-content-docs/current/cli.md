@@ -1,22 +1,16 @@
 ---
-title: Command-line Guide
+title: 커맨드라인 가이드
 ---
 
-In this section, we will describe how to use the Solana command-line tools to
-create a _wallet_, to send and receive SOL tokens, and to participate in
-the cluster by delegating stake.
+이번 섹션에선 솔라나 커맨드라인 툴을 사용해 SOL 토큰을 수신, 전송 및 스테이킹 위임으로 클러스터에 참여할 수 있게 해주는 _지갑_을 생성하는 방법에 대해 알아보겠습니다.
 
-To interact with a Solana cluster, we will use its command-line interface, also
-known as the CLI. We use the command-line because it is the first place the
-Solana core team deploys new functionality. The command-line interface is not
-necessarily the easiest to use, but it provides the most direct, flexible, and
-secure access to your Solana accounts.
+솔라나 클러스터와 상호작용하기 위해 커맨드라인, 즉, CLI 인터페이스를 사용할 것입니다. 커맨드라인을 쓰는 이유는 솔라나 코어 팀이 새로운 기능을 커맨드라인에 가장 먼저 배포하기 때문입니다. 커맨드라인 인터페이스는 사용하기 가장 쉬운 것은 아니지만, 솔라나 계정에 대해 가장 직접적이고 유연하며 안전한 접근을 제공합니다.
 
-## Getting Started
+## 시작하기
 
-To get started using the Solana Command Line (CLI) tools:
+솔라나 커맨드라인(CLI) 툴을 사용하기 위한 절차입니다:
 
-- [Install the Solana Tools](cli/install-solana-cli-tools.md)
-- [Choose a Cluster](cli/choose-a-cluster.md)
-- [Create a Wallet](wallet-guide/cli.md)
-- [Check out our CLI conventions](cli/conventions.md)
+- [Solana Tools 설치](cli/install-solana-cli-tools.md)
+- [클러스터 선택](cli/choose-a-cluster.md)
+- [지갑 생성](wallet-guide/cli.md)
+- [CLI 컨벤션 체크](cli/conventions.md)

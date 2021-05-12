@@ -1,5 +1,5 @@
 ---
-title: References
+title: المراجع (References)
 ---
 
 1. [https://blog.ethereum.org/2016/07/27/inflation-transaction-fees-cryptocurrency-monetary-policy/](https://blog.ethereum.org/2016/07/27/inflation-transaction-fees-cryptocurrency-monetary-policy/)

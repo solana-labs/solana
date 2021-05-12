@@ -1,7 +1,7 @@
 ---
-title: Submitting Bugs
+title: 버그 제출
 ---
 
-Please submit all bugs and feedback as [issues in this Github repo](https://github.com/solana-labs/solana/issues).
+모든 버그와 의견을 \[이 Github 저장소의 문제\] (https://github.com/solana-labs/solana/issues)로 제출해주세요.
 
-Given the fast pace of communication in the [Discord channels](useful-links.md), it’s likely issues reported in them may be lost in the information flow. Filing the issues in the Github repo is the only way to ensure the issues get logged and addressed.
+\[Discord 채널\] (useful-links.md)의 빠른 커뮤니케이션 속도를 감안할 때보고 된 문제는 정보 흐름에서 손실 될 수 있습니다. Github 리포지토리에 문제를 제출하는 것이 문제를 기록하고 해결하는 유일한 방법입니다.

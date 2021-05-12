@@ -1,16 +1,9 @@
 ---
-title: Support / Troubleshooting
+title: Поддержка / Устранение проблем
 ---
 
-If you have questions or are having trouble setting up or using your wallet
-of choice, please make sure you've read through all the relevant pages in our
-[Wallet Guide](paper-wallet.md). The Solana team is working hard to support new
-features on popular wallets, and we do our best to keep our documents up to date
-with the latest available features.
+Если у вас есть вопросы или возникли проблемы с настройкой или использованием вашего кошелька, пожалуйста, убедитесь, что вы прочитали все соответствующие страницы в нашем [Руководстве по кошелькам](paper-wallet.md). Команда Solana усердно работает над поддержкой новых функций в популярных кошельках, и мы делаем все возможное, чтобы наша документация была обновлена в соответствии с последними доступных функциями.
 
-If you have questions after reading the docs, feel free to reach out to us on
-our [Telegram](https://t.me/solanaio).
+Если у вас остались вопросы после прочтения документации, не стесняйтесь задавать их в нашем официальном [Telegram чате](https://t.me/solana).
 
-For **technical support**, reach out to us on
-[Discord](https://discordapp.com/invite/pquxPsq), using the #wallet-support
-channel in our Community section.
+Для вопросов **технической поддержки**, свяжитесь с нами на [сервере Discord](https://discordapp.com/invite/pquxPsq), используя канал #wallet-support в разделе нашего сообщества.

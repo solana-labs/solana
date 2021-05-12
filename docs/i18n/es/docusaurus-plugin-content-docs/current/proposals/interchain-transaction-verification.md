@@ -1,105 +1,105 @@
 ---
-title: Inter-chain Transaction Verification
+title: Verificación de transacciones intercadenas
 ---
 
-## Problem
+## Problema
 
-Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
+Las aplicaciones intercadenas no son nuevas en el ecosistema de activos digitales; De hecho, incluso los intercambios centralizados más pequeños todavía ponen de relieve categóricamente todas las aplicaciones de una sola cadena reunidas en términos de usuarios y volumen. Mantienen valoraciones masivas y han pasado años optimizando eficazmente sus productos básicos para una amplia gama de usuarios finales. Sin embargo, sus operaciones básicas se centran en mecanismos que requieren que sus usuarios confíen en ellos de manera secundaria. típicamente con poco o ningún recurso o protección contra pérdidas accidentales. Esto ha llevado a fracturar el ecosistema de activos digitales más amplio a lo largo de las líneas de red porque las soluciones de interoperabilidad típicamente:
 
-- Are technically complex to fully implement
-- Create unstable network scale incentive structures
-- Require consistent and high level cooperation between stakeholders
+- Son técnicamente complejas de aplicar en su totalidad
+- Crear estructuras de incentivos inestables a escala de red
+- Requiere una cooperación consistente y de alto nivel entre las partes interesadas
 
-## Proposed Solution
+## Solución propuesta
 
-Simple Payment Verification \(SPV\) is a generic term for a range of different methodologies used by light clients on most major blockchain networks to verify aspects of the network state without the burden of fully storing and maintaining the chain itself. In most cases, this means relying on a form of hash tree to supply a proof of the presence of a given transaction in a certain block by comparing against a root hash in that block’s header or equivalent. This allows a light client or wallet to reach a probabilistic level of certainty about on-chain events by itself with a minimum of trust required with regard to network nodes.
+Simple Payment Verification \(SPV\) es un término genérico para un rango de diferentes metodologías utilizadas por clientes ligeros en la mayoría de las principales redes de blockchain para verificar aspectos del estado de la red sin la carga de almacenar y mantener la cadena misma. En la mayoría de los casos esto significa confiar en una forma de árbol hash para proporcionar una prueba de la presencia de una transacción determinada en un bloque determinado comparando con un hash de raíz en la cabecera o equivalente de ese bloque. Esto permite a un cliente ligero o a un monedero alcanzar un nivel probabilístico de certeza sobre los eventos en la cadena por sí mismo, con un mínimo de confianza requerida con respecto a los nodos de la red.
 
-Traditionally the process of assembling and validating these proofs is carried out off chain by nodes, wallets, or other clients, but it also offers a potential mechanism for inter-chain state verification. However, by moving the capability to validate SPV proofs on-chain as a smart contract while leveraging the archival properties inherent to the blockchain, it is possible to construct a system for programmatically detecting and verifying transactions on other networks without the involvement of any type of trusted oracle or complex multi-stage consensus mechanism. This concept is broadly generalisable to any network with an SPV mechanism and can even be operated bilaterally on other smart contract platforms, opening up the possibility of cheap, fast, inter-chain transfer of value without relying on collateral, hashlocks, or trusted intermediaries.
+Tradicionalmente, el proceso de ensamblaje y validación de estas pruebas se lleva a cabo a partir de la cadena por nodos, billeteras, u otros clientes, pero también ofrece un mecanismo potencial para la verificación entre cadenas de estado. Sin embargo, al trasladar la capacidad de validar las pruebas de SPV en la cadena como un contrato inteligente al tiempo que se aprovechan las propiedades de archivo inherentes a la cadena de bloques, es posible construir un sistema para detectar y verificar programáticamente las transacciones en otras redes sin la participación de ningún tipo de oráculo de confianza o mecanismo de consenso complejo de varias etapas. Este concepto es ampliamente generalizable a cualquier red con un mecanismo de SPV e incluso puede ser operado bilateralmente en otras plataformas de contratos inteligentes, abriendo la posibilidad de una transferencia de valor barata, rápida y entre cadenas sin depender de garantías, hashlocks o intermediarios de confianza.
 
-Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of applications and contracts able to interoperate across the variegated and every growing platform ecosystem.
+Optar por aprovechar los mecanismos bien establecidos y estables en su desarrollo que ya son comunes a todas las principales cadenas de bloques permite que las soluciones de interoperabilidad basadas en SPV sean mucho más sencillas que los enfoques orquestados de varias etapas. Como parte de esto, prescinden de la necesidad de estándares de comunicación de cadena cruzada ampliamente acordados y de las grandes organizaciones multigrupales que los escriben en favor de un conjunto de servicios discretos basados en contratos que pueden ser fácilmente utilizados por contratos de llamada a través de un formato de abstracción común. Esto sentará las bases para una amplia gama de aplicaciones y contratos capaces de interactuar a través del variegado y cada ecosistema de plataformas en crecimiento.
 
-## Terminology
+## Terminología
 
-SPV Program - Client-facing interface for the inter-chain SPV system, manages participant roles. SPV Engine - Validates transaction proofs, subset of the SPV Program. Client - The caller to the SPV Program, typically another solana contract. Prover - Party who generates proofs for transactions and submits them to the SPV Program. Transaction Proof - Created by Provers, contains a merkle proof, transaction, and blockheader reference. Merkle Proof - Basic SPV proof that validates the presence of a transaction in a certain block. Block Header - Represents the basic parameters and relative position of a given block. Proof Request - An order placed by a client for verification of transaction\(s\) by provers. Header Store - A data structure for storing and referencing ranges of block headers in proofs. Client Request - Transaction from the client to the SPV Program to trigger creation of a Proof Request. Sub-account - A Solana account owned by another contract account, without its own private key.
+Programa SPV - Interfaz orientada al cliente para el sistema SPV intercadena, gestiona los roles de participante. SPV Engine - Valida pruebas de transacción, subconjunto del programa SPV. Cliente - La persona que llama al programa SPV, típicamente otro contrato de solana. Prover - Parte que genera pruebas para las transacciones y las presenta al Programa SPV. Prueba de transacción - Creado por Provers, contiene una referencia a prueba de merkle, transacción y encabezado de bloques. Merkle Proof - Prueba SPV básica que valida la presencia de una transacción en un bloque determinado. Cabecera de bloque - Representa los parámetros básicos y la posición relativa de un bloque determinado. Solicitud de prueba - Un pedido realizado por un cliente para la verificación de transacción\(s\) por provers. Tienda de cabeceras - Una estructura de datos para almacenar y referenciar rangos de cabeceras de bloque en pruebas. Solicitud de cliente - Transacción desde el cliente al programa SPV para activar la creación de una solicitud de prueba. Subcuenta - Una cuenta Solana propiedad de otra cuenta contractual, sin su propia clave privada.
 
-## Service
+## Servicio
 
-SPV Programs run as contracts deployed on the Solana network and maintain a type of public marketplace for SPV proofs that allows any party to submit both requests for proofs as well as proofs themselves for verification in response to requests. There will be multiple SPV Program instances active at any given time, at least one for each connected external network and potentially multiple instances per network. SPV program instances will be relatively consistent in their high level API and feature sets with some variation between currency platforms \(Bitcoin, Litecoin\) and smart contract platforms owing to the potential for verification of network state changes beyond simply transactions. In every case regardless of network, the SPV Program relies on an internal component called an SPV engine to provide stateless verification of the actual SPV proofs upon which the higher level client facing features and api are built. The SPV engine requires a network specific implementation, but allows easy extension of the larger inter-chain ecosystem by any team who chooses to carry out that implementation and drop it into the standard SPV program for deployment.
+Los programas de SPV funcionan como contratos desplegados en la red Solana y mantienen un tipo de mercado público para las pruebas de SPV que permite a cualquier parte presentar ambas solicitudes de pruebas así como pruebas para su verificación en respuesta a las solicitudes. Habrá múltiples instancias de programa SPV activas en cualquier momento dado al menos una para cada red externa conectada y potencialmente múltiples instancias por red. Las instancias del programa SPV serán relativamente consistentes en su API de alto nivel y conjuntos de características con alguna variación entre plataformas de divisas \(Bitcoin, Litecoin\) y plataformas de contratos inteligentes debido al potencial de verificación de cambios en el estado de la red más allá de simples transacciones. En todos los casos, independientemente de la red, el programa SPV se basa en un componente interno llamado motor SPV para proporcionar una verificación sin estado de las pruebas reales de SPV sobre las que se construyen las características y api del cliente de más alto nivel. El motor SPV requiere una implementación específica de la red, pero permite una fácil extensión del mayor ecosistema intercadena por cualquier equipo que decida llevar a cabo esa implementación y dejarla caer en el programa estándar SPV para su implementación.
 
-For purposes of Proof Requests, the requester is referred to as the program client, which in most if not all cases will be another Solana Contract. The client can choose to submit a request pertaining to a specific transaction or to include a broader filter that can apply to any of a range of parameters of a transaction including its inputs, outputs, and amount. For example, A client could submit a request for any transaction sent from a given address A to address B with the amount X after a certain time. This structure can be used in a range of applications, such as verifying a specific intended payment in the case of an atomic swap or detecting the movement of collateral assets for a loan.
+Para propósitos de solicitud de prueba, el solicitante se denomina cliente del programa, que en la mayoría de los casos si no todos serán otro contrato de Solana. El cliente puede elegir enviar una solicitud perteneciente a una transacción específica o incluir un filtro más amplio que se pueda aplicar a cualquiera de los parámetros de una transacción incluyendo sus entradas, salidas y cantidad. Por ejemplo, Un cliente podría enviar una solicitud para cualquier transacción enviada desde una dirección A dada para dirección B con la cantidad X después de un cierto tiempo. Esta estructura puede ser usada en un rango de aplicaciones, tales como verificar un pago específico previsto en el caso de un intercambio atómico o detectar el movimiento de activos colaterales de garantía para un préstamo.
 
-Following submission of a Client Request, assuming that it is successfully validated, a proof request account is created by the SPV program to track the progress of the request. Provers use the account to specify the request they intend to fill in the proofs they submit for validation, at which point the SPV program validates those proofs and if successful, saves them to the account data of the request account. Clients can monitor the status of their requests and see any applicable transactions alongside their proofs by querying the account data of the request account. In future iterations when supported by Solana, this process will be simplified by contracts publishing events rather than requiring a polling style process as described.
+Siguiendo el envío de una solicitud de cliente, asumiendo que se validó con éxito, una cuenta de solicitud de prueba es creada por el programa SPV para seguir el progreso de la solicitud. Proveedores de usar la cuenta para especificar la solicitud que tienen la intención de rellenar las pruebas que envían para su validación, En ese momento el programa SPV valida esas pruebas y si lo hace con éxito, las guarda en los datos de la cuenta de la cuenta. Los clientes pueden monitorear el estado de sus solicitudes y ver cualquier transacción aplicable junto con sus pruebas consultando los datos de cuenta de la cuenta solicitada. En futuras iteraciones apoyadas por Solana, este proceso se simplificará mediante contratos de publicación de eventos en lugar de requerir un proceso de estilo de votación como se describe.
 
-## Implementation
+## Implementación
 
-The Solana Inter-chain SPV mechanism consists of the following components and participants:
+El mecanismo SPV de Solana Inter-chain consiste en los siguientes componentes y participantes:
 
-### SPV engine
+### Motor SPV
 
-A contract deployed on Solana which statelessly verifies SPV proofs for the caller. It takes as arguments for validation:
+Un contrato desplegado en Solana que verifica sin estado las pruebas SPV para la persona que llama. Toma como argumentos para la validación:
 
-- An SPV proof in the correct format of the blockchain associated with the program
-- Reference\(s\) to the relevant block headers to compare that proof against
-- The necessary parameters of the transaction to verify
+- Una prueba de SPV en el formato correcto del blockchain asociado al programa
+- Referencia\(s\) a las cabeceras de bloques relevantes para comparar esa prueba contra
+- Los parámetros necesarios de la transacción para verificar
 
-  If the proof in question is successfully validated, the SPV program saves proof
+  Si el comprobante en cuestión es validado con éxito, el programa SPV guarda prueba
 
-  of that verification to the request account, which can be saved by the caller to
+  de esa verificación a la cuenta de solicitud, que puede ser guardada por la persona que llama a
 
-  its account data or otherwise handled as necessary. SPV programs also expose
+  los datos de su cuenta o de otro modo manejados según sea necesario. Los programas SPV también exponen
 
-  utilities and structs used for representation and validation of headers,
+  utilidades y estructuras utilizadas para la representación y validación de cabeceras,
 
-  transactions, hashes, etc. on a chain by chain basis.
+  transacciones, hashes, etc. sobre una cadena por cadena.
 
-### SPV program
+### Programa SPV
 
-A contract deployed on Solana which coordinates and intermediates the interaction between Clients and Provers and manages the validation of requests, headers, proofs, etc. It is the primary point of access for Client contracts to access the inter-chain. SPV mechanism. It offers the following core features:
+Un contrato desplegado en Solana que coordina e intermedia la interacción entre Clientes y Proveedores y gestiona la validación de solicitudes, cabeceras, pruebas, etc. Es el principal punto de acceso de los contratos del Cliente para acceder a la intercadena. Mecanismo SPV. Ofrece las siguientes características principales:
 
-- Submit Proof Request - allows client to place a request for a specific proof or set of proofs
-- Cancel Proof Request - allows client to invalidate a pending request
-- Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
+- Enviar solicitud de prueba - permite al cliente presentar una solicitud de prueba específica o conjunto de pruebas
+- Cancelar la solicitud de prueba - permite al cliente invalidar una solicitud pendiente
+- Llenar la Solicitud de Prueba - utilizado por los Provers para enviar para validación una prueba correspondiente a una Solicitud de Prueba dada
 
-  The SPV program maintains a publicly available listing of valid pending Proof
+  El programa SPV mantiene una lista disponible públicamente de la prueba válida pendiente
 
-  Requests in its account data for the benefit of the Provers, who monitor it and
+  Solicita datos de su cuenta en beneficio de los Provers, que la monitorean y
 
-  enclose references to target requests with their submitted proofs.
+  adjuntar las referencias a las solicitudes de destino con sus pruebas presentadas.
 
-### Proof Request
+### Solicitud de prueba
 
-A message sent by the Client to the SPV engine denoting a request for a proof of a specific transaction or set of transactions. Proof Requests can either manually specify a certain transaction by its hash or can elect to submit a filter that matches multiple transactions or classes of transactions. For example, a filter matching “any transaction from address xxx to address yyy” could be used to detect payment of a debt or settlement of an inter-chain swap. Likewise, a filter matching “any transaction from address xxx” could be used by a lending or synthetic token minting contract to monitor and react to changes in collateralization. Proof Requests are sent with a fee, which is disbursed by the SPV engine contract to the appropriate Prover once a proof matching that request is validated.
+Un mensaje enviado por el Cliente al motor SPV que denomina una solicitud de prueba de una transacción específica o conjunto de transacciones. Las solicitudes de prueba pueden especificar manualmente una transacción determinada por su hash o puede elegir enviar un filtro que coincida con varias transacciones o clases de transacciones. Por ejemplo, un filtro que coincida con “cualquier transacción de la dirección xxx a la dirección yy” podría utilizarse para detectar el pago de una deuda o liquidación de un intercambio intercadena. Del mismo modo, un filtro que coincida con “cualquier transacción desde la dirección xxx” podría ser utilizado por un contrato de préstamo o sintético de minting de tokens para monitorear y reaccionar a los cambios en la colateralización. Las solicitudes de prueba se envían con un honorario, que es desembolsado por el contrato del motor SPV a la Prover apropiada una vez que se valida una prueba que coincida con esa solicitud.
 
-### Request Book
+### Solicitar Libro
 
-The public listing of valid, open Proof Requests available to provers to fill or for clients to cancel. Roughly analogous to an orderbook in an exchange, but with a single type of listing rather than two separate sides. It is stored in the account data of the SPV program.
+El listado público de solicitudes de prueba válidas y abiertas disponibles para los provers que deben llenar o para que los clientes cancelen. Analógico a un libro de pedidos en un intercambio, pero con un solo tipo de listado, en lugar de dos lados separados. Se almacena en los datos de la cuenta del programa SPV.
 
-### Proof
+### Prueba
 
-A proof of the presence of a given transaction in the blockchain in question. Proofs encompass both the actual merkle proof and reference\(s\) to a chain of valid sequential block headers. They are constructed and submitted by Provers in accordance with the specifications of the publicly available Proof Requests hosted on the request book by the SPV program. Upon Validation, they are saved to the account data of the relevant Proof Request, which can be used by the Client to monitor the state of the request.
+Una prueba de la presencia de una transacción determinada en el blockchain en cuestión. Las pruebas abarcan tanto la prueba actual de merkle como la referencia\(s\) a una cadena de cabeceras de bloque válidas. Son construidos y presentados por Provers de acuerdo con las especificaciones de las Solicitudes de Prueba disponibles públicamente alojadas en el libro de solicitud del programa SPV. Tras la validación, se guardan en los datos de la cuenta de la solicitud de prueba pertinente, que puede ser utilizado por el Cliente para monitorear el estado de la solicitud.
 
-### Client
+### Cliente
 
-The originator of a request for a transaction proof. Clients will most often be other contracts as parts of applications or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
+El autor de una solicitud de prueba de transacción. Los clientes serán más a menudo otros contratos como parte de aplicaciones o productos financieros específicos como préstamos, swaps, escrow, etc. El cliente en cualquier ciclo de proceso de verificación inicial envía una solicitud de cliente que comunica los parámetros y la comisión y, si se validó con éxito, resulta en la creación de una cuenta de Prueba de Solicitud por el programa SPV. El Cliente también puede enviar una Solicitud de Cancelación referenciando una Solicitud de Prueba activa con el fin de denotarla como inválida para propósitos de envío de pruebas.
 
 ### Prover
 
-The submitter of a proof that fills a Proof Request. Provers monitor the request book of the SPV program for outstanding Proof Requests and generate matching proofs, which they submit to the SPV program for validation. If the proof is accepted, the fee associated with the Proof Request in question is disbursed to the Prover. Provers typically operate as Solana Blockstreamer nodes that also have access to a Bitcoin node, which they use for purposes of constructing proofs and accessing block headers.
+El remitente de una prueba que llena una solicitud de prueba. Los Proveedores monitorean el libro de solicitudes del programa SPV para solicitudes de prueba pendientes y generan pruebas coincidentes, que envían al programa SPV para su validación. Si el comprobante es aceptado, la cuota asociada a la Solicitud de Prueba en cuestión será abonada a la Prover. Proveedores normalmente funcionan como nodos Solana Blockstreamer que también tienen acceso a un nodo Bitcoin, que utilizan para construir pruebas y acceder a las cabeceras de bloques.
 
-### Header Store
+### Tienda de cabecera
 
-An account-based data structure used to maintain block headers for the purpose of inclusion in submitted proofs by reference to the header store account. header stores can be maintained by independent entities, since header chain validation is a component of the SPV program proof validation mechanism. Fees that are paid out by Proof Requests to Provers are split between the submitter of the merkle proof itself and the header store that is referenced in the submitted proof. Due to the current inability to grow already allocated account data capacity, the use case necessitates a data structure that can grow indefinitely without rebalancing. Sub-accounts are accounts owned by the SPV program without their own private keys that are used for storage by allocating blockheaders to their account data. Multiple potential approaches to the implementation of the header store system are feasible:
+Una estructura de datos basada en la cuenta utilizada para mantener los encabezados de bloque con el propósito de la inclusión en las pruebas presentadas por referencia a la cuenta de la tienda de encabezados. las tiendas de cabeceras pueden ser mantenidas por entidades independientes, ya que la validación de la cadena de cabeceras es un componente del mecanismo de validación de prueba del programa SPV. Las cuotas pagadas por Provers por Pruebas se dividen entre el remitente de la prueba de Merkle en sí y la tienda de cabeceras a la que se hace referencia en la prueba presentada. Debido a la incapacidad actual de crecer ya asignada capacidad de datos de cuenta, el caso de uso necesita una estructura de datos que puede crecer indefinidamente sin reequilibrarse. Las subcuentas son cuentas propiedad del programa SPV sin sus propias claves privadas que se utilizan para el almacenamiento asignando las cabeceras de bloqueo a los datos de su cuenta. Múltiples enfoques potenciales para la implementación del sistema de almacenamiento de cabeceras son factibles:
 
-Store Headers in program sub-accounts indexed by Public address:
+Almacenar cabeceras en subcuentas del programa indexadas por dirección pública:
 
-- Each sub-account holds one header and has a public key matching the blockhash
-- Requires same number of account data lookups as confirmations per verification
-- Limit on number of confirmations \(15-20\) via max transaction data ceiling
-- No network-wide duplication of individual headers
+- Cada subcuenta tiene un encabezado y tiene una clave pública que coincide con el blockhash
+- Requiere el mismo número de búsquedas de datos de cuenta que las confirmaciones por verificación
+- Limitar el número de confirmaciones \(15-20\) mediante el límite máximo de datos de transacción
+- No hay duplicación en toda la red de cabeceras individuales
 
-Linked List of multiple sub-accounts storing headers:
+Lista vinculada de múltiples cabeceras de almacenamiento de subcuentas:
 
-- Maintain sequential index of storage accounts, many headers per storage account
-- Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
-- Compact sequential data address format allows any number of confirmations and fast lookups
-- Facilitates network-wide header duplication inefficiencies
+- Mantener índice secuencial de cuentas de almacenamiento, muchos encabezados por cuenta de almacenamiento
+- Máximo 2 búsquedas de datos de cuenta para &gt;99,9% de verificaciones \(1 para máximo\)
+- Formato de dirección de datos secuencial compacto permite cualquier número de confirmaciones y búsquedas rápidas
+- Facilita las ineficiencias de duplicación en toda la red

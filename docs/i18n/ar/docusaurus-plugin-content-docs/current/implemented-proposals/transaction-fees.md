@@ -1,32 +1,32 @@
 ---
-title: Deterministic Transaction Fees
+title: رسوم المُعاملات الحتمية (Deterministic Transaction Fees)
 ---
 
-Transactions currently include a fee field that indicates the maximum fee field a slot leader is permitted to charge to process a transaction. The cluster, on the other hand, agrees on a minimum fee. If the network is congested, the slot leader may prioritize the transactions offering higher fees. That means the client won't know how much was collected until the transaction is confirmed by the cluster and the remaining balance is checked. It smells of exactly what we dislike about Ethereum's "gas", non-determinism.
+تتضمن المُعاملات حاليًا حقل الرسوم الذي يُشير إلى حقل الحد الأقصى للرسوم الذي يُسمح لقائد الفُتحة (slot leader) بتحصيله لمُعالجة المُعاملة. من ناحية أخرى، تُوافق المجموعة (cluster) على حد أدنى للرسوم. إذا كانت الشبكة مُزدحمة، فقد يعطي قائد الفُتحة (slot leader) الأولوية للمُعاملات التي تُقدم رسومًا أعلى. هذا يعني أن العميل لن يعرف المبلغ الذي تم تحصيله حتى يتم تأكيد المُعاملة من قبل المجموعة (cluster) ويتم فحص الرصيد المُتبقي. إنها تبدو بالضبط ما مثل ما نكرهه في "غاز" الـ Ethereum، اللا حتمية.
 
-## Congestion-driven fees
+## الرسوم المدفوعة بالإزدحام (Congestion-driven fees)
 
-Each validator uses _signatures per slot_ \(SPS\) to estimate network congestion and _SPS target_ to estimate the desired processing capacity of the cluster. The validator learns the SPS target from the genesis config, whereas it calculates SPS from recently processed transactions. The genesis config also defines a target `lamports_per_signature`, which is the fee to charge per signature when the cluster is operating at _SPS target_.
+يستخدم كل مُدقّق التوقيعات لكل فتحة _signatures per slot_\ (SPS \) لتقدير إزدحام الشبكة و _SPS target_ لتقدير سعة المُعالجة المطلوبة للمجموعة (cluster). يتعرف المُدقّق (validator) على هدف SPS منذ إعدادات مرحلة التكوين (genesis config)، بينما يحسب SPS من المُعاملات التي تمت مُعالجتها مُؤخرًا. يُحدد التكوين الأصلي أيضًا هدف `lamports_per_signature`، وهو الرسوم التي يتم تحصيلها لكل توقيع عندما تعمل المجموعة عند _SPS target_.
 
-## Calculating fees
+## حساب الرسوم (Calculating fees)
 
-The client uses the JSON RPC API to query the cluster for the current fee parameters. Those parameters are tagged with a blockhash and remain valid until that blockhash is old enough to be rejected by the slot leader.
+يستخدم العميل واجهة برمجة تطبيقات JSON RPC للإستعلام عن مُعلِّمات (parameters) الرسوم الحالية في المجموعة (cluster). يتم تمييز هذه مُعلِّمات (parameters) بإستخدام تجزئة الكتلة (Blockhash) وتظل صالحة حتى تصبح تجزئة الكتلة قديمة بدرجة كافية ليتم رفضها من قِبل قائد الفُتحة (slot leader).
 
-Before sending a transaction to the cluster, a client may submit the transaction and fee account data to an SDK module called the _fee calculator_. So long as the client's SDK version matches the slot leader's version, the client is assured that its account will be changed exactly the same number of lamports as returned by the fee calculator.
+قبل إرسال مُعاملة إلى الكتلة (cluster)، يجوز للعميل إرسال بيانات حساب المُعاملة والرسوم إلى وحدة SDK تسمى حاسبة الرسوم _fee calculator_. طالما أن إصدار SDK الخاص بالعميل يتطابق مع إصدار قائد الفُتحة (slot leader)، فإن العميل مُطمئن إلى أنه سيتم تغيير حسابه تمامًا بنفس عدد الـ lamports كما تم إرجاعه بواسطة حاسبة الرسوم.
 
-## Fee Parameters
+## مُعلِّمات الرسوم (Fee Parameters)
 
-In the first implementation of this design, the only fee parameter is `lamports_per_signature`. The more signatures the cluster needs to verify, the higher the fee. The exact number of lamports is determined by the ratio of SPS to the SPS target. At the end of each slot, the cluster lowers `lamports_per_signature` when SPS is below the target and raises it when above the target. The minimum value for `lamports_per_signature` is 50% of the target `lamports_per_signature` and the maximum value is 10x the target \`lamports_per_signature'
+في أول تنفيذ لهذا التصميم، تكون مُعلِّمة (parameter) الرسوم الوحيدة هي ` lamports_per_signature `. كلما زاد عدد التوقيعات التي تحتاج المجموعة (cluster) للتحقق منها، زادت الرسوم. يتم تحديد العدد الدقيق للمنافذ عن طريق نسبة الـ SPS إلى هدف الـ SPS. في نهاية كل فُتحة (Slot)، تُخفض المجموعة `lamports_per_signature` عندما يكون SPS أقل من الهدف وترفعه عندما يكون فوق الهدف. الحد الأدنى لقيمة `lamports_per_signature` هو 50٪ من الهدف `lamports_per_signature` والقيمة القصوى هي 10x للهدف \ "lamports_per_signature"
 
-Future parameters might include:
+قد تتضمن المُعلِّمات (parameters) المُستقبلية ما يلي:
 
-- `lamports_per_pubkey` - cost to load an account
-- `lamports_per_slot_distance` - higher cost to load very old accounts
-- `lamports_per_byte` - cost per size of account loaded
-- `lamports_per_bpf_instruction` - cost to run a program
+- `lamports_per_pubkey` - تكلفة تحميل الحساب
+- `lamports_per_slot_distance` - تكلفة أعلى لتحميل حسابات قديمة جدًا
+- `lamports_per_byte` - التكلفة لكل حجم حساب تم تحميله
+- `lamports_per_bpf_instruction` - تكلفة تشغيل برنامج
 
-## Attacks
+## الهجمات (Attacks)
 
-### Hijacking the SPS Target
+### إختطاف هدف SPS أو Hijacking the SPS Target
 
-A group of validators can centralize the cluster if they can convince it to raise the SPS Target above a point where the rest of the validators can keep up. Raising the target will cause fees to drop, presumably creating more demand and therefore higher TPS. If the validator doesn't have hardware that can process that many transactions that fast, its confirmation votes will eventually get so long that the cluster will be forced to boot it.
+يُمكن لمجموعة من المُدقّقين (validators) جعل المجموعة (cluster) مركزية إذا تمكنوا من إقناعها برفع هدف SPS فوق نقطة يتُمكن بقية المُدقّقين من مُواكبة ذلك. سيُؤدي رفع الهدف إلى إنخفاض الرسوم، مما يُؤدي على الأرجح إلى زيادة الطلب وبالتالي زيادة عدد المُعاملات في الثانىة الواحدة (TPS). إذا لم يكن لدى المُدقّق (validator) أجهزة يُمكنها مُعالجة العديد من المُعاملات بهذه السرعة، فستستغرق أصوات التأكيد في النهاية وقتًا طويلاً بحيث تضطر المجموعة (cluster) إلى تشغيلها.

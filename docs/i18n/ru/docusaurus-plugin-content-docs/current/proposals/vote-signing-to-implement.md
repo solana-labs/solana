@@ -1,116 +1,116 @@
 ---
-title: Secure Vote Signing
+title: Безопасное Подписание Голоса
 ---
 
-## Secure Vote Signing
+## Безопасное Подписание Голоса
 
-This design describes additional vote signing behavior that will make the process more secure.
+Этот дизайн описывает дополнительные действия при подписи голоса, которые сделают процесс более безопасным.
 
-Currently, Solana implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
+В настоящее время Solana использует службу подписи голосов, которая оценивает каждый голос, чтобы убедиться, что он не нарушает условие слешинга. Эта служба может иметь различные вариации, в зависимости от возможностей аппаратной платформы. В частности, он может использоваться совместно с безопасным анклавом \(таким как SGX\). Анклав может сгенерировать асимметричный ключ, открывая API пользовательскому \(ненадежному\) коду для подписания транзакций голосования, сохраняя приватный ключ, подписавший голос, в его защищённой памяти.
 
-The following sections outline how this architecture would work:
+Следующие разделы описывают как будет работать эта архитектура:
 
-### Message Flow
+### Поток сообщения
 
-1. The node initializes the enclave at startup
+1. Нода инициализирует анклав при запуске
 
-   - The enclave generates an asymmetric key and returns the public key to the
+   - Анклав генерирует асимметричный ключ и возвращает открытый ключ
 
-     node
+     ноде
 
-   - The keypair is ephemeral. A new keypair is generated on node bootup. A
+   - Пара ключей эфемерна. При загрузке ноды генерируется новая пара ключей. А
 
-     new keypair might also be generated at runtime based on some to be determined
+     новый пара ключей может также генерироваться во время работы на основе некоторых определяемых
 
-     criteria.
+     критерий.
 
-   - The enclave returns its attestation report to the node
+   - Анклав возвращает отчет аттестации ноде
 
-2. The node performs attestation of the enclave \(e.g using Intel's IAS APIs\)
+2. Нода выполняет аттестацию анклава \(например с помощью Intel's IAS API\)
 
-   - The node ensures that the Secure Enclave is running on a TPM and is
+   - Нода проверяет, чтобы защищённый анклав был запущен в TPM и
 
-     signed by a trusted party
+     подписан доверенной стороной
 
-3. The stakeholder of the node grants ephemeral key permission to use its stake.
+3. Держатель стейка норды предоставляет разрешение эфемерного ключа на использование своего стейка.
 
-   This process is to be determined.
+   Этот процесс должен быть определен.
 
-4. The node's untrusted, non-enclave software calls trusted enclave software
+4. Ненадежное, не-анклавное ПО ноды вызывает доверенное ПО анклава
 
-   using its interface to sign transactions and other data.
+   используя свой интерфейс для подписания транзакций и других данных.
 
-   - In case of vote signing, the node needs to verify the PoH. The PoH
+   - В случае подписи голоса, нода должна верифицировать PoH. PoH
 
-     verification is an integral part of signing. The enclave would be
+     верификация является неотъемлемой частью подписи. Анклав будет
 
-     presented with some verifiable data to check before signing the vote.
+     представлен с некоторыми верифицируемыми данными для проверки перед подписанием голосования.
 
-   - The process of generating the verifiable data in untrusted space is to be determined
+   - Необходимо определить процесс генерации проверяемых данных в ненадежном пространстве
 
-### PoH Verification
+### PoH верификация
 
-1. When the node votes on an en entry `X`, there's a lockout period `N`, for
+1. Когда нода голосует за запись в `X`, есть период блокировки `N`, для того
 
-   which it cannot vote on a fork that does not contain `X` in its history.
+   , который не может голосовать за форы, не содержащий `Х` в своей истории.
 
-2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout
+2. Каждый раз, когда нода голосует за производную `X`, например `X+y`, период
 
-   period for `X` increases by a factor `F` \(i.e. the duration node cannot vote on
+   блокировки для `X` увеличивается на фактор `F` \(т.е. длительность периода пока нода не может голосовать за
 
-   a fork that does not contain `X` increases\).
+   форк, который не содержит `X` - увеличивается\).
 
-   - The lockout period for `X+y` is still `N` until the node votes again.
+   - Период блокировки для `X+y` все еще `N` до тех пор, пока нода снова не проголосует.
 
-3. The lockout period increment is capped \(e.g. factor `F` applies maximum 32
+3. Приращение периода блокировки ограничено \(e.g. фактор `F` применяется максимум 32
 
-   times\).
+   раза\).
 
-4. The signing enclave must not sign a vote that violates this policy. This
+4. Подписывающий анклав не должен подписывать голос, который нарушает эту политику. Это
 
-   means
+   значит
 
-   - Enclave is initialized with `N`, `F` and `Factor cap`
-   - Enclave stores `Factor cap` number of entry IDs on which the node had
+   - Энклав инициализирован с `N`, `F` и `Factor cap`
+   - Анклав хранит `Factor capp` количество идентификаторов записи, на ноде за которую
 
-     previously voted
+     ранее проголосовал
 
-   - The sign request contains the entry ID for the new vote
-   - Enclave verifies that new vote's entry ID is on the correct fork
+   - Запрос на подпись содержит идентификатор записи для нового голоса
+   - Enclave проверяет, что ID нового голоса находится на правильном форке
 
-     \(following the rules \#1 and \#2 above\)
+     \(следуя правилам \#1 и \#2 выше\)
 
-### Ancestor Verification
+### Проверка Предшественника
 
-This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last_tick at which each node voted 4. It sends new vote request to vote-signing service
+Это альтернативный, хотя и менее определенный подход к проверке форка голосования. 1. Валидатор поддерживает активный набор нод в кластере 2. Он наблюдает за голосами от активной группы за последний период голосования 3. Он хранит предшественник/last_tick, за который проголосовала каждая нода 4. Он посылает запрос на новый голос в службу подписания голосов
 
-- It includes previous votes from nodes in the active set, and their
+- Он включает в себя предыдущие голоса от нод в активной группе, и их
 
-  corresponding ancestors
+  соответствующих предков
 
-  1. The signer checks if the previous votes contains a vote from the validator,
+  1. Подписывающий проверяет, содержит ли предыдущие голоса голос от валидатора,
 
-     and the vote ancestor matches with majority of the nodes
+     и предшественник голосования совпадает с большинством узлов
 
-- It signs the new vote if the check is successful
-- It asserts \(raises an alarm of some sort\) if the check is unsuccessful
+- Если проверка прошла успешно, он подписывает новый голос
+- Он утверждает \(поднимает какой-то сигнал тревоги\), если проверка не удалась
 
-The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH \(as it'll be rejected by the cluster\). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing \(as part of
+Предпосылка заключается в том, что валидатор может быть обманут самое большее один раз, чтобы проголосовать за неправильные данные. Если кто-то захватит валидатора и отправит запрос на голосование для фиктивных данных, этот голос не будет включен в PoH \(поскольку он будет отклонен кластером\). В следующий раз, когда валидатор отправит запрос на подпись голосования, служба подписи обнаружит, что последний голос валидатора отсутствует \(как часть
 
-## 5 above\).
+## пункта 5 выше).
 
-### Fork determination
+### Обнаружение форка
 
-Due to the fact that the enclave cannot process PoH, it has no direct knowledge of fork history of a submitted validator vote. Each enclave should be initiated with the current _active set_ of public keys. A validator should submit its current vote along with the votes of the active set \(including itself\) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the fork being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
+Из-за того, что анклав не может обрабатывать PoH, он не имеет прямых сведений об истории форков поданного голоса валидатора. Каждый анклав должен быть инициирован с текущим _активным набором_ открытых ключей. Валидатор должен отправить свой текущий голос вместе с голосами активного набора \(включая самого себя\), которые он наблюдал в слоте своего предыдущего голосования. Таким образом, анклав может предположить голоса, сопровождающие предыдущее голосование валидатора, и, следовательно, форк, по которому проводится голосование. Это невозможно для первоначально представленного голоса валидатора, так как у него не будет "предыдущего" слота для ссылки. Чтобы учесть это, следует применять кратковременное замораживание голосования до тех пор, пока не будет подан второй голос, содержащий голоса в активном наборе вместе с собственным голосом на высоте первоначального голосования.
 
-### Enclave configuration
+### Конфигурация анклава
 
-A staking client should be configurable to prevent voting on inactive forks. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted fork. This configuration should take the form of a rule such that the client will only vote on a fork if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted fork at a depth where an additional vote would create a lockout for an undesirable amount of time if that fork turns out not to be live.
+Клиент стейкинга должен быть настраиваемым, чтобы предотвратить голосование на неактивных форках. Этот механизм должен использовать известный активный набор клиента `N_active` вместе с пороговым голосованием `N_голосом` и пороговой глубиной `N_depth`, чтобы определить, следует ли продолжать голосование по представленному форку. Эта конфигурация должна принять форму правила, чтобы клиент голосовал за форк, только если он наблюдает больше, чем `N_vote` в `N_depth`. Фактически, это означает, что клиент не подтверждает, что он наблюдал некоторую вероятность экономической финализации представленного форка на такой глубине, где дополнительное голосование приведет к блокировке на нежелательный период времени, если этот форк окажется не действующим.
 
-### Challenges
+### Проблемы
 
-1. Generation of verifiable data in untrusted space for PoH verification in the
+1. Генерация проверяемых данных в ненадежном месте для проверки PoH
 
-   enclave.
+   в анклаве.
 
-2. Need infrastructure for granting stake to an ephemeral key.
+2. Нужна инфраструктура для предоставления стейка эфемерному ключу.

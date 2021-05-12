@@ -1,102 +1,58 @@
 ---
-title: "Transactions"
+title: "المُعاملات (Transactions)"
 ---
 
-Program execution begins with a [transaction](terminology.md#transaction) being
-submitted to the cluster. The Solana runtime will execute a program to process
-each of the [instructions](terminology.md#instruction) contained in the
-transaction, in order, and atomically.
+يبدأ تنفيذ البرنامج بـ [transaction](terminology.md#transaction) التي يتم تقديمها إلى المجموعة (cluster). سينفذ وقت تشغيل Solana برنامجًا لمعالجة كل من [instructions](terminology.md#instruction) الواردة في المُعاملة، بالترتيب وبشكل ذري.
 
-## Anatomy of a Transaction
+## تشريح المُعاملة (Anatomy of a Transaction)
 
-This section covers the binary format of a transaction.
+يُغطي هذا القسم التنسيق الثنائي للمُعاملة.
 
-### Transaction Format
+### تنسيق المُعاملة (Transaction Format)
 
-A transaction contains a [compact-array](#compact-array-format) of signatures,
-followed by a [message](#message-format). Each item in the signatures array is
-a [digital signature](#signature-format) of the given message. The Solana
-runtime verifies that the number of signatures matches the number in the first
-8 bits of the [message header](#message-header-format). It also verifies that
-each signature was signed by the private key corresponding to the public key at
-the same index in the message's account addresses array.
+تحتوي المُعاملة على مجموعة مُدمجة [compact-array](#compact-array-format) من التوقيعات، تليها رسالة [message](#message-format). كل عنصر في مصفوفة التواقيع هو توقيع إلكتروني [digital signature](#signature-format) من الرسالة المُحَدَّدة. يتحقق وقت تشغيل Solana من أن عدد التوقيعات يطابق الرقم الموجود في أول 8 bits من رأس الرسالة [message header](#message-header-format). كما يتحقق من أن كل توقيع تم توقيعه بواسطة المفتاح الخاص (private key) المقابل للمفتاح العمومي (public key) في نفس الفهرس في مصفوفة عناوين حساب الرسالة.
 
-#### Signature Format
+#### تنسيق التوقيع (Signature Format)
 
-Each digital signature is in the ed25519 binary format and consumes 64 bytes.
+يكون كل توقيع رقمي بالتنسيق الثنائي ed25519 ويستهلك 64 bytes.
 
-### Message Format
+### تنسيق الرسالة (Message Format)
 
-A message contains a [header](#message-header-format), followed by a
-compact-array of [account addresses](#account-addresses-format), followed by a
-recent [blockhash](#blockhash-format), followed by a compact-array of
-[instructions](#instruction-format).
+تحتوي الرسالة على [header](#message-header-format)، متبوعة بمصفوفة مضغوطة من عناوين الحساب [account addresses](#account-addresses-format)، متبوعة بمجموعة حديثة لتجزئة الكُتلة [blockhash](#blockhash-format)، متبوعة بمصفوفة مضغوطة من التعليمات [instructions](#instruction-format).
 
-#### Message Header Format
+#### تنسيق رأس الرسالة (Message Header Format)
 
-The message header contains three unsigned 8-bit values. The first value is the
-number of required signatures in the containing transaction. The second value
-is the number of those corresponding account addresses that are read-only. The
-third value in the message header is the number of read-only account addresses
-not requiring signatures.
+يحتوي رأس الرسالة على ثلاث قيم 8-bit غير مُوقَّعة. القيمة الأولى هي عدد التوقيعات المطلوبة في المُعاملة التي تحتوي عليها. القيمة الثانية هي عدد عناوين الحساب المُطابقة التي تكون للقراءة فقط (read-only). القيمة الثالثة في رأس الرسالة هي عدد عناوين الحساب للقراءة فقط (read-only) التي لا تتطلب توقيعات.
 
-#### Account Addresses Format
+#### تنسيق عناوين الحساب (Account Addresses Format)
 
-The addresses that require signatures appear at the beginning of the account
-address array, with addresses requesting write access first and read-only
-accounts following. The addresses that do not require signatures follow the
-addresses that do, again with read-write accounts first and read-only accounts
-following.
+تظهر العناوين التي تتطلب تواقيع في بداية مصفوفة عناوين الحساب، مع العناوين التي تطلب حق الوصول للكتابة أولاً ثم وتليها الحسابات القابلة للقراءة فقط (read-only). العناوين التي لا تتطلب توقيعات تتبع العناوين التي تتطلب توقيعات، مرة أخرى مع حسابات القراءة والكتابة (read-write) أولاً متبوعة بحسابات القراءة فقط (read-only).
 
-#### Blockhash Format
+#### تنسيق تجزئة الكتلة (Blockhash Format)
 
-A blockhash contains a 32-byte SHA-256 hash. It is used to indicate when a
-client last observed the ledger. Validators will reject transactions when the
-blockhash is too old.
+تحتوي تجزئة الكتلة (blockhash) على تجزئة SHA-256 بحجم 32-byte. يتم إستخدامه للإشارة إلى آخر مرة لاحظ فيها العميل دفتر الأستاذ (ledger). سيرفض المُدققون (validators) المُعاملات عندما تكون تجزئة الكتلة (blockhash) قديمة جدًا.
 
-### Instruction Format
+### تنسيق التعليمات (Instruction Format)
 
-An instruction contains a program id index, followed by a compact-array of
-account address indexes, followed by a compact-array of opaque 8-bit data. The
-program id index is used to identify an on-chain program that can interpret the
-opaque data. The program id index is an unsigned 8-bit index to an account
-address in the message's array of account addresses. The account address
-indexes are each an unsigned 8-bit index into that same array.
+تحتوي التعليمات على فهرس مُعرف البرنامج (program id)، متبوعًا بمصفوفة مضغوطة من فهارس عناوين الحساب، متبوعة بمصفوفة مضغوطة من البيانات المُبهمة 8-bit. يتم إستخدام فهرس مُعرّف البرنامج لتحديد برنامج على الشبكة (On-Chain) يُمكنه تفسير البيانات المُبهمة (opaque data). فهرس مُعرّف البرنامج عبارة عن فهرس 8-bit غير مُوقَّعة لعنوان حساب في رسالة مجموعة عناوين الحساب. فهارس عنوان الحساب كل منها عبارة عن فهرس 8-bit بدون إشارة إلى نفس المصفوفة.
 
-### Compact-Array Format
+### تنسيق المصفوفة المضغوطة (Compact-Array Format)
 
-A compact-array is serialized as the array length, followed by each array item.
-The array length is a special multi-byte encoding called compact-u16.
+يتم إجراء تسلسل للمصفوفة المضغوطة (Compact-Array) على أنها طول الصفيف، متبوعًة بكل عنصر في المصفوفة. طول المصفوفة هو ترميز خاص مُتعدد الـ byte يُسمى مضغوط u16 أو Compact-u16 Format.
 
-#### Compact-u16 Format
+#### مضغوط u16 أو Compact-u16 Format
 
-A compact-u16 is a multi-byte encoding of 16 bits. The first byte contains the
-lower 7 bits of the value in its lower 7 bits. If the value is above 0x7f, the
-high bit is set and the next 7 bits of the value are placed into the lower 7
-bits of a second byte. If the value is above 0x3fff, the high bit is set and
-the remaining 2 bits of the value are placed into the lower 2 bits of a third
-byte.
+مضغوط u16 أو Compact-u16 هو ترميز مُتعدد الـ byte متكون من 16 bits. يحتوي الـ byte الأول على عدد 7 bits أقل من القيمة في 7 bits الأقل. إذا كانت القيمة أعلى من 0x7f، يتم تعيين الـ bit العالي ويتم وضع الـ 7 bits التالية من القيمة في 7 bits الأقل من الـ bits للـ byte الثاني. إذا كانت القيمة أعلى من 0x3fff، يتم تعيين الـ bit العالي ويتم وضع الـ 2 bits المتبقيتين من القيمة في الـ 2 bits السفليتين من الـ byte الثالث.
 
-### Account Address Format
+### تنسيق عنوان الحساب (Account Address Format)
 
-An account address is 32-bytes of arbitrary data. When the address requires a
-digital signature, the runtime interprets it as the public key of an ed25519
-keypair.
+عنوان الحساب هو 32-bytes من البيانات العشوائية. عندما يتطلب العنوان توقيعًا رقميًا، يُفسره وقت التشغيل على أنه المفتاح العمومي (public key) لزوج المفاتيح ed25519.
 
-## Instructions
+## التعليمات (Instructions)
 
-Each [instruction](terminology.md#instruction) specifies a single program, a
-subset of the transaction's accounts that should be passed to the program, and a
-data byte array that is passed to the program. The program interprets the data
-array and operates on the accounts specified by the instructions. The program
-can return successfully, or with an error code. An error return causes the
-entire transaction to fail immediately.
+تُحدد كل تعليمة [instruction](terminology.md#instruction) برنامجًا واحدًا، ومجموعة فرعية من حسابات المُعاملة التي يجب تمريرها إلى البرنامج، ومصفوفة بيانات الـ byte التي يتم تمريرها إلى البرنامج. يفسر البرنامج مصفوفة البيانات ويعمل على الحسابات المُحددة في التعليمات. يمكن للبرنامج الإرجاع بنجاح، أو برمز رسالة خطأ. يُؤدي إرجاع الخطأ إلى فشل المُعاملة بالكامل على الفور.
 
-Programs typically provide helper functions to construct instructions they
-support. For example, the system program provides the following Rust helper to
-construct a
-[`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63)
-instruction:
+يُوفر البرنامج عادةً وظائف مُساعدة لبناء التعليمات التي يدعمونها. على سبيل المثال، يُوفر برنامج النظام مساعد Rust التالي لإنشاء تعليمة [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
 
 ```rust
 pub fn create_account(
@@ -110,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new_with_bincode(
+    Instruction::new(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -122,89 +78,36 @@ pub fn create_account(
 }
 ```
 
-Which can be found here:
+الذي يمكن العثور عليه هنا:
 
 https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L220
 
-### Program Id
+### مُعرف البرنامج (Program Id)
 
-The instruction's [program id](terminology.md#program-id) specifies which
-program will process this instruction. The program's account's owner specifies
-which loader should be used to load and execute the program and the data
-contains information about how the runtime should execute the program.
+يُحدد مُعرف البرنامج [program id](terminology.md#program-id) الخاص بالإرشادات البرنامج الذي سيُعالج هذه التعليمة. يُحدد مالك حساب البرنامج المُحمّل (Loader) الذي يجب إستخدامه لتحميل البرنامج وتنفيذه وتحتوي البيانات على معلومات حول كيفية تنفيذ وقت التشغيل للبرنامج.
 
-In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md),
-the owner is the BPF Loader and the account data holds the BPF bytecode. Program
-accounts are permanently marked as executable by the loader once they are
-successfully deployed. The runtime will reject transactions that specify programs
-that are not executable.
+في حالة برامج BPF المنشورة [deployed BPF programs](developing/deployed-programs/overview.md)، يكون المالك هو مُحمّل BPF وبيانات الحساب تحتفظ بالـ bytecode الخاص بالـ BPF.  يتم تمييز حسابات البرنامج بشكل دائم على أنها قابلة للتنفيذ بواسطة المُحمّل (Loader) بمجرد نشرها بنجاح. سيرفض وقت التشغيل المُعاملات التي حدد البرامج غير القابلة للتنفيذ.
 
-Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs)
-are handled differently in that they are built directly into the Solana runtime.
 
-### Accounts
+على عكس البرامج التي تم نشرها، يتم التعامل مع [builtins](developing/builtins/programs.md) بشكل مُختلف من حيث أنها مُدمجة مُباشرة في وقت تشغيل Solana.
 
-The accounts referenced by an instruction represent on-chain state and serve as
-both the inputs and outputs of a program. More information about Accounts can be
-found in the [Accounts](accounts.md) section.
+### الحسابات (Accounts)
 
-### Instruction data
+تُمثل الحسابات المُشار إليها بواسطة التعليمات حالة على الشبكة (on-chain) وتعمل كمُدخلات (inputs) ومُخرجات (outputs) للبرنامج. يُمكن العثور على مزيد من المعلومات حول الحسابات في قسم الحسابات [Accounts ](accounts.md).
 
-Each instruction caries a general purpose byte array that is passed to the
-program along with the accounts. The contents of the instruction data is program
-specific and typically used to convey what operations the program should
-perform, and any additional information those operations may need above and
-beyond what the accounts contain.
+### تنسيق التعليمات (Instruction data)
 
-Programs are free to specify how information is encoded into the instruction
-data byte array. The choice of how data is encoded should take into account the
-overhead of decoding since that step is performed by the program on-chain. It's
-been observed that some common encodings (Rust's bincode for example) are very
-inefficient.
+كل تعليمة تحمل مصفوفة byte للأغراض العامة يتم تمريرها إلى البرنامج مع الحسابات. مُحتويات بيانات التعليمات خاصة بالبرنامج وتُستخدم عادةً للتعبير عن العمليات التي يجب أن يقوم بها البرنامج وأي معلومات إضافية قد تحتاجها هذه العمليات بالإضافة إلى ما تحتويه الحسابات.
 
-The [Solana Program Library's Token
-program](https://github.com/solana-labs/solana-program-library/tree/master/token)
-gives one example of how instruction data can be encoded efficiently, but note
-that this method only supports fixed sized types. Token utilizes the
-[Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs)
-trait to encode/decode instruction data for both token instructions as well as
-token account states.
+البرامج حرة في تحديد كيفية تشفير المعلومات في مصفوفة بيانات byte التعليمات. يجب أن يأخذ إختيار كيفية تشفير البيانات في الإعتبار النفقات العامة لفك الترميز منذ أن يتم تنفيذ هذه الخطوة بواسطة البرنامج على الشبكة (on-chain). لقد لوحظ أن بعض الترميزات الشائعة (على سبيل المثال Rust's bincode) غير فعالة للغاية.
 
-### Multiple instructions in a single transaction
+يُعطي [Solana Program Library's Token program](https://github.com/solana-labs/solana-program-library/tree/master/token) مثالاً واحدًا على كيفية تشفير بيانات التعليمات بكفاءة، لكن لاحظ أن هذه الطريقة تدعم فقط الأنواع ذات الحجم الثابت. يُستخدم الرمز السمة [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) لترميز / فك تشفير بيانات التعليمات لكل من تعليمات الرمز وكذلك حالات حساب الرمز.
 
-A transaction can contain instructions in any order. This means a malicious
-user could craft transactions that may pose instructions in an order that the
-program has not been protected against. Programs should be hardened to properly
-and safely handle any possible instruction sequence.
+## التوقيعات (Signatures)
 
-One not so obvious example is account deinitialization. Some programs may
-attempt to deinitialize an account by setting its lamports to zero, with the
-assumption that the runtime will delete the account. This assumption may be
-valid between transactions, but it is not between instructions or cross-program
-invocations. To harden against this, the program should also explicitly zero out the
-account's data.
+تسرد كل مُعاملة صراحةً جميع المفاتيح العمومية (public keys) للحساب المُشار إليها في تعليمات المُعاملة. كل مجموعة فرعية من هذه المفاتيح العمومية (public keys) مصحوبة بتوقيع المُعاملة. تُشير تلك التواقيع إلى البرامج الموجودة على الشبكة (On-Chain) التي تُفيد بأن صاحب الحساب أذن بالمعاملة. عادةً ما يستخدم البرنامج التفويض للسماح بخصم الحساب أو تعديل بياناته. تُمكن العثور على مزيد من المعلومات حول كيفية توصيل التفويض إلى برنامج في الحسابات [Accounts](accounts.md#signers)
 
-An example of where this could be a problem is if a token program, upon
-transferring the token out of an account, sets the account's lamports to zero,
-assuming it will be deleted by the runtime. If the program does not zero out the
-account's data, a malicious user could trail this instruction with another that
-transfers the tokens a second time.
 
-## Signatures
+## تجزئة الكتلة الحديثة (Recent Blockhash)
 
-Each transaction explicitly lists all account public keys referenced by the
-transaction's instructions. A subset of those public keys are each accompanied
-by a transaction signature. Those signatures signal on-chain programs that the
-account holder has authorized the transaction. Typically, the program uses the
-authorization to permit debiting the account or modifying its data. More
-information about how the authorization is communicated to a program can be
-found in [Accounts](accounts.md#signers)
-
-## Recent Blockhash
-
-A transaction includes a recent [blockhash](terminology.md#blockhash) to prevent
-duplication and to give transactions lifetimes. Any transaction that is
-completely identical to a previous one is rejected, so adding a newer blockhash
-allows multiple transactions to repeat the exact same action. Transactions also
-have lifetimes that are defined by the blockhash, as any transaction whose
-blockhash is too old will be rejected.
+تتضمن المُعاملة رقم تجزئة الكُتلة [blockhash](terminology.md#blockhash) حديثًا لمنع الإزدواجية وإعطاء عمر للمُعاملات. يتم رفض أي مُعاملة مُطابقة تمامًا لمُعاملة سابقة، لذا فإن إضافة تجزئة كتلة (Blockhash) أحدث يسمح للمُعاملات المُتعددة بتكرار نفس الإجراء بالضبط. المُعاملات أيضًا لها فترات عمر مُحددة بواسطة تجزئة الكتلة (Blockhash)، حيث سيتم رفض أي مُعاملة يتكون تجزئة كتلتها (Blockhash) قديمًا جدًا.

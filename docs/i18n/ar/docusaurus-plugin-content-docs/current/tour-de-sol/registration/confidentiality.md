@@ -1,7 +1,7 @@
 ---
-title: Confidentiality
+title: الخُصوصية (Confidentiality)
 ---
 
 **Section 8 of the** [**TOUR DE SOL PARTICIPATION TERMS**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) **references confidentiality.**
 
-Solana doesn’t intend to share any confidential information during the Tour de SOL. However, if we do, it will be called out as such within our communications verbally, by email, etc. Unless information is specifically called out as such, the information should not be considered confidential and we welcome you to share it.
+لا تنوي Solana مُشاركة أي معلومات حساسة خلال Tour de SOL. مع ذلك، إذا فعلنا ذلك، فسيتم إستدعاؤه على هذا النحو في إتصالاتنا شفهيًا، عبر البريد الإلكتروني، وما إلى ذلك. ما لم يتم ذكر المعلومات على هذا النحو على وجه التحديد ، لا ينبغي إعتبار المعلومات حساسة ونُرحب بكم لمُشاركتها.

@@ -1,7 +1,7 @@
 ---
-title: Running a Validator
+title: Запуск валидатора
 ---
 
-This section describes how run a Solana validator node.
+В этом разделе описано, как запустить ноду валидатора Solana.
 
-There are several clusters available to connect to, see [choosing a Cluster](cli/choose-a-cluster.md) for an overview of each.
+Существует несколько параллельно работающих кластеров, с описанием каждого из них можно ознакомиться на странице [Выбор кластера](cli/choose-a-cluster.md).

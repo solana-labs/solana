@@ -1,31 +1,24 @@
 ---
-title: Add Solana to Your Exchange
+title: 거래소에 Solana 추가
 ---
 
-This guide describes how to add Solana's native token SOL to your cryptocurrency
-exchange.
+이 가이드는 암호 화폐 거래소에 Solana의 기본 토큰 SOL을 추가하는 방법을 설명합니다.
 
-## Node Setup
+## 노드 설정
 
-We highly recommend setting up at least two nodes on high-grade computers/cloud
-instances, upgrading to newer versions promptly, and keeping an eye on service
-operations with a bundled monitoring tool.
+고급 컴퓨터 / 클라우드 인스턴스에 최소 2 개의 노드를 설정하고, 최신 버전으로 즉시 업그레이드하고, 번들 모니터링 도구를 사용하여 서비스 운영을 주시하는 것이 좋습니다.
 
-This setup enables you:
-
-- to have a trusted gateway to the Solana mainnet-beta cluster to get data and
-  submit withdrawal transactions
+이 설정을 통해 다음을 수행 할 수 있습니다 .-데이터를 가져오고 인출 트랜잭션을 제출하기 위해 Solana 메인 넷-베타 클러스터에 대한 신뢰할 수있는 게이트웨이를 갖출 수 있습니다.- 보유 된 과거 블록 데이터의 양을 완전히 제어 할 수 있습니다 .-한 노드가실패하더라도 서비스 가용성을 유지합니다
+- to have a trusted gateway to the Solana mainnet-beta cluster to get data and submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
-Solana nodes demand relatively high computing power to handle our fast blocks
-and high TPS. For specific requirements, please see
-[hardware recommendations](../running-validator/validator-reqs.md).
+Solana에노드는 빠른 블록과 높은 TPS를 처리하기 위해 상대적으로 높은 컴퓨팅 성능을 필요로합니다.  특정 요구 사항은 \[하드웨어 권장 사항\] (../ running-validator / validator-reqs.md)을 참조하십시오.
 
-To run an api node:
+API를 노드를 실행하려면
 
 1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
-2. Start the validator with at least the following parameters:
+2. 시작 최소한 다음 매개 변수를 사용하여 검증
 
 ```bash
 solana-validator \
@@ -40,157 +33,116 @@ solana-validator \
   --no-untrusted-rpc
 ```
 
-Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
+:`bash는
+solana-validator \
+  --ledger <LEDGER_PATH> \
+  --entrypoint <CLUSTER_ENTRYPOINT> \
+  --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
+  --rpc-port 8899 \
+  --no-voting \
+  --enable-rpc-transaction- 역사 \
+  --limit은 원장 크기는 \
+  --trusted - 검증 <VALIDATOR_ADDRESS> \
+  --no-신뢰할
+수없는-RPC`정의`--ledger`
 
-The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to the cluster you are joining.
-[Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
+`--entrypoint` 및`--expected-genesis-hash` 매개 변수는 모두 참여하는 클러스터에 따라 다릅니다. \[메인 넷 베타의 현재 매개 변수\] (../ clusters.md # example-solana-validator-command-line-2)
 
-The `--limit-ledger-size` parameter allows you to specify how many ledger
-[shreds](../terminology.md#shred) your node retains on disk. If you do not
-include this parameter, the validator will keep the entire ledger until it runs
-out of disk space. The default value attempts to keep the ledger disk usage
-under 500GB. More or less disk usage may be requested by adding an argument to
-`--limit-ledger-size` if desired. Check `solana-validator --help` for the
-default limit value used by `--limit-ledger-size`. More information about
-selecting a custom limit value is [available
-here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+`--limit-ledger-size` 매개 변수를 사용하면 원장 \[파쇄\] (. ./terminology.md#shred) 노드가 디스크에 유지합니다. 이 매개 변수를 포함하지 않으면 유효성 검사기는 디스크 공간이 부족해질 때까지 전체 원장을 유지합니다.  기본값은 원장 디스크 사용량을 500GB 미만으로 유지하려고합니다.  원하는 경우`--limit-ledger-size`에 인수를 추가하여 디스크 사용량을 더 많이 또는 더 적게 요청할 수 있습니다. `--limit-ledger-size`에서 사용하는 기본 제한 값은`solana-validator --help`를 확인하세요.  맞춤 제한 값 선택에 대한 자세한 내용은 \[여기\] (https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26)를 참조하세요.
 
-Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+하나 이상의`--trusted-validator` 매개 변수를 지정하면 악성 스냅 샷에서 부팅하지 못하도록 보호 할 수 있습니다. \[신뢰할 수있는 밸리데이터로 부팅하는 값에 대해 자세히 알아보기\] (../ running-validator / validator-start.md # trusted-validators)
 
-Optional parameters to consider:
+고려할 선택적 매개 변수 :
 
-- `--private-rpc` prevents your RPC port from being published for use by other nodes
-- `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
+- 사용할 수있는 블록 확인하려면 [`getConfirmedBlocks` 요청]을 보내 이미 시작 슬롯 매개 변수로 처리 한 마지막 블록을 통과, (/ 클라이언트 / jsonrpc-api.md #의 getconfirmedblocks 개발)
+- 원하는 원장 저장 위치, 그리고`--rpc - port` 노출하려는 포트에.
 
-### Automatic Restarts and Monitoring
+### 자동 다시 시작 및 모니터링자동으로 다시 시작
 
-We recommend configuring each of your nodes to restart automatically on exit, to
-ensure you miss as little data as possible. Running the solana software as a
-systemd service is one great option.
+되도록 각 노드를 구성하는 것이 좋습니다. 가능한 한 적은 데이터를 놓치십시오. 솔라나 소프트웨어를 시스템 서비스로 실행하는 것은 훌륭한 옵션 중 하나입니다.
 
-For monitoring, we provide
-[`solana-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
-which can monitor your validator and detect with the `solana-validator` process
-is unhealthy. It can directly be configured to alert you via Slack, Telegram,
-Discord, or Twillio. For details, run `solana-watchtower --help`.
+모니터링을 위해 밸리데이터을 모니터링하고`solana- '로 감지 할 수있는 [`solana-watchtower`] (https://github.com/solana-labs/solana/blob/master/watchtower/README.md)를 제공합니다. 밸리데이터 프로세스가 비정상입니다. Slack, Telegram, Discord 또는 Twillio를 통해 경고하도록 직접 구성 할 수 있습니다. 자세한 내용은`solana-watchtower --help`를 실행하세요.
 
 ```bash
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
-#### New Software Release Announcements
+#### 새 소프트웨어 릴리스 알림
 
-We release new software frequently (around 1 release / week).
-Sometimes newer versions include incompatible protocol changes, which
-necessitate timely software update to avoid errors in processing blocks.
+새 소프트웨어를 자주 릴리스합니다 (약 1 주일에 릴리스). 때때로 최신 버전에는 호환되지 않는 프로토콜 변경 사항이 포함되어있어 처리 블록의 오류를 방지하기 위해 적시에 소프트웨어를 업데이트해야합니다.
 
-Our official release announcements for all kinds of releases (normal and
-security) are communicated via a discord channel called
-[`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
-(`mb` stands for `mainnet-beta`).
+모든 종류의 릴리스 (일반 및 보안)에 대한 공식 릴리스 발표는 [`# mb-announcement`] (https://discord.com/channels/428295358100013066/669406841830244375)라는 불화 채널을 통해 전달됩니다 (`mb`는 `mainnet-beta`).
 
-Like staked validators, we expect any exchange-operated validators to be updated
-at your earliest convenience within a business day or two after a normal release
-announcement. For security-related releases, more urgent action may be needed.
+스테이킹 밸리데이터과 마찬가지로 거래소 운영 밸리데이터은 정상적인 출시 발표 후 영업일 기준 1 ~ 2 일 이내에 가능한 한 빨리 업데이트 될 것으로 예상합니다. 보안 관련 릴리스의 경우 더 긴급한 조치가 필요할 수 있습니다.
 
-### Ledger Continuity
+### 원장 연속성
 
-By default, each of your nodes will boot from a snapshot provided by one of your
-trusted validators. This snapshot reflects the current state of the chain, but
-does not contain the complete historical ledger. If one of your node exits and
-boots from a new snapshot, there may be a gap in the ledger on that node. In
-order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
-`solana-validator` command to receive historical ledger data instead of a
-snapshot.
+기본적으로 각 노드는 신뢰할 수있는 유효성 검사기 중 하나가 제공 한 스냅 샷에서 부팅됩니다. 이 스냅 샷은 체인의 현재 상태를 반영하지만 전체 내역 원장을 포함하지 않습니다. 노드 중 하나가 종료되고 새 스냅 샷에서 부팅되는 경우 해당 노드의 원장에 간격이있을 수 있습니다. 이 문제를 방지하려면`--no-snapshot-fetch` 매개 변수를`solana-validator` 명령에 추가하여 스냅 샷 대신 기록 원장 데이터를받습니다.
 
-Do not pass the `--no-snapshot-fetch` parameter on your initial boot as it's not
-possible to boot the node all the way from the genesis block. Instead boot from
-a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
+최초 부팅시`--no-snapshot-fetch` 매개 변수를 전달하지 마십시오. 제네시스 블록에서 노드를 완전히 부팅 할 수는 없습니다.  대신 스냅 샷에서 먼저 부팅 한 다음 재부팅을 위해`--no-snapshot-fetch` 매개 변수를 추가합니다.
 
-It is important to note that the amount of historical ledger available to your
-nodes from the rest of the network is limited at any point in time. Once
-operational if your validators experience significant downtime they may not be
-able to catch up to the network and will need to download a new snapshot from a
-trusted validator. In doing so your validators will now have a gap in its
-historical ledger data that cannot be filled.
+나머지 네트워크의 노드에서 사용할 수있는 기록 원장의 양은 언제든지 제한된다는 점에 유의해야합니다.  일단 작동되면 밸리데이터이 상당한 다운 타임을 경험하면 네트워크를 따라 잡지 못할 수 있으며 신뢰할 수있는 밸리데이터으로부터 새 스냅 샷을 다운로드해야합니다.  이렇게하면 밸리데이터이 채울 수없는 과거 원장 데이터에 공백이 생깁니다.
 
-### Minimizing Validator Port Exposure
 
-The validator requires that various UDP and TCP ports be open for inbound
-traffic from all other Solana validators. While this is the most efficient mode of
-operation, and is strongly recommended, it is possible to restrict the
-validator to only require inbound traffic from one other Solana validator.
+### 유효성 검사기 포트 노출 최소화 유효성
 
-First add the `--restricted-repair-only-mode` argument. This will cause the
-validator to operate in a restricted mode where it will not receive pushes from
-the rest of the validators, and instead will need to continually poll other
-validators for blocks. The validator will only transmit UDP packets to other
-validators using the _Gossip_ and _ServeR_ ("serve repair") ports, and only
-receive UDP packets on its _Gossip_ and _Repair_ ports.
+검사기는 다른 모든 Solana 유효성 검사기의 인바운드 트래픽을 위해 다양한 UDP 및 TCP 포트를 열어야합니다.   이것이 가장 효율적인 작동 모드이며 강력하게 권장되지만 다른 Solana 유효성 검사기의 인바운드 트래픽 만 요구하도록 유효성 검사기를 제한 할 수 있습니다.
 
-The _Gossip_ port is bi-directional and allows your validator to remain in
-contact with the rest of the cluster. Your validator transmits on the _ServeR_
-to make repair requests to obtaining new blocks from the rest of the network,
-since Turbine is now disabled. Your validator will then receive repair
-responses on the _Repair_ port from other validators.
+먼저`--restricted-repair-only-mode` 인수를 추가합니다.  이렇게하면 유효성 검사기가 나머지 유효성 검사기로부터 푸시를받지 않고 대신 블록에 대해 계속해서 다른 유효성 검사기를 폴링해야하는 제한된 모드에서 작동하게됩니다.  밸리데이터는 * Gossip * 및 * ServeR * ( "serve repair") 포트를 사용하는 다른 밸리데이터에게만 UDP 패킷을 전송하고 * Gossip * 및 * Repair * 포트에서 UDP 패킷 만 수신합니다.
 
-To further restrict the validator to only requesting blocks from one or more
-validators, first determine the identity pubkey for that validator and add the
-`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` arguments for each
-PUBKEY. This will cause your validator to be a resource drain on each validator
-that you add, so please do this sparingly and only after consulting with the
-target validator.
+Gossip * 포트는 양방향이며 유효성 검사기가 나머지 클러스터와 계속 연락 할 수 있도록합니다.  이제 Turbine이 비활성화되었으므로 유효성 검사기는 * ServeR *에서 네트워크의 나머지 부분에서 새 블록을 얻기위한 수리 요청을 전송합니다.  그러면 귀하의 밸리데이터은 다른 밸리데이터으로부터 * Repair * 포트에 대한 수리 응답을 받게됩니다.
 
-Your validator should now only be communicating with the explicitly listed
-validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
+유효성 검사기를 하나 이상의 유효성 검사기에서 요청하는 블록으로 만 제한하려면 먼저 해당 유효성 검사기에 대한 ID pubkey를 결정하고 각 PUBKEY에 대해`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` 인수를 추가합니다.  이로 인해 유효성 검사기가 추가하는 각 유효성 검사기에서 리소스가 소모되므로 대상 유효성 검사기와상의 한 후에 만이 작업을 아껴서 수행하십시오.
 
-## Setting up Deposit Accounts
+이제 유효성 검사기는 명시 적으로 나열된 유효성 검사기와 * Gossip *, * Repair * 및 * ServeR * 포트에서만 통신해야합니다.
 
-Solana accounts do not require any on-chain initialization; once they contain
-some SOL, they exist. To set up a deposit account for your exchange, simply
-generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md).
+## 입금 계정 설정
 
-We recommend using a unique deposit account for each of your users.
+Solana 계정은 온 체인 초기화가 필요하지 않습니다. 일단 SOL을 포함하면 존재합니다. 거래소에 입금 계정을 설정하려면 \[지갑 도구\] (../ wallet-guide / cli.md) 중 하나를 사용하여 Solana 키 쌍을 생성하기 만하면됩니다.
 
-Solana accounts are charged [rent](developing/programming-model/accounts.md#rent) on creation and once per
-epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
-SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
-query the
-[`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
+각 사용자에 대해 고유 한 예금 계좌를 사용하는 것이 좋습니다.
+
+Solana 계정은 생성시 그리고 에포크 당 한 번 \[임대료\] (개발 / 프로그래밍 모델 /accounts.md#rent)가 청구되지만 SOL에 2 년 분량의 임대료가 포함 된 경우 임대료를 면제받을 수 있습니다. 예금 계좌의 최소 임대료 면제 잔액을 찾으려면 [`getMinimumBalanceForRentExemption` endpoint] (developing / clients / jsonrpc-api.md # getminimumbalanceforrentexemption) :
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl -X POST -H "Content- 유형 : application / json "-d '{"jsonrpc ":"2.0 ","id ": 1,"method ":"getMinimumBalanceForRentExemption ","params ": [0]}'localhost : 8899
 
-{"jsonrpc":"2.0","result":890880,"id":1}
+{"jsonrpc ":" 2.0 ","result ": 890880,"id ": 1}
 ```
 
-### Offline Accounts
+### 오프라인 계정오프라인
 
-You may wish to keep the keys for one or more collection accounts offline for
-greater security. If so, you will need to move SOL to hot accounts using our
-[offline methods](../offline-signing.md).
+보안 강화를 위해 하나 이상의 컬렉션 계정에 대한 키를으로 유지할 수 있습니다. 그렇다면 \[오프라인 방법\] (../ offline-signing.md)을 사용하여 SOL을 핫 계정으로 이동해야합니다.
 
-## Listening for Deposits
+## 입금 듣기
 
-When a user wants to deposit SOL into your exchange, instruct them to send a
-transfer to the appropriate deposit address.
+When a user wants to deposit SOL into your exchange, instruct them to send a transfer to the appropriate deposit address.
 
-### Poll for Blocks
+### 블록에
 
-To track all the deposit accounts for your exchange, poll for each confirmed
-block and inspect for addresses of interest, using the JSON-RPC service of your
-Solana API node.
+사용자가 SOL을 거래소에 입금하려면 적절한 입금 주소로 송금하도록 지시하십시오.
 
-- To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
-  passing the last block you have already processed as the start-slot parameter:
+- API를 노드에 [`getConfirmedSignaturesForAddress2` (개발 / 클라이언트 / jsonrpc-api.md # getconfirmedsignaturesforaddress2) 요청을 보내기
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
+"NULL,"메모"널"서명
+  ":"35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby
+  ","슬롯
+"(114)},
+{"ERR
 
-{"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
+  "NULL,"메모"널"
+  기호 ""4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr
+  ","슬롯
+"112},
+{"ERR
+
+  "NULL,"메모"널"서명
+  ":"dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6
+  ","슬롯
 ```
 
-Not every slot produces a block, so there may be gaps in the sequence of integers.
+대한 폴링 거래소의 모든 예금 계좌를 추적하려면 Solana API 노드의 JSON-RPC 서비스를 사용하여 확인 된 각 블록에 대해 폴링하고 관심있는 주소를 검사합니다.
 
 - For each block, request its contents with a [`getConfirmedBlock` request](developing/clients/jsonrpc-api.md#getconfirmedblock):
 
@@ -258,60 +210,22 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-The `preBalances` and `postBalances` fields allow you to track the balance
-changes in every account without having to parse the entire transaction. They
-list the starting and ending balances of each account in
-[lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
-example, if the deposit address if interest is
-`47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+`preBalances` 및`postBalances` 필드를 사용하면 전체 트랜잭션을 구문 분석하지 않고도 모든 계정의 잔액 변경을 추적 할 수 있습니다. 'accountKeys'목록에 색인 된 \[lamports\] (../ terminology.md # lamport)에있는 각 계정의 시작 및 종료 잔액을 나열합니다. 예를 들어이자가 '47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi'인 경우 입금 주소가 218099990000-207099990000 = 11000000000 lamports = 11 SOL 인
 
-If you need more information about the transaction type or other specifics, you
-can request the block from RPC in binary format, and parse it using either our
-[Rust SDK](https://github.com/solana-labs/solana) or
-[Javascript SDK](https://github.com/solana-labs/solana-web3.js).
+만일 트랜잭션 타입 및 기타 세부사항에 대한 추가정보가 필요하다면, RPC에서 바이너리 포맷의 블록을 요청하고 [Rust SDK](https://github.com/solana-labs/solana) 나 [Javascript SDK](https://github.com/solana-labs/solana-web3.js)로 parsing할 수 있습니다.
 
-### Address History
+### 주소 내역
 
-You can also query the transaction history of a specific address. This is
-generally _not_ a viable method for tracking all your deposit addresses over all
-slots, but may be useful for examining a few accounts for a specific period of
-time.
+특정 주소의 거래 내역을 조회 할 수도 있습니다. 이것은 일반적으로 모든 슬롯에서 모든 입금 주소를 추적하는 실행 가능한 방법은 아니지만, 특정 기간 동안 몇 개의 계정을 검사하는 데 유용 할 수 있습니다.
 
-- Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2)
-  request to the api node:
+- Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
-
-{
-  "jsonrpc": "2.0",
-  "result": [
-    {
-      "err": null,
-      "memo": null,
-      "signature": "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
-      "slot": 114
-    },
-    {
-      "err": null,
-      "memo": null,
-      "signature": "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
-      "slot": 112
-    },
-    {
-      "err": null,
-      "memo": null,
-      "signature": "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6",
-      "slot": 108
-    }
-  ],
-  "id": 1
-}
+:```bash는
+컬 -X POST -H "콘텐츠 형식 : 응용 프로그램 / JSON"-d '{ "jsonrpc": "2.0", "id": 1, "method": "getConfirmedSignaturesForAddress2", "params": [ "6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", { "limit": "3}]} 'localhost : 88993}]}'localhost : 8899
 ```
 
-- For each signature returned, get the transaction details by sending a
-  [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
+- For each signature returned, get the transaction details by sending a [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
@@ -371,151 +285,70 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-## Sending Withdrawals
+## 인출 전송
 
-To accommodate a user's request to withdraw SOL, you must generate a Solana
-transfer transaction, and send it to the api node to be forwarded to your
-cluster.
+사용자의 SOL 인출 요청을 수용하려면 Solana 전송 트랜잭션을 생성해야합니다. , 클러스터로 전달할 api 노드로 보냅니다.
 
-### Synchronous
+### 동기
 
-Sending a synchronous transfer to the Solana cluster allows you to easily ensure
-that a transfer is successful and finalized by the cluster.
+Sending a synchronous transfer to the Solana cluster allows you to easily ensure that a transfer is successful and finalized by the cluster.
 
-Solana's command-line tool offers a simple command, `solana transfer`, to
-generate, submit, and confirm transfer transactions. By default, this method
-will wait and track progress on stderr until the transaction has been finalized
-by the cluster. If the transaction fails, it will report any transaction errors.
+Solana의 명령 줄 도구는 전송 트랜잭션을 생성, 제출 및 확인하는 간단한 명령 'solana transfer'를 제공합니다. 기본적으로이 메서드는 트랜잭션이 클러스터에 의해 완료 될 때까지 stderr에서 진행률을 대기하고 추적합니다. 트랜잭션이 실패하면 트랜잭션 오류를보고합니다.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
-The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js)
-offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build
-a transfer transaction, and submit it using the `sendAndConfirmTransaction`
-method.
+The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build a transfer transaction, and submit it using the `sendAndConfirmTransaction` method.
 
-### Asynchronous
+### 인출을위한 사용자 제공 계정 주소 확인
 
-For greater flexibility, you can submit withdrawal transfers asynchronously. In
-these cases, it is your responsibility to verify that the transaction succeeded
-and was finalized by the cluster.
+For greater flexibility, you can submit withdrawal transfers asynchronously. In these cases, it is your responsibility to verify that the transaction succeeded and was finalized by the cluster.
 
-**Note:** Each transaction contains a [recent
-blockhash](developing/programming-model/transactions.md#blockhash-format) to
-indicate its liveness. It is **critical** to wait until this blockhash expires
-before retrying a withdrawal transfer that does not appear to have been
-confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
-more on [blockhash expiration](#blockhash-expiration) below.
+**Note:** Each transaction contains a [recent blockhash](developing/programming-model/transactions.md#blockhash-format) to indicate its liveness. It is **critical** to wait until this blockhash expires before retrying a withdrawal transfer that does not appear to have been confirmed or finalized by the cluster. Otherwise, you risk a double spend. See more on [blockhash expiration](#blockhash-expiration) below.
 
-First, get a recent blockhash using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees)
-or the CLI command:
+-반환 된 각 서명에 대해 [`getConfirmedTransaction`] (developing / clients / jsonrpc-api.md # getconfirme dtransaction) 요청 :
 
 ```bash
-solana fees --url http://localhost:8899
+spl-token create-account <TOKEN_MINT_ADDRESS>소유
 ```
 
-In the command-line tool, pass the `--no-wait` argument to send a transfer
-asynchronously, and include your recent blockhash with the `--blockhash` argument:
+In the command-line tool, pass the `--no-wait` argument to send a transfer asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
-You can also build, sign, and serialize the transaction manually, and fire it off to
-the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
+Solana 클러스터에 동기 전송을 전송하면 전송이 성공적이고 클러스터에 의해 완료되었는지 쉽게 확인할 수 있습니다.
 
-#### Transaction Confirmations & Finality
+#### Blockhash 만료
 
-Get the status of a batch of transactions using the
-[`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
-The `confirmations` field reports how many
-[confirmed blocks](../terminology.md#confirmed-block) have elapsed since the
-transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
+Get the status of a batch of transactions using the [`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses). The `confirmations` field reports how many [confirmed blocks](../terminology.md#confirmed-block) have elapsed since the transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
-
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "context": {
-      "slot": 82
-    },
-    "value": [
-      {
-        "slot": 72,
-        "confirmations": 10,
-        "err": null,
-        "status": {
-          "Ok": null
-        }
-      },
-      {
-        "slot": 48,
-        "confirmations": null,
-        "err": null,
-        "status": {
-          "Ok": null
-        }
-      }
-    ]
-  },
-  "id": 1
-}
+:```bash는
+컬 -X POST -H "Content-Type : application / json"-d '{ "jsonrpc": "2.0", "id": 1, "method": "getConfirmedBlocks", "params": [5]}'localhost : 8899
 ```
 
 #### Blockhash Expiration
 
-You can check whether a particular blockhash is still valid by sending a
-[`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
-request with the blockhash as a parameter. If the response value is `null`, the
-blockhash is expired, and the withdrawal transaction using that blockhash should
-never succeed.
+[`getFees` 엔드 포인트를 사용하여 출금 트랜잭션에 대한 최근 블록 해시를 요청할 때] ( development / clients / jsonrpc-api.md # getfees) 또는 'solana fee'의 경우 응답에는 blockhash가 유효한 마지막 슬롯 인 'lastValidSlot'이 포함됩니다. [`getSlot` 쿼리] (developing / clients / jsonrpc-api.md # getslot);로 클러스터 슬롯을 확인할 수 있습니다. 클러스터 슬롯이`lastValidSlot`보다 크면 해당 블록 해시를 사용하는 인출 트랜잭션이 성공해서는 안됩니다.
+
+또한 blockhash를 매개 변수로 사용하여 [`getFeeCalculatorForBlockhash`] (developing / clients / jsonrpc-api.md # getfeecalculatorforblockhash) 요청을 전송하여 특정 blockhash가 여전히 유효한지 다시 확인할 수 있습니다. 응답 값이 null이면 블록 해시가 만료되고 인출 트랜잭션이 성공해서는 안됩니다.
 
 ### Validating User-supplied Account Addresses for Withdrawals
 
-As withdrawals are irreversible, it may be a good practice to validate a
-user-supplied account address before authorizing a withdrawal in order to
-prevent accidental loss of user funds.
+인출은 되돌릴 수 없으므로 사용자 자금의 우발적 인 손실을 방지하기 위해 인출을 승인하기 전에 사용자가 제공 한 계정 주소를 확인하는 것이 좋습니다.
 
-#### Basic verfication
-
-Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
-results in an ASCII text string matching the following regular expression:
-
-```
-[1-9A-HJ-NP-Za-km-z]{32,44}
-```
-
-This check is insufficient on its own as Solana addresses are not checksummed, so
-typos cannot be detected. To further validate the user's input, the string can be
-decoded and the resulting byte array's length confirmed to be 32. However, there
-are some addresses that can decode to 32 bytes despite a typo such as a single
-missing character, reversed characters and ignored case
-
-#### Advanced verification
-
-Due to the vulnerability to typos described above, it is recommended that the
-balance be queried for candidate withdraw addresses and the user prompted to
-confirm their intentions if a non-zero balance is discovered.
-
-#### Valid ed25519 pubkey check
-
-The address of a normal account in Solana is a Base58-encoded string of a
-256-bit ed25519 public key. Not all bit patterns are valid public keys for the
-ed25519 curve, so it is possible to ensure user-supplied account addresses are
-at least correct ed25519 public keys.
+Solana의 일반 계정 주소는 256 비트 ed25519 공개 키의 Base58 인코딩 문자열입니다. 모든 비트 패턴이 ed25519 곡선에 대해 유효한 공개 키가 아니므로 사용자가 제공 한 계정 주소가 최소한 올바른 ed25519 공개 키인지 확인할 수 있습니다.
 
 #### Java
 
-Here is a Java example of validating a user-supplied address as a valid ed25519
-public key:
+다음은 사용자 제공 주소를 유효한 ed25519 공개 키로 확인하는 Java 예제입니다
 
-The following code sample assumes you're using the Maven.
+다음 코드 샘플에서는 Maven을 사용하고 있다고 가정합니다.
 
-`pom.xml`:
+`pom.xml` :
 
 ```xml
 <repositories>
@@ -531,15 +364,15 @@ The following code sample assumes you're using the Maven.
 <dependencies>
   ...
   <dependency>
-      <groupId>io.github.novacrypto</groupId>
-      <artifactId>Base58</artifactId>
-      <version>0.1.3</version>
-  </dependency>
+      <groupId> io.github.novacrypto </ groupId>
+      <artifactId> Base58 </ artifactId>
+      <version> 0.1.3 </ version>
+  </ dependency>
   <dependency>
-      <groupId>cafe.cryptography</groupId>
-      <artifactId>curve25519-elisabeth</artifactId>
-      <version>0.1.0</version>
-  </dependency>
+      <groupId> cafe.cryptography </ groupId>
+      <artifactId> curve25519-elisabeth </ artifactId>
+      <version> 0.1.0 </ version>
+  </ dependency>
 <dependencies>
 ```
 
@@ -566,83 +399,62 @@ public class PubkeyValidator
 }
 ```
 
-## Supporting the SPL Token Standard
+## SPL 토큰 표준 지원
 
-[SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
-token creation and exchange on the Solana blockchain.
+\[SPL Token\] (https://spl.solana.com/token)은 Solana 블록체인에서 래핑 / 합성 토큰 생성 및 교환을위한 표준입니다.
 
-The SPL Token workflow is similar to that of native SOL tokens, but there are a
-few differences which will be discussed in this section.
+SPL 토큰 워크 플로는 네이티브 SOL 토큰의 워크 플로와 비슷하지만이 섹션에서 설명 할 몇 가지 차이점이 있습니다.
 
 ### Token Mints
 
-Each _type_ of SPL Token is declared by creating a _mint_ account. This account
-stores metadata describing token features like the supply, number of decimals, and
-various authorities with control over the mint. Each SPL Token account references
-its associated mint and may only interact with SPL Tokens of that type.
+SPL 토큰의 각 * 유형 *은 * mint * 계정을 생성하여 선언됩니다.  이 계정은 공급, 소수 자릿수 및 민트를 제어하는 ​​다양한 권한과 같은 토큰 기능을 설명하는 메타 데이터를 저장합니다.  각 SPL 토큰 계정은 관련 민트를 참조하며 해당 유형의 SPL 토큰과 만 상호 작용할 수 있습니다.
 
-### Installing the `spl-token` CLI Tool
+### # 예제
 
-SPL Token accounts are queried and modified using the `spl-token` command line
-utility. The examples provided in this section depend upon having it installed
-on the local system.
+SPL 토큰 계정은`spl-token` 명령 줄 유틸리티를 사용하여 쿼리하고 수정합니다. 이 섹션에 제공된 예제는 로컬 시스템에 설치되었는지에 따라 다릅니다.
 
-`spl-token` is distributed from Rust [crates.io](https://crates.io/crates/spl-token)
-via the Rust `cargo` command line utility. The latest version of `cargo` can be
-installed using a handy one-liner for your platform at [rustup.rs](https://rustup.rs).
-Once `cargo` is installed, `spl-token` can be obtained with the following command:
+`spl-token`은 Rust`cargo` 명령 줄 유틸리티를 통해 Rust \[crates.io\] (https://crates.io/crates/spl-token)에서 배포됩니다. 최신 버전의`cargo`는 \[rustup.rs\] (https://rustup.rs)에서 귀하의 플랫폼을위한 편리한 원 라이너를 사용하여 설치할 수 있습니다. cargo`가 설치되어`하면`SPL-token`는 다음 명령을 사용하여 얻을 수 있습니다
 
 ```
 cargo install spl-token-cli
 ```
 
-You can then check the installed version to verify
+설치된 버전을 확인하세요
 
 ```
 spl-token --version
 ```
 
-Which should result in something like
+그러면 다음과 같이 뜨게 됩니다.
 
 ```text
 spl-token-cli 2.0.1
 ```
 
-### Account Creation
+### 기타 고려 사항
 
-SPL Token accounts carry additional requirements that native System Program
-accounts do not:
+있습니다```SPL 토큰 -
 
-1. SPL Token accounts must be created before an amount of tokens can be
-   deposited. Token accounts can be created explicitly with the
-   `spl-token create-account` command, or implicitly by the
-   `spl-token transfer --fund-recipient ...` command.
-1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
-   for the duration of their existence and therefore require a small amount of
-   native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-   this amount is 0.00203928 SOL (2,039,280 lamports).
+1. SPL 토큰은 필수 계정 일정량의 토큰이 입금되기 전에 생성됩니다.   토큰 계정은`spl-token create-account` 명령을 사용하여 명시 적으로 만들거나`spl-token transfer --fund-recipient ...`명령을 사용하여 암시 적으로 만들 수 있습니다.
+1. SPL 토큰 계정은 존재하는 동안 \[rent-exempt\] (developing / programming-model / accounts.md # rent-exmption) 상태를 유지해야하므로 계정 생성시 소량의 기본 SOL 토큰을 예치해야합니다. SPL 토큰 v2 계정의 경우이 금액은 0.00203928 SOL (2,039,280 램프 포트)입니다.
 
 #### Command Line
-
-To create an SPL Token account with the following properties:
-
-1. Associated with the given mint
-1. Owned by the funding account's keypair
+같은 발생한다
+1. 주어진 민트와 연결
+1. 펀딩 계정의 키 쌍
 
 ```
 spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
 #### Example
-
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
 ```
 
-Or to create an SPL Token account with a specific keypair:
-
+또는
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -653,13 +465,11 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### Checking an Account's Balance
 
 #### Command Line
-
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### Example
-
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -667,67 +477,43 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 ### Token Transfers
 
-The source account for a transfer is the actual token account that contains the
-amount.
+버전은``````텍스트 SPL-토큰 CLI는 2.0.1```###
 
-The recipient address however can be a normal wallet account. If an associated
-token account for the given mint does not yet exist for that wallet, the
-transfer will create it provided that the `--fund-recipient` argument as
-provided.
+The recipient address however can be a normal wallet account.  If an associated token account for the given mint does not yet exist for that wallet, the transfer will create it provided that the `--fund-recipient` argument as provided.
 
 #### Command Line
-
 ```
-spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
+$ spl-token transfer --fund-recipient <교환 토큰 계정> <인출 금액> <인출 주소>
 ```
 
 #### Example
-
 ```
-$ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Transfer 1 tokens
-  Sender: 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN
-  Recipient: 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
+#### Example
 ```
 
-### Depositing
+### 예치
+각 `(user, mint)` 짝은 온체인에 구별되는 계정을 필요로 하며, 거래소들은 토큰 계정 배치를 미리 생성하고 유저 요청 시 할당할 것을 권장합니다. 모든 해당 계정은 거래소가 컨트롤하는 키페어 소유여야 합니다.
 
-Since each `(user, mint)` pair requires a separate account on chain, it is
-recommended that an exchange create batches of token accounts in advance and assign them
-to users on request. These accounts should all be owned by exchange-controlled
-keypairs.
+입금 거래 모니터링은 위에서 설명한 \[block polling\] (# poll-for-blocks) 방법을 따라야합니다. SPL 토큰 \[Transfer\] (https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)을 발행하는 성공적인 거래를 위해 각 새 블록을 스캔해야합니다. 또는 \[Transfer2\] (https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) 명령으로 사용자 계정을 참조한 다음 \[토큰 계정을 쿼리합니다. balance\] (developing / clients / jsonrpc-api.md # gettokenaccountbalance) 업데이트.
 
-Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
-method described above. Each new block should be scanned for successful transactions
-issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
-or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
-instructions referencing user accounts, then querying the
-[token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance)
-updates.
+예`$
+SPL 토큰 전송 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+전송한 토큰
+  보낸사람 :
+  6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN받는사람 : 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+서명:
+3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj`
 
-[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
-made to exend the `preBalance` and `postBalance` transaction status metadata
-fields to include SPL Token balance transfers.
+### 출금
+입금 각각`(사용자, 민트)가`쌍 체인에 별도의 계정을 필요로하기 때문에, 교환이 사전에 토큰 계정의 배치를 작성하고 사용자에게 할당하는 것이 좋습니다 요청시.
 
-### Withdrawing
+행`SPL
+토큰 균형
+<TOKEN_ACCOUNT_ADDRESS>`확인
 
-The withdrawal address a user provides should be the same address used for
-regular SOL withdrawal.
-
-Before executing a withdrawal [transfer](#token-transfers),
-the exchange should check the address as
-[described above](#validating-user-supplied-account-addresses-for-withdrawals).
-
-From the withdrawal address, the associated token account for the correct mint
-determined and the transfer issued to that account. Note that it's possible
-that the associated token account does not yet exist, at which point the
-exchange should fund the account on behalf of the user. For SPL Token v2
-accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
-lamports).
+출금 주소로부터 관련된 올바른 민팅 토큰 계정이 결정되고 해당 계정으로 전송이 발생합니다.  Note that it's possible that the associated token account does not yet exist, at which point the exchange should fund the account on behalf of the user.  For SPL Token v2 accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280 lamports).
 
 Template `spl-token transfer` command for a withdrawal:
-
 ```
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
@@ -735,18 +521,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 ### Other Considerations
 
 #### Freeze Authority
+규정 준수를 위해 SPL 토큰 발행 기관은 민트와 관련하여 생성 된 모든 계정에 대해 "권한 동결"을 선택적으로 보유하도록 선택할 수 있습니다.  이렇게하면 주어진 계정의 자산을 마음대로 \[고정\] (https://spl.solana.com/token#freezing-accounts)하여 해동 될 때까지 계정을 사용할 수 없게됩니다. 이 기능이 사용 중이면 동결 기관의 pubkey가 SPL 토큰의 민트 계정에 등록됩니다.
 
-For regulatory compliance reasons, an SPL Token issuing entity may optionally
-choose to hold "Freeze Authority" over all accounts created in association with
-its mint. This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
-the assets in a given account at will, rendering the account unusable until thawed.
-If this feature is in use, the freeze authority's pubkey will be registered in
-the SPL Token's mint account.
+## 통합
 
-## Testing the Integration
-
-Be sure to test your complete workflow on Solana devnet and testnet
-[clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
-is the most open and flexible, and ideal for initial development, while testnet
-offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.
+테스트 메인 넷 베타에서 프로덕션으로 이동하기 전에 Solana devnet 및 testnet \[clusters\] (../ clusters.md)에서 전체 워크 플로를 테스트해야합니다. Devnet은 가장 개방적이고 유연하며 초기 개발에 이상적이며 testnet은보다 현실적인 클러스터 구성을 제공합니다. devnet과 testnet은 모두 수도꼭지를 지원하고`solana airdrop 10`을 실행하여 개발 및 테스트를위한 devnet 또는 testnet SOL을 얻습니다.

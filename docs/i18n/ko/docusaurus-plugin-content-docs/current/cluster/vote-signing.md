@@ -1,59 +1,59 @@
 ---
-title: Secure Vote Signing
+title: 안전한 투표 서명
 ---
 
-A validator receives entries from the current leader and submits votes confirming those entries are valid. This vote submission presents a security challenge, because forged votes that violate consensus rules could be used to slash the validator's stake.
+밸리데이터는 현 리더로부터 엔트리를 받고 해당 엔트리가 유효한 지 확정하기 위한 투표를 제출합니다. 합의 규칙을 어기는 조작된 표로 인해 밸리데이터의 스테이킹 지분 슬래싱이 일어날 수 있으므로 투표 제출은 보안 챌린지이기도 합니다.
 
-The validator votes on its chosen fork by submitting a transaction that uses an asymmetric key to sign the result of its validation work. Other entities can verify this signature using the validator's public key. If the validator's key is used to sign incorrect data \(e.g. votes on multiple forks of the ledger\), the node's stake or its resources could be compromised.
+밸리데이터는 비대칭 키를 통해 검증 작업에 서명한 트랜잭션을 제출하며 선택한 포크에 투표합니다. 다른 참여자들은 밸리데이터의 공개키를 통해 해당 서명을 검증할 수 있습니다. 만일 잘못된 데이터에 밸리데이터의 키가 서명이 되있다면 \(e.g. 장부 상 다수의 포크에 투표 등\), 노드의 지분과 리소스가 위험에 처하게 됩니다.
 
-Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
+솔라나는 슬래싱 조건에 들지 않도록 각 투표를 평가해주는 _vote signer_ 서비스를 따로 구현하여 이러한 리스크를 해결합니다.
 
-## Validators, Vote Signers, and Stakeholders
+## 밸리데이터, 투표 서명자, 그리고 스테이크홀더
 
-When a validator receives multiple blocks for the same slot, it tracks all possible forks until it can determine a "best" one. A validator selects the best fork by submitting a vote to it, using a vote signer to minimize the possibility of its vote inadvertently violating a consensus rule and getting a stake slashed.
+밸리데이터가 같은 슬롯에 대해 다수의 블록을 받을 때, 밸리데이터는 "최적의" 포크를 정할때까지 모든 가능한 포크들을 트랙킹 합니다. 밸리데이터는 투표를 통해 최적의 포크를 선택하고, 투표 서명자를 통해 부주의하게 합의 규칙을 어기게 되어 지분 슬래싱을 당할 확률을 최소화 합니다.
 
-A vote signer evaluates the vote proposed by the validator and signs the vote only if it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. It doesn't need to process a full set of transactions.
+투표 서명자는 밸리데이터가 제출한 투표를 평가하고 슬래싱 조건에 맞지 않을 때에만 투표에 서명합니다. 투표 서명자는 나머지 클러스터들과 자신이 서명하는 투표들에 대해 최소한의 상태만 유지하면 됩니다. 서명자는 전체 트랜잭션 세트를 처리할 필요가 없습니다.
 
-A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer's votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
+스테이크홀더란 스테이킹 지분에 대한 통제력을 가진 존재를 뜻합니다. 스테이크홀더는 자신의 지분을 투표 서명자에게 위임할 수 있습니다. 지분이 위임되면 투표 서명자의 표는 위임받은 모든 지분에 대한 투표 가중치를 반영하게 되며, 모든 위임지분에 대한 보상을 생성하게 됩니다.
 
-Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
+현재 밸리데이터와 투표 서명자 간의 관계는 1:1이며, 스테이크홀더는 전체 지분을 단일 투표 서명자에게 위임하게 됩니다.
 
-## Signing service
+## 서명 서비스
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
+투표 서명 서비스는 JSON RPC 서버와 리퀘스트 프로세서로 구성되어 있습니다. 최초에 서비스는 설정된 포트에서 RPC 서버를 가동하며 밸리데이터의 요청을 기다립니다. 서명 서비스는 다음과 같은 요청을 받게됩니다:
 
-1. Register a new validator node
+1. 신규 밸리데이터 노드 등록
 
-   - The request must contain validator's identity \(public key\)
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
-   - If a validator tries to register again, the service returns the public key from the pre-existing keypair
+    - 요청은 밸리데이터의 신원\(공개키\) 를 보유해야 합니다
+    - 요청은 반드시 밸리데이터의 개인키로 서명되어야 합니다
+    - 요청의 서명이 검증되지 못한다면 서비스는 해당 요청을 거절합니다
+    - 서비스는 밸리데이터를 위해 투표를 위한 새로운 비대칭 키를 생성하며, 공개키를 응답으로 제출합니다
+    - 만일 밸리데이터가 재등록을 시도하면, 서비스는 기존의 키 쌍에서 공개키를 반환합니다
 
-2. Sign a vote
+2. 투표 서명
 
-   - The request must contain a voting transaction and all verification data
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service verifies the voting data
-   - The service returns a signature for the transaction
+    - 요청은 반드시 투표 트랜잭션과 검증 데이터 전부를 포함하고 있어야 합니다
+    - 요청은 반드시 밸리데이터의 개인키로 서명되어야 합니다
+    - 요청의 서명이 검증되지 못한다면 서비스는 해당 요청을 거절합니다
+    - 서비스는 투표 데이터를 검증합니다
+    - 서비스는 트랜잭션에 대한 서명을 반환합니다
 
-## Validator voting
+## 밸리데이터 투표
 
-A validator node, at startup, creates a new vote account and registers it with the cluster by submitting a new "vote register" transaction. The other nodes on the cluster process this transaction and include the new validator in the active set. Subsequently, the validator submits a "new vote" transaction signed with the validator's voting private key on each voting event.
+밸리데이터 노드는 가동시에 신규 투표 계정을 생성하고 신규 "vote register" 트랜잭션을 제출하며 클러스터에 등록합니다. 클러스터 내 여타 노드들은 해당 트랜잭션을 처리하고 활성화된 세트에 신규 밸리데이터를 포함시킵니다. 이후, 밸리데이터는 매 투표 이벤트마다 자신의 투표 개인키로 서명된 "new vote" 트랜잭션을 제출합니다.
 
-### Configuration
+### 설정
 
-The validator node is configured with the signing service's network endpoint \(IP/Port\).
+밸리데이터 노드는 서명 서비스의 네트워크 엔드포인트 \(IP/Port\) 를 설정합니다.
 
-### Registration
+### 등록
 
-At startup, the validator registers itself with its signing service using JSON RPC. The RPC call returns the voting public key for the validator node. The validator creates a new "vote register" transaction including this public key, and submits it to the cluster.
+최초에 밸리데이터는 JSON RPC를 통해 서명 서비스로 스스로 등록합니다. RPC 호출은 밸리데이터 노드를 위한 서명 개인키를 반환합니다. 밸리데이터는 공개키를 포함한 신규 "vote register" 트랜잭션을 생성하고, 이를 클러스터에 제출합니다.
 
-### Vote Collection
+### 투표 회수
 
-The validator looks up the votes submitted by all the nodes in the cluster for the last voting period. This information is submitted to the signing service with a new vote signing request.
+투표 주기 마지막에 밸리데이터는 클러스터 전체 노드가 제출한 표를 확인합니다. 해당 정보는 신규 투표 서명 요청과 함께 서명 서비스에게 제출됩니다.
 
-### New Vote Signing
+### 신규 투표 서명
 
-The validator creates a "new vote" transaction and sends it to the signing service using JSON RPC. The RPC request also includes the vote verification data. On success, the RPC call returns the signature for the vote. On failure, RPC call returns the failure code.
+밸리데이터는 "new vote" 트랜잭션을 생성하고 JSON RPC를 통해 서명 서비스로 전송합니다. RPC 요청은 투표에 대한 검증 데이터 또한 포함합니다. 성공적이면 RPC 호출은 투표에 대한 서명을 반환합니다. 실패한다면 RPC 호출은 실패 코드를 반환합니다.

@@ -1,115 +1,57 @@
 ---
-title: Simple Payment and State Verification
+title: المدفوعات البسيطة والتحقق من الحالة (Simple Payment and State Verification)
 ---
 
-It is often useful to allow low resourced clients to participate in a Solana
-cluster. Be this participation economic or contract execution, verification
-that a client's activity has been accepted by the network is typically
-expensive. This proposal lays out a mechanism for such clients to confirm that
-their actions have been committed to the ledger state with minimal resource
-expenditure and third-party trust.
+غالبًا ما يكون من المُفيد السماح للعملاء ذوي الموارد المُنخفضة بالمُشاركة في مجموعة Solana. سواء كانت هذه المُشاركة إقتصادية أو تنفيذ العقد، فإن التحقق من أن نشاط العميل قد تم قبوله من قبل الشبكة يكون مُكلفًا في العادة. يضع هذا الإقتراح آلية لهؤلاء العملاء لتأكيد أن أفعالهم قد تم الإلتزام بها في حالة دفتر الأستاذ (ledger) مع الحد الأدنى من نفقات الموارد وثقة الطرف الثالث.
 
-## A Naive Approach
+## نهج ساذج (A Naive Approach)
 
-Validators store the signatures of recently confirmed transactions for a short
-period of time to ensure that they are not processed more than once. Validators
-provide a JSON RPC endpoint, which clients can use to query the cluster if a
-transaction has been recently processed. Validators also provide a PubSub
-notification, whereby a client registers to be notified when a given signature
-is observed by the validator. While these two mechanisms allow a client to
-verify a payment, they are not a proof and rely on completely trusting a
-validator.
+يقوم المُدقّقون (validators) بتخزين تواقيع المُعاملات التي تم تأكيدها مُؤخرًا لفترة قصيرة من الوقت لضمان عدم مُعالجتها أكثر من مرة. يُوفر المُدقّقون (validators) نقطة نهاية JSON RPC، والتي يُمكن للعملاء إستخدامها للإستعلام عن نظام المجموعة إذا تمت مُعالجة إحدى المُعاملات مؤخرًا. يُوفر المُدقّقون (validators) أيضًا إشعارًا لـ PubSub، حيث سجل العميل ليتم إخطاره عند مُلاحظة توقيع مُعين بواسطة المُدقّق (validator). بينما تسمح هاتان الآليتان للعميل بالتحقق من الدفع، إلا أنهما ليسا دليلًا ويعتمدان على الثقة الكاملة في المُدقّق (validator).
 
-We will describe a way to minimize this trust using Merkle Proofs to anchor the
-validator's response in the ledger, allowing the client to confirm on their own
-that a sufficient number of their preferred validators have confirmed a
-transaction. Requiring multiple validator attestations further reduces trust in
-the validator, as it increases both the technical and economic difficulty of
-compromising several other network participants.
+سنصف طريقة لتقليل هذه الثقة إلى الحد الأدنى بإستخدام Merkle إثباتات لترسيخ إستجابة المُدقّق (validator) في دفتر الأستاذ (ledger)، مما يسمح للعميل بأن يُؤكد بنفسه أن عددًا كافيًا من المُدقّقين (validators) المُفضلين لديهم قد أكدوا المُعاملة. يُؤدي طلب شهادات المُدقّق (validator) المُتعددة إلى تقليل الثقة في المُدقّق بشكل أكبر، لأنه يزيد من الصعوبة التقنية والإقتصادية في المُساومة على العديد من المُشاركين الآخرين في الشبكة.
 
-## Light Clients
+## العملاء الخفيفون (Light Clients)
 
-A 'light client' is a cluster participant that does not itself run a validator.
-This light client would provide a level of security greater than trusting a
-remote validator, without requiring the light client to spend a lot of resources
-verifying the ledger.
+"العميل الخفيف" (light client) هو أحد المُشاركين في نظام المجموعة (cluster) الذي لا يقوم بنفسه بتشغيل مُدقّق (validator). سيُوفر هذا العميل الخفيف (light client) مُستوى من الأمان أكبر من الوثوق بمُدقّق (validator) عن بُعد، دون مُطالبة العميل الخفيف (light client) بإنفاق الكثير من الموارد للتحقق من دفتر الأستاذ (ledger).
 
-Rather than providing transaction signatures directly to a light client, the
-validator instead generates a Merkle Proof from the transaction of interest to
-the root of a Merkle Tree of all transactions in the including block. This
-Merkle Root is stored in a ledger entry which is voted on by validators,
-providing it consensus legitimacy. The additional level of security for a light
-client depends on an initial canonical set of validators the light client
-considers to be the stakeholders of the cluster. As that set is changed, the
-client can update its internal set of known validators with
-[receipts](simple-payment-and-state-verification.md#receipts). This may become
-challenging with a large number of delegated stakes.
+بدلاً من تقديم توقيعات المُعاملات مُباشرة إلى عميل خفيف (light client)، يقوم المُدقّق (validator) بدلاً من ذلك بإنشاء إثبات Merkle من المُعاملة ذات الأهمية إلى شجرة Merkle لجميع المُعاملات في الكتلة (block) المعنية. يتم تخزين ThisbMerkle Root في مُدخل (entry) دفتر الأستاذ (ledger) الذي يتم التصويت عليه من قبل المُدقّقين (validators)، مما يُوفر شرعية إجماع (consensus) عليها. يعتمد المُستوى الإضافي من الأمان للعميل الخفيف (light client) على مجموعة أولية أساسية من المُدقّقين (validators) الذين يعتبرهم العميل الخفيف (light client) أصحاب المصلحة في المجموعة (cluster). عند تغيير هذه المجموعة، يُمكن للعميل تحديث مجموعته الداخلية من المُدقّقين (validators) المعروفين بالإيصالات [receipts](simple-payment-and-state-verification.md#receipts). قد يصبح هذا صعبًا مع وجود عدد كبير من الحِصَص المُفوضة (delegated stakes).
 
-Validators themselves may want to use light client APIs for performance reasons.
-For example, during the initial launch of a validator, the validator may use a
-cluster provided checkpoint of the state and verify it with a receipt.
+قد يرغب المُدقّقون (validators) أنفسهم في إستخدام واجهات برمجة تطبيقات (API) العميل الخفيف (light client) لأسباب تتعلق بالأداء. على سبيل المثال، أثناء الإطلاق الأولي للمُدقّق (validator)، قد يستخدم المُدقّق نقطة تفتيش مُتفرعة من الحالة وتتحقق منها بإيصال.
 
-## Receipts
+## الإيصالات (Receipts)
 
-A receipt is a minimal proof that; a transaction has been included in a block,
-that the block has been voted on by the client's preferred set of validators
-and that the votes have reached the desired confirmation depth.
+الإيصال (receipt) هو الدليل الأدنى على ذلك؛ تم تضمين مُعاملة في كتلة (block)، الكتلة (block) التي تم التصويت عليها من قبل مجموعة المُدقّقين (validators) المُفضلين لدى العميل (client) وأن الأصوات قد وصلت إلى عمق التأكيد المطلوب.
 
-### Transaction Inclusion Proof
+### إثبات إدراج المُعاملة (Transaction Inclusion Proof)
 
-A transaction inclusion proof is a data structure that contains a Merkle Path
-from a transaction, through an Entry-Merkle to a Block-Merkle, which is included
-in a Bank-Hash with the required set of validator votes. A chain of PoH Entries
-containing subsequent validator votes, deriving from the Bank-Hash, is the proof
-of confirmation.
+إثبات إدراج المُعاملة (Transaction Inclusion Proof) هو بنية بيانات تحتوي على مسار Merkle من مُعاملة، من خلال Entry-Merkle إلى Block-Merkle، والذي يتم تضمينه في تجزئة البنك (Bank-Hash) مع المجموعة المطلوبة من أصوات المُدقّقين (validators). سلسلة مُدخلات (entries) الـ PoH التي تحتوي على أصوات المُدقّقين (validators) اللاحقة، المُستمدة من تجزئة البنك (Bank-Hash)، هي دليل التأكيد.
 
-#### Transaction Merkle
+#### مُعاملة Merkle أو Transaction Merkle
 
-An Entry-Merkle is a Merkle Root including all transactions in a given entry,
-sorted by signature. Each transaction in an entry is already merkled here:
-https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
-This means we can show a transaction `T` was included in an entry `E`.
+إن Entry-Merkle هو Merkle Root بما في ذلك جميع المُعاملات في مُدخل (entry) مُعين، مُرتبة حسب التوقيع. تم دمج كل مُعاملة في المُدخل (entry) بالفعل هنا: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205. هذا يعني أنه يُمكننا إظهار مُعاملة تم تضمين `T` في المُدخل `E`.
 
-A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
-block.
+الـ Block-Merkle هو Merkle Root لجميع Entry-Merkles المُتسلسلة في الكتلة (block).
 
-![Block Merkle Diagram](/img/spv-block-merkle.svg)
+![كتلة مُخطط Merkle أو Block Merkle Diagram](/img/spv-block-merkle.svg)
 
-Together the two merkle proofs show a transaction `T` was included in a block
-with bank hash `B`.
+تُظهر الإثباتان معًا أن المُعاملة `T`قد تم تضمينها في كتلة (block) مع تجزئة البنك (Bank Hash) الخاصة بـ `B`.
 
-An Accounts-Hash is the hash of the concatentation of the state hashes of
-each account modified during the current slot.
+تجزئة الحسابات (Accounts-Hash) هي تجزئة تسلسل تجزئات الحالة لكل حساب تم تعديله أثناء الفُتحة (Slot) الحالية.
 
-Transaction status is necessary for the receipt because the state receipt is
-constructed for the block. Two transactions over the same state can appear in
-the block, and therefore, there is no way to infer from just the state whether
-a transaction that is committed to the ledger has succeeded or failed in
-modifying the intended state. It may not be necessary to encode the full status
-code, but a single status bit to indicate the transaction's success.
+تُعتبر حالة المُعاملة ضرورية للإيصال نظرًا لإنشاء إيصال الحالة للكتلة (block). يُمكن أن تظهر مُعاملتان على نفس الحالة في الكتلة (block)، وبالتالي، لا توجد طريقة للإستدلال من الحالة فقط على ما إذا كانت المُعاملة المُلتزمة بدفتر الأستاذ (ledger) قد نجحت أو فشلت في تعديل الحالة المقصودة. قد لا يكون من الضروري ترميز كود الحالة بالكامل، ولكن من الضروري ترميز حالة bit واحدة للإشارة إلى نجاح المُعاملة.
 
-Currently, the Block-Merkle is not implemented, so to verify `E` was an entry
-in the block with bank hash `B`, we would need to provide all the entry hashes
-in the block. Ideally this Block-Merkle would be implmented, as the alternative
-is very inefficient.
+حاليًا، لم يتم تنفيذ Block-Merkle، لذا للتحقق من أن `E` كان مُدخلًا (entry) في الكتلة (block) مع تجزئة البنك (bank hash) الخاصة بـ `B`، سنحتاج إلى توفير جميع تجزئات (hashes) المُدخل (entry) في الكتلة (block). من الناحية المثالية، سيتم تنفيذ Block-Merkle، لأن البديل غير فعال للغاية.
 
-#### Block Headers
+#### رؤوس الكتلة (block headers)
+من أجل التحقق من إثباتات تضمين المُعاملات، يحتاج العملاء الخفيفون (light clients) إلى أن يكونوا قادرين على إستنتاج هيكل الإنقسامات أو الشوكات (forks) في الشبكة
 
-In order to verify transaction inclusion proofs, light clients need to be able
-to infer the topology of the forks in the network
+بشكل أكثر تحديدًا، سيحتاج العميل الخفيف (light client) إلى تتبع رؤوس الكتل (block headers) الواردة بحيث يُمكن لتجزئات البنك (Bank Hashes) للكتل (blocks) الخاصة بـ `A` و `B`، تحديد ما إذا كان `A` سلف مُشترك (ancestor) لـ `B` (القسم أدناه في إثبات التأكيد المُتفائل `Optimistic Confirmation Proof` يشرح السبب!). محتويات الرأس (header) هي الحقول اللازمة لحساب تجزئة البنك (bank hash).
 
-More specifically, the light client will need to track incoming block headers
-such that given two bank hashes for blocks `A` and `B`, they can determine
-whether `A` is an ancestor of `B` (Below section on
-`Optimistic Confirmation Proof` explains why!). Contents of header are the
-fields necessary to compute the bank hash.
+تجزئة البنك (Bank-Hash) هي تجزئة سلسلة Block-Merkle وتجزئة الحسابات (Accounts-Hash) المُوضحة في قسم `Transaction Merkle` أعلاه.
 
-A Bank-Hash is the hash of the concatenation of the Block-Merkle and
-Accounts-Hash described in the `Transaction Merkle` section above.
+![مُخطط تجزئة البنك (Bank Hash Diagram)](/img/spv-bank-hash.svg)
 
-![Bank Hash Diagram](/img/spv-bank-hash.svg)
-
-In the code:
+في التعليمة البرمجية:
 
 https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/runtime/src/bank.rs#L3468-L3473
 
@@ -126,37 +68,19 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
         ]);
 ```
 
-A good place to implement this logic along existing streaming logic in the
-validator's replay logic: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
+مكان جيد لتنفيذ هذا المنطق على طول منطق التدفق الحالي في منطق إعادة التشغيل للمُدقّق: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
 
-#### Optimistic Confirmation Proof
+#### إثبات التأكيد المُتفائل (Optimistic Confirmation Proof)
 
-Currently optimistic confirmation is detected via a listener that monitors
-gossip and the replay pipeline for votes:
-https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
+تم الكشف حاليًا عن تأكيد مُتفائل (Optimistic Confirmation) من خلال المُستمع (listener) الذي يُراقب القيل والقال (gossip) وخط أنابيب (pipeline) الإعادة للأصوات: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
 
-Each vote is a signed transaction that includes the bank hash of the block the
-validator voted for, i.e. the `B` from the `Transaction Merkle` section above.
-Once a certain threshold `T` of the network has voted on a block, the block is
-considered optimistially confirmed. The votes made by this group of `T`
-validators is needed to show the block with bank hash `B` was optimistically
-confirmed.
+كل تصويت عبارة عن مُعاملة مُوقعة تتضمن تجزئة البنك(bank hash) للكتلة (block) التي صوت المُدقّق (validator) عليها، أي `B` من قسم `Transaction Merkle` أعلاه. بمجرد تصويت عتبة مُعينة `T` من الشبكة على كتلة (block)، يتم إعتبار الكتلة مُؤكدة بشكل مُتفائل. هناك حاجة إلى الأصوات التي تم إجراؤها بواسطة هذه المجموعة المُكونة من `T` مُدقّق لإظهار الكتلة (block) بإستخدام تجزئة بنك `B` تم تأكيدها بتفاؤل.
 
-However other than some metadata, the signed votes themselves are not
-currently stored anywhere, so they can't be retrieved on demand. These votes
-probably need to be persisted in Rocksdb database, indexed by a key
-`(Slot, Hash, Pubkey)` which represents the slot of the vote, bank hash of the
-vote, and vote account pubkey responsible for the vote.
+مع ذلك، بخلاف بعض البيانات الوصفية (metadata)، فإن الأصوات المُوقعة نفسها لا يتم تخزينها حاليًا في أي مكان، لذا لا يُمكن إسترجاعها عند الطلب. ربما تحتاج هذه الأصوات إلى الإستمرار في قاعدة بيانات Rocksdb، المُفهرسة بواسطة مفتاح `(Slot, Hash, Pubkey)` الذي يُمثل فُتحة (slot) التصويت، وتجزئة البنك (bank hash) للتصويت، والمفتاح العمومي (pubkey) لحساب التصويت المسؤول عن التصويت.
 
-Together, the transaction merkle and optimistic confirmation proofs can be
-provided over RPC to subscribers by extending the existing signature
-subscrption logic. Clients who subscribe to the "Confirmed" confirmation
-level are already notified when optimistic confirmation is detected, a flag
-can be provided to signal the two proofs above should also be returned.
+معًا، يُمكن تقديم دليل المُعاملة وإثباتات التأكيد المُتفائل (optimistic confirmation proofs) عبر RPC للمُشتركين من خلال توسيع منطق الإشتراك الحالي للتوقيع. يتم بالفعل إخطار العملاء الذين إشتركوا في مُستوى التأكيد "SingleGossip" عند مُكتشاف تأكيد مُتفائل، ويُمكن أيضًا تقديم علامة للإشارة إلى الإثباتات أعلاه.
 
-It is important to note that optimistcally confirming `B` also implies that all
-ancestor blocks of `B` are also optimistically confirmed, and also that not
-all blocks will be optimistically confirmed.
+من المهم أن نُلاحظ أن التأكيد المُتفائل لـ `B` يعني أيضًا أن جميع كتل (blocks) السلف المُشترك من `B` تم تأكيدها أيضًا بشكل مُتفائل، وأيضًا أنه لن يتم تأكيد جميع الكتل (blocks) بشكل مُتفائل.
 
 ```
 
@@ -164,54 +88,35 @@ B -> B'
 
 ```
 
-So in the example above if a block `B'` is optimisically confirmed, then so is
-`B`. Thus if a transaction was in block `B`, the transaction merkle in the
-proof will be for block `B`, but the votes presented in the proof will be for
-block `B'`. This is why the headers in the `Block headers` section above are
-important, the client will need to verify that `B` is indeed an ancestor of
-`B'`.
+لذلك في المثال أعلاه، إذا تم تأكيد الكتلة `B'` على النحو الأمثل، فسيكون كذلك لـ `B`. بالتالي، إذا كانت المُعاملة في الكتلة `B`، فستكون مُعاملة merkle في الإثبات للكتلة `B`، لكن الأصوات المُقدمة في الإثبات ستكون للكتلة `B'`. هذا هو سبب أهمية الرؤوس (headers) في قسم رؤوس الكتلة `Block headers` أعلاه، سيحتاج العميل إلى التحقق من أن `B` هو بالفعل سلف مُشترك (ancestor) لـ `B'`.
 
-#### Proof of Stake Distribution
+#### إثبات توزيع الحِصَّة (Proof of Stake Distribution)
 
-Once presented with the transaction merkle and optimistic confirmation proofs
-above, a client can verify a transaction `T` was optimistially confirmed in a
-block with bank hash `B`. The last missing piece is how to verify that the
-votes in the optimistic proofs above actually constitute the valid `T`
-percentage of the stake necessay to uphold the safety guarantees of
-"optimistic confirmation".
+بمجرد تقديم مُعاملة merkle وإثباتات التأكيد المُتفائل (Optimistic Confirmation Proofs) أعلاه، يُمكن للعميل التحقق من أن المُعاملة `T` تم تأكيدها بتفاؤل في كتلة (block) بها تجزئة البنك `B`. آخر قطعة مفقودة هي كيفية التحقق من أن الأصوات في الإثباتات المُتفائلة أعلاه تشكل في الواقع النسبة الصحيحة `T` من الحِصَّة الضرورية لدعم ضمانات السلامة "للتأكيد المتفائل" (optimistic confirmation).
 
-One way to approach this might be for every epoch, when the stake set changes,
-to write all the stakes to a system account, and then have validators subscribe
-to that system account. Full nodes can then provide a merkle proving that the
-system account state was updated in some block `B`, and then show that the
-block `B` was optimistically confirmed/rooted.
+قد تكون إحدى الطرق للتعامل مع هذا هو أن تقوم كل فترة (epoch)، عندما تتغير مجموعة الحِصَّة (stake)، بكتابة جميع الحِصص (stakes) إلى حساب النظام، ثم جعل المُدقّقين (validators) يشتركون في حساب النظام هذا. يُمكن أن تُوفر العُقد (nodes) الكاملة بعد ذلك Merkle يُثبت أن حالة حساب النظام قد تم تحديثها في كتلة `B`، ثم تُظهر أن الكتلة `B` قد تم تأكيدها / تجذيرها بشكل مُتفائل.
 
-### Account State Verification
+### التحقق من حالة الحساب (Account State Verification)
 
-An account's state (balance or other data) can be verified by submitting a
-transaction with a **_TBD_** Instruction to the cluster. The client can then
-use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify
-whether the cluster agrees that the acount has reached the expected state.
+يُمكن التحقق من حالة الحساب (الرصيد أو البيانات الأخرى) عن طريق إرسال مُعاملة مع توجيه تعليمات **_TBD_** إلى المجموعة (cluster). يُمكن للعميل بعد ذلك إستخدام إثبات إدراج المُعاملة [Transaction Inclusion Proof](#transaction-inclusion-proof) للتحقق مما إذا كانت المجموعة (cluster) تُوافق على أن الحساب قد وصل إلى الحالة المُتوقعة.
 
-### Validator Votes
+### أصوات المُدقّق (Validator Votes)
 
-Leaders should coalesce the validator votes by stake weight into a single entry.
-This will reduce the number of entries necessary to create a receipt.
+يجب على القادة (Leaders) دمج أصوات المُدقّقين (validators) حسب وزن الحِصَّة (stake) في مُدخل (entry) واحد. سيُؤدي هذا إلى تقليل عدد المُدخلات (entries) اللازمة لإنشاء إيصال (receipt).
 
-### Chain of Entries
+### سلسلة المُدخلات (Chain of Entries)
 
-A receipt has a PoH link from the payment or state Merkle Path root to a list
-of consecutive validation votes.
+يحتوي الإيصال (receipt) على رابط PoH من جذر Merkle Path للدفع أو الحالة إلى قائمة أصوات المُصادقة المُتتالية (consecutive validation votes).
 
-It contains the following:
+يحتوي على ما يلي:
 
 - Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Hash
 
-And a vector of PoH entries:
+وناقل (vector) لمُدخلات (entries) الـ PoH:
 
-- Validator vote entries
-- Ticks
-- Light entries
+- مُدخلات تصويت المُدقّق (Validator vote entries)
+- العلامات (Ticks)
+- المُدخلات الخفيفة (Light entries)
 
 ```text
 /// This Entry definition skips over the transactions and only contains the
@@ -226,33 +131,21 @@ LightEntry {
 }
 ```
 
-The light entries are reconstructed from Entries and simply show the entry
-Merkle Root that was mixed in to the PoH hash, instead of the full transaction
-set.
+يُعاد بناء مُدخلات (entries) الضوء من المُدخلات وتُظهر ببساطة مُدخل Merkle Root الذي تم خلطه في تجزئة PoH، بدلاً من مجموعة المُعاملات الكاملة.
 
-Clients do not need the starting vote state. The
-[fork selection](../implemented-proposals/tower-bft.md) algorithm is defined
-such that only votes that appear after the transaction provide finality for the
-transaction, and finality is independent of the starting state.
+لا يحتاج العملاء (Clients) إلى حالة بدء التصويت. يتم تعريف خوارزمية [fork selection](../implemented-proposals/tower-bft.md) بحيث أن الأصوات التي تظهر بعد المُعاملة فقط هي التي تُوفر وقت إثبات المُعاملة (Finality)، ووقت إثبات المُعاملة مُستقل عن حالة البداية.
 
-### Verification
+### التحقّق (Verification)
 
-A light client that is aware of the supermajority set validators can verify a
-receipt by following the Merkle Path to the PoH chain. The Block-Merkle is the
-Merkle Root and will appear in votes included in an Entry. The light client can
-simulate [fork selection](../implemented-proposals/tower-bft.md) for the
-consecutive votes and verify that the receipt is confirmed at the desired
-lockout threshold.
+يُمكن للعميل الخفيف (light client) الذي يدرك مجموعة الأغلبية العظمى (supermajority) التحقق من الإيصال (receipt) بإتباع مسار Merkle إلى سلسلة PoH. Block-Merkle هو Merkle Root وسيظهر في الأصوات المُدرجة في المُدخل (entry). يُمكن للعميل الخفيف مُحاكاة اختيار الإنقسام أو الشوكة [ fork selection ](../implemented-proposals/tower-bft.md) للأصوات المُتتالية والتحقق من تأكيد الإيصال (receipt) عند حد الإغلاق المطلوب.
 
-### Synthetic State
+### الحالة الإصطناعية (Synthetic State)
 
-Synthetic state should be computed into the Bank-Hash along with the bank
-generated state.
+يجب إحتساب الحالة الإصطناعية (Synthetic state) في تجزئة البنك (Bank-Hash) جنبًا إلى جنب مع الحالة التي تم إنشاؤها من قبل البنك.
 
-For example:
+على سبيل المثال:
 
-- Epoch validator accounts and their stakes and weights.
-- Computed fee rates
+- فترة (epoch) حسابات المُدقّق (validator) وحِصَصها (stakes) وأوزانها.
+- مُعدلات الرسوم المُحَوْسَبَة (Computed fee rates)
 
-These values should have an entry in the Bank-Hash. They should live under known
-accounts, and therefore have an index into the hash concatenation.
+يجب أن يكون لهذه القيم مُدخل (entry) في تجزئة البنك (Bank-Hash). يجب أن يعيشوا تحت حسابات معروفة، وبالتالي يكون لديهم فهرس في سلسلة التجزئة (hash concatenation).

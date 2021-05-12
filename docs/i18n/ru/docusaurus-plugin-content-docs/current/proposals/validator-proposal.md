@@ -1,54 +1,29 @@
 ---
-title: Validator
+title: Валидатор
 ---
 
-## History
+## История
 
-When we first started Solana, the goal was to de-risk our TPS claims. We knew
-that between optimistic concurrency control and sufficiently long leader slots,
-that PoS consensus was not the biggest risk to TPS. It was GPU-based signature
-verification, software pipelining and concurrent banking. Thus, the TPU was
-born. After topping 100k TPS, we split the team into one group working toward
-710k TPS and another to flesh out the validator pipeline. Hence, the TVU was
-born. The current architecture is a consequence of incremental development with
-that ordering and project priorities. It is not a reflection of what we ever
-believed was the most technically elegant cross-section of those technologies.
-In the context of leader rotation, the strong distinction between leading and
-validating is blurred.
+Когда мы впервые запустили Solana, целью было снизить риски, связанные с заявками на TPS. Мы знали, что, несмотря на оптимистичный контроль параллелизма и достаточно длинные слоты лидеров, консенсус PoS не был самым большим риском для TPS. Это была проверка подписи на базе графического процессора, конвейерная обработка программного обеспечения и параллельный банкинг. Таким образом, родилась идея TPU (Transaction Processing Unit). После того, как мы превысили 100 тыс. TPS, мы разделили команду на одну группу, работающую над достижением 710 тыс. TPS, а другую - над раскрытием возможностей конвейера валидатора. Таким образом, родилась идея TVU (Transaction Validation Unit). Текущая архитектура является следствием постепенного развития с перечисленными этапами и приоритетами проекта. Это не отражение того, что мы когда-либо считали наиболее технически элегантным сечением этих технологий. В контексте ротации лидера четкое различие между обработкой (TPU) и проверкой (TVU) стирается.
 
-## Difference between validating and leading
+## Различия между валидацией и лидерством
 
-The fundamental difference between the pipelines is when the PoH is present. In
-a leader, we process transactions, removing bad ones, and then tag the result
-with a PoH hash. In the validator, we verify that hash, peel it off, and
-process the transactions in exactly the same way. The only difference is that
-if a validator sees a bad transaction, it can't simply remove it like the
-leader does, because that would cause the PoH hash to change. Instead, it
-rejects the whole block. The other difference between the pipelines is what
-happens _after_ banking. The leader broadcasts entries to downstream validators
-whereas the validator will have already done that in RetransmitStage, which is
-a confirmation time optimization. The validation pipeline, on the other hand,
-has one last step. Any time it finishes processing a block, it needs to weigh
-any forks it's observing, possibly cast a vote, and if so, reset its PoH hash
-to the block hash it just voted on.
+Фундаментальные различая между этими пайплайнами заключаются в присутствии PoH. В режиме лидера, мы обрабатываем транзакции, удаляем те, которые не проходят валидации и затем отмечаем конечный результат с помощью хэша PoH. В режиме валидатора мы проверяем этот хеш, очищаем его и обрабатываем транзакции точно так же способом. Единственное отличие состоит в том, что если валидатор видит транзакцию, не удовлетворяющую условиям, он не может просто взять и удалить ее, как это делает лидер, потому что это приведет к изменению хэша PoH. Вместо этого, отклоняется весь блок. Остальные отличия заключаются в том, что именно происходит _после_ банкинга. Лидер транслирует записи валидаторам, тогда как валидатор уже сделал это в RetransmitStage, что является оптимизацией времени подтверждения. Но с другой стороны, пайплайн работы валидатора требует ещё одного, последнего шага. Каждый раз, когда он завершает обработку блока, ему необходимо взвесить все наблюдаемые им форки, возможно проголосовать, и, если да, сбросить свой хэш PoH на хэше блока, за который он только что проголосовал.
 
-## Proposed Design
+## Предложенный дизайн
 
-We unwrap the many abstraction layers and build a single pipeline that can
-toggle leader mode on whenever the validator's ID shows up in the leader
-schedule.
+Мы разворачиваем множество уровней абстракции и строим единый пайплайн процессов, который может включать режим лидера всякий раз, когда идентификатор валидатора появляется в расписании лидеров.
 
-![Validator block diagram](/img/validator-proposal.svg)
+![Диаграмма блоков валидатора](/img/validator-proposal.svg)
 
-## Notable changes
+## Изменения
 
-- Hoist FetchStage and BroadcastStage out of TPU
-- BankForks renamed to Banktree
-- TPU moves to new socket-free crate called solana-tpu.
-- TPU's BankingStage absorbs ReplayStage
-- TVU goes away
-- New RepairStage absorbs Shred Fetch Stage and repair requests
-- JSON RPC Service is optional - used for debugging. It should instead be part
-  of a separate `solana-blockstreamer` executable.
-- New MulticastStage absorbs retransmit part of RetransmitStage
-- MulticastStage downstream of Blockstore
+- FetchStage и BroadcastStage являются частью TPU
+- BankForks переименован в Banktree
+- TPU переходит на новый способо создания без сокетов под названием solana-tpu.
+- BankingStage этап TPU поглощена ReplayStage
+- TVU отброшен
+- Новый этап RepairStage включает в себя Shred Fetch Stage и запрос на восстановление
+- Сервис JSON RPC теперь опционален и используется для отладки. Вместо этого он должен быть частью отдельного исполняемого процесса `solana-blockstreamer`.
+- Новый этап MulticastStage включает в себя часть ретрансляции и RetransmitStage
+- MulticastStage транслируется в Blockstore

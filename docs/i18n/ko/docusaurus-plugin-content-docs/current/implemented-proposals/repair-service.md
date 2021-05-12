@@ -1,108 +1,58 @@
 ---
-title: Repair Service
+title: 수리 서비스
 ---
 
-## Repair Service
+## 수리 서비스
 
-The RepairService is in charge of retrieving missing shreds that failed to be
-delivered by primary communication protocols like Turbine. It is in charge of
-managing the protocols described below in the `Repair Protocols` section below.
+RepairService는 Turbine과 같은 기본 통신 프로토콜에서 전달하지 못한 누락 된 조각을 검색하는 역할을합니다. 아래의 'Repair Protocols'섹션에서 설명하는 프로토콜을 관리하는 역할을합니다.
 
-## Challenges:
+## 과제 :
 
-1\) Validators can fail to receive particular shreds due to network failures
+1 \) 밸리데이터은 네트워크 장애로 인해 특정 파쇄를받지 못할 수 있습니다.
 
-2\) Consider a scenario where blockstore contains the set of slots {1, 3, 5}.
-Then Blockstore receives shreds for some slot 7, where for each of the shreds
-b, b.parent == 6, so then the parent-child relation 6 -&gt; 7 is stored in
-blockstore. However, there is no way to chain these slots to any of the
-existing banks in Blockstore, and thus the `Shred Repair` protocol will not
-repair these slots. If these slots happen to be part of the main chain, this
-will halt replay progress on this node.
+2 \) 블록 저장소에 슬롯 {1, 3, 5} 세트가 포함 된 시나리오를 고려하십시오. 그런 다음 Blockstore는 일부 슬롯 7에 대한 조각을 수신합니다. 여기서 각 조각 b, b.parent == 6이므로 부모-자식 관계 6-& gt; 7은 blockstore에 저장됩니다. 그러나 이러한 슬롯을 Blockstore의 기존 뱅크에 연결할 수있는 방법이 없으므로 'Shred Repair'프로토콜은 이러한 슬롯을 복구하지 않습니다. 이러한 슬롯이 메인 체인의 일부인 경우이 노드의 재생 진행이 중단됩니다.
 
-## Repair-related primitives
+## 수리 관련 프리미티브
 
-Epoch Slots:
-Each validator advertises separately on gossip the various parts of an
-`Epoch Slots`:
+Epoch Slots : 각 밸리데이터은 'Epoch Slots'의 다양한 부분을 가십에 개별적으로 광고합니다.
 
-- The `stash`: An epoch-long compressed set of all completed slots.
-- The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
-  slots starting from some some slot `M`, where `N` is the number of slots
-  that will fit in an MTU-sized packet.
+- 'stash': 완료된 모든 슬롯의 epoch-long 압축 세트.
+- '캐시': 일부 슬롯 'M'에서 시작하는 최신 'N'완료 슬롯의 실행 길이 인코딩 (RLE)입니다. 여기서 'N'은 MTU 크기 패킷에 맞는 슬롯 수입니다.
 
-`Epoch Slots` in gossip are updated every time a validator receives a
-complete slot within the epoch. Completed slots are detected by blockstore
-and sent over a channel to RepairService. It is important to note that we
-know that by the time a slot `X` is complete, the epoch schedule must exist
-for the epoch that contains slot `X` because WindowService will reject
-shreds for unconfirmed epochs.
+가십의 '에포크 슬롯'은 유효성 검사기가 에포크 내에서 완전한 슬롯을 수신 할 때마다 업데이트됩니다. 완료된 슬롯은 blockstore에 의해 감지되고 채널을 통해 RepairService로 전송됩니다. 슬롯`X`가 완료 될 때까지 WindowService는 확인되지 않은 epoch에 대한 파쇄를 거부하므로 슬롯`X`를 포함하는 epoch에 대한 epoch 일정이 존재해야한다는 것을 아는 것이 중요합니다.
 
-Every `N/2` completed slots, the oldest `N/2` slots are moved from the
-`cache` into the `stash`. The base value `M` for the RLE should also
-be updated.
+완성 된 'N / 2'슬롯마다 가장 오래된 'N / 2'슬롯이 '캐시'에서 '숨김'으로 이동합니다. RLE의 기본 값 'M'도 업데이트해야합니다.
 
-## Repair Request Protocols
+## 수리 요청 프로토콜
 
-The repair protocol makes best attempts to progress the forking structure of
-Blockstore.
+복구 프로토콜은 Blockstore의 분기 구조를 진행하기 위해 최선의 시도를합니다.
 
-The different protocol strategies to address the above challenges:
+위의 과제를 해결하기위한 다양한 프로토콜 전략 :
 
-1. Shred Repair \(Addresses Challenge \#1\): This is the most basic repair
-   protocol, with the purpose of detecting and filling "holes" in the ledger.
-   Blockstore tracks the latest root slot. RepairService will then periodically
-   iterate every fork in blockstore starting from the root slot, sending repair
-   requests to validators for any missing shreds. It will send at most some `N`
-   repair reqeusts per iteration. Shred repair should prioritize repairing
-   forks based on the leader's fork weight. Validators should only send repair
-   requests to validators who have marked that slot as completed in their
-   EpochSlots. Validators should prioritize repairing shreds in each slot
-   that they are responsible for retransmitting through turbine. Validators can
-   compute which shreds they are responsible for retransmitting because the
-   seed for turbine is based on leader id, slot, and shred index.
+1. 파쇄 수리 \ (문제 해결 \ # 1 \) : 원장의 "구멍"을 감지하고 채우는 목적으로 가장 기본적인 수리 프로토콜입니다. Blockstore는 최신 루트 슬롯을 추적합니다. 그런 다음 RepairService는 루트 슬롯에서 시작하여 블록 스토어의 모든 포크를 주기적으로 반복하여 누락 된 조각에 대한 수리 요청을 밸리데이터에게 보냅니다. 반복 당 최대 몇 개의`N` 수리 요청을 보냅니다. 파쇄 수리는 리더의 포크 무게를 기준으로 포크 수리의 우선 순위를 지정해야합니다. 밸리데이터은 해당 슬롯을 EpochSlot에서 완료된 것으로 표시 한 밸리데이터에게만 수리 요청을 보내야합니다. 밸리데이터은 터빈을 통한 재전송을 담당하는 각 슬롯에서 파쇄 수리의 우선 순위를 정해야합니다. 밸리데이터는 터빈의 시드가 리더 ID, 슬롯 및 파쇄 인덱스를 기반으로하기 때문에 재전송을 담당하는 파쇄를 계산할 수 있습니다.
 
-   Note: Validators will only accept shreds within the current verifiable
-   epoch \(epoch the validator has a leader schedule for\).
+   참고 : 밸리데이터은 현재 검증 가능한 시대 \ (밸리데이터이 리더 일정을 가지고있는 시대 \) 내에서만 파쇄를 수락합니다.
 
-2. Preemptive Slot Repair \(Addresses Challenge \#2\): The goal of this
-   protocol is to discover the chaining relationship of "orphan" slots that do not
-   currently chain to any known fork. Shred repair should prioritize repairing
-   orphan slots based on the leader's fork weight.
+2. 선점 슬롯 복구 \ (문제 해결 \ # 2 \) :이 프로토콜의 목표는 현재 알려진 포크에 연결되지 않은 "고아"슬롯의 연결 관계를 발견하는 것입니다. 파쇄 수리는 리더의 포크 무게에 따라 고아 슬롯 수리의 우선 순위를 지정해야합니다.
 
-   - Blockstore will track the set of "orphan" slots in a separate column family.
-   - RepairService will periodically make `Orphan` requests for each of
-     the orphans in blockstore.
+   - -Blockstore는 별도의 column family에서 "고아"슬롯 세트를 추적합니다.
+   - -RepairService는 블록 스토어의 각 고아에 대해 주기적으로 '고아'요청을합니다.
 
-     `Orphan(orphan)` request - `orphan` is the orphan slot that the
-     requestor wants to know the parents of `Orphan(orphan)` response -
-     The highest shreds for each of the first `N` parents of the requested
-     `orphan`
+     `Orphan (orphan)`request-`orphan`은 요청자가`Orphan (orphan)`응답의 부모를 알고 자하는 고아 슬롯입니다.-요청 된`orphan`의 첫 번째`N` 부모 각각에 대해 가장 높은 파쇄 횟수입니다.
 
-     On receiving the responses `p`, where `p` is some shred in a parent slot,
-     validators will:
+     응답`p`를 수신하면,`p`는 상위 슬롯의 일부 조각입니다.
 
-     - Insert an empty `SlotMeta` in blockstore for `p.slot` if it doesn't
-       already exist.
-     - If `p.slot` does exist, update the parent of `p` based on `parents`
+     - 참고 : 이러한 빈 슬롯이 blockstore에 추가되면`Shred Repair` 프로토콜이 해당 슬롯을 채우려 고 시도해야합니다.
+     - `p.slot`이있는 경우`parents`를 기준으로`p`의 상위 항목을 업데이트합니다.
 
-     Note: that once these empty slots are added to blockstore, the
-     `Shred Repair` protocol should attempt to fill those slots.
+     Note: that once these empty slots are added to blockstore, the `Shred Repair` protocol should attempt to fill those slots.
 
-     Note: Validators will only accept responses containing shreds within the
-     current verifiable epoch \(epoch the validator has a leader schedule
-     for\).
+     참고 : 밸리데이터은 현재 검증 가능한 시대 \ (밸리데이터이 리더 일정을 가지고있는 \) 내의 파쇄가 포함 된 응답 만 수락합니다.
 
-Validators should try to send orphan requests to validators who have marked that
-orphan as completed in their EpochSlots. If no such validators exist, then
-randomly select a validator in a stake-weighted fashion.
+밸리데이터은 해당 고아를 EpochSlot에서 완료된 것으로 표시 한 밸리데이터에게 고아 요청을 보내야합니다. 그러한 밸리데이터이 존재하지 않는 경우, 지분 가중치 방식으로 밸리데이터을 무작위로 선택합니다.
 
-## Repair Response Protocol
+## 수리 응답 프로토콜
 
-When a validator receives a request for a shred `S`, they respond with the
-shred if they have it.
+밸리데이터가 파쇄 'S'요청을 받으면 파쇄가 있으면 파쇄로 응답합니다.
 
-When a validator receives a shred through a repair response, they check
-`EpochSlots` to see if <= `1/3` of the network has marked this slot as
-completed. If so, they resubmit this shred through its associated turbine
-path, but only if this validator has not retransmitted this shred before.
+밸리데이터이 수리 응답을 통해 파쇄를 받으면`EpochSlots`를 확인하여 네트워크의 <=`1 / 3`이이 슬롯을 완료로 표시했는지 확인합니다. 만약 그렇다면, 그들은 관련 터빈 경로를 통해이 파쇄를 다시 제출하지만,이 밸리데이터이 이전에이 파쇄를 재전송하지 않은 경우에만 가능합니다.

@@ -1,60 +1,35 @@
 ---
-title: Slashing rules
+title: Правила Снятия
 ---
 
-Unlike Proof of Work \(PoW\) where off-chain capital expenses are already
-deployed at the time of block construction/voting, PoS systems require
-capital-at-risk to prevent a logical/optimal strategy of multiple chain voting.
-We intend to implement slashing rules which, if broken, result some amount of
-the offending validator's deposited stake to be removed from circulation. Given
-the ordering properties of the PoH data structure, we believe we can simplify
-our slashing rules to the level of a voting lockout time assigned per vote.
+В отличие от Proof of Work \ (PoW \), где капитальные затраты вне сети уже развернуты во время создания блока / голосования, системы PoS требуют риска капитала для предотвращения логической / оптимальной стратегии множественного цепного голосования. Мы намерены внедрить правила сокращения, которые в случае нарушения приводят к тому, что некоторая сумма депонированной ставки нарушившего валидатора будет удалена из обращения. Учитывая упорядочивающие свойства структуры данных PoH, мы считаем, что можем упростить наши правила сокращения до уровня времени блокировки голосования, назначаемого для каждого голоса.
 
-I.e. Each vote has an associated lockout time \(PoH duration\) that represents
-a duration by any additional vote from that validator must be in a PoH that
-contains the original vote, or a portion of that validator's stake is
-slashable. This duration time is a function of the initial vote PoH count and
-all additional vote PoH counts. It will likely take the form:
+То есть. С каждым голосованием связано время блокировки \ (длительность PoH \), которое представляет собой продолжительность любого дополнительного голосования от этого валидатора, которое должно быть в PoH, содержащем исходный голос, или часть ставки этого валидатора может быть снята. Это время зависит от начального количества голосов PoH и засчитываются все дополнительные голоса PoH. Скорее всего, он примет форму:
 
 ```text
 Lockouti\(PoHi, PoHj\) = PoHj + K \* exp\(\(PoHj - PoHi\) / K\)
 ```
 
-Where PoHi is the height of the vote that the lockout is to be applied to and
-PoHj is the height of the current vote on the same fork. If the validator
-submits a vote on a different PoH fork on any PoHk where k &gt; j &gt; i and
-PoHk &lt; Lockout\(PoHi, PoHj\), then a portion of that validator's stake is at
-risk of being slashed.
+Где PoHi - это высота голоса, к которому будет применяться блокировка, а PoHj - это высота текущего голосования на том же форке. Если валидатор отправляет голосование по другому форку PoH на любом PoHk, где k &gt; j &gt;; i и PoHk &lt; Lockout\(PoHi, PoHj\), тогда часть ставки этого валидатора может быть снята.
 
-In addition to the functional form lockout described above, early
-implementation may be a numerical approximation based on a First In, First Out
-\(FIFO\) data structure and the following logic:
+В дополнение к функциональной блокировке формы, описанной выше, ранняя реализация может представлять собой численное приближение, основанное на структуре данных «первым пришел - первым вышел» (FIFO) и следующей логике:
 
-- FIFO queue holding 32 votes per active validator
-- new votes are pushed on top of queue \(`push_front`\)
-- expired votes are popped off top \(`pop_front`\)
-- as votes are pushed into the queue, the lockout of each queued vote doubles
-- votes are removed from back of queue if `queue.len() > 32`
-- the earliest and latest height that has been removed from the back of the
-  queue should be stored
+- Очередь FIFO, содержащая 32 голоса на активный валидатор
+- новые голоса помещаются в начало очереди \ (` push_front ` \)
+- голоса с истекшим сроком действия отображаются сверху \ (` pop_front ` \)
+- по мере того, как голоса помещаются в очередь, блокировка каждого голосования в очереди удваивается
+- голоса удаляются из очереди, если `queue.len() > 32`
+- самая ранняя и самая последняя высота, которая была удалена из задней части очереди, должна быть сохранена
 
-It is likely that a reward will be offered as a % of the slashed amount to any
-node that submits proof of this slashing condition being violated to the PoH.
+Вполне вероятно, что вознаграждение будет предложено в виде% от сокращенной суммы любому узлу, который представит PoH доказательства нарушения этого условия сокращения.
 
-### Partial Slashing
+### Частичное снятие
 
-In the schema described so far, when a validator votes on a given PoH stream,
-they are committing themselves to that fork for a time determined by the vote
-lockout. An open question is whether validators will be hesitant to begin
-voting on an available fork if the penalties are perceived too harsh for an
-honest mistake or flipped bit.
+В схеме, описанной до сих пор, когда валидатор голосует за данный поток PoH, он фиксируется на этой вилке на время, определяемое блокировкой голосования. Открытый вопрос: не решатся ли валидаторы начать голосование за доступный форк, если штрафы будут восприниматься слишком суровыми за честную ошибку или перевернутый бит.
 
-One way to address this concern would be a partial slashing design that results
-in a slashable amount as a function of either:
+Одним из способов решения этой проблемы может быть частичное сокращение, которое приводит к уменьшению количества в зависимости от:
 
-1. the fraction of validators, out of the total validator pool, that were also
-   slashed during the same time period \(ala Casper\)
-2. the amount of time since the vote was cast \(e.g. a linearly increasing % of
-   total deposited as slashable amount over time\), or both.
+1. ставки валидаторов из общего пула валидаторов, которые также были сняты в течение того же периода времени \ (ala Casper \)
+2. количество времени, прошедшее с момента голосования \ (например, линейно увеличивающийся% от общей суммы, внесенный в виде сокращаемой суммы с течением времени \), или и то, и другое.
 
-This is an area currently under exploration.
+Эта область в настоящее время исследуется.

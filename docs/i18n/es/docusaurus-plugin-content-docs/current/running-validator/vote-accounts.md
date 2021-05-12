@@ -1,192 +1,97 @@
 ---
-title: Vote Account Management
+title: Gestión de cuentas de voto
 ---
 
-This page describes how to set up an on-chain _vote account_. Creating a vote
-account is needed if you plan to run a validator node on Solana.
+Esta página describe cómo configurar una cuenta de voto _en cadena_.  Se necesita crear una cuenta de voto si planeas ejecutar un nodo de validador en Solana.
 
-## Create a Vote Account
+## Crear una cuenta de voto
+Se puede crear una cuenta de voto con el comando [create-vote-account](../cli/usage.md#solana-create-vote-account). La cuenta de voto puede configurarse cuando se crea por primera vez o después de que el validador esté en ejecución.  Todos los aspectos de la cuenta de voto pueden ser cambiados, excepto la [vote account address](#vote-account-address), el cual es fijo para toda la vida de la cuenta.
 
-A vote account can be created with the
-[create-vote-account](../cli/usage.md#solana-create-vote-account) command.
-The vote account can be configured when first created or after the validator is
-running. All aspects of the vote account can be changed except for the
-[vote account address](#vote-account-address), which is fixed for the lifetime
-of the account.
+### Configurar una cuenta de voto existente
+ - Para cambiar la identidad del validador [](#validator-identity), usa [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
+ - Para cambiar la [autoridad de voto](#vote-authority), usa [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
+ - Para cambiar la [autoridad de retiro de votos](#withdraw-authority), utilice [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
+ - Para cambiar la [comisión](#commission), usa [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-### Configure an Existing Vote Account
+## Estructura de Cuenta de Voto
 
-- To change the [validator identity](#validator-identity), use
-  [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
-- To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
-- To change the [withdraw authority](#withdraw-authority), use
-  [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
-- To change the [commission](#commission), use
-  [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
+### Dirección de cuenta de voto
+Una cuenta de voto se crea en una dirección que es la clave pública de un archivo keypair, o en una dirección derivada basada en la clave pública de un archivo keypair y una cadena de semillas.
 
-## Vote Account Structure
+La dirección de una cuenta de voto nunca es necesaria para firmar ninguna transacción, pero solo se utiliza para buscar la información de la cuenta.
 
-### Vote Account Address
+Cuando alguien quiere [delegar tokens en una cuenta de stake](../staking.md), el comando de delegación está dirigido a la dirección de cuenta de voto del validador a quien el titular del token quiere delegar.
 
-A vote account is created at an address that is either the public key of a
-keypair file, or at a derived address based on a keypair file's public key and
-a seed string.
+### Identidad del validador
 
-The address of a vote account is never needed to sign any transactions,
-but is just used to look up the account information.
+La _identidad del validador_ es una cuenta del sistema que se utiliza para pagar por todas las comisiones de transacción de voto enviadas a la cuenta de voto. Debido a que se espera que el validador vote en la mayoría de los bloques válidos que recibe, la cuenta de identidad del validador esta frecuentemente (potencialmente múltiples veces por segundo) firmando transacciones y pagando comisiones.  Por esta razón, el keypair de identidad del validador debe ser almacenado como una "billetera caliente" en un archivo keypair en el mismo sistema que el proceso de validación se está ejecutando.
 
-When someone wants to [delegate tokens in a stake account](../staking.md),
-the delegation command is pointed at the vote account address of the validator
-to whom the token-holder wants to delegate.
+Debido a que una cartera caliente es generalmente menos segura que una cartera sin conexión o "fría", el operador del validador puede elegir almacenar solo suficiente SOL en la cuenta de identidad para cubrir las comisiones de votación por un tiempo limitado. tales como unas pocas semanas o meses.  La cuenta de identidad del validador podría ser recargada periódicamente desde una cartera más segura.
 
-### Validator Identity
+Esta práctica puede reducir el riesgo de pérdida de fondos si el disco o el sistema de archivos del nodo validador se ponen en peligro o están dañados.
 
-The _validator identity_ is a system account that is used to pay for all the
-vote transaction fees submitted to the vote account.
-Because the validator is expected to vote on most valid blocks it receives,
-the validator identity account is frequently
-(potentially multiple times per second) signing transactions and
-paying fees. For this reason the validator identity keypair must be
-stored as a "hot wallet" in a keypair file on the same system the validator
-process is running.
+La identidad del validador es necesaria cuando se crea una cuenta de voto. La identidad del validador también se puede cambiar después de crear una cuenta usando el comando [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 
-Because a hot wallet is generally less secure than an offline or "cold" wallet,
-the validator operator may choose to store only enough SOL on the identity
-account to cover voting fees for a limited amount of time, such as a few weeks
-or months. The validator identity account could be periodically topped off
-from a more secure wallet.
+### Autoridad de voto
 
-This practice can reduce the risk of loss of funds if the validator node's
-disk or file system becomes compromised or corrupted.
+El keypair de la _vote authority_ se utiliza para firmar cada transacción de voto que el nodo del validador desea enviar al clúster.  Esto no necesariamente tiene que ser único de la identidad del validador, como verás más adelante en este documento.  Como la autoridad de voto, al igual que la identidad del validador, firma transacciones con frecuencia, también debe ser un keypair en caliente en el mismo sistema de archivos que el proceso del validador.
 
-The validator identity is required to be provided when a vote account is created.
-The validator identity can also be changed after an account is created by using
-the [vote-update-validator](../cli/usage.md#solana-vote-update-validator) command.
+La autoridad de voto puede establecerse en la misma dirección que la identidad del validador. Si la identidad del validador es también la autoridad de voto, solo una firma por transacción de voto es necesaria para firmar el voto y pagar la comisión de la transacción.  Debido a que las comisiones de transacción en Solana se evalúan por firma, tener un firmante en lugar de dos resultará en la mitad de la comisión de transacción pagada en comparación con ajustar la autoridad de voto y la identidad del validador a dos cuentas diferentes.
 
-### Vote Authority
+La autoridad de voto puede establecerse cuando se crea la cuenta de voto.  Si no es proporcionado, el comportamiento predeterminado es asignarle la misma que la identidad del validador. La autoridad de voto puede ser cambiada más tarde con el comando [autorizar votantes](../cli/usage.md#solana-vote-authorize-voter).
 
-The _vote authority_ keypair is used to sign each vote transaction the validator
-node wants to submit to the cluster. This doesn't necessarily have to be unique
-from the validator identity, as you will see later in this document. Because
-the vote authority, like the validator identity, is signing transactions
-frequently, this also must be a hot keypair on the same file system as the
-validator process.
+La autoridad de votación puede cambiarse como máximo una vez por época.  Si la autoridad es cambiada con [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter), esto no tendrá efecto hasta el comienzo del siguiente época. Para soportar una transición suave de la firma de votos, `solana-validator` permite que el argumento `--authorized-voter` sea especificado varias veces.  Esto permite que el proceso de validación siga votando con éxito cuando la red alcance un límite de época en el que la cuenta de autoridad del validador del voto del validador cambie.
 
-The vote authority can be set to the same address as the validator identity.
-If the validator identity is also the vote authority, only one
-signature per vote transaction is needed in order to both sign the vote and pay
-the transaction fee. Because transaction fees on Solana are assessed
-per-signature, having one signer instead of two will result in half the transaction
-fee paid compared to setting the vote authority and validator identity to two
-different accounts.
+### Autoridad de Retiro
 
-The vote authority can be set when the vote account is created. If it is not
-provided, the default behavior is to assign it the same as the validator identity.
-The vote authority can be changed later with the
-[vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter) command.
+El keypair _withdraw authority_ se utiliza para retirar fondos de una cuenta de votos mediante el comando [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account).  Cualquier recompensa de la red que gane un validador se deposita en la cuenta de votos y sólo se puede recuperar firmando con el keypai de la autoridad de retiro.
 
-The vote authority can be changed at most once per epoch. If the authority is
-changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
-this will not take effect until the beginning of the next epoch.
-To support a smooth transition of the vote signing,
-`solana-validator` allows the `--authorized-voter` argument to be specified
-multiple times. This allows the validator process to keep voting successfully
-when the network reaches an epoch boundary at which the validator's vote
-authority account changes.
+La autoridad de retiro también es necesaria para firmar cualquier transacción para cambiar la [comisión](#commission), de una cuenta de votos, y para cambiar la identidad del validador en una cuenta de votos.
 
-### Withdraw Authority
+Dado que la cuenta de votos podría acumular un saldo importante, considere la posibilidad de mantener el keypair de autoridad de retirada en un monedero offline/frío, ya que no es necesario para firmar transacciones frecuentes.
 
-The _withdraw authority_ keypair is used to withdraw funds from a vote account
-using the [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
-command. Any network rewards a validator earns are deposited into the vote
-account and are only retrievable by signing with the withdraw authority keypair.
+La autoridad de retiro puede establecerse en la creación de una cuenta de voto con la opción `--authorized-withdrawer`.  Si esto no se proporciona, la identidad del validador se establecerá como la autoridad de retiro por defecto.
 
-The withdraw authority is also required to sign any transaction to change
-a vote account's [commission](#commission), and to change the validator
-identity on a vote account.
+La autoridad de retiro se puede cambiar más tarde con el comando [de retiro de autorización de voto](../cli/usage.md#solana-vote-authorize-withdrawer).
 
-Because the vote account could accrue a significant balance, consider keeping
-the withdraw authority keypair in an offline/cold wallet, as it is
-not needed to sign frequent transactions.
+### Comisión
 
-The withdraw authority can be set at vote account creation with the
-`--authorized-withdrawer` option. If this is not provided, the validator
-identity will be set as the withdraw authority by default.
+_Comisión_ es el porcentaje de recompensas de red obtenidas por un validador que se deposita en la cuenta de voto del validador.  El resto de las recompensas se distribuyen a todas las cuentas de stake delegadas a esa cuenta de voto. proporcional al peso activo del stake de cada cuenta de stake.
 
-The withdraw authority can be changed later with the
-[vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
-command.
+Por ejemplo, si una cuenta de voto tiene una comisión del 10%, por todas las recompensas ganadas por ese validador en una época dada, 10% de estas recompensas serán depositadas en la cuenta de voto en el primer bloque de la siguiente época. El 90% restante se depositará en cuentas de stake delegadas como stake. activa inmediatamente.
 
-### Commission
+Un validador puede elegir establecer una comisión baja para intentar atraer más delegaciones de stake como resultado de una comisión más baja en un porcentaje mayor de recompensas pasado al delegado.  Como hay costos asociados a configurar y operar un nodo de validador, un validador idealmente establecería una comisión suficientemente alta para al menos cubrir sus gastos.
 
-_Commission_ is the percent of network rewards earned by a validator that are
-deposited into the validator's vote account. The remainder of the rewards
-are distributed to all of the stake accounts delegated to that vote account,
-proportional to the active stake weight of each stake account.
+La comisión puede establecerse al crear una cuenta de voto con la opción `--commission`. Si no se proporciona, el valor predeterminado será del 100%, lo que resultará en todos las recompensas depositadas en la cuenta de voto, y ninguno se transmite a ninguna cuenta de stake delegada.
 
-For example, if a vote account has a commission of 10%, for all rewards earned
-by that validator in a given epoch, 10% of these rewards will be deposited into
-the vote account in the first block of the following epoch. The remaining 90%
-will be deposited into delegated stake accounts as immediately active stake.
+La comisión también se puede cambiar más tarde con el comando [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-A validator may choose to set a low commission to try to attract more stake
-delegations as a lower commission results in a larger percentage of rewards
-passed along to the delegator. As there are costs associated with setting up
-and operating a validator node, a validator would ideally set a high enough
-commission to at least cover their expenses.
+Al establecer la comisión, sólo se aceptan valores enteros en el conjunto [0-100]. El entero representa el número de puntos porcentuales para la comisión, así que crear una cuenta con `--commission 10` establecerá una comisión del 10%.
 
-Commission can be set upon vote account creation with the `--commission` option.
-If it is not provided, it will default to 100%, which will result in all
-rewards deposited in the vote account, and none passed on to any delegated
-stake accounts.
+## Rotación de clave
+Rotar las claves de autoridad de la cuenta de voto requiere un manejo especial al tratar con un validador en vivo.
 
-Commission can also be changed later with the
-[vote-update-commission](../cli/usage.md#solana-vote-update-commission) command.
+### Identidad del validador de cuentas de voto
 
-When setting the commission, only integer values in the set [0-100] are accepted.
-The integer represents the number of percentage points for the commission, so
-creating an account with `--commission 10` will set a 10% commission.
+Necesitarás acceder al keypair _withdraw authority_ de la cuenta de voto para cambiar la identidad del validador.  Los siguientes pasos asumen que `~/withdraw-authority.json` es ese keypair.
 
-## Key Rotation
+1. Crear el nuevo keypair de identidad del validador, `solana-keygen new -o ~/new-validator-keypair.json`.
+2. Asegúrese de que la nueva cuenta de identidad ha sido financiada, `solana transfer ~/new-validator-keypair.json 500`.
+3. Ejecute `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json` para modificar la identidad del validador en su cuenta de voto
+4. Reinicia tu validador con el nuevo keypair de identidad para el argumento `--identity`
 
-Rotating the vote account authority keys require special handling when dealing
-with a live validator.
+### Cuenta de voto Votante autorizado
+El par de claves _vote authority_ sólo puede cambiarse en los límites de la época y requiere algunos argumentos adicionales a `solana-validator` para una migración sin problemas.
 
-### Vote Account Validator Identity
+1. Ejecuta `solana epoch-info`.  Si no queda mucho tiempo en la época actual, considere la posibilidad de esperar a la siguiente época para que su validador tenga tiempo suficiente para reiniciar y ponerse al día.
+2. Crear el nuevo keypair de autoridad de votación, `solana-keygen new -o ~/new-vote-authority.json`.
+3. Determinar el keypair actual de _vote authority_ ejecutando `solana
+vote-account ~/vote-account-keypair.json`.  Puede ser la cuenta de identidad del validador (por defecto) o algún otro keypair.  Los siguientes pasos asumen que `~/validator-keypair.json` es ese keypair.
+4. Ejecute `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. Está previsto que la nueva autoridad de votación se active a partir de la próxima época.
+5. `solana-validator` debe reiniciarse ahora con los pares de claves de autoridad de voto antiguos y nuevos, para que pueda realizar la transición sin problemas en la siguiente época. Añadir los dos argumentos al reiniciar: `--authorized-voter ~/validator-keypair.json
+--authorized-voter ~/new-vote-authority.json`
+6. Después de que el clúster alcance la siguiente época, elimine el argumento `--authorized-voter ~/validator-keypair.json` y reinicie `solana-validator`, ya que el antiguo keypair de autoridad de voto ya no es necesario.
 
-You will need access to the _withdraw authority_ keypair for the vote account to
-change the validator identity. The follow steps assume that
-`~/withdraw-authority.json` is that keypair.
 
-1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
-2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
-3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
-   to modify the validator identity in your vote account
-4. Restart your validator with the new identity keypair for the `--identity` argument
-
-### Vote Account Authorized Voter
-
-The _vote authority_ keypair may only be changed at epoch boundaries and
-requires some additional arguments to `solana-validator` for a seamless
-migration.
-
-1. Run `solana epoch-info`. If there is not much time remaining time in the
-   current epoch, consider waiting for the next epoch to allow your validator
-   plenty of time to restart and catch up.
-2. Create the new vote authority keypair, `solana-keygen new -o ~/new-vote-authority.json`.
-3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. It may be validator's
-   identity account (the default) or some other keypair. The following steps
-   assume that `~/validator-keypair.json` is that keypair.
-4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
-   The new vote authority is scheduled to become active starting at the next epoch.
-5. `solana-validator` now needs to be restarted with the old and new vote
-   authority keypairs, so that it can smoothly transition at the next epoch. Add
-   the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
-6. After the cluster reaches the next epoch, remove the
-   `--authorized-voter ~/validator-keypair.json` argument and restart
-   `solana-validator`, as the old vote authority keypair is no longer required.
-
-### Vote Account Authorized Withdrawer
-
-No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.
+### Cuenta de voto de Retirada autorizada
+No se requiere ninguna manipulación especial.  Utilice el comando `solana vote-authorize-withdrawer` según sea necesario.

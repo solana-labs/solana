@@ -1,37 +1,37 @@
 ---
-title: Embedding the Move Language
+title: 이동 언어 포함
 ---
 
-## Problem
+## 문제
 
-Solana enables developers to write on-chain programs in general purpose programming languages such as C or Rust, but those programs contain Solana-specific mechanisms. For example, there isn't another chain that asks developers to create a Rust module with a `process_instruction(KeyedAccounts)` function. Whenever practical, Solana should offer application developers more portable options.
+Solana를 사용하면 개발자가 C 또는 Rust와 같은 범용 프로그래밍 언어로 온 체인 프로그램을 작성할 수 있지만 이러한 프로그램에는 Solana 관련 메커니즘이 포함되어 있습니다. 예를 들어, 개발자에게`process_instruction (KeyedAccounts)`함수를 사용하여 Rust 모듈을 만들도록 요청하는 다른 체인은 없습니다. 가능할 때마다 Solana는 응용 프로그램 개발자에게 더 많은 이식 가능한 옵션을 제공해야합니다.
 
-Until just recently, no popular blockchain offered a language that could expose the value of Solana's massively parallel [runtime](../validator/runtime.md). Solidity contracts, for example, do not separate references to shared data from contract code, and therefore need to be executed serially to ensure deterministic behavior. In practice we see that the most aggressively optimized EVM-based blockchains all seem to peak out around 1,200 TPS - a small fraction of what Solana can do. The Libra project, on the other hand, designed an on-chain programming language called Move that is more suitable for parallel execution. Like Solana's runtime, Move programs depend on accounts for all shared state.
+최근까지만해도 Solana의 대규모 병렬 \[런타임\] (../ validator / runtime.md)의 가치를 노출 할 수있는 언어를 제공하는 인기있는 블록체인은 없었습니다. 예를 들어, Solidity 컨트랙트은 공유 데이터에 대한 참조를 컨트랙트 코드에서 분리하지 않으므로 결정적 동작을 보장하기 위해 순차적으로 실행되어야합니다. 실제로 우리는 가장 공격적으로 최적화 된 EVM 기반 블록체인이 모두 약 1,200 TPS에 정점을 찍는 것으로 보입니다. 솔라나가 할 수있는 일의 작은 부분입니다. 반면에 Libra 프로젝트는 병렬 실행에 더 적합한 Move라는 온 체인 프로그래밍 언어를 설계했습니다. Solana의 런타임과 마찬가지로 Move 프로그램은 모든 공유 상태에 대한 계정에 의존합니다.
 
-The biggest design difference between Solana's runtime and Libra's Move VM is how they manage safe invocations between modules. Solana took an operating systems approach and Libra took the domain-specific language approach. In the runtime, a module must trap back into the runtime to ensure the caller's module did not write to data owned by the callee. Likewise, when the callee completes, it must again trap back to the runtime to ensure the callee did not write to data owned by the caller. Move, on the other hand, includes an advanced type system that allows these checks to be run by its bytecode verifier. Because Move bytecode can be verified, the cost of verification is paid just once, at the time the module is loaded on-chain. In the runtime, the cost is paid each time a transaction crosses between modules. The difference is similar in spirit to the difference between a dynamically-typed language like Python versus a statically-typed language like Java. Solana's runtime allows applications to be written in general purpose programming languages, but that comes with the cost of runtime checks when jumping between programs.
+Solana의 런타임과 Libra의 Move VM 간의 가장 큰 디자인 차이점은 모듈 간의 안전한 호출을 관리하는 방법입니다. Solana는 운영 체제 접근 방식을 취했고 Libra는 도메인 별 언어 접근 방식을 취했습니다. 런타임에서 모듈은 호출자의 모듈이 호출 수신자가 소유 한 데이터에 쓰지 않도록 런타임에 다시 트랩해야합니다. 마찬가지로 호출 수신자가 완료되면 호출 수신자가 호출자가 소유 한 데이터에 쓰지 않도록 런타임에 다시 트랩해야합니다. 반면에 Move에는 이러한 검사를 바이트 코드 검증기로 실행할 수있는 고급 유형 시스템이 포함되어 있습니다. Move 바이트 코드를 검증 할 수 있기 때문에 검증 비용은 모듈이 온 체인에로드 될 때 한 번만 지불됩니다. 런타임에서는 트랜잭션이 모듈간에 교차 할 때마다 비용이 지불됩니다. 차이점은 Python과 같은 동적 유형 언어와 Java와 같은 정적으로 유형이 지정된 언어의 차이점과 정신적으로 유사합니다. Solana의 런타임을 사용하면 응용 프로그램을 범용 프로그래밍 언어로 작성할 수 있지만 프로그램 사이를 이동할 때 런타임 검사 비용이 발생합니다.
 
-This proposal attempts to define a way to embed the Move VM such that:
+이 제안은 Move VM을 포함하는 방법을 다음과 같이 정의하려고 시도합니다.
 
-- cross-module invocations within Move do not require the runtime's
+- -Move 내의 교차 모듈 호출에는 런타임의필요하지 않습니다.
 
-  cross-program runtime checks
+  교차 프로그램 런타임 검사가-
 
-- Move programs can leverage functionality in other Solana programs and vice
+- Move 프로그램은 다른 Solana 프로그램의 기능을 활용할 수 있으며 그
 
   versa
 
 - Solana's runtime parallelism is exposed to batches of Move and non-Move
 
-  transactions
+  트랜잭션의
 
-## Proposed Solution
+## 제안 된 솔루션
 
-### Move VM as a Solana loader
+### Solana 로더로
 
-The Move VM shall be embedded as a Solana loader under the identifier `MOVE_PROGRAM_ID`, so that Move modules can be marked as `executable` with the VM as its `owner`. This will allow modules to load module dependencies, as well as allow for parallel execution of Move scripts.
+VM 이동 Move VM은 식별자`MOVE_PROGRAM_ID '아래에 Solana 로더로 내장되어 Move 모듈이`executable로 표시 될 수 있습니다. `VM을`소유자`로 지정합니다. 이렇게하면 모듈이 모듈 종속성을로드 할 수있을뿐만 아니라 Move 스크립트를 병렬로 실행할 수 있습니다.
 
-All data accounts owned by Move modules must set their owners to the loader, `MOVE_PROGRAM_ID`. Since Move modules encapsulate their account data in the same way Solana programs encapsulate theirs, the Move module owner should be embedded in the account data. The runtime will grant write access to the Move VM, and Move grants access to the module accounts.
+Move 모듈이 소유 한 모든 데이터 계정은 소유자를 'MOVE_PROGRAM_ID'로더로 설정해야합니다. Move 모듈은 Solana 프로그램이 자신의 것을 캡슐화하는 것과 같은 방식으로 계정 데이터를 캡슐화하므로 Move 모듈 소유자는 계정 데이터에 포함되어야합니다. 런타임은 Move VM에 대한 쓰기 액세스 권한을 부여하고 Move는 모듈 계정에 대한 액세스 권한을 부여합니다.
 
-### Interacting with Solana programs
+### Solana 프로그램과의 상호 작용
 
-To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust BPF programs.
+비 Move 프로그램에서 명령어를 호출하려면 Solana가`process_instruction ()`시스템 호출을 사용하여 Move VM을 확장해야합니다. `process_instruction ()`Rust BPF 프로그램과 동일하게 작동합니다.

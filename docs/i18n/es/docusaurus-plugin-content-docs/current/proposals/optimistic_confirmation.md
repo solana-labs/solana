@@ -1,28 +1,16 @@
 ---
-title: Optimistic Confirmation
+title: Confirmación optimista
 ---
 
-## Primitives
+## Primitivos
 
-`vote(X, S)` - Votes will be augmented with a "reference" slot, `X`
-which is the **latest** ancestor of this fork that this validator voted on
-with a proof of switching. As long as the validator makes consecutive votes
-that are all descended from each other, the same `X` should be used for all
-those votes. When the validator makes a vote for a slot `s` that is not
-descended from the previous, `X` will be set to the new slot `s`. All votes
-will then be of the form `vote(X, S)`, where `S` is the sorted list of slots
-`(s, s.lockout)` being voted for.
+`vote(X, S)` - Los votos se aumentarán con una ranura de "referencia", `X` que es el **latest** de este fork fue este validador votó con una prueba de cambio. Mientras el validador realice votaciones consecutivas que desciendan unas de otras, se debe utilizar el mismo `X` para todas esas votaciones. Cuando el validador realiza una votación para una ranura `s` que no desciende de la anterior, `X` se establecerá en la nueva ranura `s`. Todos los votos entonces serán de la forma `voto(X, S)`, donde `S` es la lista ordenada de ranuras `(s, s. ockout)` votando a favor.
 
-Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
+Dado un voto `vote(X, S)`, deja `S.last == vote.last` ser la última ranura en `S`.
 
-Now we define some "Optimistic Slashing" slashing conditions. The intuition
-for these is described below:
+Ahora definimos algunas condiciones de corte "Optimistic Slashing". La intuición para estos se describe a continuación:
 
-- `Intuition`: If a validator submits `vote(X, S)`, the same validator
-  should not have voted on a different fork that "overlaps" this fork.
-  More concretely, this validator should not have cast another vote
-  `vote(X', S')` where the range `[X, S.last]` overlaps the range
-  `[X', S'.last]`, `X != X'`, as shown below:
+- `Intuición`: Si un validador envía `vote(X, S)`, el mismo validador no debería haber votado en un fork diferente que "superpone" a este fork. Más concretamente, este validador no debería haber emitido otro voto `vote(X', S')` donde el rango `[X, S. última]` superpone el rango `[X', S'.last]`, `X != X'`, como se muestra a continuación:
 
 ```text
                                   +-------+
@@ -70,111 +58,68 @@ for these is described below:
                     +-------+
 ```
 
-(Example of slashable votes vote(X', S') and vote(X, S))
+(Ejemplo de votos barajables (X', S') y voto(X, S))
 
-In the diagram above, note that the vote for `S.last` must have been sent after
-the vote for `S'.last` (due to lockouts, the higher vote must have been sent
-later). Thus, the sequence of votes must have been: `X ... S'.last ... S.last`.
-This means after the vote on `S'.last`, the validator must have switched back
-to the other fork at some slot `s > S'.last > X`. Thus, the vote for `S.last`
-should have used `s` as the "reference" point, not `X`, because that was the
-last "switch" on the fork.
+En el diagrama anterior, ten en cuenta que la votación a favor de `S. el pasado` debe haber sido enviado después de el voto por `S". pasados` (debido a bloqueos, el voto más alto debe haber sido enviado más tarde). Así, la secuencia de votos debe haber sido: `X ... S'.last ... S.last`. Esto significa después de la votación sobre `S". ast`, el validador debe haber cambiado de vueltan al otro fork en alguna ranura `s > S. el último > X`. Por lo tanto, la votación a favor de `S. el pasado` debería haber usado `s` como punto de "referencia" no `X`, porque ese fue el último "switch" en el fork.
 
-To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
-any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
-the votes must satisfy:
+Para hacer cumplir esto, definimos las condiciones de corte "Optimistic Slashing". Dado dos votos distintos `voto(X, S)`y `voto(X', S')` por el mismo validador, los votos deben satisfacer:
 
 - `X <= S.last`, `X' <= S'.last`
-- All `s` in `S` are ancestors/descendants of one another,
-  all `s'` in `S'` are ancsestors/descendants of one another,
+- Todos los `s` en `S` son ancestros/descendientes unos de otros, todos los `s` en `S` son ancestros/descendientes unos de otros,
 -
-- `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
-- `X' > X` implies `X' > S.last` and `S'.last > S.last`
-  and for all `s` in `S`, `s + lockout(s) < X'`
-- `X > X'` implies `X > S'.last` and `S.last > S'.last`
-  and for all `s` in `S'`, `s + lockout(s) < X`
+- `X == X'` implica `S` es padre de `S'` o `S'` es padre de `S`
+- `X' > X` implica `X' > S. last` y `S'.last > S. last` y para todos `s` en `S`, `s + bloqueo(s) < X'`
+- `X' > X` implica `X' > S. last` y `S'.last > S. last` y para todos `s` en `S`, `s + bloqueo(s) < X'`
 
-(The last two rules imply the ranges cannot overlap):
-Otherwise the validator is slashed.
+(Las dos últimas reglas implican que los rangos no se pueden solapar): De lo contrario, el validador es recortado.
 
-`Range(vote)` - Given a vote `v = vote(X, S)`, define `Range(v)` to be the range
-of slots `[X, S.last]`.
+`Range(vote)` - Dado un voto `v = voto(X, S)`, definir `Range(v)` para ser el rango de ranuras `[X, S. último]`.
 
-`SP(old_vote, new_vote)` - This is the "Switching Proof" for `old_vote`, the
-validator's latest vote. Such a proof is necessary anytime a validator switches
-their "reference" slot (see vote section above). The switching proof includes
-a reference to `old_vote`, so that there's a record of what the "range" of that
-`old_vote` was (to make other conflicting switches in this range slashable).
-Such a switch must still respect lockouts.
+`SP(old_vote, new_vote)` Esta es la "prueba de cambio" para `old_vote`, el último voto del validador. Tal prueba es necesaria en cualquier momento en que un validador cambie su franja horaria de "referencia" (vea la sección de voto anterior). El comprobante de conmutación incluye una referencia a `Old_vote`, para que haya un registro de lo que era el "rango" de ese `old_vote` (para hacer otros interruptores conflictivos en este rango de barreras). Un cambio de este tipo debe seguir respetando los bloqueos.
 
-A switching proof shows that `> 1/3` of the network is locked out at slot
-`old_vote.last`.
+Un comprobante de cambio muestra que `> 1/3` de la red está bloqueado en la ranura `old_vote.last`.
 
-The proof is a list of elements `(validator_id, validator_vote(X, S))`, where:
+La prueba es una lista de elementos `(validator_id, validator_vote(X, S))`, donde:
 
-1. The sum of the stakes of all the validator id's `> 1/3`
+1. La suma del stake de todos los Id del validador `> 1/3`
 
-2. For each `(validator_id, validator_vote(X, S))`, there exists some slot `s`
-   in `S` where:
-   _ a.`s` is not a common ancestor of both `validator_vote.last` and
-   `old_vote.last` and `new_vote.last`.
-   _ b. `s` is not a descendant of `validator_vote.last`. \* c. `s + s.lockout() >= old_vote.last` (implies validator is still locked
-   out on slot `s` at slot `old_vote.last`).
+2. Para cada `(validator_id, validator_vote(X, S))`, existe alguna ranura `s` en `S` donde: _ a.`s` no es un ancestro común de ambos `validator_vote.last` y `antiguo_voto.last` y `nuevo_voto.last`. _ b. `s` no es un descendiente de `validator_vote.last`. \* c. `s + s.lockout() >= old_vote. ast` (implica que el validador aún está bloqueado en la ranura `s` en la ranura `old_vote.last`).
 
-Switching forks without a valid switching proof is slashable.
+El cambio de forks sin un comprobante de cambio válido es cortable.
 
-## Definitions:
+## Definiciones:
 
-Optimistic Confirmation - A block `B` is then said to have achieved
-"optimistic confirmation" if `>2/3` of stake have voted with votes `v`
-where `Range(v)` for each such `v` includes `B.slot`.
+Confirmación optimista - Se dice que un bloque `B` ha alcanzado "confirmación optimista" si `>2/3` del stake han votado con votos `v` donde `Range(v)` para cada uno `v` incluye `B. mucho`.
 
-Finalized - A block `B` is said to be finalized if at least one
-correct validator has rooted `B` or a descendant of `B`.
+Finalizado - Se dice que un bloque `B` está finalizado si al menos un validador correcto ha rootado `B` o un descendiente de `B`.
 
-Reverted - A block `B` is said to be reverted if another block `B'` that
-is not a parent or descendant of `B` was finalized.
+Estimado - Se dice que se revierte un bloque `B` si otro bloque `B` que no es un padre o descendiente de `B` fue finalizado.
 
-## Guarantees:
+## Garantías:
 
-A block `B` that has reached optimistic confirmation will not be reverted
-unless at least one validator is slashed.
+Un bloque `B` que ha alcanzado una confirmación optimista no será revertido a menos que se haya barrido al menos un validador.
 
-## Proof:
+## Prueba:
 
-Assume for the sake of contradiction, a block `B` has achieved
-`optimistic confirmation` at some slot `B + n` for some `n`, and:
+Supongamos por contradicción, un bloque `B` ha alcanzado `confirmación optimista` en alguna ranura `B + n` para algunos `n`, y:
 
-- Another block `B'` that is not a parent or descendant of `B`
-  was finalized.
-- No validators violated any slashing conditions.
+- Otro bloque `B'` que no es padre o descendiente de `B` fue finalizado.
+- Ningún validador violó ninguna condición de slashing.
 
-By the definition of `optimistic confirmation`, this means `> 2/3` of validators
-have each shown some vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
-Call this set of validators the `Optimistic Validators`.
+Por la definición de `confirmación optimista`, esto significa `> 2/3` de validadores han mostrado un voto `v` del formulario `Vote(X, S)` donde `X <= B <= v. pasado`. Llamar a este conjunto de validadores los `Validadores optimistas`.
 
-Now given a validator `v` in `Optimistic Validators`, given two votes made by
-`v`, `Vote(X, S)` and `Vote(X', S')` where `X <= B <= S.last`, and
-`X' <= B <= S'.last`, then `X == X'` otherwise an "Optimistic Slashing" condition
-is violated (the "ranges" of each vote would overlap at `B`).
+Ahora se ha dado un validador `v` en `Validadores Optimistas`, dos votos realizados por `-`, `Vote(X, S)` y `Vote(X', S')` donde `X <= B <= S. el last`, y `X' <= B <= S'. last`, then `X == X'` de lo contrario una condición de "slashing Optimista" es violada (los "rangos" de cada voto se superpondrían `B`).
 
-Thus define the `Optimistic Votes` to be the set of votes made by
-`Optimistic Validators`, where for each optimistic validator `v`, the vote made
-by `v` included in the set is the `maximal` vote `Vote(X, S)` with the
-greatest `S.last` out of any votes made by `v` that satisfy `X <= B <= S.last`.
-Because we know from above `X` for all such votes made by `v` is unique, we know
-there is such a unique `maximal` vote.
+Así definimos los `Votos Optimistas` para ser el conjunto de votos hechos por `Validadores Optimistas`, donde para cada validador optimista `v`, el voto hecho por `v` incluido en el conjunto es el `máximo` voto `Vote(X, S)` con el más grande `S.last` de cualquier voto realizado por `v` que satisfacen `X <= B <= S.last`. Como sabemos por lo anterior que `X` para todos los votos realizados por `v` es único, sabemos que hay un voto `máximo` único.
 
 ### Lemma 1:
 
-`Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the
-`Optimistic Validators` set, and `S` contains a vote for a slot `s`
-for which:
+`Reclamar:` Se le ha dado un voto `Vote(X, S)` hecho por un validador `V` en el conjunto `Validadores Optimistas` y `S` contiene un voto para una ranura `s` para que:
 
 - `s + s.lockout > B`,
-- `s` is not an ancestor or descendant of `B`,
+- `s` no es un antepasado o descendiente de `B`,
 
-then `X > B`.
+entonces `X > B`.
 
 ```text
                                   +-------+
@@ -232,47 +177,29 @@ then `X > B`.
                     +-------+
 ```
 
-`Proof`: Assume for the sake of contradiction a validator `V` from the
-"Optimistic Validators" set made such a vote `Vote(X, S)` where `S` contains
-a vote for a slot `s` not an ancestor or descendant of `B`, where
-`s + s.lockout > B`, but `X <= B`.
+`Prueba`: Supongamos por contradicción que un validador `V` del conjunto "Validadores Optimistas" hizo tal votación `Vote(X, S)` donde `S` contiene un voto para una ranura `s` no es un antepasado o descendiente de `B`, donde `s + s. ockout > B`, pero `X <= B`.
 
-Let `Vote(X', S')` be the vote in `Optimistic Votes` set made by validator `V`.
-By definition of that set (all votes optimistically confirmed `B`),
-`X' <= B <= S'.last` (see diagram above).
+Dejar `Vote(X', S')` ser el voto en `Votos Optimistas` establecidos por el validador `V`. Por definición de ese conjunto (todos los votos confirmados optimistamente `B`), `X' <= B <= S'.last` (ver el diagrama anterior).
 
-This implies that because it's assumed above `X <= B`, then `X <= S'.last`,
-so by the slashing rules, either `X == X'` or `X < X'` (otherwise would
-overlap the range `(X', S'.last)`).
+Esto implica que porque se asume por encima de `X <= B`, entonces `X <= S'.last`, así por las reglas de slashing, `X == X'` o `X < X'` (de lo contrario solaparía el rango `(X', S'.last)`).
 
-`Case X == X'`:
+`Caso X == X'`:
 
-Consider `s`. We know `s != X` because it is assumed `s` is not an ancestor
-or descendant of `B`, and `X` is an ancestor of `B`. Because `S'.last` is a
-descendant of `B`, this means `s` is also not an ancestor or descendant of
-`S'.last`. Then because `S.last` is descended from `s`, then `S'.last` cannot
-be an ancestor or descendant of `S.last` either. This implies `X != X'` by the
-"Optimistic Slashing" rules.
+Considere `s`. ¡Conocemos `s X` porque se asume que `s` no es un ancestro o descendiente de `B`, y `X` es un antepasado de `B`. Porque `S'.last` es un descendiente de `B`, esto significa que `s` tampoco es un antepasado o descendiente de `S'. último`. Luego, debido a que `S.last` es descendido de `s`y luego `S.last` tampoco puede ser un antepasado o descendiente de `S.last`. Esto implica `X != X'` por las reglas "Optimistic Slashing".
 
-`Case X < X'`:
+`Caso X < X'`:
 
-Intuitively, this implies that `Vote(X, S)` was made "before" `Vote(X', S')`.
+Intuitivamente, esto implica que `Vote(X, S)` se hizo "antes" `Vote(X', S')`.
 
-From the assumption above, `s + s.lockout > B > X'`. Because `s` is not an
-ancestor of `X'`, lockouts would have been violated when this validator
-first attempted to submit a switching vote to `X'` with some vote of the
-form `Vote(X', S'')`.
+De la suposición anterior, `s + s.lockout > B > X'`. Como `s` no es un ancestro de `X'`, los bloqueos se habrían violado cuando este validador intentó por primera vez enviar un voto de cambio a `X'` con algún voto de la forma `Voto(X', S'')`.
 
-Since none of these cases are valid, the assumption must have been invalid,
-and the claim is proven.
+Puesto que ninguno de estos casos son válidos, el supuesto debe haber sido inválido, y el reclamo está probado.
 
 ### Lemma 2:
 
-Recall `B'` was the block finalized on a different fork than
-"optimistically" confirmed" block `B`.
+Recuerda `B'` fue el bloque finalizado en un fork diferente que bloque "optimistamente" confirmado `B`.
 
-`Claim`: For any vote `Vote(X, S)` in the `Optimistic Votes` set, it must be
-true that `B' > X`
+`Reclama`: Para cualquier voto `Vote(X, S)` en el conjunto `Votos Opimistas` debe ser cierto que `B' > X`
 
 ```text
                                 +-------+
@@ -311,98 +238,59 @@ true that `B' > X`
                    +-------+
 ```
 
-`Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Then by
-definition, given the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
+`Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Luego, por definición, dado el bloque "optimistamente" `B`, `X <= B <= S.last`.
 
-Because `X` is a parent of `B`, and `B'` is not a parent or ancestor of `B`,
-then:
+Porque `X` es un padre de `B`, y `B'` no es un padre o ancestro de `B`, entonces:
 
 - `B' != X`
-- `B'` is not a parent of `X`
+- `B'` no es padre de `X`
 
-Now consider if `B'` < `X`:
+Ahora considere si `B'` < `X`:
 
-`Case B' < X`: We wll show this is a violation of lockouts.
-From above, we know `B'` is not a parent of `X`. Then because `B'` was rooted,
-and `B'` is not a parent of `X`, then the validator should not have been able
-to vote on the higher slot `X` that does not descend from `B'`.
+`Caso B' < X`: Vamos a mostrar que esto es una violación de bloqueos. Desde arriba, sabemos que `B` no es un padre de `X`. Entonces porque `B'` estaba arraigado, y `B'` no es padre de `X`, entonces el validador no debería haber podido votar en la ranura más alta `X` que no desciende de `B'`.
 
-### Proof of Safety:
+### Prueba de seguridad:
 
-We now aim to show at least one of the validators in the
-`Optimistic Validators` set violated a slashing rule.
+Ahora apuntamos a mostrar al menos uno de los validadores en el conjunto de `Validadores Optimos` violó una regla de slashing.
 
-First note that in order for `B'` to have been rooted, there must have been
-`> 2/3` stake that voted on `B'` or a descendant of `B'`. Given that the
-`Optimistic Validator` set also contains `> 2/3` of the staked validators,
-it follows that `> 1/3` of the staked validators:
+Primera nota de que para que `B` haya sido rooteado, debe haber habido `> 2/3` stake que votó en `B` o un descendiente de `B`. Dado que el conjunto de `Validador Opítimista` también contiene `> 2/3` de los validadores con stake, se deduce que `> 1/3` de los validadores con stake:
 
-- Rooted `B'` or a descendant of `B'`
-- Also submitted a vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
+- `B`Rooteado o un descendiente de `B`
+- También envió un voto `v` del formulario `Vote(X, S)` donde `X <= B <= v.last`.
 
-Let the `Delinquent` set be the set of validators that meet the above
-criteria.
+Deja que el `Delincuente` sea el conjunto de validadores que cumplan con los criterios anteriores.
 
-By definition, in order to root `B'`, each validator `V` in `Delinquent`
-must have each made some "switching vote" of the form `Vote(X_v, S_v)` where:
+Por definición, para rootear `B'`, cada validador `V` en `Delincuente` debe haber hecho algún "voto de cambio" del formulario `Vote(X_v, S_v)` dónde:
 
 - `S_v.last > B'`
-- `S_v.last` is a descendant of `B'`, so it can't be a descendant of `B`
-- Because `S_v.last` is not a descendant of `B`, then `X_v` cannot be a
-  descendant or ancestor of `B`.
+- `S_v.last` es un descendiente de `B`, por lo que no puede ser un descendiente de `B`
+- Porque `S_v. last` no es un descendiente de `B`, entonces `X_v` no puede ser un descendiente o antepasado de `B`.
 
-By definition, this delinquent validator `V` also made some vote `Vote(X, S)`
-in the `Optimistic Votes` where by definition of that set (optimistically
-confirmed `B`), we know `S.last >= B >= X`.
+Por definición, este validador `V` también votó `Vote(X, S)` en los `Votos Optimistas` donde por definición de ese conjunto (optimistamente confirmó `B`), conocemos `S. last >= B >= X`.
 
-By `Lemma 2` we know `B' > X`, and from above `S_v.last > B'`, so then
-`S_v.last > X`. Because `X_v != X` (cannot be a descendant or ancestor of
-`B` from above), then by the slashing rules then, we know `X_v > S.last`.
-From above, `S.last >= B >= X` so for all such "switching votes", `X_v > B`.
+Por `Lemma 2` conocemos que `B' > X`, y por encima `S_v.last > B'`, entonces `S_v.last > X`. Porque `X_v ! X` (no puede ser un descendiente o antepasado de `B` desde arriba), luego por las reglas de slashing entonces, sabemos que `X_v > S.last`. Desde arriba, `S.last >= B >= X` así que para todos los "cambios de votos", `X_v > B`.
 
-Now ordering all these "switching votes" in time, let `V` to be the validator
-in `Optimistic Validators` that first submitted such a "swtching vote"
-`Vote(X', S')`, where `X' > B`. We know that such a validator exists because
-we know from above that all delinquent validators must have submitted such
-a vote, and the delinquent validators are a subset of the
-`Optimistic Validators`.
+Ahora ordenando todos estos "cambios de votos" a tiempo, deja a `V` para ser el validador en `Validadores Optimistas` que enviaron por primera vez un "cambio de votos" `Vote(X', S')`, donde `X' > B`. Sabemos que ese validador existe porque sabemos por lo anterior que todos los validadores morosos deben haber presentado ese voto, y los validadores morosos son un subconjunto de los `Validadores optimistas`.
 
-Let `Vote(X, S)` be the unique vote in `Optimistic Votes` made by
-validator `V` (maximizing `S.last`).
+Dejar `voto(X, S)` ser el voto único en `Votos Optimistas` realizados por validador `V` (maximizando `S.last`).
 
-Given `Vote(X, S)` because `X' > B >= X`, then `X' > X`, so
-by the "Optimistic Slashing" rules, `X' > S.last`.
+Dado `Vote(X, S)` porque `X' > B >= X`, entonces `X' > X`, así que por las reglas "Optimistic Slashing", `X' > S.last`.
 
-In order to perform such a "switching vote" to `X'`, a switching proof
-`SP(Vote(X, S), Vote(X', S'))` must show `> 1/3` of stake being locked
-out at this validator's latest vote, `S.last`. Combine this `>1/3` with the
-fact that the set of validators in the `Optimistic Voters` set consists of
-`> 2/3` of the stake, implies at least one optimistic validator `W` from the
-`Optimistic Voters` set must have submitted a vote (recall the definition of
-a switching proof),`Vote(X_w, S_w)` that was included in validator `V`'s
-switching proof for slot `X'`, where `S_w` contains a slot `s` such that:
+Para realizar este "voto de cambio" a `X'`, una prueba de cambio `SP(Voto(X, S), Voto(X', S'))` debe mostrar que `> 1/3` de la participación está bloqueada en el último voto de este validador, `S.last`. Combine este `>1/3` con el hecho de que el conjunto de validadores en el conjunto de `Votantes Optimistas` consiste en `> 2/3` del stake, implica al menos un validador optimista `W` del conjunto de `votantes optimistas` debe haber emitido un voto (recuérdese la definición de una prueba de cambio), `Voto(X_w, S_w)` que se incluyó en la prueba de cambio del validador `V` prueba de cambio para la ranura `X'`, donde `S_w` contiene una ranura `s` tal que:
 
-- `s` is not a common ancestor of `S.last` and `X'`
-- `s` is not a descendant of `S.last`.
+- `s` no es un antepasado común de `S.last` y `X'`
+- `s` no es un descendiente de `S.last`.
 - `s' + s'.lockout > S.last`
 
-Because `B` is an ancestor of `S.last`, it is also true then:
+Porque `B` es un antepasado de `S.last`, entonces también es cierto:
 
-- `s` is not a common ancestor of `B` and `X'`
+- `s` no es un antepasado común de `B` y `X`
 - `s' + s'.lockout > B`
 
-which was included in `V`'s switching proof.
+que fue incluido en la prueba de cambio de `V`.
 
-Now because `W` is also a member of `Optimistic Voters`, then by the `Lemma 1`
-above, given a vote by `W`, `Vote(X_w, S_w)`, where `S_w` contains a vote for
-a slot `s` where `s + s.lockout > B`, and `s` is not an ancestor of `B`, then
-`X_w > B`.
+Ahora bien, como `W` es también un miembro de `Votantes optimistas`, entonces por el `Lema 1` anterior, dado un voto de `W`, `Vote(X_w, S_w)`, donde `S_w` contiene un voto para una ranura `s` donde `s + s. lockout > B`, y `s` no es un ancestro de `B`, entonces `X_w > B`.
 
-Because validator `V` included vote `Vote(X_w, S_w)` in its proof of switching
-for slot `X'`, then his implies validator `V'` submitted vote `Vote(X_w, S_w)`
-**before** validator `V` submitted its switching vote for slot `X'`,
-`Vote(X', S')`.
+Porque el validador `V` incluyó el voto `Vote(X_w, S_w)` en su prueba de cambio para la ranura `X'`, entonces su implica que el validador `V'` presentó el voto `Vote(X_w, S_w)` **antes** de que el validador `V` presentara su voto de conmutación para la ranura `X'`, `Voto(X', S')`.
 
-But this is a contradiction because we chose `Vote(X', S')` to be the first vote
-made by any validator in the `Optimistic Voters` set where `X' > B` and `X'` is
-not a descendant of `B`.
+Pero esto es una contradicción porque elegimos `Vote(X', S')` para ser el primer voto realizado por cualquier validador en el `Votantes optimistas` establecido donde `X' > B` y `X'` es no un descendiente de `B`.

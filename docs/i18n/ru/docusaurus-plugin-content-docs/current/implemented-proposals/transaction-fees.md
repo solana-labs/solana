@@ -1,32 +1,32 @@
 ---
-title: Deterministic Transaction Fees
+title: Детерминированные комиссии за транзакции
 ---
 
-Transactions currently include a fee field that indicates the maximum fee field a slot leader is permitted to charge to process a transaction. The cluster, on the other hand, agrees on a minimum fee. If the network is congested, the slot leader may prioritize the transactions offering higher fees. That means the client won't know how much was collected until the transaction is confirmed by the cluster and the remaining balance is checked. It smells of exactly what we dislike about Ethereum's "gas", non-determinism.
+На текущий момент транзакции включают в себя поле комиссий, которое указывает на поле максимальную комиссию, изымаемую лидером слота за обработку транзакции. Кластер же соглашается на минимальную плату. Если сеть перегружена, лидер слота может отдать приоритет транзакциям, предлагающим более высокие комиссии. Это означает, что клиент не будет знать, сколько было собрано, до тех пор пока транзакция не будет подтверждена кластером и не будет проверен остаток баланса. И это попахивает именно тем, что нам не очень нравится, когда мы говорим о газе в сети Ethereum - отсутствием детерминизма.
 
-## Congestion-driven fees
+## Комиссии зависимые от нагрузки
 
-Each validator uses _signatures per slot_ \(SPS\) to estimate network congestion and _SPS target_ to estimate the desired processing capacity of the cluster. The validator learns the SPS target from the genesis config, whereas it calculates SPS from recently processed transactions. The genesis config also defines a target `lamports_per_signature`, which is the fee to charge per signature when the cluster is operating at _SPS target_.
+Каждый валидатор использует _подпись для каждого слота_ \(SPS или signatures per slot\) для оценки перегрузки сети и _цель SPS_, чтобы оценить требуемую вычислительную мощность кластера. Валидатор узнает о цели SPS c генезис-конфигураций, тогда как сам SPS вычисляется с недавно обработанных транзакций. Генезис-конфигурация также определяет цель для `lamports_per_signature`, что является комиссией за подпись, когда кластер обрабатывает _цель SPS_.
 
-## Calculating fees
+## Расчет комиссии
 
-The client uses the JSON RPC API to query the cluster for the current fee parameters. Those parameters are tagged with a blockhash and remain valid until that blockhash is old enough to be rejected by the slot leader.
+Для запроса текущих параметров комиссий кластера, клиент может использовать JSON RPC API. Эти параметры помечаются хешем блока (blockhash) и остаются валидными до тех пор, пока этот хэш не станет достаточно старым, чтобы его отклонил лидер слота.
 
-Before sending a transaction to the cluster, a client may submit the transaction and fee account data to an SDK module called the _fee calculator_. So long as the client's SDK version matches the slot leader's version, the client is assured that its account will be changed exactly the same number of lamports as returned by the fee calculator.
+Перед отправкой полной транзакции в кластер, клиент может отправить данные транзакции и размер комиссий в модуль SDK, который называется _калькулятором комиссий_. Пока версия SDK клиента совпадает с версией лидера слота, клиент может быть уверен, что его аккаунт изменится точно на тоже количество лэмпортов, которое возвращается калькулятором.
 
-## Fee Parameters
+## Параметры комиссии
 
-In the first implementation of this design, the only fee parameter is `lamports_per_signature`. The more signatures the cluster needs to verify, the higher the fee. The exact number of lamports is determined by the ratio of SPS to the SPS target. At the end of each slot, the cluster lowers `lamports_per_signature` when SPS is below the target and raises it when above the target. The minimum value for `lamports_per_signature` is 50% of the target `lamports_per_signature` and the maximum value is 10x the target \`lamports_per_signature'
+При первой реализации этой архитектуры, только `lamports_per_signature` был единственным параметром определяющим комиссию. Чем больше подписей должен проверить кластер, тем выше собираемые комиссии. Точное количество лэмпортов определяется отношением SPS к цели SPS. В конце каждого слота, кластер понижает `lamports_per_signature`, если SPS ниже цели и повышает, если он выше. Минимальное значение для `lamports_per_signature` - 50% от целевого значения `lamports_per_signature` и максимальное значение равно 10x от целевого lamports_per_signature
 
-Future parameters might include:
+Будущие параметры могут включать:
 
-- `lamports_per_pubkey` - cost to load an account
-- `lamports_per_slot_distance` - higher cost to load very old accounts
-- `lamports_per_byte` - cost per size of account loaded
-- `lamports_per_bpf_instruction` - cost to run a program
+- `lamports_per_pubkey` - цена загрузки аккаунта
+- `lamports_per_slot_distance` - более высокая цена, для загрузки очень старого аккаунта
+- `lamports_per_byte` - цена за размер загружаемого аккаунта
+- `lamports_per_bpf_instruction` - цена запуска программы
 
-## Attacks
+## Атаки
 
-### Hijacking the SPS Target
+### Взлом цели SPS
 
-A group of validators can centralize the cluster if they can convince it to raise the SPS Target above a point where the rest of the validators can keep up. Raising the target will cause fees to drop, presumably creating more demand and therefore higher TPS. If the validator doesn't have hardware that can process that many transactions that fast, its confirmation votes will eventually get so long that the cluster will be forced to boot it.
+Группа валидаторов может pf[dfnbnm кластер, если они смогут убедить его поднять цель SPS выше точки, за которой остальные валидаторы могут продолжать работу. Повышение целевого показателя вызовет снижение комиссий, что, по-видимому, приведет к увеличению спроса и, следовательно, к увеличению TPS. Если у валидатора нет оборудования, которое может настолько быстро обрабатывать такое количество транзакций, его голоса подтверждения в конечном станут занимать так много времени, что кластер будет вынужден отключить его.

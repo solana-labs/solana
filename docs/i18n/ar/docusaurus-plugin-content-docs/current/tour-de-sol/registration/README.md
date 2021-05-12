@@ -1,1 +1,1 @@
-# Registration
+# التسجيل (Registration)

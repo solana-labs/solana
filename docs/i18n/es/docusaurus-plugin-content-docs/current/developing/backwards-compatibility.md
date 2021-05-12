@@ -1,150 +1,115 @@
 ---
-title: Backward Compatibility Policy
+title: Política de retrocompatibilidad
 ---
 
-As the Solana developer ecosystem grows, so does the need for clear expectations around
-breaking API and behavior changes affecting applications and tooling built for Solana.
-In a perfect world, Solana development could continue at a very fast pace without ever
-causing issues for existing developers. However, some compromises will need to be made
-and so this document attempts to clarify and codify the process for new releases.
+A medida que el ecosistema de desarrolladores de Solana crece, también lo hace la necesidad de expectativas claras en torno a los cambios de comportamiento y de la API que afectan a las aplicaciones y las herramientas creadas para Solana. En un mundo perfecto, el desarrollo de Solana podría continuar a un ritmo muy rápido sin causar nunca problemas a los desarrolladores existentes. Sin embargo, habrá que hacer algunas concesiones por lo que este documento intenta aclarar y codificar el proceso para las nuevas versiones.
 
-### Expectations
+### Expectativas
 
-- Solana software releases include APIs, SDKs, and CLI tooling (with a few [exceptions](#exceptions)).
-- Solana software releases follow semantic versioning, more details below.
-- Software for a `MINOR` version release will be compatible across all software on the
-  same `MAJOR` version.
+- Las versiones de software de Solana incluyen APIs, SDKs y herramientas CLI (con algunas [excepciones](#exceptions)).
+- Las versiones de software de Solana siguen las versiones semánticas, más detalles a continuación.
+- El software de una versión `MINOR` será compatible con todo el software de la misma versión `MAJOR`.
 
-### Deprecation Process
+### Proceso de eliminación
 
-1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
-2. According to code upgrade difficulty, some features will be remain deprecated for a few release
-   cycles.
-3. In a future `MAJOR` release, deprecated features will be removed in an incompatible way.
+1. En cualquier versión `PATCH` o `MINOR`, una característica, una API, un endpoint etc. podrían marcarse como obsoletos.
+2. Según la dificultad de actualización del código, algunas características quedarán obsoletas durante algunos ciclos de lanzamiento.
+3. En una futura versión de `MAJOR`, las funciones obsoletas se eliminarán de forma incompatible.
 
-### Release Cadence
+### Cadencia de liberación
 
-The Solana RPC API, Rust SDK, CLI tooling, and BPF Program SDK are all updated and shipped
-along with each Solana software release and should always be compatible between `PATCH`
-updates of a particular `MINOR` version release.
+La API RPC de Solana, el SDK de Rust, las herramientas CLI y el SDK del programa BPF se actualizan y se envían junto con cada versión del software de Solana y siempre deberían ser compatibles entre las actualizaciones de `PATCH` de una versión particular de `MINOR`.
 
-#### Release Channels
+#### Canales de liberación
 
-- `edge` software that contains cutting-edge features with no backward compatibility policy
-- `beta` software that runs on the Solana Tour de SOL testnet cluster
-- `stable` software that run on the Solana Mainnet Beta and Devnet clusters
+- Software `edge` que contiene funciones de última generación sin política de retrocompatibilidad
+- software `beta` que se ejecuta en el clúster Solana Tour de SOL testnet
+- software `stable` que se ejecutan en los clusters Solana Mainnet Beta y Devnet
 
-#### Major Releases (x.0.0)
+#### Lanzamientos Mayores (x.0.0)
 
-`MAJOR` version releases (e.g. 2.0.0) may contain breaking changes and removal of previously
-deprecated features. Client SDKs and tooling will begin using new features and endpoints
-that were enabled in the previous `MAJOR` version.
+Los lanzamientos de versiones `MAJOR` (por ejemplo, 2.0.0) pueden contener cambios de ruptura y la eliminación de características previamente obsoletas. Los SDK y las herramientas del cliente comenzarán a utilizar las nuevas funciones y puntos finales que se habilitaron en la versión anterior de `MAJOR`.
 
-#### Minor Releases (1.x.0)
+#### Lanzamientos menores (1.x.0)
 
-New features and proposal implementations are added to _new_ `MINOR` version
-releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. While running
-on the testnet, `MINOR` versions are considered to be in the `beta` release channel. After
-those changes have been patched as needed and proven to be reliable, the `MINOR` version will
-be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
+Las nuevas funcionalidades y las implementaciones de las propuestas se añaden a _nuevos_ `MINOR` lanzamientos de versiones (por ejemplo, 1.4.0) y se ejecutan primero en el clúster de la red de pruebas de Solana. Mientras se ejecuta en la red de pruebas, las versiones `MINOR` se consideran en el canal de lanzamiento `beta`. Después de que esos cambios se hayan parcheado según sea necesario y se haya demostrado que son fiables, la versión `MINOR` se actualizará al canal de lanzamiento `stable` y se desplegará en el clúster Beta de la Mainnet.
 
-#### Patch Releases (1.0.x)
+#### Lanzamientos de parches (1.0.x)
 
-Low risk features, non-breaking changes, and security and bug fixes are shipped as part
-of `PATCH` version releases (e.g. 1.0.11). Patches may be applied to both `beta` and `stable`
-release channels.
+Las funciones de bajo riesgo, los cambios que no rompen el sistema y las correcciones de seguridad y de errores se envían como parte de las versiones `PATCH` (por ejemplo, 1.0.11). Los parches pueden aplicarse tanto a los canales de liberación `beta` como `stable`.
 
 ### RPC API
 
-Patch releases:
+Lanzamientos de parches:
+- Corrección de errores
+- Correcciones de seguridad
+- Endpoint / eliminación de funciones
 
-- Bug fixes
-- Security fixes
-- Endpoint / feature deprecation
+Lanzamientos menores:
+- Nuevos endpoints y funciones de RPC
 
-Minor releases:
+Lanzamientos Mayores:
+- Eliminación de características obsoletas
 
-- New RPC endpoints and features
+### Cajas Rust
 
-Major releases:
+* [`solana-sdk`](https://docs.rs/solana-sdk/) - SDK de Rust para crear transacciones y analizar estados de cuentas
+* [`solana-programa`](https://docs.rs/solana-program/) - Rust SDK para programas de escritura
+* [`solana-client`](https://docs.rs/solana-client/) - Cliente de Rust para conectar a la API RPC
+* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Cliente de Rust para administrar archivos de configuración del Solana CLI
 
-- Removal of deprecated features
+Lanzamientos de parches:
+- Corrección de errores
+- Correcciones de seguridad
+- Mejoras de rendimiento
 
-### Rust Crates
+Lanzamientos menores:
+- Nuevas APIs
 
-- [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
-- [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
-- [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
-- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
+Lanzamientos Mayores
+- Eliminación de APIs obsoletas
+- Cambios de comportamiento incompatibles con el pasado
 
-Patch releases:
+### Herramientas CLI
 
-- Bug fixes
-- Security fixes
-- Performance improvements
+Lanzamientos de parches:
+- Corrección de errores y seguridad
+- Mejoras de rendimiento
+- Subcomando / argumento obsoleto
 
-Minor releases:
+Lanzamientos menores:
+- Nuevos subcomandos
 
-- New APIs
+Lanzamientos Mayores:
+- Cambio a los nuevos endpoints / configuración de la API RPC introducidos en la versión principal anterior.
+- Eliminación de características obsoletas
 
-Major releases
+### Características del tiempo de ejecución
 
-- Removal of deprecated APIs
-- Backwards incompatible behavior changes
+Las nuevas funciones del tiempo de ejecución de Solana se activan manualmente. Las características del tiempo de ejecución incluyen: la introducción de nuevos programas nativos, sysvars y syscalls; y cambios en su comportamiento. La activación de las funciones es independiente del clúster, lo que permite crear confianza en Testnet antes de la activación en Mainnet-beta.
 
-### CLI Tools
+El proceso de liberación es el siguiente:
 
-Patch releases:
+1. La nueva función de tiempo de ejecución se incluye en una nueva versión, desactivada por defecto
+2. Una vez que un número suficiente de validadores con stake se actualizan a la nueva versión, el interruptor de funciones en tiempo de ejecución se activa manualmente con una instrucción
+3. La característica tiene efecto al comienzo de la siguiente época
 
-- Bug and security fixes
-- Performance improvements
-- Subcommand / argument deprecation
+### Cambios de infraestructura
 
-Minor releases:
+#### Nodos públicos de la API
 
-- New subcommands
+Solana proporciona nodos RPC API disponibles públicamente para todos los desarrolladores. El equipo de Solana hará todo lo posible para comunicar cualquier cambio en el host, el puerto, la disponibilidad, etc. Sin embargo, recomendamos que los desarrolladores confíen en sus propios nodos validadores para desalentar la dependencia de los nodos operados por Solana.
 
-Major releases:
+#### Scripts de clúster locales e imágenes Docker
 
-- Switch to new RPC API endpoints / configuration introduced in the previous major version.
-- Removal of deprecated features
+Los cambios de ruptura se limitarán a las actualizaciones de versión `MAJOR`. Las actualizaciones `MINOR` y `PATCH` deben ser siempre compatibles con el pasado.
 
-### Runtime Features
+### Excepciones
 
-New Solana runtime features are feature-switched and manually activated. Runtime features
-include: the introduction of new native programs, sysvars, and syscalls; and changes to
-their behavior. Feature activation is cluster agnostic, allowing confidence to be built on
-Testnet before activation on Mainnet-beta.
+#### SDK de JavaScript Web3
 
-The release process is as follows:
+El SDK de Web3.JS también sigue las especificaciones de versiones semánticas, pero se envía por separado de las versiones de software de Solana.
 
-1. New runtime feature is included in a new release, deactivated by default
-2. Once sufficient staked validators upgrade to the new release, the runtime feature switch
-   is activated manually with an instruction
-3. The feature takes effect at the beginning of the next epoch
+#### Vectores de Ataque
 
-### Infrastructure Changes
-
-#### Public API Nodes
-
-Solana provides publicly available RPC API nodes for all developers to use. The Solana team
-will make their best effort to communicate any changes to the host, port, rate-limiting behavior,
-availability, etc. However, we recommend that developers rely on their own validator nodes to
-discourage dependence upon Solana operated nodes.
-
-#### Local cluster scripts and Docker images
-
-Breaking changes will be limited to `MAJOR` version updates. `MINOR` and `PATCH` updates should always
-be backwards compatible.
-
-### Exceptions
-
-#### Web3 JavaScript SDK
-
-The Web3.JS SDK also follows semantic versioning specifications but is shipped separately from Solana
-software releases.
-
-#### Attack Vectors
-
-If a new attack vector is discovered in existing code, the above processes may be
-circumvented in order to rapidly deploy a fix, depending on the severity of the issue.
+Si se descubre un nuevo vector de ataque en el código existente, se pueden eludir los procesos anteriores para desplegar rápidamente una solución, dependiendo de la gravedad del problema.

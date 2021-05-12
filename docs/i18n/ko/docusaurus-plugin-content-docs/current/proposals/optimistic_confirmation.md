@@ -1,28 +1,16 @@
 ---
-title: Optimistic Confirmation
+title: 낙관적 확인
 ---
 
-## Primitives
+## 기초 요소
 
-`vote(X, S)` - Votes will be augmented with a "reference" slot, `X`
-which is the **latest** ancestor of this fork that this validator voted on
-with a proof of switching. As long as the validator makes consecutive votes
-that are all descended from each other, the same `X` should be used for all
-those votes. When the validator makes a vote for a slot `s` that is not
-descended from the previous, `X` will be set to the new slot `s`. All votes
-will then be of the form `vote(X, S)`, where `S` is the sorted list of slots
-`(s, s.lockout)` being voted for.
+이러한 "전환 투표"를`X'`로 수행하려면 전환 증명`SP (Vote (X, S), Vote (X ', S'))`가 지분의`> 1 / 3`을 보여 주어야합니다. 이 밸리데이터의 최근 투표 인`S.last`에서 잠겼습니다. 이`> 1 / 3`을`낙관적 유권자`세트의 밸리데이터 세트가 지분의`> 2 / 3`로 구성된다는 사실과 결합하면`낙관적 유권자`중 하나 이상의 낙관적 밸리데이터`W`를 의미합니다. 세트가 투표를 제출해야합니다 (전환 증명의 정의를 기억하세요),`V`의 슬롯`X '에 대한 전환 증명에 포함 된`Vote (X_w, S_w)`, 여기서`S_w`에는 슬롯이 포함됩니다.`s`는 다음과 같습니다.
 
-Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
+투표`vote (X, S)`가 주어지면`S.last == vote.last`가`S`의 마지막 슬롯이되도록합니다.
 
-Now we define some "Optimistic Slashing" slashing conditions. The intuition
-for these is described below:
+이제 몇 가지 "낙관적 슬래싱"슬래싱 조건을 정의합니다. 이에 대한 직관은 아래에 설명되어 있습니다.
 
-- `Intuition`: If a validator submits `vote(X, S)`, the same validator
-  should not have voted on a different fork that "overlaps" this fork.
-  More concretely, this validator should not have cast another vote
-  `vote(X', S')` where the range `[X, S.last]` overlaps the range
-  `[X', S'.last]`, `X != X'`, as shown below:
+- `Vote (X ', S')`를 밸리데이터`V`가 만든`Optimistic Votes`의 투표로 지정합니다. 해당 세트의 정의 (모든 투표는 낙관적으로`B`로 확인 됨),`X '<= B <= S'.last` (위의 다이어그램 참조).
 
 ```text
                                   +-------+
@@ -70,109 +58,67 @@ for these is described below:
                     +-------+
 ```
 
-(Example of slashable votes vote(X', S') and vote(X, S))
+(슬래시 가능한 투표의 예 vote (X ', S') 및 vote (X, S))
 
-In the diagram above, note that the vote for `S.last` must have been sent after
-the vote for `S'.last` (due to lockouts, the higher vote must have been sent
-later). Thus, the sequence of votes must have been: `X ... S'.last ... S.last`.
-This means after the vote on `S'.last`, the validator must have switched back
-to the other fork at some slot `s > S'.last > X`. Thus, the vote for `S.last`
-should have used `s` as the "reference" point, not `X`, because that was the
-last "switch" on the fork.
+In the diagram above, note that the vote for `S.last` must have been sent after the vote for `S'.last` (due to lockouts, the higher vote must have been sent later). 따라서 투표 순서는`X ... S'.last ... S.last` 여야합니다. 즉,`S'.last`에 대한 투표 후 유효성 검사기가 일부 슬롯`s> S'.last> X`에서 다른 포크로 다시 전환해야합니다. Thus, the vote for `S.last` should have used `s` as the "reference" point, not `X`, because that was the last "switch" on the fork.
 
-To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
-any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
-the votes must satisfy:
+이를 시행하기 위해 "Optimistic Slashing"슬래싱 조건을 정의합니다. 동일한 밸리데이터이 두 개의 서로 다른 투표`vote (X, S)`와`vote (X ', S')`를 주면 다음을 충족해야합니다.
 
-- `X <= S.last`, `X' <= S'.last`
-- All `s` in `S` are ancestors/descendants of one another,
-  all `s'` in `S'` are ancsestors/descendants of one another,
+- `X > X'` implies `X > S'.last` and `S.last > S'.last` and for all `s` in `S'`, `s + lockout(s) < X`
+- 'S'의 모든 's'는 서로의 조상 / 하위, 'S'의 모든 's'는 서로의 조상 / 하위,
 -
-- `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
-- `X' > X` implies `X' > S.last` and `S'.last > S.last`
-  and for all `s` in `S`, `s + lockout(s) < X'`
-- `X > X'` implies `X > S'.last` and `S.last > S'.last`
-  and for all `s` in `S'`, `s + lockout(s) < X`
+- -루팅 된`B'` 또는`B'`의 자손 -`Vote (X, S)`형식의`v`도 제출했으며`X <= B <= v.last`입니다.
+- `X' > X` implies `X' > S.last` and `S'.last > S.last` and for all `s` in `S`, `s + lockout(s) < X'`
+- `-<code>s '+ s'.lockout> S.last`
 
-(The last two rules imply the ranges cannot overlap):
-Otherwise the validator is slashed.
+(마지막 두 규칙은 범위가 겹칠 수 없음을 의미합니다.) : 그렇지 않으면 유효성 검사기가 슬래시됩니다.
 
-`Range(vote)` - Given a vote `v = vote(X, S)`, define `Range(v)` to be the range
-of slots `[X, S.last]`.
+`X <= S.last`,`X '<= S'.last`
 
-`SP(old_vote, new_vote)` - This is the "Switching Proof" for `old_vote`, the
-validator's latest vote. Such a proof is necessary anytime a validator switches
-their "reference" slot (see vote section above). The switching proof includes
-a reference to `old_vote`, so that there's a record of what the "range" of that
-`old_vote` was (to make other conflicting switches in this range slashable).
-Such a switch must still respect lockouts.
+`SP (old_vote, new_vote)`-밸리데이터의 최근 투표 인`old_vote`에 대한 "전환 증명"입니다. 이러한 증명은 밸리데이터가 "참조"슬롯을 전환 할 때마다 필요합니다 (위의 투표 섹션 참조). 스위칭 증명에는`old_vote`에 대한 참조가 포함되어 있으므로 해당`old_vote`의 "범위"가 무엇인지에 대한 기록이 있습니다 (이 범위에서 다른 충돌 스위치를 슬래시 가능하게 만들기 위해). 이러한 스위치는 여전히 잠금을 존중해야합니다.
 
-A switching proof shows that `> 1/3` of the network is locked out at slot
-`old_vote.last`.
+`Range (vote)`-투표`v = vote (X, S)`가 주어지면`Range (v)`를 슬롯`[X, S.last]`의 범위로 정의합니다.
 
 The proof is a list of elements `(validator_id, validator_vote(X, S))`, where:
 
-1. The sum of the stakes of all the validator id's `> 1/3`
+1. 모든 밸리데이터 ID의 '> 1/3'지분의 합
 
-2. For each `(validator_id, validator_vote(X, S))`, there exists some slot `s`
-   in `S` where:
-   _ a.`s` is not a common ancestor of both `validator_vote.last` and
-   `old_vote.last` and `new_vote.last`.
-   _ b. `s` is not a descendant of `validator_vote.last`. \* c. `s + s.lockout() >= old_vote.last` (implies validator is still locked
-   out on slot `s` at slot `old_vote.last`).
+2. 각`(validator_id, validator_vote (X, S))`에 대해`S`에 슬롯`s`가 있습니다. 여기서 _ a.`s`는`validator_vote.last`와`둘 다의 공통 조상이 아닙니다. old_vote.last` 및`new_vote.last`. _ b. `s`는`validator_vote.last`의 자손이 아닙니다. \* c. `s + s.lockout ()> = old_vote.last` (유효성 검사기가 슬롯`old_vote.last`의 슬롯`s`에서 여전히 잠겨 있음을 나타냄).
 
-Switching forks without a valid switching proof is slashable.
+스위칭 증명은 네트워크의`> 1 / 3`이 슬롯`old_vote.last`에서 잠겨 있음을 보여줍니다.
 
-## Definitions:
+## 정의 :
 
-Optimistic Confirmation - A block `B` is then said to have achieved
-"optimistic confirmation" if `>2/3` of stake have voted with votes `v`
-where `Range(v)` for each such `v` includes `B.slot`.
+증명은`(validator_id, validator_vote (X, S))`요소의 목록입니다.
 
-Finalized - A block `B` is said to be finalized if at least one
-correct validator has rooted `B` or a descendant of `B`.
+유효한 스위칭 증명이없는 스위칭 포크는 슬래시 가능합니다.
 
-Reverted - A block `B` is said to be reverted if another block `B'` that
-is not a parent or descendant of `B` was finalized.
+Reverted - A block `B` is said to be reverted if another block `B'` that is not a parent or descendant of `B` was finalized.
 
-## Guarantees:
+## 보장 :
 
-A block `B` that has reached optimistic confirmation will not be reverted
-unless at least one validator is slashed.
+완료 됨-하나 이상의 올바른 유효성 검사기가 'B'또는 'B'의 하위 항목을 루팅 한 경우 블록 'B'가 완료되었다고합니다.
 
-## Proof:
+## 증명 :
 
-Assume for the sake of contradiction, a block `B` has achieved
-`optimistic confirmation` at some slot `B + n` for some `n`, and:
+되돌림- 'B'의 부모 또는 하위 항목이 아닌 다른 블록 'B'가 완료되면 블록 'B'가 되돌려 진다고합니다.
 
-- Another block `B'` that is not a parent or descendant of `B`
-  was finalized.
+- Another block `B'` that is not a parent or descendant of `B` was finalized.
 - No validators violated any slashing conditions.
 
-By the definition of `optimistic confirmation`, this means `> 2/3` of validators
-have each shown some vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
-Call this set of validators the `Optimistic Validators`.
+`낙관적 확인`의 정의에 따르면 이는 밸리데이터의`> 2 / 3`가 각각`Vote (X, S)`형식의`v`를 보였음을 의미합니다. 여기서`X <= B <= v.last` . 따라서`Optimistic Votes`를`Optimistic Validators`가 만든 투표 세트로 정의합니다. 따라서`Optimistic Votes`를`Optimistic Validators`가 만든 투표 세트로 정의합니다.
 
-Now given a validator `v` in `Optimistic Validators`, given two votes made by
-`v`, `Vote(X, S)` and `Vote(X', S')` where `X <= B <= S.last`, and
-`X' <= B <= S'.last`, then `X == X'` otherwise an "Optimistic Slashing" condition
-is violated (the "ranges" of each vote would overlap at `B`).
+모순을 위해 블록 'B'가 일부 'n'에 대해 일부 슬롯 'B + n'에서 '낙관적 확인'을 달성했다고 가정합니다.
 
-Thus define the `Optimistic Votes` to be the set of votes made by
-`Optimistic Validators`, where for each optimistic validator `v`, the vote made
-by `v` included in the set is the `maximal` vote `Vote(X, S)` with the
-greatest `S.last` out of any votes made by `v` that satisfy `X <= B <= S.last`.
-Because we know from above `X` for all such votes made by `v` is unique, we know
-there is such a unique `maximal` vote.
+밸리데이터`V`는 슬롯`X '로 전환하는 증거에`Vote (X_w, S_w)`투표를 포함했기 때문에 밸리데이터`V'`가`Vote (X_w, S_w)`** 전에 ** 투표를 제출했음을 암시합니다.
+밸리데이터`V`는 슬롯`X'`,`Vote (X ', S')`에 대한 전환 투표를 제출했습니다.
 
-### Lemma 1:
+### 정리 1 :
 
-`Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the
-`Optimistic Validators` set, and `S` contains a vote for a slot `s`
-for which:
+`Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the `Optimistic Validators` set, and `S` contains a vote for a slot `s` for which:
 
-- `s + s.lockout > B`,
-- `s` is not an ancestor or descendant of `B`,
+- `s '+ s'.lockout> B`
+- `s + s. 잠금> B`, -`s`는`B`의 조상 또는 후손이 아닙니다.
 
 then `X > B`.
 
@@ -232,47 +178,29 @@ then `X > B`.
                     +-------+
 ```
 
-`Proof`: Assume for the sake of contradiction a validator `V` from the
-"Optimistic Validators" set made such a vote `Vote(X, S)` where `S` contains
-a vote for a slot `s` not an ancestor or descendant of `B`, where
-`s + s.lockout > B`, but `X <= B`.
+`Claim :``Optimistic Validators` 세트에서`V` 밸리데이터가 만든`Vote (X, S)`투표가 주어졌고`S`는 다음과 같은 슬롯`s`에 대한 투표를 포함합니다.
 
-Let `Vote(X', S')` be the vote in `Optimistic Votes` set made by validator `V`.
-By definition of that set (all votes optimistically confirmed `B`),
-`X' <= B <= S'.last` (see diagram above).
+`Proof` :`Vote (X, S)`를`Optimistic Votes` 세트의 투표로 지정합니다. 그런 다음 정의에 따라 "낙관적으로 확인 된"블록`B`,`X <= B <= S.last`가 주어집니다.
 
-This implies that because it's assumed above `X <= B`, then `X <= S'.last`,
-so by the slashing rules, either `X == X'` or `X < X'` (otherwise would
-overlap the range `(X', S'.last)`).
+그런 다음`X> B`.
 
 `Case X == X'`:
 
-Consider `s`. We know `s != X` because it is assumed `s` is not an ancestor
-or descendant of `B`, and `X` is an ancestor of `B`. Because `S'.last` is a
-descendant of `B`, this means `s` is also not an ancestor or descendant of
-`S'.last`. Then because `S.last` is descended from `s`, then `S'.last` cannot
-be an ancestor or descendant of `S.last` either. This implies `X != X'` by the
-"Optimistic Slashing" rules.
+`s`를 고려하십시오. `s`는`B`의 조상이나 후손이 아니라`s`가`B`의 조상이라고 가정하기 때문에 우리는`s! = X`를 알고 있습니다. Because `S'.last` is a descendant of `B`, this means `s` is also not an ancestor or descendant of `S'.last`. Then because `S.last` is descended from `s`, then `S'.last` cannot be an ancestor or descendant of `S.last` either. 이것은 "Optimistic Slashing"규칙에 의해`X! = X'`를 의미합니다.
 
-`Case X < X'`:
+! = X'</code>, 아래와 같이 :
 
-Intuitively, this implies that `Vote(X, S)` was made "before" `Vote(X', S')`.
+`케이스 X == X'` :
 
-From the assumption above, `s + s.lockout > B > X'`. Because `s` is not an
-ancestor of `X'`, lockouts would have been violated when this validator
-first attempted to submit a switching vote to `X'` with some vote of the
-form `Vote(X', S'')`.
+위의 가정에서`s + s.lockout> B> X'`. `s`는`X'`의 조상이 아니기 때문에이 밸리데이터이`Vote (X ', S' ') 형식의 일부 투표로`X'`에 대한 전환 투표를 처음 제출하려고 시도했을 때 잠금이 위반되었을 것입니다.`.
 
-Since none of these cases are valid, the assumption must have been invalid,
-and the claim is proven.
+`케이스 X <X'` :
 
-### Lemma 2:
+### 정리 2 :
 
-Recall `B'` was the block finalized on a different fork than
-"optimistically" confirmed" block `B`.
+직관적으로 이것은`Vote (X, S)`가`Vote (X ', S')` "전에"이루어 졌음을 의미합니다.
 
-`Claim`: For any vote `Vote(X, S)` in the `Optimistic Votes` set, it must be
-true that `B' > X`
+`Claim`: For any vote `Vote(X, S)` in the `Optimistic Votes` set, it must be true that `B' > X`
 
 ```text
                                 +-------+
@@ -311,98 +239,60 @@ true that `B' > X`
                    +-------+
 ```
 
-`Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Then by
-definition, given the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
+`Proof` : 모순을 위해 "Optimistic Validators"세트의 Validator`V`가 그러한 투표`Vote (X, S)`를했다고 가정합니다.`S`는 조상이 아닌 슬롯`s`에 대한 투표를 포함합니다. 또는`B`의 하위 항목, 여기서`s + s.lockout> B`이지만`X <= B`입니다.
 
-Because `X` is a parent of `B`, and `B'` is not a parent or ancestor of `B`,
-then:
+회상 'B'는 '낙관적으로 확인 된'블록 'B'와 다른 포크에서 완성 된 블록입니다.
 
 - `B' != X`
-- `B'` is not a parent of `X`
+- = X</code> -`B'`는`X`의 부모가 아닙니다.
 
-Now consider if `B'` < `X`:
+`Claim` :`Optimistic Votes` 세트의`Vote (X, S)`투표에 대해`B '> X`가 참이어야합니다.
 
-`Case B' < X`: We wll show this is a violation of lockouts.
-From above, we know `B'` is not a parent of `X`. Then because `B'` was rooted,
-and `B'` is not a parent of `X`, then the validator should not have been able
-to vote on the higher slot `X` that does not descend from `B'`.
+`Case B '<X` : 이것이 잠금 위반임을 보여줄 것입니다. 위에서 살펴보면 'B'가 'X'의 부모가 아님을 알 수 있습니다. 그러면`B'`가 루팅되고`B'`가`X`의 부모가 아니기 때문에 밸리데이터은`B'`에서 내려 오지 않는 상위 슬롯`X`에 투표 할 수 없었어야합니다.
 
-### Proof of Safety:
+### 안전 증명 :
 
-We now aim to show at least one of the validators in the
-`Optimistic Validators` set violated a slashing rule.
+`X`는`B`의 부모이고`B'`는`B`의 부모 또는 조상이 아니기 때문에 :
 
-First note that in order for `B'` to have been rooted, there must have been
-`> 2/3` stake that voted on `B'` or a descendant of `B'`. Given that the
-`Optimistic Validator` set also contains `> 2/3` of the staked validators,
-it follows that `> 1/3` of the staked validators:
+먼저 'B'가 루팅되기 위해서는 'B' '또는'B '의 후손에 투표 한'> 2/3 '지분이 있어야합니다. `Optimistic Validator` 세트에 스테이킹 된 밸리데이터의`> 2 / 3`도 포함되어 있다는 점을 감안할 때 스테이킹 된 밸리데이터의`> 1 / 3`을 따릅니다.
 
 - Rooted `B'` or a descendant of `B'`
-- Also submitted a vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
+- 위에서`S.last> = B> = X`이므로 이러한 모든 "전환 투표"에 대해`X_v> B`입니다.
 
-Let the `Delinquent` set be the set of validators that meet the above
-criteria.
+이제`B'` <`X`를 고려하십시오.
 
-By definition, in order to root `B'`, each validator `V` in `Delinquent`
-must have each made some "switching vote" of the form `Vote(X_v, S_v)` where:
+정의에 따라 'B'를 루트하려면 'Delinquent'의 각 유효성 검사기 'V'가 각각 'Vote (X_v, S_v)'형식의 "전환 투표"를 수행해야합니다. 여기서 :
 
-- `S_v.last > B'`
-- `S_v.last` is a descendant of `B'`, so it can't be a descendant of `B`
-- Because `S_v.last` is not a descendant of `B`, then `X_v` cannot be a
-  descendant or ancestor of `B`.
+- `'S_v.last'는 'B'의 후손이므로 'B'의 후손이 될 수 없습니다.`
+- 'S_v.last'는 'B'의 후손이 아니므로 'X_v'는 'B'의 후손 또는 조상이 될 수 없습니다.
+- = X</code> (위에서`B`의 후손 또는 조상일 수 없음)이므로 슬래시 규칙에 따라`X_v> S.last`를 알 수 있습니다.
 
-By definition, this delinquent validator `V` also made some vote `Vote(X, S)`
-in the `Optimistic Votes` where by definition of that set (optimistically
-confirmed `B`), we know `S.last >= B >= X`.
+이제 '낙관적 밸리데이터'집합에있는 밸리데이터 중 하나 이상이 슬래싱 규칙을 위반했음을 표시하는 것을 목표로합니다.
 
-By `Lemma 2` we know `B' > X`, and from above `S_v.last > B'`, so then
-`S_v.last > X`. Because `X_v != X` (cannot be a descendant or ancestor of
-`B` from above), then by the slashing rules then, we know `X_v > S.last`.
-From above, `S.last >= B >= X` so for all such "switching votes", `X_v > B`.
+`X == X'`는`S`가`S '의 부모이거나`S'`가`S`의 부모임을 의미합니다. -`X '> X`는`X'> S.last`및`S'.last> S.last`를 의미하고`S`의 모든`s`에 대해`s + lockout (s) <X'`를 의미합니다.
+-`X> X'`는`X> S'.last`및`S.last> S'.last`를 의미하며`S '의 모든`s`에 대해`s + lockout (s) <X`를 의미합니다.
 
-Now ordering all these "switching votes" in time, let `V` to be the validator
-in `Optimistic Validators` that first submitted such a "swtching vote"
-`Vote(X', S')`, where `X' > B`. We know that such a validator exists because
-we know from above that all delinquent validators must have submitted such
-a vote, and the delinquent validators are a subset of the
-`Optimistic Validators`.
+이제이 모든 "전환 투표"를 제때에 주문하고,`V`가 이러한 "전환 투표"`Vote (X ', S')`를 처음 제출 한`Optimistic Validators`의 밸리데이터가되도록합니다. 여기서`X '> B`. 우리는 위에서부터 모든 체납 검증자가 그러한 투표를 제출해야하고 체납 검증자가 '낙관적 검증 자'의 하위 집합이라는 것을 알고 있기 때문에 그러한 검증자가 존재한다는 것을 알고 있습니다.
 
-Let `Vote(X, S)` be the unique vote in `Optimistic Votes` made by
-validator `V` (maximizing `S.last`).
+'Delinquent'세트를 위의 기준을 충족하는 유효성 검사기 세트로 설정합니다.
 
-Given `Vote(X, S)` because `X' > B >= X`, then `X' > X`, so
-by the "Optimistic Slashing" rules, `X' > S.last`.
+여기서`X <= B <= S .last`,`X '<= B <= S'.last`,`X == X'`, 그렇지 않으면 "Optimistic Slashing"조건이 위반됩니다 (각 투표의 "범위"는`B`에서 겹칩니다. ).
 
-In order to perform such a "switching vote" to `X'`, a switching proof
-`SP(Vote(X, S), Vote(X', S'))` must show `> 1/3` of stake being locked
-out at this validator's latest vote, `S.last`. Combine this `>1/3` with the
-fact that the set of validators in the `Optimistic Voters` set consists of
-`> 2/3` of the stake, implies at least one optimistic validator `W` from the
-`Optimistic Voters` set must have submitted a vote (recall the definition of
-a switching proof),`Vote(X_w, S_w)` that was included in validator `V`'s
-switching proof for slot `X'`, where `S_w` contains a slot `s` such that:
+`vote (X, S)`-투표는이 검증자가 전환 증명으로 투표 한이 포크의 ** 최신 ** 조상 인 '참조'슬롯 'X'로 증가됩니다. 검증 인이 서로의 후손 인 연속 투표를하는 한 모든 투표에 동일한 'X'를 사용해야합니다. 유효성 검사기가 이전의 하위 슬롯이 아닌`s`에 투표하면`X`가 새 슬롯`s`로 설정됩니다. 그러면 모든 투표는`vote (X, S)`형식이됩니다. 여기서`S`는 투표되는 슬롯`(s, s.lockout)`의 정렬 된 목록입니다. Combine this `>1/3` with the fact that the set of validators in the `Optimistic Voters` set consists of `> 2/3` of the stake, implies at least one optimistic validator `W` from the `Optimistic Voters` set must have submitted a vote (recall the definition of a switching proof),`Vote(X_w, S_w)` that was included in validator `V`'s switching proof for slot `X'`, where `S_w` contains a slot `s` such that:
 
 - `s` is not a common ancestor of `S.last` and `X'`
-- `s` is not a descendant of `S.last`.
-- `s' + s'.lockout > S.last`
+- `s`는`S.last`의 후손이 아닙니다.
+- `S_v.last> B'`
 
-Because `B` is an ancestor of `S.last`, it is also true then:
+정의에 따라이 체납 밸리데이터`V`는`낙관적 투표`에서`투표 (X, S)`를 만들었습니다.이 세트의 정의 (낙관적으로 확인 된`B`)에 따르면`S.last> = B > = X`.
 
-- `s` is not a common ancestor of `B` and `X'`
+- `s`는`B`와`X'`의 공통 조상이 아닙니다.
 - `s' + s'.lockout > B`
 
-which was included in `V`'s switching proof.
+'V'의 스위칭 증명에 포함되었습니다.
 
-Now because `W` is also a member of `Optimistic Voters`, then by the `Lemma 1`
-above, given a vote by `W`, `Vote(X_w, S_w)`, where `S_w` contains a vote for
-a slot `s` where `s + s.lockout > B`, and `s` is not an ancestor of `B`, then
-`X_w > B`.
+이제`W`는`낙관적 유권자`의 일원이기 때문에 위`정의 1`에 의해`W`,`Vote (X_w, S_w)`의 투표가 주어집니다. 여기서`S_w`는 슬롯`s` 여기서`s + s.lockout> B`이고`s`는`B`의 조상이 아닌 경우`X_w> B`입니다.
 
-Because validator `V` included vote `Vote(X_w, S_w)` in its proof of switching
-for slot `X'`, then his implies validator `V'` submitted vote `Vote(X_w, S_w)`
-**before** validator `V` submitted its switching vote for slot `X'`,
-`Vote(X', S')`.
+`Vote (X, S)`를 밸리데이터`V`가 만든`Optimistic Votes`에서 고유 한 투표로 지정합니다 (`S.last` 최대화).
 
-But this is a contradiction because we chose `Vote(X', S')` to be the first vote
-made by any validator in the `Optimistic Voters` set where `X' > B` and `X'` is
-not a descendant of `B`.
+`X '> B> = X`,`X'> X`이므로`Vote (X, S)`가 주어지면 "Optimistic Slashing"규칙에 따라`X '> S.last`가됩니다.

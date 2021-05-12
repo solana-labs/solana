@@ -2,8 +2,8 @@
 title: TVU
 ---
 
-![TVU Block Diagram](/img/tvu.svg)
+![مخطط كتلة TVU](/img/tvu.svg)
 
-## Retransmit Stage
+## مرحلة إعادة الإرسال (Retransmit Stage)
 
-![Retransmit Block Diagram](/img/retransmit_stage.svg)
+![مخطط كتلة إعادة النقل](/img/retransmit_stage.svg)

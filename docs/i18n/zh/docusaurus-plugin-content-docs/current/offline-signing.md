@@ -5,9 +5,9 @@ title: 离线交易签名
 一些安全模型要求保留签名密钥，因此签名过程与交易创建和网络广播分开。 示例包括：
 
 - 从地理位置不同的签名者收集的签名在[多签名方案](cli/usage.md#multiple-witnesses)
-- 使用 [气隙（airgapped）](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)签名设备来签名交易
+- 使用 [气隙（airgapped）](https://en.wikipedia.org/wiki/Air_gap_(networking))签名设备来签名交易
 
-本文档介绍了如何使用 Solana 的 CLI 分别签名和提交交易。
+本文档介绍了如何使用Solana的CLI分别签名和提交交易。
 
 ## 支持离线签名的命令
 
@@ -26,8 +26,8 @@ title: 离线交易签名
 
 要离线签署交易，请在命令行上传递以下参数
 
-1. `--sign-only`，阻止客户端将签名的交易提交到网络。 相反，pubkey/签名对被打印到 stdout。
-2. `--blockhash BASE58_HASH`，允许调用者指定用于填写交易的 `最近的区块哈希` 字段。 这可以满足一些目的。例如： _ 取消连接到网络的需要，并通过 RPC 查询最近的区块哈希 _ 让签名者能够在多个签名中协调区块哈希方案
+1. `--sign-only`，阻止客户端将签名的交易提交到网络。 相反，pubkey/签名对被打印到stdout。
+2. `--blockhash BASE58_HASH`，允许调用者指定用于填写交易的 `最近的区块哈希` 字段。 这可以满足一些目的。例如： _ 取消连接到网络的需要，并通过RPC 查询最近的区块哈希 _ 让签名者能够在多个签名中协调区块哈希方案
 
 ### 示例：离线签名付款
 
@@ -54,7 +54,7 @@ Signers (Pubkey=Signature):
 若要提交已离线签名的交易，请在命令行传入下面的参数
 
 1. `--blockhash BASE58_HASH`，必须与用于签名的区块哈希值相同
-2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`，离线签名者中的一个。 这直接包含在交易中的 pubkey(s) 签名，而不用任何本地秘钥对它进行签名
+2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`，离线签名者中的一个。 这直接包含在交易中的pubkey(s) 签名，而不用任何本地秘钥对它进行签名
 
 ### 示例：提交离线已签名付款
 
@@ -137,4 +137,4 @@ ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTH
 
 ## 购买更多时间来签名
 
-通常，Solana 交易必须由网络在其`recent_blockhash`字段中距区块哈希值数个插槽内进行签名并接受(在撰写本文时约为 2 分钟)。 如果您的签名过程花费的时间超过此时间，则[Durable Transaction Nonce](offline-signing/durable-nonce.md) 可以为您提供所需的额外时间。
+通常，Solana交易必须由网络在其`recent_blockhash`字段中距区块哈希值数个插槽内进行签名并接受(在撰写本文时约为2分钟)。 如果您的签名过程花费的时间超过此时间，则[Durable Transaction Nonce](offline-signing/durable-nonce.md) 可以为您提供所需的额外时间。

@@ -1,130 +1,58 @@
 ---
-title: Staking on Solana
+title: التحْصِيص في Solana
 ---
 
-_Note before reading: All references to increases in values are in absolute
-terms with regards to balance of SOL.
-This document makes no suggestion as to the monetary value of SOL at any time._
+*ملاحظة قبل القراءة: جميع الإشارات إلى الزيادات في القيم مطلقة الشروط فيما يتعلق بتوازن SOL. ولا تقدم هذه الوثيقة أي اقتراح بشأن القيمة النقدية للمؤسسة في أي وقت.*
 
-Staking your SOL tokens on Solana is the best way you can help secure the world's
-highest-performing blockchain network, and
-[earn rewards](implemented-proposals/staking-rewards.md) for doing so!
+ويعتبر حصحصة وحدات SOL على Solana أفضل طريقة يمكنك من خلالها المساعدة في زيادة أمان شبكة البلوكتشين الأعلى أداءً و ربح مكافآت [earn rewards](implemented-proposals/staking-rewards.md) مقابل ذلك! مكافآت التضخم والشبكة حاليًا *NOT* ليست مفعلة على الشبكة التجريبية الرئيسية ل Solana، ومن المحتمل أن يتم تفعيلها في المستقبل.
 
-Solana is a Proof-of-Stake (PoS) network with delegations, which means that
-anyone who holds SOL tokens can choose to delegate some of their SOL to one or
-more validators, who process transactions and run the network.
+تُعَدّ Solana شبكة إثبات حِصَّة (Proof-of-Stake) بتفويضات، أي أنه بإمكان أي شخص يمتلك رموز SOL أن يُفَوِّض ببعض ما يملك من رموز SOL لصالح واحد أو أكثر من المُدقّقين (validators) والذين يقومون بدورهم بمتابعة المُعاملات وتشغيل الشبكة.
 
-Delegating stake is a shared-risk shared-reward financial model that may provide
-returns to holders of tokens delegated for a long period.
-This is achieved by aligning the financial incentives of the token-holders
-(delegators) and the validators to whom they delegate.
+يعد تفويض الحِصَّة نموذج مالي يشترك فيه الطرفان في الربح والخسارة ومن المُمكن أن يقدّم عوائد لحاملي الرموز المُفَوِّضين عليها لفترة طويلة. ويتحقق ذلك من خلال مواءمة الحوافز المالية لمالكي العملات الرمزية (المندوبون) والمدققين الذين يفوضون إليهم.
 
-The more stake a validator has delegated to them, the more often this validator
-is chosen to write new transactions to the ledger. The more transactions
-the validator writes, the more rewards they and their delegators earn.
-Validators who configure their systems to be able to process more transactions
-at a time not only earn proportionally more rewards for doing so, they also
-keep the network running as fast and as smoothly as possible.
+وكلما زادت حصة مدقق مفوض عنهم، زادت احتمالية اختيار هذا المدقق لكتابة معاملات جديدة إلى دفتر الأستاذ.  وكلما زاد عدد المعاملات التي يكتبها المدقق زادت المكافآت التي يحققها المدققون والمفوضون. المدققون الذين يعدون أنظمتهم لتكون قادرة على معالجة معاملات أكثر مرة واحدة لا يتم مكافأتهم بنظام النسبة فحسب على ذلك، بل إنهم يحافظون على عملية تشغيل الشبكة بأسرع وأسهل ما يمكن.
 
-Validators incur costs by running and maintaining their systems, and this is
-passed on to delegators in the form of a fee collected as a percentage of
-rewards earned. This fee is known as a _commission_. As validators earn more
-rewards the more stake is delegated to them, they may compete with one another
-to offer the lowest commission for their services, in order to attract more
-delegated stake.
+ويتكبد المدققون تكاليف من خلال تشغيل وصيانة أنظمتهم، وهذا يتم تحويله إلى المفوضين في شكل رسوم يتم جمعها على شكل نسبة مئوية من المكافآت المكتسبة.  وتعرف هذه الرسوم بالعمولة *commission*. وكلما اكتسب المدققون مكافآت أكثر، يتم تفويضهم بحصة أكبر وربما ينافس بعضهم البعض في عرض عمولة أقل على خدماتهم من أجل كسب حصة تفويض أكبر.
 
-There is a risk of loss of tokens when staking, through a process known as
-_slashing_. Slashing involves the removal and destruction of a portion of a
-validator's delegated stake in response to intentional malicious behavior,
-such as creating invalid transactions or censoring certain types of transactions
-or network participants.
+هناك مخاطر تتمثل في خسارة الرموز في عملية التحْصِيص خلال عملية تُسَمَّى الإقتطاع *slashing*.  الإقتطاع *NOT* ليس مُفَعَّل على الشبكة التجريبية الرئيسية (Mainnet Beta) لـ Solana ومن المُمكن أن يتم تفعيلها في المُستقبل.  ويتضمن الاقتطاع الحذف التلقائي وتدمير جزء من الحصة المفوضة للمدقق كرد على أي سلوك خبيث متعمد، مثل إنشاء عمليات تحويل غير صحيحة أو الكشف عن أنواع معينة من عمليات التحويل أو مشاركين معيني في الشبكة. وفي حال تم اقتطاع مدقق ما، فإن جميع حاملي الرموز الذين قاموا بتفويض حصصهم إلى ذلك المدقق سيخسرون جزءًا من تفويضهم.  في حين أن ذلك يعني خسارة فورية لحاملي الرموز، فإنه كذلك يعني خسارة مستقبلية لمكافآت المدقق نتيجة لنقصان إجمالي التفويض لديه.
 
-If a validator is slashed, all token holders who have delegated stake to that
-validator will lose a portion of their delegation. While this means an immediate
-loss for the token holder, it also is a loss of future rewards for the validator
-due to their reduced total delegation. More details on the slashing roadmap can
-be found
-[here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
+ويعد من أهداف مكافآت الشبكة والاقتطاع مواءمة الحوافز المالية للمدققين وحاملي الرموز، والذي يساعد بدوره في الحفاظ على أمان الشبكة وقوتها وأداءها لتكون في أعلى مستوياتها.
 
-It is the goal of the network rewards and slashing to align both validators'
-and token holders' financial incentives, which in turn help keeps the network
-secure, robust and performing at its best.
+*ملاحظة: مكافآت الشبكة للمُحَصِّصين والمدققين غير متوفرة على الشبكة التجريبية الرئيسية.*
 
-## How do I stake my SOL tokens?
+*ملاحظة: يعد الاقتطاع غير متوفر على الشبكة التجريبية الرئيسية في هذا الوقت.*
 
-In order to stake tokens on Solana, you first will need to transfer some SOL
-into a wallet that supports staking, then follow the steps or instructions
-provided by the wallet to create a stake account and delegate your stake.
-Different wallets will vary slightly in their process for this but the general
-description is below.
 
-#### Supported Wallets
+## كيف يمكن تحْصِيص رموز SOL الخاصة بي؟
+لكي تتمكن من تحصيص رموزك في Solana عليك أولًا أن تقوم بتحويل بعض من رموز SOL إلى محفظة تدعم التحصيص، وبعدها عليك أن تتبع الخطوات أو التعليمات التي تنص عليها المحفظة لإنشاء حساب تحصيص والقيام بتفويض حصتك. وتختلف هذه العملية بشكل طفيف باختلاف المحفظات ولكن الوصف العام لها كما يلي.
 
-Staking operations are supported by the following wallet solutions:
+#### المحفظات المدعومة
+عمليات التحْصِيص مدعومة من خلال الحلول التالية والمتعلقة بالمحفظة:
 
-- SolFlare.com in conjunction with a keystore file or a Ledger Nano.
-  Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
+ - SolFlare.com مقترنة بملف تخزين مفاتيح أو تكنولوجيا النانو لدفتر الأستاذ. قم بالاطلاع على دليل الاستخدام [guide to using SolFlare](wallet-guide/solflare.md) لتفاصيل إضافية.
 
-- Solana command line tools can perform all stake operations in conjunction
-  with a CLI-generated keypair file wallet, a paper wallet, or with a connected
-  Ledger Nano.
-  [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
+ - يمكن لأدوات سطر الأوامر في Solana أن تؤدي جميع عمليات التخصيص مقترنة بمحفظة ملف يقوم بتوليد زوج مفاتيح من نوع CLI، أو من خلال تكنولوجيا النانو لدفتر الأستاذ. أوامر التحصيص بإستخدام أدوات سطر الأوامر في [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
-- [Exodus](https://www.exodus.com/) wallet. They make the process very simple,
-  but you cannot choose a validator: they assign you to their partner validator.
-  See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq)
-  for details.
+#### إنشاء حساب إثبات الحِصَّة أو التَّحْصِيص (Stake Account)
+يختلف نوع حساب التحصيص عن حساب من عنوان محفظة يستخدم ببساطة لإرسال واستقبال رموز SOL إلى عناوين أخرى. إذا قمت باستقبال رموز SOL إلى محفظة تتحكم فيها، فإنه يمكنك استخدام بعض هذه الرموز في إنشاء وتمويل حساب تحصيص جديد، والذي سيكون له عنوان مختلف عن عنوان المحفظة التي استخدمتها في إنشائه. وقد تختلف خطوات إنشاء حساب إثبات حصة بشكل بسيط بناءً على المحفظة التي تستخدمها.  لا تدعم جميع المحفظات حسابات إثبات الحصة، انظر المحافظ المدعومة [Supported Wallets](#supported-wallets).
 
-- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges.
-  Note that you cannot choose a validator with these services: they assign you
-  to their partner validator.
+#### إختيار المُدقّق (Validator)
+بعد إنشاء حساب تحصيص، ربما تكون راغبا في تفويض رموز SOL إلى عقدة تدقيق.  فيما يلي بعض المواقع الإلكترونية التي يمكن أن تحصل من خلالها على معلومات بشأن المدققين المشاركين حاليًا في تشغيل وإدارة الشبكة. لا يوصي فريق مختبرات Solana ومؤسسة Solana بأي مدقق معين.
 
-#### Create a Stake Account
+يقدم مدققو الشبكة التجريبية الرئيسية أنفسهم وخدماتهم في هذا الثريد الخاصة بمدونة Solana:
+ - https://forums.solana.com/t/validator-information-thread
 
-A stake account is a different type of account from a wallet address
-that is used to simply send and receive SOL tokens to other addresses. If you
-have received SOL in a wallet address you control, you can use some of
-these tokens to create and fund a new stake account, which will have a different
-address than the wallet you used to create it.
-Depending on which wallet you are using the steps to create a stake account
-may vary slightly. Not all wallets support stake accounts, see
-[Supported Wallets](#supported-wallets).
+وقد تم بناء وصيانة الموقع الإلكتروني solanabeach.io بواسطة أحد المدققين لدينا، تسهيلات إثبات الحصة.  ويقوم بتقديم بعض المعلومات البيانية عالية المستوى حول الشبكة ككل، وكذلك يقوم بتقديم قائمة بكل مدقق وبعض الإحصائيات حول الأداء الأخير لكل واحد منهم.
+ - https://solanabeach.io
 
-#### Select a Validator
+لعرض إحصائيات إنتاج الكتلة، قم باستخدام أدوام سطر الأوامر في Solana:
+ - `مدققو Solana`
+ - `إنتاج وحدات Solana`
 
-After a stake account is created, you will likely want to delegate the SOL
-to a validator node. Below are a few places where you can get information about
-the validators who are currently participating in running the network.
-The Solana Labs team and the Solana Foundation do not recommend any particular
-validator.
+لا يقوم فريق Solana بتوصيات حول كيفية فهم هذه المعلومات.  وينبغي على المفوضين أن يقوموا بالتفويض بأنفسهم.
 
-The Mainnet Beta validators introduce themselves and their services on this
-Solana Forum thread:
+#### تفويض الحصة الخاصة بك
+في حال قررت تفويض أحد المدققين، قم باستخدام محفظة مدعومة لتفويض حساب الحصة إلى عنوان حساب تصويت المدقق.
 
-- https://forums.solana.com/t/validator-information-thread
-
-The site solanabeach.io is built and maintained by one of our validators,
-Staking Facilities. It provides a some high-level graphical information about
-the network as a whole, as well as a list of each validator and some recent
-performance statistics about each one.
-
-- https://solanabeach.io
-
-To view block production statistics, use the Solana command-line tools:
-
-- `solana validators`
-- `solana block-production`
-
-The Solana team does not make recommendations on how to interpret this
-information. Potential delegators should do their own due diligence.
-
-#### Delegate your Stake
-
-Once you have decided to which validator or validators you will delegate, use
-a supported wallet to delegate your stake account to the validator's vote
-account address.
-
-## Stake Account Details
-
-For more information about the operations and permissions associated with a
-stake account, please see [Stake Accounts](staking/stake-accounts.md)
+## تفاصيل حساب إثبات الحِصَّة أو التَّحْصِيص
+لمزيد من المعلومات حول العمليات والصلاحيات المرتبطة بحساب إثبات الحصة، قم بزيارة حسابات الحصة [Stake Accounts](staking/stake-accounts.md) من فضلك

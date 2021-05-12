@@ -1,17 +1,7 @@
 ---
-title: "Overview"
+title: "نظرة عامة"
 ---
 
-An [app](terminology.md#app) interacts with a Solana cluster by sending it
-[transactions](transactions.md) with one or more
-[instructions](transactions.md#instructions). The Solana [runtime](runtime.md)
-passes those instructions to [programs](terminology.md#program) deployed by app
-developers beforehand. An instruction might, for example, tell a program to
-transfer [lamports](terminology.md#lamport) from one [account](accounts.md) to
-another or create an interactive contract that governs how lamports are
-transferred. Instructions are executed sequentially and atomically for each
-transaction. If any instruction is invalid, all account changes in the
-transaction are discarded.
+يتفاعل التطبيق [app](terminology.md#app) مع مجموعة Solana بإرسالها المُعاملات [transactions](transactions.md) مع واحد أو أكثر من تعليمة [instructions](transactions.md#instructions). يُمرر وقت التشغيل [runtime](runtime.md) الخاص بـ Solana مُسبقًا هذه التعليمات إلى البرامج [programs](terminology.md#program) التي تم نشرها بواسطة مُطوري التطبيقات. قد تُخبر التعليمات، على سبيل المثال، البرنامج بنقل [lamports](terminology.md#lamports) من الحساب [account](accounts.md) إلى آخر أو إنشاء عقد تفاعلي يحكم كيفية نقل الـ lamports. يتم تنفيذ التعليمات بشكل مُتسلسل وذري لكل مُعاملة. إذا كانت أي تعليمات غير صالحة، يتم تجاهل جميع تغييرات الحساب في المُعاملة.
 
-To start developing immediately you can build, deploy, and run one of the
-[examples](developing/on-chain-programs/examples.md).
+لبدء التطوير على الفور يُمكنك بناء ونشر وتشغيل واحد من الأمثلة [examples](developing/deployed-programs/examples.md).

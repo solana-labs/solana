@@ -1,45 +1,44 @@
 ---
-title: Create a validator public key
+title: إنشاء المفتاح العمومي للمُدقّق (Create a validator public key)
 ---
 
-In order to participate you need to first register. See [Registration info](../registration/how-to-register.md).
+من أجل المُشاركة، عليك التسجيل أولاً. راجع معلومات التسجيل [Registration info](../registration/how-to-register.md).
 
-In order to obtain your allotment of SOL you need to publish your
-validator's identity public key under your keybase.io account.
+من أجل الحصول على تخصيص عملة SOL الخاصة بك، تحتاج إلى نشر مفتاح الهوية العمومي للمُدقّق (validator's identity public key) الخاص بك تحت حساب keybase.io الخاص بك.
 
-## **Generate Keypair**
+## **توليد زوج المفاتيح (Generate Keypair)**
 
-1. If you haven't already, generate your validator's identity keypair by running:
+1. إذا لم تكن قد قُمت بذلك بالفعل، فقُم بإنشاء زوج مفاتيح هوية المُدقّق (validator identity keypair) عن طريق تشغيل:
 
    ```bash
      solana-keygen new -o ~/validator-keypair.json
    ```
 
-2. The identity public key can now be viewed by running:
+2. يمكن الآن عرض مفتاح الهوية العمومي (identity public key) عن طريق تشغيل:
 
    ```bash
      solana-keygen pubkey ~/validator-keypair.json
    ```
 
-> Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
+> ملاحظة: ملف "validator-keypair.json" هو أيضًا مفتاحك الخاص \(ed25519 \).
 
-Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
+يُعرّف زوج مفاتيح هوية المُدقّق (validator identity keypair) الخاص بك بشكل فريد المُدقّق الخاص بك داخل الشبكة. من الأهمية بمكان إجراء نسخ إحتياطي لهذه المعلومات **It is crucial to back-up this information.**
 
-If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
+إذا لم تقم بعمل نسخة إحتياطية من هذه المعلومات، فلن تكون قادرًا على إسترداد المُدقّق (validator) الخاص بك إذا فقدت الوصول إليها. إذا حدث هذا، فستفقد حِصَّتك من عملات SOL أيضًا.
 
-To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
+لعمل نسخة إحتياطية من زوج مفاتيح الهوية (identity keypair) للمُدقّق (validator) الخاص بك، قُم بعمل نسخة إحتياطية من ملفك في مكان آمن **back-up your "validator-keypair.json” file to a secure location.**
 
-## Link your Solana pubkey to a Keybase account
+## قُم بربط المفتاح العمومي (pubkey) في Solana بحساب قاعدة المفتاح (Keybase)
 
-You must link your Solana pubkey to a Keybase.io account. The following instructions describe how to do that by installing Keybase on your server.
+يجب عليك ربط المفتاح العمومي (Pubkey) في Solana بحساب Keybase.io. تصف الإرشادات التالية كيفية القيام بذلك عن طريق تثبيت Keybase على الخادم الخاص بك.
 
-1. Install [Keybase](https://keybase.io/download) on your machine.
-2. Log in to your Keybase account on your server. Create a Keybase account first if you don’t already have one. Here’s a [list of basic Keybase CLI commands](https://keybase.io/docs/command_line/basics).
-3. Create a Solana directory in your public file folder: `mkdir /keybase/public/<KEYBASE_USERNAME>/solana`
-4. Publish your validator's identity public key by creating an empty file in your Keybase public file folder in the following format: `/keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`. For example:
+1. قُم بتثبيت [Keybase](https://keybase.io/download) على جهازك.
+2. قُم بتسجيل الدخول إلى حساب Keybase الخاص بك على الخادم الخاص بك. أنشئ حساب Keybase أولاً إذا لم يكن لديك حساب بالفعل. هنا قائمة أوامر Keybase CLI الأساسية [list of basic Keybase CLI commands](https://keybase.io/docs/command_line/basics).
+3. قُم بإنشاء دليل Solana في مُجلد الملف العام الخاص بك: `mkdir /keybase/public/<KEYBASE_USERNAME>/solana`
+4. قُم بنشر زوج مفاتيح هوية المُدقّق (validator identity keypair) الخاص بك عن طريق إنشاء ملف فارغ في مُجلد ملف Keybase العام بالتنسيق التالي: `/keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`. على سبيل المثال:
 
    ```bash
      touch /keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>
    ```
 
-5. To check your public key was published, ensure you can successfully browse to `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`
+5. للتحقق من نشر المفتاح العمومي (public key)، تأكد من أنه يُمكنك التصفح بنجاح إلى `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`

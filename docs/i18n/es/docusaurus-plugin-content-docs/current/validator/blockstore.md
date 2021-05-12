@@ -2,90 +2,90 @@
 title: Blockstore
 ---
 
-After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../cluster/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.
+Después de que un bloque llega a la finalidad, todos los bloques desde aquel hasta el bloque génesis forman una cadena lineal con el conocido nombre blockchain. Hasta ese punto, sin embargo, el validador debe mantener todas las cadenas potencialmente válidas, llamadas _forks_. El proceso por el cual se forman naturalmente forks como resultado de la rotación de líderes se describe en [generación de forks](../cluster/fork-generation.md). La estructura de datos _blockstore_ descrita aquí es la forma en que un validador hace frente a esos forks hasta que los bloques son finalizados.
 
-The blockstore allows a validator to record every shred it observes on the network, in any order, as long as the shred is signed by the expected leader for a given slot.
+El blockstore permite a un validador registrar cada trozo que observa en la red, en cualquier orden, siempre y cuando el pedazo esté firmado por el líder esperado para una rama determinada.
 
-Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred index` \(within the slot\). This permits the skip-list structure of the Solana protocol to be stored in its entirety, without a-priori choosing which fork to follow, which Entries to persist or when to persist them.
+Los fragmentos se trasladan a un espacio de claves que se puede forzar la tupla de `leader slot` + `shred index`\(dentro de la ranura). Esto permite que la estructura de lista salteada del protocolo Solana se almacene en su totalidad, sin a-priori eligiendo qué fork seguir, qué Entradas persistir o cuándo persistir en ellas.
 
-Repair requests for recent shreds are served out of RAM or recent files and out of deeper storage for less recent shreds, as implemented by the store backing Blockstore.
+Las solicitudes de reparación de fragmentos recientes se sirven de la memoria RAM o de los archivos recientes y del almacenamiento más profundo para los fragmentos menos recientes, según lo implementado por el almacén que respalda a Blockstore.
 
-## Functionalities of Blockstore
+## Funcionalidades de Blockstore
 
-1. Persistence: the Blockstore lives in the front of the nodes verification
+1. Persistencia: el Blockstore vive en la parte frontal de la verificación de nodos
 
-   pipeline, right behind network receive and signature verification. If the
+   pipeline, justo detrás de la red recibir y la verificación de firmas. Si el
 
-   shred received is consistent with the leader schedule \(i.e. was signed by the
+   shred recibido es coherente con el horario del líder \(es decir, fue firmado por el
 
-   leader for the indicated slot\), it is immediately stored.
+   líder para la ranura indicada\), se almacena inmediatamente.
 
-2. Repair: repair is the same as window repair above, but able to serve any
+2. Reparación: la reparación es la misma que la reparación de ventanas arriba, pero capaz de servir cualquier
 
-   shred that's been received. Blockstore stores shreds with signatures,
+   shred que ha sido recibido. Blockstore almacena fragmentos con firmas,
 
-   preserving the chain of origination.
+   preservando la cadena de origen.
 
-3. Forks: Blockstore supports random access of shreds, so can support a
+3. Forks: Blockstore soporta acceso aleatorio de shreds, así que puede soportar la
 
-   validator's need to rollback and replay from a Bank checkpoint.
+   necesidad del validador de dar marcha atrás y repetir desde un punto de control bancario.
 
-4. Restart: with proper pruning/culling, the Blockstore can be replayed by
+4. Reinicio: con una poda/eliminación adecuada, el almacén de bloques puede reproducirse mediante la
 
-   ordered enumeration of entries from slot 0. The logic of the replay stage
+   enumeración ordenada de las entradas desde la ranura 0. La lógica de la etapa de repetición
 
-   \(i.e. dealing with forks\) will have to be used for the most recent entries in
+   /(es decir, el tratamiento de los forks) tendrá que ser utilizada para las entradas más recientes en
 
-   the Blockstore.
+   el Blockstore.
 
-## Blockstore Design
+## Diseño de Blockstore
 
-1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
-2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
+1. Las entradas en el Blockstore se almacenan como pares clave-valor, donde la clave es el índice de ranura concatenado y el índice de fragmentación de una entrada, y el valor son los datos de la entrada. Tenga en cuenta que los índices de shred están basados en cero para cada ranura (es decir, son relativos a la ranura).
+2. El Blockstore mantiene metadatos para cada ranura, en la estructura de `SlotMeta` que contiene:
 
-   - `slot_index` - The index of this slot
-   - `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
-   - `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
-   - `received` - The highest received shred index for the slot
-   - `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+   - `slot_index` - El índice de esta ranura
+   - `num_blocks` - El número de bloques en la ranura \(usado para encadenar a una ranura anterior\)
+   - `consumed` - El índice más alto `n`, tal que para todos `m < n`, hay un shred en esta ranura con el índice de fragmentación igual a `n` \(i.. el índice más alto de fragmentación consecutiva\).
+   - `received` - El índice más alto recibido para la ranura
+   - `next_slots` - Una lista de futuras ranuras a las que esta ranura podría encadenar. Utilizado al reconstruir
 
-     the ledger to find possible fork points.
+     elledger para encontrar posibles puntos de forks.
 
-   - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
+   - `last_index` - El índice del shred que está marcado como el último shred de esta ranura. Esta bandera en un pedazo será fijada por el líder para una ranura cuando estén transmitiendo la última ranura para una ranura.
+   - `is_rooted` - Verdadero si cada bloque de 0...ranura forma una secuencia completa sin agujeros. Podemos derivar is_rooted para cada ranura con las siguientes reglas. Sea slot\(n\) el slot con índice `n`, y slot\(n\).is_full\(\) es verdadero si el slot con índice `n` tiene todos los ticks esperados para ese slot. Sea is_rooted(n\) la afirmación de que "la ranura(n\).is_rooted es verdadera". Entonces:
 
-     is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
+     is_rooted(0\) is_rooted(n+1\) iff \(is_rooted(n\) y slot(n\).is_full(\)
 
-3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
-4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
+3. Encadenamiento - Cuando llega un fragmento para una nueva ranura `x`, comprobamos el número de bloques \ (`num_blocks`) para esa nueva ranura \ (esta información está codificada en el fragmento). Entonces sabemos que esta nueva ranura se encadena con la ranura `x - num_blocks`.
+4. Suscripciones - El Blockstore registra un conjunto de ranuras a las que se ha "suscrito". Esto significa que las entradas de la cadena a estas ranuras serán enviadas en el canal Blockstore para su consumo por la ReplayStage. Consulte las `Blockstore APIs` para más detalles.
+5. Actualizar notificaciones - Blockstore notifica a los oyentes cuando slot\(n\).is_rooted es volteado de falso a verdadero para cualquier `n`.
 
-## Blockstore APIs
+## APIs de Blockstore
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
+El Blockstore ofrece una API basada en suscripción que ReplayStage utiliza para pedir entradas que le interesen. Las entradas se enviarán en un canal expuesto por el Blockstore. Estas API de suscripción son las siguientes: 1. `fn get_slots_.Ue(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Devuelve nuevas ranuras conectadas a cualquier elemento de la lista `slot_indexes`.
 
-1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
+1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Devuelve el vector de entradas para la ranura que comienza con `entry_start_index`, limitando el resultado a `max` si `max_entries == Some(max)`, de lo contrario, no se impone ningún límite superior en la longitud del vector de retorno.
 
-Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
+Nota: De forma acumulativa, esto significa que la etapa de repetición tendrá que saber cuándo ha terminado una ranura, y suscribirse a la siguiente ranura que le interese para obtener el siguiente conjunto de entradas. Anteriormente, la carga de las ranuras encadenadas recaía sobre el Blockstore.
 
-## Interfacing with Bank
+## Interfaz con el banco
 
-The bank exposes to replay stage:
+El banco expone a la fase de repetición:
 
-1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last
+1. `prev_hash`: en qué cadena PoH está trabajando como indica el hash del último
 
-   entry it processed
+   entrada procesada
 
-2. `tick_height`: the ticks in the PoH chain currently being verified by this
+2. `tick_height`: los ticks de la cadena PoH que están siendo verificados por este
 
-   bank
+   banco
 
-3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
+3. `votes`: una pila de registros que contienen: 1. `prev_hashes`: a lo que cualquier cosa después de esta votación debe encadenar en PoH 2. `tick_height`: la altura de tick a la que se emitió este voto 3. `lockout period`: cuánto tiempo debe observarse una cadena en el ledger para
 
-   be able to be chained below this vote
+   poder encadenarse por debajo de este voto
 
-Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
+La etapa de repetición utiliza las APIs de Blockstore para encontrar la cadena de entradas más larga que pueda colgar de una votación anterior. Si esa cadena de entradas no cuelga de la última votación, la etapa de repetición hace retroceder el banco hasta esa votación y repite la cadena desde ahí.
 
-## Pruning Blockstore
+## Limpiando Blockstore
 
-Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.
+Una vez que las entradas del Blockstore son lo suficientemente antiguas, la representación de todas los posibles forks se vuelve menos útiles, y tal vez incluso problemáticos para la repetición al reiniciar. Sin embargo, una vez que los votos de un validador han alcanzado el bloqueo máximo, cualquier contenido del Blockstore que no esté en la cadena del PoH para ese voto puede ser podado, expurgado.

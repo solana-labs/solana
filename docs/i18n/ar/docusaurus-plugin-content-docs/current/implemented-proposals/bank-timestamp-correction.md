@@ -1,77 +1,37 @@
 ---
-title: Bank Timestamp Correction
+title: تصحيح الختم الزمني للبنك (Bank Timestamp Correction)
 ---
 
-Each Bank has a timestamp that is stashed in the Clock sysvar and used to assess
-time-based stake account lockups. However, since genesis, this value has been
-based on a theoretical slots-per-second instead of reality, so it's quite
-inaccurate. This poses a problem for lockups, since the accounts will not
-register as lockup-free on (or anytime near) the date the lockup is set to
-expire.
+يحتوي كل بنك على ختم زمني (Timestamp) يتم تخزينه في نظام الساعة ويستخدم لتقييم عمليات قفل حساب الأسهم المُستندة إلى الوقت. مع ذلك، مُنذ مرحلة التكوين (Genesis)، هذه القيمة كانت مبنية على نظرية فتحات كل ثانية (slots-per-second) بدلاً من الواقع، لذا فهي غير دقيقة تمامًا. يُمثل هذا مشكلة بالنسبة لعمليات الإقفال، نظرًا لأن الحسابات لن تُسجل على أنها خالية من القفل في (أو في أي وقت قريب) من تاريخ تعيين القفل على الإنتهاء.
 
-Block times are already being estimated to cache in Blockstore and long-term
-storage using a [validator timestamp oracle](validator-timestamp-oracle.md);
-this data provides an opportunity to align the bank timestamp more closely with
-real-world time.
+يتم بالفعل تقدير أوقات الكتل (Block times) للتخزين المُؤقت في مخزن الكُتلة (blockstore) والتخزين طويل المدى بإستخدام أوراكل الختم الزمني للمُدقّق [validator timestamp oracle](validator-timestamp-oracle.md)؛ تُوفر هذه البيانات فرصة لمُواءمة الختم الزمني للبنك بشكل وثيق مع الوقت الفعلي.
 
-The general outline of the proposed implementation is as follows:
+المُخطط العام للتنفيذ المُقترح هو كما يلي:
 
-- Correct each Bank timestamp using the validator-provided timestamp.
-- Update the validator-provided timestamp calculation to use a stake-weighted
-  median, rather than a stake-weighted mean.
-- Bound the timestamp correction so that it cannot deviate too far from the
-  expected theoretical estimate
+- قُم بتصحيح كل ختم زمني (Timestamp) للبنك بإستخدام الختم زمني المُقدم من المُدقّق (validator).
+- قُم بتحديث حساب الطابع الذي يوفره المُدقّق (validator) لإستخدام المُتوسط المُرجح بالحِصَّة (stake-weighted)، بدلاً من متوسط المُرجح بالحِصَّة (stake-weighted).
+- أُربط تصحيح الختم الزمني (Timestamp) بحيث لا ينحرف كثيرًا عن التقدير النظري المُتوقع
 
-## Timestamp Correction
+## تصحيح الختم الزمني (Bank Timestamp)
 
-On every new Bank, the runtime calculates a realistic timestamp estimate using
-validator timestamp-oracle data. The Bank timestamp is corrected to this value
-if it is greater than or equal to the previous Bank's timestamp. That is, time
-should not ever go backward, so that locked up accounts may be released by the
-correction, but once released, accounts can never be relocked by a time
-correction.
+في كل بنك جديد، يحسب وقت التشغيل تقديرًا واقعيًا للختم الزمني (Timestamp) بإستخدام بيانات الختم الزمني للأوراكل (timestamp-oracle) للمُدقّق (validator. يتم تصحيح الختم الزمني (Timestamp) للبنك إلى هذه القيمة إذا كانت أكبر من أو تُساوي الختم الزمني (Timestamp) للبنك السابق. هذا يعني أن الوقت لا ينبغي أن يتراجع أبدًا، لذلك قد يتم تحرير الحسابات المُقفلة من خلال التصحيح، ولكن بمجرد الإفراج عن الحسابات، لا يُمكن أبدًا إعادة تجميع الحسابات عن طريق تصحيح الوقت.
 
-### Calculating Stake-Weighted Median Timestamp
+### حساب الختم الزمني المُتوسط المُرجح بالحِصَّة (Calculating Stake-Weighted Median Timestamp)
 
-In order to calculate the estimated timestamp for a particular Bank, the runtime
-first needs to get the most recent vote timestamps from the active validator
-set. The `Bank::vote_accounts()` method provides the vote accounts state, and
-these can be filtered to all accounts whose most recent timestamp was provided
-within the last epoch.
+من أجل حساب الختم الزمني (Timestamp) المُقدر لبنك مُعين، يحتاج وقت التشغيل أولاً إلى الحصول على أحدث الأختام الزمنية (Timestamps) للتصويت من مجموعة المُدقّق (validator) النشط. تُوفر طريقة `Bank::vote_accounts()` حالة حسابات التصويت، ويُمكن تصفيتها لجميع الحسابات التي تم توفير تمها الزمني (Timestamp) الأخير خلال الفترة (epoch) الماضية.
 
-From each vote timestamp, an estimate for the current Bank is calculated using
-the epoch's target ns_per_slot for any delta between the Bank slot and the
-timestamp slot. Each timestamp estimate is associated with the stake delegated
-to that vote account, and all the timestamps are collected to create a
-stake-weighted timestamp distribution.
+من كل تصويت ختم زمني (Timestamp)، يتم حساب تقدير للبنك الحالي بإستخدام هدف الفترة ns_per_slot لأي دلتا (delta) بين فُتحة (Slot) البنك وفتحة الختم الزمني. يرتبط كل تقدير للختم الزمني (Timestamp) بالحِصَّة (stake) المُفوضة لحساب التصويت هذا، ويتم جمع كل الأختام الزمنية (Timestamps) لإنشاء توزيع أختام الزمنية مُرجحة بالحِصَّة (stake-weighted).
 
-From this set, the stake-weighted median timestamp -- that is, the timestamp at
-which 50% of the stake estimates a greater-or-equal timestamp and 50% of the
-stake estimates a lesser-or-equal timestamp -- is selected as the potential
-corrected timestamp.
+من هذه المجموعة، يتم تحديد مُتوسط الختم الزمني (Timestamp) المُرجح بالحِصَّة (stake-weighted) - أي الختم الزمني الذي تُقدر عنده 50٪ من الحِصَّة (stake) ختما زمنيًا أكبر أو يساوي ويُقدر 50٪ من الحِصَّة ختما زمنيًا أقل أو يساوي - يتم تحديده كختم زمني مُصحح مُحتمل.
 
-This stake-weighted median timestamp is preferred over the stake-weighted mean
-because the multiplication of stake by proposed timestamp in the mean
-calculation allows a node with very small stake to still have a large effect on
-the resulting timestamp by proposing a timestamp that is very large or very
-small. For example, using the previous `calculate_stake_weighted_timestamp()`
-method, a node with 0.00003% of the stake proposing a timestamp of `i64::MAX`
-can shift the timestamp forward 97k years!
+يُفضل مُتوسط الختم الزمني (Timestamp) المُرجح بالحِصَّة (stake-weighted) هذا على المُتوسط المُرجح بالحِصَّة لأن مُضاعفة الحِصَّة بالختم الزمني المُقترح في الحساب يسمح للعُقدة (node) ذات الحِصَّة الصغيرة جدًا أن يكون لها تأثير كبير على الختم الزمني الناتج من خلال إقتراح ختم زمني كبير جدًا أو صغير جدًا. على سبيل المثال، بإستخدام طريقة `calculate_stake_weighted_timestamp()` السابقة، يُمكن للعُقدة (node) التي بها 0.00003٪ من الحِصَّة (stake) التي تقترح ختما زمنيا (Timestamp) بقيمة `i64::MAX` أن تُحول الختم الزمني (Timestamp) إلى الأمام بـ 97 ألف سنة!
 
-### Bounding Timestamps
+### الطوابع الزمنية الممُضمّنة (Bounding Timestamps)
 
-In addition to preventing time moving backward, we can prevent malicious
-activity by bounding the corrected timestamp to an acceptable level of deviation
-from the theoretical expected time.
+بالإضافة إلى منع تحرك الوقت للخلف، يُمكننا منع النشاط الضار من خلال ربط الختم الزمني (Timestamp) المُصحح بمستوى مقبول من الإنحراف عن الوقت النظري المُتوقع.
 
-This proposal suggests that each timestamp be allowed to deviate up to 25% from
-the expected time since the start of the epoch.
+يقترح هذا الإقتراح السماح لكل ختم زمني (Timestamp) بالإنحراف بنسبة تصل إلى 25٪ عن الوقت المُتوقع منذ بداية الفترة (epoch).
 
-In order to calculate the timestamp deviation, each Bank needs to log the
-`epoch_start_timestamp` in the Clock sysvar. This value is set to the
-`Clock::unix_timestamp` on the first slot of each epoch.
+لحساب إنحراف الختم الزمني (Timestamp)، يحتاج كل بنك إلى تسجيل `epoch_start_timestamp` في نظام الساعة sysvar. يتم تعيين هذه القيمة على `Clock::unix_timestamp` في الفُتحة (slot) الأولى من كل فترة (epoch).
 
-Then, the runtime compares the expected elapsed time since the start of the
-epoch with the proposed elapsed time based on the corrected timestamp. If the
-corrected elapsed time is within +/- 25% of expected, the corrected timestamp is
-accepted. Otherwise, it is bounded to the acceptable deviation.
+بعد ذلك، يُقارن وقت التشغيل الوقت المُنقضي المُتوقع مُنذ بداية الفترة (epoch) مع الوقت المُنقضي المُقترح بناءً على الختم الزمني (Timestamp) المُصحح. إذا كان الوقت المُنقضي المُصحح ضمن +/- 25٪ من المُتوقع، يتم قبول الختم الزمني (Timestamp) المُصحح. بخلاف ذلك، يتم تقييده بالإنحراف المقبول.

@@ -1,55 +1,55 @@
 ---
-title: Leader-to-Leader Transition
+title: Transición de líder a líder
 ---
 
-This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
+Este diseño describe cómo los líderes de la transición de producción del libro de ganancias PoH entre sí a medida que cada líder genera su propia ranura.
 
-## Challenges
+## Desafíos
 
-Current leader and the next leader are both racing to generate the final tick for the current slot. The next leader may arrive at that slot while still processing the current leader's entries.
+El líder actual y el próximo líder están en carrera para generar la marca final de la rama actual. El próximo líder puede llegar a esa franja horaria mientras sigue procesando las entradas del líder actual.
 
-The ideal scenario would be that the next leader generated its own slot right after it was able to vote for the current leader. It is very likely that the next leader will arrive at their PoH slot height before the current leader finishes broadcasting the entire block.
+El escenario ideal sería que el próximo líder generara su propia franja horaria justo después de que pudiera votar por el líder actual. Es muy probable que el próximo líder llegue a su altura de la ranura PoH antes de que el líder actual termine emitiendo todo el bloque.
 
-The next leader has to make the decision of attaching its own block to the last completed block, or wait to finalize the pending block. It is possible that the next leader will produce a block that proposes that the current leader failed, even though the rest of the network observes that block succeeding.
+El próximo líder tiene que tomar la decisión de adjuntar su propio bloque al último bloque completado, o esperar para finalizar el bloque pendiente. Es posible que el próximo líder produzca un bloque que proponga que el actual líder fracase, aunque el resto de la red observa que el bloque tiene éxito.
 
-The current leader has incentives to start its slot as early as possible to capture economic rewards. Those incentives need to be balanced by the leader's need to attach its block to a block that has the most commitment from the rest of the network.
+El líder actual tiene incentivos para empezar su franja horaria lo antes posible para obtener recompensas económicas. Esos incentivos deben equilibrarse con la necesidad del líder de fijar su bloque a un bloque que tenga el mayor compromiso del resto de la red.
 
-## Leader timeout
+## Tiempo de espera del líder
 
-While a leader is actively receiving entries for the previous slot, the leader can delay broadcasting the start of its block in real time. The delay is locally configurable by each leader, and can be dynamically based on the previous leader's behavior. If the previous leader's block is confirmed by the leader's TVU before the timeout, the PoH is reset to the start of the slot and this leader produces its block immediately.
+Mientras que un líder está recibiendo activamente entradas para la rama anterior, el líder puede retrasar la transmisión del inicio de su bloque en tiempo real. El retraso es configurable localmente por cada líder, y puede basarse dinámicamente en el comportamiento del líder anterior. Si el bloque anterior del líder es confirmado por el TVU del líder antes del tiempo de espera, el PoH se reinicia al inicio de la ranura y este líder produce su bloque inmediatamente.
 
-The downsides:
+Las desventajas:
 
-- Leader delays its own slot, potentially allowing the next leader more time to
+- El líder retrasa su propio espacio, permitiendo potencialmente al próximo líder más tiempo
 
-  catch up.
+  para ponerse al día.
 
-The upsides compared to guards:
+Los aspectos positivos en comparación con los guardias:
 
-- All the space in a block is used for entries.
-- The timeout is not fixed.
-- The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
-- This design doesn't require a ledger hard fork to update.
-- The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
-- The leader can speculatively generate the last tick from the last received entry.
-- The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
+- Todo el espacio de un bloque se usa para entradas.
+- No se ha solucionado el tiempo de espera.
+- El tiempo de espera es local para el líder, y por lo tanto puede ser inteligente. La heurística del líder puede tener en cuenta el rendimiento de la turbina.
+- Este diseño no requiere una bifurcación de contabilidad para actualizar.
+- El líder anterior puede transmitir redundamente la última entrada en el bloque al siguiente líder, y el próximo líder puede decidir especulativamente confiar en él para generar su bloque sin verificar el bloque anterior.
+- El líder puede generar especulativamente el último tick de la última entrada recibida.
+- El líder puede procesar de forma especulativa las transacciones y adivinar cuáles no van a ser codificadas por el líder anterior. Este es también un vector de ataque de la censura. El líder actual puede retener las transacciones que recibe de los clientes para que pueda codificarlas en su propia ranura. Una vez procesadas, las entradas pueden ser reproducidas en PoH rápidamente.
 
-## Alternative design options
+## Opciones de diseño alternativo
 
-### Guard tick at the end of the slot
+### Guardián al final de la ranura
 
-A leader does not produce entries in its block after the _penultimate tick_, which is the last tick before the first tick of the next slot. The network votes on the _last tick_, so the time difference between the _penultimate tick_ and the _last tick_ is the forced delay for the entire network, as well as the next leader before a new slot can be generated. The network can produce the _last tick_ from the _penultimate tick_.
+Un líder no produce entradas en su bloque después del pulso _penultimate tick_, que es el último tick antes del primer tick de la siguiente ranura. La red vota en el _last tick_, así que la diferencia de tiempo entre el pulso _penultimate tick_ y el _last tick_ es el retraso forzado para toda la red, así como el próximo líder antes de que se pueda generar una nueva ranura. La red puede producir el _last tick_ del _penultimate tick_.
 
-If the next leader receives the _penultimate tick_ before it produces its own _first tick_, it will reset its PoH and produce the _first tick_ from the previous leader's _penultimate tick_. The rest of the network will also reset its PoH to produce the _last tick_ as the id to vote on.
+Si el próximo líder recibe el _penultimate tick_ antes de que produzca su propio _first tick_, reiniciará su PoH y producirá el _first tick_ del anterior líder _penultimate tick_. El resto de la red también restablecerá su PoH para producir el _último tick_ como el id para votar.
 
-The downsides:
+Las desventajas:
 
-- Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
-- Average case confirmation time for a transaction would be at least 50ms worse.
-- It is part of the ledger definition, so to change this behavior would require a hard fork.
-- Not all the available space is used for entries.
+- Cada votación y, por lo tanto, cada confirmación se retrasa por un tiempo de espera fijo. 1 tick, o alrededor de 100m.
+- El tiempo promedio de confirmación de caso para una transacción sería de al menos 50 ms peor.
+- Es parte de la definición del libro mayor, por lo que cambiar este comportamiento requeriría una bifurcación dura.
+- No todo el espacio disponible se utiliza para las entradas.
 
-The upsides compared to leader timeout:
+Las ventajas en comparación con el tiempo de espera del líder:
 
-- The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
-- The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.
+- El próximo líder ha recibido todas las entradas anteriores, por lo que puede comenzar a procesar transacciones sin registrarlas en PoH.
+- El líder anterior puede transmitir redundamente la última entrada que contiene el pulso _penultimate_ al siguiente líder. El próximo líder puede generar especulativamente el _último tick_ tan pronto como reciba el _penúltimo tick_, incluso antes de verificarlo.

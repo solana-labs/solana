@@ -1,79 +1,58 @@
 ---
-title: Using Solana CLI
+title: Использование Solana CLI
 ---
 
-Before running any Solana CLI commands, let's go over some conventions that
-you will see across all commands. First, the Solana CLI is actually a collection
-of different commands for each action you might want to take. You can view the list
-of all possible commands by running:
+Перед выполнением команд Solana CLI, давайте рассмотрим некоторые соглашения, которые вы увидите во всех командах. Во-первых, Solana CLI на самом деле является коллекцией различных команд для каждого действия, которое вы можете захотеть. Вы можете просмотреть список из всех возможных команд, выполнив:
 
 ```bash
 solana --help
 ```
 
-To zoom in on how to use a particular command, run:
+Чтобы увеличить масштаб использования определённой команды, запустите:
 
 ```bash
-solana <COMMAND> --help
+соляна <COMMAND> --help
 ```
 
-where you replace the text `<COMMAND>` with the name of the command you want
-to learn more about.
+где вы замените текст `<COMMAND>` на название команды, о которой вы хотите узнать больше.
 
-The command's usage message will typically contain words such as `<AMOUNT>`,
-`<ACCOUNT_ADDRESS>` or `<KEYPAIR>`. Each word is a placeholder for the _type_ of
-text you can execute the command with. For example, you can replace `<AMOUNT>`
-with a number such as `42` or `100.42`. You can replace `<ACCOUNT_ADDRESS>` with
-the base58 encoding of your public key, such as
-`9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
+Сообщение об использовании команды будет обычно содержать слова, такие как `<AMOUNT>`, `<ACCOUNT_ADDRESS>` или `<KEYPAIR>`. Каждое слово является меткой для типа __ из текста, с которым вы можете выполнить команду. Например, вы можете заменить `<AMOUNT>` на такое число, как `42` или `100.42`. Вы можете заменить `<ACCOUNT_ADDRESS>` на base58 кодировку вашего открытого ключа, например `9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
 
-## Keypair conventions
+## Контракты пары ключей
 
-Many commands using the CLI tools require a value for a `<KEYPAIR>`. The value
-you should use for the keypair depend on what type of
-[command line wallet you created](../wallet-guide/cli.md).
+Многие команды, использующие инструменты CLI, требуют значения для `<KEYPAIR>`. Значение, которое вы должны использовать для клавиатуры зависит от типа кошелька [командной строки, который вы создали](../wallet-guide/cli.md).
 
-For example, the way to display any wallet's address
-(also known as the keypair's pubkey), the CLI help document shows:
+Например, способ отображения адреса любого кошелька (также известного как пикет клавиатуры), документ помощи CLI:
 
 ```bash
 solana-keygen pubkey <KEYPAIR>
 ```
 
-Below, we show how to resolve what you should put in `<KEYPAIR>` depending
-on your wallet type.
+Ниже мы показываем, как определить то, что вам следует поместить в `<KEYPAIR>` в зависимости от от типа вашего кошелька.
 
-#### Paper Wallet
+#### Бумажный кошелек
 
-In a paper wallet, the keypair is securely derived from the seed words and
-optional passphrase you entered when the wallet was create. To use a paper
-wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help
-documents, enter the uri scheme `prompt://` and the program will prompt you to
-enter your seed words when you run the command.
+В бумажном кошельке кейворд безопасно происходит от мнемонических слов и опциональной ключевой фразы, которую вы ввели при создании кошелька. Чтобы использовать бумажный кошелек с парой ключей везде, где текст `<KEYPAIR>` отображается в примерах или справочных документах, введите слово `ASK` и программа попросит ввести ваши ключи, когда вы запускаете команду.
 
-To display the wallet address of a Paper Wallet:
+Чтобы отобразить адрес кошелька бумажного кошелька:
 
 ```bash
-solana-keygen pubkey prompt://
+solana-keygen pubkey
 ```
 
-#### File System Wallet
+#### Файловый системный кошелек
 
-With a file system wallet, the keypair is stored in a file on your computer.
-Replace `<KEYPAIR>` with the complete file path to the keypair file.
+С файловой системой пара ключей хранится в файле на вашем компьютере. Заменить `<KEYPAIR>` на полный путь к файлу клавиатуры.
 
-For example, if the file system keypair file location is
-`/home/solana/my_wallet.json`, to display the address, do:
+Например, если расположение файлового ключа в системе `/home/solana/my_wallet.json`, чтобы отобразить адрес, выполните:
 
 ```bash
 solana-keygen pubkey /home/solana/my_wallet.json
 ```
 
-#### Hardware Wallet
+#### Аппаратный кошелек
 
-If you chose a hardware wallet, use your
-[keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),
-such as `usb://ledger?key=0`.
+Если вы выбрали аппаратный кошелек, используйте ваш [адрес клавиатуры](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key), например `usb://ledger?key=0`.
 
 ```bash
 solana-keygen pubkey usb://ledger?key=0

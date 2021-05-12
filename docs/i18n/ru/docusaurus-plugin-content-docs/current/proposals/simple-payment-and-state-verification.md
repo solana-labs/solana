@@ -1,115 +1,57 @@
 ---
-title: Simple Payment and State Verification
+title: Простой платеж и проверка состояния
 ---
 
-It is often useful to allow low resourced clients to participate in a Solana
-cluster. Be this participation economic or contract execution, verification
-that a client's activity has been accepted by the network is typically
-expensive. This proposal lays out a mechanism for such clients to confirm that
-their actions have been committed to the ledger state with minimal resource
-expenditure and third-party trust.
+Часто бывает полезно разрешить клиентам с ограниченными ресурсами участвовать в кластере Solana. Будь то экономическое участие или исполнение контракта, проверка того, что деятельность клиента была принята сетью, обычно стоит дорого. Это предложение излагает механизм для таких клиентов, чтобы подтвердить, что их действия были зафиксированы в состоянии реестра с минимальными затратами ресурсов и доверием третьих сторон.
 
-## A Naive Approach
+## Наивный подход
 
-Validators store the signatures of recently confirmed transactions for a short
-period of time to ensure that they are not processed more than once. Validators
-provide a JSON RPC endpoint, which clients can use to query the cluster if a
-transaction has been recently processed. Validators also provide a PubSub
-notification, whereby a client registers to be notified when a given signature
-is observed by the validator. While these two mechanisms allow a client to
-verify a payment, they are not a proof and rely on completely trusting a
-validator.
+Валидаторы хранят подписи недавно подтвержденных транзакций в течение короткого периода времени, чтобы гарантировать, что они не будут обработаны более одного раза. Валидаторы предоставляют конечную точку JSON RPC, которую клиенты могут использовать для запроса кластера, если транзакция была недавно обработана. Валидаторы также предоставляют уведомление PubSub, посредством чего клиент регистрируется, чтобы получить уведомление, когда данная подпись будет обнаружена валидатором. Хотя эти два механизма позволяют клиенту проверить платеж, они не являются доказательством и полагаются на полное доверие валидатору.
 
-We will describe a way to minimize this trust using Merkle Proofs to anchor the
-validator's response in the ledger, allowing the client to confirm on their own
-that a sufficient number of their preferred validators have confirmed a
-transaction. Requiring multiple validator attestations further reduces trust in
-the validator, as it increases both the technical and economic difficulty of
-compromising several other network participants.
+Мы опишем способ минимизировать это доверие с помощью Merkle Proofs, чтобы закрепить ответ валидатора в реестре, позволяя клиенту самостоятельно подтвердить, что достаточное количество предпочитаемых им валидаторов подтвердили транзакцию. Требование нескольких подтверждений валидатора еще больше снижает доверие к валидатору, поскольку увеличивает как технические, так и экономические трудности, связанные с компрометацией нескольких других участников сети.
 
-## Light Clients
+## Лёгкий клиент
 
-A 'light client' is a cluster participant that does not itself run a validator.
-This light client would provide a level of security greater than trusting a
-remote validator, without requiring the light client to spend a lot of resources
-verifying the ledger.
+«Легкий клиент» - это участник кластера, который сам не запускает валидатор. Этот легкий клиент обеспечит уровень безопасности выше, чем доверие удаленному валидатору, не требуя от легкого клиента тратить много ресурсов на проверку реестра.
 
-Rather than providing transaction signatures directly to a light client, the
-validator instead generates a Merkle Proof from the transaction of interest to
-the root of a Merkle Tree of all transactions in the including block. This
-Merkle Root is stored in a ledger entry which is voted on by validators,
-providing it consensus legitimacy. The additional level of security for a light
-client depends on an initial canonical set of validators the light client
-considers to be the stakeholders of the cluster. As that set is changed, the
-client can update its internal set of known validators with
-[receipts](simple-payment-and-state-verification.md#receipts). This may become
-challenging with a large number of delegated stakes.
+Вместо того, чтобы предоставлять подписи транзакций непосредственно легкому клиенту, валидатор вместо этого генерирует доказательство Меркла от интересующей транзакции до корня Дерева Меркла всех транзакций во включающем блоке. Этот корень Меркла хранится в записи реестра, за которую голосуют валидаторы, что обеспечивает ее законность на основе консенсуса. Дополнительный уровень безопасности для легкого клиента зависит от начального канонического набора валидаторов, который легкий клиент считает заинтересованными сторонами кластера. При изменении этого набора клиент может обновить свой внутренний набор известных валидаторов с помощью [ чеков ](simple-payment-and-state-verification.md#receipts). Это может стать проблемой при большом количестве делегированных ставок.
 
-Validators themselves may want to use light client APIs for performance reasons.
-For example, during the initial launch of a validator, the validator may use a
-cluster provided checkpoint of the state and verify it with a receipt.
+Сами валидаторы могут захотеть использовать легкие клиентские API из соображений производительности. Например, во время первоначального запуска валидатора, валидатор может использовать предоставленную кластером контрольную точку состояния и проверять ее с помощью чеков.
 
-## Receipts
+## Чеки
 
-A receipt is a minimal proof that; a transaction has been included in a block,
-that the block has been voted on by the client's preferred set of validators
-and that the votes have reached the desired confirmation depth.
+Чек- минимальное доказательство того, что транзакция была включена в блок, за блок проголосовал предпочтительный набор валидаторов клиента и что голоса достигли желаемой глубины подтверждения.
 
-### Transaction Inclusion Proof
+### Подтверждение включения транзакции
 
-A transaction inclusion proof is a data structure that contains a Merkle Path
-from a transaction, through an Entry-Merkle to a Block-Merkle, which is included
-in a Bank-Hash with the required set of validator votes. A chain of PoH Entries
-containing subsequent validator votes, deriving from the Bank-Hash, is the proof
-of confirmation.
+Доказательство включения транзакции - это структура данных, которая содержит путь Меркла от транзакции через Entry-Merkle к Block-Merkle, который включен в Bank-Hash с необходимым набором голосов валидатора. Цепочка записей PoH, содержащих последующие голоса валидаторов, происходящие от Bank-Hash, является доказательством подтверждения.
 
-#### Transaction Merkle
+#### Транзакция Меркла
 
-An Entry-Merkle is a Merkle Root including all transactions in a given entry,
-sorted by signature. Each transaction in an entry is already merkled here:
-https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
-This means we can show a transaction `T` was included in an entry `E`.
+Entry-Merkle - это корень Merkle, включающий все транзакции в данной записи, отсортированные по подписи. Каждая транзакция в записи уже размещена здесь: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205. Это означает, что мы можем показать, что транзакция ` T ` была включена в запись ` E `.
 
-A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
-block.
+Block-Merkle - это корень Меркла для всех секвенированных в блоке Entry-Merkle.
 
-![Block Merkle Diagram](/img/spv-block-merkle.svg)
+![Диаграмма Merkle блока](/img/spv-block-merkle.svg)
 
-Together the two merkle proofs show a transaction `T` was included in a block
-with bank hash `B`.
+Вместе два доказательства Меркла показывают, что транзакция ` T ` была включена в блок с банковским хешем ` B `.
 
-An Accounts-Hash is the hash of the concatentation of the state hashes of
-each account modified during the current slot.
+Accounts-Hash - это хэш конкатенации хэшей состояния каждом аккаунте, измененной в текущем слоте.
 
-Transaction status is necessary for the receipt because the state receipt is
-constructed for the block. Two transactions over the same state can appear in
-the block, and therefore, there is no way to infer from just the state whether
-a transaction that is committed to the ledger has succeeded or failed in
-modifying the intended state. It may not be necessary to encode the full status
-code, but a single status bit to indicate the transaction's success.
+Статус транзакции необходим для квитанции, потому что квитанция о состоянии создается для блока. Две транзакции в одном и том же состоянии могут появиться в блок, и, следовательно, нет никакого способа сделать вывод только по состоянию на основе того, была ли транзакция, зафиксированная в реестре, успешной или неудачной при изменении предполагаемого состояния. Может потребоваться кодирование не полного кода состояния, а только одного бита состояния, чтобы указать на успешность транзакции.
 
-Currently, the Block-Merkle is not implemented, so to verify `E` was an entry
-in the block with bank hash `B`, we would need to provide all the entry hashes
-in the block. Ideally this Block-Merkle would be implmented, as the alternative
-is very inefficient.
+В настоящее время Block-Merkle не реализован, поэтому для проверки того, что ` E ` был записью в блоке с банковским хешем ` B `, нам нужно будет предоставить все хэши записей в блокировать. В идеале этот Block-Merkleдолжен быть реализован, поскольку альтернатива очень неэффективна.
 
-#### Block Headers
+#### Заголовки Блоков
+Чтобы проверить доказательства включения транзакции, легкие клиенты должны иметь возможность делать выводы о топологии форков в сети
 
-In order to verify transaction inclusion proofs, light clients need to be able
-to infer the topology of the forks in the network
+В частности, легкому клиенту потребуется отслеживать заголовки входящих блоков, чтобы, учитывая два хэша банка для блоков ` A ` и ` B `, они могли определить, соответствует ли ` A ` является предком ` B ` (ниже в разделе ` Оптимистическое подтверждение подтверждения ` объясняется, почему!). Содержание заголовка - это поля, необходимые для вычисления банковского хэша.
 
-More specifically, the light client will need to track incoming block headers
-such that given two bank hashes for blocks `A` and `B`, they can determine
-whether `A` is an ancestor of `B` (Below section on
-`Optimistic Confirmation Proof` explains why!). Contents of header are the
-fields necessary to compute the bank hash.
+Bank-Hash - это хэш слияния Block-Merkle и Accounts-Hash описанный выше в разделе `Transaction Merkle`.
 
-A Bank-Hash is the hash of the concatenation of the Block-Merkle and
-Accounts-Hash described in the `Transaction Merkle` section above.
+![Диаграмма хеша банка](/img/spv-bank-hash.svg)
 
-![Bank Hash Diagram](/img/spv-bank-hash.svg)
-
-In the code:
+В коде:
 
 https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/runtime/src/bank.rs#L3468-L3473
 
@@ -126,37 +68,19 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
         ]);
 ```
 
-A good place to implement this logic along existing streaming logic in the
-validator's replay logic: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
+Хорошее место для реализации этой логики наряду с существующей логикой потоковой передачи в логике воспроизведения валидатора: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
 
-#### Optimistic Confirmation Proof
+#### Оптимистическое подтверждение
 
-Currently optimistic confirmation is detected via a listener that monitors
-gossip and the replay pipeline for votes:
-https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
+В настоящее время оптимистичное подтверждение обнаруживается через слушателя, который отслеживает gossip и replay pipeline голосов: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
 
-Each vote is a signed transaction that includes the bank hash of the block the
-validator voted for, i.e. the `B` from the `Transaction Merkle` section above.
-Once a certain threshold `T` of the network has voted on a block, the block is
-considered optimistially confirmed. The votes made by this group of `T`
-validators is needed to show the block with bank hash `B` was optimistically
-confirmed.
+Каждый голос представляет собой подписанную транзакцию, которая включает в себя банковский хэш блока, за который проголосовал валидатор, то есть ` B ` из раздела ` Transaction Merkle ` выше. После того, как определенный порог ` T ` сети проголосовал за блок, блок считается оптимально подтвержденным. Голоса, сделанные этой группой валидаторов ` T ` необходимы, чтобы показать, что блок с банковским хешем ` B ` был оптимистично подтвержден.
 
-However other than some metadata, the signed votes themselves are not
-currently stored anywhere, so they can't be retrieved on demand. These votes
-probably need to be persisted in Rocksdb database, indexed by a key
-`(Slot, Hash, Pubkey)` which represents the slot of the vote, bank hash of the
-vote, and vote account pubkey responsible for the vote.
+Однако, за исключением некоторых метаданных, подписанные голоса в настоящее время нигде не хранятся, поэтому их нельзя получить по запросу. Эти голоса, вероятно, необходимо сохранить в базе данных Rocksdb, проиндексировав ключом ` (Slot, Hash, Pubkey) `, который представляет слот для голосования, банковский хеш-код голоса и pubkey аккаунта для голосования, ответственный за голосование.
 
-Together, the transaction merkle and optimistic confirmation proofs can be
-provided over RPC to subscribers by extending the existing signature
-subscrption logic. Clients who subscribe to the "Confirmed" confirmation
-level are already notified when optimistic confirmation is detected, a flag
-can be provided to signal the two proofs above should also be returned.
+Вместе доказательства транзакции и оптимистичного подтверждения могут быть предоставлены подписчикам через RPC путем расширения существующей логики подписки на подпись. Клиенты, подписавшиеся на подтверждение «SingleGossip» уровня уже уведомлены, когда обнаружено оптимистичное подтверждение, может быть предоставлен флаг, сигнализирующий, что два вышеупомянутых доказательства также должны быть возвращены.
 
-It is important to note that optimistcally confirming `B` also implies that all
-ancestor blocks of `B` are also optimistically confirmed, and also that not
-all blocks will be optimistically confirmed.
+Важно отметить, что оптимистическое подтверждение ` B ` также подразумевает, что все блоки-предки ` B ` также оптимистично подтверждены, а также что не все блоки будут подтверждены оптимистично.
 
 ```
 
@@ -164,95 +88,64 @@ B -> B'
 
 ```
 
-So in the example above if a block `B'` is optimisically confirmed, then so is
-`B`. Thus if a transaction was in block `B`, the transaction merkle in the
-proof will be for block `B`, but the votes presented in the proof will be for
-block `B'`. This is why the headers in the `Block headers` section above are
-important, the client will need to verify that `B` is indeed an ancestor of
-`B'`.
+Таким образом, в приведенном выше примере, если блок ` B '` оптимизирован, то также и ` B `. Таким образом, если транзакция была в блоке ` B `, транзакция в доказательстве будет для блока ` B `, но голоса, представленные в доказательстве, будут для блока ` B '`. Вот почему важны заголовки в разделе ` Заголовки блоков ` выше, клиенту необходимо будет убедиться, что ` B ` действительно является предком ` B '`.
 
-#### Proof of Stake Distribution
+#### Подтверждение распределения стейка
 
-Once presented with the transaction merkle and optimistic confirmation proofs
-above, a client can verify a transaction `T` was optimistially confirmed in a
-block with bank hash `B`. The last missing piece is how to verify that the
-votes in the optimistic proofs above actually constitute the valid `T`
-percentage of the stake necessay to uphold the safety guarantees of
-"optimistic confirmation".
+После представления транзакции и оптимистичных подтверждений подтверждения выше, клиент может проверить, что транзакция ` T ` была оптимистично подтверждена в блоке с банковским хешем ` B `. Последний недостающий элемент - это как проверить, что голоса в приведенных выше оптимистических доказательствах фактически составляют действительный ` T ` процент ставки, необходимый для обеспечения гарантий безопасности «оптимистического подтверждения».
 
-One way to approach this might be for every epoch, when the stake set changes,
-to write all the stakes to a system account, and then have validators subscribe
-to that system account. Full nodes can then provide a merkle proving that the
-system account state was updated in some block `B`, and then show that the
-block `B` was optimistically confirmed/rooted.
+Один из способов приблизиться к этому может заключаться в том, чтобы для каждой эпохи, когда набор ставок изменяется, записывать все ставки в системный аккаунт, а затем иметь валидаторы, подписывающиеся на эту системный аккаунт. Затем полные узлы могут предоставить Меркл, доказывающий, что состояние системного аккаунта было обновлено в каком-то блоке ` B `, а затем показать, что блок ` B ` был оптимистично подтвержден / внедрен.
 
-### Account State Verification
+### Верификация состояния аккаунта
 
-An account's state (balance or other data) can be verified by submitting a
-transaction with a **_TBD_** Instruction to the cluster. The client can then
-use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify
-whether the cluster agrees that the acount has reached the expected state.
+Состояние аккаунта (баланс или другие данные) можно проверить, отправив транзакцию с помощью **_TBD_** инструкции для кластера. Затем клиент может использовать [ подтверждение включения транзакции ](#transaction-inclusion-proof), чтобы проверить, согласен ли кластер с тем, что счет достиг ожидаемого состояния.
 
-### Validator Votes
+### Голоса валидаторов
 
-Leaders should coalesce the validator votes by stake weight into a single entry.
-This will reduce the number of entries necessary to create a receipt.
+Лидеры должны объединить голоса валидаторов по весу ставок в одну запись. Это уменьшит количество записей, необходимых для создания чека.
 
-### Chain of Entries
+### Цепочка записей
 
-A receipt has a PoH link from the payment or state Merkle Path root to a list
-of consecutive validation votes.
+Чек имеет ссылку PoH от корня платежа или состояния Merkle Path до списка последовательных проверочных голосов.
 
-It contains the following:
+В нем содержится следующее:
 
-- Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Hash
+- Транзакция -&gt; Вход-Меркле -&gt; Блок-Меркле -&gt; Банк-хэш
 
-And a vector of PoH entries:
+И вектор PoH записей:
 
-- Validator vote entries
-- Ticks
-- Light entries
+- Записи о голосовании валидатора
+- Тики
+- Лёгкие записи
 
 ```text
-/// This Entry definition skips over the transactions and only contains the
-/// hash of the transactions used to modify PoH.
+/// Это определение записи пропускает транзакции и содержит только
+/// хеш транзакций, используемых для изменения PoH.
 LightEntry {
-    /// The number of hashes since the previous Entry ID.
+    /// Количество хэшей с предыдущего идентификатора.
     pub num_hashes: u64,
-    /// The SHA-256 hash `num_hashes` after the previous Entry ID.
+    /// SHA-256 хэш `num_hashes` после предыдущего идентификатора записи.
     hash: Hash,
-    /// The Merkle Root of the transactions encoded into the Entry.
+     /// Корень Меркла транзакций, закодированных во Входе.
     entry_hash: Hash,
 }
 ```
 
-The light entries are reconstructed from Entries and simply show the entry
-Merkle Root that was mixed in to the PoH hash, instead of the full transaction
-set.
+Легкие записи реконструируются из записей и просто показывают запись Merkle Root, которая была подмешана к хешу PoH, вместо полного набора транзакций.
 
-Clients do not need the starting vote state. The
-[fork selection](../implemented-proposals/tower-bft.md) algorithm is defined
-such that only votes that appear after the transaction provide finality for the
-transaction, and finality is independent of the starting state.
+Клиентам не нужно состояние начала голосования. Алгоритм [ выбора форка ](../implemented-proposals/tower-bft.md) определен таким образом, что только голоса, которые появляются после транзакции, обеспечивают окончательность транзакции, и окончательность не зависит от начальное состояние.
 
-### Verification
+### Верификация
 
-A light client that is aware of the supermajority set validators can verify a
-receipt by following the Merkle Path to the PoH chain. The Block-Merkle is the
-Merkle Root and will appear in votes included in an Entry. The light client can
-simulate [fork selection](../implemented-proposals/tower-bft.md) for the
-consecutive votes and verify that the receipt is confirmed at the desired
-lockout threshold.
+Легкий клиент, который знает о валидаторах набора супербольшинства, может проверить получение, следуя Merkle Path к цепочке PoH. Блок-Меркл является Корнем Меркла и будет отображаться в голосах, включенных в Заявку. Легкий клиент может имитировать [ выбор форка ](../implemented-proposals/tower-bft.md) для последовательных голосований и убедитесь, что получение подтверждено на желаемом пороге блокировки.
 
-### Synthetic State
+### Синтетическое состояние
 
-Synthetic state should be computed into the Bank-Hash along with the bank
-generated state.
+Синтетическое состояние должно быть вычислено в Банк-хэш вместе с состоянием, сгенерированным банком.
 
-For example:
+Пример:
 
-- Epoch validator accounts and their stakes and weights.
-- Computed fee rates
+- Аккаунти валидатора эпохи, их ставки и веса.
+- Вычисляемые комиссии
 
-These values should have an entry in the Bank-Hash. They should live under known
-accounts, and therefore have an index into the hash concatenation.
+Эти значения должны иметь запись в Банк-Хаш. Они должны жить под известными аккаунтами и, следовательно, иметь индекс в хеш-конкатенации.

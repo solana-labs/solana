@@ -1,45 +1,44 @@
 ---
-title: Create a validator public key
+title: Создание публичного ключа валидатора
 ---
 
-In order to participate you need to first register. See [Registration info](../registration/how-to-register.md).
+Для участия вам необходимо сначала зарегистрироваться. Смотрите [информацию по регистрации](../registration/how-to-register.md).
 
-In order to obtain your allotment of SOL you need to publish your
-validator's identity public key under your keybase.io account.
+Для получения выделенной доли SOL вам необходимо опубликовать публичный ключ валидатора в вашем аккаунте keybase.io.
 
-## **Generate Keypair**
+## **Генерация ключей**
 
-1. If you haven't already, generate your validator's identity keypair by running:
+1. Если вы еще не создали, сгенерируйте идентификационный ключ вашего валидатора, запустив:
 
    ```bash
      solana-keygen new -o ~/validator-keypair.json
    ```
 
-2. The identity public key can now be viewed by running:
+2. Публичный идентификационный ключ можно просмотреть командой:
 
    ```bash
      solana-keygen pubkey ~/validator-keypair.json
    ```
 
-> Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
+> Примечание: Файл "validator-keypair.json" также является вашим приватным ключом \(ed25519\).
 
-Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
+Ваш идентификационный ключ валидатора уникально идентифицирует ваш валидатор в сети. **Крайне важно сделать резервную копию этой информации.**
 
-If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
+Идентификационный ключ валидатора невозможно восстановить, если вы потеряете доступ к нему и не сохраните эту информацию. Если это произойдет, вы ПОТЕРЯЕТЕ ТАКЖЕ ДОСТУП К СВОИМ СРЕДСТВАМ SOL.
 
-To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
+Для резервного копирования идентификационного ключа **сделайте резервную копию файла "validator-keypair.json" в безопасное место.**
 
-## Link your Solana pubkey to a Keybase account
+## Привяжите ваш публичный ключ Solana к аккаунту Keybase
 
-You must link your Solana pubkey to a Keybase.io account. The following instructions describe how to do that by installing Keybase on your server.
+Вы должны привязать ваш публичный ключ Solana к аккаунту Keybase.io. Следующие инструкции описывают как это сделать, установив Keybase на ваш сервер.
 
-1. Install [Keybase](https://keybase.io/download) on your machine.
-2. Log in to your Keybase account on your server. Create a Keybase account first if you don’t already have one. Here’s a [list of basic Keybase CLI commands](https://keybase.io/docs/command_line/basics).
-3. Create a Solana directory in your public file folder: `mkdir /keybase/public/<KEYBASE_USERNAME>/solana`
-4. Publish your validator's identity public key by creating an empty file in your Keybase public file folder in the following format: `/keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`. For example:
+1. Установите [Keybase](https://keybase.io/download).
+2. Войдите в свой аккаунт Keybase на вашем сервере. Создайте учётную запись Keybase, если у вас ее еще нет. Вот [список основных команд Keybase CLI](https://keybase.io/docs/command_line/basics).
+3. Создайте каталог Solana в вашей публичной папке файлов: `mkdir /keybase/public/<KEYBASE_USERNAME>/solana`
+4. Опубликуйте публичный идентификационный ключ валидатора, создав пустой файл в публичной папке файлов Keybase в следующем формате: `/keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`. Например:
 
    ```bash
      touch /keybase/public/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>
    ```
 
-5. To check your public key was published, ensure you can successfully browse to `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`
+5. Для проверки, что ваш публичный ключ был опубликован, убедитесь, что вы можете успешно перейти на `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`

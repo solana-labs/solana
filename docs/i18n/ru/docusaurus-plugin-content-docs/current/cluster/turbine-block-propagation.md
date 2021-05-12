@@ -1,101 +1,88 @@
 ---
-title: Turbine Block Propagation
+title: Распространение Turbine Block
 ---
 
-A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for sharing any data it receives with the other nodes in its neighborhood, as well as propagating the data on to a small set of nodes in other neighborhoods. This way each node only has to communicate with a small number of nodes.
+Кластер Solana использует многослойный механизм распространения блоков под названием _Turbine_ для трансляции транзакции на все узлы с минимальным количеством дублирующих сообщений. Кластер делится на небольшие коллекции узлов, называемых _районами_. Каждый узел отвечает за обмен любыми данными, которые он получает с другими узлами своего района, а также распространение данных на небольшой набор узлов в других районах. Таким образом, каждый узел должен общаться только с небольшим количеством узлов.
 
-During its slot, the leader node distributes shreds between the validator nodes in the first neighborhood \(layer 0\). Each validator shares its data within its neighborhood, but also retransmits the shreds to one node in some neighborhoods in the next layer \(layer 1\). The layer-1 nodes each share their data with their neighborhood peers, and retransmit to nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
+Во время слота лидер распределяет между узлами валидатора в первом соседстве \(слой 0\). Каждый валидатор делится данными в пределах своего района, но также передает на один узел в некоторых районах на следующем уровне \(слой 1\). Узлы первого уровня делятся своими данными с соседними соседями, до тех пор, пока все узлы в кластере не получат все штрихи.
 
-## Neighborhood Assignment - Weighted Selection
+## Назначение соседей - взвешенное выделение
 
-In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
+Для того чтобы фанат данных работал, весь кластер должен согласиться с тем, как кластер делится на районы. Для достижения этой цели все признанные узлы валидатора \(узлы TVU\) сортируются по ставке и хранятся в списке. Затем этот список проиндексируется различными способами для определения границ районов проживания и повторной передачи соседей. Например, лидер просто выберет первые узлы, которые составляют слой 0. Это будет автоматически самым высоким держателем ставки, позволяя наиболее сильным голосам сначала вернуться к лидеру. Узлы слоя 0 и нижнего слоя используют ту же логику, чтобы найти своих соседей и соседей следующего слоя.
 
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
+Для уменьшения возможности векторов атаки, каждый из них передается по дереву случайных районов. Каждый узел использует один и тот же набор узлов, представляющих кластер. Случайное дерево формируется из набора для каждого шреда с использованием семенного материала, получаемого из признаков лидера, ячейки и сеянного индекса.
 
-## Layer and Neighborhood Structure
+## Слой и структура соседних районов
 
-The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
+Нынешний лидер делает свои первоначальные трансляции не более `узлов DATA_PLANE_FANOUT`. Если этот уровень 0 меньше, чем количество узлов в кластере, то плоскость хранения данных добавляет ниже слоёв. Последующие слои следуют этим ограничениям для определения способности слоя: Каждый район содержит `DATA_PLANE_FANOUT` узлов. Слой 0 начинается с одного соседства с узлами фанаута. Количество узлов в каждом дополнительном слое увеличивается в фактор фанаута.
 
-As mentioned above, each node in a layer only has to broadcast its shreds to its neighbors and to exactly 1 node in some next-layer neighborhoods, instead of to every TVU peer in the cluster. A good way to think about this is, layer 0 starts with 1 neighborhood with fanout nodes, layer 1 adds fanout neighborhoods, each with fanout nodes and layer 2 will have `fanout * number of nodes in layer 1` and so on.
+Как упоминалось выше, каждый узел слоя должен только транслировать свои фрагменты своим соседям и ровно один узел в некоторых соседних районах, вместо каждого пира TVU в кластере. Хороший способ подумать об этом, слой 0 начинается с 1 соседства с узлами фанаута, слой 1 добавляет фанаутские районы, у каждого фанатов и второго слоя `фанаут * количество узлов в слое 1` и так далее.
 
-This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes.
+Таким образом, каждый узел должен общаться только с максимум `2 * DATA_PLANE_FANOUT - 1` узлов.
 
-The following diagram shows how the Leader sends shreds with a fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
+На диаграмме показано, как руководитель посылает данные с фанаутом 2 в соседство 0 в слое 0 и как узлы в соседстве 0 делятся своими данными друг с другом.
 
-![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
+![Лидер отправляет на соседний уровень 0 в слое 0](/img/data-plane-seeding.svg)
 
-The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
+На диаграмме показано, как 0 фанатов соседства 1 и 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
+![Соседние 0 Фанаут соседству 1 и 2](/img/data-plane-fanout.svg)
 
-Finally, the following diagram shows a two layer cluster with a fanout of 2.
+Наконец, на следующей диаграмме показан кластер двух слоёв с фанаутом 2.
 
-![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
+![Два слоя с Фанаутом 2](/img/data-plane.svg)
 
-### Configuration Values
+### Настройка конфигурации
 
-`DATA_PLANE_FANOUT` - Determines the size of layer 0. Subsequent layers grow by a factor of `DATA_PLANE_FANOUT`. The number of nodes in a neighborhood is equal to the fanout value. Neighborhoods will fill to capacity before new ones are added, i.e if a neighborhood isn't full, it _must_ be the last one.
+`DATA_PLANE_FANOUT` - определяет размер слоя 0. Последующие слои растут в `DATA_PLANE_FANOUT`. Количество узлов в соседстве равно величине фанаута. Соседние границы будут заполнены до того, как будут добавлены новые, то есть если район не заполнен, то он _должен быть последним_.
 
-Currently, configuration is set when the cluster is launched. In the future, these parameters may be hosted on-chain, allowing modification on the fly as the cluster sizes change.
+В настоящее время конфигурация устанавливается при запуске кластера. В будущем эти параметры могут быть размещены в цепи, что позволяет модифицировать на лету по мере изменения размеров кластер.
 
-## Calculating the required FEC rate
+## Расчет требуемого курса FEC
 
-Turbine relies on retransmission of packets between validators. Due to
-retransmission, any network wide packet loss is compounded, and the
-probability of the packet failing to reach its destination increases
-on each hop. The FEC rate needs to take into account the network wide
-packet loss, and the propagation depth.
+Turbine использует повторную передачу пакетов между валидаторами. Из-за повторной передачи объединена любая потеря общесетевых пакетов, и вероятность того, что пакет с не сможет достичь назначения, увеличивается на в каждом прыжке. Курс FEC должен учитывать потерю пакетов в сети и глубину распространения.
 
-A shred group is the set of data and coding packets that can be used
-to reconstruct each other. Each shred group has a chance of failure,
-based on the likelyhood of the number of packets failing that exceeds
-the FEC rate. If a validator fails to reconstruct the shred group,
-then the block cannot be reconstructed, and the validator has to rely
-on repair to fixup the blocks.
+Засеянная группа — это набор данных и пакетов кодирования, которые могут быть использованы для реконструирования друг друга. Каждая группа имеет шанс на провал, основываясь на вероятности отказа от пакетов, превышающих скорость FEC. Если валидатор не может реконструировать пролитую группу, тогда блок не может быть перестроен, и валидатор должен полагаться на ремонт для ремонта блоков.
 
-The probability of the shred group failing can be computed using the
-binomial distribution. If the FEC rate is `16:4`, then the group size
-is 20, and at least 4 of the shreds must fail for the group to fail.
-Which is equal to the sum of the probability of 4 or more trails failing
-out of 20.
+Вероятность неудачи прошитой группы может быть рассчитана с помощью распределения биномиальности. Если курс FEC `16:4`, то размер группы равен 20, и по крайней мере 4 шридов должны потерпеть неудачу для группы. Которая равна сумме вероятности провалившихся из 20.
 
-Probability of a block succeeding in turbine:
+Вероятность блока привела к успеху турбины:
 
-- Probability of packet failure: `P = 1 - (1 - network_packet_loss_rate)^2`
-- FEC rate: `K:M`
-- Number of trials: `N = K + M`
-- Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P, trials = N, failures = i)`
-- Shreds per block: `G`
-- Block success rate: `B = (1 - S) ^ (G / N)`
-- Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
+- Вероятность сбоя пакета: `P = 1 - (1 - network_packet_loss_rate)^2`
+- FEC курс: `К:М`
+- Количество испытаний: `N = K + M`
+- Шанс сбоя в группе: `S = SUM из i=0 -> M для биномиального (prob_failure = P, trials = N, failures = i)`
+- Шредов на блок: `G`
+- Успешная скорость блока: `B = (1 - S) ^ (G / N)`
+- Распределение биномов ровно для `i` результатов с вероятностью P в N испытаниях определяется как `(N select i) * P^i * (1 - P)^(N-i)`
 
-For example:
+Например:
 
-- Network packet loss rate is 15%.
-- 50k tps network generates 6400 shreds per second.
-- FEC rate increases the total shreds per block by the FEC ratio.
+- Скорость потери сетевых пакетов составляет 15%.
+- Сеть в 50k т/с генерирует 6400 излучателей в секунду.
+- Курс FEC увеличивает общее количество штрихов за блок на коэффициент FEC.
 
-With a FEC rate: `16:4`
+FEC курс: `16:4`
 
 - `G = 8000`
-- `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
-- `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775, trials = 20, failures = i) = 0.689414`
-- `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
+- `P = 1 - 0,85 ± 0,85 = 1 - 0,7225 = 0,2775`
+- `S = СУМ из i=0 -> 4 для двоичного (prob_failure = 0.2775, trials = 20, failures = i) = 0.689414`
+- `B = (1 - 0,689) ^ (8000 / 20) = 10^-203`
 
-With FEC rate of `16:16`
-
-- `G = 12800`
-- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.002132`
-- `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
-
-With FEC rate of `32:32`
+FEC курс: `16:16`
 
 - `G = 12800`
-- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
-- `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
+- `S = СУМ из i=0 -> 32 для двоичного (prob_failure = 0.2775, trials = 64, failures = i) = 0.002132`
+- `B = (1 - 0,002132) ^ (12800 / 32) = 0,42583`
 
-## Neighborhoods
+FEC курс: `32:32`
 
-The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
+- `G = 12800`
+- `S = СУМ из i=0 -> 32 для двоичного (prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
+- `B = (1 - 0,000048) ^ (12800 / 64) = 0,99045`
 
-![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)
+## Соседи
+
+На следующей диаграмме показано, как взаимодействуют два квартала в разных слоях. Чтобы записать район, достаточно узлов \(кодов стирания +1\) из вышеуказанного района необходимо прервать. Поскольку каждый район получает излишек с нескольких узлов в соседстве в верхнем слое, Нам понадобится большая сетевая ошибка в верхних слоях, чтобы в итоге получить неполные данные.
+
+![Внутренние работы по соседству](/img/data-plane-neighborhood.svg)

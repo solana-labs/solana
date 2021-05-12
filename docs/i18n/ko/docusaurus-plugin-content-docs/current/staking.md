@@ -2,129 +2,73 @@
 title: Staking on Solana
 ---
 
-_Note before reading: All references to increases in values are in absolute
-terms with regards to balance of SOL.
-This document makes no suggestion as to the monetary value of SOL at any time._
+*읽기 전 참고 사항 : 값의 증가에 대한 모든 언급은 SOL의 균형과 관련하여 절대적인 용어입니다. 이 문서는 SOL의 금전적 가치에 대해 어떠한 제안도하지 않습니다.*
 
-Staking your SOL tokens on Solana is the best way you can help secure the world's
-highest-performing blockchain network, and
-[earn rewards](implemented-proposals/staking-rewards.md) for doing so!
+Solana에 SOL 토큰을 스테이 킹하는 것은 전 세계를 보호 할 수있는 가장 좋은 방법입니다. 최고 성능의 블록 체인 네트워크 그렇게하면 [ 리워드를 받으세요 ](implemented-proposals/staking-rewards.md)! 인플레이션 및 네트워크 보상은 현재 Solana에서 활성화되지 * 아닙니다 </ em>. 메인 넷 베타 네트워크이지만 향후 활성화 될 수 있습니다.</p>
 
-Solana is a Proof-of-Stake (PoS) network with delegations, which means that
-anyone who holds SOL tokens can choose to delegate some of their SOL to one or
-more validators, who process transactions and run the network.
+Solana는 위임이있는 PoS (Proof-of-Stake) 네트워크입니다. 즉, SOL 토큰을 보유한 사람은 누구나 자신의 SOL 중 일부를 트랜잭션을 처리하고 네트워크를 운영하는 하나 이상의 밸리데이터에게 위임 할 수 있습니다.
 
-Delegating stake is a shared-risk shared-reward financial model that may provide
-returns to holders of tokens delegated for a long period.
-This is achieved by aligning the financial incentives of the token-holders
-(delegators) and the validators to whom they delegate.
+위임 지분은 장기간 위임 된 토큰 보유자에게 수익을 제공 할 수있는 공유 위험 공유 보상 재무 모델입니다. 이는 토큰 보유자 (위임자)와 이들이 위임하는 밸리데이터의 재정적 인센티브를 조정함으로써 달성됩니다.
 
-The more stake a validator has delegated to them, the more often this validator
-is chosen to write new transactions to the ledger. The more transactions
-the validator writes, the more rewards they and their delegators earn.
-Validators who configure their systems to be able to process more transactions
-at a time not only earn proportionally more rewards for doing so, they also
-keep the network running as fast and as smoothly as possible.
+밸리데이터이 그들에게 위임 한 지분이 많을수록이 밸리데이터은 원장에 새로운 거래를 작성하기 위해 더 자주 선택됩니다.  밸리데이터이 더 많은 트랜잭션을 작성할수록 더 많은 보상을 받게됩니다. 한 번에 더 많은 트랜잭션을 처리 할 수 ​​있도록 시스템을 구성하는 밸리데이터은 이에 대해 비례 적으로 더 많은 보상을받을뿐만 아니라 가능한 한 빠르고 원활하게 네트워크를 계속 실행합니다.
 
-Validators incur costs by running and maintaining their systems, and this is
-passed on to delegators in the form of a fee collected as a percentage of
-rewards earned. This fee is known as a _commission_. As validators earn more
-rewards the more stake is delegated to them, they may compete with one another
-to offer the lowest commission for their services, in order to attract more
-delegated stake.
+밸리데이터은 시스템을 실행하고 유지 관리함으로써 비용이 발생하며, 이는 획득 한 보상의 비율로 수집 된 수수료 형태로 위임자에게 전달됩니다.  이 수수료를 * 커미션 </ em>이라고합니다. 밸리데이터이 더 많은 보상을받을수록 더 많은 지분이 위임 될수록 더 많은 위임 지분을 유치하기 위해 서로 경쟁하여 서비스에 대해 가장 낮은 수수료를 제공 할 수 있습니다.</p>
 
-There is a risk of loss of tokens when staking, through a process known as
-_slashing_. Slashing involves the removal and destruction of a portion of a
-validator's delegated stake in response to intentional malicious behavior,
-such as creating invalid transactions or censoring certain types of transactions
-or network participants.
+스테이 킹시 다음과 같은 프로세스를 통해 토큰 손실 위험이 있습니다. * 슬래시 </ em>.  슬래 싱은 현재 Solana의 메인 넷 베타에서 활성화되지 * 아닙니다 </ em>. 네트워크이지만 나중에 활성화 될 수 있습니다.  슬래싱은 유효하지 않은 거래 생성 또는 특정 유형의 거래 또는 네트워크 참여자를 검열하는 것과 같은 고의적 인 악의적 행위에 대응하여 밸리데이터의 위임 지분 일부를 자동으로 제거 및 파괴하는 것을 포함합니다. 밸리데이터이 슬래시되면 해당 밸리데이터에게 지분을 위임 한 모든 토큰 보유자는 위임의 일부를 잃게됩니다.  이는 토큰 보유자에게 즉각적인 손실을 의미하지만, 전체 위임 감소로 인한 밸리데이터의 향후 보상 손실이기도합니다.</p>
 
-If a validator is slashed, all token holders who have delegated stake to that
-validator will lose a portion of their delegation. While this means an immediate
-loss for the token holder, it also is a loss of future rewards for the validator
-due to their reduced total delegation. More details on the slashing roadmap can
-be found
-[here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
+밸리데이터과 토큰 보유자의 재정적 인센티브를 조정하는 것이 네트워크 보상 및 슬래싱의 목표이며, 이는 네트워크를 안전하고 견고하며 최상의 성능으로 유지하는 데 도움이됩니다.
 
-It is the goal of the network rewards and slashing to align both validators'
-and token holders' financial incentives, which in turn help keeps the network
-secure, robust and performing at its best.
+*참고 : 스테이커와 밸리데이터을위한 네트워크 보상은 현재.*
 
-## How do I stake my SOL tokens?
+**메인 넷 베타에서 활성화되어 있지 않습니다* 참고 :메인 넷 베타에서는 슬래싱이 활성화되어 있지 않습니다.**
 
-In order to stake tokens on Solana, you first will need to transfer some SOL
-into a wallet that supports staking, then follow the steps or instructions
-provided by the wallet to create a stake account and delegate your stake.
-Different wallets will vary slightly in their process for this but the general
-description is below.
 
-#### Supported Wallets
+## SOL 토큰을 어떻게합니까?
+Solana에 토큰을 스테이킹하려면 먼저 일부 SOL을 스테이킹을 지원하는 지갑으로 전송 한 다음 지갑에서 제공하는 단계 또는 지침에 따라 스테이킹 계정을 만들고 지분을 위임해야합니다. 지갑마다 프로세스가 약간 씩 다르지만 일반적인 설명은 다음과 같습니다.
 
-Staking operations are supported by the following wallet solutions:
+#### 지원되는 지갑
+작업은 다음 지갑 솔루션에 의해 지원됩니다.
 
-- SolFlare.com in conjunction with a keystore file or a Ledger Nano.
-  Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
+ - 스테이킹-SolFlare.com과 키 스토어 파일 또는 Ledger Nano. 자세한 내용은
+ SolFlare 사용 가이드 </ 0>를 확인하세요.</p></li> 
+   
+    - -Solana 명령 줄 도구는 CLI 생성 키 쌍 파일 지갑, 종이 지갑 또는 연결된 Ledger Nano와 함께 모든 지분 작업을 수행 할 수 있습니다. \[Solana 명령 줄 도구를 사용한 스테이킹 명령\] (cli / delegate-stake.md).</ul> 
 
-- Solana command line tools can perform all stake operations in conjunction
-  with a CLI-generated keypair file wallet, a paper wallet, or with a connected
-  Ledger Nano.
-  [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
-- [Exodus](https://www.exodus.com/) wallet. They make the process very simple,
-  but you cannot choose a validator: they assign you to their partner validator.
-  See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq)
-  for details.
 
-- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges.
-  Note that you cannot choose a validator with these services: they assign you
-  to their partner validator.
+#### 스테이킹 계정 생성
 
-#### Create a Stake Account
+스테이킹 계정은 단순히 SOL 토큰을 다른 주소로 보내고받는 데 사용되는 지갑 주소와 다른 유형의 계정입니다. 자신이 관리하는 지갑 주소로 SOL을받은 경우 이러한 토큰 중 일부를 사용하여 새 지분 계정을 만들고 자금을 조달 할 수 있습니다. 스테이킹 계정을 만드는 단계를 사용하는 지갑에 따라 약간 다를 수 있습니다.  모든 지갑이 스테이킹 계정을 지원하는 것은 아닙니다. \[지원되는 지갑\] (# supported-wallets)을 참조하세요.
 
-A stake account is a different type of account from a wallet address
-that is used to simply send and receive SOL tokens to other addresses. If you
-have received SOL in a wallet address you control, you can use some of
-these tokens to create and fund a new stake account, which will have a different
-address than the wallet you used to create it.
-Depending on which wallet you are using the steps to create a stake account
-may vary slightly. Not all wallets support stake accounts, see
-[Supported Wallets](#supported-wallets).
 
-#### Select a Validator
 
-After a stake account is created, you will likely want to delegate the SOL
-to a validator node. Below are a few places where you can get information about
-the validators who are currently participating in running the network.
-The Solana Labs team and the Solana Foundation do not recommend any particular
-validator.
+#### 밸리데이터 선택
 
-The Mainnet Beta validators introduce themselves and their services on this
-Solana Forum thread:
+스테이킹 계정이 생성 된 후 SOL을 밸리데이터 노드에 위임 할 수 있습니다.  다음은 현재 네트워크 운영에 참여하고있는 밸리데이터에 대한 정보를 얻을 수있는 몇 가지 장소입니다. Solana Labs 팀과 Solana Foundation은 특정 밸리데이터을 추천하지 않습니다.
 
-- https://forums.solana.com/t/validator-information-thread
+메인 넷 베타 밸리데이터은이 Solana 포럼 스레드에서 자신과 서비스를 소개합니다.: -https
 
-The site solanabeach.io is built and maintained by one of our validators,
-Staking Facilities. It provides a some high-level graphical information about
-the network as a whole, as well as a list of each validator and some recent
-performance statistics about each one.
+ - https://forums.solana.com/t/validator-information-thread
 
-- https://solanabeach.io
+//forums.solana.com/t/validator-information-thread 사이트 solanabeach.io는 밸리데이터 중 하나 인 Staking Facility에 의해 구축 및 유지 관리됩니다. .  전체 네트워크에 대한 몇 가지 고급 그래픽 정보와 각 유효성 검사기 목록 및 각 유효성 검사기에 대한 최근 성능 통계를 제공합니다.
 
-To view block production statistics, use the Solana command-line tools:
+ - https://solanabeach.io
 
-- `solana validators`
-- `solana block-production`
+https://solanabeach.io보기블록 생산 통계까지, 솔라 명령 줄 도구를 사용 : -`솔라 validators` -`솔라 블록
 
-The Solana team does not make recommendations on how to interpret this
-information. Potential delegators should do their own due diligence.
+ - `solana validators`
+ - `solana block-production`
 
-#### Delegate your Stake
+production`이정보를 해석하는 방법에 대한 권장하지 않습니다 솔라 팀.  잠재적 인 위임자는 자체 실사를 수행해야합니다.
 
-Once you have decided to which validator or validators you will delegate, use
-a supported wallet to delegate your stake account to the validator's vote
-account address.
 
-## Stake Account Details
 
-For more information about the operations and permissions associated with a
-stake account, please see [Stake Accounts](staking/stake-accounts.md)
+#### 스테이킹 위임 위임 할
+
+과 관련된 운영 및 권한에 대한 자세한 내용은 \[스테이킹 계정\] (staking / stake-accounts.md)을 참조하십시오.
+
+
+
+## 스테이킹 계정 세부 정보 스테이킹 계정
+
+For more information about the operations and permissions associated with a stake account, please see [Stake Accounts](staking/stake-accounts.md)

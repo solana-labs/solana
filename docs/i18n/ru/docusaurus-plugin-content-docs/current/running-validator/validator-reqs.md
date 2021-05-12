@@ -1,86 +1,64 @@
 ---
-title: Validator Requirements
+title: Требования к валидатору
 ---
 
-## Minimum SOL requirements
+## Оборудование
 
-There is no strict minimum amount of SOL required to run a validator on Solana.
+- Рекомендации CPU
+  - Мы рекомендуем процессор с наибольшим количеством ядер. AMD Threadripper или Intel Server \(Xeon\) процессоры будут хорошим выбором.
+  - Мы рекомендуем AMD Threadripper так как вы получаете большее количество ядер для параллелизации по сравнению с Intel.
+  - Threadripper также имеет преимущество по затратам на ядро и большее количество линий PCIe по сравнению с аналогичной частью Intel. PoH \(Доказательство Истории\) основан на sha256 и Threadripper также поддерживает аппаратные инструкции sha256.
+- Размер и тип SSD (SATA vs NVMe/M.2\)
+  - Minimum - Samsung 860 Evo 2TB
+  - Mid-range - Samsung 860 Evo 4TB
+  - High-end - Samsung 860 Evo 4TB
+- GPU
+  - Хотя узел только CPU может быть в состоянии поддерживать работоспособность валидатора, вполне вероятно после увеличения пропускной способности транзакции, потребуется также и GPU
+  - Какие GPU?
+    - Мы рекомендуем GPU модели Nvidia Turing и volta, семейства GPUs от 1660ti до 2080ti серий потребительских GPU или серии Tesla серверных GPU.
+    - В настоящее время мы не поддерживаем OpenCL и поэтому не поддерживаем AMD GPU. У нас есть награда для то, кто сделает портирование на OpenCL. Интересно? [Проверьте наш GitHub.](https://github.com/solana-labs/solana)
+- Блок питания
+  - Примерное потребление энергии для узла валидатора с AMD Threadripper 3950x и 2x 2080Ti GPU составляет 800-1000W.
 
-However in order to participate in consensus, a vote account is required which
-has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote
-transaction for each block the validator agrees with, which can cost up to
-1.1 SOL per day.
+### Предварительные настройки
 
-## Hardware Recommendations
+Ниже приведены рекомендации по спецификациям low, medium и high оборудования:
 
-- CPU
-  - 12 cores / 24 threads, or more
-  - 2.8GHz, or faster
-  - AVX2 instruction support (to use official release binaries, self-compile
-    otherwise)
-  - Support for AVX512f and/or SHA-NI instructions is helpful
-  - The AMD Threadripper Zen3 series is popular with the validator community
-- RAM
-  - 128GB, or more
-  - Motherboard with 256GB capacity suggested
-- Disk
-  - PCIe Gen3 x4 NVME SSD, or better
-  - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
-  - Ledger: 1TB or larger. High TBW suggested
-  - OS: (Optional) 500GB, or larger. SATA OK
-  - The OS may be installed on the ledger disk, though testing has shown better
-    performance with the ledger on its own disk
-  - Accounts and ledger _can_ be stored on the same disk, however due to high
-    IOPS, this is not recommended
-  - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
-- GPUs
-  - Not strictly necessary at this time
-  - Motherboard and power supply speced to add one or more high-end GPUs in the
-    future suggested
+|                       | Low end             | Medium end             | High end               | Примечание                                                                                                       |
+|:--------------------- |:------------------- |:---------------------- |:---------------------- |:---------------------------------------------------------------------------------------------------------------- |
+| CPU                   | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | Рекомендуется использовать материнскую плату с 10Gb и с максимально большим количеством линий PCIe и m.2 слотов. |
+| RAM                   | 32GB                | 64GB                   | 128GB                  |                                                                                                                  |
+| Ledger Drive          | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | Или эквивалентный SSD                                                                                            |
+| Accounts Drive\(s\) | None                | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                                                  |
+| GPU                   | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Поддерживается любое количество GPUs, поддерживаемых cuda на платформах Linux.                                   |
 
-## Virtual machines on Cloud Platforms
+## Виртуальные машины на Cloud-платформах
 
-While you can run a validator on a cloud computing platform, it may not
-be cost-efficient over the long term.
+Хотя вы можете запустить валидатор на облачной вычислительной платформе, он может не быть экономически эффективным в долгосрочной перспективе.
 
-However, it may be convenient to run non-voting api nodes on VM instances for
-your own internal usage. This use case includes exchanges and services built on
-Solana.
+Однако, может быть удобно запускать api-узлы без голосования в экземплярах ВМ для собственного внутреннего использования. Этот вариант использования включает биржи и сервисы, построенные на Solana.
 
-In fact, the mainnet-beta validators operated by the team are currently
-(Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with
-2048 GB SSD for operational convenience.
+На самом деле, официальные узлы API mainnet-beta в настоящее время (окт. 2020) запущены на GCE `n1-standard-32` (32 vCPUs, 120 GB) с 2048 GB SSD для удобства работы.
 
-For other cloud platforms, select instance types with similar specs.
+Для других облачных платформ выберите типы экземпляров со схожими характеристиками.
 
-Also note that egress internet traffic usage may turn out to be high,
-especially for the case of running staked validators.
+Также обратите внимание на то, что использование интернет-трафика может оказаться большим, особенно для запущенных валидаторов.
 
 ## Docker
 
-Running validator for live clusters (including mainnet-beta) inside Docker is
-not recommended and generally not supported. This is due to concerns of general
-Docker's containerzation overhead and resultant performance degradation unless
-specially configured.
+Запуск валидатора для работающих кластеров (включая mainnet-beta) внутри Docker не рекомендуется и обычно не поддерживается. Это обусловлено общими накладными расходами на контейнер докера и ухудшением производительности, если он не сконфигурирован специально для этого.
 
-We use Docker only for development purposes. Docker Hub contains images for all
-releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
+Мы используем docker только для целей разработки.
 
-## Software
+## ПО
 
-- We build and run on Ubuntu 20.04.
-- See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
+- Мы занимаемся разработкой с использованием Ubuntu 18.04. Некоторые пользователи испытывали проблемы при запуске на Ubuntu 16.04
+- Смотрите [Инструкции по настройке](../cli/install-solana-cli-tools.md) для текущей версии программного обеспечения Solana.
 
-Be sure to ensure that the machine used is not behind a residential NAT to avoid
-NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
-For more information on port forwarding with regards to residential networks,
-see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
+Убедитесь, что используемая машина не находится за NAT. Компьютер с облачным сервером работает наилучшим образом. **Убедитесь, что IP порты от 8000 до 10000 не заблокированы для входящего и исходящего трафика.** Дополнительную информацию о пробросе портов см. в [этом документе](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
-Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
-MacOS or WSL users may build from source.
+Скомпилированные бинарные файлы доступны для Linux x86_64 \(Ubuntu 18.04 рекомендуется). Пользователи MacOS или WSL могут скомпилировать из исходного кода.
 
-## GPU Requirements
+## Требования GPU
 
-CUDA is required to make use of the GPU on your system. The provided Solana
-release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using
-a different CUDA version then you will need to rebuild from source.
+CUDA требуется для использования GPU в вашей системе. Предоставленный Solana бинарные файлы построены на Ubuntu 18.04 с [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). Если ваша машина использует другую версию CUDA, то вам нужно будет скомпилировать из исходного кода.

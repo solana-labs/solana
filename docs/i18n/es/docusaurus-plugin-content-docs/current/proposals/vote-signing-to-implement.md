@@ -1,116 +1,116 @@
 ---
-title: Secure Vote Signing
+title: Firma de voto segura
 ---
 
-## Secure Vote Signing
+## Firma de voto segura
 
-This design describes additional vote signing behavior that will make the process more secure.
+Este diseño describe un comportamiento adicional de firma de votos que hará el proceso más seguro.
 
-Currently, Solana implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
+Actualmente, Solana implementa un servicio de firma de votos que evalúa cada voto para asegurar que no viola una condición de slashing. El servicio podría tener variaciones diferentes, dependiendo de las capacidades de la plataforma de hardware. En particular, podría ser utilizado junto con un enclave seguro \(como SGX\). El enclave podría generar una clave asimétrica, exponiendo una API para el usuario \(no confiable\) código para firmar las transacciones de voto, mientras se mantiene la clave privada de firma de votos en su memoria protegida.
 
-The following sections outline how this architecture would work:
+Las siguientes secciones describen cómo funcionaría esta arquitectura:
 
-### Message Flow
+### Flujo de mensajes
 
-1. The node initializes the enclave at startup
+1. El nodo inicializa el enclave al iniciar
 
-   - The enclave generates an asymmetric key and returns the public key to the
+   - El enclave genera una clave asimétrica y devuelve la clave pública al
 
-     node
+     nodo
 
-   - The keypair is ephemeral. A new keypair is generated on node bootup. A
+   - El keypair es efímero. Se genera un nuevo keypair en el libro del nodo. Un
 
-     new keypair might also be generated at runtime based on some to be determined
+     nuevo keypair también se puede generar en tiempo de ejecución basado en algunos criterios a
 
-     criteria.
+     determinar.
 
-   - The enclave returns its attestation report to the node
+   - El enclave devuelve su informe de certificación al nodo
 
-2. The node performs attestation of the enclave \(e.g using Intel's IAS APIs\)
+2. El nodo realiza la comprobación del enclave \\(p. ej. usando las API IAS de Intel\\)
 
-   - The node ensures that the Secure Enclave is running on a TPM and is
+   - El nodo asegura que el Enclave Seguro se está ejecutando en un TPM y es
 
-     signed by a trusted party
+     firmado por un grupo de confianza
 
-3. The stakeholder of the node grants ephemeral key permission to use its stake.
+3. El poseedor de stake del nodo concede permiso a la clave efímera para utilizar su participación.
 
-   This process is to be determined.
+   Este proceso debe ser determinado.
 
-4. The node's untrusted, non-enclave software calls trusted enclave software
+4. El software no confiable del nodo llama al software de enclave confiable
 
-   using its interface to sign transactions and other data.
+   usando su interfaz para firmar transacciones y otros datos.
 
-   - In case of vote signing, the node needs to verify the PoH. The PoH
+   - En caso de firmar votos, el nodo necesita verificar el PoH. El PoH
 
-     verification is an integral part of signing. The enclave would be
+     es una parte integral de la firma. El enclave sería
 
-     presented with some verifiable data to check before signing the vote.
+     presentado con algunos datos verificables para comprobar antes de firmar la votación.
 
-   - The process of generating the verifiable data in untrusted space is to be determined
+   - Se determinará el proceso de generación de datos verificables en un espacio no confiable
 
-### PoH Verification
+### Verificación de PoH
 
-1. When the node votes on an en entry `X`, there's a lockout period `N`, for
+1. Cuando el nodo vota en una entrada `X`, hay un periodo de bloqueo `N`, para
 
-   which it cannot vote on a fork that does not contain `X` in its history.
+   el cual no puede votar en un fork que no contiene `X` en su historial.
 
-2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout
+2. Cada vez que el nodo vota sobre la derivada de `X`, diga `X+y`, el
 
-   period for `X` increases by a factor `F` \(i.e. the duration node cannot vote on
+   período de bloqueo para `X` aumenta en un factor `F` \(es decir, el nodo de duración no puede votar
 
-   a fork that does not contain `X` increases\).
+   un fork que no contiene aumentos de `X`\).
 
-   - The lockout period for `X+y` is still `N` until the node votes again.
+   - El período de bloqueo para `X+y` todavía es `N` hasta que el nodo vuelva a votar.
 
-3. The lockout period increment is capped \(e.g. factor `F` applies maximum 32
+3. El incremento del período de bloqueo está limitado \(por ejemplo, factor `F` aplica un máximo de 32
 
-   times\).
+   veces\).
 
-4. The signing enclave must not sign a vote that violates this policy. This
+4. El enclave firmante no debe firmar un voto que viole esta política. Esto
 
-   means
+   significa
 
-   - Enclave is initialized with `N`, `F` and `Factor cap`
-   - Enclave stores `Factor cap` number of entry IDs on which the node had
+   - Enclave se inicializa con `N`, `F` y `Factor cap`
+   - Enclave almacena `Factor cap` número de identificadores de entrada en los que el nodo tenía
 
-     previously voted
+     previamente votados
 
-   - The sign request contains the entry ID for the new vote
-   - Enclave verifies that new vote's entry ID is on the correct fork
+   - La solicitud de signo contiene el ID de entrada para el nuevo voto
+   - Enclave verifica que el ID de entrada del nuevo voto esté en el fork correcto
 
-     \(following the rules \#1 and \#2 above\)
+     \(siguiendo las reglas \#1 y \#2 anteriores\)
 
-### Ancestor Verification
+### Verificación del Ancestro
 
-This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last_tick at which each node voted 4. It sends new vote request to vote-signing service
+Este es un enfoque alternativo, aunque menos seguro, para verificar la votación de fork. 1. El validador mantiene un conjunto activo de nodos en el cluster 2. Observa los votos del conjunto activo del último período de votación 3. Almacena el ancestro/last_tick en el que cada nodo votó 4. Envía una nueva solicitud de votación al servicio de firma de votos
 
-- It includes previous votes from nodes in the active set, and their
+- Incluye votos anteriores de los nodos en el conjunto activo, y sus
 
-  corresponding ancestors
+  ancestros correspondientes
 
-  1. The signer checks if the previous votes contains a vote from the validator,
+  1. El firmante comprueba si los votos anteriores contienen un voto del validador,
 
-     and the vote ancestor matches with majority of the nodes
+     y el ancestro del voto coincide con la mayoría de los nodos
 
-- It signs the new vote if the check is successful
-- It asserts \(raises an alarm of some sort\) if the check is unsuccessful
+- Firma la nueva votación si la comprobación tiene éxito
+- Se verifica \(levanta una alarma de algún orden\) si la comprobación no se ha realizado correctamente
 
-The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH \(as it'll be rejected by the cluster\). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing \(as part of
+La premisa es que el validador puede ser suplantado como máximo una vez para votar datos incorrectos. Si alguien secuestra al validador y presenta una solicitud de voto para datos falsos ese voto no será incluido en el PoH \(como será rechazado por el cluster\). La próxima vez que el validador envíe una solicitud para firmar el voto, el servicio de firma detectará que falta el último voto del validador \(como parte de
 
-## 5 above\).
+## 5 anteriores\).
 
-### Fork determination
+### Determinación del fork
 
-Due to the fact that the enclave cannot process PoH, it has no direct knowledge of fork history of a submitted validator vote. Each enclave should be initiated with the current _active set_ of public keys. A validator should submit its current vote along with the votes of the active set \(including itself\) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the fork being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
+Debido al hecho de que el enclave no puede procesar PoH, no tiene conocimiento directo del historial del fork de un voto de validador presentado. Cada enclave debe iniciarse con el actual _conjunto activo_ de claves públicas. Un validador debe presentar su voto actual junto con los votos del conjunto activo \(incluyendo sí mismo\) que observó en la ranura de su voto anterior. De esta forma, el enclave puede suponer los votos que acompañan a la votación anterior del validador y, por tanto, al fork sobre el que se vota. Esto no es posible para la votación inicial presentada por el validador, ya que no tendrá una franja horaria "anterior" como referencia. Para tener en cuenta esto, se debe aplicar un corto bloqueo de votación hasta que se presente el segundo voto que contenga los votos dentro del conjunto activo, junto con su propio voto, en el momento álgido de la votación inicial.
 
-### Enclave configuration
+### Configuración de Enclave
 
-A staking client should be configurable to prevent voting on inactive forks. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted fork. This configuration should take the form of a rule such that the client will only vote on a fork if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted fork at a depth where an additional vote would create a lockout for an undesirable amount of time if that fork turns out not to be live.
+Un cliente que hace staking debe ser configurable para evitar votar en forks inactivos. Este mecanismo debe usar el conjunto activo conocido del cliente `N_active` junto con un umbral de votación `N_vote` y una profundidad de umbral `N_depth` para determinar si continuar o no votando sobre un fork enviado. Esta configuración debería tomar la forma de una regla de tal manera que el cliente solo votará en un fork si observa más de `N_vote` en `N_depth`. Prácticamente, esto representa que el cliente confirme que ha observado cierta probabilidad de finalidad económica del fork presentado a una profundidad en la que un voto adicional crearía un bloqueo durante un tiempo indeseable si ese fork resulta no estar vivo.
 
-### Challenges
+### Desafíos
 
-1. Generation of verifiable data in untrusted space for PoH verification in the
+1. Generación de datos verificables en espacio no fiable para la verificación de PoH en el
 
    enclave.
 
-2. Need infrastructure for granting stake to an ephemeral key.
+2. Se necesita una infraestructura para conceder participación a una clave efímera.

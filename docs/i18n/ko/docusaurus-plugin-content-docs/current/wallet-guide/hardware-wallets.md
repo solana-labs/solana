@@ -1,53 +1,35 @@
 ---
-title: Using Hardware Wallets on the Solana CLI
+title: Solana CLI에서 하드웨어 지갑 사용
 ---
 
-Signing a transaction requires a private key, but storing a private
-key on your personal computer or phone leaves it subject to theft.
-Adding a password to your key adds security, but many people prefer
-to take it a step further and move their private keys to a separate
-physical device called a _hardware wallet_. A hardware wallet is a
-small handheld device that stores private keys and provides some
-interface for signing transactions.
+거래에 서명하려면 개인 키가 필요하지만 개인용 컴퓨터 나 전화에 개인 키를 저장하면 도난 당할 수 있습니다. 키에 암호를 추가하면 보안이 강화되지만 많은 사람들이 한 단계 더 나아가 개인 키를 _hardware wallet_이라는 별도의 물리적 장치로 옮기는 것을 선호합니다. 하드웨어 지갑은 개인 키를 저장하고 트랜잭션 서명을위한 인터페이스를 제공하는 소형 휴대용 장치입니다.
 
-The Solana CLI has first class support for hardware wallets. Anywhere
-you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
-can pass a _keypair URL_ that uniquely identifies a keypair in a
-hardware wallet.
+Solana CLI는 하드웨어 지갑에 대한 최고 수준의 지원을 제공합니다. 키 쌍 파일 경로 (사용 문서에서`<KEYPAIR>`로 표시됨)를 사용하는 모든 곳에서 하드웨어 지갑에서 키 쌍을 고유하게 식별하는 _keypair URL_을 전달할 수 있습니다.
 
-## Supported Hardware Wallets
+## 지원되는 하드웨어 지갑
 
-The Solana CLI supports the following hardware wallets:
+Solana CLI는 다음 하드웨어 지갑을 지원합니다.
 
 - [Ledger Nano S and Ledger Nano X](hardware-wallets/ledger.md)
 
-## Specify a Keypair URL
+## 키 페어 URL 지정
 
-Solana defines a keypair URL format to uniquely locate any Solana keypair on a
-hardware wallet connected to your computer.
+-\[Ledger Nano S 및 Ledger Nano X\] (hardware-wallets / ledger.md)
 
-The keypair URL has the following form, where square brackets denote optional
-fields:
+Solana는 컴퓨터에 연결된 하드웨어 지갑에서 Solana 키 쌍을 고유하게 찾기 위해 키 쌍 URL 형식을 정의합니다.
 
 ```text
-usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
+usb : // <MANUFACTURER> [/ <WALLET_ID>] [?
 ```
 
-`WALLET_ID` is a globally unique key used to disambiguate multiple devices.
+`WALLET_ID`는 여러 장치를 명확하게하는 데 사용되는 전역 적으로 고유 한 키입니다.
 
-`DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
-The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
-are positive integers.
+`DERVIATION_PATH`는 하드웨어 지갑 내에서 Solana 키로 이동하는 데 사용됩니다. 경로 형식은`<ACCOUNT> [/ <CHANGE>]`이며, 여기서 각`ACCOUNT` 및`CHANGE`는 양의 정수입니다.
 
-For example, a fully qualified URL for a Ledger device might be:
+예를 들어 Ledger 장치의 정규화 된 URL은 다음과 같습니다.
 
 ```text
-usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
+usb : // ledger / BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?
 ```
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501). The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
+모든 파생 경로에는 경로가 \[BIP44 사양\] (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)을 따르고 있음을 나타내는 접두사 '44'/ 501 ''이 암시 적으로 포함됩니다. 파생 된 키는 모두 Solana 키입니다 (Coin 유형 501). The single quote indicates a "hardened" derivation. Solana는 Ed25519 키 쌍을 사용하기 때문에 모든 파생이 강화되므로 따옴표 추가는 선택 사항이며 불필요합니다.

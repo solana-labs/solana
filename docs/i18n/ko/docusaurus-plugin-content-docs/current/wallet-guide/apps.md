@@ -1,48 +1,24 @@
 ---
-title: Mobile App Wallets
+title: 모바일 앱 지갑
 ---
 
-Solana is supported by multiple third-party apps which should provide a familiar
-experience for most people who are new or experienced with using crypto wallets.
+Solana는 암호화 지갑 사용에 익숙하거나 경험이 많은 대부분의 사람들에게 친숙한 경험을 제공해야하는 여러 타사 앱에서 지원됩니다.
 
-## Exodus
+## 트러스트 월렛
+\[Trust Wallet\] (https://trustwallet.com/)은 iOS 및 Android에서 사용할 수있는 앱으로 SOL 토큰을주고받는 데 사용할 수 있습니다.
 
-Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+*Note: Trust Wallet does not support stake accounts or staking operations*
 
-Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+### 트러스트 월렛 보안
 
-Exodus includes live charts, a built-in exchange, and 24/7 human support.
+트러스트 월렛에 보관 된 토큰은 앱이 설치된 기기만큼 안전합니다. 휴대 전화 나 태블릿의 잠금을 해제 할 수있는 사람은 누구나 트러스트 월렛 앱을 사용하고 토큰을 전송할 수 있습니다. 보안을 강화하기 위해 트러스트 월렛 애플리케이션에 비밀번호를 추가 할 수 있습니다. 트러스트 월렛 암호를 추가하려면 앱을 열고 설정-> 보안-> 암호로 이동하십시오.
 
-## Trust Wallet
+누군가 귀하의 트러스트 월렛 애플리케이션에 대한 액세스 권한을 얻으면 복구 시드 문구에 액세스 할 수 있습니다. 시드 문구에 액세스 할 수있는 사람은 누구나 다른 기기에서 트러스트 월렛 키를 다시 만들 수 있습니다. 거기에서 그들은 자신의 휴대폰이나 태블릿이 아닌 해당 장치에서 거래에 서명 할 수 있습니다. 시드 문구는 새 지갑이 생성 될 때 표시되며 다음 단계에 따라 나중에 앱에서 볼 수도 있습니다.
 
-[Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
-and can be used to send and receive SOL tokens.
-
-_Note: Trust Wallet does not support stake accounts or staking operations_
-
-### Trust Wallet Security
-
-Tokens held in Trust Wallet are only as secure as the device on which the app is
-installed. Anyone who is able to unlock your phone or tablet may be able to
-use the Trust Wallet app and transfer your tokens. To improve security,
-you can add a passcode to the Trust Wallet application.
-To add a Trust Wallet passcode, open the app and go to
-Settings -> Security -> Passcode.
-
-If someone gains access to your Trust Wallet application, they can access your
-recovery seed phrase.
-Anyone who has access to your seed phrase will be able to recreate
-your Trust Wallet keys on a different device. From there, they could
-sign transactions from that device rather than on your own phone or tablet.
-The seed phrase is displayed when a new wallet is created and it can also be
-viewed at any later time in the app by following these steps:
-
-- Go to Setting -> Wallets
-- Under the Options menu for a particular wallet tap "Show Recovery Phrase"
+- 참고 : 트러스트 월렛은 스테이킹 계정 또는 스테이킹 작업을 지원하지 않습니다 *
+- -설정-> 지갑으로 이동 -특정 지갑의 옵션 메뉴에서 "복구 문구 표시"를 탭합니다.
 
 ## Coin98
+\[Coin98\] (https://coin98.app/)은 iOS 및 Android에서 사용할 수있는 앱으로 SOL 토큰을주고받는 데 사용할 수 있습니다.
 
-[Coin98](https://coin98.app/) is an app available for iOS and Android and can
-be used to send and receive SOL tokens.
-
-_Note: Coin98 does not support stake accounts or staking operations_
+**참고 : Coin98은 스테이킹 계정 또는 스테이킹 작업을 지원하지 않습니다 ***

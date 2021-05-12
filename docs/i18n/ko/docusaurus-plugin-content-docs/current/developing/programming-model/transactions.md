@@ -2,209 +2,112 @@
 title: "Transactions"
 ---
 
-Program execution begins with a [transaction](terminology.md#transaction) being
-submitted to the cluster. The Solana runtime will execute a program to process
-each of the [instructions](terminology.md#instruction) contained in the
-transaction, in order, and atomically.
+프로그램 실행은 클러스터에 제출되는 \[transaction\] (terminology.md # transaction)로 시작됩니다. Solana 런타임은 트랜잭션에 포함 된 각 \[instructions\] (terminology.md # instruction)을 순서대로 원자 적으로 처리하는 프로그램을 실행합니다.
 
-## Anatomy of a Transaction
+## 트랜잭션 분석트랜잭션
 
-This section covers the binary format of a transaction.
+이 섹션에서는의 이진 형식을 다룹니다.
 
-### Transaction Format
+### 트랜잭션 형식
 
-A transaction contains a [compact-array](#compact-array-format) of signatures,
-followed by a [message](#message-format). Each item in the signatures array is
-a [digital signature](#signature-format) of the given message. The Solana
-runtime verifies that the number of signatures matches the number in the first
-8 bits of the [message header](#message-header-format). It also verifies that
-each signature was signed by the private key corresponding to the public key at
-the same index in the message's account addresses array.
+트랜잭션은 서명의 \[compact-array\] (# compact-array-format)와 그 뒤에 \[message\] (# message-format)을 포함합니다. 서명 배열의 각 항목은 주어진 메시지의 \[디지털 서명\] (# signature-format)입니다. Solana 런타임은 서명 수가 \[메시지 헤더\] (# message-header-format)의 처음 8 비트에있는 번호와 일치하는지 확인합니다. 또한 각 서명이 메시지의 계정 주소 배열의 동일한 인덱스에있는 공개 키에 해당하는 개인 키로 서명되었는지 확인합니다.
 
-#### Signature Format
+#### 서명 형식
 
-Each digital signature is in the ed25519 binary format and consumes 64 bytes.
+각 디지털 서명은 ed25519 바이너리 형식이며 64 바이트를 사용합니다.
 
-### Message Format
+### 메시지 형식
 
-A message contains a [header](#message-header-format), followed by a
-compact-array of [account addresses](#account-addresses-format), followed by a
-recent [blockhash](#blockhash-format), followed by a compact-array of
-[instructions](#instruction-format).
+메시지에는 \[header\] (# message-header-format), \[계정 주소\] (# account-addresses-format)의 압축 배열, 최근 \[blockhash\] (# blockhash-format), \[instructions\] (# instruction-format)의 압축 배열이 뒤 따릅니다.
 
-#### Message Header Format
+#### 메시지 헤더 형식
 
-The message header contains three unsigned 8-bit values. The first value is the
-number of required signatures in the containing transaction. The second value
-is the number of those corresponding account addresses that are read-only. The
-third value in the message header is the number of read-only account addresses
-not requiring signatures.
+메시지 헤더에는 3 개의 부호없는 8 비트 값이 포함됩니다. 첫 번째 값은 포함하는 트랜잭션의 필수 서명 수입니다. 두 번째 값은 읽기 전용 인 해당 계정 주소의 수입니다. 메시지 헤더의 세 번째 값은 서명이 필요하지 않은 읽기 전용 계정 주소의 수입니다.
 
-#### Account Addresses Format
+#### 계정 주소 형식따릅니다
 
-The addresses that require signatures appear at the beginning of the account
-address array, with addresses requesting write access first and read-only
-accounts following. The addresses that do not require signatures follow the
-addresses that do, again with read-write accounts first and read-only accounts
-following.
+서명이 필요한 주소는 계정 주소 배열의 시작 부분에 나타나며 쓰기 액세스를 먼저 요청하는 주소와 읽기 전용 계정이 뒤. 서명이 필요하지 않은 주소는 다시 한 번 읽기-쓰기 계정이 먼저이고 읽기 전용 계정이 뒤 따르는 주소를 따릅니다.
 
-#### Blockhash Format
+#### 블록 해시 형식
 
-A blockhash contains a 32-byte SHA-256 hash. It is used to indicate when a
-client last observed the ledger. Validators will reject transactions when the
-blockhash is too old.
+블록 해시는 32 바이트 SHA-256 해시를 포함합니다. 클라이언트가 원장을 마지막으로 관찰 한시기를 나타내는 데 사용됩니다. 밸리데이터은 블록 해시가 너무 오래되면 거래를 거부합니다.
 
-### Instruction Format
+### 명령어 형식
 
-An instruction contains a program id index, followed by a compact-array of
-account address indexes, followed by a compact-array of opaque 8-bit data. The
-program id index is used to identify an on-chain program that can interpret the
-opaque data. The program id index is an unsigned 8-bit index to an account
-address in the message's array of account addresses. The account address
-indexes are each an unsigned 8-bit index into that same array.
+명령어에는 프로그램 ID 색인, 계정 주소 색인의 압축 배열, 불투명 한 8 비트 데이터의 압축 배열이 차례로 포함됩니다. 프로그램 ID 인덱스는 불투명 한 데이터를 해석 할 수있는 온 체인 프로그램을 식별하는 데 사용됩니다. 프로그램 ID 색인은 메시지의 계정 주소 배열에있는 계정 주소에 대한 서명되지 않은 8 비트 색인입니다. 계정 주소 인덱스는 각각 동일한 배열에 대한 부호없는 8 비트 인덱스입니다.
 
-### Compact-Array Format
+### Compact-Array 형식
 
-A compact-array is serialized as the array length, followed by each array item.
-The array length is a special multi-byte encoding called compact-u16.
+compact-array는 각 배열 항목이 뒤에 오는 배열 길이로 직렬화됩니다. 배열 길이는 compact-u16이라는 특수한 다중 바이트 인코딩입니다.
 
-#### Compact-u16 Format
+#### Compact-u16 형식
 
-A compact-u16 is a multi-byte encoding of 16 bits. The first byte contains the
-lower 7 bits of the value in its lower 7 bits. If the value is above 0x7f, the
-high bit is set and the next 7 bits of the value are placed into the lower 7
-bits of a second byte. If the value is above 0x3fff, the high bit is set and
-the remaining 2 bits of the value are placed into the lower 2 bits of a third
-byte.
+compact-u16은 16 비트의 다중 바이트 인코딩입니다. 첫 번째 바이트는 하위 7 비트 값의 하위 7 비트를 포함합니다. 값이 0x7f보다 크면 상위 비트가 설정되고 값의 다음 7 비트가 두 번째 바이트의 하위 7 비트에 배치됩니다. 값이 0x3fff보다 크면 상위 비트가 설정되고 값의 나머지 2 비트는 세 번째 바이트의 하위 2 비트에 배치됩니다.
 
-### Account Address Format
+### 계정 주소 형식
 
-An account address is 32-bytes of arbitrary data. When the address requires a
-digital signature, the runtime interprets it as the public key of an ed25519
-keypair.
+계정 주소는 32 바이트의 임의 데이터입니다. 주소에 디지털 서명이 필요한 경우 런타임은이를 ed25519 키 쌍의 공개 키로 해석합니다.
 
-## Instructions
+## 명령어
 
-Each [instruction](terminology.md#instruction) specifies a single program, a
-subset of the transaction's accounts that should be passed to the program, and a
-data byte array that is passed to the program. The program interprets the data
-array and operates on the accounts specified by the instructions. The program
-can return successfully, or with an error code. An error return causes the
-entire transaction to fail immediately.
+각 \[instruction\] (terminology.md # instruction)은 단일 프로그램, 프로그램에 전달되어야하는 트랜잭션 계정의 하위 집합 및 프로그램에 전달되는 데이터 바이트 배열을 지정합니다. 이 프로그램은 데이터 배열을 해석하고 지침에 지정된 계정에서 작동합니다. 프로그램이 성공적으로 또는 오류 코드를 반환 할 수 있습니다. 오류 반환으로 인해 전체 트랜잭션이 즉시 실패합니다.
 
-Programs typically provide helper functions to construct instructions they
-support. For example, the system program provides the following Rust helper to
-construct a
-[`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63)
-instruction:
+프로그램은 일반적으로 지원하는 명령을 구성하는 도우미 기능을 제공합니다. 예를 들어, 시스템 프로그램은 [`SystemInstruction :: CreateAccount`] (https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs # L63) 명령 :
 
 ```rust
-pub fn create_account(
-    from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey,
-    lamports: u64,
-    space: u64,
-    owner: &Pubkey,
-) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*to_pubkey, true),
+pub fn create_account (
+    from_pubkey : & Pubkey,
+    to_pubkey : & Pubkey,
+    lamports : u64,
+    space : u64,
+    owner : & Pubkey,
+)-> Instruction {
+    let account_metas = vec! [
+        AccountMeta :: new (* from_pubkey, true),
+        AccountMeta :: new (* to_pubkey, true),
     ];
-    Instruction::new_with_bincode(
-        system_program::id(),
-        &SystemInstruction::CreateAccount {
+    Instruction :: new (
+        system_program :: id (),
+        & SystemInstruction :: CreateAccount {
             lamports,
             space,
-            owner: *owner,
+            owner : * owner,
         },
         account_metas,
     )
 }
 ```
 
-Which can be found here:
+여기에서 찾을 수 있습니다 :
 
-https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L220
+https://github.com/solana -labs / solana / blob / 6606590b8132e56dab9e60b3f7d20ba7412a736c / sdk / program / src / system_instruction.rs # L220
 
-### Program Id
+### 프로그램 Id
 
-The instruction's [program id](terminology.md#program-id) specifies which
-program will process this instruction. The program's account's owner specifies
-which loader should be used to load and execute the program and the data
-contains information about how the runtime should execute the program.
+명령어의 \[프로그램 ID\] (terminology.md # program-id)는이 명령어를 처리 할 프로그램을 지정합니다. 프로그램의 계정 소유자는 프로그램을로드하고 실행하는 데 사용할 로더를 지정하며 데이터에는 런타임이 프로그램을 실행하는 방법에 대한 정보가 포함됩니다.
 
-In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md),
-the owner is the BPF Loader and the account data holds the BPF bytecode. Program
-accounts are permanently marked as executable by the loader once they are
-successfully deployed. The runtime will reject transactions that specify programs
-that are not executable.
+\[배포 된 BPF 프로그램\] (developing / deployed-programs / overview.md)의 경우 소유자는 BPF 로더이고 계정 데이터는 BPF 바이트 코드를 보유합니다.  프로그램 계정은 성공적으로 배포되면 로더에 의해 영구적으로 실행 가능한 것으로 표시됩니다. 런타임은 실행 불가능한 프로그램을 지정하는 트랜잭션을 거부합니다.
 
-Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs)
-are handled differently in that they are built directly into the Solana runtime.
 
-### Accounts
+배포 된 프로그램과 달리 \[builtins\] (developing / builtins / programs.md)는 Solana 런타임에 직접 빌드된다는 점에서 다르게 처리됩니다.
 
-The accounts referenced by an instruction represent on-chain state and serve as
-both the inputs and outputs of a program. More information about Accounts can be
-found in the [Accounts](accounts.md) section.
+### 계정
 
-### Instruction data
+명령에서 참조하는 계정은 온 체인 상태를 나타내며 프로그램의 입력 및 출력 역할을합니다. 계정에 대한 자세한 내용은 \[계정\] (accounts.md) 섹션에서 찾을 수 있습니다.
 
-Each instruction caries a general purpose byte array that is passed to the
-program along with the accounts. The contents of the instruction data is program
-specific and typically used to convey what operations the program should
-perform, and any additional information those operations may need above and
-beyond what the accounts contain.
+### 명령어 데이터
 
-Programs are free to specify how information is encoded into the instruction
-data byte array. The choice of how data is encoded should take into account the
-overhead of decoding since that step is performed by the program on-chain. It's
-been observed that some common encodings (Rust's bincode for example) are very
-inefficient.
+각 명령어는 계정과 함께 프로그램에 전달되는 범용 바이트 배열을 가지고 있습니다. 명령 데이터의 내용은 프로그램에 따라 다르며 일반적으로 프로그램이 수행해야하는 작업과 계정에 포함 된 것 이상으로 이러한 작업에 필요할 수있는 추가 정보를 전달하는 데 사용됩니다.
 
-The [Solana Program Library's Token
-program](https://github.com/solana-labs/solana-program-library/tree/master/token)
-gives one example of how instruction data can be encoded efficiently, but note
-that this method only supports fixed sized types. Token utilizes the
-[Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs)
-trait to encode/decode instruction data for both token instructions as well as
-token account states.
+프로그램은 정보가 명령어 데이터 바이트 배열로 인코딩되는 방법을 자유롭게 지정할 수 있습니다. 데이터가 인코딩되는 방법을 선택할 때 디코딩 오버 헤드를 고려해야합니다. 해당 단계는 온 체인 프로그램에 의해 수행되기 때문입니다. 일부 일반적인 인코딩 (예 : Rust의 bincode)은 매우 비효율적 인 것으로 관찰되었습니다.
 
-### Multiple instructions in a single transaction
+\[Solana 프로그램 라이브러리의 토큰 프로그램\] (https://github.com/solana-labs/solana-program-library/tree/master/token)은 명령 데이터를 효율적으로 인코딩 할 수있는 방법에 대한 한 가지 예를 제공하지만이 방법에 유의하십시오. 토큰은 \[Pack\] (https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) 특성을 활용하여 토큰 명령과 토큰 모두에 대한 명령 데이터를 인코딩 / 디코딩합니다. 계정 상태.
 
-A transaction can contain instructions in any order. This means a malicious
-user could craft transactions that may pose instructions in an order that the
-program has not been protected against. Programs should be hardened to properly
-and safely handle any possible instruction sequence.
+## 서명
 
-One not so obvious example is account deinitialization. Some programs may
-attempt to deinitialize an account by setting its lamports to zero, with the
-assumption that the runtime will delete the account. This assumption may be
-valid between transactions, but it is not between instructions or cross-program
-invocations. To harden against this, the program should also explicitly zero out the
-account's data.
+각 트랜잭션은 트랜잭션 지침에서 참조하는 모든 계정 공개 키를 명시 적으로 나열합니다. 이러한 공개 키의 하위 집합은 각각 트랜잭션 서명과 함께 제공됩니다. 이러한 서명은 계정 소유자가 거래를 승인했다는 온 체인 프로그램을 나타냅니다. 일반적으로 프로그램은 권한을 사용하여 계정에서 인출 또는 데이터 수정을 허용합니다. 권한이 프로그램에 전달되는 방법에 대한 자세한 내용은 \[계정\] (accounts.md # signers)에서 찾을 수 있습니다.
 
-An example of where this could be a problem is if a token program, upon
-transferring the token out of an account, sets the account's lamports to zero,
-assuming it will be deleted by the runtime. If the program does not zero out the
-account's data, a malicious user could trail this instruction with another that
-transfers the tokens a second time.
 
-## Signatures
+## 최근 블록 해시
 
-Each transaction explicitly lists all account public keys referenced by the
-transaction's instructions. A subset of those public keys are each accompanied
-by a transaction signature. Those signatures signal on-chain programs that the
-account holder has authorized the transaction. Typically, the program uses the
-authorization to permit debiting the account or modifying its data. More
-information about how the authorization is communicated to a program can be
-found in [Accounts](accounts.md#signers)
-
-## Recent Blockhash
-
-A transaction includes a recent [blockhash](terminology.md#blockhash) to prevent
-duplication and to give transactions lifetimes. Any transaction that is
-completely identical to a previous one is rejected, so adding a newer blockhash
-allows multiple transactions to repeat the exact same action. Transactions also
-have lifetimes that are defined by the blockhash, as any transaction whose
-blockhash is too old will be rejected.
+트랜잭션에는 중복을 방지하고 제공하기 위해 최근 \[blockhash\] (terminology.md # blockhash)가 포함됩니다. 거래 수명. 이전 트랜잭션과 완전히 동일한 트랜잭션은 거부되므로 새로운 블록 해시를 추가하면 여러 트랜잭션이 정확히 동일한 작업을 반복 할 수 있습니다. 또한 블록 해시가 너무 오래된 트랜잭션은 거부되므로 트랜잭션에는 블록 해시에 의해 정의 된 수명이 있습니다.

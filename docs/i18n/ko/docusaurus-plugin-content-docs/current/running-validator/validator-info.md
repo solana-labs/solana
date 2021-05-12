@@ -1,64 +1,61 @@
 ---
-title: Publishing Validator Info
+title: 유효성 검사기 정보 게시
 ---
 
-You can publish your validator information to the chain to be publicly visible to other users.
+다른 사용자가 공개적으로 볼 수 있도록 유효성 검사기 정보를 체인에 게시 할 수 있습니다.
 
-## Run solana validator-info
+## solana validator-info 실행
 
-Run the solana CLI to populate a validator info account:
-
-```bash
-solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
-```
-
-For details about optional fields for VALIDATOR_INFO_ARGS:
+solana CLI를 실행하여 유효성 검사기 정보 계정을 채 웁니다.
 
 ```bash
-solana validator-info publish --help
+solana validator-info publish --keypair ~ / validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
 ```
 
-## Example Commands
-
-Example publish command:
+VALIDATOR_INFO_ARGS의 선택적 필드에 대한 자세한 내용은 다음을 참조하세요.
 
 ```bash
-solana validator-info publish "Elvis Validator" -n elvis -w "https://elvis-validates.com"
+솔라나 밸리데이터 정보 게시-도움말
 ```
 
-Example query command:
+## 예제 명령
+
+게시 명령의 예 :
 
 ```bash
-solana validator-info get
+solana validator-info 게시 "Elvis Validator"-n elvis -w "https://elvis-validates.com"
 ```
 
-which outputs
+쿼리 명령 예 :
+
+```bash
+솔라나 밸리데이터 정보 얻기
+```
+
+어느 출력
 
 ```text
-Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
-  Validator pubkey: 6dMH3u76qZ7XG4bVboVRnBHR2FfrxEqTTTyj4xmyDMWo
-  Info: {"keybaseUsername":"elvis","name":"Elvis Validator","website":"https://elvis-validates.com"}
+8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah의 유효성 검사기 정보
+  유효성 검사기 pubkey : 6dMH3u76qZ7XG4bVboVRnBHR2FfrxEqTTTyj4xmyDMWo
+  정보 : { "keybaseUsername": "elvis", "name": "Elvis Validator", "website": "https://elvis-validates.com"}
 ```
 
-## Keybase
+## 키베이스
 
-Including a Keybase username allows client applications \(like the Solana
-Network Explorer\) to automatically pull in your validator public profile,
-including cryptographic proofs, brand identity, etc. To connect your validator
-pubkey with Keybase:
+Keybase 사용자 이름을 포함하면 클라이언트 애플리케이션 \ (예 : Solana Network Explorer \)이 암호화 증명, 브랜드 아이덴티티 등을 포함한 유효성 검사기 공개 프로필을 자동으로 가져올 수 있습니다. 유효성 검사기 pubkey를 Keybase와 연결하려면 :
 
-1. Join [https://keybase.io/](https://keybase.io/) and complete the profile for your validator
-2. Add your validator **identity pubkey** to Keybase:
+1. [https://keybase.io/](https://keybase.io/)에 가입하고 유효성 검사기 프로필 작성
+2. 유효성 검사기 ** identity pubkey **를 Keybase에 추가합니다.
 
-   - Create an empty file on your local computer called `validator-<PUBKEY>`
-   - In Keybase, navigate to the Files section, and upload your pubkey file to
+   - CLI는`validator- <PUBKEY>`파일을 확인합니다.
+   - -Keybase에서 파일 섹션으로 이동하여 pubkey 파일을
 
-     a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
+     공용 폴더의`solana` 하위 디렉토리 :`/ keybase / public / <KEYBASE_USERNAME> / solana`
 
-   - To check your pubkey, ensure you can successfully browse to
+   - -pubkey를 확인하려면 다음을 성공적으로 탐색 할 수 있는지 확인하십시오.
 
-     `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
+     `https://keybase.pub/ <KEYBASE_USERNAME> / solana / validator- <PUBKEY>`
 
-3. Add or update your `solana validator-info` with your Keybase username. The
+3. Keybase 사용자 이름으로`solana validator-info`를 추가하거나 업데이트합니다. 그만큼
 
-   CLI will verify the `validator-<PUBKEY>` file
+   -로컬 컴퓨터에`validator- <PUBKEY>`라는 빈 파일을 만듭니다.

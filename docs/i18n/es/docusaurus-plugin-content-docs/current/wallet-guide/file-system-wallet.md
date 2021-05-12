@@ -1,65 +1,48 @@
 ---
-title: File System Wallet
+title: Billetera del Sistema de Archivos
 ---
 
-This document describes how to create and use a file system wallet with the
-Solana CLI tools. A file system wallet exists as an unencrypted keypair file
-on your computer system's filesystem.
+Este documento describe cómo crear y utilizar una billetera del sistema de archivos con las herramientas de CLI de Solana. Existe una billetera del sistema de archivos como un archivo de keypair sin cifrar en el sistema de archivos de su ordenador.
 
-> File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
+> Las billeteras del sistema de archivos son el método **menos seguro** de almacenar los tokens SOL. Almacenar grandes cantidades de tokens en una billetera del sistema de archivos **no es recomendable**.
 
-## Before you Begin
+## Antes de comenzar
 
-Make sure you have
-[installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
+Asegúrese de que tiene [instalado las herramientas de línea de comandos Solana](../cli/install-solana-cli-tools.md)
 
-## Generate a File System Wallet Keypair
+## Generar un File System Wallet Keypair
 
-Use Solana's command-line tool `solana-keygen` to generate keypair files. For
-example, run the following from a command-line shell:
+Utilice la herramienta de línea de comandos de Solana `solana-keygen` para generar archivos keypair. Por ejemplo, ejecute lo siguiente desde una línea de comandos shell:
 
 ```bash
 mkdir ~/my-solana-wallet
 solana-keygen new --outfile ~/my-solana-wallet/my-keypair.json
 ```
 
-This file contains your **unencrypted** keypair. In fact, even if you specify
-a password, that password applies to the recovery seed phrase, not the file. Do
-not share this file with others. Anyone with access to this file will have access
-to all tokens sent to its public key. Instead, you should share only its public
-key. To display its public key, run:
+Este archivo contiene tu keypair **sin cifrar**. De hecho, incluso si especifica una contraseña, esa contraseña se aplica a la frase de semilla de recuperación, no al archivo. No compartas este archivo con otros. Cualquiera que tenga acceso a este archivo tendrá acceso a todos los tokens enviados a su clave pública. En su lugar, solo se debe compartir su clave pública. Para mostrar su clave pública, ejecute:
 
 ```bash
-solana-keygen pubkey ~/my-solana-wallet/my-keypair.json
+pubkey solana-keygen ~/my-solana-wallet/my-keypair.json
 ```
 
-It will output a string of characters, such as:
+Le mostrará una cadena de caracteres, como:
 
 ```text
 ErRr1caKzK8L8nn4xmEWtimYRiTCAZXjBtVphuZ5vMKy
 ```
 
-This is the public key corresponding to the keypair in
-`~/my-solana-wallet/my-keypair.json`. The public key of the keypair file is
-your _wallet address_.
+Esta es la clave pública correspondiente al keypair en `~/my-solana-wallet/my-keypair.json`. La clave pública del archivo del keypair es su _dirección de billetera_.
 
-## Verify your Address against your Keypair file
+## Verifique su dirección con su archivo Keypair
 
-To verify you hold the private key for a given address, use
-`solana-keygen verify`:
+Para verificar que posee la clave privada para una dirección determinada, utilice `verificación de solana-keygen`:
 
 ```bash
 solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 ```
 
-where `<PUBKEY>` is replaced with your wallet address.
-The command will output "Success" if the given address matches the
-the one in your keypair file, and "Failed" otherwise.
+donde `<PUBKEY>` es reemplazado con su dirección de billetera. El comando mostrará "Éxito" si la dirección dada coincide con la del archivo del keypair y "Failed" en caso contrario.
 
-## Creating Multiple File System Wallet Addresses
+## Creando múltiples direcciones del sistema de archivos
 
-You can create as many wallet addresses as you like. Simply re-run the
-steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)
-and make sure to use a new filename or path with the `--outfile` argument.
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes.
+Puede crear tantas direcciones de cartera como desee. Simplemente vuelva a ejecutar los pasos en [Genere una billetera del sistema de archivos](#generate-a-file-system-wallet-keypair) y asegúrese de usar un nuevo nombre de archivo o ruta con el argumento `--outfile`. Múltiples direcciones del monedero pueden ser útiles si desea transferir tokens entre sus propias cuentas para diferentes propósitos.

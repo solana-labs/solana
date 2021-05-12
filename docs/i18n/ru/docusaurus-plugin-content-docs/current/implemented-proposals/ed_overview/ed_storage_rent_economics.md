@@ -1,17 +1,17 @@
 ---
-title: Storage Rent Economics
+title: Экономика аренды хранилища
 ---
 
-Each transaction that is submitted to the Solana ledger imposes costs. Transaction fees paid by the submitter, and collected by a validator, in theory, account for the acute, transactional, costs of validating and adding that data to the ledger. Unaccounted in this process is the mid-term storage of active ledger state, necessarily maintained by the rotating validator set. This type of storage imposes costs not only to validators but also to the broader network as active state grows so does data transmission and validation overhead. To account for these costs, we describe here our preliminary design and implementation of storage rent.
+Каждая транзакция, представленная в реестре Solana, налагает на себя соответствующие расходы. Плата за транзакции, оплаченная отправителем платежа и собранная валидатором в теории, Расходы на подтверждение и добавление этих данных в реестр. Неучтенный в этом процессе - это среднесрочное хранение активного состояния реестра, которое обязательно поддерживается набором валидатора вращения. Этот тип хранения требует затрат не только для валидаторов, но и для более широкой сети по мере роста активного состояния и передачи данных и накладных расходов. С учетом этих затрат мы опишем здесь наши предварительные разработки и внедрения арендной платы за хранение.
 
-Storage rent can be paid via one of two methods:
+Аренда за хранение может быть оплачена одним из двух способов:
 
-Method 1: Set it and forget it
+Метод 1: Установить и забыть
 
-With this approach, accounts with two-years worth of rent deposits secured are exempt from network rent charges. By maintaining this minimum-balance, the broader network benefits from reduced liquidity and the account holder can trust that their `Account::data` will be retained for continual access/usage.
+При таком подходе от сетевых сборов освобождаются счета обеспеченные за два года пополнения средств аренды. Поддерживая этот минимальный баланс, Более широкая сеть выгод от пониженной ликвидности и обладатель аккаунта может доверять их `Account::data` будут сохранены для постоянного доступа/использования.
 
-Method 2: Pay per byte
+Метод 2: Оплата за байт
 
-If an account has less than two-years worth of deposited rent the network charges rent on a per-epoch basis, in credit for the next epoch. This rent is deducted at a rate specified in genesis, in lamports per kilobyte-year.
+Если на счету внесена арендная плата менее чем за два года, сеть взимает арендную плату за каждую эпоху в кредит на следующую эпоху. Эта арендная плата вычитается по ставке, указанной в генезисе, в лэмпортах за килобайт в год.
 
-For information on the technical implementation details of this design, see the [Rent](../rent.md) section.
+Для получения информации о технической реализации этого дизайна смотрите раздел [Аренда](../rent.md).

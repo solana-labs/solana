@@ -1,68 +1,44 @@
 ---
-title: Commitment
+title: Compromiso
 ---
 
-The commitment metric aims to give clients a measure of the network confirmation
-and stake levels on a particular block. Clients can then use this information to
-derive their own measures of commitment.
+La métrica de compromiso apunta a dar a los clientes una medida de la confirmación de la red y niveles de apuesta en un bloque en particular. Los clientes pueden entonces usar esta información para derivar sus propias medidas de compromiso.
 
-# Calculation RPC
+# Calcular RPC
 
-Clients can request commitment metrics from a validator for a signature `s`
-through `get_block_commitment(s: Signature) -> BlockCommitment` over RPC. The
-`BlockCommitment` struct contains an array of u64 `[u64, MAX_CONFIRMATIONS]`. This
-array represents the commitment metric for the particular block `N` that
-contains the signature `s` as of the last block `M` that the validator voted on.
+Los clientes pueden solicitar métricas de compromiso de un validador para una firma `s` a través de `get_block_commitment(s: Signature) -> BlockCommitment` sobre RPC. La estructura `BlockCommitment` contiene un array de u64 `[u64, MAX_CONFIRMATIONS]`. Este arreglo representa la métrica de compromiso para el bloque `N` en particular que contiene la firma `s` al último bloque `M` en el que votó el validador.
 
-An entry `s` at index `i` in the `BlockCommitment` array implies that the
-validator observed `s` total stake in the cluster reaching `i` confirmations on
-block `N` as observed in some block `M`. There will be `MAX_CONFIRMATIONS` elements in
-this array, representing all the possible number of confirmations from 1 to
-`MAX_CONFIRMATIONS`.
+Una entrada `s` en índice `i` en el array `BlockCommitment` implica que el validador observó `s` la participación total en el clúster llegando a `i` confirmaciones en bloque `N` como se observó en algún bloque `M`. Habrá `MAX_CONFIRMMATIONS` elementos en este arreglo, representando todo el posible número de confirmaciones de 1 a `MAX_CONFIRMATIONS`.
 
-# Computation of commitment metric
+# Cálculo de la métrica de compromiso
 
-Building this `BlockCommitment` struct leverages the computations already being
-performed for building consensus. The `collect_vote_lockouts` function in
-`consensus.rs` builds a HashMap, where each entry is of the form `(b, s)`
-where `s` is the amount of stake on a bank `b`.
+Construyendo este `BlockCommitment` struct aprovecha los cálculos que ya están siendo realizados para construir consenso. La función `collect_vote_lockouts` en `consenso. s` construye un HashMap, donde cada entrada es de la forma `(b, s)` donde `s` es la cantidad de participación en un banco `b`.
 
-This computation is performed on a votable candidate bank `b` as follows.
+Este cálculo se realiza en un banco candidato votable `b` de la siguiente manera.
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
    for vote_account in b.vote_accounts {
-       for v in vote_account.vote_stack {
+       for v in vote_account. vote_stack {
            for a in ancestors(v) {
-               f(*output.get_mut(a), vote_account, v);
+               f(*output. et_mut(a), vote_account, v);
            }
        }
-   }
+}
 ```
 
-where `f` is some accumulation function that modifies the `Stake` entry
-for slot `a` with some data derivable from vote `v` and `vote_account`
-(stake, lockout, etc.). Note here that the `ancestors` here only includes
-slots that are present in the current status cache. Signatures for banks earlier
-than those present in the status cache would not be queryable anyway, so those
-banks are not included in the commitment calculations here.
+donde ` f ` es una función de acumulación que modifica la entrada ` Stake ` para la ranura ` a ` con algunos datos derivables de vote ` v ` y ` vote_account ` (apuesta, bloqueo, etc.). Ten en cuenta que los `ancestors` aquí solo incluyen ranuras presentes en la caché de estado actual. Las firmas para los bancos antes de lo que los presentes en la caché de estado no serían consultables de todos modos, por lo que esos bancos no están incluidos en los cálculos de compromiso aquí.
 
-Now we can naturally augment the above computation to also build a
-`BlockCommitment` array for every bank `b` by:
+Ahora naturalmente podemos aumentar el cálculo anterior para crear también un arreglo de `BlockCommitment` para cada banco `b` por:
 
-1. Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
-2. Replacing `f` with `f'` such that the above computation also builds this
-   `BlockCommitment` for every bank `b`.
+1. Añadir un `ForkCommitmentCache` para recoger las estructuras `BlockCommitment`
+2. Reemplazando `f` por `f'` de tal manera que el cálculo anterior también construye este `BlockCommitment` por cada banco `b`.
 
-We will proceed with the details of 2) as 1) is trivial.
+Procederemos con los detalles de 2) ya que 1) es trivial.
 
-Before continuing, it is noteworthy that for some validator's vote account `a`,
-the number of local confirmations for that validator on slot `s` is
-`v.num_confirmations`, where `v` is the smallest vote in the stack of votes
-`a.votes` such that `v.slot >= s` (i.e. there is no need to look at any
-votes > v as the number of confirmations will be lower).
+Antes de continuar, cabe destacar que para la cuenta de voto de algún validador ` a `, el número de confirmaciones locales para ese validador en la ranura ` s ` es ` v.num_confirmations `, donde ` v ` es el voto más pequeño en la pila de votos ` a.votes ` tal que `v.slot >= s` (es decir, no hay necesidad de mirar votos > v ya que el número de confirmaciones será menor).
 
-Now more specifically, we augment the above computation to:
+Ahora más específicamente, aumentamos el cálculo anterior a:
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
@@ -77,16 +53,16 @@ Now more specifically, we augment the above computation to:
    }
 ```
 
-where `f'` is defined as:
+donde `f'` está definido como:
 
 ```text
     fn f`(
         stake: &mut Stake,
         some_ancestor: &mut BlockCommitment,
-        vote_account: VoteAccount,
+        vote_accountt: VoteAccount,
         v: Vote, total_stake: u64
     ){
         f(stake, vote_account, v);
         *some_ancestor.commitment[v.num_confirmations] += vote_account.stake;
-    }
+}
 ```

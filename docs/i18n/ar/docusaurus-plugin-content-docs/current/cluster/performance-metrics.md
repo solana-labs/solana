@@ -1,25 +1,25 @@
 ---
-title: Performance Metrics
+title: مقاييس الأداء (Performance Metrics)
 ---
 
-Solana cluster performance is measured as average number of transactions per second that the network can sustain \(TPS\). And, how long it takes for a transaction to be confirmed by super majority of the cluster \(Confirmation Time\).
+يُقاس أداء مجموعة Solana كمُتوسط عدد المُعاملات في الثانية التي يُمكن للشبكة أن تُحافظ عليها \(TPS\). وكم من الوقت يستغرق تأكيد المُعاملة من قبل الأغلبية العُظمى (supermajority) من المجموعة (cluster) \(وقت التأكيد\).
 
-Each cluster node maintains various counters that are incremented on certain events. These counters are periodically uploaded to a cloud based database. Solana's metrics dashboard fetches these counters, and computes the performance metrics and displays it on the dashboard.
+تحتفظ كل عُقدة (node) من المجموعة (cluster) بعدادات مُختلفة تزداد في بعض الأحداث. يتم تحميل هذه العدادات بشكل دوري إلى قاعدة بيانات سحابية (cloud based database). لوحة قياسات Solana تجلب هذه العدادات، وتحسب مقاييس الأداء وتعرضها على لوحة القياس.
 
-## TPS
+## عدد المُعاملات في الثانية الواحدة (TPS)
 
-Each node's bank runtime maintains a count of transactions that it has processed. The dashboard first calculates the median count of transactions across all metrics enabled nodes in the cluster. The median cluster transaction count is then averaged over a 2 second period and displayed in the TPS time series graph. The dashboard also shows the Mean TPS, Max TPS and Total Transaction Count stats which are all calculated from the median transaction count.
+يحتفظ بنك وقت التشغيل لكل عُقدة (node) بعدد المُعاملات التي قامت بمُعالجتها. تقوم لوحة التحكم أولا بحساب مُتوسط عدد المُعاملات عبر جميع المقاييس التي تم تفعيل العُقَد (nodes) فيها في المجموعة (cluster). يتم بعد ذلك حساب مُتوسط عدد المُعاملات في المجموعة (cluster) خلال فترة 2 ثانية وعرضه في الرسم البياني للسلسلة الزمنية TPS. تُظهر لوحة التحكم أيضا إحصائيات مُتوسط عدد مُعاملات في الثانية الواحدة (TPS) و الحد الأقصى لعدد المُعاملات في الثانية الواحدة (TPS) و إجمالي عدد المُعاملات التي يتم حسابها جميعها من مُتوسط عدد المُعاملات.
 
-## Confirmation Time
+## وقت التأكيد أو التثبت (Confirmation Time)
 
-Each validator node maintains a list of active ledger forks that are visible to the node. A fork is considered to be frozen when the node has received and processed all entries corresponding to the fork. A fork is considered to be confirmed when it receives cumulative super majority vote, and when one of its children forks is frozen.
+تحتفظ كل عُقَد التدقيق (validator node) بقائمة من الإنقسامات أو الشوكات (forks) النشطة على دفتر الأستاذ (ledger) التي تكون مرئية للعُقدة (node). يُعتبر الإنقسام أو الشوكة (fork) مُجمّدة عندما تتلقى العُقدة (node) وتُعالج جميع المُدخلات (entries) المُقابلة للإنقسام أو الشوكة (fork). يُمكن إعتبار الإنقسام أو الشوكة (fork) مُؤكدة عندما تحصل على الأغلبية التراكمية للأصوات، وعندما يتم تجميد أحد فروع (children) الإنقسام أو الشوكة (fork).
 
-The node assigns a timestamp to every new fork, and computes the time it took to confirm the fork. This time is reflected as validator confirmation time in performance metrics. The performance dashboard displays the average of each validator node's confirmation time as a time series graph.
+تقوم العُقدة (node) بتعيين الختم الزمني (Timestamp) لكل إنقسام أو شوكة (fork) جديد، وتقوم بحساب الوقت الذي يستغرقه لتأكيد الإنقسام أو الشوكة (fork). يظهر هذا الوقت بإسم وقت تأكيد المُصادقة (validator confirmation time) في مقاييس الأداء. لوحة عرض الأداء تعرض مُتوسط وقت تأكيد كل عُقدة (node) من عُقَد التدقيق (validator nodes) كرسم بياني للسلسلة الزمنية.
 
-## Hardware setup
+## إعداد الأجهزة (Hardware setup)
 
-The validator software is deployed to GCP n1-standard-16 instances with 1TB pd-ssd disk, and 2x Nvidia V100 GPUs. These are deployed in the us-west-1 region.
+يتم نشر برنامج المُدقّق (validator) على النظام GCP n1-standard-16 مع قرص صلب 1TB pd-ssd و عدد 2 Nvidia V100 GPUs. يتم تشغيلها في المنطقة غرب الولايات المتحدة us-west-1.
 
-solana-bench-tps is started after the network converges from a client machine with n1-standard-16 CPU-only instance with the following arguments: `--tx\_count=50000 --thread-batch-sleep 1000`
+يبدأ تشغيل solana-bench-tps بعد أن تتقارب الشبكة من جهاز العميل مع مثيل n1-standard-16 CPU-only بالحالات التالية: `--tx\_count=50000 --thread-batch-sleep 1000`
 
-TPS and confirmation metrics are captured from the dashboard numbers over a 5 minute average of when the bench-tps transfer stage begins.
+يتم إلتقاط عدد المُعاملات في الثانية الواحدة (TPS) وقِياسات التأكيد أو التثبت من أرقام لوحة التحكم على مدى 5 دقائق في المُتوسط عند بدء مرحلة نقل bench-tps.

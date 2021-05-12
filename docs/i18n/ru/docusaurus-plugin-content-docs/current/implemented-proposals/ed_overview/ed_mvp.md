@@ -1,24 +1,14 @@
 ---
-title: Economic Design MVP
+title: Экономический дизайн MVP
 ---
 
-**Subject to change.**
+**С учетом изменений.**
 
-The preceding sections, outlined in the
-[Economic Design Overview](ed_overview.md),
-describe a long-term vision of a sustainable Solana economy.
-Of course, we don't expect the final implementation to perfectly match what has
-been described above. We intend to fully engage with network stakeholders
-throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\)
-to ensure the system supports, and is representative of, the various network
-participants' interests. The first step toward this goal, however, is outlining
-a some desired MVP economic features to be available for early pre-testnet and
-testnet participants. Below is a rough sketch outlining basic economic
-functionality from which a more complete and functional system can be developed.
+Предыдущие разделы, описанные в [Обзоре экономического дизайна](ed_overview.md), описывают долгосрочное видение устойчивой экономики Solana. Разумеется, мы не ожидаем, что окончательная реализация полностью совпадает с описанным выше описанием. Мы намерены полностью взаимодействовать с заинтересованными сторонами сети на всех этапах реализации \(т.е., testnet, mainnet\) для обеспечения поддержки и репрезентативной поддержки различных заинтересованных участников сети. Первый шаг на пути к этой цели, однако, определяет некоторые желаемые экономические возможности MVP доступны для ранних участников testnet и участников mainnet. Ниже приводится приблизительный набросок основных экономических функций, на основе которых можно разработать более полную и функциональную систему.
 
-## MVP Economic Features
+## Экономичные возможности MVP
 
-- Faucet to deliver testnet SOLs to validators for staking and application development.
-- Mechanism by which validators are rewarded via network inflation.
-- Ability to delegate tokens to validator nodes
-- Validator set commission fees on interest from delegated tokens.
+- Faucet(кран) для доставки SOL тестовой сети валидаторам для стейкинга и разработки приложений.
+- Механизм, с помощью которого валидаторы получают вознаграждение за инфляцию сети.
+- Возможность делегировать токены узлам валидатора
+- Validator устанавливает комиссионные по процентам от делегированных токенов.

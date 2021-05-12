@@ -1,63 +1,27 @@
 ---
-title: Solana Wallet Guide
+title: Solana 지갑 가이드
 ---
 
-This document describes the different wallet options that are available to users
-of Solana who want to be able to send, receive and interact with
-SOL tokens on the Solana blockchain.
+이 문서는 Solana 블록체인에서 SOL 토큰을 보내고, 받고, 상호 작용할 수 있기를 원하는 Solana 사용자가 사용할 수있는 다양한 지갑 옵션을 설명합니다.
 
-## What is a Wallet?
+## 지갑이란?
 
-A crypto wallet is a device or application that stores a collection of keys and
-can be used to send, receive,
-and track ownership of cryptocurrencies. Wallets can take many forms.
-A wallet might be a directory or file in your computer's file system,
-a piece of paper, or a specialized device called a _hardware wallet_.
-There are also various smartphone apps and computer programs
-that provide a user-friendly way to create and manage wallets.
+암호 화폐 지갑은 키 모음을 저장하고 암호 화폐의 소유권을 보내고 받고 추적하는 데 사용할 수있는 장치 또는 애플리케이션입니다. 지갑은 다양한 형태를 취할 수 있습니다. 지갑은 컴퓨터 파일 시스템의 디렉토리 나 파일, 종이 또는 _hardware wallet_이라고하는 특수 장치 일 수 있습니다. 또한 사용자 친화적 인 지갑 생성 및 관리 방법을 제공하는 다양한 스마트 폰 앱과 컴퓨터 프로그램이 있습니다.
 
-A _keypair_ is a securely generated _private key_ and its
-cryptographically-derived _public key_. A private key and its corresponding
-public key are together known as a _keypair_.
-A wallet contains a collection of one or more keypairs and provides some means
-to interact with them.
+_keypair_는 안전하게 생성 된 _private key_ 및 암호 학적으로 파생 된 _public key_입니다. 개인 키와 해당 공개 키를 함께 _keypair_라고합니다. 지갑에는 하나 이상의 키 쌍 모음이 포함되어 있으며 이들과 상호 작용할 수있는 수단을 제공합니다.
 
-The _public key_ (commonly shortened to _pubkey_) is known as the wallet's
-_receiving address_ or simply its _address_. The wallet address **may be shared
-and displayed freely**. When another party is going to send some amount of
-cryptocurrency to a wallet, they need to know the wallet's receiving address.
-Depending on a blockchain's implementation, the address can also be used to view
-certain information about a wallet, such as viewing the balance,
-but has no ability to change anything about the wallet or withdraw any tokens.
+_public key_ (일반적으로 _pubkey_로 축약 됨)는 지갑의 _ 수신 주소 _ 또는 단순히 _address_로 알려져 있습니다. 지갑 주소는 ** 자유롭게 공유하고 표시 할 수 있습니다 **. 다른 당사자가 지갑에 일정량의 암호 화폐를 보낼 때 지갑의 수신 주소를 알아야합니다. 블록체인의 구현에 따라 주소는 잔액보기와 같은 지갑에 대한 특정 정보를 보는 데 사용될 수도 있지만 지갑에 대한 어떤 것도 변경하거나 토큰을 인출 할 수 없습니다.
 
-The _private key_ is required to digitally sign any transactions to send
-cryptocurrencies to another address or to make any changes to the wallet.
-The private key **must never be shared**. If someone gains access to the
-private key to a wallet, they can withdraw all the tokens it contains.
-If the private key for a wallet is lost, any tokens that have been sent
-to that wallet's address are **permanently lost**.
+_private key_는 암호 화폐를 다른 주소로 보내거나 지갑을 변경하기 위해 모든 거래에 디지털 서명을하는 데 필요합니다. 비공개 키는 ** 공유해서는 안됩니다 **. 누군가가 지갑의 개인 키에 대한 액세스 권한을 얻으면 포함 된 모든 토큰을 인출 할 수 있습니다. 지갑의 개인 키가 분실되면 해당 지갑 주소로 전송 된 모든 토큰이 ** 영구적으로 분실 **됩니다.
 
-Different wallet solutions offer different approaches to keypair security and
-interacting with the keypair and sign transactions to use/spend the tokens.
-Some are easier to use than others.
-Some store and back up private keys more securely.
-Solana supports multiple types of wallets so you can choose the right balance
-of security and convenience.
+다른 지갑 솔루션은 키 쌍 보안에 대한 다른 접근 방식을 제공하고 키 쌍과 상호 작용하고 토큰을 사용 / 소비하기 위해 트랜잭션에 서명합니다. 일부는 다른 것보다 사용하기 쉽습니다. 일부는 개인 키를 더 안전하게 저장하고 백업합니다. Solana는 여러 유형의 지갑을 지원하므로 보안과 편의성의 적절한 균형을 선택할 수 있습니다.
 
-**If you want to be able to receive SOL tokens on the Solana blockchain,
-you first will need to create a wallet.**
+****** Solana 블록체인에서 SOL 토큰을 받으려면 먼저 지갑을 만들어야합니다.****
 
-## Supported Wallets
+## 지원되는 지갑
 
-Solana supports several types of wallets in the Solana native
-command-line app as well as wallets from third-parties.
+Solana는 Solana 기본 명령 줄 앱에서 여러 유형의 지갑과 타사 지갑을 지원합니다.
 
-For the majority of users, we recommend using one of the
-[app wallets](wallet-guide/apps.md) or a browser-based
-[web wallet](wallet-guide/web-wallets.md), which will provide a more familiar
-user experience rather than needing to learn command line tools.
+대부분의 사용자에게 \[앱 지갑\] (wallet-guide / apps.md) 또는 브라우저 기반 \[웹 지갑\] (wallet-guide / web-wallets.md) 중 하나를 사용하는 것이 좋습니다. 명령 줄 도구를 배울 필요가 없습니다.
 
-For advanced users or developers, the [command-line wallets](wallet-guide/cli.md)
-may be more appropriate, as new features on the Solana blockchain will always be
-supported on the command line first before being integrated into third-party
-solutions.
+고급 사용자 또는 개발자의 경우 \[명령 줄 지갑\] (wallet-guide / cli.md)이 더 적절할 수 있습니다. Solana 블록체인의 새로운 기능은 항상 타사에 통합되기 전에 먼저 명령 줄에서 지원되기 때문입니다. 솔루션.

@@ -1,60 +1,35 @@
 ---
-title: Slashing rules
+title: 슬래싱 규칙
 ---
 
-Unlike Proof of Work \(PoW\) where off-chain capital expenses are already
-deployed at the time of block construction/voting, PoS systems require
-capital-at-risk to prevent a logical/optimal strategy of multiple chain voting.
-We intend to implement slashing rules which, if broken, result some amount of
-the offending validator's deposited stake to be removed from circulation. Given
-the ordering properties of the PoH data structure, we believe we can simplify
-our slashing rules to the level of a voting lockout time assigned per vote.
+블록 구성 / 투표시 오프 체인 자본 비용이 이미 배포 된 작업 증명 (PoW)과 달리, PoS 시스템은 다중 체인 투표의 논리적 / 최적 전략을 방지하기 위해 위험 자본이 필요합니다. 우리는 슬래싱 규칙을 시행 할 예정입니다.이 규칙을 위반할 경우 위반하는 밸리데이터이 예치 한 지분의 일부가 유통에서 제거됩니다. 역사증명 데이터 구조의 순서 속성을 고려할 때, 우리는 투표 당 할당 된 투표 잠금 시간 수준으로 슬래싱 규칙을 단순화 할 수 있다고 믿습니다.
 
-I.e. Each vote has an associated lockout time \(PoH duration\) that represents
-a duration by any additional vote from that validator must be in a PoH that
-contains the original vote, or a portion of that validator's stake is
-slashable. This duration time is a function of the initial vote PoH count and
-all additional vote PoH counts. It will likely take the form:
+I.e. 즉 각 투표에는 해당 밸리데이터의 추가 투표 기간을 나타내는 관련 잠금 시간 \ (역사증명 기간 \)이 있습니다.이 기간은 원래 투표가 포함 된 역사증명에 있어야합니다. 이 기간은 초기 투표 역사증명 카운트 및 모든 추가 투표 역사증명 카운트의 함수입니다. 다음과 같은 형식을 취합니다.
 
 ```text
-Lockouti\(PoHi, PoHj\) = PoHj + K \* exp\(\(PoHj - PoHi\) / K\)
+잠금 \ (역사증명i, 역사증명j \) = 역사증명j + K \ * exp \ (\ (역사증명j-역사증명i \) / K \)
 ```
 
-Where PoHi is the height of the vote that the lockout is to be applied to and
-PoHj is the height of the current vote on the same fork. If the validator
-submits a vote on a different PoH fork on any PoHk where k &gt; j &gt; i and
-PoHk &lt; Lockout\(PoHi, PoHj\), then a portion of that validator's stake is at
-risk of being slashed.
+여기서 역사증명i는 잠금이 적용될 투표의 높이이고 역사증명j는 동일한 포크에 대한 현재 투표의 높이입니다. 밸리데이터가 역사증명k의 다른 역사증명 포크에 투표를 제출하는 경우 k & gt; j & gt; i 및 역사증명k & lt; Lockout \ (역사증명i, 역사증명j \), 해당 밸리데이터의 지분 일부가 삭감 될 위험이 있습니다.
 
-In addition to the functional form lockout described above, early
-implementation may be a numerical approximation based on a First In, First Out
-\(FIFO\) data structure and the following logic:
+위에서 설명한 기능적 형식 잠금 외에도 초기 구현은 First In, First Out \ (FIFO \) 데이터 구조 및 다음 논리를 기반으로 한 수치 근사치 일 수 있습니다.
 
-- FIFO queue holding 32 votes per active validator
-- new votes are pushed on top of queue \(`push_front`\)
+- -활성 밸리데이터당 32 표를 보유한 FIFO 대기열 -새 투표가 대기열 상단에 푸시됩니다.
+- \ (`push_front` \) -만료 된 투표는 상단에 표시됩니다.
 - expired votes are popped off top \(`pop_front`\)
-- as votes are pushed into the queue, the lockout of each queued vote doubles
-- votes are removed from back of queue if `queue.len() > 32`
-- the earliest and latest height that has been removed from the back of the
-  queue should be stored
+- \ (`pop_front` \) -투표가 대기열로 푸시되면 대기중인 각 투표의 잠금이 두 배가됩니다.
+- `queue.len ()> 32` 인 경우 대기열 뒤에서 투표가 제거됩니다.
+- the earliest and latest height that has been removed from the back of the queue should be stored
 
-It is likely that a reward will be offered as a % of the slashed amount to any
-node that submits proof of this slashing condition being violated to the PoH.
+이 슬래싱 조건이 역사증명에 위반되었다는 증거를 제출하는 모든 노드에 슬래시 금액의 %로 보상이 제공 될 가능성이 있습니다.
 
-### Partial Slashing
+### 부분 슬래싱
 
-In the schema described so far, when a validator votes on a given PoH stream,
-they are committing themselves to that fork for a time determined by the vote
-lockout. An open question is whether validators will be hesitant to begin
-voting on an available fork if the penalties are perceived too harsh for an
-honest mistake or flipped bit.
+지금까지 설명한 스키마에서 밸리데이터가 주어진 역사증명 스트림에 투표하면 투표 잠금에 의해 결정된 시간 동안 해당 포크에 자신을 커밋합니다. 공개 된 질문은 벌칙이 정직한 실수 나 뒤집힌 비트로 인해 너무 가혹하다고 인식되면 밸리데이터이 사용 가능한 포크에서 투표를 시작하는 것을 주저할지 여부입니다.
 
-One way to address this concern would be a partial slashing design that results
-in a slashable amount as a function of either:
+One way to address this concern would be a partial slashing design that results in a slashable amount as a function of either:
 
-1. the fraction of validators, out of the total validator pool, that were also
-   slashed during the same time period \(ala Casper\)
-2. the amount of time since the vote was cast \(e.g. a linearly increasing % of
-   total deposited as slashable amount over time\), or both.
+1. 전체 밸리데이터 풀 중 동일한 기간 동안 삭감 된 밸리데이터 비율 \ (ala Casper \)
+2. 투표가 실시 된 이후의 시간 \ (예 : 시간이 지남에 따라 삭감 할 수있는 금액으로 입금 된 총 금액의 선형 적으로 증가하는 % \) 또는 둘 다.
 
-This is an area currently under exploration.
+이 문제를 해결하는 한 가지 방법은 다음 중 하나의 함수로 슬래시 가능한 양을 생성하는 부분 슬래싱 디자인입니다.

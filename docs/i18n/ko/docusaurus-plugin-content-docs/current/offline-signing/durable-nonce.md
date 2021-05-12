@@ -2,61 +2,50 @@
 title: Durable Transaction Nonces
 ---
 
-Durable transaction nonces are a mechanism for getting around the typical
-short lifetime of a transaction's [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash).
-They are implemented as a Solana Program, the mechanics of which can be read
-about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
+는 트랜잭션 [`recent_blockhash`] (developing / programming-model / transactions.md # recent-blockhash)의 일반적인 짧은 수명을 처리하는 메커니즘입니다. 그것들은 솔라나 프로그램으로 구현되며, 그 메커니즘은 \[제안\] (../ implemented-proposals / durable-tx-nonces.md)에서 읽을 수 있습니다.
 
-## Usage Examples
+## 사용 예
 
-Full usage details for durable nonce CLI commands can be found in the
-[CLI reference](../cli/usage.md).
+내구성있는 nonce CLI 명령에 대한 전체 사용 세부 정보는 \[CLI 참조\] (../ cli / usage.md)에서 찾을 수 있습니다.
 
-### Nonce Authority
+### Nonce 계정 생성
 
-Authority over a nonce account can optionally be assigned to another account. In
-doing so the new authority inherits full control over the nonce account from the
-previous authority, including the account creator. This feature enables the
-creation of more complex account ownership arrangements and derived account
-addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
-argument is used to specify this account and is supported by the following
-commands
+임시 계정에 대한 임시권한은 선택적으로 다른 계정에 할당 될 수 있습니다. 이렇게하면 새 권한은 계정 생성자를 포함하여 이전 권한에서 nonce 계정에 대한 모든 권한을 상속합니다. 이 기능을 사용하면 더 복잡한 계정 소유권 컨트랙트 및 키 쌍과 연결되지 않은 파생 계정 주소를 만들 수 있습니다. 은`--nonce-권한 <AUTHORITY_KEYPAIR은> '인수는이 계정을 지정하는 데 사용되는 다음과 같은 명령에 의해 지원됩니다
 
-- `create-nonce-account`
+- `할당 권한 다시 할당 와 생성 후 거버넌스 계정`
 - `new-nonce`
-- `withdraw-from-nonce-account`
+- `인출 와 비표 계정에서이야`
 - `authorize-nonce-account`
 
-### Nonce Account Creation
+### 저장된 Nonce 값 쿼리
 
-The durable transaction nonce feature uses an account to store the next nonce
-value. Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
-so need to carry the minimum balance to achieve this.
+영구 트랜잭션 nonce 기능은 계정을 사용하여 다음 nonce 값을 저장합니다. 영구 임시 계정은 \[rent-exempt\] (../ implemented-proposals / rent.md # two-tiered-rent-regime)이어야하므로이를 달성하려면 최소 잔액을 보유해야합니다.
 
-A nonce account is created by first generating a new keypair, then create the account on chain
+`만들-거버넌스 - account`를 -`새로운 nonce`을 -'철수-부터 거버넌스 - account`
 
 - Command
 
 ```bash
-solana-keygen new -o nonce-keypair.json
-solana create-nonce-account nonce-keypair.json 1
+밥<code>bash는
+$ 솔라-keygen은 새로운 -o alice.json의
+$ 솔라-keygen은 새로운 - 오 nonce.json
+$ 솔라-keygen은 새로운 -o
+bob.json</code>
 ```
 
 - Output
 
 ```text
-2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
+HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ```###
 ```
 
-> To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
+> \[전체 사용 문서\] (../ cli / usage.md # solana-create-nonce-account)
 
 > [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 
-### Querying the Stored Nonce Value
+### 저장된 논스 값
 
-Creating a durable nonce transaction requires passing the stored nonce value as
-the value to the `--blockhash` argument upon signing and submission. Obtain the
-presently stored nonce value with
+내구성있는 nonce 트랜잭션을 생성하려면 저장된 nonce를 전달해야합니다. 서명 및 제출시`--blockhash` 인수에 대한 값으로 값을 지정합니다. 에 현재 저장 거버넌스 값을 구합니다
 
 - Command
 
@@ -67,15 +56,14 @@ solana nonce nonce-keypair.json
 - Output
 
 ```text
-8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
+8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU```&#062;
 ```
 
 > [Full usage documentation](../cli/usage.md#solana-get-nonce)
 
-### Advancing the Stored Nonce Value
+### 디스플레이 난스
 
-While not typically needed outside a more useful transaction, the stored nonce
-value can be advanced by
+nonce 값 계정이 먼저 발생 새로운 키 쌍에 의해 생성되는 다음 체인에 계정을 생성
 
 - Command
 
@@ -86,78 +74,87 @@ solana new-nonce nonce-keypair.json
 - Output
 
 ```text
-44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
+44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK```&#062;
 ```
 
 > [Full usage documentation](../cli/usage.md#solana-new-nonce)
 
-### Display Nonce Account
+### Nonce 계정에서 자금 인출 자금
 
-Inspect a nonce account in a more human friendly format with
+nonce 값 계정이 먼저 발생 새로운 키 쌍에 의해 생성되는 다음 체인에 계정을 생성
 
 - Command
 
 ```bash
-solana nonce-account nonce-keypair.json
+<code>bash는
+솔라 거버넌스 - 계정 거버넌스 -
+keypair.json</code>
 ```
 
 - Output
 
 ```text
-balance: 0.5 SOL
-minimum balance required: 0.00136416 SOL
-nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
+출력<code>텍스트
+밸런스 : 0.5 SOL
+최소균형이 필요합니다 : 0.00136416 SOL의
+비표 :
+DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS을</code>&#062;
 ```
 
 > [Full usage documentation](../cli/usage.md#solana-nonce-account)
 
-### Withdraw Funds from a Nonce Account
+### 에 새 권한
 
-Withdraw funds from a nonce account with
+명령`배시
+솔라-keygen은 새로운 -o 논스-keypair.json을
+만들-거버넌스 - 계정 솔라 난스-keypair.json
+1`
 
 - Command
 
 ```bash
-solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0.5
+명령<code>bash는
+솔라 철회-부터 거버넌스-계정 거버넌스 - keypair.json ~ /의 .config / 솔라 / id.json
+0.5</code>
 ```
 
 - Output
 
 ```text
-3foNy1SBqwXSsfSfTdmYKDuhnVheRnKXpoPySiUDBVeDEs6iMVokgqm7AqfTjbk7QBE8mqomvMUMNQhtdMvFLide
+3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV을```####
 ```
 
-> Close a nonce account by withdrawing the full balance
+> 전체 잔액을 인출하여 임시 계정 폐쇄
 
 > [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
 
-### Assign a New Authority to a Nonce Account
+### Durable Nonce를 사용한 지불 예제Durable nonce를 사용하여
 
-Reassign the authority of a nonce account after creation with
+2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL```>
 
 - Command
 
 ```bash
-solana authorize-nonce-account nonce-keypair.json nonce-authority.json
+여기에서는 별도의 [nonce Authority] (# nonce-authority)가 사용되지 않으므로<code>alice.json</code>은 임시 계정대한 완전한 권한을
 ```
 
 - Output
 
 ```text
-3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
+3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT```&#062;
 ```
 
 > [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
 
-## Other Commands Supporting Durable Nonces
+## Durable Nonce지원하는 기타 명령Durable Nonce
 
-To make use of durable nonces with other CLI subcommands, two arguments must be
-supported.
+>
 
-- `--nonce`, specifies the account storing the nonce value
+- `--nonce`, nonce 값을 저장하는 계정 지정-`--nonce
+-authority`, 선택적 지정 \[nonce Authority\] (# nonce-authority)
 - `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
 
-The following subcommands have received this treatment so far
+출력```텍스트
 
 - [`pay`](../cli/usage.md#solana-pay)
 - [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
@@ -165,83 +162,86 @@ The following subcommands have received this treatment so far
 
 ### Example Pay Using Durable Nonce
 
-Here we demonstrate Alice paying Bob 1 SOL using a durable nonce. The procedure
-is the same for all subcommands supporting durable nonces
+여기에서는 Alice가Bob 1 SOL을 지불하는 것을 보여줍니다. 절차는내구성 난스를 지원하는 모든 하위 명령에 대해 동일합니다
 
-#### - Create accounts
+#### - 만들기 계정,
 
-First we need some accounts for Alice, Alice's nonce and Bob
+2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL```>
 
 ```bash
-$ solana-keygen new -o alice.json
-$ solana-keygen new -o nonce.json
-$ solana-keygen new -o bob.json
+명령<code>bash는
+솔라 거버넌스 거버넌스 -
+keypair.json</code>
 ```
 
-#### - Fund Alice's account
+#### -기금 앨리스의 계정
 
-Alice will need some funds to create a nonce account and send to Bob. Airdrop
-her some SOL
+앨리스는 논스 계정 생성 및 밥에게 보낼 자금이 필요할 것입니다. 앨리스에게 SOL을 에어드랍 하세요.
 
 ```bash
-$ solana airdrop -k alice.json 1
-1 SOL
+$ solana airdrop -k alice.json 10
+10 SOL
 ```
 
-#### - Create Alice's nonce account
+#### 우리가앨리스에 대한 몇 가지 계정이 필요 먼저  앨리스의 비표와
 
-Now Alice needs a nonce account. Create one
+이제 앨리스를 비표 계정이 필요합니다. 생성
 
-> Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
+> 시도>,기억`alice.json`는 [거버넌스 기관이 예에서 (# 거버넌스입니다.
 
 ```bash
-$ solana create-nonce-account -k alice.json nonce.json 0.1
-3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
+F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7``````bash는
+$의 솔라 지불 -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 ```
 
 #### - A failed first attempt to pay Bob
 
-Alice attempts to pay Bob, but takes too long to sign. The specified blockhash
-expires and the transaction fails
+밥을 지불앨리스 시도를실패했지만서명하는 데 시간이 너무 오래 걸립니다. 지정된 blockhash가 만료되고 트랜잭션이 실패합니다
 
 ```bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
-[2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
-Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
+<code>bash
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
+[2020-01-02T18 : 48 : 28.462911000Z ERROR solana_cli :: cli] Io (Custom {kind : 기타 오류 : "거래 \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV \ "실패 : 없음"})
+오류 : 이오 (사용자 정의 {종류 : 기타, 오류 : "거래 \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV \ "실패 :
+없음을"})</code>
 ```
 
-#### - Nonce to the rescue!
+#### -Nonce를 구출하세요!
 
-Alice retries the transaction, this time specifying her nonce account and the
-blockhash stored there
+명령`bash는
+솔라 새로운 넌스 넌스 -
+keypair.json`
 
 > Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
 
 ```bash
-$ solana nonce-account nonce.json
-balance: 0.1 SOL
-minimum balance required: 0.00136416 SOL
-nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
+SOL``````bash는
+$ 솔라 거버넌스 - 계정 nonce.json
+1 SOL :균형
+최소밸런스필수 : 0.00136416 SOL의
+거버넌스 :
+6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN```
 ```
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
-#### - Success!
+#### -성공!
 
-The transaction succeeds! Bob receives 0.01 SOL from Alice and Alice's stored
-nonce advances to a new value
+The transaction succeeds! 거래가 성공했습니다!밥은 새 앨리스와 앨리스의 저장 거버넌스의 발전에서 1 SOL을 수신
 
 ```bash
-$ solana balance -k bob.json
-0.01 SOL
+값```bash는
+$의 솔라 균형 -k bob.json
+1
 ```
 
 ```bash
-$ solana nonce-account nonce.json
-balance: 0.1 SOL
-minimum balance required: 0.00136416 SOL
-nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
+거버넌스-권한)```bash는
+$ 솔라 거버넌스 - 계정  JSON
+밸런스: 1 개 SOL
+최소균형이 필요합니다 : 0.00136416 SOL의
+거버넌스 :
 ```

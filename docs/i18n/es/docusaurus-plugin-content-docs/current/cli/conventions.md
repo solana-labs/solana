@@ -1,80 +1,59 @@
 ---
-title: Using Solana CLI
+title: Usando Solana CLI
 ---
 
-Before running any Solana CLI commands, let's go over some conventions that
-you will see across all commands. First, the Solana CLI is actually a collection
-of different commands for each action you might want to take. You can view the list
-of all possible commands by running:
+Antes de ejecutar cualquier comando Solana CLI, vamos a pasar algunas convenciones que verás a través de todos los comandos. En primer lugar, la CLI de Solana es en realidad una colección de diferentes comandos para cada acción que desee realizar. Puede ver la lista de todos los comandos posibles ejecutando:
 
 ```bash
 solana --help
 ```
 
-To zoom in on how to use a particular command, run:
+Para hacer zoom sobre cómo usar un comando en particular, ejecute:
 
 ```bash
 solana <COMMAND> --help
 ```
 
-where you replace the text `<COMMAND>` with the name of the command you want
-to learn more about.
+donde se sustituye el texto `<COMMAND>` por el nombre del comando que se desea aprender más sobre él.
 
-The command's usage message will typically contain words such as `<AMOUNT>`,
-`<ACCOUNT_ADDRESS>` or `<KEYPAIR>`. Each word is a placeholder for the _type_ of
-text you can execute the command with. For example, you can replace `<AMOUNT>`
-with a number such as `42` or `100.42`. You can replace `<ACCOUNT_ADDRESS>` with
-the base58 encoding of your public key, such as
-`9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
+El mensaje de uso del comando normalmente contendrá palabras como `<AMOUNT>`, `<ACCOUNT_ADDRESS>` o `<KEYPAIR>`. Cada palabra es un marcador de posición para el _tipo_ de texto con el que se puede ejecutar el comando. Por ejemplo, puedes reemplazar `<AMOUNT>` con un número como `42` o `100.42`. Puede reemplazar `<ACCOUNT_ADDRESS>` por la codificación base58 de su clave pública, como `9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
 
-## Keypair conventions
+## Convenciones Keypair
 
-Many commands using the CLI tools require a value for a `<KEYPAIR>`. The value
-you should use for the keypair depend on what type of
-[command line wallet you created](../wallet-guide/cli.md).
+Muchos comandos que utilizan las herramientas CLI requieren un valor para un `<KEYPAIR>`. El valor que debe usar para el keypair depende del tipo de cartera de línea de comandos [que haya creado](../wallet-guide/cli.md).
 
-For example, the way to display any wallet's address
-(also known as the keypair's pubkey), the CLI help document shows:
+Por ejemplo, la forma de mostrar la dirección de cualquier monedero (también conocida como pubkeys delkeypair), el documento de ayuda de CLI muestra:
 
 ```bash
-solana-keygen pubkey <KEYPAIR>
+pubkey de solana-keygen <KEYPAIR>
 ```
 
-Below, we show how to resolve what you should put in `<KEYPAIR>` depending
-on your wallet type.
+A continuación, mostramos cómo resolver lo que debe poner en `<KEYPAIR>` dependiendo de su tipo de billetera.
 
-#### Paper Wallet
+#### Billetera de papel
 
-In a paper wallet, the keypair is securely derived from the seed words and
-optional passphrase you entered when the wallet was create. To use a paper
-wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help
-documents, enter the uri scheme `prompt://` and the program will prompt you to
-enter your seed words when you run the command.
+En una Billetera de papel, el keypair se deriva de forma segura de las palabras de semilla y contraseña opcional que introdujo cuando se creó la Billetera. Para usar un keypair de una billetera de papel en cualquier lugar el texto `<KEYPAIR>` se muestra en ejemplos o documentos de ayuda, introduce la palabra `ASK` y el programa te pedirá que introduzcas tus palabras de semilla cuando ejecutes el comando.
 
-To display the wallet address of a Paper Wallet:
+Para mostrar la dirección de la billetera de una billetera de papel:
 
 ```bash
-solana-keygen pubkey prompt://
+pubkey de solana-keygen
 ```
 
-#### File System Wallet
+#### Cartera del Sistema de Archivos
 
-With a file system wallet, the keypair is stored in a file on your computer.
-Replace `<KEYPAIR>` with the complete file path to the keypair file.
+Con una cartera de sistema de archivos, el keypair se almacena en un archivo en su computadora. Reemplaza `<KEYPAIR>` por la ruta completa del archivo al keypair.
 
-For example, if the file system keypair file location is
-`/home/solana/my_wallet.json`, to display the address, do:
+Por ejemplo, si la ubicación del archivo del keypair del sistema de archivos es `/home/solana/my_wallet.json`, para mostrar la dirección, son:
 
 ```bash
-solana-keygen pubkey /home/solana/my_wallet.json
+pubkey solana-keygen /home/solana/my_wallet.json
 ```
 
-#### Hardware Wallet
+#### Billetera Hardware
 
-If you chose a hardware wallet, use your
-[keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),
-such as `usb://ledger?key=0`.
+Si eligió una billetera de hardware, utilice su [URL de par de claves](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key), como `usb://ledger?key=0`.
 
 ```bash
-solana-keygen pubkey usb://ledger?key=0
+pubkey solana-keygen usb://ledger?key=0
 ```

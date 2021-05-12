@@ -1,150 +1,115 @@
 ---
-title: Backward Compatibility Policy
+title: Политика обратной совместимости
 ---
 
-As the Solana developer ecosystem grows, so does the need for clear expectations around
-breaking API and behavior changes affecting applications and tooling built for Solana.
-In a perfect world, Solana development could continue at a very fast pace without ever
-causing issues for existing developers. However, some compromises will need to be made
-and so this document attempts to clarify and codify the process for new releases.
+По мере роста экосистемы Solana растет и потребность в четких ожиданиях в отношении API и изменений поведения, влияющих на приложения и инструменты, созданные для Solana. В идеальном мире разработка Solana могла бы продолжаться очень быстрыми темпами, не вызывая проблем у существующих разработчиков. Однако, необходимо будет пойти на некоторые компромиссы, и поэтому в этом документе делается попытка прояснить и систематизировать процесс для новых релизов.
 
-### Expectations
+### Ожидания
 
-- Solana software releases include APIs, SDKs, and CLI tooling (with a few [exceptions](#exceptions)).
-- Solana software releases follow semantic versioning, more details below.
-- Software for a `MINOR` version release will be compatible across all software on the
-  same `MAJOR` version.
+- Релизы программного обеспечения Solana включают в себя API, SDK и инструменты CLI (с несколькими [исключениями](#exceptions)).
+- Релизы ПО Solana имеют семантическую нумерацию версий, детальнее о которой написано ниже.
+- Программное обеспечение для `MINOR` версий всегда будет совместимо со всеми программами на одной `MAJOR` версии.
 
-### Deprecation Process
+### Депрекация
 
-1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
-2. According to code upgrade difficulty, some features will be remain deprecated for a few release
-   cycles.
-3. In a future `MAJOR` release, deprecated features will be removed in an incompatible way.
+1. В любом `PATCH` или `MINOR` релизе, функции, API, эндпоинты и т. д. могут быть отмечены как устаревшие - deprecated.
+2. В зависимости от сложности обновления, некоторые функции останутся устаревшими в течение нескольких релиз-циклов.
+3. В будущем `MAJOR` релизе, устаревшие функции будут удалены без сохранения обратной совместимости.
 
-### Release Cadence
+### Процесс выпуска релизов
 
-The Solana RPC API, Rust SDK, CLI tooling, and BPF Program SDK are all updated and shipped
-along with each Solana software release and should always be compatible between `PATCH`
-updates of a particular `MINOR` version release.
+RPC API, Rust SDK, инструменты CLI, и SDK программ BPF будут обновляться и поставляться вместе с каждым релизом Solana и всегда должны быть совместимы между `PATCH` обновлениями конкретной `MINOR` релиз-версии.
 
-#### Release Channels
+#### Ветки релизов
 
-- `edge` software that contains cutting-edge features with no backward compatibility policy
-- `beta` software that runs on the Solana Tour de SOL testnet cluster
-- `stable` software that run on the Solana Mainnet Beta and Devnet clusters
+- `edge` ПО, которое содержит самые новые возможности без политики обратной совместимости
+- `beta` ПО, которое работает на тестнет кластере Solana Tour de SOL
+- `stable` ветка, ПО работающее на Solana Mainnet Beta и Devnet кластерах
 
-#### Major Releases (x.0.0)
+#### Мажорные релизы (x.0.0)
 
-`MAJOR` version releases (e.g. 2.0.0) may contain breaking changes and removal of previously
-deprecated features. Client SDKs and tooling will begin using new features and endpoints
-that were enabled in the previous `MAJOR` version.
+`MAJOR` версии (например, 2.0.0) могут содержать критические изменения и удаленые ранее устаревшие функций. Клиентские SDK и остальные инструменты начнут использовать новые функции и эндпоинты, которые были включены в предыдущей версии `MAJOR`.
 
-#### Minor Releases (1.x.0)
+#### Минорные релизы (1.x.0)
 
-New features and proposal implementations are added to _new_ `MINOR` version
-releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. While running
-on the testnet, `MINOR` versions are considered to be in the `beta` release channel. After
-those changes have been patched as needed and proven to be reliable, the `MINOR` version will
-be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
+Новые возможности и реализации предложений об улучшении добавляются в _новую_ `MINOR` версию релиза и обычно, в первую очередь, запускаются на тестнет кластере Solana's Tour de SOL. При работе в тестовой сети `MINOR` версии считаются находящимися в ветке `beta`. После внесения необходимых патчей и подтверждения их надежности версия `MINOR` будет обновлена до релиз-ветки `stable` и развернута в кластере Mainnet Beta.
 
-#### Patch Releases (1.0.x)
+#### Патч релизы (1.0.x)
 
-Low risk features, non-breaking changes, and security and bug fixes are shipped as part
-of `PATCH` version releases (e.g. 1.0.11). Patches may be applied to both `beta` and `stable`
-release channels.
+Функции с низким уровнем риска, некритические изменения, а также исправления безопасности и ошибок поставляются как часть `PATCH` релизов (например, 1.0.11). Патч-релизы могут выпускаться на ветках `beta` и `stable`.
 
 ### RPC API
 
-Patch releases:
+Патч релизы:
+- Исправления багов
+- Улучшения безопасности
+- Эндпоинты / депрекация возможностей
 
-- Bug fixes
-- Security fixes
-- Endpoint / feature deprecation
+Минорные релизы:
+- Новые возможности и RPC эндпоинты
 
-Minor releases:
+Мажорные релизы:
+- Удаление устаревших функций
 
-- New RPC endpoints and features
+### Пакеты Rust
 
-Major releases:
+* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK для создания транзакций и парсинга состояний аккаунтов
+* [`solana-program`](https://docs.rs/solana-program/) - Rust SDK для написания программ
+* [`solana-client`](https://docs.rs/solana-client/) - Rust client для работы с RPC API
+* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust клиент для управления файлами конфигураций Solana CLI
 
-- Removal of deprecated features
+Патч релизы:
+- Исправления багов
+- Улучшения безопасности
+- Улучшение производительности
 
-### Rust Crates
+Минорные релизы:
+- Новые API
 
-- [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
-- [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
-- [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
-- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
+Мажорные релизы
+- Удаление устаревших APIs
+- Изменения поведения без обратной совместимости
 
-Patch releases:
+### Инструменты CLI
 
-- Bug fixes
-- Security fixes
-- Performance improvements
+Патч релизы:
+- Исправления ошибок и проблем с безопасностью
+- Улучшение производительности
+- Деприкация отдельных команд и аргументов
 
-Minor releases:
+Минорные релизы:
+- Новые команды
 
-- New APIs
+Мажорные релизы:
+- Переход на новые RPC API эндпоинты / конфигурация, представленная в предыдущей основной версии.
+- Удаление устаревших функций
 
-Major releases
+### Возможности среды выполнения
 
-- Removal of deprecated APIs
-- Backwards incompatible behavior changes
+Новые возможности среды выполнения Solana сводятся к переключению функций и ручной активации. Возможности среды выполнения включают: введение новых нативных программ, системных переменных и системных вызовов; и изменения в их поведении. Активация новых функций не зависит от кластера, что позволяет убедится в их работоспособности на тестовом кластере до активации в Mainnet-Beta.
 
-### CLI Tools
+Процесс выпуска обновлений:
 
-Patch releases:
+1. Новые возмодности среды выполнения входят в каждый новый релиз, но отключены по-умолчанию
+2. После обновления достаточного количества валидаторов до новой версии, необходимо вручную активировать новые возможности среды выполнения с помощью инструкции
+3. Доступные возможности полностью активируются в начеле следующей эпохи
 
-- Bug and security fixes
-- Performance improvements
-- Subcommand / argument deprecation
+### Изменения инфраструктуры
 
-Minor releases:
+#### Публичные API ноды
 
-- New subcommands
+Solana предоставляет общедоступные RPC API ноды для использования всеми разработчиками. Команда Solana приложит максимум усилий, чтобы сообщать о любых изменениях хоста, порта, ограничений скорости и доступности, и т. д. Однако мы рекомендуем разработчикам полагаться на собственные ноды, чтобы избежать зависимости от узлов, находящихся под управлением Solana.
 
-Major releases:
+#### Локальные скрипты и образы Docker
 
-- Switch to new RPC API endpoints / configuration introduced in the previous major version.
-- Removal of deprecated features
+Критические изменения будут ограничены `MAJOR` релизами. `MINOR` и `PATCH` обновления всегда должны быть обратно совместимы.
 
-### Runtime Features
+### Исключения
 
-New Solana runtime features are feature-switched and manually activated. Runtime features
-include: the introduction of new native programs, sysvars, and syscalls; and changes to
-their behavior. Feature activation is cluster agnostic, allowing confidence to be built on
-Testnet before activation on Mainnet-beta.
+#### Web3 JavaScript API
 
-The release process is as follows:
+SDK Web3.JS также следует спецификациям по семантическому версию, но поставляется отдельно от релизов Solana.
 
-1. New runtime feature is included in a new release, deactivated by default
-2. Once sufficient staked validators upgrade to the new release, the runtime feature switch
-   is activated manually with an instruction
-3. The feature takes effect at the beginning of the next epoch
+#### Векторы атаки
 
-### Infrastructure Changes
-
-#### Public API Nodes
-
-Solana provides publicly available RPC API nodes for all developers to use. The Solana team
-will make their best effort to communicate any changes to the host, port, rate-limiting behavior,
-availability, etc. However, we recommend that developers rely on their own validator nodes to
-discourage dependence upon Solana operated nodes.
-
-#### Local cluster scripts and Docker images
-
-Breaking changes will be limited to `MAJOR` version updates. `MINOR` and `PATCH` updates should always
-be backwards compatible.
-
-### Exceptions
-
-#### Web3 JavaScript SDK
-
-The Web3.JS SDK also follows semantic versioning specifications but is shipped separately from Solana
-software releases.
-
-#### Attack Vectors
-
-If a new attack vector is discovered in existing code, the above processes may be
-circumvented in order to rapidly deploy a fix, depending on the severity of the issue.
+Если в существующем коде обнаруживается новый вектор атаки, указанные выше процессы могут быть проигнорированны чтобы быстро развернуть исправление, в зависимости от серьезности проблемы.

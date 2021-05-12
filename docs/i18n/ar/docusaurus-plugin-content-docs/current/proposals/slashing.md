@@ -1,60 +1,35 @@
 ---
-title: Slashing rules
+title: قواعد الإقتطاع (Slashing rules)
 ---
 
-Unlike Proof of Work \(PoW\) where off-chain capital expenses are already
-deployed at the time of block construction/voting, PoS systems require
-capital-at-risk to prevent a logical/optimal strategy of multiple chain voting.
-We intend to implement slashing rules which, if broken, result some amount of
-the offending validator's deposited stake to be removed from circulation. Given
-the ordering properties of the PoH data structure, we believe we can simplify
-our slashing rules to the level of a voting lockout time assigned per vote.
+على عكس إثبات العمل \(PoW\) حيث يتم بالفعل نشر النفقات الرأسمالية خارج الشبكة (off-chain) في وقت إنشاء الكتلة / التصويت، تتطلب أنظمة PoS رأس المال المُعرض للخطر لمنع الإستراتيجية المنطقية / المُثلى للتصويت المُتسلسل المُتعدد. نحن عازمون على تطبيق قواعد الإقتطاع (slashing) التي، إذا تم كسرها، تُؤدي إلى إزالة جزء من الحِصَّة (stake) المودعة للمُدقّق (validator) المُخالف من التداول. نظرًا لخصائص الترتيب لهيكل بيانات PoH، نعتقد أنه يُمكننا تبسيط قواعد الإقتطاع (slashing) الخاصة بنا إلى مُستوى وقت إغلاق التصويت المُخصص لكل تصويت.
 
-I.e. Each vote has an associated lockout time \(PoH duration\) that represents
-a duration by any additional vote from that validator must be in a PoH that
-contains the original vote, or a portion of that validator's stake is
-slashable. This duration time is a function of the initial vote PoH count and
-all additional vote PoH counts. It will likely take the form:
+بمعنى آخر. كل تصويت له وقت إغلاق مُرتبط \ (مُدة PoH \) يُمثل مُدة من خلال أي تصويت إضافي من ذلك المُدقّق (validator) يجب أن يكون في الـ PoH الذي يحتوي على التصويت الأصلي، أو جزء من حِصَّة (stake) ذلك المُدقّق (validator) قابلة للإقتطاع (slashing). هذه المُدة الزمنية هي دالة لعد التصويت الأولي لـ PoH وجميع حسابات PoH للتصويت الإضافية. ومن المُرجح أن يتخذ هذا الشكل ما يلي:
 
 ```text
 Lockouti\(PoHi, PoHj\) = PoHj + K \* exp\(\(PoHj - PoHi\) / K\)
 ```
 
-Where PoHi is the height of the vote that the lockout is to be applied to and
-PoHj is the height of the current vote on the same fork. If the validator
-submits a vote on a different PoH fork on any PoHk where k &gt; j &gt; i and
-PoHk &lt; Lockout\(PoHi, PoHj\), then a portion of that validator's stake is at
-risk of being slashed.
+حيث PoHi هو ذروة التصويت الذي سيتم تطبيق الإغلاق عليه و PoHj هو ذروة التصويت الحالي على نفس الإنقسام أو الشوكة (fork). إذا قدم المُدقّق (validator) تصويتًا على إنقسام أو شوكة PoH مُختلفة على أي PoHk حيث k &gt; j &gt; i و PoHk &lt; Lockout\(PoHi, PoHj\)، فإن جزءًا من حِصَّة (stake) هذا المُدقّق (validator) مُعرضة لخطر الإقتطاع (slashing).
 
-In addition to the functional form lockout described above, early
-implementation may be a numerical approximation based on a First In, First Out
-\(FIFO\) data structure and the following logic:
+بالإضافة إلى تأمين النموذج الوظيفي المُوضح أعلاه، قد يكون التنفيذ المُبكر تقريبًا رقميًا يعتمد على بنية بيانات أول ما يدخل (First In)، يخرج أولاً (First Out) المعروف إختصارا بـ \(FIFO\) والمنطق التالي:
 
-- FIFO queue holding 32 votes per active validator
-- new votes are pushed on top of queue \(`push_front`\)
-- expired votes are popped off top \(`pop_front`\)
-- as votes are pushed into the queue, the lockout of each queued vote doubles
-- votes are removed from back of queue if `queue.len() > 32`
-- the earliest and latest height that has been removed from the back of the
-  queue should be stored
+- تحتوي قائمة إنتظار FIFO على 32 صوتًا لكل مُدقّق (validator) نشط
+- يتم دفع الأصوات الجديدة أعلى قائمة الإنتظار \ (`push_front`\)
+- ظهرت الأصوات مُنتهية الصلاحية من أعلى (`pop_front`\)
+- مع دفع الأصوات إلى قائمة الإنتظار، يتضاعف إغلاق كل صوت في قائمة الإنتظار
+- تتم إزالة الأصوات من الجزء الخلفي من قائمة الإنتظار إذا كان `queue.len() > 32`
+- يجب تخزين أقرب وأحدث إرتفاع تمت إزالته من الجزء الخلفي لقائمة الإنتظار
 
-It is likely that a reward will be offered as a % of the slashed amount to any
-node that submits proof of this slashing condition being violated to the PoH.
+من المُحتمل أن يتم تقديم مُكافأة كنسبة مئوية من المبلغ المُقتطع لأي عُقدة (node) تُقدم دليلاً على إنتهاك شرط الإقتطاع (slashing) هذا إلى PoH.
 
-### Partial Slashing
+### الإقتطاع الجزئي (Partial Slashing)
 
-In the schema described so far, when a validator votes on a given PoH stream,
-they are committing themselves to that fork for a time determined by the vote
-lockout. An open question is whether validators will be hesitant to begin
-voting on an available fork if the penalties are perceived too harsh for an
-honest mistake or flipped bit.
+في المُخطط الموصوف حتى الآن، عندما يصوت المُدقّق (validator) على تيار PoH مُعين، فإنهم يلتزمون بذلك الإنقسام أو الشوكة (fork) لفترة زمنية تُحددها فترة إغلاق التصويت. السؤال المفتوح هو ما إذا كان المُدقّقون (validators) سيترددون في بدء التصويت على إنقسام أو شوكة (fork) مُتاحة إذا تم إعتبار العقوبات قاسية جدًا لخطأ صادق (honest mistake) أو bit مقلوب.
 
-One way to address this concern would be a partial slashing design that results
-in a slashable amount as a function of either:
+تتمثل إحدى طرق مُعالجة هذا الإشكال في تصميم الإقتطاع الجزئي (partial slashing) الجزئي الذي ينتج عنه مبلغ قابل للتقسيم كدالة لأي من:
 
-1. the fraction of validators, out of the total validator pool, that were also
-   slashed during the same time period \(ala Casper\)
-2. the amount of time since the vote was cast \(e.g. a linearly increasing % of
-   total deposited as slashable amount over time\), or both.
+1. جزء المُدقّقين (validators)، من إجمالي مجموعة مُجمع المُدقّقين (validator pool)، التي تم أيضًا إقتطاعها (slashed) خلال نفس الفترة الزمنية \(ala Casper\)
+2. مقدار الوقت مُنذ الإدلاء بالتصويت \ (على سبيل المثال، زيادة ٪ خطية من إجمالي الإيداع كمبلغ قابل للإقتطاع بمرور الوقت\)، أو كليهما.
 
-This is an area currently under exploration.
+هذه منطقة قيد الإستكشاف حاليًا.

@@ -1,22 +1,22 @@
 ---
-title: Persistent Account Storage
+title: التخزين المُستمر للحساب (Persistent Account Storage)
 ---
 
-## Persistent Account Storage
+## التخزين المُستمر للحساب (Persistent Account Storage)
 
-The set of accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
+تُمثل مجموعة الحسابات الحالة المحسوبة الحالية لجميع المُعاملات التي تمت مُعالجتها بواسطة المُدقّق (validator). كل المُدقّق (validator) يحتاج إلى الحفاظ على هذه المجموعة بأكملها. تُمثل كل كتلة (block) تقترحها الشبكة تغييرًا في هذه المجموعة، وبما أن كل كتلة (block) هي نقطة تراجع مُحتملة ، يجب أن تكون التغييرات قابلة للعكس.
 
-Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
+التخزين الدائم مثل NVMEs أرخص 20 إلى 40 مرة من DDR. تكمن مُشكلة التخزين المُستمر في أن أداء الكتابة والقراءة أبطأ بكثير من DDR ويجب توخي الحذر في كيفية قراءة البيانات أو الكتابة إليها. يُمكن تقسيم كل من عمليات القراءة والكتابة بين مُحركات أقراص تخزين مُتعددة والوصول إليها بشكل متوازٍ. يقترح هذا التصميم بنية بيانات تسمح بالقراءات والكتابات المُتزامنة للتخزين. يتم تحسين عمليات الكتابة بإستخدام بنية بيانات AppendVec، والتي تسمح لكاتب واحد بالإلحاق مع السماح بالوصول إلى العديد من أجهزة القراءة المُتزامنة. يحتفظ فهرس الحسابات بمُؤشر إلى النقطة التي تم فيها إلحاق الحساب بكل إنقسام أو شوكة (fork)، وبالتالي إزالة الحاجة إلى نقاط تفتيش صريحة للحالة.
 
-## AppendVec
+## إلحاق النواقل (AppendVec)
 
-AppendVec is a data structure that allows for random reads concurrent with a single append-only writer. Growing or resizing the capacity of the AppendVec requires exclusive access. This is implemented with an atomic `offset`, which is updated at the end of a completed append.
+إلحاق النواقل (AppendVec) هو هيكل بيانات يسمح بالقراءات العشوائية المُتزامنة مع كاتب إلحاق واحد فقط. تتطلب زيادة سعة إلحاق النواقل (AppendVec) أو تغيير حجمها وصولاً خاصًا. يتم تنفيذ ذلك بإزاحة ذرية `offset`، والتي يتم تحديثها في نهاية مُلحق مُكتمل.
 
-The underlying memory for an AppendVec is a memory-mapped file. Memory-mapped files allow for fast random access and paging is handled by the OS.
+الذاكرة الأساسية لإلحاق النواقل (AppendVec) هي ملف ذاكرة مُعين (memory-mapped file). تسمح ملفات الذاكرة المُعينة (memory-mapped files) بالوصول العشوائي السريع ويتم التعامل مع الترحيل بواسطة نظام التشغيل.
 
-## Account Index
+## فهرس الحساب (Account Index)
 
-The account index is designed to support a single index for all the currently forked Accounts.
+تم تصميم فهرس الحساب لدعم فهرس واحد لجميع الحسابات المُتشعبة حاليًا.
 
 ```text
 type AppendVecId = usize;
@@ -28,7 +28,7 @@ struct AccountMap(Hashmap<Fork, (AppendVecId, u64)>);
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 ```
 
-The index is a map of account Pubkeys to a map of Forks and the location of the Account data in an AppendVec. To get the version of an account for a specific Fork:
+الفهرس عبارة عن خريطة حساب مفتاتيح عمومية (pubkeys) لخريطة الإنقسامات أو الشوكات (Forks) وموقع بيانات الحساب في إلحاق النواقل (AppendVec). للحصول على نسخة حساب لإنقسام أو شوكة (fork):
 
 ```text
 /// Load the account for the pubkey.
@@ -39,45 +39,57 @@ The index is a map of account Pubkeys to a map of Forks and the location of the 
 pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 ```
 
-The read is satisfied by pointing to a memory-mapped location in the `AppendVecId` at the stored offset. A reference can be returned without a copy.
+تتم القراءة عن طريق الإشارة إلى موقع مُعين للذاكرة في `AppendVecId` عند الإزاحة المُخزنة. يُمكن إرجاع المرجع بدون نسخة.
 
-### Root Forks
+### إنقسامات أو شوكات الجذر (Root Forks)
 
-[Tower BFT](tower-bft.md) eventually selects a fork as a root fork and the fork is squashed. A squashed/root fork cannot be rolled back.
+يُحدد [Tower BFT](tower-bft.md) في النهاية إنقسام أو شوكة (fork) كشوكة جذر (root fork) ويتم سحق الإنقسام أو الشوكة. لا يمكن التراجع عن الإنقسام أو الشوكة الجذر / المسحوقة.
 
-When a fork is squashed, all accounts in its parents not already present in the fork are pulled up into the fork by updating the indexes. Accounts with zero balance in the squashed fork are removed from fork by updating the indexes.
+عندما يتم سحق الإنقسام أو الشوكة (fork)، يتم سحب جميع الحسابات الموجودة في العناصر الرئيسية غير الموجودة بالفعل في الإنقسام أو الشوكة (fork) إلى أعلى نقطة عن طريق تحديث الفهارس. الحسابات ذات الرصيد الصفري في الإنقسام أو الشوكة (fork) المسحوقة تتم إزالتها من الإنقسام أو الشوكة (fork) عن طريق تحديث الفهارس.
 
-An account can be _garbage-collected_ when squashing makes it unreachable.
+يُمكن أن يتم جمع الحساب الغير مرغوب فيه _garbage-collected_ عندما يجعله السحق غير قابل للوصول.
 
-Three possible options exist:
+هناك ثلاثة خيارات مُمكنة:
 
-- Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
-- Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
-- Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
+- الحفاظ على مجموعة تجزئة (HashSet) من الإنقسامات أو الشوكات الجذرية (root forks). من المُتوقع أن يتم إنشاء واحد كل ثانية. الشجرة (tree) بأكملها يُمكن جمعها في وقت لاحق. بدلاً من ذلك، إذا إحتفظت كل إنقسام أو شوكة (fork) بعدد مرجعي للحسابات، فقد تحدث عملية جمع البيانات المُهملة في أي وقت يتم فيه تحديث موقع الفهرس.
+- إزالة أي إنقسامات أو شوكات (forks) منبوذة من الفهرس. يُمكن إعتبار أي إنقسامات أو شوكات (forks) مُتبقية أقل في العدد من الجذر على أنها جذر.
+- مسح الفهرس، نقل أي جذور قديمة إلى جذور جديدة. أي إنقسام أو شوكة (fork) مُتبقية أقل من الجذر الجديد يُمكن حذفها لاحقاً.
 
-## Garbage collection
+## كتابة مُلحقة فقط (Append-only Writes)
 
-As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
+تحدث جميع تحديثات الحسابات كتحديثات مُلحقة فقط (append-only updates). لكل تحديث للحساب، يتم تخزين إصدار جديد في إلحاق النواقل (AppendVec).
 
-To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
+من المُمكن تحسين التحديثات داخل إنقسام أو شوكة (fork) واحدة عن طريق إرجاع مرجع قابل للتغيير إلى حساب مُخزن بالفعل في إنقسام أو شوكة (fork). يتتبع البنك بالفعل الوصول المُتزامن للحسابات ويضمن أن الكتابة إلى إنقسام أو شوكة (fork) حساب مُعين لن تكون مُتزامنة مع قراءة إلى حساب في ذلك الإنقسام أو الشوكة (fork). لدعم هذه العملية، يجب على إلحاق النواقل (AppendVec) تنفيذ هذه الوظيفة:
 
-The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
+```text
+fn get_mut(&self, index: u64) -> &mut T;
+```
 
-## Index Recovery
+تسمح واجهة برمجة التطبيقات (API) هذه بالوصول المُتزامن المُتغير إلى منطقة الذاكرة في `index`. وهي تعتمد على البنك لضمان الوصول الحصري إلى هذا الفهرس.
 
-Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
+## جمع البيانات المُهملة (Garbage collection)
 
-To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
+عندما يتم تحديث الحسابات ، فإنها تنتقل إلى نهاية إلحاق النواقل (AppendVec). بمجرد نفاد السعة، يُمكن إنشاء إلحاق نواقل (AppendVec) جديد ويُمكن تخزين التحديثات هناك. في النهاية ستختفي المراجع إلى إلحاق النواقل (AppendVec) الأقدم لأنه تم تحديث جميع الحسابات، ويُمكن حذف إلحاق النواقل (AppendVec) القديم.
 
-## Snapshots
+لتسريع هذه العملية، من المُمكن نقل الحسابات التي لم يتم تحديثها مؤخرًا إلى مُقدمة إلحاق النواقل (AppendVec) الجديد. يُمكن إجراء هذا النوع من جمع البيانات المُهملة دون الحاجة إلى تأمينات حصرية لأي من هياكل البيانات بإستثناء تحديث الفهرس.
 
-To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
+يتمثل التنفيذ الأولي لجمع البيانات المُهملة (garbage collection) في أنه بمجرد أن تُصبح جميع الحسابات في إلحاق النواقل (AppendVec) إصدارات قديمة، يتم إعادة إستخدامها. لا يتم تحديث الحسابات أو نقلها بمُجرد إلحاقها.
 
-## Performance
+## إستعادة الفهرس (Index Recovery)
 
-- Append-only writes are fast. SSDs and NVMEs, as well as all the OS level kernel data structures, allow for appends to run as fast as PCI or NVMe bandwidth will allow \(2,700 MB/s\).
-- Each replay and banking thread writes concurrently to its own AppendVec.
-- Each AppendVec could potentially be hosted on a separate NVMe.
-- Each replay and banking thread has concurrent read access to all the AppendVecs without blocking writes.
-- Index requires an exclusive write lock for writes. Single-thread performance for HashMap updates is on the order of 10m per second.
-- Banking and Replay stages should use 32 threads per NVMe. NVMes have optimal performance with 32 concurrent readers or writers.
+تتمتع كل عملية جزئية للبنك (bank thread) بحق وصول خاص إلى الحسابات أثناء الإلحاق، نظرًا لأنه لا يمكن تحرير قفل الحسابات حتى يتم الإلتزام بالبيانات. لكن لا يوجد ترتيب صريح لعمليات الكتابة بين ملفات إلحاق النواقل (AppendVec) المُنفصلة. لإنشاء ترتيب، يحتفظ الفهرس بعداد نسخة الكتابة الذرية. يُسجل كل إلحاق بإلحاق النواقل (AppendVec) رقم إصدار كتابة الفهرس لذلك الإلحاق في المُدخل (entry) الخاص بالحساب في إلحاق النواقل (AppendVec).
+
+لإستعادة الفهرس، يُمكن قراءة جميع ملفات إلحاق النواقل (AppendVec) بأي ترتيب، ويجب تخزين أحدث إصدار للكتابة لكل إنقسام أو شوكة (fork) في الفهرس.
+
+## لقطات (Snapshots)
+
+لأخذ لقطة (snapshot)، يجب مسح الملفات الأساسية المُعينة للذاكرة في إلحاق النواقل (AppendVec) إلى القرص. يُمكن كتابة الفهرس على القرص أيضا.
+
+## الأداء (Performance)
+
+- الكتابات المُلحقة فقط (Append-only Writes) سريعة. تسمح مُحركات الأقراص SSDs و NVME، بالإضافة إلى جميع هياكل بيانات kernel على مُستوى نظام التشغيل، بتشغيل المُلحقات بالسرعة التي يسمح بها عرض النطاق الترددي (bandwidth) لـ PCI أو NVMe \(2,700 MB/الثانية\).
+- كل إعادة تشغيل وعملية جزئية للبنك (bank thread) تُكتب بشكل مُتزامن إلى إلحاق النواقل (AppendVec) الخاص به.
+- يُمكن إستضافة كل إلحاق النواقل (AppendVec) على NVMe مُنفصل.
+- كل إعادة تشغيل وعملية جزئية للبنك (banking thread) لها وصول قراءة مُتزامن لجميع مُلحقات النواقل (AppendVecs) دون حظر عمليات الكتابة.
+- يتطلب الفهرس قفل كتابة خاص بالكتابة. أداء عملية جزئية مُفردة (Single-thread) لتحديثات خريطة التجزئة (HashMap) هو في حدود 10 أمتار في الثانية الواحدة.
+- يجب أن تستخدم المراحل المصرفية وإعادة التشغيل 32 عملية جزئية (threads) لكل NVMe. تتمتع NVMes بأداء مثالي مع 32 قارئًا أو كاتبًا مُتزامنًا.

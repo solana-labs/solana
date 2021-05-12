@@ -6,17 +6,17 @@ title: 确定性交易费用
 
 ## 拥堵引起的费用
 
-验证节点使用*signatures per slot*\(SPS\) 来估计网络拥堵，然后通过*SPS target*来估计集群的期望处理能力。 验证节点从 genesis config 中获得 SPS target 信息，而它从最近处理的事务中计算 SPS。 Genesis config 还定义了一个目标`lamports_per_signature`，这是集群在*SPS target*运行时对每个签名收取的费用。
+验证节点使用_signatures per slot_\(SPS\) 来估计网络拥堵，然后通过_SPS target_来估计集群的期望处理能力。 验证节点从genesis config中获得SPS target信息，而它从最近处理的事务中计算SPS。 Genesis config还定义了一个目标`lamports_per_signature`，这是集群在_SPS target_运行时对每个签名收取的费用。
 
 ## 费用计算
 
 客户端使用 JSON RPC API 来查询集群的当前收费参数。 这些参数被标记了一个区块哈希，并保持有效，直到该区块哈希足够老，被插槽领导者拒绝。
 
-在向集群发送交易之前，客户端可以将交易和收费账户数据提交给一个名为*收费计算器*的 SDK 模块。 只要客户端的 SDK 版本与插槽领导者的版本相匹配，客户端就可以保证其账户被更改的 lamports 数量与费用计算器返回的数量完全相同。
+在向集群发送交易之前，客户端可以将交易和收费账户数据提交给一个名为_收费计算器_的SDK模块。 只要客户端的SDK版本与插槽领导者的版本相匹配，客户端就可以保证其账户被更改的lamports数量与费用计算器返回的数量完全相同。
 
 ## 费用参数
 
-在该设计的第一个实现中，唯一的收费参数是`lamports_per_signature`。 集群需要验证的签名越多，费用越高。 具体的 lamports 数量由 SPS 与 SPS 目标的比例决定。 在每个时段结束时，当 SPS 低于目标值时，集群会降低`lamports_per_signature`，当高于目标值时，集群则会相应提高它的值。 `lamports_per_signature`的最小值是目标`lamports_per_signature`的 50%，最大值是目标 lamports_per_signature 的 10 倍。
+在该设计的第一个实现中，唯一的收费参数是`lamports_per_signature`。 集群需要验证的签名越多，费用越高。 具体的lamports数量由SPS与SPS目标的比例决定。 在每个时段结束时，当SPS低于目标值时，集群会降低`lamports_per_signature`，当高于目标值时，集群则会相应提高它的值。 `lamports_per_signature`的最小值是目标`lamports_per_signature`的50%，最大值是目标lamports_per_signature的10倍。
 
 未来的参数可能包括：
 
@@ -27,6 +27,6 @@ title: 确定性交易费用
 
 ## 攻击
 
-### 劫持 SPS 目标
+### 劫持SPS目标
 
-一群验证节点如果能说服群组将 SPS 目标提高到其他验证者能跟上的程度，就可以将群组集中起来。 提高目标会导致费用下降，大概创造更多的需求，从而提高 TPS。 如果验证者没有硬件可以那么快地处理那么多交易，它的确认票最终会变得很长，以至于集群将被迫启动它。
+一群验证节点如果能说服群组将SPS目标提高到其他验证者能跟上的程度，就可以将群组集中起来。 提高目标会导致费用下降，大概创造更多的需求，从而提高TPS。 如果验证者没有硬件可以那么快地处理那么多交易，它的确认票最终会变得很长，以至于集群将被迫启动它。

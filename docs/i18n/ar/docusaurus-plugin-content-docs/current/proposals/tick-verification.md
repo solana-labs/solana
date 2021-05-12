@@ -1,70 +1,43 @@
 ---
-title: Tick Verification
+title: التحقق من وضع علامة (Tick Verification)
 ---
 
-This design the criteria and validation of ticks in a slot. It also describes
-error handling and slashing conditions encompassing how the system handles
-transmissions that do not meet these requirements.
+يُصمم هذا المعايير والتحقق من صحة العلامات (ticks) في الفُتحة (Slot). كما يصف أيضًا مُعالجة الأخطاء وشروط الإقتطاع (slashing) التي تشمل كيفية مُعالجة النظام لعمليات الإرسال التي لا تفي بهذه المُتطلبات.
 
-# Slot structure
+# هيكل الفُتحة (Slot structure)
 
-Each slot must contain an expected `ticks_per_slot` number of ticks. The last
-shred in a slot must contain only the entirety of the last tick, and nothing
-else. The leader must also mark this shred containing the last tick with the
-`LAST_SHRED_IN_SLOT` flag. Between ticks, there must be `hashes_per_tick`
-number of hashes.
+يجب أن تحتوي كل فُتحة (Slot) على عدد مُتوقع قدره `ticks_per_slot` من العلامات (ticks). يجب أن تتحوي آخر قِطَعة (Shred) في الفُتحة (Slot) على كامل آخر علامة (tick) فقط، ولا شيء آخر. يجب على القائد أيضًا وضع علامة (tick) على هذه القِطَعة (Shred) التي تحتوي على آخر علامة (tick) بعلامة علم `LAST_SHRED_IN_SLOT`. بين العلامة (tick)، يجب أن يكون هناك `hashes_per_tick` عدد من التجزئات (hashes).
 
-# Handling bad transmissions
+# التعامل مع الإرسال السيئ (Handling bad transmissions)
 
-Malicious transmissions `T` are handled in two ways:
+يتم التعامل مع عمليات الإرسال الضارة `T` بطريقتين:
 
-1. If a leader can generate some erronenous transmission `T` and also some
-   alternate transmission `T'` for the same slot without violating any slashing
-   rules for duplicate transmissions (for instance if `T'` is a subset of `T`),
-   then the cluster must handle the possibility of both transmissions being live.
+1. إذا كان بإمكان القائد إنشاء بعض الإرسال الخاطئ `T` وأيضًا بعض الإرسال البديل `T'` لنفس الفُتحة (Slot) دون إنتهاك أي قواعد الإقتطاع (slashing) للإرسال المُكرر (على سبيل المثال إذا كان `T'` مجموعة فرعية من `T`)، فيجب على المجموعة (cluster) التعامل مع إمكانية وجود كلا الإرسالين.
 
-Thus this means we cannot mark the erronenous transmission `T` as dead because
-the cluster may have reached consensus on `T'`. These cases necessitate a
-slashing proof to punish this bad behavior.
+بالتالي هذا يعني أنه لا يُمكننا وضع علامة على الإرسال الخاطئ `T` كميت لأن الكتلة (cluster) ربما وصلت إلى إجماع (consensus) على `T'`. هذه الحالات تتطلب حجة قاطعة لمُعاقبة هذا السلوك السيئ.
 
-2. Otherwise, we can simply mark the slot as dead and not playable. A slashing
-   proof may or may not be necessary depending on feasibility.
+2. خلاف ذلك، يُمكننا ببساطة تمييز الفُتحة (Slot) على أنها ميتة وغير قابلة للتشغيل. قد يكون إثبات الإقتطاع (slashing proof) ضروريًا وقد لا يكون ضروريًا إعتمادًا على الجدوى.
 
-# Blockstore receiving shreds
+# مخزن الكتلة يتلقى قِطَعا (Blockstore receiving shreds)
 
-When blockstore receives a new shred `s`, there are two cases:
+عندما يتلقى مخزن الكتلة (blockstore) قِطَعة (Shred) جديدة `s`، هناك حالتان:
 
-1. `s` is marked as `LAST_SHRED_IN_SLOT`, then check if there exists a shred
-   `s'` in blockstore for that slot where `s'.index > s.index` If so, together `s`
-   and `s'` constitute a slashing proof.
+1. تم وضع علامة على `s` كـ `LAST_SHRED_IN_SLOT`، ثم تحقق مما إذا كان هناك `s'` قِطَعة (Shred) في مخزن الكتلة (blockstore) لتلك الفُتحة (Slot) حيث `s'.index > s.index` إذا كان الأمر كذلك، فإن `s` و `s'` معًا يُشكلان دليلًا على إثبات الإقتطاع (slashing proof).
 
-2. Blockstore has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
-   with index `i`. If `s.index > i`, then together `s` and `s'`constitute a
-   slashing proof. In this case, blockstore will also not insert `s`.
+2. تلقى مخزن الكتلة (blockstore) بالفعل `s'` تم تمييزه على أنه آخر قِطَعة (shred) في الفُتحة `LAST_SHRED_IN_SLOT` مع مُؤشر `i`. إذا كان `s.index > i`، فإن `s` و `s'` معًا يُشكلان دليلًا على دليل الإقتطاع (slashing proof). في هذه الحالة، لن يقوم مخزن الكتلة (blockstore) أيضًا بإدراج `s`.
 
-3. Duplicate shreds for the same index are ignored. Non-duplicate shreds for
-   the same index are a slashable condition. Details for this case are covered
-   in the `Leader Duplicate Block Slashing` section.
+3. يتم تجاهل القِطَع (shreds) المُكررة لنفس الفهرس. القِطَع (shreds) غير المُكررة لنفس الفهرس قابلة للإقتطاع (slashable). يتم تغطية تفاصيل هذه الحالة في قسم قائد كتلة الإقتطاع المُكررة `Leader Duplicate Block Slashing`.
 
-# Replaying and validating ticks
+# إعادة التشغيل والتَحَقُّق من صحة العلامات (Replaying and validating ticks)
 
-1. Replay stage replays entries from blockstore, keeping track of the number of
-   ticks it has seen per slot, and verifying there are `hashes_per_tick` number of
-   hashes between ticcks. After the tick from this last shred has been played,
-   replay stage then checks the total number of ticks.
+1. تقوم مرحلة إعادة التشغيل بإعادة المُدخلات (entries) من مخزن الكتلة (blockstore)، وتتبع عدد العلامات (ticks) التي شاهدتها في كل فُتحة (Slot)، والتحقق من وجود `hashes_per_tick` عدد من التجزئة (hashes) بين العلامات. بعد العلامة (tick) للشظية (Shred) الأخيرة، تقوم مرحلة إعادة التشغيل بفحص العدد الإجمالي للعلامات (ticks).
 
-Failure scenario 1: If ever there are two consecutive ticks between which the
-number of hashes is `!= hashes_per_tick`, mark this slot as dead.
+سيناريو الفشل 1: في حالة وجود علامتين (ticks) مُتتاليتين بينهما عدد التجزئات`!= hashes_per_tick`، ضع علامة على هذه الفُتحة (Slot) على أنها ميتة.
 
-Failure scenario 2: If the number of ticks != `ticks_per_slot`, mark slot as
-dead.
+سيناريو الفشل 2: إذا كان عدد العلامات != `ticks_per_slot`، ضع علامة على الفُتحة (Slot) على أنها ميتة.
 
-Failure scenario 3: If the number of ticks reaches `ticks_per_slot`, but we still
-haven't seen the `LAST_SHRED_IN_SLOT`, mark this slot as dead.
+سيناريو الفشل 3: إذا وصل عدد العلامات (ticks) إلى `ticks_per_slot`، لكننا لم نر الرقم `LAST_SHRED_IN_SLOT` بعد، فقُم بتمييز هذه الفُتحة (Slot) على أنها ميتة.
 
-2. When ReplayStage reaches a shred marked as the last shred, it checks if this
-   last shred is a tick.
+2. عندما تصل ReplayStage إلى قطعة تم تمييزها على أنها آخر قِطَعة (Shred)، فإنها تتحقق مما إذا كانت هذه القطعة الأخيرة عبارة عن علامة (tick).
 
-Failure scenario: If the signed shred with the `LAST_SHRED_IN_SLOT` flag cannot
-be deserialized into a tick (either fails to deserialize or deserializes into
-an entry), mark this slot as dead.
+سيناريو الفشل: إذا تعذر إلغاء تسلسل الشظية (Shred) المُوَقَّة بعلامة `LAST_SHRED_IN_SLOT` لا يمكن إلغاء تسلسلها إلى علامة (إما فشل في إلغاء التسلسل أو إلغاء التسلسل في مُدخل)، ضع علامة على هذه الفُتحة (Slot) على أنها ميتة.

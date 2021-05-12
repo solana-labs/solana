@@ -1,11 +1,7 @@
 ---
-title: Steps to create a validator
+title: Шаги по созданию валидатора
 ---
 
-To create a Solana validator, follow the normal [validator workflow](../../running-validator/validator-start.md)
-targeting the [Testnet cluster](../../clusters.md).
+Чтобы создать валидатор Solana пройдите процесс [запуска валидатора](../../running-validator/validator-start.md), ориентированный на [тестовую сеть](../../clusters.md).
 
-Note that Testnet validators are automatically staked by a process that runs
-every Epoch. If your validator is running correctly then in a couple of days it
-will be staked (and automatically destaked if offline for a prolonged period of
-time).
+Обратите внимание, что валидаторы Testnet автоматически получают стейк каждую эпоху. Если валидатор работает корректно, через пару дней он получит стейк (также стейк автоматически удалится, если валидатор оффлайн в течение длительного периода времени).

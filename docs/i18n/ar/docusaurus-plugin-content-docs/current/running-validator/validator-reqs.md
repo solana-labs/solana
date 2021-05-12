@@ -1,86 +1,64 @@
 ---
-title: Validator Requirements
+title: مُتطلبات المُدقّق (Validator Requirements)
 ---
 
-## Minimum SOL requirements
+## الأجهزة (Hardware)
 
-There is no strict minimum amount of SOL required to run a validator on Solana.
+- توصيات وحدة المُعالجة المركزية (CPU Recommendations)
+  - نوصي بإستخدام وحدة المُعالجة المركزية (CPU) ذات أكبر عدد مُمكن من النوى (cores). وحدات المُعالجة المركزية AMD Threadripper أو Intel Server \(Xeon\) تُعتبر خيار جيد.
+  - نُوصي بإستخدام AMD Threadripper لأنك تحصل على عدد أكبر من النوى (cores) للتوازي (parallelization) مُقارنة بـ Intel.
+  - تتمتع Threadripper أيضًا بميزة التكلفة لكل مركز وعدد أكبر من ممرات PCIe مُقارنة بجزء Intel المُكافئ. ويستند PoH \ (إثبات التاريخ \) على Sha256 وThreadripper كما يدعم تعليمات الأجهزة Sha256.
+- حجم أقراص الحالة الصلبة SSD والنمط I/O لـ (SATA مُقابل NVMe/M.2\) للمُدقّق (validator)
+  - الحد الأدنى للأمثلة - Samsung 860 Evo 2TB
+  - مثال مُتوسط المدى - Samsung 860 Evo 4TB
+  - مثال مُتطور - Samsung 860 Evo 4TB
+- وحدات مُعالجة الرسومات (GPUs)
+  - بينما قد تكون العُقدة (node) ذات وحدة المُعالجة المركزية فقط (CPU-only) قادرة على مُواكبة شبكة الخمول الأولية، بمُجرد زيادة إنتاجية المُعاملة، ستكون وحدات مُعالجة الرسومات (GPUs) ضرورية
+  - أي نوع من وحدة مُعالجة الرسومات (GPU)؟
+    - نوصي بـ Nvidia Turing وأصناف العائلة volta مثل GPUs 1660ti إلى مجموعة 2080ti GPU للمُستهلكين أو وحدات مُعالجة الرسومات (GPU) للخادم من مجموعة Tesla.
+    - لا ندعم OpenCL حاليًا وبالتالي لا ندعم وحدات مُعالجة الرسومات (GPUs) لـ AMD. لدينا مُكافأة لشخص ما لنقلنا إلى OpenCL. هل أنت مهتم بذلك؟ تحقق من [Check out our GitHub.](https://github.com/solana-labs/solana)
+- إستهلاك الطاقة (Power Consumption)
+  - يبلغ إستهلاك الطاقة التقريبي لعُقدة التدقيق (valdiator node) التي تشغل وحدة مُعالجة رسومات AMD Threadripper 3950x و 2x 2080Ti GPU من 800 إلى 1000 Watt.
 
-However in order to participate in consensus, a vote account is required which
-has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote
-transaction for each block the validator agrees with, which can cost up to
-1.1 SOL per day.
+### الإعدادات المُعدة مسبقاً (Preconfigured Setups)
 
-## Hardware Recommendations
+فيما يلي توصياتنا لمُواصفات جهاز مُنخفض ومُتوسط وعالي الجودة:
 
-- CPU
-  - 12 cores / 24 threads, or more
-  - 2.8GHz, or faster
-  - AVX2 instruction support (to use official release binaries, self-compile
-    otherwise)
-  - Support for AVX512f and/or SHA-NI instructions is helpful
-  - The AMD Threadripper Zen3 series is popular with the validator community
-- RAM
-  - 128GB, or more
-  - Motherboard with 256GB capacity suggested
-- Disk
-  - PCIe Gen3 x4 NVME SSD, or better
-  - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
-  - Ledger: 1TB or larger. High TBW suggested
-  - OS: (Optional) 500GB, or larger. SATA OK
-  - The OS may be installed on the ledger disk, though testing has shown better
-    performance with the ledger on its own disk
-  - Accounts and ledger _can_ be stored on the same disk, however due to high
-    IOPS, this is not recommended
-  - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
-- GPUs
-  - Not strictly necessary at this time
-  - Motherboard and power supply speced to add one or more high-end GPUs in the
-    future suggested
+|                                         | مُنخفض المُواصفات   | مُتوسط المُواصفات      | عالي المُواصفات        | المُلاحظات                                                                                                  |
+|:--------------------------------------- |:------------------- |:---------------------- |:---------------------- |:----------------------------------------------------------------------------------------------------------- |
+| المُعالج (CPU)                          | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | ضع في إعتبارك لوحة أم (motherboard) قادرة على 10Gb مع أكبر عدد مُمكن من ممرات PCIe وفُتحات m.2.motherboard. |
+| ذاكرة الوصول العشوائي (RAM)             | 32GB                | 64GB                   | 128GB                  |                                                                                                             |
+| مُحرك أقراص دفتر الأستاذ (Ledger Drive) | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | أو ما يُعادله أقراص الحالة الصلبة (SSD)                                                                     |
+| مُحرك أقراص الحسابات (Accounts Drive)   | لا شيء              | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                                             |
+| وحداة مُعالجة الرسومات (GPU)            | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | يتم دعم أي عدد من وحدات مُعالجة الرسومات (GPUs) القادرة على cuda على أنظمة Linux الأساسية.                  |
 
-## Virtual machines on Cloud Platforms
+## الأجهزة الإفتراضية على المنصات السحابية
 
-While you can run a validator on a cloud computing platform, it may not
-be cost-efficient over the long term.
+بينما يُمكنك تشغيل المُدقّق (validator) على منصة الحوسبة السحابية (cloud computing)، فقد لا تكون فعالة من حيث التكلفة على المدى الطويل.
 
-However, it may be convenient to run non-voting api nodes on VM instances for
-your own internal usage. This use case includes exchanges and services built on
-Solana.
+مع ذلك، قد يكون من المُلائم تشغيل عُقد api غير مُصوتة (non-voting api nodes) على مثيلات VM لإستخدامك الداخلي. تتضمن حالة الإستخدام هذه التبادلات والخدمات المبنية على Solana.
 
-In fact, the mainnet-beta validators operated by the team are currently
-(Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with
-2048 GB SSD for operational convenience.
+في الواقع، تعمل عُقد واجهة برمجة التطبيقات (API nodes) الرسمية حاليًا في الشبكة التجريبية الرئيسية (mainnet-beta) منذ (أكتوبر 2020) على مثيلات GCE النسخة `n1-standard-32` بالخصائص التالية (32 وحدة مُعالجة مركزية إفتراضية أو vCPUs، وذاكرة 120 GB) مع 2048 GB سعة حجم الـ SSD للراحة التشغيلية.
 
-For other cloud platforms, select instance types with similar specs.
+بالنسبة إلى الأنظمة الأساسية السحابية الأخرى، حدد أنواع المثيلات بمُواصفات مُماثلة.
 
-Also note that egress internet traffic usage may turn out to be high,
-especially for the case of running staked validators.
+لاحظ أيضًا أن إستخدام حركة المرور على الأنترنات عند الخروج قد يكون مُرتفعًا، خاصةً في حالة تشغيل المُدقّقين المُحَصِّصين (staked validators).
 
-## Docker
+## الحمّال (Docker)
 
-Running validator for live clusters (including mainnet-beta) inside Docker is
-not recommended and generally not supported. This is due to concerns of general
-Docker's containerzation overhead and resultant performance degradation unless
-specially configured.
+لا يُوصى بتشغيل المُدقّق (validator) للمجموعات (clusters) الشغالة (بما في ذلك الشبكة التجريبية الرئيسية mainnet-beta) داخل Docker وهو غير مدعوم بشكل عام. يرجع ذلك إلى مخاوف عامة تتعلق بحاويات الحمّال (docker's containerzation) وتدهور الأداء الناتج ما لم يتم تكوينه بشكل خاص.
 
-We use Docker only for development purposes. Docker Hub contains images for all
-releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
+نحن نستخدم الحمّال (Docker) فقط لأغراض التطوير.
 
-## Software
+## البرمجيات (Software)
 
-- We build and run on Ubuntu 20.04.
-- See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
+- نحن نبني ونطور ونعمل على النظام Ubuntu 18.04. كان كان قد واجه بعض المُستخدمين مُشكلة عند تشغيل Ubuntu 16.04
+- راجع [Installing Solana](../cli/install-solana-cli-tools.md) لإصدار برنامج Solana الحالي.
 
-Be sure to ensure that the machine used is not behind a residential NAT to avoid
-NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
-For more information on port forwarding with regards to residential networks,
-see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
+كُن مُتأكد من أن الجهاز المُستخدم ليس NAT residential لتجنب مشاكل إجتياز NAT. تعمل الآلة المُستضافة على السحابة (cloud-hosted) بشكل أفضل. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.** لمزيد من المعلومات حول إعادة توجيه المنفذ (port forwarding) فيما يتعلق بالشبكات السكنية، راجع [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
-Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
-MacOS or WSL users may build from source.
+الثنائيات المُدمجة مُسبقا (Prebuilt binaries) مُتاحة لنظام التشغيل Linux x86_64 \ (إوصى بنُستخدام Ubuntu 18.04 \). يمكن لمُستخدمي MacOS أو WSL البناء من المصدر.
 
-## GPU Requirements
+## مُتطلبات وحدة مُعالجة الرسومات (GPU Requirements)
 
-CUDA is required to make use of the GPU on your system. The provided Solana
-release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using
-a different CUDA version then you will need to rebuild from source.
+مطلوب CUDA للإستفادة من وحدة مُعالجة الرسومات (GPU) على نظامك. تم إنشاء ثنائيات (binaries) إصدار Solana المُتوفرة على نظام Ubuntu 18.04 مع [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). إذا كان جهازك يستخدم إصدارًا مُختلفًا من CUDA، فستحتاج إلى إعادة البناء من المصدر.

@@ -1,69 +1,69 @@
 ---
-title: The Runtime
+title: Среда выполнения
 ---
 
-## The Runtime
+## Среда выполнения
 
-The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
+Среда выполнения - это процессор одновременных транзакций. Транзакции заранее указывают свои зависимости данных, а распределение динамической памяти является явным. Отделив программный код от состояния, в котором он работает, среда выполнения может управлять параллельным доступом. Транзакции, обращающиеся только к аккаунтам только для чтения, выполняются параллельно, тогда как транзакции, обращающиеся к аккаунтам с возможностью записи, выполняются последовательно. Среда выполнения взаимодействует с программой через точку входа с четко определенным интерфейсом. Данные, хранящиеся в аккаунте, являются массивом байтов непрозрачного типа. Программа имеет полный контроль над содержимым.
 
-The transaction structure specifies a list of public keys and signatures for those keys and a sequential list of instructions that will operate over the states associated with the account keys. For the transaction to be committed all the instructions must execute successfully; if any abort the whole transaction fails to commit.
+Структура транзакции определяет список публичных ключей и подписей для этих ключей и последовательный список инструкций, которые будут работать с состояниями, связанными с ключами аккаунта. Чтобы транзакция была зафиксирована, все инструкции должны выполняться успешно; при любом прерывании транзакция не может быть зафиксирована.
 
-#### Account Structure
+#### Структура аккаунта
 
-Accounts maintain a lamport balance and program-specific memory.
+Аккаунты поддерживают баланс лэмпорта и память для конкретных программ.
 
-## Transaction Engine
+## Движок транзакций
 
-The engine maps public keys to accounts and routes them to the program's entrypoint.
+Движок отображает открытые ключи для аккаунтов и направляет их на точку входа в программу.
 
-### Execution
+### Выполнение
 
-Transactions are batched and processed in a pipeline. The TPU and TVU follow a slightly different path. The TPU runtime ensures that PoH record occurs before memory is committed.
+Транзакции группируются и обрабатываются в конвейере. TPU и TVU идут немного разным путем. Среда выполнения TPU гарантирует, что запись PoH происходит до фиксации памяти.
 
-The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
+Среда выполнения TVU гарантирует, что проверка PoH происходит до того, как среда выполнения обработает какие-либо транзакции.
 
-![Runtime pipeline](/img/runtime.svg)
+![Конвейер среды выполнения](/img/runtime.svg)
 
-At the _execute_ stage, the loaded accounts have no data dependencies, so all the programs can be executed in parallel.
+На этапе _выполнения_ загруженные аккаунты не имеют зависимостей данных, поэтому все программы могут выполняться параллельно.
 
-The runtime enforces the following rules:
+Среда выполнения обеспечивает следующие правила:
 
-1. Only the _owner_ program may modify the contents of an account. This means that upon assignment data vector is guaranteed to be zero.
-2. Total balances on all the accounts is equal before and after execution of a transaction.
-3. After the transaction is executed, balances of read-only accounts must be equal to the balances before the transaction.
-4. All instructions in the transaction executed atomically. If one fails, all account modifications are discarded.
+1. Только _программа-владелец_ может изменять содержимое аккаунты. Это означает, что при назначении вектор данных гарантированно равен нулю.
+2. Общие остатки на всех счетах равны до и после выполнения транзакции.
+3. После выполнения транзакции остатки на счетах только для чтения должны быть равны остаткам до транзакции.
+4. Все инструкции в транзакции выполняются атомарно. В случае сбоя все изменения аккаунта отменяются.
 
-Execution of the program involves mapping the program's public key to an entrypoint which takes a pointer to the transaction, and an array of loaded accounts.
+Выполнение программы включает сопоставление публичного ключа программы на точку входа, которая берет указатель на транзакцию и массив загруженных аккаунтов.
 
-### SystemProgram Interface
+### Интерфейс SystemProgram
 
-The interface is best described by the `Instruction::data` that the user encodes.
+Интерфейс лучше всего описывается `Instruction::data`, которую кодирует пользователь.
 
-- `CreateAccount` - This allows the user to create an account with an allocated data array and assign it to a Program.
-- `CreateAccountWithSeed` - Same as `CreateAccount`, but the new account's address is derived from
-  - the funding account's pubkey,
-  - a mnemonic string (seed), and
-  - the pubkey of the Program
-- `Assign` - Allows the user to assign an existing account to a program.
-- `Transfer` - Transfers lamports between accounts.
+- `CreateAccount` - позволяет пользователю создать аккаунт с выделенным массивом данных и назначить его программе.
+- `CreateAccountWithSeed` - аналогично `CreateAccount`, но адрес нового аккаунта получен от
+  - pubkey аккаунта финансирования,
+  - мнемоническая строка (seed), и
+  - pubkey программы
+- `Assign` - позволяет пользователю назначить существующий аккаунт для программы.
+- `Transfer` - перемещает лэмпорты между аккаунтами.
 
-### Program State Security
+### Обеспечение безопасности программы
 
-For blockchain to function correctly, the program code must be resilient to user inputs. That is why in this design the program specific code is the only code that can change the state of the data byte array in the Accounts that are assigned to it. It is also the reason why `Assign` or `CreateAccount` must zero out the data. Otherwise there would be no possible way for the program to distinguish the recently assigned account data from a natively generated state transition without some additional metadata from the runtime to indicate that this memory is assigned instead of natively generated.
+Для правильной работы блокчейна код программы должен быть устойчивым к вводу пользователей. Вот почему в этом проекте программный код является единственным кодом, который может изменять состояние массива байтов данных в назначенных ему аккаунтах. Это также причина, по которой `Assign` или `CreateAccount` должны обнулить данные. В противном случае у программы не было бы возможности отличить недавно назначенные данные аккаунта от изначально сгенерированного перехода состояния без каких-либо дополнительных метаданных из среды выполнения, чтобы указать, что эта память назначена, а не генерируется изначально.
 
-To pass messages between programs, the receiving program must accept the message and copy the state over. But in practice a copy isn't needed and is undesirable. The receiving program can read the state belonging to other Accounts without copying it, and during the read it has a guarantee of the sender program's state.
+Чтобы передавать сообщения между программами, принимающая программа должна принять сообщение и скопировать состояние. Но на практике копия не нужна и нежелательна. Получающая программа может читать состояния, принадлежащие другим аккаунтам, не копируя их, и во время чтения она имеет гарантию состояния программы отправителя.
 
-### Notes
+### Примечания
 
-- There is no dynamic memory allocation. Client's need to use `CreateAccount` instructions to create memory before passing it to another program. This instruction can be composed into a single transaction with the call to the program itself.
-- `CreateAccount` and `Assign` guarantee that when account is assigned to the program, the Account's data is zero initialized.
-- Transactions that assign an account to a program or allocate space must be signed by the Account address' private key unless the Account is being created by `CreateAccountWithSeed`, in which case there is no corresponding private key for the account's address/pubkey.
-- Once assigned to program an Account cannot be reassigned.
-- Runtime guarantees that a program's code is the only code that can modify Account data that the Account is assigned to.
-- Runtime guarantees that the program can only spend lamports that are in accounts that are assigned to it.
-- Runtime guarantees the balances belonging to accounts are balanced before and after the transaction.
-- Runtime guarantees that instructions all executed successfully when a transaction is committed.
+- Нет динамического распределения памяти. Клиент должен использовать `CreateAccount` инструкции для создания памяти перед передачей ее в другую программу. Эта инструкция может быть объединена в одну транзакцию с вызовом самой программы.
+- `CreateAccount` и `Assign` гарантируют, что когда аккаунт назначен программе, данные аккаунта инициализированы нулем.
+- Транзакции, которые привязывают аккаунт к программе или выделяют место, должны быть подписаны приватным ключом аккаунта, если только аккаунт не создается с помощью `CreateAccountWithSeed`, в этом случае не существует соответствующего закрытого ключа для адреса и публичного ключа аккаунта.
+- После привязки к программе аккаунт не может быть переназначен.
+- Среда выполнения гарантирует, что код программы является единственным кодом, который может изменять данные аккаунта, которой назначен аккаунт.
+- Среда выполнения гарантирует, что программа может тратить только лэмпорты, которые находятся в назначенных ей аккаунтах.
+- Среда выполнения гарантирует, что остатки на счетах сбалансированы до и после транзакции.
+- Среда выполнения гарантирует, что все инструкции успешно выполнены после фиксации транзакции.
 
-## Future Work
+## Будущая работа
 
-- [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)
+- [Продолжение и сигналы для длительных транзакций](https://github.com/solana-labs/solana/issues/1485)

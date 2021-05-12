@@ -1,7 +1,7 @@
 ---
-title: Confidentiality
+title: Конфиденциальность
 ---
 
-**Section 8 of the** [**TOUR DE SOL PARTICIPATION TERMS**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) **references confidentiality.**
+**Раздел 8 документа ** [**УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) ** про конфиденциальность.**
 
-Solana doesn’t intend to share any confidential information during the Tour de SOL. However, if we do, it will be called out as such within our communications verbally, by email, etc. Unless information is specifically called out as such, the information should not be considered confidential and we welcome you to share it.
+Solana не намерена делиться никакой конфиденциальной информацией во время Tour de SOL. Однако если мы это сделаем, то мы об этом явно сообщим по электронной почте и т. д. Если информация явно не указана в качестве конфиденциальной, информация не должна считаться таковой, и мы приветствуем ее распространение.

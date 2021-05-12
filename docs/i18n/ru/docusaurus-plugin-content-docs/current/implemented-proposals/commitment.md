@@ -1,33 +1,20 @@
 ---
-title: Commitment
+title: Обязательство
 ---
 
-The commitment metric aims to give clients a measure of the network confirmation
-and stake levels on a particular block. Clients can then use this information to
-derive their own measures of commitment.
+Метрика приверженности нацелена на то, чтобы дать клиентам оценку уровня подтверждения сети и доли в конкретном блоке. Затем клиенты могут использовать эту информацию для определения своих собственных критериев приверженности.
 
-# Calculation RPC
+# Расчет RPC
 
-Clients can request commitment metrics from a validator for a signature `s`
-through `get_block_commitment(s: Signature) -> BlockCommitment` over RPC. The
-`BlockCommitment` struct contains an array of u64 `[u64, MAX_CONFIRMATIONS]`. This
-array represents the commitment metric for the particular block `N` that
-contains the signature `s` as of the last block `M` that the validator voted on.
+Клиенты могут запрашивать показатели обязательств у валидатора для подписи `s` through `get_block_commitment(s: Signature) -> BlockCommitment` over RPC. через RPC. `BlockCommitment` содержит массив u64 `[u64, MAX_CONFIRMATION]`. Этот массив представляет метрику обязательств для конкретного блока ` N `, который содержит сигнатуру ` s ` последнего блока ` M `, за который проголосовал валидатор.
 
-An entry `s` at index `i` in the `BlockCommitment` array implies that the
-validator observed `s` total stake in the cluster reaching `i` confirmations on
-block `N` as observed in some block `M`. There will be `MAX_CONFIRMATIONS` elements in
-this array, representing all the possible number of confirmations from 1 to
-`MAX_CONFIRMATIONS`.
+Запись ` s ` с индексом ` i ` в массиве ` BlockCommitment ` подразумевает, что валидатор обнаружил, что ` s ` общая ставка в кластере достигает ` i ` подтверждений в блоке ` N `, как это наблюдалось в некотором блоке ` M `. В нем будут элементы ` MAX_CONFIRMATIONS ` этот массив, представляющий все возможное количество подтверждений от 1 до ` MAX_CONFIRMATIONS `.
 
-# Computation of commitment metric
+# Вычисление метрики обязательства
 
-Building this `BlockCommitment` struct leverages the computations already being
-performed for building consensus. The `collect_vote_lockouts` function in
-`consensus.rs` builds a HashMap, where each entry is of the form `(b, s)`
-where `s` is the amount of stake on a bank `b`.
+Построение `BlockCommitment` структурирует уже выполненные вычисления для достижения консенсуса. Функция `collect_vote_lockouts` в `консенсусе. s` строит хэшкарту, где каждая запись в форме `b, s)` где `s` - это сумма ставки на банк `b`.
 
-This computation is performed on a votable candidate bank `b` as follows.
+Этот расчет выполняется в банке кандидата `b` следующим образом.
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
@@ -40,29 +27,18 @@ This computation is performed on a votable candidate bank `b` as follows.
    }
 ```
 
-where `f` is some accumulation function that modifies the `Stake` entry
-for slot `a` with some data derivable from vote `v` and `vote_account`
-(stake, lockout, etc.). Note here that the `ancestors` here only includes
-slots that are present in the current status cache. Signatures for banks earlier
-than those present in the status cache would not be queryable anyway, so those
-banks are not included in the commitment calculations here.
+где `f` - это некоторая функция накопления, которая изменяет `Разбивка` для слота `` с некоторыми данными, полученными от голоса `v` и `vote_account` (ставка, lockout и т. д.). Обратите внимание, что `ancestors` здесь включает только слотов, присутствующих в кэше текущего состояния. Подписи для банков более ранних по сравнению с теми, которые присутствуют в статус-кэше, все равно не могут быть запрошены, чтобы эти банки не были включены в расчет обязательств здесь.
 
-Now we can naturally augment the above computation to also build a
-`BlockCommitment` array for every bank `b` by:
+Теперь мы можем естественным образом увеличить вышесказанное, чтобы построить массив `BlockCommitment` для каждого банка `b` путем:
 
-1. Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
-2. Replacing `f` with `f'` such that the above computation also builds this
-   `BlockCommitment` for every bank `b`.
+1. Добавление ` ForkCommitmentCache ` для сбора структур ` BlockCommitment `
+2. Замена ` f ` на ` f '` таким образом, чтобы вышеуказанное вычисление также строило этот ` BlockCommitment ` для каждого банка ` b `.
 
-We will proceed with the details of 2) as 1) is trivial.
+Мы продолжим с подробностями 2, как 1) тривиально.
 
-Before continuing, it is noteworthy that for some validator's vote account `a`,
-the number of local confirmations for that validator on slot `s` is
-`v.num_confirmations`, where `v` is the smallest vote in the stack of votes
-`a.votes` such that `v.slot >= s` (i.e. there is no need to look at any
-votes > v as the number of confirmations will be lower).
+Прежде чем продолжить, обратите внимание, что для аккаунта голосования некоторого валидатора ` a ` количество локальных подтверждений для этого валидатора в слоте ` s ` равно ` v.num_confirmations `, где ` v ` - наименьший голос в стеке голосов ` a.votes `, такой что `v.slot >= s`(т. е. нет нужно смотреть на любой голосов > v так как количество подтверждений будет меньше).
 
-Now more specifically, we augment the above computation to:
+Более конкретно, мы дополняем приведенные выше расчеты:
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
@@ -77,7 +53,7 @@ Now more specifically, we augment the above computation to:
    }
 ```
 
-where `f'` is defined as:
+где `f'` определяется как:
 
 ```text
     fn f`(

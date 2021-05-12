@@ -1,56 +1,33 @@
-# RiP Curl: low-latency, transaction-oriented RPC
+# RiP Curl: RPC de baja latencia y orientado a transacciones
 
-## Problem
+## Problema
 
-Solana's initial RPC implementation was created for the purpose of allowing
-users to confirm transactions that had just recently been sent to the cluster.
-It was designed with memory usage in mind such that any validator should be
-able to support the API without concern of DoS attacks.
+La implementación inicial de la RPC de Solana fue creada con el propósito de permitir a los usuarios confirmar las transacciones que acababan de ser enviadas recientemente al clúster. Fue diseñado teniendo en cuenta el uso de memoria tal que cualquier validador debería ser capaz de soportar la API sin preocuparse por los ataques de DoS.
 
-Later down the line, it became desirable to use that same API to support the
-Solana explorer. The original design only supported minutes of history, so we
-changed it to instead store transaction statuses in a local RocksDB instance
-and offer days of history. We then extended that to 6 months via BigTable.
+Más adelante en la línea, se volvió deseable usar esa misma API para apoyar al explorador de Solana. El diseño original sólo admite minutos de historia, así que lo cambiamos para almacenar estados de transacción en una instancia local de RocksDB y ofrecer días de historia. Luego lo ampliamos a 6 meses a través de BigTable.
 
-With each modification, the API became more suitable for applications serving
-static content and less appealing for transaction processing. The clients poll
-for transaction status instead of being notified, giving the false impression
-of higher confirmation times. Furthermore, what clients can poll for is
-limited, preventing them from making reasonable real-time decisions, such as
-recognizing a transaction is confirmed as soon as particular, trusted
-validators vote on it.
+Con cada modificación, la API se volvió más adecuada para aplicaciones que sirven contenido estático y menos atractiva para el procesamiento de transacciones. Los clientes preguntan por el estado de la transacción en lugar de ser notificados, dando la falsa impresión de que los tiempos de confirmación son mayores. Además, lo que los clientes pueden sondear es limitado, lo que les impide tomar decisiones razonables en tiempo real, como reconocer que una transacción está confirmada tan pronto como determinados validadores de confianza la voten.
 
-## Proposed Solution
+## Solución propuesta
 
-A web-friendly, transaction-oriented, streaming API built around the
-validator's ReplayStage.
+Una API de streaming orientada a las transacciones y fácil de usar, construida alrededor del ReplayStage del validador.
 
-Improved client experience:
+Mejora la experiencia del cliente:
 
-- Support connections directly from WebAssembly apps.
-- Clients can be notified of confirmation progress in real-time, including votes
-  and voter stake weight.
-- Clients can be notified when the heaviest fork changes, if it affects the
-  transactions confirmation count.
+* Soporte de conexiones directamente desde aplicaciones de WebAssembly.
+* Los clientes pueden ser notificados del progreso de la confirmación en tiempo real, incluyendo votos y peso del stake de votantes.
+* Los clientes pueden ser notificados cuando el fork más pesado cambia, si afecta al recuento de confirmación de transacciones.
 
-Easier for validators to support:
+Fácil para que los validadores soporten:
 
-- Each validator supports some number of concurrent connections and otherwise
-  has no significant resource constraints.
-- Transaction status is never stored in memory and cannot be polled for.
-- Signatures are only stored in memory until the desired commitment level or
-  until the blockhash expires, which ever is later.
+* Cada validador soporta algún número de conexiones simultáneas y de lo contrario no tiene restricciones significativas de recursos.
+* El estado de la transacción nunca se almacena en memoria y no se puede encuestar.
+* Las firmas sólo se almacenan en memoria hasta que el nivel de compromiso deseado o hasta que el blockhash caduque, que nunca es más tarde.
 
-How it works:
+Cómo funciona:
 
-1. The client connects to a validator using a reliable communication channel,
-   such as a web socket.
-2. The validator registers the signature with ReplayStage.
-3. The validator sends the transaction into the Gulf Stream and retries all
-   known forks until the blockhash expires (not until the transaction is
-   accepted on only the heaviest fork). If the blockhash expires, the
-   signature is unregistered, the client is notified, and connection is closed.
-4. As ReplayStage detects events affecting the transaction's status, it
-   notifies the client in real-time.
-5. After confirmation that the transaction is rooted (`CommitmentLevel::Max`),
-   the signature is unregistered and the server closes the upstream channel.
+1. El cliente se conecta a un validador usando un canal de comunicación confiable, como un socket web.
+2. El validador registra la firma con ReplayStage.
+3. El validador envía la transacción a la cadena del Golfo y vuelve a intentar todos los forks conocidos hasta que el blockhash expire (no hasta que la transacción sea aceptada en sólo el fork más pesado). Si el blockhash caduca, la firma no está registrada, se notificará al cliente y se cerrará la conexión.
+4. A medida que ReplayStage detecta eventos que afectan el estado de la transacción, notifica al cliente en tiempo real.
+5. Después de confirmar que la transacción es rooteada (`CommitmentLevel::Max`), la firma no está registrada y el servidor cierra el canal original.

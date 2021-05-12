@@ -1,36 +1,36 @@
 ---
-title: Managing Forks
+title: Administrando bifurcaciones
 ---
 
-The ledger is permitted to fork at slot boundaries. The resulting data structure forms a tree called a _blockstore_. When the validator interprets the blockstore, it must maintain state for each fork in the chain. We call each instance an _active fork_. It is the responsibility of a validator to weigh those forks, such that it may eventually select a fork.
+Se permite que el libro mayor se bifurque en los límites de las ranuras. La estructura de datos resultante forma un árbol llamado _ almacén de bloques _. Cuando el validador interpreta el almacén de bloques, debe mantener el estado de cada bifurcación de la cadena. Llamamos a cada instancia una _ bifurcación activa _. Es responsabilidad de un validador pesar esas bifurcaciones, de modo que eventualmente pueda seleccionar una bifurcación.
 
-A validator selects a fork by submiting a vote to a slot leader on that fork. The vote commits the validator for a duration of time called a _lockout period_. The validator is not permitted to vote on a different fork until that lockout period expires. Each subsequent vote on the same fork doubles the length of the lockout period. After some cluster-configured number of votes \(currently 32\), the length of the lockout period reaches what's called _max lockout_. Until the max lockout is reached, the validator has the option to wait until the lockout period is over and then vote on another fork. When it votes on another fork, it performs an operation called _rollback_, whereby the state rolls back in time to a shared checkpoint and then jumps forward to the tip of the fork that it just voted on. The maximum distance that a fork may roll back is called the _rollback depth_. Rollback depth is the number of votes required to achieve max lockout. Whenever a validator votes, any checkpoints beyond the rollback depth become unreachable. That is, there is no scenario in which the validator will need to roll back beyond rollback depth. It therefore may safely _prune_ unreachable forks and _squash_ all checkpoints beyond rollback depth into the root checkpoint.
+Un validador selecciona una bifurcación enviando un voto a un líder de ranura en esa bifurcación. El voto compromete al validador por un período de tiempo llamado _ período de bloqueo _. El validador no puede votar en una bifurcación diferente hasta que expire el período de bloqueo. Cada voto subsiguiente en la misma bifurcación duplica la duración del período de bloqueo. Después de un número de votos configurado en grupo \ (actualmente 32 \), la duración del período de bloqueo alcanza lo que se llama _ bloqueo máximo _. Hasta que se alcance el bloqueo máximo, el validador tiene la opción de esperar hasta que finalice el período de bloqueo y luego votar por otra bifurcación. Cuando vota por otra bifurcación, realiza una operación llamada _ retroceso _, mediante la cual el estado retrocede en el tiempo hasta un punto de control compartido y luego salta hacia la punta de la bifurcación que acaba de votar. La distancia máxima que una bifurcación puede retroceder se denomina _ profundidad de retroceso _. La profundidad de reversión es el número de votos necesarios para lograr el bloqueo máximo. Siempre que un validador vota, cualquier punto de control más allá de la profundidad de retroceso se vuelve inalcanzable. Es decir, no existe un escenario en el que el validador deba retroceder más allá de la profundidad de retroceso. Por lo tanto, puede _ podar _ bifurcaciones inalcanzables y _ aplastar _ todos los puntos de control más allá de la profundidad de retroceso en el punto de control raíz.
 
-## Active Forks
+## Bifurcaciones activas
 
-An active fork is as a sequence of checkpoints that has a length at least one longer than the rollback depth. The shortest fork will have a length exactly one longer than the rollback depth. For example:
+Una bifurcación activa es como una secuencia de puntos de control que tiene una longitud al menos uno más larga que la profundidad de retroceso. La bifurcación más corta tendrá una longitud exactamente, una más larga que la profundidad de retroceso. Por ejemplo:
 
-![Forks](/img/forks.svg)
+![Bifurcaciones](/img/forks.svg)
 
-The following sequences are _active forks_:
+Las siguientes secuencias son _ bifurcaciones activas _:
 
 - {4, 2, 1}
 - {5, 2, 1}
 - {6, 3, 1}
 - {7, 3, 1}
 
-## Pruning and Squashing
+## Limpiar y aplastar
 
-A validator may vote on any checkpoint in the tree. In the diagram above, that's every node except the leaves of the tree. After voting, the validator prunes nodes that fork from a distance farther than the rollback depth and then takes the opportunity to minimize its memory usage by squashing any nodes it can into the root.
+Un validador puede votar en cualquier punto de control del árbol. En el diagrama de arriba, son todos los nodos excepto las hojas del árbol. Después de la votación, el validador limpia los nodos que se bifurcan desde una distancia más lejana que la profundidad de retroceso y luego toma la oportunidad de minimizar su uso de memoria al aplastar cualquier nodo que pueda entrar en la raíz.
 
-Starting from the example above, with a rollback depth of 2, consider a vote on 5 versus a vote on 6. First, a vote on 5:
+Empezando por el ejemplo anterior, con una profundidad de retroceso de 2, considere una votación sobre 5 contra una votación sobre 6. En primer lugar, una votación sobre 5:
 
-![Forks after pruning](/img/forks-pruned.svg)
+![Bifurcaciones despues de limpiar](/img/forks-pruned.svg)
 
-The new root is 2, and any active forks that are not descendants from 2 are pruned.
+La nueva raíz es 2, y cualquier bifurcación activa que no sea descendiente de 2 se limpia.
 
-Alternatively, a vote on 6:
+Alternativamente, una votación sobre 6:
 
-![Forks](/img/forks-pruned2.svg)
+![Bifurcaciones](/img/forks-pruned2.svg)
 
-The tree remains with a root of 1, since the active fork starting at 6 is only 2 checkpoints from the root.
+El árbol permanece con una raíz de 1, ya que la bifurcación activa a partir de 6 es sólo 2 puntos de control de la raíz.

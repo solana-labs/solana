@@ -1,33 +1,20 @@
 ---
-title: Commitment
+title: الإلتزام (Commitment)
 ---
 
-The commitment metric aims to give clients a measure of the network confirmation
-and stake levels on a particular block. Clients can then use this information to
-derive their own measures of commitment.
+يهدف مقياس الإلتزام إلى منح العملاء مقياسًا لتأكيد الشبكة ومستويات الحِصَّة (stake) في كتلة (block) معينة. يمكن للعملاء بعد ذلك إستخدام هذه المعلومات لإشتقاق تدابير الإلتزام الخاصة بهم.
 
-# Calculation RPC
+# حساب الـ RPC
 
-Clients can request commitment metrics from a validator for a signature `s`
-through `get_block_commitment(s: Signature) -> BlockCommitment` over RPC. The
-`BlockCommitment` struct contains an array of u64 `[u64, MAX_CONFIRMATIONS]`. This
-array represents the commitment metric for the particular block `N` that
-contains the signature `s` as of the last block `M` that the validator voted on.
+يمكن للعملاء طلب مقاييس الإلتزام من المُدقّق `s` through `get_block_commitment(s: Signature) -> BlockCommitment` عبر الـ RPC. يحتوي الهيكل `BlockCommitment` على مصفوفة من u64 بأمر `[u64, MAX_CONFIRMATIONS]`. تمثل هذه المصفوفة مقياس الإلتزام للكتلة (block) المحددة `N` التي تحتوي على التوقيع `s` إعتبارًا من الكتلة `M` الأخيرة التي صوت المُدقّق (validator) عليها.
 
-An entry `s` at index `i` in the `BlockCommitment` array implies that the
-validator observed `s` total stake in the cluster reaching `i` confirmations on
-block `N` as observed in some block `M`. There will be `MAX_CONFIRMATIONS` elements in
-this array, representing all the possible number of confirmations from 1 to
-`MAX_CONFIRMATIONS`.
+يُشير الإدخال `s` في الفهرس `i` في المصفوفة `BlockCommitment` إلى أن المُدقّق لاحظ `s` أن إجمالي الحِصَّة في الفُتحة التي تصل إلى `i` تأكيدات على الكتلة `N` كما لوحظ في بعض الكتل `M`. ستكون هناك عناصر `MAX_CONFIRMATIONS` في هذه المصفوفة، والتي تمثل جميع عدد التأكيدات الممكنة من 1 إلى `MAX_CONFIRMATIONS`.
 
-# Computation of commitment metric
+# حساب مقياس الإلتزام (Computation of commitment metric)
 
-Building this `BlockCommitment` struct leverages the computations already being
-performed for building consensus. The `collect_vote_lockouts` function in
-`consensus.rs` builds a HashMap, where each entry is of the form `(b, s)`
-where `s` is the amount of stake on a bank `b`.
+يعمل بناء هيكل إلتزام الكُتلة `BlockCommitment` هذا على تعزيز العمليات الحسابية التي تم إجراؤها بالفعل للتوصل إلى إجماع (consensus). تعمل الدالة `collect_vote_lockouts` في `consensus.rs` على إنشاء خريطة التجزئة (HashMap)، حيث يكون كل إدخال على شكل `(b, s)` حيث يمثل `s` مقدار الحِصَّة (stake) في بنك `b`.
 
-This computation is performed on a votable candidate bank `b` as follows.
+يتم إجراء هذا الحساب على بنك مرشح قابل للتصويت `b` على النحو التالي.
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
@@ -40,29 +27,18 @@ This computation is performed on a votable candidate bank `b` as follows.
    }
 ```
 
-where `f` is some accumulation function that modifies the `Stake` entry
-for slot `a` with some data derivable from vote `v` and `vote_account`
-(stake, lockout, etc.). Note here that the `ancestors` here only includes
-slots that are present in the current status cache. Signatures for banks earlier
-than those present in the status cache would not be queryable anyway, so those
-banks are not included in the commitment calculations here.
+حيث `f` هي بعض وظائف التراكم التي تُعدل إدخال الحِصَّة `Stake` للفُتحة `a` مع بعض البيانات المُشتقِّة من التصويت `v` و حساب التصويت `vote_account` (الحِصَّة، التأمين، إلخ). لاحظ هنا أن `ancestors` هنا يتضمن فقط الفُتحات (Slots) الموجودة في ذاكرة التخزين المؤقت للحالة الحالية. لن تكون التواقيع الخاصة بالبنوك التي تسبق تلك الموجودة في ذاكرة التخزين المُؤقت للحالة قابلة للإستعلام بأي حال من الأحوال، لذلك لم يتم تضمين هذه البنوك في حسابات الإلتزام هنا.
 
-Now we can naturally augment the above computation to also build a
-`BlockCommitment` array for every bank `b` by:
+يمكننا الآن زيادة الحساب أعلاه بشكل طبيعي لبناء مصفوفة `BlockCommitment` لكل بنك `b` عن طريق:
 
-1. Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
-2. Replacing `f` with `f'` such that the above computation also builds this
-   `BlockCommitment` for every bank `b`.
+1. إضافة `ForkCommitmentCache` لتجميع هيكل `BlockCommitment`
+2. إستبدال `f` بـ `f'` بحيث يؤدي الحساب أعلاه أيضًا إلى إنشاء `BlockCommitment` لكل بنك `b`.
 
-We will proceed with the details of 2) as 1) is trivial.
+سننتقل إلى تفاصيل 2) لأن 1) أمر عديم الأهمية.
 
-Before continuing, it is noteworthy that for some validator's vote account `a`,
-the number of local confirmations for that validator on slot `s` is
-`v.num_confirmations`, where `v` is the smallest vote in the stack of votes
-`a.votes` such that `v.slot >= s` (i.e. there is no need to look at any
-votes > v as the number of confirmations will be lower).
+قبل المتابعة، من الجدير بالذكر أنه بالنسبة لحساب تصويت بعض المُدقّقين `a`، فإن عدد التأكيدات المحلية لهذا المُدقّق في الفُتحة `s` هو `v.num_confirmations`، حيث `v` هو أصغر تصويت في مجموعة الأصوات `a.votes` بحيث يكون `v.slot >= s` (أي ليست هناك حاجة للنظر في أي تصويت > v لأن عدد التأكيدات سيكون أقل).
 
-Now more specifically, we augment the above computation to:
+الآن بشكل أكثر تحديدًا، نقوم بزيادة الحساب أعلاه إلى:
 
 ```text
    let output: HashMap<b, Stake> = HashMap::new();
@@ -77,7 +53,7 @@ Now more specifically, we augment the above computation to:
    }
 ```
 
-where `f'` is defined as:
+حيث تم تعريف `f'` على النحو التالي:
 
 ```text
     fn f`(

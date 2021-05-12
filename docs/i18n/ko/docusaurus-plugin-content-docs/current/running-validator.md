@@ -1,7 +1,7 @@
 ---
-title: Running a Validator
+title: 유효성 검사기 실행
 ---
 
-This section describes how run a Solana validator node.
+이 섹션에서는 Solana 유효성 검사기 노드를 실행하는 방법을 설명합니다.
 
-There are several clusters available to connect to, see [choosing a Cluster](cli/choose-a-cluster.md) for an overview of each.
+연결할 수있는 여러 클러스터가 있습니다. 각각에 대한 개요는 \[클러스터 선택\] (cli / choose-a-cluster.md)을 참조하십시오.

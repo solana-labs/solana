@@ -1,88 +1,88 @@
 ---
-title: Leader Rotation
+title: عملية التناوب على لعب دور القائد أو الleader
 ---
 
-At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
+تتوقع المجموعة أو الcluster في أي لحظة أن يقوم مدقق أو validator واحد فقط بإنتاج مدخالات دفتر الأستاذ أو ledger. بوجود قائد أو leader واحد فقط في كل مرة، يستطيع جميع المدققين أو validators إعادة عرض نسخ متطابقة من دفتر الأستاذ أو ledger. بيد أن العيب الذي تعانيه عملية وجود قائد أو leader واحد فقط في كل مرة هو أن القائد الخبيث قادر على فرض الرقابة على الأصوات والمعاملات. بما أنه لا يمكن التمييز بين الرقابة والشبكة التي تسقط الحزم أو الpackets فإن المجموعة أو الcluster لا يمكنها ببساطة أن تنتخب عقدة أو nods واحدة للقيام بدور القائد أو الleader إلى ما لا نهاية. بدلا من ذلك، تقلل المجموعة أو الcluster من نفوذ القائد أو الleader الخبيث عن طريق تدوير أو تبديل عملية تناوب تولي تولي القيادة على العقد أو nodes.
 
-Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that an entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
+كل مدقق أو validator يختار القائد أو الleader المتوقع بإستخدام نفس الخوارزمية الموضحة أدناه. عندما يتلقى المدقق أو validator مُدخل دفتر الأستاذ أو ledger الموقع الجديد، يمكن أن يكون من المُؤكد أن القائد أو الleader المتوقع قد أنتج مُدخلا. ترتيب الفُتحات (Slots) التي يتم تعيين كل قائد (leader) لها تُسمى جدول القادة _leader schedule_.
 
-## Leader Schedule Rotation
+## جدولة عملية التناوب على لعب دور القائد (leader)
 
-A validator rejects blocks that are not signed by the _slot leader_. The list of identities of all slot leaders is called a _leader schedule_. The leader schedule is recomputed locally and periodically. It assigns slot leaders for a duration of time called an _epoch_. The schedule must be computed far in advance of the slots it assigns, such that the ledger state it uses to compute the schedule is finalized. That duration is called the _leader schedule offset_. Solana sets the offset to the duration of slots until the next epoch. That is, the leader schedule for an epoch is calculated from the ledger state at the start of the previous epoch. The offset of one epoch is fairly arbitrary and assumed to be sufficiently long such that all validators will have finalized their ledger state before the next schedule is generated. A cluster may choose to shorten the offset to reduce the time between stake changes and leader schedule updates.
+يرفض المُدقّق (validator) الكتل (blocks) التي لم يتم توقيعها من قبل قائد الفُتحة _slot leader_. قائمة هويات جميع قادة الفُتحات (slot leaders) تُسمى جدول القائد _leader schedule_. يُعاد حساب جدول عملية التناوب على لعب دور القائد (leader) بطريقة محلية ودورية. تقوم بتعيين قادة الفُتحات (slot leaders) لمدة من الوقت تُسمى فترة _epoch_. يجب حساب الجدول قبل وقت طويل من فترة تعيينه للفُتحات (Slots)، بحيث يتم الإنتهاء من حالة دفتر الأستاذ (ledger) الذي يستخدمه لحساب الجدول. هذه المدة تُسمى جدول القائد المُعَوِّض _leader schedule offset_. تُحدد Solana قائمة المُعَوِّضين على مدة الفُتحات (Slots) حتى الفترة (epoch) التالية. أي أن الجدول الزمني للقائد (leader) لفترة (epoch) ما يُحسب من حالة دفتر الأستاذ (ledger) في بداية الفترة (epoch) السابقة. يتسم التعويض عن فترة (epoch) واحدة إعتباطيا إلى حد ما ويُفترض أنه طويل بما فيه الكفاية بحيث يكون جميع المُدقّقين (validators) قد أكملوا حالة دفتر الأستاذ (ledger) قبل وضع الجدول الزمني التالي. قد تختار مجموعة (cluster) من المجموعات لتقصير فترة التعويض لتقليص الوقت بين التغييرات المُتعلقة بالحِصَّة (stake) وتحديثات الجدول الزمني للقائدين (leaders).
 
-While operating without partitions lasting longer than an epoch, the schedule only needs to be generated when the root fork crosses the epoch boundary. Since the schedule is for the next epoch, any new stakes committed to the root fork will not be active until the next epoch. The block used for generating the leader schedule is the first block to cross the epoch boundary.
+بينما التشغيل بدون تقسيم يدوم أطول من فترة (epoch) واحدة، لا يلزم إنشاء الجدول الزمني إلا عندما يتجاوز جذر الإنقسام أو الشوكة (fork) حدود الفترة (epoch). بما أن الجدول الزمني للفترة (epoch) اللاحقة، فإن أي حِصَص (stakes) جديدة يلتزم بها في الإنقسام أو الشوكة (fork) الأصلية لن تكون نشطة إلا في الفترة (epoch) التالية. الكتلة (block) المُستخدمة لإنشاء الجدول الزمني للقائد (leader schedule) هي أول كتلة (block) تعبر حدود الفترة (epoch).
 
-Without a partition lasting longer than an epoch, the cluster will work as follows:
+بدون تقسيم يدوم أكثر من فترة (epoch)، ستعمل المجموعة (cluster) على النحو التالي:
 
-1. A validator continuously updates its own root fork as it votes.
-2. The validator updates its leader schedule each time the slot height crosses an epoch boundary.
+1. يقوم المُدقّق (validator) بتحديث جذر الإنقسام أو الشوكة (fork) الخاصة به بإستمرار أثناء تصويته.
+2. يقوم المُدقّق (validator) بتحديث الجدول الزمني لقائده (leader) في كل مرة يعبر إرتفاع (height) الفُتحة (Slot) حدود الفترة (epoch).
 
-For example:
+على سبيل المثال:
 
-The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100, 101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
+مُدة الفترة (epoch) هي 100 فُتحة (Slots). يتم تحديث جذر الإنقسام أو الشوكة (fork) من الإنقسام أو الشوكة المحسوبة عند الإرتفاع 99 للفُتحة (Slot) إلى الإنقسام أو الشوكة المحسوبة عند الإرتفاع 102 للفُتحة. الإنقسام أو الشوكة (fork) مع فُتحات (Slots) في الإرتفاع 100، 101 تم تخطيها بسبب الفشل. يتم حساب الجدول الزمني الجديد للقائد (leader schedule) بإستخدام الإنقسام أو الشوكة (fork) عند إرتفاع الفُتحة (Slot) إلى 102. وهو نشط من الفُتحة (Slot) عدد 200 حتى يتم تحديثه مرة أخرى.
 
-No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
+لا يُمكن أن يوجد أي تضارب لأن كل مُدقّق (validator) يُصوت مع المجموعة (cluster) تخطى 100 و 101 عندما يتجاوز جذره 102. جميع المُدقّقين (validators)، بغض النظر عن نمط التصويت، سيكونون مُلتزمين إما بجذر 102 أو سليل 102.
 
-### Leader Schedule Rotation with Epoch Sized Partitions.
+### عملية التناوب على لعب دور القائد (leader) مع تقسيمات حجم الفترة (epoch).
 
-The duration of the leader schedule offset has a direct relationship to the likelihood of a cluster having an inconsistent view of the correct leader schedule.
+مدة تعويض الجدول الزمني للقائد (leader) لها علاقة مُباشرة بإحتمال أن تكون هناك رؤية غير مُتسقة للمجموعة (cluster) للجدول الزمني الصحيح للقائد.
 
-Consider the following scenario:
+ضع في الإعتبار السيناريو التالي:
 
-Two partitions that are generating half of the blocks each. Neither is coming to a definitive supermajority fork. Both will cross epoch 100 and 200 without actually committing to a root and therefore a cluster-wide commitment to a new leader schedule.
+قسمان يولدان نصف الكتل (blocks) لكل منهما. لا يصل أي منهما إلى إنقسام أو شوكة (fork) ذات أغلبية عُظمى (supermajority) نهائية. كلاهما سيتخلفان عن الفترة (epoch) عدد 100 و 200 دون أن يلتزما فعليا بجذورهما ومن ثم بالإلتزام على نطاق المجموعة بجدول زمني جديد للقائد (leader).
 
-In this unstable scenario, multiple valid leader schedules exist.
+في هذا السيناريو غير المُستقر، تتواجد جداول زمنية صحيحة مُتعددة للقائد (leader).
 
-- A leader schedule is generated for every fork whose direct parent is in the previous epoch.
-- The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
+- يتم إنشاء جدول زمني للقائد أو leader لكل إنقسام أو شوكة أو Fork يكون أحد مولديه المباشرين في الفترة أو epoch السابقة.
+- الجدول الزمني للقائد (leader schedule) صالح بعد بداية الفترة (epoch) التالية للإنقسامات أو الشوكات (forks) المُتحدِّرة (descendant) حتى يتم تحديثه.
 
-Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much much larger then slot time and the expected length for a fork to be committed to root.
+سيتباعد الجدول الزمني لكل قسم بعد أن يدوم التقسيم أكثر من فترة (epoch). لهذا السبب، يجب إختيار مدة الفترة (epoch) لتكون أكبر بكثير من وقت الفُتحة (Slot) والمُدة المُتوقعة للإنقسام أو الشوكة (fork) ليتم الإلتزام بجذورها.
 
-After observing the cluster for a sufficient amount of time, the leader schedule offset can be selected based on the median partition duration and its standard deviation. For example, an offset longer then the median partition duration plus six standard deviations would reduce the likelihood of an inconsistent ledger schedule in the cluster to 1 in 1 million.
+بعد مُراقبة المجموعة (cluster) لفترة كافية من الوقت، يُمكن إختيار الجدول الزمني لتعويض القائد (leader) على أساس مُتوسط مُدة التقسيم وإنحرافه المعياري. على سبيل المثال، من شأن التعويض الأطول من مُتوسط مُدة التقسيم بالإضافة إلى ستة إنحرافات معيارية أن تُقلل من إحتمال وجود جدول دفتر أستاذ (ledger) غير مُتسق في المجموعة (cluster) إلى 1 من المليون.
 
-## Leader Schedule Generation at Genesis
+## جدول توليد القائد في فترة التكوين (Leader Schedule Generation at Genesis)
 
-The genesis config declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis config as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
+إعداد فترة التكوين (Genesis) تُعلن القائد (leader) الأول للفترة (epoch) الأولى. ينتهي هذا القائد (leader) إلى تحديد موعده لأول فترتين (epochs) لأن الجدول الزمني للقائد يتم إنشاؤه أيضا في الفُتحة (Slot) عدد 0 للفترة (epoch) التالية. يُمكن تحديد أطول أول فترين (epochs) في إعدادات فترة التكوين (Genesis) أيضا. يجب أن يكون الحد الأدنى لأول فترين (epochs) أكبر من أو يساوي أقصى عمق للتراجع (rollback) كما هو مُحدد في [Tower BFTBFT](../implemented-proposals/tower-bft.md).
 
-## Leader Schedule Generation Algorithm
+## خوارزمية جدول توليد القائد (Leader Schedule Generation Algorithm)
 
-Leader schedule is generated using a predefined seed. The process is as follows:
+يتم إنشاء الجدول الزمني للقائد (Leader schedule) بإستخدام قِيَ برمجية (seed) مُحَدَّدَة مسبقا. فيما يلي هكذا تتم العملية:
 
-1. Periodically use the PoH tick height \(a monotonically increasing counter\) to seed a stable pseudo-random algorithm.
-2. At that height, sample the bank for all the staked accounts with leader identities that have voted within a cluster-configured number of ticks. The sample is called the _active set_.
-3. Sort the active set by stake weight.
-4. Use the random seed to select nodes weighted by stake to create a stake-weighted ordering.
-5. This ordering becomes valid after a cluster-configured number of ticks.
+1. إستخدم دوريا إرتفاع العلامة (tick) الخاصة بالـ PoH \(عَدَّاد زيادة رتيب\) لزرع خوارزمية قيمة برمجية (seed) شبه عشوائية ومُستقرة.
+2. عند هذا الإرتفاع (height)، قُم بتجربة البنك لجميع حِساب إثبات الحِصَّة أو التَّحْصِيص (staked accounts) ذات الهُوِيَّات القيادية التي صوتت ضمن عدد من العلامات (ticks) المُصنّعة في المجموعة (cluster). العينة تُسمى مجموعة نشطة _active set_.
+3. فرز المجموعة النشطة (active set) حسب وزن الحِصَّة (stake weight).
+4. إستخدم القيم البرمجية (seed) العشوائية لإختيار العُقَد (nodes) المُرجحة بالحِصَّة (stake-weighted) لإنشاء ترتيب حسب حجم حِصَّة.
+5. هذا الطلب يصبح صالحا بعد عدد من الticks التي تم تصنيعها في المجموعة أو cluster.
 
-## Schedule Attack Vectors
+## جدولة ناقلات الهجوم (Schedule Attack Vectors)
 
-### Seed
+### القيمة البرمجية (seed)
 
-The seed that is selected is predictable but unbiasable. There is no grinding attack to influence its outcome.
+القيمة البرمجية (seed) التي يتم إختيارها يُمكن التنبؤ بها ولكنها غير مُتحيزة. لا يوجد هجوم طاحن للتأثير على نتائجه.
 
-### Active Set
+### المجموعة النشطة (Active Set)
 
-A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
+يستطيع القائد (leader) أن يأخذ موقف مُتحيز ضد المجموعة النشطة (active set) عن طريق فرض الرقابة على أصوات المُدقّقين (validators). هناك طريقتان مُمكنتان للقادة (leaders) لفرض الرقابة على المجموعة النشطة (active set):
 
-- Ignore votes from validators
-- Refuse to vote for blocks with votes from validators
+- تجاهل الأصوات من المُدقّقين (validators)
+- رفض التصويت على الكتل (blocks) مع أصوات من المُدقّقين (validators)
 
-To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
+للحد من إحتمال فرض الرقابة، يتم حساب المجموعة النشطة (active set) في حدود جدول القائد المُعَوِّض (leader schedule offset) من خلال مُدة أخذ عينات المجموعة النشطة أو _active set sampling duration_. مُدة أخذ عينات المجموعة النشطة (active set) طويلة بما فيه الكفاية بحيث تكون الأصوات قد تم جمعها بواسطة قادة (leaders) مُتعددين.
 
-### Staking
+### إثبات الحِصَّة أو التَّحْصِيص (Staking)
 
-Leaders can censor new staking transactions or refuse to validate blocks with new stakes. This attack is similar to censorship of validator votes.
+يُمكن للقادة فرض رقابة على مُعاملات إثبات الحِصَّة أو التَّحْصِيص الجديدة أو رفض التحقق من صحة الكتل (blocks) مع الحِصَص (stakes) الجديدة. يُشبه هذا الهجوم الرقابة على أصوات المُدقّقين (validators).
 
-### Validator operational key loss
+### فقدان مفتاح التشغيل للمُدقّقين (validators)
 
-Leaders and validators are expected to use ephemeral keys for operation, and stake owners authorize the validators to do work with their stake via delegation.
+من المُتَوَقَّع أن يستخدم القادة (Leaders) والمُدقّقون (validators) مفاتيح مُؤقتة (ephemeral keys) للعمل، ويأذن أصحاب الحِصَّة (stake) للمُدقّقين (validators) بالعمل مع حِصَّتهم (stake) عن طريق التفويض (Delegation).
 
-The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly by co-signing a validator vote even though the stake is currently delegated to a validator.
+ينبغي أن تكون المجموعة (cluster) قادرة على التعافي من فقدان جميع المفاتيح المؤقتة (ephemeral keys) التي يستخدمها القادة (leaders) والمُدقّقون (validators)، ويُمكن أن يحدث ذلك من خلال ضعف البرمجيات المُشتركة التي تتقاسمها جميع العُقَد (nodes). ينبغي أن يكون بمقدور أصحاب الحِصَّة (Stake owners) التصويت مُباشرة بالتوقيع المُشترك على صوت المُدقّق (validator) حتى وإن كانت الحِصَّة (stake) مُفوضة سلفا إلى مُدقّق (validator) آخر.
 
-## Appending Entries
+## إلحاق المُدخلات (Appending Entries)
 
-The lifetime of a leader schedule is called an _epoch_. The epoch is split into _slots_, where each slot has a duration of `T` PoH ticks.
+مُدة عمر الجدول الزمني للقائد (leader schedule) تُسمى الفترة _epoch_. تنقسم الفترة (epoch) إلى فُتحات _slots_، حيث كل فُتحة (slot) لها مُدة `T` العلامة (tick) الخاصة بالـ PoH.
 
-A leader transmits entries during its slot. After `T` ticks, all the validators switch to the next scheduled leader. Validators must ignore entries sent outside a leader's assigned slot.
+يقوم القائد (leader) بنقل المُدخلات (entries) خلال الفُتحة (Slot) الخاصة به. بعد وضع الticks `T` ، يتحول جميع المُدقّقين (validators) إلى القائد (leader) المُبَرمَج التالي. يجب أن يتجاهل المُدقّقون (Validators) المُدخلات (entries) المُرسلة خارج فُتحة (slot) القائد (leader).
 
-All `T` ticks must be observed by the next leader for it to build its own entries on. If entries are not observed \(leader is down\) or entries are invalid \(leader is buggy or malicious\), the next leader must produce ticks to fill the previous leader's slot. Note that the next leader should do repair requests in parallel, and postpone sending ticks until it is confident other validators also failed to observe the previous leader's entries. If a leader incorrectly builds on its own ticks, the leader following it must replace all its ticks.
+يجب أن يُراقب القائد (leader) التالي جميع العلامات `T` لكي يبني مُدخلاته (entries) الخاصة به. إذا لم يتم مُراقبة المُدخالات، لا يُمكن الإتصال بالقائد \(leader is down\) أو المُدخالات غير صالحة، القائد خبيث أو ذو أخطاء عديدة \(leader is buggy or malicious\)، يجب على القائد التالي أن ينتج علامات (ticks) لملء فُتحة القائد السابق. لاحظ أنه ينبغي للقائد التالي أن يتقدم بطلبات التصليح بالتوازي، يقوم بتأجيل إرسال العلامات (ticks) إلى أن يتأكد من فشل بقية المُدقّقين أيضا في مُراقبة مُدخالات القائد السابق. إذا كان أحد القادة (leader) يبني بشكل خاطئ على العلامات (ticks) الخاصة به، فيجب على القائد (leader) الذي يليه أنيُيعوض جميع تلك العلامات (ticks).

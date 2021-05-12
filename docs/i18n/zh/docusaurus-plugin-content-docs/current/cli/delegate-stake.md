@@ -5,7 +5,6 @@ title: 委托您的质押
 通过 [ 获取 SOL ](transfer-tokens.md) 以后，您可以通过 _stake_ 将它委托给一个验证节点。 质押（Stake）就是在 _stake account_ 中的代币。 Solana 根据质押权重为验证节点分配投票权重，权重会影响它们在区块链中决定下一个有效交易区块。 然后 Solana 会按周期生成新的 SOL 来奖励质押者和验证节点。 您委托的代币越多，获得的奖励就越高。
 
 ## 创建一个质押账户
-
 要委托代币，您首先要将代币转入一个质押帐户。 而要创建一个帐户，您需要一个密钥对： 它的公钥将作为 [质押账户地址](../staking/stake-accounts.md#account-address)。 此处无需密码或加密；此密钥对将在创建密钥账户后被丢弃。
 
 ```bash
@@ -48,7 +47,6 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### 设置质押和取款权限
-
 创建账号时，如果需要设置 [质押和提现权限](../staking/stake-accounts.md#understanding-account-authorities)，您可以通过 `--stake-authority` and `--withdraw-authority` 选项或 `solana stake-authorize` 命令来实现。 例如，要设置一个新的质押权限，请运行：
 
 ```bash
@@ -68,7 +66,7 @@ solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STR
     --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> --fee-payer <KEYPAIR>
 ```
 
-`<STRING>` 是一个最多 32 字节的任意字符串，通常情况下是一个对应该派生账户的数字。 第一个账户是"0"，第二个是 "1"，以此类推。 `<STAKE_ACCOUNT_KEYPAIR>` 公钥发挥基本地址的作用。 该命令将从基础地址和种子字符串中派生一个新地址。 要查看派生出哪个质押地址，请使用 `solana create-address-with-seed`命令：
+`<STRING>` 是一个最多32字节的任意字符串，通常情况下是一个对应该派生账户的数字。 第一个账户是"0"，第二个是 "1"，以此类推。 `<STAKE_ACCOUNT_KEYPAIR>` 公钥发挥基本地址的作用。 该命令将从基础地址和种子字符串中派生一个新地址。 要查看派生出哪个质押地址，请使用 `solana create-address-with-seed`命令：
 
 ```bash
 solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE

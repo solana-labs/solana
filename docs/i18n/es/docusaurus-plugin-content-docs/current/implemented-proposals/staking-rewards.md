@@ -1,57 +1,57 @@
 ---
-title: Staking Rewards
+title: Recompensas de Staking
 ---
 
-A Proof of Stake \(PoS\), \(i.e. using in-protocol asset, SOL, to provide secure consensus\) design is outlined here. Solana implements a proof of stake reward/security scheme for validator nodes in the cluster. The purpose is threefold:
+Aquí se describe un diseño de Proof of Stake (PoS\), (es decir, el uso de activos en el protocolo, SOL, para proporcionar un consenso seguro.) el diseño se describe aquí. Solana implementa un esquema proof of stake de recompensa/seguridad para los nodos validadores del clúster. El propósito es triple:
 
-- Align validator incentives with that of the greater cluster through
+- Alinear incentivos del validador con el del grupo mayor a través
 
-  skin-in-the-game deposits at risk
+  de depósitos en juego bajo riesgo
 
-- Avoid 'nothing at stake' fork voting issues by implementing slashing rules
+- Evitar cuestiones de "nada en stake" en el fork mediante la aplicación de reglas de slashing
 
-  aimed at promoting fork convergence
+  destinado a promover la convergencia del fork
 
-- Provide an avenue for validator rewards provided as a function of validator
+- Proporcionar una vía para las recompensas del validador proporcionadas como una función del validador
 
-  participation in the cluster.
+  de la participación en el cluster.
 
-While many of the details of the specific implementation are currently under consideration and are expected to come into focus through specific modeling studies and parameter exploration on the Solana testnet, we outline here our current thinking on the main components of the PoS system. Much of this thinking is based on the current status of Casper FFG, with optimizations and specific attributes to be modified as is allowed by Solana's Proof of History \(PoH\) blockchain data structure.
+Aunque muchos de los detalles de la implementación específica están siendo considerados actualmente y se espera que se concentren a través de estudios específicos de modelado y exploración de parámetros en la red de pruebas Solana, esbozamos aquí nuestro pensamiento actual sobre los principales componentes del sistema PoS. Gran parte de este pensamiento se basa en el estado actual de Casper FFG, con optimizaciones y atributos específicos a ser modificados como es permitido por la estructura de datos de la Prueba de Historia de Solana \(PoH\).
 
-## General Overview
+## Resumen general
 
-Solana's ledger validation design is based on a rotating, stake-weighted selected leader broadcasting transactions in a PoH data structure to validating nodes. These nodes, upon receiving the leader's broadcast, have the opportunity to vote on the current state and PoH height by signing a transaction into the PoH stream.
+El diseño de validación del ledger de Solana se basa en una transacción de transmisión líder giratoria, ponderada por participantes, en una estructura de datos PoH para validar nodos. Estos nodos, al recibir la transmisión del líder, tener la oportunidad de votar sobre el estado actual y altura PoH firmando una transacción en el flujo de PoH.
 
-To become a Solana validator, one must deposit/lock-up some amount of SOL in a contract. This SOL will not be accessible for a specific time period. The precise duration of the staking lockup period has not been determined. However we can consider three phases of this time for which specific parameters will be necessary:
+Para convertirse en un validador de Solana, uno debe depositar o bloquear alguna cantidad de SOL en un contrato. Este SOL no será accesible por un período de tiempo específico. No se ha determinado la duración exacta del periodo de bloqueo de staking. Sin embargo, podemos considerar tres fases de este tiempo para las que serán necesarios parámetros específicos:
 
-- _Warm-up period_: which SOL is deposited and inaccessible to the node,
+- _Warm-up period_: donde SOL es depositado e inaccesible para el nodo,
 
-  however PoH transaction validation has not begun. Most likely on the order of
+  sin embargo, la validación de la transacción PoH no ha comenzado. Probablemente por orden de
 
-  days to weeks
+  días a semanas
 
-- _Validation period_: a minimum duration for which the deposited SOL will be
+- _Período de validación_: duración mínima durante la cual el SOL depositado será
 
-  inaccessible, at risk of slashing \(see slashing rules below\) and earning
+  inaccesible, con riesgo de slashing \(ver reglas de slashing abajo\) y ganar
 
-  rewards for the validator participation. Likely duration of months to a
+  recompensas para la participación del validador. Probablemente la duración sea de meses a un
 
-  year.
+  año.
 
-- _Cool-down period_: a duration of time following the submission of a
+- _Período de enfriamiento_: duración del tiempo después de la presentación de una
 
-  'withdrawal' transaction. During this period validation responsibilities have
+  Transacción de "retiro". Durante este período se han eliminado las responsabilidades de
 
-  been removed and the funds continue to be inaccessible. Accumulated rewards
+  validación y los fondos siguen siendo inaccesibles. Las Recompensas acumuladas
 
-  should be delivered at the end of this period, along with the return of the
+  debe entregarse al final de este período, junto con la devolución del
 
-  initial deposit.
+  depósito inicial.
 
-Solana's trustless sense of time and ordering provided by its PoH data structure, along with its [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast and transmission design, should provide sub-second transaction confirmation times that scale with the log of the number of nodes in the cluster. This means we shouldn't have to restrict the number of validating nodes with a prohibitive 'minimum deposits' and expect nodes to be able to become validators with nominal amounts of SOL staked. At the same time, Solana's focus on high-throughput should create incentive for validation clients to provide high-performant and reliable hardware. Combined with potential a minimum network speed threshold to join as a validation-client, we expect a healthy validation delegation market to emerge. To this end, Solana's testnet will lead into a "Tour de SOL" validation-client competition, focusing on throughput and uptime to rank and reward testnet validators.
+El sentido sin confianza del tiempo y el ordenamiento de Solana proporcionado por su estructura de datos PoH, junto con su difusión y diseño de transmisión de datos de [turbina](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) y su diseño de transmisión proporciona tiempos de confirmación de la transacción de sub-segundo que escalan con el registro del número de nodos en el cluster. Esto significa que no deberíamos tener que restringir el número de nodos de validación con un prohibitivo 'depósitos mínimos' y esperar que los nodos sean capaces de convertirse en validadores con cantidades nominales de SOL en stake. Al mismo tiempo, el enfoque de Solana en un alto rendimiento debería crear incentivos para que los clientes de validación proporcionen hardware confiable y de alto rendimiento. Combinados con el potencial de un umbral mínimo de velocidad de red para unirse como un cliente de validación, esperamos que surja un mercado de delegaciones de validación saludable. Con este fin, la red de pruebas de Solana conducirá a una competición de validación-cliente "Tour de SOL", centrándose en el rendimiento y tiempo de puesta en marcha para clasificarse y recompensar a los validadores de la red de pruebas.
 
-## Penalties
+## Multas
 
-As discussed in the [Economic Design](ed_overview/ed_overview.md) section, annual validator interest rates are to be specified as a function of total percentage of circulating supply that has been staked. The cluster rewards validators who are online and actively participating in the validation process throughout the entirety of their _validation period_. For validators that go offline/fail to validate transactions during this period, their annual reward is effectively reduced.
+Como se explica en la sección [Diseño Económico](ed_overview/ed_overview.md), las tasas de interés anuales del validador deben especificarse como una función del porcentaje total de oferta circulante que ha sido puesto en stake. El clúster premia a los validadores que están en línea y participan activamente en el proceso de validación a lo largo de todo su _periodo de validación_. Para los validadores que no convaliden o no validen transacciones durante este período, su recompensa anual se reduce efectivamente.
 
-Similarly, we may consider an algorithmic reduction in a validator's active amount staked amount in the case that they are offline. I.e. if a validator is inactive for some amount of time, either due to a partition or otherwise, the amount of their stake that is considered ‘active’ \(eligible to earn rewards\) may be reduced. This design would be structured to help long-lived partitions to eventually reach finality on their respective chains as the % of non-voting total stake is reduced over time until a supermajority can be achieved by the active validators in each partition. Similarly, upon re-engaging, the ‘active’ amount staked will come back online at some defined rate. Different rates of stake reduction may be considered depending on the size of the partition/active set.
+Del mismo modo, podemos considerar una reducción algorítmica de la cantidad activa en stake de un validador en el caso de que estén fuera de línea. Es decir. si un validador está inactivo durante algún tiempo, ya sea debido a una partición o de otro modo, la cantidad de su stake que se considera "activo" \(elegible para ganar recompensas\) puede ser reducida. Este diseño estaría estructurado para ayudar a las particiones de larga duración a llegar finalmente a la finalidad en sus respectivas cadenas, ya que el % del stake total sin voto se reduce con el tiempo hasta que los validadores activos puedan lograr una supermayoría en cada partición. De la misma manera, una vez reactivado, la cantidad “activa” en stake volverá a estar en línea a una tasa definida. Se pueden considerar diferentes tasas de reducción de stake dependiendo del tamaño del conjunto de particiones/activos.

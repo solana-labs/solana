@@ -1,25 +1,25 @@
 ---
-title: Performance Metrics
+title: Métricas de rendimiento
 ---
 
-Solana cluster performance is measured as average number of transactions per second that the network can sustain \(TPS\). And, how long it takes for a transaction to be confirmed by super majority of the cluster \(Confirmation Time\).
+El rendimiento del cluster de Solana se mide como el número promedio de transacciones por segundo que la red puede sostener \(TPS\). Y, cuánto tiempo tarda una transacción en ser confirmada por la súper mayoría del clúster \(Tiempo de Confirmación\).
 
-Each cluster node maintains various counters that are incremented on certain events. These counters are periodically uploaded to a cloud based database. Solana's metrics dashboard fetches these counters, and computes the performance metrics and displays it on the dashboard.
+Cada nodo de cluster mantiene varios contadores que se incrementan en ciertos eventos. Estos contadores se suben periódicamente a una base de datos basada en la nube. El tablero de métricas de Solana obtiene estos contadores y calcula las métricas de rendimiento y las muestra en el panel.
 
 ## TPS
 
-Each node's bank runtime maintains a count of transactions that it has processed. The dashboard first calculates the median count of transactions across all metrics enabled nodes in the cluster. The median cluster transaction count is then averaged over a 2 second period and displayed in the TPS time series graph. The dashboard also shows the Mean TPS, Max TPS and Total Transaction Count stats which are all calculated from the median transaction count.
+El tiempo de ejecución de cada nodo mantiene un recuento de transacciones que ha procesado. El panel primero calcula el recuento medio de transacciones en todos los nodos habilitados para métricas en el clúster. El recuento medio de transacciones de cluster es entonces promediado en un período de 2 segundos y se muestra en el gráfico de series de tiempo TPS. El panel de control también muestra las estadísticas de promedio TPS, Max TPS y Total de transacciones que se calculan a partir del recuento de transacciones medianas.
 
-## Confirmation Time
+## Tiempo de confirmación
 
-Each validator node maintains a list of active ledger forks that are visible to the node. A fork is considered to be frozen when the node has received and processed all entries corresponding to the fork. A fork is considered to be confirmed when it receives cumulative super majority vote, and when one of its children forks is frozen.
+Cada nodo de validación mantiene una lista de bifurcaciones de contabilidad activas que son visibles para el nodo. Se considera que una bifurcación está congelada cuando el nodo ha recibido y procesado todas las entradas correspondientes a la bifurcación. Se considera que una bifurcación está confirmada cuando recibe un voto de supermayoría acumulativa y cuando una de sus bifurcaciones secundarias se congela.
 
-The node assigns a timestamp to every new fork, and computes the time it took to confirm the fork. This time is reflected as validator confirmation time in performance metrics. The performance dashboard displays the average of each validator node's confirmation time as a time series graph.
+El nodo asigna una marca de tiempo a cada nueva bifurcación y calcula el tiempo que tardó en confirmar la bifurcación. Esta vez se refleja como el tiempo de confirmación del validador en las métricas de rendimiento. El panel de desempeño muestra el promedio del tiempo de confirmación de cada nodo validador como un gráfico de la serie de tiempo.
 
-## Hardware setup
+## Configuración de hardware
 
-The validator software is deployed to GCP n1-standard-16 instances with 1TB pd-ssd disk, and 2x Nvidia V100 GPUs. These are deployed in the us-west-1 region.
+El software validador está desplegado en instancias GCP n1-standard-16 con disco pd-sd 1TB y 2x GPU Nvidia V100. Estos están desplegados en la región us-west-1.
 
-solana-bench-tps is started after the network converges from a client machine with n1-standard-16 CPU-only instance with the following arguments: `--tx\_count=50000 --thread-batch-sleep 1000`
+solana-bench-tps se inicia después de que la red converge desde una máquina cliente con una instancia n1-standard-16 de solo CPU con los siguientes argumentos: ` --tx \ _count = 50000 --thread-batch-sleep 1000 `
 
-TPS and confirmation metrics are captured from the dashboard numbers over a 5 minute average of when the bench-tps transfer stage begins.
+Las métricas TPS y de confirmación se capturan a partir de los números de tablero en un promedio de 5 minutos de cuando comienza la etapa de transferencia de las tps de los bancos.

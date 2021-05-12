@@ -1,359 +1,353 @@
 ---
-title: Ledger Replication
+title: النسخ المُتماثل لدفتر الأستاذ (Ledger Replication)
 ---
 
-Note: this ledger replication solution was partially implemented, but not
-completed. The partial implementation was removed by
-https://github.com/solana-labs/solana/pull/9992 in order to prevent the security
-risk of unused code. The first part of this design document reflects the
-once-implemented parts of ledger replication. The
-[second part of this document](#ledger-replication-not-implemented) describes the
-parts of the solution never implemented.
+مُلاحظة: تم تنفيذ حل النسخ المُتماثل لدفتر الأستاذ (ledger replication) هذا جزئيًا، ولكن لم يكتمل. تمت إزالة التطبيق الجزئي بواسطة https://github.com/solana-labs/solana/pull/9992 من أجل منع المخاطر الأمنية للتعليمات البرمجية غير المُستخدمة. يعكس الجزء الأول من مُستند التصميم هذا الأجزاء التي تم تنفيذها مرة واحدة من النسخ المُتماثل لدفتر الأستاذ (ledger replication). يصف الجزء الثاني من هذه الوثيقة [second part of this document](#ledger-replication-not-implemented) أجزاء الحل التي لم يتم تنفيذها مُطلقًا.
 
-## Proof of Replication
+## دليل النسخ المُتماثل (Proof of Replication)
 
-At full capacity on a 1gbps network solana will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
+ستُولد Solana بكامل طاقتها على شبكة 1 1gbps في الثانية الواحدة، عدد 4 petabytes من البيانات سنويًا. لمنع الشبكة من التمركز حول المُدقّقين (validators) الذين يتعين عليهم تخزين مجموعة البيانات الكاملة، يقترح هذا البروتوكول طريقة للعُقد المُعدِّنة (mining nodes) لتوفير سعة تخزين لأجزاء من البيانات.
 
-The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as it's hashed. The simple solution is to periodically regenerate the hash based on a signed PoH value. This ensures that all the data is present during the generation of the proof and it also requires validators to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `number_of_proofs * data_size`
+الفكرة الأساسية لـ دليل النسخ المُتماثل (Proof of Replication) هي تشفير مجموعة بيانات بمفتاح مُتماثل (symmetric key) عام بإستخدام تشفير CBC، ثم تجزئة (hash) مجموعة البيانات المُشفرة. المُشكلة الرئيسية في النهج الساذج هي أن عُقدة التخزين (storage nodes) غير النزيهة يُمكنها بث التشفير وحذف البيانات لأنها مُجزأة. الحل البسيط هو إعادة إنشاء التجزئة (hash) بشكل دوري بناءً على قيمة PoH المُوقَّعة. هذا يضمن أن جميع البيانات موجودة أثناء إنشاء الدليل ويتطلب أيضًا أن يكون لدى المُدقّقين (validators) كامل البيانات المُشفرة للتحقق من كل إثبات لكل هوية. لذا فإن المساحة المطلوبة للتحقق هي حجم الإثباتات ضارب حجم البيانات `number_of_proofs * data_size`
 
-## Optimization with PoH
+## التحسين بإستخدام الـ PoH
 
-Our improvement on this approach is to randomly sample the encrypted segments faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the segments stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. The total space required for verification is `1_ledger_segment + 2_cbc_blocks * number_of_identities` with core count equal to `number_of_identities`. We use a 64-byte chacha CBC block size.
+يتمثل تحسيننا في هذا النهج في أخذ عينات عشوائية من المقاطع المُشفرة بشكل أسرع مما يتطلبه الأمر للتشفير، وتسجيل تجزئة (hash) تلك العينات في دفتر أستاذ الـ PoH. بالتالي تظل المقاطع بالترتيب نفسه تمامًا لكل PoRep ويُمكن التحقق من دفق البيانات والتحقق من جميع البراهين في دفعة واحدة. بهذه الطريقة يُمكننا التحقق من البراهين المُتعددة في نفس الوقت، كل واحد على أساس CUDA الخاص به. إجمالي المساحة المطلوبة للتحقق هي `1_ledger_segment + 2_cbc_blocks * number_of_identities` مع عدد أساسي يساوي `number_of_identities`. نحن نستخدم حجم كتلة 64-byte chacha CBC.
 
-## Network
+## الشبكة (Network)
 
-Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
+مُدقّقو (validators) لـ PoRep هم نفس المُدقّقين الذين يتحققون من المُعاملات. إذا تمكن أمين الأرشيف من إثبات أن المُدقّق (validator) قد قام بالتحقق من برنامج PoRep المُزيف، فلن يتلقى المُدقّق مُكافأة عن فترة التخزين تلك.
 
-Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
+المُؤرشفون (Archivers) هم عملاء خفيفون_light clients_ مُتخصصون. يقومون بتنزيل جزء من دفتر الأستاذ \(ويعرف أيضًا بإسم الجزء\) وتخزينه، وتوفير PoReps لتخزين دفتر الأستاذ. لكل أرشفة PoRep تم التحقق منها، تحصل على مُكافأة من عملة sol من مُجمع التعدين (mining pool).
 
-## Constraints
+## القيود (Constraints)
 
-We have the following constraints:
+لدينا القيود التالية:
 
-- Verification requires generating the CBC blocks. That requires space of 2
+- يتطلب التحقق إنشاء كتل CBC. ويتطلب ذلك مساحة عدد 2
 
-  blocks per identity, and 1 CUDA core per identity for the same dataset. So as
+  من الكتل (blocks) لكل هوية، ونواة CUDA واحدة لكل هوية لمجموعة البيانات نفسها. لذلك
 
-  many identities at once should be batched with as many proofs for those
+  يجب تجميع العديد من الهويات دفعة واحدة مع العديد من الإثباتات لتلك
 
-  identities verified concurrently for the same dataset.
+  الهويات التي تم التحقق منها بشكل مُتزامن لنفس مجموعة البيانات.
 
-- Validators will randomly sample the set of storage proofs to the set that
+- سيقوم المُدقّقون (validators) بأخذ عينات عشوائية من مجموعة إثباتات التخزين إلى المجموعة التي
 
-  they can handle, and only the creators of those chosen proofs will be
+  يُمكنها التعامل معها، وفقط مُنشئو تلك الإثباتات المُختارة
 
-  rewarded. The validator can run a benchmark whenever its hardware configuration
+  ستتم مُكافأتهم. يُمكن للمُدقّق (validator) تشغيل إختبار معياري متى تكون إعدادات الأجهزة الخاصة به
 
-  changes to determine what rate it can validate storage proofs.
+  تغييرت لتحديد المُعدل الذي يُمكِّنه من التحقق من صحة إثباتات التخزين.
 
-## Validation and Replication Protocol
+## بروتوكول التحقق من الصحة والنسخ المُتماثل (Validation and Replication Protocol)
 
-### Constants
+### الثوابت (Constants)
 
-1. SLOTS_PER_SEGMENT: Number of slots in a segment of ledger data. The
+1. SLOTS_PER_SEGMENT: عدد الفُتحات (slots) في مقطع بيانات دفتر الأستاذ (ledger). ال
 
-   unit of storage for an archiver.
+   وحدة لتخزين أرشيفي.
 
-2. NUM_KEY_ROTATION_SEGMENTS: Number of segments after which archivers
+2. NUM_KEY_ROTATION_SEGMENTS: عدد المقاطع التي بعدها المُؤرشفون (Archivers)
 
-   regenerate their encryption keys and select a new dataset to store.
+   يُعيدون إنشاء مفاتيح التشفير الخاصة بهم وتحديد مجموعة بيانات جديدة لتخزينها.
 
-3. NUM_STORAGE_PROOFS: Number of storage proofs required for a storage proof
+3. NUM_STORAGE_PROOFS: عدد أدلة التخزين المطلوبة لمُكافأة
 
-   claim to be successfully rewarded.
+   مُطالبة إثبات التخزين بنجاح.
 
-4. RATIO_OF_FAKE_PROOFS: Ratio of fake proofs to real proofs that a storage
+4. RATIO_OF_FAKE_PROOFS: نسبة الإثباتات المُزيفة مقارنة بالإثباتات الحقيقية التي يجب أن يحتويها
 
-   mining proof claim has to contain to be valid for a reward.
+   إدعاء إثبات تعدين التخزين حتى يكون صالحًا للحصول على مُكافأة.
 
-5. NUM_STORAGE_SAMPLES: Number of samples required for a storage mining
+5. NUM_STORAGE_SAMPLES: عدد العينات المطلوبة لإثبات التعدين
 
-   proof.
+   بالتخزين.
 
-6. NUM_CHACHA_ROUNDS: Number of encryption rounds performed to generate
+6. NUM_CHACHA_ROUNDS: عدد جولات التشفير التي تم إجراؤها لإنشاء
 
-   encrypted state.
+   حالة التشفير.
 
-7. NUM_SLOTS_PER_TURN: Number of slots that define a single storage epoch or
+7. NUM_SLOTS_PER_TURN: عدد الفُتحات (Slots) التي تُحدد فترة (epoch) تخزين واحدة أو
 
-   a "turn" of the PoRep game.
+   "دورة" لعبة PoRep.
 
-### Validator behavior
+### سلوك المُدقّق (Validator behavior)
 
-1. Validators join the network and begin looking for archiver accounts at each
+1. ينضم المُدقّقون (validators) إلى الشبكة ويبدأون في البحث عن حسابات المُؤرشف (Archiver) في كل
 
-   storage epoch/turn boundary.
+   فترة (epoch) تخزين/حدود مُنعطف.
 
-2. Every turn, Validators sign the PoH value at the boundary and use that signature
+2. في كل مُنعطف، يوقع المُدقّقون (validators) قيمة الـ PoH عند الحدود ويستخدمون هذا التوقيع
 
-   to randomly pick proofs to verify from each storage account found in the turn boundary.
+   لإختيار الإثباتات بشكل عشوائي للتحقق من كل حساب تخزين (storage account) موجود في حدود المُنعطف.
 
-   This signed value is also submitted to the validator's storage account and will be used by
+   يتم إرسال هذه القيمة المُوقعة أيضًا إلى حساب تخزين المُدقّق (validator) وسيتم إستخدامها بواسطة
 
-   archivers at a later stage to cross-verify.
+   المُؤرشفين (Archivers) في مرحلة لاحقة للتحقق المُتبادل.
 
-3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
+3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. يتم تقديم هذه القيمة
 
-   is also served to Archivers via RPC interfaces.
+   أيضًا إلى أجهزة الأرشفة عبر واجهات RPC.
 
-4. For a given turn N, all validations get locked out until turn N+3 \(a gap of 2 turn/epoch\).
+4. بالنسبة لدور مُعين N، يتم قفل جميع عمليات التحقق حتى تتحول N+3 \(فجوة 2 دورات/ الفترة\).
 
-   At which point all validations during that turn are available for reward collection.
+   عند هذه النقطة، تكون جميع عمليات التحقق من الصحة خلال هذا الدور مُتاحة لجمع المُكافآت.
 
-5. Any incorrect validations will be marked during the turn in between.
+5. سيتم وضع علامة على أي عمليات تحقق غير صحيحة أثناء الدور بينهما.
 
-### Archiver behavior
+### سلوك المُؤرشف (Archiver behavior)
 
-1. Since an archiver is somewhat of a light client and not downloading all the
+1. نظرًا لأن برنامج المُؤرشف (Archiver) هو عميل خفيف (light client) إلى حد ما ولا يقوم بتنزيل جميع
 
-   ledger data, they have to rely on other validators and archivers for information.
+   بيانات دفتر الأستاذ (ledger)، فيجب عليه الإعتماد على المُدقّقين (validators) والمُؤرشفين (Archivers) الآخرين للحصول على المعلومات.
 
-   Any given validator may or may not be malicious and give incorrect information, although
+   قد يكون أو لا يكون أي مُدقّق (validator) ضار ويُعطي معلومات غير صحيحة، على الرغم من
 
-   there are not any obvious attack vectors that this could accomplish besides having the
+   عدم وجود أي ناقلات هجوم (attack vectors) واضحة يُمكن أن يُحققها هذا بالإضافة إلى قيام
 
-   archiver do extra wasted work. For many of the operations there are a number of options
+   المُؤرشف (Archiver) بعمل إضافي ضائع. بالنسبة للعديد من العمليات، هناك عدد من الخيارات
 
-   depending on how paranoid an archiver is:
+   إعتمادًا على مدى إرتياب المُؤرشف (Archiver):
 
-   - \(a\) archiver can ask a validator
-   - \(b\) archiver can ask multiple validators
-   - \(c\) archiver can ask other archivers
-   - \(d\) archiver can subscribe to the full transaction stream and generate
+   - \(a\) يُمكن للمُؤرشف (Archiver) أن يسأل المُدقّق (validator)
+   - \(b\) يُمكن للمُؤرشف (Archiver) أن يطلب عدة مُدقّقين (validators)
+   - \(c\) يُمكن للمُؤرشف (Archiver) أن يسأل مُؤرشفون (Archivers) آخرين
+   - \(d\) يُمكن للمُؤرشف (Archiver) الإشتراك في تدفق المُعاملات الكامل وإنشاء
 
-     the information itself \(assuming the slot is recent enough\)
+     (بإفتراض أن الفُتحة أو الـ slot حديثة بما يكفي\)
 
-   - \(e\) archiver can subscribe to an abbreviated transaction stream to
+   - \(e\) يُمكن للمُؤرشف (Archiver) الإشتراك في تدفق المُعاملات ل
 
-     generate the information itself \(assuming the slot is recent enough\)
+     توليد المعلومات نفسها \(بإفتراض أن الفترة أو الـ slot حديثة بما يكفي\)
 
-2. An archiver obtains the PoH hash corresponding to the last turn with its slot.
-3. The archiver signs the PoH hash with its keypair. That signature is the
+2. يحصل المُؤرشف (Archiver) على تجزئة (hash) الـ PoH المُقابلة للإنعطاف الأخير بفُتحته (slot).
+3. يُوقع المُؤرشف (Archiver) تجزئة (hash) الـ PoH بزوج المفاتيح (keypair) الخاص به. هذا التوقيع
 
-   seed used to pick the segment to replicate and also the encryption key. The
+   هو الأصل المُستخدم لإختيار المقطع المُراد نسخه وكذلك مفتاح التشفير. يقوم
 
-   archiver mods the signature with the slot to get which segment to
+   المُؤرشف (Archiver) بتعديل التوقيع بالفُتحة (Slot) للحصول على الجزء المُراد
 
-   replicate.
+   نسخه.
 
-4. The archiver retrives the ledger by asking peer validators and
+4. يسترجع المُؤرشف (Archiver) دفتر الأستاذ (ledger) عن طريق سؤال المُدقّقين (validators) النظراء و
 
-   archivers. See 6.5.
+   المُؤرشفين (Archivers). راجع 6.5.
 
-5. The archiver then encrypts that segment with the key with chacha algorithm
+5. يقوم المُؤرشف (Archiver) بعد ذلك بتشفير هذا المقطع بالمفتاح بإستخدام خوارزمية chacha
 
-   in CBC mode with `NUM_CHACHA_ROUNDS` of encryption.
+   في وضع CBC بإستخدام `NUM_CHACHA_ROUNDS` من التشفير.
 
-6. The archiver initializes a chacha rng with the a signed recent PoH value as
+6. يقوم المُؤرشف (Archiver) بتهيئة chacha rng مع قيمة PoH المُوقَّعة مؤخرًا
 
-   the seed.
+   كبذرة.
 
-7. The archiver generates `NUM_STORAGE_SAMPLES` samples in the range of the
+7. يُنشئ برنامج الأرشفة `NUM_STORAGE_SAMPLES` عينة في نطاق حجم
 
-   entry size and samples the encrypted segment with sha256 for 32-bytes at each
+   الإدخال (entry) ويأخذ عينات من المقطع المُشفر بإستخدام sha256 لـ 32-bytes في كل منها
 
-   offset value. Sampling the state should be faster than generating the encrypted
+   قيمة تعويض. يجب أن يكون أخذ عينات الحالة أسرع من إنشاء
 
-   segment.
+   المقطع المُشفر.
 
-8. The archiver sends a PoRep proof transaction which contains its sha state
+8. يرسل المُؤرشف (Archiver) مُعاملة إثبات PoRep والتي تحتوي على حالة sh
 
-   at the end of the sampling operation, its seed and the samples it used to the
+   في نهاية عملية أخذ العينات، وبذورها والعينات التي إستخدمتها إلى
 
-   current leader and it is put onto the ledger.
+   القائد (leader) الحالي ويتم وضعها في دفتر الأستاذ (ledger).
 
-9. During a given turn the archiver should submit many proofs for the same segment
+9. خلال دورة مُعينة، يجب على المُؤرشف (Archiver) تقديم العديد من البراهين لنفس المقطع
 
-   and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
+   وبناءً على نسبة الإثباتات المُزيفة `RATIO_OF_FAKE_PROOFS`، يجب أن تكون بعض هذه الأدلة مُزيفة.
 
-10. As the PoRep game enters the next turn, the archiver must submit a
+10. مع دخول لعبة PoRep إلى المُنعطف التالي، يجب على المُؤرشف (Archiver) إرسال
 
-    transaction with the mask of which proofs were fake during the last turn. This
+    مُعاملة مع القناع الذي كانت فيه الإثباتات مُزيفة أثناء المنعطف الأخير. هذه
 
-    transaction will define the rewards for both archivers and validators.
+    المُعاملة ستُحدد المُكافآت لكل من المُؤرشفين (Archivers) والمُدقّقين (validators).
 
-11. Finally for a turn N, as the PoRep game enters turn N + 3, archiver's proofs for
+11. أخيرًا الإنعطاف N، مع دخول لعبة PoRep في الدور N+3، سيتم إحتساب إثباتات المُؤرشفين (Archivers)
 
-    turn N will be counted towards their rewards.
+    للدور N في مُكافآتهم.
 
-### The PoRep Game
+### لعبة Porep أو The PoRep Game
 
-The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep games can be in progress but each in a different stage.
+تحتوي لعبة دليل النسخ المُتماثل (Proof of Replication) على 4 مراحل أساسية. كل "دور" (turn) يُمكن أن تكون ألعاب PoRep المُتعددة قيد التقدم ولكن كل منها في مرحلة مُختلفة.
 
-The 4 stages of the PoRep Game are as follows:
+المراحل الأربع من لعبة PoRep كما يلي:
 
-1. Proof submission stage
-   - Archivers: submit as many proofs as possible during this stage
-   - Validators: No-op
-2. Proof verification stage
-   - Archivers: No-op
-   - Validators: Select archivers and verify their proofs from the previous turn
-3. Proof challenge stage
-   - Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
-   - Validators: No-op
-4. Reward collection stage
-   - Archivers: Collect rewards for 3 turns ago
-   - Validators: Collect rewards for 3 turns ago
+1. مرحلة تقديم الإثبات (Proof submission stage)
+   - المُؤرشفون (Archivers): تقديم أكبر عدد مُمكن من الإثباتات خلال هذه المرحلة
+   - المُدقّقون: No-op
+2. مرحلة التحقق من الإثبات (Proof verification stage)
+   - المُؤرشفون: No-op
+   - المُدقّقون (validators): يختارون المُؤرشفين (Archivers) ويتحققون من الإثباتات الخاصة بهم من المُنعطف السابق
+3. مرحلة تحدي الإثبات (مرحلة تحدي الإثبات)
+   - المُؤرشفون (Archivers): يرسلون قناع الإثبات مع التبريرات\(للإثباتات المُزيفة التي تم تقديمها قبل دورتين\)
+   - المُدقّقون: No-op
+4. مرحلة جمع المكافآت (Reward collection stage)
+   - المُؤرشفون (Archivers): يجمعون المُكافآت قبل 3 أدوار (turns)
+   - المُدقّقون (validators): يجمعون المُكافآت لمدة 3 أدوار (turns) مضت
 
-For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
+لكل دور (turn) في لعبة PoRep، يقوم كل من المُدقّقين (validators) و المُؤرشفين (Archivers) بتقييم كل مرحلة. يتم تشغيل المراحل كعمليات مُنفصلة في برنامج التخزين (storage program).
 
-### Finding who has a given block of ledger
+### العثور على من لديه كتلة (block) مُعينة من دفتر الأستاذ (ledger)
 
-1. Validators monitor the turns in the PoRep game and look at the rooted bank
+1. يُراقب المُدقّقون (validators) المُنعطفات في لعبة PoRep وينظرون إلى البنك المُتجذر
 
-   at turn boundaries for any proofs.
+   عند حدود الدور (turn) بحثًا عن أي إثباتات.
 
-2. Validators maintain a map of ledger segments and corresponding archiver public keys.
+2. يحتفظ المُدقّقون (validators) بخريطة شرائح دفتر الأستاذ (ledger) والمفاتيح العامة (public keys) للأرشيف المناسب.
 
-   The map is updated when a Validator processes an archiver's proofs for a segment.
+   يتم تحديث الخريطة عندما يُعالج المُدقّق (validator) أدلة المُؤرشفين (Archivers) لجزء ما.
 
-   The validator provides an RPC interface to access the this map. Using this API, clients
+   يُوفر المُدقّق (validator) واجهة RPC للوصول إلى هذه الخريطة. بإستخدام واجهة برمجة التطبيقات (API) هذه، يُمكن للعملاء
 
-   can map a segment to an archiver's network address \(correlating it via cluster_info table\).
+   تعيين مقطع إلى عنوان شبكة المُؤرشفين (Archivers) \ (ربطه عبر جدول معلومات المجموعة\).
 
-   The clients can then send repair requests to the archiver to retrieve segments.
+   يمكن للعملاء بعد ذلك إرسال طلبات الإصلاح إلى المُؤرشف (Archiver) لإسترداد المقاطع.
 
-3. Validators would need to invalidate this list every N turns.
+3. سيحتاج المُدقّقون (validators) إلى إبطال هذه القائمة كل في كل مُنعطف (turn) الـ N.
 
-## Sybil attacks
+## هجمات Sybil أو Sybil attacks
 
-For any random seed, we force everyone to use a signature that is derived from a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
+بالنسبة لأي بذرة عشوائية، نجبر الجميع على إستخدام توقيع مُشتق من تجزئة (hash) الـ PoH عند حدود المُنعطف (turn). يستخدم الجميع العدد نفسه، لذلك يتم توقيع نفس تجزئة (hash) الـ PoH بواسطة كل مُشارك. ثم يتم ربط كل توقيعات مُشفرة بزوج المفاتيح (keypair)، مما يمنع القائد (leader) من الطحن على القيمة الناتجة لأكثر من هوية واحدة.
 
-Since there are many more client identities then encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
+نظرًا لوجود العديد من هويات العملاء ثم هويات التشفير، نحتاج إلى تقسيم المُكافأة لعدة عملاء، ومنع هجمات Sybil من إنشاء العديد من العملاء للحصول على نفس كتلة (block) البيانات. لإبقاء BFT، نُريد تجنب أن يكون كيان بشري واحد يُخزن جميع النسخ المُكررة لجزء واحد من دفتر الأستاذ (ledger).
 
-Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
+حلنا لهذا هو إجبار العملاء على الإستمرار في إستخدام نفس الهوية. إذا تم إستخدام الجولة الأولى للحصول على نفس الكتلة (block) للعديد من هويات العملاء، فإن الجولة الثانية لنفس هويات العميل ستفرض إعادة توزيع التواقيع، وبالتالي هويات وكتل PoRep. بالتالي، للحصول على مُكافأة للمُؤرشفين (Archivers)، يجب تخزين الكتلة (block) الأولى مجانًا ويُمكن للشبكة أن تُكافئ هويات العملاء طويلة الأمد أكثر من الهويات الجديدة.
 
-## Validator attacks
+## هجمات المُدقّقين (Validator attacks)
 
-- If a validator approves fake proofs, archiver can easily out them by
+- إذا وافق المُدقّق (validator) على الإثباتات المُزيفة، فيُمكن للمُؤرشف (Archiver) إخراجها بسهولة
 
-  showing the initial state for the hash.
+  من خلال إظهار الحالة الأولية للتجزئة (hash).
 
-- If a validator marks real proofs as fake, no on-chain computation can be done
+- إذا قام المُدقّق (validator) بتمييز البراهين الحقيقية على أنها مُزيفة، فلا يُمكن إجراء أي حساب على على الشبكة (On-Chain)
 
-  to distinguish who is correct. Rewards would have to rely on the results from
+  لتمييز من هو الصحيح. يجب أن تعتمد المُكافآت على النتائج من
 
-  multiple validators to catch bad actors and archivers from being denied rewards.
+  عدة مُدقّقين (validators) للقبض على المُمثلين السيئين والمُؤرشفين (Archivers) من الحرمان من المُكافآت.
 
-- Validator stealing mining proof results for itself. The proofs are derived
+- المُدقّق (validator) يسرق نتائج إثبات التعدين (mining proof) لنفسه. تُستمد الإثباتات
 
-  from a signature from an archiver, since the validator does not know the
+  من توقيع من المُؤرشف (Archiver)، نظرًا لأن المُدقّق (validator) لا يعرف
 
-  private key used to generate the encryption key, it cannot be the generator of
+  المفتاح الخاص (private key) المُستخدم لإنشاء مفتاح التشفير (encryption key)، فلا يُمكن أن يكون مُنشئ
 
-  the proof.
+  الإثبات.
 
-## Reward incentives
+## حوافز المُكافأة (Reward incentives)
 
-Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by archivers may require a higher fee than a normal transaction to represent the computational cost required by validators.
+من السهل إنشاء الإثباتات المُزيفة ولكن من الصعب التحقق منها. لهذا السبب، قد تتطلب مُعاملات إثبات PoRep التي يتم إنشاؤها بواسطة المُؤرشفون (Archivers) رسومًا أعلى من المُعاملة العادية لتمثيل التكلفة الحسابية التي يطلبها المُدقّقون (validators).
 
-Some percentage of fake proofs are also necessary to receive a reward from storage mining.
+بعض النسبة المئوية من الإثباتات المُزيفة ضرورية أيضًا لتلقي مُكافأة من تعدين التخزين (storage proof).
 
-## Notes
+## الملاحظات (Notes)
 
-- We can reduce the costs of verification of PoRep by using PoH, and actually
+- يُمكننا تقليل تكاليف التحقق من PoRep بإستخدام الـ PoH، وجعلها بالفعل
 
-  make it feasible to verify a large number of proofs for a global dataset.
+  قابلة للتحقق من عدد كبير من الإثباتات لمجموعة بيانات عامة.
 
-- We can eliminate grinding by forcing everyone to sign the same PoH hash and
+- يُمكننا القضاء على الطحن عن طريق إجبار الجميع على توقيع نفس تجزئة (hash) الـ PoH و
 
-  use the signatures as the seed
+  إستخدام التوقيعات كبذرة
 
-- The game between validators and archivers is over random blocks and random
+- تدور اللعبة بين المُدقّقين (validators) والمُؤرشفون (Archivers) على الكتل (blocks) العشوائية
 
-  encryption identities and random data samples. The goal of randomization is
+  وهويات التشفير العشوائية وعينات البيانات العشوائية. الهدف من التوزيع العشوائي هو
 
-  to prevent colluding groups from having overlap on data or validation.
+  منع المجموعات المُتآمرة من التداخل في البيانات أو التحقق من إثبات الصحة أو المُصادقة (validation).
 
-- Archiver clients fish for lazy validators by submitting fake proofs that
+- يقوم عملاء المُؤرشف (Archiver) بالبحث عن المُدقّقين (validators) الكسالى من خلال تقديم أدلة مُزيفة على ذلك
 
-  they can prove are fake.
+  يُمكنهم إثبات أنها مُزيفة.
 
-- To defend against Sybil client identities that try to store the same block we
+- للدفاع ضد هويات عملاء Sybil التي تُحاول تخزين نفس الكتلة (block)،
 
-  force the clients to store for multiple rounds before receiving a reward.
+  نُجبر العملاء على التخزين لعدة جولات قبل إستلام المكافأة.
 
-- Validators should also get rewarded for validating submitted storage proofs
+- يجب أيضًا مُكافأة المُدقّقين (validators) على التحقق من صحة أدلة التخزين (storage proofs) المُقدمة
 
-  as incentive for storing the ledger. They can only validate proofs if they
+  كحافز لتخزين دفتر الأستاذ (ledger). يُمكنهم فقط التحقق من صحة الإثباتات إذا كانوا
 
-  are storing that slice of the ledger.
+  يُخزنون تلك الشريحة من دفتر الأستاذ (ledger).
 
-# Ledger Replication Not Implemented
+# لم يتم بعد تنفيذ النسخ المُتماثل لدفتر الأستاذ (Ledger Replication Not Implemented)
 
-Replication behavior yet to be implemented.
+لم يتم تنفيذ سلوك النسخ المُتماثل بعد.
 
-## Storage epoch
+## فترة التخزين (Storage epoch)
 
-The storage epoch should be the number of slots which results in around 100GB-1TB of ledger to be generated for archivers to store. Archivers will start storing ledger when a given fork has a high probability of not being rolled back.
+يجب أن تكون فترة التخزين (storage epoch) عبارة عن عدد الفُتحات (Slots) التي ينتج عنها حوالي 100GB-1TB من دفتر الأستاذ (ledger) ليتم إنشاؤه للمُؤرشفون (Archivers) لتخزينه. سيبدأ المُؤرشفين (Archivers) في تخزين دفتر الأستاذ (ledger) عندما يكون للإنقسام أو الشوكة (fork) إحتمالية كبيرة بعدم التراجع.
 
-## Validator behavior
+## سلوك المُدقّق (Validator behavior)
 
-1. Every NUM_KEY_ROTATION_TICKS it also validates samples received from
+1. كل NUM_KEY_ROTATION_TICKS يقوم أيضًا بالتحقق من صحة العينات المُتلقاة من
 
-   archivers. It signs the PoH hash at that point and uses the following
+   المُؤرشفين (Archivers). يُوقع على تجزئة تجزئة (hash) الـ PoH عند تلك النقطة ويستخدم ما يلي
 
-   algorithm with the signature as the input:
+   خوارزمية مع التوقيع كمُدخل (input):
 
-   - The low 5 bits of the first byte of the signature creates an index into
+   - تُنشئ الـ 5 bits المُنخفضة من الـ byte الأول من التوقيع فهرسًا إلى
 
-     another starting byte of the signature.
+     بداية byte آخر من التوقيع.
 
-   - The validator then looks at the set of storage proofs where the byte of
+   - ثم ينظر المُدقّق (validator) في مجموعة إثباتات التخزين (storage proofs) حيث يتطابق byte
 
-     the proof's sha state vector starting from the low byte matches exactly
+     مُتجه حالة sha (أو sha state vector) للإثبات بدءًا من الـbyte المُنخفض تمامًا
 
-     with the chosen byte\(s\) of the signature.
+     مع الـbyte المُختار للتوقيع.
 
-   - If the set of proofs is larger than the validator can handle, then it
+   - إذا كانت مجموعة الإثباتات أكبر مما يُمكن للمُدقّق (validator) التعامل معه، فإنه
 
-     increases to matching 2 bytes in the signature.
+     يزداد إلى 2 bytes في التوقيع.
 
-   - Validator continues to increase the number of matching bytes until a
+   - يستمر المُدقّق (validator) في زيادة عدد وحدات الـ bytes المُطابقة حتى يتم العثور
 
-     workable set is found.
+     على مجموعة قابلة للتطبيق.
 
-   - It then creates a mask of valid proofs and fake proofs and sends it to
+   - ثم يقوم بإنشاء قناع من الإثباتات الصالحة والإثباتات المُزيفة ويُرسله إلى
 
-     the leader. This is a storage proof confirmation transaction.
+     القائد (leader). هذه مُعاملة تأكيد إثبات التخزين.
 
-2. After a lockout period of NUM_SECONDS_STORAGE_LOCKOUT seconds, the
+2. بعد فترة إغلاق مُدتها NUM_SECONDS_STORAGE_LOCKOUT من الثواني، يُرسل
 
-   validator then submits a storage proof claim transaction which then causes the
+   يُرسل المُدقّق (validator) بعد ذلك مُعاملة مُطالبة بإثبات التخزين والتي تُؤدي بعد ذلك
 
-   distribution of the storage reward if no challenges were seen for the proof to
+   إلى توزيع مُكافأة التخزين في حالة عدم ظهور إعتراضات على الإثبات في إثباتات
 
-   the validators and archivers party to the proofs.
+   كل من المُدقّقين (validators) والمُؤرشفين (Archivers).
 
-## Archiver behavior
+## سلوك المُؤرشف (Archiver behavior)
 
-1. The archiver then generates another set of offsets which it submits a fake
+1. يقوم المُؤرشف (Archiver) بعد ذلك بإنشاء مجموعة أخرى من عمليات الإزاحة (offsets) التي يُقدمها دليلًا مُزيفًا
 
-   proof with an incorrect sha state. It can be proven to be fake by providing the
+   بحالة sha غير صحيحة. يُمكن إثبات أنها مُزيفة من خلال توفير
 
-   seed for the hash result.
+   البذور لنتيجة التجزئة (hash).
 
-   - A fake proof should consist of an archiver hash of a signature of a PoH
+   - يجب أن يتكون الدليل المُزيف من تجزئة (hash) مُؤرشف (Archiver) لتوقيع
 
-     value. That way when the archiver reveals the fake proof, it can be
+     قيمة PoH. بهذه الطريقة عندما يكشف المُؤرشف (Archiver) الدليل المُزيف، يُمكن
 
-     verified on chain.
+     التحقق منه على الشبكة.
 
-2. The archiver monitors the ledger, if it sees a fake proof integrated, it
+2. يُراقب المُؤرشف (Archiver) دفتر الأستاذ (ledger)، إذا رأى إثباتًا مُزيفًا مُدمجًا، فإنه
 
-   creates a challenge transaction and submits it to the current leader. The
+   يُنشئ مُعاملة تحدي ويُرسلها إلى القائد (leader) الحالي. يُثبت
 
-   transacation proves the validator incorrectly validated a fake storage proof.
+   التحويل أن المُدقّق (validator) قد قام بالتحقق من صحة إثبات التخزين المُزيف بشكل غير صحيح.
 
-   The archiver is rewarded and the validator's staking balance is slashed or
+   تتم مُكافأة المُؤرشف (Archiver) ويتم الإقتطاع (slashing) أو
 
-   frozen.
+   تجميد رصيد إثبات الحِصَّة أو التَّحْصِيص (staking) الخاص بالمُدقّق (validator).
 
-## Storage proof contract logic
+## منطق عقد إثبات التخزين (Storage proof contract logic)
 
-Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similiar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
+سيكون لكل مُؤرشف (Archiver) والمُدقّق (validator) حساب تخزين خاص به. سيكون حساب المُدقّقون (validators) مُنفصلاً عن مُعرف القيل والقال (gossip id) مُشابه لحساب تصويتهم. يجب تنفيذ هذين البرنامجين كبرنامجين، أحدهما يتعامل مع المُدقّق (validator) بإعتباره المُصمم والآخر للمُؤرشف (Archiver). بهذه الطريقة عندما تُشير البرامج إلى حسابات أخرى، يُمكنهم التحقق من مُعرّف البرنامج للتأكد من أنه مُدقق أو حساب مُؤرشف (Archiver) يراجعونه.
 
-### SubmitMiningProof
+### تقديم دليل التعدين (SubmitMiningProof)
 
 ```text
 SubmitMiningProof {
@@ -364,13 +358,13 @@ SubmitMiningProof {
 keys = [archiver_keypair]
 ```
 
-Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
+يقوم المُؤرشِفون (Archivers) بإنشاء هذه بعد تعدين عن بيانات دفتر الأستاذ (ledger) المُخزن الخاص بهم لقيمة تجزئة (hash) مُعينة. الفُتحة (Slot) هي الفُتحة النهائية لجزء دفتر الأستاذ (ledger) الذي يقومون بتخزينه، وهي الحالة الناتجة عن مُؤرشِف (Archiver) يستخدام وظيفة التجزئة (hash) لأخذ عينات من مقطع دفتر الأستاذ الشفر. التوقيع هو التوقيع الذي تم إنشاؤه عند توقيعهم على قيمة الـ PoH لفترة التخزين (Storage epoch) الحالية. يجب حفظ قائمة الإثباتات من فترة التخزين (Storage epoch) الحالية في حالة الحساب، ثم نقلها إلى قائمة الإثباتات للفترة (epoch) السابقة عندما تمر الفترة. في فترة التخزين (Storage epoch) مُعينة، يجب على المُؤرشِف (Archiver) تقديم الإثباتات لجزء واحد فقط.
 
-The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS_PER_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
+يجب أن يحتوي البرنامج على قائمة بالفُتحات (Slots) التي تُعد فُتحات (Slots) تعدين صالحة للتخزين. يجب الحفاظ على هذه القائمة من خلال تتبع الفُتحات (slots) التي هي فُتحات مُتجذرة صوّت عليها جزء كبير من الشبكة بقيمة تأمين عالية، ربما 32 صوتًا. ستتم إضافة كل عدد SLOTS_PER_SEGMENT من الفُتحات (Slots) إلى هذه المجموعة. يجب أن يتحقق البرنامج من أن الفُتحة (Slot) في هذه المجموعة. يُمكن الحفاظ على المجموعة من خلال تلقي الإعلان عن التخزين الأخير لتجزئة الكتلة (AdvertiseStorageRecentBlockHash) والتحقق من حالة البنك / Tower BFT.
 
-The program should do a signature verify check on the signature, public key from the transaction submitter and the message of the previous storage epoch PoH value.
+يجب أن يقوم البرنامج بإجراء التحقق من التوقيع والتحقق من التوقيع والمفتاح العمومي (public key) من مُقدم المُعاملة ورسالة قيمة الـ PoH في فترة التخزين (Storage epoch) السابقة.
 
-### ProofValidation
+### إثبات الصِّحة (ProofValidation)
 
 ```text
 ProofValidation {
@@ -379,11 +373,11 @@ ProofValidation {
 keys = [validator_keypair, archiver_keypair(s) (unsigned)]
 ```
 
-A validator will submit this transaction to indicate that a set of proofs for a given segment are valid/not-valid or skipped where the validator did not look at it. The keypairs for the archivers that it looked at should be referenced in the keys so the program logic can go to those accounts and see that the proofs are generated in the previous epoch. The sampling of the storage proofs should be verified ensuring that the correct proofs are skipped by the validator according to the logic outlined in the validator behavior of sampling.
+سيقوم المُدقّق (validator) بإرسال هذه المُعاملة للإشارة إلى أن مجموعة الإثباتات لشريحة مُعينة صالحة / غير صالحة أو تم تخطيها حيث لم ينظر المُدقّق (validator) إليها. يجب الإشارة إلى أزواج المفاتيح (keypairs) الخاصة بالمُؤرشِفين (Archivers) التي تم فحصها في المفاتيح حتى يتمكن منطق البرنامج من الإنتقال إلى تلك الحسابات ومعرفة أن الإثباتات تم إنشاؤها في الفترة (epoch) السابقة. يجب التحقق من أخذ عينات إثباتات التخزين (storage proofs) لضمان تخطي المُدقّق (validator) الإثباتات الصحيحة وفقًا للمنطق المُوضح في سلوك أخذ المُدقّق (validator) للعينات.
 
-The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
+ستُشير مفاتيح المُؤرشِف (Archiver) المُضمنة إلى عينات التخزين التي يتم الرجوع إليها؛ يجب التحقق من طول قناع الإثبات (proof_mask) مُقابل مجموعة إثباتات التخزين (storage proofs) في حساب المُؤرشِف (Archiver) المُشار إليه، ويجب أن يتطابق مع عدد الأدلة المُقدمة في فترة التخزين (Storage epoch) السابقة في حالة حساب المُؤرشِف (Archiver) المذكور.
 
-### ClaimStorageReward
+### المُطالبة بمُكافأة التخزين (ClaimStorageReward)
 
 ```text
 ClaimStorageReward {
@@ -391,9 +385,9 @@ ClaimStorageReward {
 keys = [validator_keypair or archiver_keypair, validator/archiver_keypairs (unsigned)]
 ```
 
-Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for an archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
+سيستخدم المُؤرشِفين (Archivers) والمُدقّقون (validators) هذه المُعاملة للحصول على رموز مدفوعة من حالة البرنامج حيث يوجد إرسال إثبات التخزين (SubmitStorageProof) وإثبات الصِّحة (ProofValidation) والتحقق من صِّحة إثبات التحدي (ChallengeProofValidations) في حالة تم فيها تقديم الإثباتات والتحقق من صحتها ولا يوجد تحقق من صِّحة إثبات التحدي (ChallengeProofValidations) يُشير إلى تلك الإثباتات. بالنسبة للمُدقّق (validator)، يجب أن يُشير إلى أزواج مفاتيح (keypairs) المُؤرشِف (Archiver) الذي قام بالتحقق من صحة الإثباتات في الفترة (epoch) ذات الصلة. بالنسبة للمُؤرشِف (Archiver)، يجب أن يُشير إلى أزواج مفاتيح (keypairs) المُدقّق (validator) التي تم التحقق من صحتها ويُريد الحصول على مُكافأتة مُقابلها.
 
-### ChallengeProofValidation
+### صِّحة إثبات التحدي (ChallengeProofValidation)
 
 ```text
 ChallengeProofValidation {
@@ -403,9 +397,9 @@ ChallengeProofValidation {
 keys = [archiver_keypair, validator_keypair]
 ```
 
-This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash_seed_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
+هذه المُعاملة مُخصصة لإصطياد المُدقّقين (validators) الكسالى الذين لا يقومون بالعمل للتحقق من صحة الإثباتات. سيُرسل المُؤرشِف (Archiver) هذه المُعاملة عندما يرى أن المُدقّق (validator) قد وافق على مُعاملة تقديم دليل التعدين (SubmitMiningProof) وهمية. نظرًا لأن المُؤرشِف (Archiver) هو عبارة عن عميل خفيف (light client) لا ينظر إلى الشبكة الكاملة، فسيتعين عليه أن يطلب من المُدقّق (validator) أو مجموعة من المُدقّقين لهذه المعلومات ربما عبر إستدعاء RPC للحصول على جميع عمليات التحقق من صحة شريحة مُعينة في فترة التخزين (Storage epoch) السابقة. سيبحث البرنامج في حالة حساب المُدقّق (validator)، ويرى أنه تم تقديم إثبات التحقق في فترة التخزين (Storage epoch) السابقة ويُجزئ التجزئة hash_seed_value ومعرفة أن التجزئة تُطابق مُعاملة تقديم دليل التعدين (SubmitMiningProof) وأن المُدقّق حددها على أنها صالحة. إذا كان الأمر كذلك، فسيتم حفظ التحدي في قائمة التحديات التي يُواجهها في حالته.
 
-### AdvertiseStorageRecentBlockhash
+### الإعلان عن تخزين تجزئة الكُتلة الحديثة (AdvertiseStorageRecentBlockHash)
 
 ```text
 AdvertiseStorageRecentBlockhash {
@@ -414,4 +408,4 @@ AdvertiseStorageRecentBlockhash {
 }
 ```
 
-Validators and archivers will submit this to indicate that a new storage epoch has passed and that the storage proofs which are current proofs should now be for the previous epoch. Other transactions should check to see that the epoch that they are referencing is accurate according to current chain state.
+سيقوم المُدقّقون (validators) والمُؤرشِفون (Archivers) بإرسال هذا للإشارة إلى أن فترة تخزين (Storage epoch) جديدة قد إنقضت وأن إثباتات التخزين التي هي إثباتات حالية يجب أن تكون الآن للفترة (epoch) السابقة. يجب أن تتحقق المُعاملات الأخرى لمعرفة ما إذا كانت الفترة (epoch) التي تُشير إليها دقيقة وفقًا لحالة الشبكة الحالية.

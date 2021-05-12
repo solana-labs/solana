@@ -1,105 +1,105 @@
 ---
-title: Inter-chain Transaction Verification
+title: 체인 간 트랜잭션 검증
 ---
 
-## Problem
+## 문제
 
-Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
+체인 간 애플리케이션은 디지털 자산 생태계에 새로운 것이 아닙니다. 사실, 더 작은 중앙 집중식 거래소조차도 사용자 및 볼륨 측면에서 통합 된 모든 단일 체인 애플리케이션을 여전히 절대적으로 왜소하게 만듭니다. 그들은 막대한 평가를 받고 있으며 광범위한 최종 사용자를 위해 핵심 제품을 효과적으로 최적화하는 데 수년을 보냈습니다. 그러나 기본 운영은 일반적으로 우발적 손실에 대한 보호 또는 의지가 거의 또는 전혀없이 사용자가 일방적으로 자신을 신뢰하도록 요구하는 메커니즘을 중심으로합니다. 이로 인해 상호 운용성 솔루션이 일반적으로 다음과 같은 이유로 네트워크 라인을 따라 더 광범위한 디지털 자산 생태계가 분열되고 있습니다
 
-- Are technically complex to fully implement
-- Create unstable network scale incentive structures
+- SPV 증거를 프로그램과 관련된 blockchain의 올바른 형식
+- 참고 \ (들 \) 관련 블록 헤더에 그 증거를 비교하기
 - Require consistent and high level cooperation between stakeholders
 
-## Proposed Solution
+## 제안 된 솔루션
 
-Simple Payment Verification \(SPV\) is a generic term for a range of different methodologies used by light clients on most major blockchain networks to verify aspects of the network state without the burden of fully storing and maintaining the chain itself. In most cases, this means relying on a form of hash tree to supply a proof of the presence of a given transaction in a certain block by comparing against a root hash in that block’s header or equivalent. This allows a light client or wallet to reach a probabilistic level of certainty about on-chain events by itself with a minimum of trust required with regard to network nodes.
+단순 결제 확인 \ (SPV \)는 대부분의 주요 블록체인 네트워크에서 라이트 클라이언트가 체인 자체를 완전히 저장하고 유지하는 부담없이 네트워크 상태의 측면을 확인하는 데 사용하는 다양한 방법론에 대한 일반적인 용어입니다. 대부분의 경우, 이것은 해시 트리의 한 형태에 의존하여 해당 블록의 헤더 또는 그에 상응하는 루트 해시와 비교하여 특정 블록에서 주어진 트랜잭션의 존재에 대한 증거를 제공하는 것을 의미합니다. 이를 통해 라이트 클라이언트 또는 지갑은 네트워크 노드와 관련하여 필요한 최소한의 신뢰로 자체적으로 온 체인 이벤트에 대한 확률 적 수준의 확실성에 도달 할 수 있습니다.
 
-Traditionally the process of assembling and validating these proofs is carried out off chain by nodes, wallets, or other clients, but it also offers a potential mechanism for inter-chain state verification. However, by moving the capability to validate SPV proofs on-chain as a smart contract while leveraging the archival properties inherent to the blockchain, it is possible to construct a system for programmatically detecting and verifying transactions on other networks without the involvement of any type of trusted oracle or complex multi-stage consensus mechanism. This concept is broadly generalisable to any network with an SPV mechanism and can even be operated bilaterally on other smart contract platforms, opening up the possibility of cheap, fast, inter-chain transfer of value without relying on collateral, hashlocks, or trusted intermediaries.
+전통적으로 이러한 증명을 조립하고 검증하는 프로세스는 노드, 지갑 또는 기타 클라이언트에 의해 체인 외부에서 수행되지만 체인 간 상태 검증을위한 잠재적 메커니즘도 제공합니다. 그러나 블록체인 고유의 보관 속성을 활용하면서 체인에서 SPV 증명을 스마트 컨트랙트으로 검증하는 기능을 이동함으로써 어떤 유형의 개입없이 다른 네트워크에서 트랜잭션을 프로그래밍 방식으로 감지하고 검증하는 시스템을 구축 할 수 있습니다. 신뢰할 수있는 오라클 또는 복잡한 다단계 합의 메커니즘. 이 개념은 SPV 메커니즘을 사용하는 모든 네트워크에 광범위하게 일반화 할 수 있으며 다른 스마트 컨트랙트 플랫폼에서 양방향으로 운영 될 수도 있으므로 담보, 해시 록 또는 신뢰할 수있는 중개자에 의존하지 않고도 저렴하고 빠른 체인 간 가치 이전 가능성을 열어줍니다.
 
-Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of applications and contracts able to interoperate across the variegated and every growing platform ecosystem.
+이미 모든 주요 블록체인에 공통된 잘 확립되고 개발 적으로 안정적인 메커니즘을 활용하면 SPV 기반 상호 운용성 솔루션이 오케스트레이션 된 다단계 접근 방식보다 훨씬 더 간단해질 수 있습니다. 이것의 일환으로, 그들은 널리 합의 된 교차 체인 통신 표준과이를 작성하는 대규모 다자간 조직에 대한 필요성을 없애고, 공동을 통해 발신자 컨트랙트에서 쉽게 활용할 수있는 일련의 개별 컨트랙트 기반 서비스를 선호합니다. 추상화 형식. 이는 다양하고 성장하는 모든 플랫폼 생태계에서 상호 운용 할 수있는 광범위한 애플리케이션 및 컨트랙트의 토대가 될 것입니다.
 
-## Terminology
+## 용어
 
-SPV Program - Client-facing interface for the inter-chain SPV system, manages participant roles. SPV Engine - Validates transaction proofs, subset of the SPV Program. Client - The caller to the SPV Program, typically another solana contract. Prover - Party who generates proofs for transactions and submits them to the SPV Program. Transaction Proof - Created by Provers, contains a merkle proof, transaction, and blockheader reference. Merkle Proof - Basic SPV proof that validates the presence of a transaction in a certain block. Block Header - Represents the basic parameters and relative position of a given block. Proof Request - An order placed by a client for verification of transaction\(s\) by provers. Header Store - A data structure for storing and referencing ranges of block headers in proofs. Client Request - Transaction from the client to the SPV Program to trigger creation of a Proof Request. Sub-account - A Solana account owned by another contract account, without its own private key.
+SPV 프로그램-인터 체인 SPV 시스템을위한 클라이언트 대면 인터페이스로 참가자 역할을 관리합니다. SPV 엔진-SPV 프로그램의 하위 집합 인 트랜잭션 증명의 유효성을 검사합니다. 클라이언트-SPV 프로그램의 호출자, 일반적으로 다른 솔라나 컨트랙트. Prover-거래 증명을 생성하여 SPV 프로그램에 제출하는 당사자입니다. Transaction Proof-Provers가 생성하며 머클 증명, 트랜잭션 및 블록 헤더 참조를 포함합니다. Merkle Proof-특정 블록에서 트랜잭션의 존재를 확인하는 기본 SPV 증명입니다. 블록 헤더-주어진 블록의 기본 매개 변수 및 상대 위치를 나타냅니다. 증명 요청-증명자가 거래를 확인하기 위해 클라이언트가 주문한 것입니다. 헤더 저장소-증명에서 블록 헤더 범위를 저장하고 참조하기위한 데이터 구조입니다. 클라이언트 요청-증명 요청 생성을 트리거하기 위해 클라이언트에서 SPV 프로그램으로의 트랜잭션입니다. 하위 계정-자체 개인 키없이 다른 컨트랙트 계정이 소유 한 Solana 계정입니다.
 
-## Service
+## 서비스
 
-SPV Programs run as contracts deployed on the Solana network and maintain a type of public marketplace for SPV proofs that allows any party to submit both requests for proofs as well as proofs themselves for verification in response to requests. There will be multiple SPV Program instances active at any given time, at least one for each connected external network and potentially multiple instances per network. SPV program instances will be relatively consistent in their high level API and feature sets with some variation between currency platforms \(Bitcoin, Litecoin\) and smart contract platforms owing to the potential for verification of network state changes beyond simply transactions. In every case regardless of network, the SPV Program relies on an internal component called an SPV engine to provide stateless verification of the actual SPV proofs upon which the higher level client facing features and api are built. The SPV engine requires a network specific implementation, but allows easy extension of the larger inter-chain ecosystem by any team who chooses to carry out that implementation and drop it into the standard SPV program for deployment.
+SPV 프로그램은 Solana 네트워크에 배포 된 컨트랙트으로 실행되며 모든 당사자가 요청에 대한 응답으로 검증을 위해 증명 요청과 증명을 모두 제출할 수있는 SPV 증명을위한 일종의 공개 마켓 플레이스를 유지합니다. 주어진 시간에 여러 SPV 프로그램 인스턴스가 활성화되며, 연결된 각 외부 네트워크에 대해 적어도 하나, 잠재적으로 네트워크 당 여러 인스턴스가 있습니다. SPV 프로그램 인스턴스는 단순한 거래를 넘어서 네트워크 상태 변경을 검증 할 수있는 잠재력으로 인해 통화 플랫폼 \ (비트 코인, 라이트 코인 \)과 스마트 컨트랙트 플랫폼간에 약간의 차이가있는 높은 수준의 API 및 기능 세트에서 상대적으로 일관 될 것입니다. 네트워크에 관계없이 모든 경우에 SPV 프로그램은 SPV 엔진이라고하는 내부 구성 요소에 의존하여 상위 수준의 클라이언트 대면 기능 및 API가 구축되는 실제 SPV 증명의 상태 비 저장 검증을 제공합니다. SPV 엔진은 네트워크 별 구현이 필요하지만 해당 구현을 수행하고 배포를 위해 표준 SPV 프로그램에 드롭하기로 선택한 모든 팀이 더 큰 체인 간 에코 시스템을 쉽게 확장 할 수 있습니다.
 
-For purposes of Proof Requests, the requester is referred to as the program client, which in most if not all cases will be another Solana Contract. The client can choose to submit a request pertaining to a specific transaction or to include a broader filter that can apply to any of a range of parameters of a transaction including its inputs, outputs, and amount. For example, A client could submit a request for any transaction sent from a given address A to address B with the amount X after a certain time. This structure can be used in a range of applications, such as verifying a specific intended payment in the case of an atomic swap or detecting the movement of collateral assets for a loan.
+증명 요청을 위해 요청자는 프로그램 클라이언트라고하며, 대부분의 경우 모든 경우는 다른 Solana 컨트랙트이됩니다. 클라이언트는 특정 트랜잭션과 관련된 요청을 제출하거나 입력, 출력 및 금액을 포함하여 트랜잭션의 매개 변수 범위에 적용 할 수있는 더 광범위한 필터를 포함하도록 선택할 수 있습니다. 예를 들어, 클라이언트는 주어진 주소 A에서 주소 B로 전송 된 트랜잭션에 대한 요청을 특정 시간 후에 금액 X로 제출할 수 있습니다. 이 구조는 원자 스왑의 경우 특정 의도 된 지불을 확인하거나 대출을위한 담보 자산의 이동을 감지하는 것과 같은 다양한 응용 프로그램에서 사용할 수 있습니다.
 
-Following submission of a Client Request, assuming that it is successfully validated, a proof request account is created by the SPV program to track the progress of the request. Provers use the account to specify the request they intend to fill in the proofs they submit for validation, at which point the SPV program validates those proofs and if successful, saves them to the account data of the request account. Clients can monitor the status of their requests and see any applicable transactions alongside their proofs by querying the account data of the request account. In future iterations when supported by Solana, this process will be simplified by contracts publishing events rather than requiring a polling style process as described.
+성공적으로 검증되었다고 가정하고 클라이언트 요청을 제출 한 후 SPV 프로그램에서 요청 진행 상황을 추적하기 위해 증명 요청 계정을 만듭니다. 밸리데이터는 계정을 사용하여 검증을 위해 제출 한 증명을 작성하려는 요청을 지정합니다. 이때 SPV 프로그램은 해당 증명의 유효성을 검사하고 성공하면 요청 계정의 계정 데이터에 저장합니다. 클라이언트는 요청 계정의 계정 데이터를 쿼리하여 요청 상태를 모니터링하고 증명과 함께 적용 가능한 트랜잭션을 볼 수 있습니다. Solana가 지원하는 향후 반복에서이 프로세스는 설명한대로 폴링 스타일 프로세스를 요구하지 않고 이벤트를 게시하는 컨트랙트에 의해 단순화 될 것입니다.
 
-## Implementation
+## 구현
 
-The Solana Inter-chain SPV mechanism consists of the following components and participants:
+Solana Inter-chain SPV 메커니즘은 다음 구성 요소와 참여자로 구성됩니다.
 
-### SPV engine
+### SPV 엔진
 
-A contract deployed on Solana which statelessly verifies SPV proofs for the caller. It takes as arguments for validation:
+호출자의 SPV 증명을 상태 비 저장으로 확인하는 Solana에 배포 된 컨트랙트입니다. 그것은 확인을 위해 인수로 취
 
-- An SPV proof in the correct format of the blockchain associated with the program
+- SPV 프로그램은 증명유효한 보류중인 증명의 공개 목록을 유지합니다
 - Reference\(s\) to the relevant block headers to compare that proof against
-- The necessary parameters of the transaction to verify
+- 트랜잭션의 필요한 매개 확인
 
-  If the proof in question is successfully validated, the SPV program saves proof
+  변수를경우문제의 증명이 성공적으로 검증되면 SPV 프로그램은증명저장합니다.이 증명
 
-  of that verification to the request account, which can be saved by the caller to
+  요청 계정에 해당 검증을은 호출자가
 
-  its account data or otherwise handled as necessary. SPV programs also expose
+  계정 데이터에 저장하거나 필요에 따라 처리 할 수 ​​있습니다. SPV 프로그램은 또한노출
 
-  utilities and structs used for representation and validation of headers,
+  헤더,의 표현 및 유효성 검사에 사용되는 유틸리티 및 구조체를
 
-  transactions, hashes, etc. on a chain by chain basis.
+  체인별로트랜잭션, 해시 등합니다.
 
-### SPV program
+### SPV 프로그램
 
-A contract deployed on Solana which coordinates and intermediates the interaction between Clients and Provers and manages the validation of requests, headers, proofs, etc. It is the primary point of access for Client contracts to access the inter-chain. SPV mechanism. It offers the following core features:
+클라이언트와 밸리데이터 간의 상호 작용을 조정 및 중개하고 요청, 헤더, 증명 등의 유효성 검사를 관리하는 Solana에 배포 된 컨트랙트입니다. 클라이언트 컨트랙트이 인터 체인에 액세스 할 수있는 주요 액세스 지점입니다. SPV 메커니즘. 다음과 같은 핵심 기능을 제공합니다
 
-- Submit Proof Request - allows client to place a request for a specific proof or set of proofs
+- .-증명 요청 제출-클라이언트가 특정 증명 또는 증명 세트에 대한 요청을 할 수 있도록 허용-증명 요청 취소-클라이언트가 보류중인 요청을 무효화하도록 허용 -증명 요청 채우기-검증을 위해 제출하는 데 사용 주어진 증명 요청에 해당하는 증명
 - Cancel Proof Request - allows client to invalidate a pending request
-- Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
+- 하고 제출 된 증명과 함께 대상 요청에 대한 참조를 동봉.
 
   The SPV program maintains a publicly available listing of valid pending Proof
 
-  Requests in its account data for the benefit of the Provers, who monitor it and
+  요청을 모니터링하는 증명 자의 이익을 위해 계정 데이터에서요청
 
   enclose references to target requests with their submitted proofs.
 
-### Proof Request
+### 증명 요청
 
-A message sent by the Client to the SPV engine denoting a request for a proof of a specific transaction or set of transactions. Proof Requests can either manually specify a certain transaction by its hash or can elect to submit a filter that matches multiple transactions or classes of transactions. For example, a filter matching “any transaction from address xxx to address yyy” could be used to detect payment of a debt or settlement of an inter-chain swap. Likewise, a filter matching “any transaction from address xxx” could be used by a lending or synthetic token minting contract to monitor and react to changes in collateralization. Proof Requests are sent with a fee, which is disbursed by the SPV engine contract to the appropriate Prover once a proof matching that request is validated.
+특정 트랜잭션 또는 트랜잭션 집합의 증명 요청을 나타내는 클라이언트가 SPV 엔진으로 보내는 메시지입니다. 증명 요청은 해시로 특정 트랜잭션을 수동으로 지정하거나 여러 트랜잭션 또는 트랜잭션 클래스와 일치하는 필터를 제출하도록 선택할 수 있습니다. 예를 들어, "주소 xxx에서 주소 yyy까지의 모든 거래"와 일치하는 필터를 사용하여 부채 지불 또는 체인 간 스왑 결제를 감지 할 수 있습니다. 마찬가지로,“xxx 주소의 모든 거래”와 일치하는 필터는 대출 또는 합성 토큰 채굴 컨트랙트에서 담보 화의 변경 사항을 모니터링하고 이에 대응하는 데 사용할 수 있습니다. 증명 요청은 해당 요청과 일치하는 증명이 확인되면 SPV 엔진 컨트랙트에 의해 적절한 Prover에게 지불되는 수수료와 함께 전송됩니다.
 
-### Request Book
+### 요청서
 
-The public listing of valid, open Proof Requests available to provers to fill or for clients to cancel. Roughly analogous to an orderbook in an exchange, but with a single type of listing rather than two separate sides. It is stored in the account data of the SPV program.
+증인이 작성하거나 고객이 취소 할 수있는 유효한 공개 증명 요청의 공개 목록입니다. 거래소의 주문 장과 거의 유사하지만 두 개의 개별 측면이 아닌 단일 유형의 목록이 있습니다. SPV 프로그램의 계정 데이터에 저장됩니다.
 
-### Proof
+### 증명
 
-A proof of the presence of a given transaction in the blockchain in question. Proofs encompass both the actual merkle proof and reference\(s\) to a chain of valid sequential block headers. They are constructed and submitted by Provers in accordance with the specifications of the publicly available Proof Requests hosted on the request book by the SPV program. Upon Validation, they are saved to the account data of the relevant Proof Request, which can be used by the Client to monitor the state of the request.
+문제의 블록체인에서 주어진 거래의 존재에 대한 증명. 증명은 실제 머클 증명과 유효한 순차 블록 헤더 체인에 대한 참조를 모두 포함합니다. SPV 프로그램의 요청서에 호스팅 된 공개적으로 사용 가능한 증명 요청의 사양에 따라 Provers가 구성하고 제출합니다. 유효성 검사시 관련 증명 요청의 계정 데이터에 저장되며 클라이언트가 요청 상태를 모니터링하는 데 사용할 수 있습니다.
 
-### Client
+### 클라이언트
 
-The originator of a request for a transaction proof. Clients will most often be other contracts as parts of applications or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
+트랜잭션 증명 요청의 발신자. 클라이언트는 대부분 응용 프로그램의 일부 또는 대출, 스왑, 에스크로 등과 같은 특정 금융 상품으로 다른 컨트랙트이 될 것입니다. 주어진 검증 프로세스주기에서 클라이언트는 처음에 매개 변수와 수수료를 전달하는 ClientRequest를 제출하고 성공적으로 검증되면 SPV 프로그램에 의한 증명 요청 계정 생성. 클라이언트는 증명 제출을 위해 유효하지 않은 것으로 표시하기 위해 활성 증명 요청을 참조하는 CancelRequest를 제출할 수도 있습니다.
 
 ### Prover
 
-The submitter of a proof that fills a Proof Request. Provers monitor the request book of the SPV program for outstanding Proof Requests and generate matching proofs, which they submit to the SPV program for validation. If the proof is accepted, the fee associated with the Proof Request in question is disbursed to the Prover. Provers typically operate as Solana Blockstreamer nodes that also have access to a Bitcoin node, which they use for purposes of constructing proofs and accessing block headers.
+증명 요청을 작성하는 증명의 제출자입니다. 증명자는 SPV 프로그램의 요청서에서 미해결 증명 요청을 모니터링하고 일치하는 증명을 생성하여 검증을 위해 SPV 프로그램에 제출합니다. 증명이 수락되면 해당 증명 요청과 관련된 수수료가 Prover에게 지급됩니다. Provers는 일반적으로 Bitcoin 노드에 액세스 할 수있는 Solana Blockstreamer 노드로 작동하며,이를 증명을 구성하고 블록 헤더에 액세스하는 데 사용합니다.
 
-### Header Store
+### 헤더 저장소
 
-An account-based data structure used to maintain block headers for the purpose of inclusion in submitted proofs by reference to the header store account. header stores can be maintained by independent entities, since header chain validation is a component of the SPV program proof validation mechanism. Fees that are paid out by Proof Requests to Provers are split between the submitter of the merkle proof itself and the header store that is referenced in the submitted proof. Due to the current inability to grow already allocated account data capacity, the use case necessitates a data structure that can grow indefinitely without rebalancing. Sub-accounts are accounts owned by the SPV program without their own private keys that are used for storage by allocating blockheaders to their account data. Multiple potential approaches to the implementation of the header store system are feasible:
+헤더 저장소 계정을 참조하여 제출 된 증명에 포함 할 목적으로 블록 헤더를 유지하는 데 사용되는 계정 기반 데이터 구조입니다. 헤더 체인 유효성 검사는 SPV 프로그램 증명 유효성 검사 메커니즘의 구성 요소이므로 헤더 저장소는 독립적 인 엔터티에 의해 유지 관리 될 수 있습니다. Proof Requests to Provers에 의해 지불되는 수수료는 머클 증명 자체의 제출자와 제출 된 증명에서 참조되는 헤더 저장소간에 분할됩니다. 현재 이미 할당 된 계정 데이터 용량을 늘릴 수 없기 때문에 사용 사례에는 재조정없이 무기한으로 확장 할 수있는 데이터 구조가 필요합니다. 하위 계정은 블록 헤더를 계정 데이터에 할당하여 저장하는 데 사용되는 자체 개인 키없이 SPV 프로그램이 소유 한 계정입니다. 헤더 저장 시스템의 구현에 대한 여러 가지 잠재적 인 접근이 가능합니다 :헤더 저장
 
-Store Headers in program sub-accounts indexed by Public address:
+공개 주소로 인덱싱 된 프로그램 하위 계정에:
 
 - Each sub-account holds one header and has a public key matching the blockhash
 - Requires same number of account data lookups as confirmations per verification
-- Limit on number of confirmations \(15-20\) via max transaction data ceiling
+- 검증 당 확인으로 -최대 트랜잭션 데이터 한도를 통한 확인 횟수 제한 \ (15-20 \) -개별 헤더의 네트워크 전체 중복 없음 헤더를
 - No network-wide duplication of individual headers
 
-Linked List of multiple sub-accounts storing headers:
+저장하는 여러 하위 계정의 연결된 목록 :
 
 - Maintain sequential index of storage accounts, many headers per storage account
-- Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
+- -스토리지 계정의 순차 인덱스 유지, 다수 스토리지 계정 당 헤더 -99.9 % 이상의 확인에 대해 최대 2 개의 계정 데이터 조회 \ (대부분의 경우 1 개 \) -소형 순차 데이터 주소 형식으로 여러 확인 및 빠른 조회 가능 -네트워크 전체 헤더 중복 비 효율성 촉진
 - Compact sequential data address format allows any number of confirmations and fast lookups
 - Facilitates network-wide header duplication inefficiencies

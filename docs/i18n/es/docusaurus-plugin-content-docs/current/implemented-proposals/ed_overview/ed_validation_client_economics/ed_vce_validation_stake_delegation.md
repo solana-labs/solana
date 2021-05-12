@@ -1,28 +1,28 @@
 ---
-title: Validation Stake Delegation
+title: Validación de Delegación de Stake
 ---
 
-**Subject to change.**
+**Sujeto a cambios.**
 
-Running a Solana validation-client required relatively modest upfront hardware capital investment. **Table 2** provides an example hardware configuration to support ~1M tx/s with estimated ‘off-the-shelf’ costs:
+La ejecución de un cliente de validación de Solana requirió una inversión inicial de capital en hardware relativamente modesta. **Tabla 2** proporciona un ejemplo de configuración de hardware para soportar ~1M tx/s con costos estimados ‘off-the-shelf’:
 
-| Component         | Example                                          | Estimated Cost |
-| :---------------- | :----------------------------------------------- | :------------- |
-| GPU               | 2x 2080 Ti                                       | \$2500         |
-| or                | 4x 1080 Ti                                       | \$2800         |
-| OS/Ledger Storage | Samsung 860 Evo 2TB                              | \$370          |
-| Accounts storage  | 2x Samsung 970 Pro M.2 512GB                     | \$340          |
-| RAM               | 32 Gb                                            | \$300          |
-| Motherboard       | AMD x399                                         | \$400          |
-| CPU               | AMD Threadripper 2920x                           | \$650          |
-| Case              |                                                  | \$100          |
-| Power supply      | EVGA 1600W                                       | \$300          |
-| Network           | &gt; 500 mbps                                    |                |
-| Network \(1\)     | Google webpass business bay area 1gbps unlimited | \$5500/mo      |
-| Network \(2\)     | Hurricane Electric bay area colo 1gbps           | \$500/mo       |
+| Componente                | Ejemplo                                            | Costo estimado |
+|:------------------------- |:-------------------------------------------------- |:-------------- |
+| GPU                       | 2x 2080 Ti                                         | \$2500        |
+| o                         | 4x 1080 Ti                                         | \$2800        |
+| Almacenamiento OS/Ledger  | Samsung 860 Evo 2TB                                | \$370         |
+| Almacenamiento de cuentas | 2x Samsung 970 Pro M.2 512GB                       | \$340         |
+| RAM                       | 32 Gb                                              | \$300         |
+| Madriguera                | AMD x399                                           | \$400         |
+| CPU                       | AMD Threadripper 2920x                             | \$650         |
+| Caso                      |                                                    | \$100         |
+| Alimentación              | EVGA 1600W                                         | \$300         |
+| Red                       | &gt; 500 mbps                                |                |
+| Red \(1\)               | Área comercial webpass de Google 1gbps ilimitada   | \$5500/mo     |
+| Red \(2\)               | Área de la bahía eléctrica de Hurricane colo 1gbps | \$500/mo      |
 
-**Table 2** example high-end hardware setup for running a Solana client.
+**Tabla 2** ejemplo de configuración de hardware de alta gama para ejecutar un cliente Solana.
 
-Despite the low-barrier to entry as a validation-client, from a capital investment perspective, as in any developing economy, there will be much opportunity and need for trusted validation services as evidenced by node reliability, UX/UI, APIs and other software accessibility tools. Additionally, although Solana’s validator node startup costs are nominal when compared to similar networks, they may still be somewhat restrictive for some potential participants. In the spirit of developing a true decentralized, permissionless network, these interested parties can become involved in the Solana network/economy via delegation of previously acquired tokens with a reliable validation node to earn a portion of the interest generated.
+A pesar de la baja barrera de entrada como cliente de validación, desde el punto de vista de la inversión de capital, como en cualquier economía en desarrollo, habrá muchas oportunidades y necesidad de servicios de validación de confianza, como lo demuestran la fiabilidad de los nodos, la UX/UI, las API y otras herramientas de accesibilidad del software. Adicionalmente, aunque los costos de inicio del nodo validador de Solana son nominales cuando se compara con redes similares, pueden ser algo restrictivos para algunos participantes potenciales. Con el espíritu de desarrollar una verdadera red descentralizada y sin permisos. estas partes interesadas pueden participar en la red / economía de Solana a través de la delegación de tokens previamente adquiridas con un nodo de validación fiable para ganar una porción del interés generado.
 
-Delegation of tokens to validation-clients provides a way for passive Solana token holders to become part of the active Solana economy and earn interest rates proportional to the interest rate generated by the delegated validation-client. Additionally, this feature intends to create a healthy validation-client market, with potential validation-client nodes competing to build reliable, transparent and profitable delegation services.
+Delegación de tokens a clientes de validación proporciona una forma para que los poseedores pasivos de token de Solana se conviertan en parte de la economía activa de Solana y ganen tasas de interés proporcionales a la tasa de interés generada por el cliente de validación delegado. Además, esta característica pretende crear un mercado de clientes de validación saludable, con nodos potenciales de validación-cliente que compiten para construir servicios de delegación fiables, transparentes y rentables.

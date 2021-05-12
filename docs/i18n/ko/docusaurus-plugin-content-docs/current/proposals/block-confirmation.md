@@ -1,85 +1,45 @@
 ---
-title: Block Confirmation
+title: 차단 확인
 ---
 
-A validator votes on a PoH hash for two purposes. First, the vote indicates it
-believes the ledger is valid up until that point in time. Second, since many
-valid forks may exist at a given height, the vote also indicates exclusive
-support for the fork. This document describes only the former. The latter is
-described in [Tower BFT](../implemented-proposals/tower-bft.md).
+밸리데이터은 두 가지 목적으로 역사증명 해시에 투표합니다. 첫째, 투표는 원장이 해당 시점까지 유효하다고 믿고 있음을 나타냅니다. 둘째, 주어진 높이에 많은 유효한 포크가 존재할 수 있으므로 투표는 포크에 대한 독점적 인 지원을 나타냅니다. 이 문서는 전자에 대해서만 설명합니다. 후자는 \[Tower BFT\] (../ implemented-proposals / tower-bft.md)에 설명되어 있습니다.
 
-## Current Design
+## 현재 디자인
 
-To start voting, a validator first registers an account to which it will send
-its votes. It then sends votes to that account. The vote contains the tick
-height of the block it is voting on. The account stores the 32 highest heights.
+투표를 시작하기 위해 밸리데이터는 먼저 투표를 보낼 계정을 등록합니다. 그런 다음 해당 계정으로 투표를 보냅니다. 투표에는 투표중인 블록의 틱 높이가 포함됩니다. 계정은 가장 높은 32 개의 높이를 저장합니다.
 
-### Problems
+### 문제
 
-- Only the validator knows how to find its own votes directly.
+- -밸리데이터 만이 자신의 투표를 직접 찾는 방법을 알고 있습니다.
 
-  Other components, such as the one that calculates confirmation time, needs to
-  be baked into the validator code. The validator code queries the bank for all
-  accounts owned by the vote program.
+  확인 시간을 계산하는 것과 같은 다른 구성 요소는 유효성 검사기 코드에 구워 져야합니다. 유효성 검사기 코드는 투표 프로그램이 소유 한 모든 계정에 대해 은행에 쿼리합니다.
 
-- Voting ballots do not contain a PoH hash. The validator is only voting that
-  it has observed an arbitrary block at some height.
+- -투표 용지에는 역사증명 해시가 포함되어 있지 않습니다. 밸리데이터은 특정 높이에서 임의의 블록을 관찰 한 것에 대해서만 투표합니다.
 
-- Voting ballots do not contain a hash of the bank state. Without that hash,
-  there is no evidence that the validator executed the transactions and
-  verified there were no double spends.
+- -투표 용지에는 은행 상태의 해시가 포함되어 있지 않습니다. 해당 해시가 없으면 유효성 검사기가 거래를 실행하고 이중 지출이 없음을 확인했다는 증거가 없습니다.
 
-## Proposed Design
+## 제안 된 디자인
 
-### No Cross-block State Initially
+### 초기에 교차 블록 상태 없음
 
-At the moment a block is produced, the leader shall add a NewBlock transaction
-to the ledger with a number of tokens that represents the validation reward.
-It is effectively an incremental multisig transaction that sends tokens from
-the mining pool to the validators. The account should allocate just enough
-space to collect the votes required to achieve a supermajority. When a
-validator observes the NewBlock transaction, it has the option to submit a vote
-that includes a hash of its ledger state (the bank state). Once the account has
-sufficient votes, the vote program should disperse the tokens to the
-validators, which causes the account to be deleted.
+블록이 생성되는 순간 리더는 검증 보상을 나타내는 여러 토큰과 함께 NewBlock 트랜잭션을 원장에 추가해야합니다. 마이닝 풀에서 유효성 검사기로 토큰을 보내는 것은 사실상 증분 다중 서명 트랜잭션입니다. 계정은 과반수를 달성하는 데 필요한 투표를 수집 할 수있는 충분한 공간을 할당해야합니다. 밸리데이터이 NewBlock 트랜잭션을 관찰하면 원장 상태 (은행 상태)의 해시를 포함하는 투표를 제출할 수 있습니다. 계정에 충분한 투표가 있으면 투표 프로그램은 토큰을 유효성 검사자에게 분산시켜 계정을 삭제해야합니다.
 
-#### Logging Confirmation Time
+#### 로깅 확인 시간
 
-The bank will need to be aware of the vote program. After each transaction, it
-should check if it is a vote transaction and if so, check the state of that
-account. If the transaction caused the supermajority to be achieved, it should
-log the time since the NewBlock transaction was submitted.
+은행은 투표 프로그램에 대해 알고 있어야합니다. 각 거래 후, 투표 거래인지 확인하고, 그렇다면 해당 계정의 상태를 확인해야합니다. 트랜잭션으로 인해 과반수가 달성 된 경우 NewBlock 트랜잭션이 제출 된 이후 시간을 기록해야합니다.
 
-### Finality and Payouts
+### 최종 성과 지불금
 
-[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm. It proposes
-that payment to miners be postponed until the _stack_ of validator votes reaches
-a certain depth, at which point rollback is not economically feasible. The vote
-program may therefore implement Tower BFT. Vote instructions would need to
-reference a global Tower account so that it can track cross-block state.
+\[Tower BFT\] (../ implemented-proposals / tower-bft.md)는 제안 된 포크 선택 알고리즘입니다. 채굴 자에 대한 지불은 밸리데이터 투표의 _stack_이 특정 깊이에 도달 할 때까지 연기 할 것을 제안합니다.이 시점에서 롤백은 경제적으로 가능하지 않습니다. 따라서 투표 프로그램은 Tower BFT를 구현할 수 있습니다. 투표 지침은 교차 블록 상태를 추적 할 수 있도록 글로벌 타워 계정을 참조해야합니다.
 
-## Challenges
+## 도전
 
-### On-chain voting
+### 온 체인 투표
 
-Using programs and accounts to implement this is a bit tedious. The hardest
-part is figuring out how much space to allocate in NewBlock. The two variables
-are the _active set_ and the stakes of those validators. If we calculate the
-active set at the time NewBlock is submitted, the number of validators to
-allocate space for is known upfront. If, however, we allow new validators to
-vote on old blocks, then we'd need a way to allocate space dynamically.
+이를 구현하기 위해 프로그램과 계정을 사용하는 것은 약간 지루합니다. 가장 어려운 부분은 NewBlock에 할당 할 공간을 파악하는 것입니다. 두 변수는 _active set_ 및 해당 유효성 검사기의 지분입니다. NewBlock이 제출 될 때 활성 세트를 계산하면 공간을 할당 할 유효성 검사기 수가 미리 알려집니다. 그러나 새로운 밸리데이터가 이전 블록에 투표 할 수 있도록 허용한다면 공간을 동적으로 할당 할 수있는 방법이 필요합니다.
 
-Similar in spirit, if the leader caches stakes at the time of NewBlock, the
-vote program doesn't need to interact with the bank when it processes votes. If
-we don't, then we have the option to allow stakes to float until a vote is
-submitted. A validator could conceivably reference its own staking account, but
-that'd be the current account value instead of the account value of the most
-recently finalized bank state. The bank currently doesn't offer a means to
-reference accounts from particular points in time.
+정신적으로 유사하게 리더가 NewBlock 당시 지분을 캐시하면 투표 프로그램은 투표를 처리 할 때 은행과 상호 작용할 필요가 없습니다. 그렇지 않은 경우 투표가 제출 될 때까지 지분이 변동되도록 허용 할 수 있습니다. 밸리데이터은 자신의 스테이킹 계정을 참조 할 수 있지만 가장 최근에 완료된 은행 상태의 계정 값 대신 현재 계정 값이 될 것입니다. 은행은 현재 특정 시점의 계좌를 참조 할 수있는 수단을 제공하지 않습니다.
 
-### Voting Implications on Previous Blocks
+### 이전 블록에 대한 투표 시사점
 
-Does a vote on one height imply a vote on all blocks of lower heights of
-that fork? If it does, we'll need a way to lookup the accounts of all
-blocks that haven't yet reached supermajority. If not, the validator could
-send votes to all blocks explicitly to get the block rewards.
+한 높이에 대한 투표는 해당 포크의 더 낮은 높이의 모든 블록에 대한 투표를 의미합니까? 만약 그렇다면, 아직 슈퍼 다수에 도달하지 않은 모든 블록의 계정을 조회하는 방법이 필요합니다. 그렇지 않은 경우 밸리데이터는 모든 블록에 명시 적으로 투표를 보내 블록 보상을받을 수 있습니다.

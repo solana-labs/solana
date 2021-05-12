@@ -1,16 +1,12 @@
 ---
-title: Calling Between Programs
+title: Вызовы между программами
 ---
 
-## Cross-Program Invocations
+## Межпрограммные вызовы
 
-The Solana runtime allows programs to call each other via a mechanism called
-cross-program invocation. Calling between programs is achieved by one program
-invoking an instruction of the other. The invoking program is halted until the
-invoked program finishes processing the instruction.
+Среда выполнения Solana позволяет программам обращаться друг к другу через механизм межпрограммных вызовов.  Межпрограммные вызовы возникают тогда, когда одна программа вызывает инструкции другой программы.  Вызывающая программа приостанавливается до тех пор, пока вызываемая программа не закончит обработку инструкции.
 
-For example, a client could create a transaction that modifies two accounts,
-each owned by separate on-chain programs:
+Например, клиент может создать транзакцию, изменяющую два аккаунта, каждый из которых принадлежит отдельной on-chain программе:
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -20,8 +16,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-A client may to instead allow the `acme` program to conveniently invoke `token`
-instructions on the client's behalf:
+Вместо этого клиент может разрешить программе `acme` вызывать инструкции программы `token` от своего имени:
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -30,10 +25,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-Given two on-chain programs `token` and `acme`, each implementing instructions
-`pay()` and `launch_missiles()` respectively, acme can be implemented with a
-call to a function defined in the `token` module by issuing a cross-program
-invocation:
+Возьмем для примера две on-chain программы `token` и `acme`, содержащие инструкции `pay()` и `launch_missiles()` соответственно. В этом случае модуль acme может вызвать функцию, определенную в модуле `token`, через механизм межпрограммных вызовов:
 
 ```rust,ignore
 mod acme {
@@ -52,53 +44,23 @@ mod acme {
     }
 ```
 
-`invoke()` is built into Solana's runtime and is responsible for routing the
-given instruction to the `token` program via the instruction's `program_id`
-field.
+Метод `invoke()` встроен в среду выполнения Solana и отвечает за передачу указанной инструкции модулю `token` на основе содержащегося в ней поля `program_id`.
 
-Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked. This means that both the executable account (the
-ones that matches the instruction's program id) and the accounts passed to the
-instruction procesor.
+Обратите внимание, что при вызове метода `invoke` вызывающая программа должна передать все аккаунты, требуемые для вызываемой инструкции.  Это означает, что в процессор команд передаются как аккаунты, так и исполняемый аккаунт (соответствующий идентификатору program_id, содержащемуся в инструкции).
 
-Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
-accounts owned by `token`. It does this by applying the runtime's policy to the
-current state of the accounts at the time `acme` calls `invoke` vs. the initial
-state of the accounts at the beginning of the `acme`'s instruction. After
-`pay()` completes, the runtime must again ensure that `token` didn't modify any
-accounts owned by `acme` by again applying the runtime's policy, but this time
-with the `token` program ID. Lastly, after `pay_and_launch_missiles()`
-completes, the runtime must apply the runtime policy one more time, where it
-normally would, but using all updated `pre_*` variables. If executing
-`pay_and_launch_missiles()` up to `pay()` made no invalid account changes,
-`pay()` made no invalid changes, and executing from `pay()` until
-`pay_and_launch_missiles()` returns made no invalid changes, then the runtime
-can transitively assume `pay_and_launch_missiles()` as whole made no invalid
-account changes, and therefore commit all these account modifications.
+Перед вызовом метода `pay()` среда выполнения должна проверить, что модуль `acme` не изменил никакие аккаунты, принадлежащие модулю `token`. Это обеспечивается путем применения политики среды выполнения к текущему состоянию аккаунтов в момент вызова метода `invoke` модулем `acme`, которая сравнивает его с состоянием аккаунтов перед началом выполнения инструкции модуля `acme`. После выполнения метода `pay()` среда выполнения снова должна проверить, что модуль `token` не изменил никакие аккаунты, принадлежащие модулю `acme`, снова применяя политику, но уже к идентификатору программы `token`. Наконец, после выполнения метода `pay_and_launch_missiles()` политика применяется еще раз там, где она должна применяться, но при этом используются уже обновленные переменные `pre_*`. Если выполнение цепочки методов от `pay_and_launch_missiles()` до `pay()`, выполнение метода `pay()` и выполнение цепочки методов от `pay()` до возвращения результатов методом `pay_and_launch_missiles()` не привели к некорректным изменениям аккаунтов, то среда выполнения считает, что метод `pay_and_launch_missiles()` в целом не сделал никаких некорректных изменений, и фиксирует все изменения аккаунтов.
 
-### Instructions that require privileges
+### Инструкции, требующие привилегий
 
-The runtime uses the privileges granted to the caller program to determine what
-privileges can be extended to the callee. Privileges in this context refer to
-signers and writable accounts. For example, if the instruction the caller is
-processing contains a signer or writable account, then the caller can invoke an
-instruction that also contains that signer and/or writable account.
+Среда выполнения выдает привилегии вызывающим программам для определения того, какие из этих привилегий можно применить к вызываемым программам. В этом контексте привилегии связаны с аккаунтами подписантов и доступными для записи (writable) аккаунтами. Например, если вызывающая программа выполняет инструкцию, содержащую аккаунт подписанта или доступный для записи аккаунт, то эта программа может вызывать инструкцию, которая также содержит аккаунт подписанта и/или доступный для записи аккаунт.
 
-This privilege extension relies on the fact that programs are immutable. In the
-case of the `acme` program, the runtime can safely treat the transaction's
-signature as a signature of a `token` instruction. When the runtime sees the
-`token` instruction references `alice_pubkey`, it looks up the key in the `acme`
-instruction to see if that key corresponds to a signed account. In this case, it
-does and thereby authorizes the `token` program to modify Alice's account.
+Это расширение привилегий основывается на том, что программы неизменяемы. В примере с программой `acme` среда выполнения может безопасно считать подпись транзакции подписью инструкции программы `token`. Когда среда выполнения встречает инструкцию модуля `token`, ссылающуюся на ключ `alice_pubkey`, она ищет этот ключ в инструкции модуля `acme` для проверки того, что этот ключ соответствует подписанному аккаунту. В нашем случае ключ будет найден, и поэтому программе `token` будет разрешено модифицировать аккаунт Alice.
 
-### Program signed accounts
+### Аккаунты, подписанные программами
 
-Programs can issue instructions that contain signed accounts that were not
-signed in the original transaction by using [Program derived
-addresses](#program-derived-addresses).
+Программы могут выполнять инструкции с подписанными аккаунтами, которые не были подписаны в исходной транзакции при помощи [получаемых от программ адресов](#program-derived-addresses).
 
-To sign an account with program derived addresses, a program may
-`invoke_signed()`.
+Программа может подписать аккаунт полученными от нее адресами при помощи метода `invoke_signed()`.
 
 ```rust,ignore
         invoke_signed(
@@ -109,85 +71,52 @@ To sign an account with program derived addresses, a program may
         )?;
 ```
 
-### Call Depth
+### Глубина вызовов
 
-Cross-program invocations allow programs to invoke other programs directly but
-the depth is constrained currently to 4.
+Межпрограммные вызовы позволяют программам напрямую вызывать другие программы с определенной глубиной. В настоящее время эта глубина ограничена до 4 вызовов.
 
-### Reentrancy
+### Реентерабельность
 
-Reentrancy is currently limited to direct self recursion capped at a fixed
-depth. This restriction prevents situations where a program might invoke another
-from an intermediary state without the knowledge that it might later be called
-back into. Direct recursion gives the program full control of its state at the
-point that it gets called back.
+В настоящее время реентерабельность ограничена прямой само-рекурсией фиксированной глубины. Существующие ограничения предотвращают ситуации, в которых программа может вызывать другую программу из промежуточного состояния, не зная о том, что она может быть вызвана позже снова. Прямая рекурсия предоставляет программе полный контроль над своим состоянием в точке, в которой она вызывается обратно.
 
-## Program Derived Addresses
+## Получаемые от программ адреса
 
-Program derived addresses allow programmaticly generated signature to be used
-when [calling between programs](#cross-program-invocations).
+Получаемые от программ адреса позволяют использовать программно сгенерированные подписи при [межпрограммных вызовах](#cross-program-invocations).
 
-Using a program derived address, a program may be given the authority over an
-account and later transfer that authority to another. This is possible because
-the program can act as the signer in the transaction that gives authority.
+Используя полученный от программы адрес, программа может получить полномочия на аккаунт, а затем передать их другой программе. Это возможно, поскольку программа может выступать в роли подписанта транзакции, предоставляющей полномочия.
 
-For example, if two users want to make a wager on the outcome of a game in
-Solana, they must each transfer their wager's assets to some intermediary that
-will honor their agreement. Currently, there is no way to implement this
-intermediary as a program in Solana because the intermediary program cannot
-transfer the assets to the winner.
+Например, если два пользователя хотят сделать ставку на результат игры в Solana, каждый из них должен перевести свой взнос посреднику, который будет соблюдать заключенное соглашение. В настоящее время в Solana невозможно реализовать такую программу-посредника, поскольку она не может передавать активы победителям.
 
-This capability is necessary for many DeFi applications since they require
-assets to be transferred to an escrow agent until some event occurs that
-determines the new owner.
+Эти возможности необходимы многим приложениям, работающим с децентрализованными финансами, поскольку они должны направлять средства депозитным агентам до наступления определенного события, определяющего нового владельца.
 
-- Decentralized Exchanges that transfer assets between matching bid and ask
-  orders.
+- Децентрализованные биржи, которые переводят активы между выигравшими ставками и запрашивают ордеры.
 
-- Auctions that transfer assets to the winner.
+- Аукционы, которые переводят активы победителям.
 
-- Games or prediction markets that collect and redistribute prizes to the
-  winners.
+- Игры или рынки предсказаний, которые собирают и перераспределяют призы победителям.
 
-Program derived address:
+Получаемые от программ адреса:
 
-1. Allow programs to control specific addresses, called program addresses, in
-   such a way that no external user can generate valid transactions with
-   signatures for those addresses.
+1. Позволяют программам контролировать специальные адреса, которые называются программными адресами, таким образом, чтобы никакой внешний пользователь не мог генерировать валидные транзакции с подписями для этих адресов.
 
-2. Allow programs to programmatically sign for program addresses that are
-   present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
+2. Позволяют программно подписывать программные адреса, содержащиеся в инструкциях, вызываемых через механизм [межпрограммных вызовов](#cross-program-invocations).
 
-Given the two conditions, users can securely transfer or assign the authority of
-on-chain assets to program addresses and the program can then assign that
-authority elsewhere at its discretion.
+Принимая во внимание эти два условия, пользователи могут безопасно переводить on-chain активы и передавать полномочия на программные адреса, а программы могут впоследствии назначать владельцев по своему усмотрению.
 
-### Private keys for program addresses
+### Закрытые ключи для программных адресов
 
-A Program address does not lie on the ed25519 curve and therefore has no valid
-private key associated with it, and thus generating a signature for it is
-impossible. While it has no private key of its own, it can be used by a program
-to issue an instruction that includes the Program address as a signer.
+Программный адрес не лежит на кривой ed25519, и поэтому не имеет связанного закрытого ключа. Как следствие, для него невозможно сгенерировать подпись.  Поскольку он не имеет собственного закрытого ключа, программы могут использовать его для выполнения инструкций, включающих в себя программный адрес в качестве подписанта.
 
-### Hash-based generated program addresses
+### Программные адреса, генерируемые на основе хэша
 
-Program addresses are deterministically derived from a collection of seeds and a
-program id using a 256-bit pre-image resistant hash function. Program address
-must not lie on the ed25519 curve to ensure there is no associated private key.
-During generation an error will be returned if the address is found to lie on
-the curve. There is about a 50/50 chance of this happening for a given
-collection of seeds and program id. If this occurs a different set of seeds or
-a seed bump (additional 8 bit seed) can be used to find a valid program address
-off the curve.
+Программные адреса детерминированно генерируются на основе набора seed-чисел и идентификатора программы с использованием 256-битной устойчивой к прообразу хэш-функции.  Программный адрес не должен лежать на кривой ed25519, чтобы гарантировать отсутствие связанного закрытого ключа. Если во время генерации адреса обнаружится, что он лежит на кривой, будет возвращена ошибка.  Вероятность, что это произойдет для заданного набора seed-чисел и идентификатора программы составляет 50%.  Если это произойдет, то для нахождения валидного программного адреса, не лежащего на кривой, будет использован другой набор seed-чисел или же в этот набор будет добавлено дополнительное 8-битное seed-число.
 
-Deterministic program addresses for programs follow a similar derivation path as
-Accounts created with `SystemInstruction::CreateAccountWithSeed` which is
-implemented with `Pubkey::create_with_seed`.
+Детерминированные программные адреса для программ следуют той же цепочке происхождения, что и аккаунты, созданные с помощью вызова `SystemInstruction::CreateAccountWithSeed` реализованного в `system_instruction::create_address_with_seed`.
 
-For reference that implementation is as follows:
+Данная реализация выглядит следующим образом:
 
 ```rust,ignore
-pub fn create_with_seed(
+pub fn create_address_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -202,79 +131,68 @@ pub fn create_with_seed(
 }
 ```
 
-Programs can deterministically derive any number of addresses by using seeds.
-These seeds can symbolically identify how the addresses are used.
+Программы могут детерминированно создавать любое количество адресов с использованием seed-чисел. Эти seed-числа могут символически определять, как используются адреса.
 
 From `Pubkey`::
 
 ```rust,ignore
-/// Generate a derived program address
-///     * seeds, symbolic keywords used to derive the key
-///     * program_id, program that the address is derived for
+/// Генерация программного адреса
+///     * seeds, символические ключевые слова, используемые для создания ключа
+///     * program_id, идентификатор программы, для которой создается адрес
 pub fn create_program_address(
     seeds: &[&[u8]],
     program_id: &Pubkey,
 ) -> Result<Pubkey, PubkeyError>
 ```
 
-### Using program addresses
+### Использование программных адресов
 
-Clients can use the `create_program_address` function to generate a destination
-address.
+Для генерации адреса назначения клиенты могут использовать функцию `create_program_address`.
 
 ```rust,ignore
-// deterministically derive the escrow key
+// детерминированное создание ключа депозита
 let escrow_pubkey = create_program_address(&[&["escrow"]], &escrow_program_id);
 
-// construct a transfer message using that key
+// создание сообщения передачи с использованием этого ключа
 let message = Message::new(vec![
     token_instruction::transfer(&alice_pubkey, &escrow_pubkey, 1),
 ]);
 
-// process the message which transfer one 1 token to the escrow
+// запуск сообщения, выполняющего перевод 1 токена на депозит
 client.send_and_confirm_message(&[&alice_keypair], &message);
 ```
 
-Programs can use the same function to generate the same address. In the function
-below the program issues a `token_instruction::transfer` from a program address
-as if it had the private key to sign the transaction.
+Программы могут использовать ту же функцию для создания того же адреса. В функции, которая приведена ниже, программа генерирует метод `token_instruction::transfer` из программного адреса, как будто у нее есть закрытый ключ для подписи транзакции.
 
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
-    // User supplies the destination
+    keyed_accounts: &[KeyedAccount]
+) -> Result<()> {
+
+    // Пользователь указывает назначение
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
-    // Deterministically derive the escrow pubkey.
+    // Детерминированное создание ключа депозита.
     let escrow_pubkey = create_program_address(&[&["escrow"]], program_id);
 
-    // Create the transfer instruction
+    // Создание инструкции передачи
     let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
 
-    // The runtime deterministically derives the key from the currently
-    // executing program ID and the supplied keywords.
-    // If the derived address matches a key marked as signed in the instruction
-    // then that key is accepted as signed.
-    invoke_signed(&instruction, accounts, &[&["escrow"]])
+    // Среда выполнения создает детерминированный ключ из идентификатора
+    // выполняющейся программы и указанных ключевых слов.
+    // Если созданный адрес совпадает с ключом, отмеченным в инструкции как подписанный,
+    // то этот ключ принимается как подписанный.
+    invoke_signed(&instruction,  &[&["escrow"]])?
 }
 ```
 
-### Instructions that require signers
+### Инструкции, требующие подписантов
 
-The addresses generated with `create_program_address` are indistinguishable from
-any other public key. The only way for the runtime to verify that the address
-belongs to a program is for the program to supply the seeds used to generate the
-address.
+Адреса, сгенерированные с помощью `create_program_address`, неотличимы от любого другого публичного ключа. Единственный способ, с помощью которого среда выполнения может убедиться в том, что адрес принадлежит программе - это запросить у программы seed-числа, использовавшиеся для генерации адреса.
 
-The runtime will internally call `create_program_address`, and compare the
-result against the addresses supplied in the instruction.
+Среда выполнения делает внутренний вызов `create_program_address` и сравнивает результат с адресом, содержащимся в инструкции.
 
-## Examples
+## Примеры
 
-Refer to [Developing with
-Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)
-and [Developing with
-C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples)
-for examples of how to use cross-program invocation.
+Примеры использования межпрограммных вызовов вы можете найти в разделах [Разработка на Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) и [Разработка на C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples).

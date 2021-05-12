@@ -1,85 +1,45 @@
 ---
-title: Block Confirmation
+title: إثبات أو تأكيد الكتلة (Block Confirmation)
 ---
 
-A validator votes on a PoH hash for two purposes. First, the vote indicates it
-believes the ledger is valid up until that point in time. Second, since many
-valid forks may exist at a given height, the vote also indicates exclusive
-support for the fork. This document describes only the former. The latter is
-described in [Tower BFT](../implemented-proposals/tower-bft.md).
+يُصوت المُدقّق (validator) على تجزئة (hash) الـ PoH لغرضين. أولاً، يُشير التصويت إلى أنه يعتقد أن دفتر الأستاذ (ledger) صالح حتى تلك النقطة الزمنية. ثانيًا، نظرًا لأن العديد من الإنقسامات أو الشوكات (forks) الصالحة قد توجد على إرتفاع مُعين، فإن التصويت يُشير أيضًا إلى الدعم الحصري للإنقسام أو الشوكة. يصف هذا المُستند السابق فقط. هذا الأخير موصوف في [Tower BFT](../implemented-proposals/tower-bft.md).
 
-## Current Design
+## التصميم الحالي (Current Design)
 
-To start voting, a validator first registers an account to which it will send
-its votes. It then sends votes to that account. The vote contains the tick
-height of the block it is voting on. The account stores the 32 highest heights.
+لبدء التصويت، يقوم المُدقّق (validator) أولاً بتسجيل الحساب الذي سيُرسل أصواته إليه. ثم يُرسل أصواتًا إلى هذا الحساب. يحتوي التصويت على علامة (tick) إرتفاع الكتلة (block) التي يُصوت عليها. يُخزن الحساب أعلى 32 إرتفاعًا.
 
-### Problems
+### المشاكل (Problems)
 
-- Only the validator knows how to find its own votes directly.
+- المُدقّق (validator) وحده يعرف كيف يجد أصواته مُباشرة.
 
-  Other components, such as the one that calculates confirmation time, needs to
-  be baked into the validator code. The validator code queries the bank for all
-  accounts owned by the vote program.
+  تحتاج المُكونات الأخرى، مثل المُكون الذي يحسب وقت التأكيد، إلى أن يتم دمجها في كود المُدقّق (validator). يستعلم التعليمات البرمجية (code) للمُدقّق (validator) من البنك عن جميع الحسابات المملوكة لبرنامج التصويت (vote program).
 
-- Voting ballots do not contain a PoH hash. The validator is only voting that
-  it has observed an arbitrary block at some height.
+- لا تحتوي بطاقات الإقتراع على تجزئة (hash) الـ PoH. يُصوت المُدقّق (validator) فقط على أنه لاحظ وجود كتلة (block) عشوائية على إرتفاع ما.
 
-- Voting ballots do not contain a hash of the bank state. Without that hash,
-  there is no evidence that the validator executed the transactions and
-  verified there were no double spends.
+- لا تحتوي بطاقات الإقتراع على تجزئة (hash) حالة البنك. بدون هذا التجزئة (hash)، لا يوجد دليل على أن المُدقّق (validator) نفذ المُعاملات والتحقق من عدم وجود إنفاق مزدوج (double spends).
 
-## Proposed Design
+## التصميم المُقترح (Proposed Design)
 
-### No Cross-block State Initially
+### لا توجد حالة كتل-مُتقاطعة في البداية (No Cross-block State Initially)
 
-At the moment a block is produced, the leader shall add a NewBlock transaction
-to the ledger with a number of tokens that represents the validation reward.
-It is effectively an incremental multisig transaction that sends tokens from
-the mining pool to the validators. The account should allocate just enough
-space to collect the votes required to achieve a supermajority. When a
-validator observes the NewBlock transaction, it has the option to submit a vote
-that includes a hash of its ledger state (the bank state). Once the account has
-sufficient votes, the vote program should disperse the tokens to the
-validators, which causes the account to be deleted.
+في اللحظة التي يتم فيها إنتاج الكتلة (block)، يجب على القائد (leader) إضافة مُعاملة كتلة جديدة (NewBlock) إلى دفتر الأستاذ (ledger) بعدد من الرموز التي تُمثل مُكافأة التحقق من الصحة. إنها بشكل فعال مُعاملة multisig تزايدية تُرسل الرموز من مُجمع التعدين (mining pool) إلى المُدقّق (validator). يجب أن يُخصص الحساب مساحة كافية فقط لجمع الأصوات المطلوبة لتحقيق أغلبية عظمى (supermajority). عندما يُراقب المُدقّق (validator) مُعاملة كتلة جديدة (NewBlock)، يكون لديه خيار إرسال تصويت يتضمن تجزئة (hash) لحالة دفتر الأستاذ (ledger) الخاص به (حالة البنك). بمجرد حصول الحساب على أصوات كافية، يجب على برنامج التصويت (vote program) توزيع الرموز على المُدقّقين (validators)، مما يُؤدي إلى حذف الحساب.
 
-#### Logging Confirmation Time
+#### وقت تأكيد التسجيل (Logging Confirmation Time)
 
-The bank will need to be aware of the vote program. After each transaction, it
-should check if it is a vote transaction and if so, check the state of that
-account. If the transaction caused the supermajority to be achieved, it should
-log the time since the NewBlock transaction was submitted.
+سيحتاج البنك إلى أن يكون على علم ببرنامج التصويت (vote program). بعد كل مُعاملة، يجب أن تتحقق مما إذا كانت مُعاملة تصويت وإذا كان الأمر كذلك، تحقق من حالة هذا الحساب. إذا تسببت المُعاملة في تحقيق الأغلبية العظمى (supermajority)، فيجب تسجيل الوقت منذ تقديم مُعاملة الكتلة الجديدة (NewBlock).
 
-### Finality and Payouts
+### وقت تأكيد المُعاملات والمدفوعات (Finality and Payouts)
 
-[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm. It proposes
-that payment to miners be postponed until the _stack_ of validator votes reaches
-a certain depth, at which point rollback is not economically feasible. The vote
-program may therefore implement Tower BFT. Vote instructions would need to
-reference a global Tower account so that it can track cross-block state.
+[Tower BFT](../implemented-proposals/tower-bft.md) هي خوارزمية إختيار الإنقسام أو الشوكة (fork) المُقترحة. يقترح تأجيل الدفع للمُعدنين (miners) حتى تصل أصوات المُدققين _stack_ إلى عمق مُعين، وعند هذه النقطة لا يكون التراجع مجديًا إقتصاديًا. بالتالي فإن برنامج التصويت قد يُنفذ الـ Tower BFT. يجب أن تُشير تعليمات التصويت إلى حساب الـ Tower العام حتى يتمكن من تتبع حالة الكتل المُتقاطعة (cross-block).
 
-## Challenges
+## التحديات (Challenges)
 
-### On-chain voting
+### التصويت على الشبكة (On-chain voting)
 
-Using programs and accounts to implement this is a bit tedious. The hardest
-part is figuring out how much space to allocate in NewBlock. The two variables
-are the _active set_ and the stakes of those validators. If we calculate the
-active set at the time NewBlock is submitted, the number of validators to
-allocate space for is known upfront. If, however, we allow new validators to
-vote on old blocks, then we'd need a way to allocate space dynamically.
+إستخدام البرامج والحسابات لتنفيذ هذا أمر شاق بعض الشيء. الجزء الأصعب هو معرفة مقدار المساحة التي يجب تخصيصها في الكتلة الجديدة (NewBlock). المُتغيرين هما المجموعة نشطة _active set_ ومخاطر تلك المُدقّقات (validators). إذا قُمنا بحساب المجموعة النشطة في وقت تقديم الكتلة الجديدة (NewBlock)، فإن عدد المُدقّقين (validators) لتخصيص مساحة لهم معروف مُقدمًا. مع ذلك، إذا سمحنا للمُدقّقين (validators) الجدد بالتصويت على الكتل (blocks) القديمة، فسنحتاج إلى طريقة لتخصيص المساحة ديناميكيًا.
 
-Similar in spirit, if the leader caches stakes at the time of NewBlock, the
-vote program doesn't need to interact with the bank when it processes votes. If
-we don't, then we have the option to allow stakes to float until a vote is
-submitted. A validator could conceivably reference its own staking account, but
-that'd be the current account value instead of the account value of the most
-recently finalized bank state. The bank currently doesn't offer a means to
-reference accounts from particular points in time.
+على نحو مُشابه من حيث الروح، إذا قام القائد بتخزين ذاكرة مُؤقت في وقت الكتلة الجديدة (NewBlock)، فلن يحتاج برنامج التصويت (vote program) إلى التفاعل مع البنك عند مُعالجة الأصوات. إذا لم نفعل ذلك، فلدينا خيار السماح بتعويم الحِصَص (stakes) حتى يتم تقديم التصويت. يُمكن أن يُشير المُدقّق (validator) إلى حساب إثبات الحِصَّة أو التَّحْصِيص (staking) الخاص به، ولكن هذا سيكون قيمة الحساب الجاري بدلاً من قيمة الحساب لآخر حالة بنكية تم الإنتهاء منها. لا يقدم البنك حاليًا وسيلة للإشارة إلى الحسابات من نقاط زمنية مُعينة.
 
-### Voting Implications on Previous Blocks
+### تأثيرات التصويت على الكتل السابقة (Voting Implications on Previous Blocks)
 
-Does a vote on one height imply a vote on all blocks of lower heights of
-that fork? If it does, we'll need a way to lookup the accounts of all
-blocks that haven't yet reached supermajority. If not, the validator could
-send votes to all blocks explicitly to get the block rewards.
+هل التصويت على إرتفاع واحد يعني تصويتًا على جميع الكتل (blocks) ذات الإرتفاعات المُنخفضة لذلك الإنقسام أو الشوكة (fork)؟ إذا حدث ذلك، فسنحتاج إلى طريقة للبحث عن حسابات جميع الكتل (blocks) التي لم تصل بعد إلى الأغلبية العظمى (supermajority). إذا لم يكن الأمر كذلك، يُمكن لمُدقّق (validator) إرسال الأصوات إلى جميع الكتل (blocks) بشكل صريح للحصول على مُكافآت الكتلة.

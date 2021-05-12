@@ -1,60 +1,15 @@
 ---
-title: History
+title: 역사
 ---
 
-In November of 2017, Anatoly Yakovenko published a whitepaper describing Proof
-of History, a technique for keeping time between computers that do not trust
-one another. From Anatoly's previous experience designing distributed systems
-at Qualcomm, Mesosphere and Dropbox, he knew that a reliable clock makes
-network synchronization very simple. When synchronization is simple the
-resulting network can be blazing fast, bound only by network bandwidth.
+2017 년 11 월 Anatoly Yakovenko는 서로를 신뢰하지 않는 컴퓨터간에 시간을 유지하는 기술인 역사 증명을 설명하는 백서를 게시했습니다. Anatoly는 Qualcomm, Mesosphere 및 Dropbox에서 분산 시스템을 설계 한 이전 경험을 통해 안정적인 시계가 네트워크 동기화를 매우 간단하게 만든다는 것을 알고있었습니다. 동기화가 간단 할 때 결과 네트워크는 네트워크 대역폭에 의해서만 제한되어 매우 빠를 수 있습니다.
 
-Anatoly watched as blockchain systems without clocks, such as Bitcoin and
-Ethereum, struggled to scale beyond 15 transactions per second worldwide when
-centralized payment systems such as Visa required peaks of 65,000 tps. Without
-a clock, it was clear they'd never graduate to being the global payment system
-or global supercomputer most had dreamed them to be. When Anatoly solved the
-problem of getting computers that don’t trust each other to agree on time, he
-knew he had the key to bring 40 years of distributed systems research to the
-world of blockchain. The resulting cluster wouldn't be just 10 times faster, or
-a 100 times, or a 1,000 times, but 10,000 times faster, right out of the gate!
+Anatoly는 Bitcoin 및 Ethereum과 같은 시계가없는 블록체인 시스템으로 Visa와 같은 중앙 집중식 결제 시스템이 최대 65,000 tps를 요구할 때 전 세계적으로 초당 15 개 이상의 트랜잭션을 확장하는 데 어려움을 겪었습니다. 시계가 없었다면 그들이 꿈꾸던 글로벌 결제 시스템이나 글로벌 슈퍼 컴퓨터로 졸업하지 못했을 것입니다. Anatoly는 서로 신뢰하지 않는 컴퓨터가 제 시간에 합의하도록하는 문제를 해결했을 때 40 년 간의 분산 시스템 연구를 블록체인 세계에 가져올 수있는 열쇠가 있다는 것을 알았습니다. 그 결과 클러스터는 10 배나 100 배, 1,000 배가 아니라 10,000 배 더 빠를 것입니다.
 
-Anatoly's implementation began in a private codebase and was implemented in the
-C programming language. Greg Fitzgerald, who had previously worked with Anatoly
-at semiconductor giant Qualcomm Incorporated, encouraged him to reimplement the
-project in the Rust programming language. Greg had worked on the LLVM compiler
-infrastructure, which underlies both the Clang C/C++ compiler as well as the
-Rust compiler. Greg claimed that the language's safety guarantees would improve
-software productivity and that its lack of a garbage collector would allow
-programs to perform as well as those written in C. Anatoly gave it a shot and
-just two weeks later, had migrated his entire codebase to Rust. Sold. With
-plans to weave all the world's transactions together on a single, scalable
-blockchain, Anatoly called the project Loom.
+Anatoly의 구현은 개인 코드베이스에서 시작되었으며 C 프로그래밍 언어로 구현되었습니다. 반도체 대기업 Qualcomm Incorporated에서 Anatoly와 함께 일했던 Greg Fitzgerald는 Rust 프로그래밍 언어로 프로젝트를 다시 구현하도록 권장했습니다. Greg는 Clang C / C ++ 컴파일러와 Rust 컴파일러의 기반이되는 LLVM 컴파일러 인프라에서 작업했습니다. Greg는 언어의 안전 보장이 소프트웨어 생산성을 향상시킬 것이며 가비지 수집기가 없으면 C로 작성된 프로그램과 마찬가지로 프로그램이 수행 될 수 있다고 주장했습니다. 판매되었습니다. 확장 가능한 단일 블록체인에 전 세계의 모든 거래를 통합 할 계획을 가지고 Anatoly는 프로젝트 Loom을 불렀습니다.
 
-On February 13th of 2018, Greg began prototyping the first open source
-implementation of Anatoly's whitepaper. The project was published to GitHub
-under the name Silk in the loomprotocol organization. On February 28th, Greg
-made his first release, demonstrating 10 thousand signed transactions could be
-verified and processed in just over half a second. Shortly after, another
-former Qualcomm cohort, Stephen Akridge, demonstrated throughput could be
-massively improved by offloading signature verification to graphics processors.
-Anatoly recruited Greg, Stephen and three others to co-found a company, then
-called Loom.
+2018 년 2 월 13 일 Greg는 Anatoly 백서의 첫 번째 오픈 소스 구현 프로토 타이핑을 시작했습니다. 이 프로젝트는 loomprotocol 조직의 Silk라는 이름으로 GitHub에 게시되었습니다. 2 월 28 일 Greg는 첫 번째 릴리스를 만들었으며 서명 된 트랜잭션 1 만 건을 0.5 초가 조금 넘는 시간에 확인 및 처리 할 수 ​​있음을 보여주었습니다. 얼마 지나지 않아 다른 전 Qualcomm 코호트 인 Stephen Akridge는 서명 검증을 그래픽 프로세서로 오프로드하여 처리량을 크게 향상시킬 수 있음을 보여주었습니다. Anatoly는 Greg, Stephen 및 다른 세 명을 모집하여 Loom이라는 회사를 공동 설립했습니다.
 
-Around the same time, Ethereum-based project Loom Network sprung up and many
-people were confused about whether they were the same project. The Loom team
-decided it would rebrand. They chose the name Solana, a nod to a small beach
-town North of San Diego called Solana Beach, where Anatoly, Greg and Stephen
-lived and surfed for three years when they worked for Qualcomm. On March 28th,
-the team created the Solana Labs GitHub organization and renamed Greg's
-prototype Silk to Solana.
+같은시기에 이더 리움 기반 프로젝트 인 Loom Network가 등장했고 많은 사람들이 같은 프로젝트인지에 대해 혼란스러워했습니다. Loom 팀은 브랜드를 변경하기로 결정했습니다. 그들은 퀄컴에서 일할 때 아나톨리, 그렉, 스티븐이 3 년 동안 살면서 서핑을했던 샌디에이고 북부의 작은 해변 마을 인 솔라나 비치에서 고개를 끄덕 인 솔라나라는 이름을 선택했습니다. 3 월 28 일 팀은 Solana Labs GitHub 조직을 만들고 Greg의 프로토 타입 Silk를 Solana로 이름을 변경했습니다.
 
-In June of 2018, the team scaled up the technology to run on cloud-based
-networks and on July 19th, published a 50-node, permissioned, public testnet
-consistently supporting bursts of 250,000 transactions per second. In a later
-release in December, called v0.10 Pillbox, the team published a permissioned
-testnet running 150 nodes on a gigabit network and demonstrated soak tests
-processing an _average_ of 200 thousand transactions per second with bursts
-over 500 thousand. The project was also extended to support on-chain programs
-written in the C programming language and run concurrently in a safe execution
-environment called BPF.
+2018 년 6 월, 팀은 클라우드 기반 네트워크에서 실행되도록 기술을 확장했으며 7 월 19 일에 초당 250,000 개의 트랜잭션 버스트를 지속적으로 지원하는 50 개 노드의 허가 된 공용 테스트 넷을 게시했습니다. 12 월의 이후 릴리스 인 v0.10 Pillbox에서 팀은 기가비트 네트워크에서 150 개의 노드를 실행하는 허가 된 테스트 넷을 게시하고 500,000 개 이상의 버스트로 초당 20 만 개의 트랜잭션을 처리하는 soak 테스트를 시연했습니다. 이 프로젝트는 또한 C 프로그래밍 언어로 작성된 온 체인 프로그램을 지원하고 BPF라는 안전한 실행 환경에서 동시에 실행되도록 확장되었습니다.

@@ -1,26 +1,26 @@
 ---
-title: Cluster Test Framework
+title: إطار إختبار المجموعات (Cluster Test Framework)
 ---
 
-This document proposes the Cluster Test Framework \(CTF\). CTF is a test harness that allows tests to execute against a local, in-process cluster or a deployed cluster.
+يقترح هذا المُستند إطار عمل إختبار الكتلة \(CTF\). الـ CTF عبارة عن أداة إختبار تسمح بإجراء الإختبارات على مجموعة (cluster) محلية قيد التشغيل أو مجموعة مُنتشرة.
 
-## Motivation
+## الحافز (Motivation)
 
-The goal of CTF is to provide a framework for writing tests independent of where and how the cluster is deployed. Regressions can be captured in these tests and the tests can be run against deployed clusters to verify the deployment. The focus of these tests should be on cluster stability, consensus, fault tolerance, API stability.
+الهدف من CTF هو توفير إطار عمل لكتابة الإختبارات بشكل مُستقل عن مكان وكيفية نشر الكتلة (cluster). يُمكن تسجيل الإنحدار في هذه الإختبارات ويُمكن تشغيل الإختبارات ضد المجموعات (clusters) المنشورة للتحقق من النشر. يجب أن يكون تركيز هذه الإختبارات على إستقرار المجموعة (cluster)، الإجماع (consensus)، التسامح مع الخطأ، إستقرار واجهة برمجة التطبيقات (API).
 
-Tests should verify a single bug or scenario, and should be written with the least amount of internal plumbing exposed to the test.
+يجب أن تتحقق الإختبارات من خطأ أو سيناريو واحد، ويجب كتابتها بأقل قدر من السباكة الداخلية المُعرضة للإختبار.
 
-## Design Overview
+## نظرة عامة على التصميم (Design Overview)
 
-Tests are provided an entry point, which is a `contact_info::ContactInfo` structure, and a keypair that has already been funded.
+يتم توفير الاختبارات كنقطة دخول، وهي عبارة عن هيكل `contact_info::ContactInfo`، وزوج مفاتيح (keypair) تم شحن رصيده بالفعل.
 
-Each node in the cluster is configured with a `validator::ValidatorConfig` at boot time. At boot time this configuration specifies any extra cluster configuration required for the test. The cluster should boot with the configuration when it is run in-process or in a data center.
+تم تكوين كل عُقدة (node) في المجموعة (cluster) بإستخدام `validator::ValidatorConfig` في وقت الإشتغال أو التمهيد. في وقت الإشتغال أو التمهيد يُحدد هذا الإعداد أي إعداد للمجموعة الإضافية المطلوبة للإختبار. يجب أن تقوم المجموعة (cluster) بالتمهيد بالإشتغال (boot) عند تشغيلها في العملية أو في مركز البيانات.
 
-Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via validator RPC.
+بمجرد بدء التشغيل، سيكتشف الإختبار المجموعة (cluster) من خلال نقطة دخول القيل والقال (gossip) وتكوين أي سلوكيات وقت تشغيل عبر مُدقّق (validator) الـ RPC.
 
-## Test Interface
+## إختبار الواجهة (Test Interface)
 
-Each CTF test starts with an opaque entry point and a funded keypair. The test should not depend on how the cluster is deployed, and should be able to exercise all the cluster functionality through the publicly available interfaces.
+يبدأ كل إختبار CTF بنقطة دخول غير شفافة وزوج مفاتيح (keypair) مُمول. يجب ألا يعتمد الإختبار على كيفية نشر المجموعة (cluster)، ويجب أن يكون قادرًا على مُمارسة جميع وظائف المجموعة من خلال الواجهات المُتاحة للجمهور.
 
 ```text
 use crate::contact_info::ContactInfo;
@@ -32,9 +32,9 @@ pub fn test_this_behavior(
 )
 ```
 
-## Cluster Discovery
+## إكتشاف المجموعات (Cluster Discovery)
 
-At test start, the cluster has already been established and is fully connected. The test can discover most of the available nodes over a few second.
+في بداية الإختبار، تم إنشاء المجموعة (cluster) بالفعل وهي مُتصلة بالكامل. يمكن للإختبار إكتشاف مُعظم العُقد (nodes) المُتاحة خلال بضع ثوانٍ.
 
 ```text
 use crate::gossip_service::discover_nodes;
@@ -43,14 +43,15 @@ use crate::gossip_service::discover_nodes;
 let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 ```
 
-## Cluster Configuration
+## إعدادات المجموعة (Cluster Configuration)
 
-To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `validator::ValidatorConfig`.
+لتمكين سيناريوهات مُحددة، يجب تمهيد المجموعة (cluster) بإعدادات خاصة. يمكن إلتقاط هذه الإعدادات في `validator::ValidatorConfig`.
 
-For example:
+على سبيل المثال:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
+validator_config.rpc_config.enable_validator_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
@@ -59,11 +60,11 @@ let local = LocalCluster::new_with_config(
                 );
 ```
 
-## How to design a new test
+## كيفية تصميم إختبار جديد (How to design a new test)
 
-For example, there is a bug that shows that the cluster fails when it is flooded with invalid advertised gossip nodes. Our gossip library and protocol may change, but the cluster still needs to stay resilient to floods of invalid advertised gossip nodes.
+على سبيل المثال، هناك خطأ يُظهر فشل المجموعة (cluster) عندما تغمرها عُقد (nodes) القيل والقال (gossip) مُعلن عنها أنها غير صالحة. قد تتغير مكتبة القيل والقال (gossip) والبروتوكول الخاص بنا، لكن المجموعة (cluster) لا تزال بحاجة إلى البقاء مرنة في مواجهة إغراقات عُقد (nodes) القيل والقال (gossip) المُعلن عنها غير الصالحة.
 
-Configure the RPC service:
+إعدادات خدمة الـ RPC أو Configure the RPC service:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
@@ -71,7 +72,7 @@ validator_config.rpc_config.enable_rpc_gossip_push = true;
 validator_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
 ```
 
-Wire the RPCs and write a new test:
+قم بتوصيل RPCs وأُكتب إختبارًا جديدًا:
 
 ```text
 pub fn test_large_invalid_gossip_nodes(

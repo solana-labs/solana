@@ -1,11 +1,11 @@
 ---
-title: Introduction
+title: Вступление
 ---
 
-## Welcome!
+## Добро пожаловать!
 
-This guide contains information about how to participate in Solana's Tour de SOL. Questions? Comments? Keep on reading!
+Это руководство содержит информацию о том, как принять участие в Solana's Tour de SOL. Вопросы? Комментарии? Почта ryan@solana.com
 
-### Learn more about Tour de SOL
+### [Узнайте больше о Tour de SOL](https://solana.com/tds/)
 
-If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.
+Если вы ещё не зарегистрировались, сначала заполните форму на [https://solana.com/tds/](https://solana.com/tds/).

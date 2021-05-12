@@ -1,57 +1,57 @@
 ---
-title: Bankless Leader
+title: Лидер Безбанкового кредита
 ---
 
-A bankless leader does the minimum amount of work to produce a valid block. The leader is tasked with ingress transactions, sorting and filtering valid transactions, arranging them into entries, shredding the entries and broadcasting the shreds. While a validator only needs to reassemble the block and replay execution of well formed entries. The leader does 3x more memory operations before any bank execution than the validator per processed transaction.
+Безбанковый лидер делает минимальное количество работ для создания действующего блока. Лидеру поручено выполнять входящие транзакции, сортировать и фильтровать действительные транзакции, организовывать их в записи, измельчать записи и транслировать их. В то время как валидатору нужно только повторно собрать блок и воспроизвести выполнение правильно сформированных записей. Лидер выполняет в 3 раза больше операций с памятью перед выполнением любого банка, чем валидатор на обработанную транзакцию.
 
-## Rationale
+## Обоснование
 
-Normal bank operation for a spend needs to do 2 loads and 2 stores. With this design leader just does 1 load. so 4x less account_db work before generating the block. The store operations are likely to be more expensive than reads.
+Для нормальной работы банка необходимо выполнить 2 нагрузки и 2 магазина. С этим дизайнерским лидером просто 1 нагрузка. так что на 4x меньше account_db работа перед генерацией блока. Операции магазина, вероятно, будут дороже, чем чтение.
 
-When replay stage starts processing the same transactions, it can assume that PoH is valid, and that all the entries are safe for parallel execution. The fee accounts that have been loaded to produce the block are likely to still be in memory, so the additional load should be warm and the cost is likely to be amortized.
+Когда этап воспроизведения начинает обработку тех же транзакций, он может предположить, что PoH действителен и что все записи безопасны для параллельного выполнения. Счета комиссий, которые были загружены для создания блока, вероятно, все еще находятся в памяти, поэтому дополнительная нагрузка должна быть теплой, а стоимость, вероятно, будет амортизирована.
 
-## Fee Account
+## Комиссионный счет
 
-The [fee account](../terminology.md#fee_account) pays for the transaction to be included in the block. The leader only needs to validate that the fee account has the balance to pay for the fee.
+[fee account](../terminology.md#fee_account)оплачивает транзакцию, которая будет включена в блок. Лидеру нужно только подтвердить, что у счета комиссии есть баланс для оплаты комиссии.
 
-## Balance Cache
+## Кэш баланса
 
-For the duration of the leaders consecutive blocks, the leader maintains a temporary balance cache for all the processed fee accounts. The cache is a map of pubkeys to lamports.
+На время последовательных блоков лидеров лидер поддерживает временный кэш баланса для всех обработанных счетов комиссий. Кэш - это карта ключей для лэмпортов.
 
-At the start of the first block the balance cache is empty. At the end of the last block the cache is destroyed.
+В начале первого блока кеш баланса пуст. В конце последнего блока кэш удаляется.
 
-The balance cache lookups must reference the same base fork for the entire duration of the cache. At the block boundary, the cache can be reset along with the base fork after replay stage finishes verifying the previous block.
+Поиски в кэше баланса должны ссылаться на одну и ту же базовую вилку на протяжении всего времени кеширования. На границе блока кэш может быть сброшен вместе с базовым форком после того, как этап воспроизведения завершит проверку предыдущего блока.
 
-## Balance Check
+## Проверка баланса
 
-Prior to the balance check, the leader validates all the signatures in the transaction.
+До проверки баланса лидер проверяет все подписи в транзакции.
 
-1. Verify the accounts are not in use and BlockHash is valid.
-2. Check if the fee account is present in the cache, or load the account from accounts_db and store the lamport balance in the cache.
-3. If the balance is less than the fee, drop the transaction.
-4. Subtract the fee from the balance.
-5. For all the keys in the transaction that are Credit-Debit and are referenced by an instruction, reduce their balance to 0 in the cache. The account fee is declared as Credit-Debit, but as long as it is not used in any instruction its balance will not be reduced to 0.
+1. Убедитесь, что аккаунты не используются, и BlockHash действителен.
+2. Проверьте, присутствует ли аккаунт комиссии в кеше, или загрузите аккаунт из accounts_db и сохраните баланс лэмпорта в кеше.
+3. Если баланс меньше, чем комиссия, удалите транзакцию.
+4. Вычтите комиссию из баланса.
+5. Для всех ключей в транзакции, которые являются кредитно-дебетовыми и на которые ссылается инструкция, уменьшите их баланс до 0 в кеше. Комиссия за счет декларируется как кредитно-дебетовая, но до тех пор, пока она не используется ни в одной инструкции, ее баланс не будет уменьшен до 0.
 
-## Leader Replay
+## Повторение Лидера
 
-Leaders will need to replay their blocks as part of the standard replay stage operation.
+Лидеру нужно будет повторять свои блоки в рамках этапа, на котором будет выполняться обычная операция.
 
-## Leader Replay With Consecutive Blocks
+## Повтор лидера с последовательными блоками
 
-A leader can be scheduled to produce multiple blocks in a row. In that scenario the leader is likely to be producing the next block while the replay stage for the first block is playing.
+Для лидера можно запланировать создание нескольких блоков подряд. В этом сценарии лидер, скорее всего, будет создавать следующий блок, в то время как воспроизводится этап воспроизведения первого блока.
 
-When the leader finishes the replay stage it can reset the balance cache by clearing it, and set a new fork as the base for the cache which can become active on the next block.
+Когда лидер завершает этап воспроизведения, он может сбросить кэш баланса, очистив его, и установить новую вилку в качестве основы для кеша, который может стать активным в следующем блоке.
 
-## Reseting the Balance Cache
+## Восстановление кэша баланса
 
-1. At the start of the block, if the balance cache is uninitialized, set the base fork for the balance cache to be the parent of the block and create an empty cache.
-2. if the cache is initialized, check if block's parents has a new frozen bank that is newer than the current base fork for the balance cache.
-3. if a parent newer than the cache's base fork exist, reset the cache to the parent.
+1. В начале блока, если кеш баланса не инициализирован, установите базовый форк для кеша баланса как родительский для блока и создайте пустой кеш.
+2. если кеш инициализирован, проверьте, есть ли у родителей блока новый замороженный банк, который новее, чем текущий базовый форк для кеша баланса.
+3. если существует родительский элемент, более новый, чем базовый форк кеша, сбросить кеш на родительский.
 
-## Impact on Clients
+## Влияние на клиентов
 
-The same fee account can be reused many times in the same block until it is used once as Credit-Debit by an instruction.
+Один и тот же комиссионный счет может быть использован много раз в одном блоке до тех пор, пока он не будет использован как кредит - дебит с помощью инструкции.
 
-Clients that transmit a large number of transactions per second should use a dedicated fee account that is not used as Credit-Debit in any instruction.
+Клиенты, которые передают большое количество транзакций в секунду, должны использовать специальный счет для комиссии, который не используется в качестве кредитно-дебетовой ни в одной инструкции.
 
-Once an account fee is used as Credit-Debit, it will fail the balance check until the balance cache is reset.
+Как только плата за счет используется в качестве кредитно-дебетовой, проверка баланса не будет выполнена до тех пор, пока кэш баланса не будет сброшен.

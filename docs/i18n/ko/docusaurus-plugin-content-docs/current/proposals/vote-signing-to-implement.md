@@ -1,116 +1,116 @@
 ---
-title: Secure Vote Signing
+title: 보안 투표 서명
 ---
 
-## Secure Vote Signing
+## 보안 투표 서명
 
-This design describes additional vote signing behavior that will make the process more secure.
+이 디자인은 프로세스를보다 안전하게 만드는 추가 투표 서명 동작을 설명합니다.
 
-Currently, Solana implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
+현재 Solana는 각 투표가 슬래싱 조건을 위반하지 않도록 평가하는 투표 서명 서비스를 구현합니다. 서비스는 하드웨어 플랫폼 기능에 따라 잠재적으로 다른 변형을 가질 수 있습니다. 특히 보안 엔 클레이브 \ (예 : SGX \)와 함께 사용할 수 있습니다. 엔 클레이브는 비대칭 키를 생성하여 사용자 \ (신뢰할 수없는 \) 코드에 대한 API를 노출하여 투표 트랜잭션에 서명하는 동시에 투표 서명 개인 키를 보호 된 메모리에 보관할 수 있습니다.
 
-The following sections outline how this architecture would work:
+다음 섹션에서는이 아키텍처의 작동 방식을 간략하게 설명합니다.
 
-### Message Flow
+### 메시지 흐름
 
-1. The node initializes the enclave at startup
+1. 노드가 시작시 엔 클레이브를 초기화합니다
 
-   - The enclave generates an asymmetric key and returns the public key to the
+   - .-엔 클레이브가 비대칭 키를 생성하고 공개 키를반환합니다
 
-     node
+     노드에
 
-   - The keypair is ephemeral. A new keypair is generated on node bootup. A
+   - The keypair is ephemeral. 노드 부팅시 새 키 쌍이 생성됩니다. A
 
-     new keypair might also be generated at runtime based on some to be determined
+     새로운키 쌍은 어떤 판단  기반으로 실행시에 생성 될 수
 
-     criteria.
+     기준으로있습니다.
 
-   - The enclave returns its attestation report to the node
+   - -엔 클레이브는 증명 보고서를 노드반환합니다
 
-2. The node performs attestation of the enclave \(e.g using Intel's IAS APIs\)
+2. 2에증명을 수행합니다. \ (예 : Intel의 IAS API 사용 \)
 
-   - The node ensures that the Secure Enclave is running on a TPM and is
+   - . 노드는 엔 클레이브의-노드는 Secure Enclave가 TPM에서 실행
 
-     signed by a trusted party
+     되고 있고 신뢰할 수있는 당사자에 의해 서명되었는지 확인합니다
 
-3. The stakeholder of the node grants ephemeral key permission to use its stake.
+3. 노드가 엔트리`X`에 투표 할 때 잠금 기간`N`이
 
-   This process is to be determined.
+   이 프로세스는 결정되어야합니다.
 
-4. The node's untrusted, non-enclave software calls trusted enclave software
+4. 때마다 X``의 미분에 노드 투표가 말하는`X + y`,대한잠금
 
-   using its interface to sign transactions and other data.
+   배`F` \에 의해 X`증가`에 기간(즉, 기간 포크에투표 할 수 있습니다
 
-   - In case of vote signing, the node needs to verify the PoH. The PoH
+   - -투표 서명의 경우, 노드는 역사증명를 확인해야합니다. 역사증명
 
-     verification is an integral part of signing. The enclave would be
+     확인은 서명의 필수적인 부분입니다. 영토는
 
-     presented with some verifiable data to check before signing the vote.
+     투표에 서명하기 전에 확인할 몇 가지 검증 가능한 데이터와 함께 제공됩니다.
 
-   - The process of generating the verifiable data in untrusted space is to be determined
+   - -신뢰할 수없는 공간에서 검증 가능한 데이터를 생성하는 과정은 다음과 같이 결정됩니다.
 
-### PoH Verification
+### 역사증명 검증
 
-1. When the node votes on an en entry `X`, there's a lockout period `N`, for
+1. 잠금 기간 증분은 \ (예 : 계수`F`는 최대 32적용
 
-   which it cannot vote on a fork that does not contain `X` in its history.
+   회\)로 제한됩니다.
 
 2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout
 
-   period for `X` increases by a factor `F` \(i.e. the duration node cannot vote on
+   수단
 
    a fork that does not contain `X` increases\).
 
-   - The lockout period for `X+y` is still `N` until the node votes again.
+   - 'X + y'의 잠금 기간은 노드가 다시 투표 할 때까지 여전히 'N'입니다.
 
-3. The lockout period increment is capped \(e.g. factor `F` applies maximum 32
+3. Enclave에서 역사증명 검증을 위해 신뢰할 수없는 공간에서 검증 가능한 데이터 생성
 
-   times\).
+   .
 
-4. The signing enclave must not sign a vote that violates this policy. This
+4. 서명 구역은이 정책을 위반하는 투표에 서명해서는 안됩니다. 이
 
    means
 
-   - Enclave is initialized with `N`, `F` and `Factor cap`
-   - Enclave stores `Factor cap` number of entry IDs on which the node had
+   - 고립 된 영토로 초기화되는`N`,`F`와`팩터 cap`
+   - 영토 매장을`요인 cap` 노드가이전에했던하는항목 ID의 수
 
-     previously voted
+     투표
 
-   - The sign request contains the entry ID for the new vote
-   - Enclave verifies that new vote's entry ID is on the correct fork
+   - 부호 요청이 새 투표에 대한 항목 ID를 포함
+   - Enclave는 새 투표의 항목 ID가 올바른 포크에 있는지 확인합니다.
 
-     \(following the rules \#1 and \#2 above\)
+     \ (위의 규칙 \ # 1 및 \ # 2에 따름 \)
 
-### Ancestor Verification
+### 조상 확인
 
-This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last_tick at which each node voted 4. It sends new vote request to vote-signing service
+이것은 투표 포크를 확인하는 덜 확실하지만 대체 방법입니다. 1. 유효성 검사기는 클러스터에서 활성 노드 집합을 유지합니다. 2. 마지막 투표 기간 동안 활성 집합의 투표를 관찰합니다. 3. 각 노드가 투표 한 조상 / 마지막 _ 틱을 저장합니다. 4. 투표를 위해 새 투표 요청을 보냅니다. -signing service-
 
-- It includes previous votes from nodes in the active set, and their
+- 으로부터의 이전 투표를 포함합니다.
 
-  corresponding ancestors
+  해당 조상
 
-  1. The signer checks if the previous votes contains a vote from the validator,
+  1. 서명자는 이전 투표에 유효성 검사기의 투표가 포함되어 있는지하는지 확인합니다
 
-     and the vote ancestor matches with majority of the nodes
+     , 투표 조상이 대부분의 노드와 일치
 
 - It signs the new vote if the check is successful
-- It asserts \(raises an alarm of some sort\) if the check is unsuccessful
+- 확인이 성공하면 투표 -확인이 실패하면 \ (일종의 경보를 울림 \)을
 
-The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH \(as it'll be rejected by the cluster\). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing \(as part of
+전제는 유효성 검사기가 잘못된 데이터에 투표하기 위해 최대 한 번 스푸핑 될 수 있다는 것입니다. 누군가 밸리데이터를 납치하여 가짜 데이터에 대한 투표 요청을 제출하면 해당 투표는 역사증명에 포함되지 않습니다 (클러스터에 의해 거부 될 것이므로 \). 다음에 유효성 검사자가 투표 서명 요청을 보낼 때 서명 서비스는 유효성 검사자의 마지막 투표가 누락되었음을 감지합니다. \ (의일부로
 
-## 5 above\).
+## 위## 5의\).
 
-### Fork determination
+### 포크 결정
 
-Due to the fact that the enclave cannot process PoH, it has no direct knowledge of fork history of a submitted validator vote. Each enclave should be initiated with the current _active set_ of public keys. A validator should submit its current vote along with the votes of the active set \(including itself\) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the fork being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
+클레이브가 역사증명를 처리 할 수 ​​없기 때문에 제출 된 밸리데이터 투표의 포크 기록에 대한 직접적인 지식이 없습니다. 각 엔 클레이브는 현재 _active set_의 공개 키로 시작되어야합니다. 밸리데이터은 이전 투표 슬롯에서 관찰 한 활성 세트 \ (자신을 포함하여 \)의 투표와 함께 현재 투표를 제출해야합니다. 이러한 방식으로 엔 클레이브는 밸리데이터의 이전 투표에 수반되는 투표를 추정 할 수 있으므로 포크가 투표됩니다. 이는 참조 할 '이전'슬롯이 없기 때문에 밸리데이터이 처음 제출 한 투표에는 불가능합니다. 이를 설명하기 위해, 초기 투표의 높이에서 자신의 투표와 함께 활성 세트 내의 투표를 포함하는 두 번째 투표가 제출 될 때까지 짧은 투표 동결을 적용해야합니다.
 
-### Enclave configuration
+### Enclave 구성
 
-A staking client should be configurable to prevent voting on inactive forks. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted fork. This configuration should take the form of a rule such that the client will only vote on a fork if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted fork at a depth where an additional vote would create a lockout for an undesirable amount of time if that fork turns out not to be live.
+스테이킹 클라이언트는 비활성 포크에 대한 투표를 방지하도록 구성 할 수 있어야합니다. 이 메커니즘은 제출 된 포크에 대한 투표를 계속할지 여부를 결정하기 위해 임계 값 투표 'N_vote'및 임계 값 깊이 'N_depth'와 함께 클라이언트의 알려진 활성 세트 'N_active'를 사용해야합니다. 이 구성은 클라이언트가 'N_depth'에서 'N_vote'이상을 관찰하는 경우에만 포크에 투표하도록 규칙 형식을 취해야합니다. 실제로 이것은 클라이언트가 제출 된 포크의 경제적 최종성 가능성을 확인한 후 해당 포크가 라이브 상태가 아닌 것으로 판명 될 경우 추가 투표가 바람직하지 않은 시간 동안 잠금을 생성 할 수있는 깊이에서 확인하는 것을 나타냅니다.
 
-### Challenges
+### 과제
 
-1. Generation of verifiable data in untrusted space for PoH verification in the
+1. Generation of verifiable data in untrusted space for 역사증명 verification in the
 
    enclave.
 
-2. Need infrastructure for granting stake to an ephemeral key.
+2. 임시 키에 지분을 부여하기위한 인프라가 필요합니다.

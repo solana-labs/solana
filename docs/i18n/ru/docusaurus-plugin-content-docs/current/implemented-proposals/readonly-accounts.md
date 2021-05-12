@@ -1,25 +1,25 @@
 ---
-title: Read-Only Accounts
+title: Аккаунты только для чтения
 ---
 
-This design covers the handling of readonly and writable accounts in the [runtime](../validator/runtime.md). Multiple transactions that modify the same account must be processed serially so that they are always replayed in the same order. Otherwise, this could introduce non-determinism to the ledger. Some transactions, however, only need to read, and not modify, the data in particular accounts. Multiple transactions that only read the same account can be processed in parallel, since replay order does not matter, providing a performance benefit.
+Этот дизайн охватывает обработку аккаунтов только для чтения и записи во [время выполнения](../validator/runtime.md). Несколько транзакций, которые изменяют один и тот же аккаунт, должны быть обработаны последовательно, чтобы они всегда воспроизводились в одном и том же порядке. В противном случае это может привести к недетерминизму реестра. Однако для некоторых транзакций требуется только чтение, а не изменение данных в определенных аккаунтах. Несколько транзакций, которые только читают один и тот же аккаунт, могут быть обработаны параллельно, так как порядок повторения не имеет значения, обеспечивая выигрыш в производительности.
 
-In order to identify readonly accounts, the transaction MessageHeader structure contains `num_readonly_signed_accounts` and `num_readonly_unsigned_accounts`. Instruction `program_ids` are included in the account vector as readonly, unsigned accounts, since executable accounts likewise cannot be modified during instruction processing.
+Для идентификации аккаунтов только для чтения структура MessageHeader транзакций содержит `num_readonly_signed_accounts` и `num_readonly_unsigned_accounts`. Инструкция `program_ids` включается в вектор аккаунта как только для чтения,, неподписанные аккаунты, поскольку исполняемые аккаунты также не могут быть изменены во время обработки инструкции.
 
-## Runtime handling
+## Обработка во время выполнения
 
-Runtime transaction processing rules need to be updated slightly. Programs still can't write or spend accounts that they do not own. But new runtime rules ensure that readonly accounts cannot be modified, even by the programs that own them.
+Правила обработки транзакций в реальном времени должны быть немного обновлены. Программы до сих пор не могут писать или тратить аккаунты, которыми они не владеют. Но новые правила работы гарантируют, что аккаунты только для чтения не могут быть изменены даже программами, которые ими владеют.
 
-Readonly accounts have the following property:
+Аккаунты только для чтения имеют следующее свойство:
 
-- Read-only access to all account fields, including lamports (cannot be credited or debited), and account data
+- Доступ только для чтения ко всем полям аккаунта, включая лэмпорты (нельзя кредитовать или дебетовать), и к данным аккаунта
 
-Instructions that credit, debit, or modify the readonly account will fail.
+Инструкции по кредитованию, дебетованию или изменению аккаунта только для чтения, не будут выполнены.
 
-## Account Lock Optimizations
+## Оптимизация блокировки аккаунта
 
-The Accounts module keeps track of current locked accounts in the runtime, which separates readonly accounts from the writable accounts. The default account lock gives an account the "writable" designation, and can only be accessed by one processing thread at one time. Readonly accounts are locked by a separate mechanism, allowing for parallel reads.
+Модуль "Аккаунты" следит за текущими заблокированными аккаунтами в реальном времени, отделяет аккаунты только для чтения от доступных для записи аккаунтов. Блокировка аккаунта по умолчанию дает ему статус «возможность для записи» и может быть доступна только одним потоком обработки за один раз. Аккаунты только для чтения заблокированы отдельным механизмом, позволяющим выполнять параллельное чтение.
 
-Although not yet implemented, readonly accounts could be cached in memory and shared between all the threads executing transactions. An ideal design would hold this cache while a readonly account is referenced by any transaction moving through the runtime, and release the cache when the last transaction exits the runtime.
+Хотя это еще не реализовано, аккаунты только для чтения могут кэшироваться в памяти и совместно использоваться всеми потоками, выполняющими транзакции. В идеальном варианте этот кэш будет храниться до тех пор, пока на аккаунт только для чтения ссылается любая транзакция, проходящая через среду выполнения, и освобождаться при завершении последней транзакции.
 
-Readonly accounts could also be passed into the processor as references, saving an extra copy.
+Аккаунты для чтения также могут быть переданы в процессор в качестве ссылок, сохраняя дополнительную копию.

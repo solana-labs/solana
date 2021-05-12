@@ -1,77 +1,53 @@
 ---
-title: Ledger Nano S and Nano X
+title: Ledger Nano S y Ledger Nano X
 ---
 
-This document describes how to set up a
-[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s) or
-[Ledger Nano X](https://shop.ledger.com/pages/ledger-nano-x)
-with the [Ledger Live](https://www.ledger.com/ledger-live) software.
+Este documento describe cómo configurar un [Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s) o [Ledger Nano X](https://shop.ledger.com/pages/ledger-nano-x) con el software [Ledger Live](https://www.ledger.com/ledger-live).
 
-Once the setup steps shown below are complete and the Solana app is installed
-on your Nano device, users have several options of how to
-[use the Nano to interact with the Solana Network](#interact-with-the-solana-network)
+Una vez que los pasos de configuración mostrados a continuación están completados y la aplicación Solana está instalada en tu dispositivo Nano, los usuarios tienen varias opciones de cómo [usar el Nano para interactuar con la Red Solana](#interact-with-the-solana-network)
 
-## Getting Started
+## Comenzando
 
-- Order a [Nano S](https://shop.ledger.com/products/ledger-nano-s) or
-  [Nano X](https://shop.ledger.com/pages/ledger-nano-x) from Ledger.
-- Follow the instructions for device setup included in the package,
-  or [Ledger's Start page](https://www.ledger.com/start/)
-- Install [Ledger Live desktop software](https://www.ledger.com/ledger-live/)
-  - If you already have Ledger Live installed, please update to the latest
-    version of Ledger Live, which enables the newest firmware and app updates.
-- Connect your Nano to your computer and follow the on-screen instructions.
-- Update the firmware on your new Nano. This is needed to ensure you are able
-  to install the latest version of the Solana App.
-  - [Update Nano S Firmware](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
-  - [Update Nano X Firmware](https://support.ledger.com/hc/en-us/articles/360013349800)
+- Ordena un [Nano S](https://shop.ledger.com/products/ledger-nano-s) o [Nano X](https://shop.ledger.com/pages/ledger-nano-x) de Ledger.
+- Siga las instrucciones para la configuración del dispositivo incluida en el paquete, o [página de inicio del Ledger's](https://www.ledger.com/start/)
+- Instalar [software de escritorio Ledger Live](https://www.ledger.com/ledger-live/)
+  - Si ya tiene instalado Ledger Live, actualice a la última versión de Ledger Live, que habilita las actualizaciones más recientes de firmware y aplicaciones.
+- Conecta tu Nano a tu ordenador y sigue las instrucciones en pantalla.
+- Actualice el firmware en su nuevo Nano.  Esto es necesario para asegurarte de que puedes instalar la última versión de la aplicación Solana.
+  - [Actualizar Firmware de Nano S](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
+  - [Actualizar Firmware Nano X](https://support.ledger.com/hc/en-us/articles/360013349800)
 
-## Install the Solana App on your Nano
+## Instala la aplicación Solana en tu Nano
 
-- Open Ledger Live
-- Click on "Manager" in the left pane on the app and search for "Solana" in the
-  App Catalog, then click "Install".
-  - Make sure your device is plugged in via USB and is unlocked with its PIN
-- You may be prompted on the Nano to confirm the install of Solana App
-- "Solana" should now show as "Installed" in the Ledger Live Manager
+- Abrir Ledger Live
+- Haga clic en "Administrador" en el panel izquierdo de la aplicación y busque "Solana" en el Catálogo de aplicaciones, luego haga clic en "Instalar".
+  - Asegúrate de que tu dispositivo está conectado por USB y está desbloqueado con su PIN
+- Se te pedirá en el Nano que confirmes la instalación de Solana App
+- "Solana" ahora debe mostrarse como "Instalado" en el Ledger Live Manager
 
-## Upgrade to the latest version of the Solana App
+## Actualizar a la última versión de la aplicación Solana
 
-To make sure you have the latest functionality, if you are using an older version
-of the Solana App, please upgrade to version `v1.0.1` by following these steps.
+Para asegurarse de que tiene la última funcionalidad, si está utilizando una versión anterior de la aplicación Solana, por favor actualice a la versión `v1.. 1` siguiendo estos pasos.
 
-- Make sure you have Ledger Live version 2.10.0 or later.
-  - To check your version of Ledger Live, click on the Settings button in the
-    upper-right corner, then click "About". If a newer version of Ledger Live is
-    available, you should see a banner prompting you to upgrade when you first open
-    Ledger Live.
-- Update the firmware on your Nano
-  - [Update Nano S Firmware](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
-  - [Update Nano X Firmware](https://support.ledger.com/hc/en-us/articles/360013349800)
-- After a successful firmware update, the Solana app should automatically get
-  re-installed with the latest version of the app.
+- Asegúrese de que tiene Ledger Live versión 2.10.0 o posterior.
+  - Para comprobar su versión de Ledger Live, haga clic en el botón Ajustes en la esquina superior derecha, luego haga clic en "Acerca de".  Si una nueva versión de Ledger Live está disponible, deberías ver un banner que te pide que actualices cuando abras Ledger Live.
+- Actualice el firmware en su Nano
+  - [Actualizar Firmware de Nano S](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
+  - [Actualizar Firmware Nano X](https://support.ledger.com/hc/en-us/articles/360013349800)
+-  Después de una actualización exitosa del firmware, la aplicación Solana debería reinstalarse automáticamente con la última versión de la aplicación.
 
-## Interact with the Solana network
+## Interactuar con la red Solana
 
-Users can use any of the following options to use their Nano to interact with
-Solana:
+Los usuarios pueden usar cualquiera de las siguientes opciones para usar su Nano para interactuar con Solana:
 
-- [SolFlare.com](https://solflare.com/) is a non-custodial web wallet built
-  specifically for Solana and supports basic transfers and staking operations
-  with the Ledger device.
-  Check out our guide for [using a Nano with SolFlare](solflare.md).
+- [SolFlare.com](https://solflare.com/) es un monedero web no custodial construido específicamente para Solana y soporta transferencias básicas y operaciones de staking con el dispositivo Ledger. Echa un vistazo a nuestra guía para [usando un Nano con SolFlare](solflare.md).
 
-- Developers and advanced users may
-  [use a Nano with the Solana command line tools](hardware-wallets/ledger.md).
-  New wallet features are almost always supported in the native command line tools
-  before being supported by third-party wallets.
+- Los desarrolladores y usuarios avanzados pueden [usar un Nano con las herramientas de línea de comandos de Solana](hardware-wallets/ledger.md). Las nuevas características del monedero casi siempre son soportadas en las herramientas nativas de línea de comandos antes de ser soportadas por carteras de terceros.
 
-## Known Issues
+## Problemas conocidos
 
-- Nano X sometimes cannot connect to web wallets using the Windows operating
-  system. This is likely to affect any browser-based wallets that use WebUSB.
-  The Ledger team is working to resolve this.
+- A veces Nano X no puede conectarse a carteras web usando el sistema operativo Windows. Es probable que esto afecte a cualquier monedero basado en el navegador que utilice WebUSB. El equipo de Ledger está trabajando para resolver esto.
 
-## Support
+## Soporte
 
-Check out our [Wallet Support Page](support.md) for ways to get help.
+Echa un vistazo a nuestra [Página de soporte al monedero](support.md) para encontrar formas de obtener ayuda.

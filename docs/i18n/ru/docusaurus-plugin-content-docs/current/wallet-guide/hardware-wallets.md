@@ -1,53 +1,35 @@
 ---
-title: Using Hardware Wallets on the Solana CLI
+title: Использование аппаратных кошельков с Solana CLI
 ---
 
-Signing a transaction requires a private key, but storing a private
-key on your personal computer or phone leaves it subject to theft.
-Adding a password to your key adds security, but many people prefer
-to take it a step further and move their private keys to a separate
-physical device called a _hardware wallet_. A hardware wallet is a
-small handheld device that stores private keys and provides some
-interface for signing transactions.
+Для подписания транзакции требуется приватный ключ, но хранение приватного ключа на вашем персональном компьютере или телефоне оставляет много пространства для действий злоумышленников. Шифрование вашего ключа паролем, позволяет повысить безопасность и защиту, но многие люди предпочитают хранить свои приватные ключи на отдельном физическом устройстве, которое называется _аппаратным кошельком_. Аппаратный кошелёк — это небольшое устройство, которое хранит ключ-пары и предоставляет удобный интерфейс для подписания транзакций.
 
-The Solana CLI has first class support for hardware wallets. Anywhere
-you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
-can pass a _keypair URL_ that uniquely identifies a keypair in a
-hardware wallet.
+Solana CLI имеет первоклассную поддержку аппаратных кошельков. В любой команде, где вы используете путь к вашей ключ-паре в качестве аргумент (обозначено как `<KEYPAIR>`), вы можете использовать _ссылку в виде URL адреса_, которая соответствует вашей ключ-паре на аппаратном кошельке.
 
-## Supported Hardware Wallets
+## Поддерживаемые аппаратные кошельки
 
-The Solana CLI supports the following hardware wallets:
+Solana CLI поддерживает следующие аппаратные кошельки:
 
-- [Ledger Nano S and Ledger Nano X](hardware-wallets/ledger.md)
+- [Ledger Nano S и Ledger Nano X](hardware-wallets/ledger.md)
 
-## Specify a Keypair URL
+## URL-адрес ключ-пары
 
-Solana defines a keypair URL format to uniquely locate any Solana keypair on a
-hardware wallet connected to your computer.
+Solana определяет формат URL-адреса ключ-пары, чтобы однозначно найти любую пару ключей Solana на аппаратном кошельке, подключенном к вашему компьютеру.
 
-The keypair URL has the following form, where square brackets denote optional
-fields:
+URL-адрес ключ-пары имеет следующий вид, где квадратные скобки обозначают необязательные поля:
 
 ```text
 usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 ```
 
-`WALLET_ID` is a globally unique key used to disambiguate multiple devices.
+`WALLET_ID` это глобальный уникальный идентификатор для каждого отдельного устройства.
 
-`DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
-The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
-are positive integers.
+`DERVIATION_PATH` указывает на конкретную ключ-пару на вашем аппаратном кошельке. Он имеет формат `<ACCOUNT>[/<CHANGE>]`, каждый `ACCOUNT` и `CHANGE` - это положительные целые числа.
 
-For example, a fully qualified URL for a Ledger device might be:
+Например, полный URL для устройства Ledger может выглядеть так:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501). The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
+Любой DERVIATION_PATH неявно включает в себя префикс `44'/501'`, который указывает, что путь соответствует спецификации [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) и что любой полученный по нему ключ, является ключом Solana (Coin type 501). Одиночная кавычка указывает на использование «защищенного» индекса потомка в пути генерации ключей. Поскольку Solana использует ключ-пары со схемой подписи Ed25519, любые пути генерации ключей, или кординаты ключей, являются защищенными, по этой причине, добавление кавычек является опциональным или не обязательным.

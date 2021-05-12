@@ -1,5 +1,5 @@
 ---
-title: TPU
+title: وحدة مُعالجة المُوتِّرة (TPU)
 ---
 
-![TPU Block Diagram](/img/tpu.svg)
+![مُخَطَّط كتلة TPU](/img/tpu.svg)

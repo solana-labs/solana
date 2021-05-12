@@ -1,201 +1,93 @@
 ---
-title: SolFlare Web Wallet
+title: محفظة SolFlare ويب
 ---
 
-## Introduction
+## مقدمة
 
-[SolFlare.com](https://solflare.com/) is a community-created web wallet built
-specifically for Solana.
-SolFlare supports sending and receiving native SOL tokens as well as sending and
-receiving SPL Tokens (Solana's ERC-20 equivalent).
-SolFlare also supports staking of SOL tokens.
+[SolFlare.com](https://solflare.com/) عبارة عن محفظة ويب تم بناؤها من قبل المجتمع خصيصًا من أجل Solana. SolFlare تدعم إرسال واستلام رموز SOL الأصلية وكذلك إرسال واستلام رموز SPL (مماثلة لشبكة ERC-20 في Solana). وتدعم SolFlare أيضًا تحصيص رموز SOL.
 
-As a _non-custodial_ wallet, your private keys are not stored by the SolFlare
-site itself, but rather they are stored in an encrypted
-[Keystore File](#using-a-keystore-file) or on a
-[Ledger Nano S or X hardware wallet](#using-a-ledger-nano-hardware-wallet).
+ولأنها محفظة غير محتضنة _non-custodial_، فإن المفاتيح الخاصة غير مخزنة على موقع SolFlare نفسه، بل يتم تخزينها في ملف تخزين مفاتيح مشفر [Keystore File](#using-a-keystore-file) أو على محفظة خارجية [Ledger Nano S or X hardware wallet](#using-a-ledger-nano-hardware-wallet).
 
-This guide describes how to set up a wallet using SolFlare, how to send and
-receive SOL tokens, and how to create and manage a stake account.
+يصف هذا الدليل كيفية إعداد محفظة باستخدام SolFlare، وكيفية إرسال و استلام رموز SOL، وكذلك كيفية إنشاء وإدارة حساب الحصة.
 
-## Getting Started
+## لنبدأ
 
-Go to https://www.solflare.com in a supported browser. Most popular web browsers
-should work when interacting with a Keystore File, but currently only
-Chrome and Brave are supported when interacting with a Ledger Nano.
+انتقل إلى https://www.solflare.com من خلال متصفح مدعوم.  وينبغي أن تعمل متصفحات الويب الأكثر انتشارًا بشكل جيد عند التعامل مع ملف تخزين المفاتيح، ولكن حاليًا تم دعم متصفحي Chrome و Brave للتعامل مع محفظة Ledger Nano.
 
-### Using a Keystore File
+### استخدام ملف مخزن المفاتيح Keystore File
 
-#### Create a new Keystore File
+#### إنشاء ملف مخزن مفاتيح جديد
+لإنشاء محفظة مع ملف مخزن مفاتيح، انقر على "إنشاء محفظة" وحدد "باستخدام ملف مخزن مفاتيح".  سوف يتم مطالبتك بإنشاء كلمة مرور والتي سوف تستخدم لتشفير ملف مخزن المفاتيح، وبعد ذلك تحميل الملف الجديد على جهاز الحاسوب الخاص بك.  ثم بعد ذلك رفع ملف مخزن المفاتيح إلى الموقع لتأكيد أنه تم حفظ الملف الذي قمت بتحميله بشكل صحيح.
 
-To create a wallet with a Keystore file, click on "Create a Wallet" and select
-"Using Keystore File". Follow the prompts to create a password which will be
-used to encrypt your Keystore file, and then to download the new file to your
-computer. You will be prompted to then upload the Keystore file back to the site
-to verify that the download was saved correctly.
+**ملاحظة: إذا فقدت ملف مخزن المفاتيح الخاص بك أو كلمة المرور المستخدمة لتشفيره، سيتم فقدان أي أموال في تلك المحفظة بشكل دائم.  ولن يستطيع فريق Solana ولا مطورو SolFlare مساعدتك في استرداد المفاتيح المفقودة.**
 
-**NOTE: If you lose your Keystore file or the password used to encrypt it, any
-funds in that wallet will be lost permanently. Neither the Solana team nor the
-SolFlare developers can help you recover lost keys.**
+ربما ترغب في حفظ نسخة احتياطية من ملف مخزن المفاتيح على قرص خارجي منفصل عن جهاز الحاسوب الرئيسي الخاص بك وتخزين كلمة المرور في مكان منفصل.
 
-You may want to consider saving a backup copy of your Keystore file on an
-external drive separate from your main computer, and storing your password in a
-separate location.
+#### الوصول إلى محفظتك من خلال ملف مخزن المفاتيح
+لاستخدام SolFlare بواسطة ملف مخزن مفاتيح تم إنشاؤه مسبقًا، اضغط على "الوصول إلى محفظة" واختر "باستخدام ملف مخزن مفاتيح".  إذا قمت للتو بإنشاء ملف مخزن مفاتيح جديد، سيتم نقلك مباشرة إلى صفحة الوصول. سيتم مطالبتك بإدخال كلمة المرور ورفع ملف مخزن المفاتيح الخاص بك، ثم سيتم نقلك إلى الصفحة الرئيسية لواجهة الحافظة.
 
-#### Access your wallet with a Keystore File
+### استخدام محفظة جهاز Ledger Nano
 
-To use SolFlare with a previously created Keystore file, click on
-"Access a Wallet" and select "Using Keystore File". If you just created a new
-Keystore file, you will be taken to the Access page directly.
-You will be prompted to enter the password and upload your Keystore file,
-then you will be taken to the wallet interface main page.
+*ملاحظة: الرجاء الاطلاع على مشاكل متكررة [known issues](ledger-live.md#known-issues) في حال واجهت أي مشاكل في استخدام محفظة Nano.*
 
-### Using a Ledger Nano hardware wallet
+#### الإعداد الأولي للجهاز
+لاستخدام محفظة Ledger Nano بواسطة SolFlare، قم أولًا بالتأكد من أنك قمت بإعداد جهاز Nano الخاص بك [set up your Nano](ledger-live.md) وقم بتثبيت آخر نسخة من تطبيق Solana على جهازك [installed the latest version of the Solana app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app).
 
-_NOTE: Please see [known issues](ledger-live.md#known-issues) for any current
-limitations in using the Nano._
+#### اختيار عنوان Ledger للوصول إليه
+قم بتوصيل جهاز Nano وفتح تطبيق Solana حتى تعرض شاشة الجهاز "التطبيق جاهز للاستخدام".
 
-#### Initial Device Setup
+من الصفحة الرئيسية لـ SolFlare، اضغط "الوصول إلى محفظة" ثم اختر "بواسطة جهاز Ledger Nano S أو Ledger Nano X".  ثم حدد الخيار الوحيد تحت "اختيار مسار الاشتقاق":
 
-To use a Ledger Nano with SolFlare, first ensure you have
-[set up your Nano](ledger-live.md) and have [installed the latest version of
-the Solana app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app)
-on your device.
+``Solana - 44`/501`/``
 
-#### Select a Ledger address to access
+ملاحظة: قد يطلب من المتصفح ما إذا كنت تريد السماح لـ SolFlare بالاتصال بجهاز Ledger الخاص بك.  انقر للسماح.
 
-Plug in your Nano and open the Solana app so the device screen displays
-"Application is Ready".
+اختر عنوانًا للتفاعل معه من المربع في الأسفل ثم اضغط "الوصول".
 
-From the SolFlare home page, click "Access a Wallet" then select "Using Ledger
-Nano S | Ledger Nano X". Under "Select derivation path", select the only option:
+يمكن لجهاز Ledger أن يشتق أعدادًا كبيرة من المفاتيح الخاصة والمفاتيح العامة المرتبطة بها. وهذا يسمح لك بإدارة والتعامل مع عدد كبير من الحسابات المختلفة من نفس الجهاز.
 
-`` Solana - 44`/501`/ ``
+إذا قمت بإيداع أموال إلى عنوان فرعي في جهاز Ledger الخاص بك، قم بالتأكد من أنك قادر على الوصول إلى نفس العنوان باستخدام SolFlare لكي تتمكن من الوصول إلى هذه الأموال.  في حال قمت بالاتصال بعنوان خاطئ، اضغط ببساطة على تسجيل الخروج ثم قم بالاتصال بالعنوان الصحيح.
 
-Note: Your browser may prompt you to ask if SolFlare may communicate with your
-Ledger device. Click to allow this.
+## اختر شبكة
 
-Select an address to interact with from the lower drop down box then click "Access".
+تحتفظ Solana بثلاثة شبكات مختلفة [three distinct networks](../clusters)، وكل واحدة منها لها هدف خاص بها من حيث دعم النظام البيئي لـ Solana.  يتم اختيار الشبكة الرئيسية التجريبية بشكل تلقائي على SolFlare، باعتبار أنها الشبكة الدائمة التي يتم فيها عمليات التبادل وتنفيذ تطبيقات الإنتاج.  لاختيار شبكة مختلفة، اضغط على اسم الشبكة المختارة حاليًا في أعلى لوحة تحكم المحفظة، إما الشبكة الرئيسة، أو الشبكة التجريبية، أو شبكة المطورين، ثم اضغط على اسم الشبكة الذي ترغب في استخدامه.
 
-The Ledger device can derive a large number of private keys and associated
-public addresses. This allows you to manage and interact with an arbitrary
-number of different accounts from the same device.
+## إرسال واستلام رموز SOL
 
-If you deposit funds to an address derived from your Ledger device,
-make sure to access the same address when using SolFlare to be able to access
-those funds. If you connect to the incorrect address,
-simply click Logout and re-connect with the correct address.
+### الاستلام
+لاستلام رموز إلى محفظتك، لا بد أن يقوم شخص ما بتحويل بعض منها إلى عنوان محفظتك.  يتم عرض العنوان في أعلى اليسار على الشاشة، ويمكنك النقر على أيقونة "نسخ" لنسخ العنوان وإعطائه لأي شخص يريد إرسال الرموز إليك.  وإذا كنت تمتلك رموزًا في محفظة مختلفة أو على منصة تبادل، يمكنك سحبها إلى هذا العنوان كذلك.  بمجرد إجراء التحويل، فإن الرصيد المعروض على SolFlare ينبغي أن يصبح محدثًا في غضون ثوان.
 
-## Select a Network
+### الإرسال
+بمجرد أن يكون لديك بعض الرموز في عنوان محفظتك، يمكنك إرسالها إلى أي عنوان محفظة أخرى أو عنوان إيداع منصة تبادل عن طريق النقر على "تحويل SOL" في أعلى يمين الشاشة.  قم بإدخال عنوان المستلم وكمية الرموز التي تريد تحويلها، ثم اضغط "إرسال".  سيتم مطالبتك بتأكيد تفاصيل العملية قبل استخدام مفتاحك لتوقيع المعاملة [use your key to sign the transaction](#signing-a-transaction) ثم بعد ذلك سيتم إرسالها إلى الشبكة.
 
-Solana maintains [three distinct networks](../clusters), each of which has
-its own purpose in supporting the Solana ecosystem. Mainnet Beta is selected by
-default on SolFlare, as this is the permanent network where exchanges and other
-production apps are deployed. To select a different network, click on the name
-of the currently selected network at the top of the wallet dashboard, either
-Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
-using.
+## تحصيص رموز SOL
+تدعم SolFlare إنشاء وإدارة حسابات الحصة والتفويض.  لمعرفة المزيد حول كيفية عمل التحصيص بشكل عام، قم بزيارة [Staking Guide](../staking).
 
-## Sending and Receiving SOL Tokens
+### إنشاء حساب إثبات الحصة (Staking)
+يمكنك استخدام بعض رموز SOL في محفظتك لإنشاء حساب حصة جديد. من الصفحة الرئيسية للمحفظة انقر فوق "تحصيص" (Staking) في الجزء العلوي من الصفحة.  في أعلى اليمين اضغط "إنشاء حساب".  أدخل كمية رموز SOL التي تريد استخدامها لتمويل حساب إثبات الحصة الجديد الخاص بك.  سيتم سحب هذه الكمية من محفظتك وتحويلها إلى حساب الحصة.  لا تقم بتحويل كافة رصيد المحفظة لديك إلى حساب الحصة، لأنه يتم خصم رسوم التحويل من المحفظة المرتبطة بحساب الحصة الخاص بك.  أو على الأقل اترك رمز SOL واحد في حساب المحفظة الخاص بك.
 
-### Receiving
+بعد تسليم وتوقيع العملية [sign the transaction](#signing-a-transaction) سيظهر حساب الحصة في المربع المسمى "حسابات الحصة الخاصة بك".
 
-To receive tokens into your wallet, someone must transfer some to your wallet's
-address. The address is displayed at the top-left on the screen, and you can
-click the Copy icon to copy the address and provide it to whoever is sending you
-tokens. If you hold tokens in a different wallet or on an exchange, you can
-withdraw to this address as well. Once the transfer is made, the balance shown
-on SolFlare should update within a few seconds.
+تقوم حسابات الحصة المنشأة على SolFlare بإعداد عنوان محفظتك باعتباره [staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities) للحساب الخاص بك، والذي يعطي مفتاح محفظتك السلطة لتوقيع أي عمليات تحويل مرتبطة بحساب الحصة الجديد الخاص بك.
 
-### Sending
+### عرض حسابات الحصة الخاصة بك
+ستكون حسابات الحصة الخاصة بك ظاهرة في مربع "حسابات الحصة الخاصة بك" على الصفحة الرئيسية للوحة التحكم في المحفظة أو على صفحة لوحة التحكم حساب الحصة.  وتتواجد حسابات الحصة في عنوان مختلف عن محفظتك.
 
-Once you have some tokens at your wallet address, you can send them to any other
-wallet address or an exchange deposit address by clicking "Transfer SOL" in the
-upper-right corner. Enter the recipient address and the amount of SOL to
-transfer and click "Submit". You will be prompted to confirm the details of the
-transaction before you [use your key to sign the transaction](#signing-a-transaction)
-and then it will be submitted to the network.
+سوف تقوم SolFlare بعرض أي حسابات حصة على الشبكة المختارة [selected network](#select-a-network) بحيث يتم اعتبار عنوان المحفظة الخاصة بك سلطة التحصيص [stake authority](../staking/stake-accounts#understanding-account-authorities). ويتم كذلك عرض حسابات التحصيص المنشأة خارج SolFlare ويمكن أن يتم إدارتها طالما أنت متصل من خلال المحفظة التي قمت بتسجيل الدخول إليها باعتبارها سلطة التحصيص (stake authority).
 
-## Staking SOL Tokens
+### تفويض الرموز في حساب إثبات الحصة
+بمجرد اختيارك مدققًا [selected a validator](../staking#select-a-validator)، يمكنك تفويض الرموز في أحد حسابات الحصة الخاصة بك إلى المدققين.  من لوحة تحكم إثبات الحصة (Staking)، اضغط "تفويض" في الجانب الأيمن من حساب الحصة المعروض. ثم قم باختيار المدقق الذي ترغب به من القائمة المنسدلة ثم اضغط "تفويض" (Delegate).
 
-SolFlare supports creating and managing stake accounts and delegations. To learn
-about how staking on Solana works in general, check out our
-[Staking Guide](../staking).
+لإلغاء تفويض الرموز في حساب الحصة (يسمى إيضًا إلغاء تفعيل الحصة)، فالعملية متشابهة.  من خلال صفحة التحصيص، في الجانب الأيمن من حساب تفويض الحصة، اضغط زر "إلغاء تفويض" واتبع التعليمات.
 
-### Create a Stake Account
+### تقسيم حساب إثبات الحصة
+يمكنك تقسيم حساب حصة الحالي إلى حسابي حصة.  انقر على عنوان حساب حصة يمكنك التحكم فيه بواسطة محفظتك، واختر "تقسيم" من شريط الإجراءات (Action).  قم بتحديد الكمية المراد تقسيمها من رموز SOL.  هذه ستكون كمية الرموز في حساب الحصة الجديد وسيتم إنقاص الكمية من حساب الحصة الحالي.  يسمح لك تقسيم حساب الحصة الخاص بك بتفويض عدة مدققين مختلفين بكميات مختلفة من الرموز. ويمكنك تقسيم حساب الحصة عدة مرات بحسب ما تريد من أجل إنشاء العدد الذي تريد من حسابات إثبات الحصة.
 
-You can use some of the SOL tokens in your wallet to create a new stake account.
-From the wallet main page click "Staking" at the top of the page. In the upper-
-right, click "Create Account". Enter the amount of SOL you want to use to
-fund your new stake account. This amount will be withdrawn from your wallet
-and transfered to the stake account. Do not transfer your entire wallet balance
-to a stake account, as the wallet is still used to pay any transaction fees
-associated with your stake account. Consider leaving at least 1 SOL in your
-wallet account.
+## توقيع معاملة
+في أي وقت تقوم فيه بإرسال معاملة مثل إرسال الرموز إلى محفظة أخرى أو تفويضها، فأنت بحاجة إلى استخدام مفتاحك الخاص للتوقيع على المعاملة بحيث يتم قبولها من قبل الشبكة.
 
-After you submit and [sign the transaction](#signing-a-transaction) you will see
-your new stake account appear in the box labeled "Your Staking Accounts".
+### استخدام ملف تخزين المفاتيح Keystore File
+إذا كنت قد وصلت إلى محفظتك باستخدام ملف تخزين المفاتيح، سيتم مطالبتك بإدخال كلمة المرور الخاصة بك في أي وقت تكون الحاجة فيه إلى المفتاح لتوقيع معاملة.
 
-Stake accounts created on SolFlare set your wallet address as the
-[staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities)
-for your new account, which gives your wallet's key the authority to sign
-for any transactions related to the new stake account.
-
-### View your Stake Accounts
-
-On the main Wallet dashboard page or on the Staking dashboard page, your stake
-accounts will be visible in the "Your Staking Accounts" box. Stake accounts
-exist at a different address from your wallet.
-
-SolFlare will locate any display all stake accounts on the
-[selected network](#select-a-network)
-for which your wallet address is assigned as the
-[stake authority](../staking/stake-accounts#understanding-account-authorities).
-Stake accounts that were created outside of SolFlare will also be displayed and
-can be managed as long as the wallet you logged in with is assigned as the stake
-authority.
-
-### Delegate tokens in a Stake Account
-
-Once you have [selected a validator](../staking#select-a-validator), you may
-delegate the tokens in one of your stake accounts to them. From the Staking
-dashboard, click "Delegate" at the right side of a displayed stake account.
-Select the validator you wish to delegate to from the drop down list and click
-Delegate.
-
-To un-delegate your staked tokens (also called deactivating your stake), the
-process is similar. On the Staking page, at the right side of a delegated stake
-account, click the "Undelegate" button and follow the prompts.
-
-### Split a Stake Account
-
-You may split an existing stake account into two stake accounts. Click on the
-address of a stake account controlled by your wallet, and under the Actions bar,
-click "Split". Specify the amount of SOL tokens you want to split. This will be
-the amount of tokens in your new stake account and your existing stake account
-balance will be reduced by the same amount. Splitting your stake account
-allows you to delegate to multiple different validators with different amounts
-of tokens. You may split a stake account as many times as you want, to create
-as many stake accounts as you want.
-
-## Signing a Transaction
-
-Any time you submit a transaction such as sending tokens to another wallet or
-delegating stake, you need to use your private key to sign the transaction so
-it will be accepted by the network.
-
-### Using a Keystore File
-
-If you accessed your wallet using a Keystore file, you will be prompted to enter
-your password any time the key is needed to sign a transaction.
-
-### Using a Ledger Nano
-
-If you accessed your wallet with a Ledger Nano, you will be prompted to
-confirm the pending transaction details on your device whenever the key is needed
-to sign. On the Nano, use the left and right buttons to view and confirm all of the
-transaction details. If everything looks correct, keep clicking the right button
-until the screen shows "Approve". Click both buttons to approve the transaction.
-If something looks incorrect, press the right button once more so the screen shows
-"Reject" and press both buttons to reject the transaction. After you approve
-or reject a transaction, you will see this reflected on the SolFlare page.
+### استخدام محفظة Ledger Nano
+إذا كنت قد وصلت إلى محفظتك باستخدام محفظة Ledger Nano، سيتم مطالبتك بتأكيد تفاصيل المعاملة المعلقة على جهازك في كل مرة يكون المفتاح مطلوبا للتوقيع. استخدم الزرين على اليمين واليسار في جهاز Nano لعرض وتأكيد تفاصيل المعاملة.  إذا بدا كل شيء صحيحًا، استمر في الضغط على الزر الأيمن حتى تظهر شاشة "تأكيد".  ثم قم بالضغط على كلا الزرين لتأكيد المعاملة. إذا شعرت أن هناك شيئًا غير صحيح، قم بالضغط على الزر الأيمن مرة أخرى كي تظهر على الشاشة "رفض" واضغط على كلا الزرين لرفض المعاملة.  بعدما تقوم بتأكيد أو رفض المعاملة، سترى ذلك في صفحة SolFlare.

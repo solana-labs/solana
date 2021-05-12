@@ -1,25 +1,25 @@
 ---
-title: Read-Only Accounts
+title: Cuentas de sólo lectura
 ---
 
-This design covers the handling of readonly and writable accounts in the [runtime](../validator/runtime.md). Multiple transactions that modify the same account must be processed serially so that they are always replayed in the same order. Otherwise, this could introduce non-determinism to the ledger. Some transactions, however, only need to read, and not modify, the data in particular accounts. Multiple transactions that only read the same account can be processed in parallel, since replay order does not matter, providing a performance benefit.
+Este diseño cubre el manejo de cuentas de solo lectura y escribible en el [runtime](../validator/runtime.md). Múltiples transacciones que modifican la misma cuenta deben ser procesadas serialmente para que siempre se repitan en el mismo orden. De lo contrario, esto podría introducir el no determinismo en el ledger. Sin embargo, algunas transacciones sólo necesitan leer, y no modificar, los datos de determinadas cuentas. Múltiples transacciones que sólo leen la misma cuenta pueden ser procesadas en paralelo, ya que la orden de repetición no importa, proporcionando un beneficio de rendimiento.
 
-In order to identify readonly accounts, the transaction MessageHeader structure contains `num_readonly_signed_accounts` and `num_readonly_unsigned_accounts`. Instruction `program_ids` are included in the account vector as readonly, unsigned accounts, since executable accounts likewise cannot be modified during instruction processing.
+Para identificar cuentas de solo lectura, la estructura de MessageHeader de transacción contiene `num_readonly_signed_accounts` y `num_readonly_unsigned_accounts`. La instrucción `program_ids` se incluye en el vector de la cuenta como sólo leída, cuentas sin firmar, ya que las cuentas ejecutables tampoco pueden ser modificadas durante el proceso de instrucciones.
 
-## Runtime handling
+## Gestión de tiempo de ejecución
 
-Runtime transaction processing rules need to be updated slightly. Programs still can't write or spend accounts that they do not own. But new runtime rules ensure that readonly accounts cannot be modified, even by the programs that own them.
+Las reglas de procesamiento de transacciones de tiempo de ejecución deben ser actualizadas rápidamente. Los programas todavía no pueden escribir o gastar cuentas que no poseen. Pero las nuevas reglas de ejecución garantizan que las cuentas de sólo lectura no puedan ser modificadas, ni siquiera por los programas que las poseen.
 
-Readonly accounts have the following property:
+Las cuentas de solo lectura tienen la siguiente propiedad:
 
-- Read-only access to all account fields, including lamports (cannot be credited or debited), and account data
+- Acceso de sólo lectura a todos los campos de la cuenta, incluyendo los lamports (no se puede abonar ni debitar) y los datos de la cuenta
 
-Instructions that credit, debit, or modify the readonly account will fail.
+Las instrucciones que abonan, cargan o modifican la cuenta de sólo lectura fallarán.
 
-## Account Lock Optimizations
+## Optimizaciones de bloqueo de cuentas
 
-The Accounts module keeps track of current locked accounts in the runtime, which separates readonly accounts from the writable accounts. The default account lock gives an account the "writable" designation, and can only be accessed by one processing thread at one time. Readonly accounts are locked by a separate mechanism, allowing for parallel reads.
+El módulo Cuentas mantiene un seguimiento de las cuentas bloqueadas actuales en tiempo de ejecución, lo que separa las cuentas de sólo lectura de las cuentas con permisos de escritura. El bloqueo de cuenta por defecto da a una cuenta la designación "escribible" y sólo puede ser accedido por un hilo de procesamiento a la vez. Las cuentas de solo lectura están bloqueadas por un mecanismo separado, permitiendo lecturas paralelas.
 
-Although not yet implemented, readonly accounts could be cached in memory and shared between all the threads executing transactions. An ideal design would hold this cache while a readonly account is referenced by any transaction moving through the runtime, and release the cache when the last transaction exits the runtime.
+Aunque aún no se han implementado, las cuentas de sólo lectura podrían almacenarse en caché en memoria y compartirse entre todos los hilos que ejecutan transacciones. Un diseño ideal mantendría esta caché mientras que una cuenta de sólo lectura es referenciada por cualquier transacción que se mueva a través del tiempo de ejecución, y liberar la caché cuando la última transacción salga del tiempo de ejecución.
 
-Readonly accounts could also be passed into the processor as references, saving an extra copy.
+Las cuentas de solo lectura también podrían pasarse al procesador como referencias, guardando una copia extra.

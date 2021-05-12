@@ -1,57 +1,57 @@
 ---
-title: Bankless Leader
+title: قائد بلا بنك (Bankless Leader)
 ---
 
-A bankless leader does the minimum amount of work to produce a valid block. The leader is tasked with ingress transactions, sorting and filtering valid transactions, arranging them into entries, shredding the entries and broadcasting the shreds. While a validator only needs to reassemble the block and replay execution of well formed entries. The leader does 3x more memory operations before any bank execution than the validator per processed transaction.
+يقوم القائد بلا بنك (Bankless Leader) بالحد الأدنى من العمل لإنتاج كتلة (block) صالحة. يُكلف القائد بإدخال المُعاملات، فرز المُعاملات الصالحة وتصفيتها، ترتيبها في مُدخلات (entries)، تمزيق المُدخلات، وبث الأشلاء (shreds). بينما يحتاج المُدقّق (validator) فقط إلى إعادة تجميع الكتلة (block) وإعادة تنفيذ المُدخلات (entries) المُصممة جيدًا. يقوم القائد بإجراء عمليات ذاكرة أكثر بثلاث مرات (3x) قبل تنفيذ أي بنك أكثر من المُدقّق (validator) لكل مُعاملة تمت مُعالجتها.
 
-## Rationale
+## الأساس المنطقي (Rationale)
 
-Normal bank operation for a spend needs to do 2 loads and 2 stores. With this design leader just does 1 load. so 4x less account_db work before generating the block. The store operations are likely to be more expensive than reads.
+تتطلب العملية المصرفية العادية للإنفاق القيام بحِملين (loads 2) ومتجرين (2 stores). مع هذا التصميم الرائد يقوم بحِمل (load 1) واحد فقط. لذا فإن عمل account_db أقل بمقدار مرات (4x) قبل إنشاء الكتلة (block). من المُحتمل أن تكون عمليات المتجر (store) أكثر تكلفة من عمليات القراءة.
 
-When replay stage starts processing the same transactions, it can assume that PoH is valid, and that all the entries are safe for parallel execution. The fee accounts that have been loaded to produce the block are likely to still be in memory, so the additional load should be warm and the cost is likely to be amortized.
+عندما تبدأ مرحلة إعادة التشغيل في مُعالجة نفس المُعاملات، يُمكن أن تفترض أن الـ PoH صالح، وأن جميع المُدخلات (entries) آمنة للتنفيذ المُتوازي. من المُحتمل أن تظل حسابات الرسوم التي تم تحميلها لإنتاج الكتلة (block) في الذاكرة، لذلك يجب أن يكون الحِمل (load) الإضافي دافئًا ومن المُرجح أن يتم إستهلاك التكلفة.
 
-## Fee Account
+## حساب الرسوم (Fee Account)
 
-The [fee account](../terminology.md#fee_account) pays for the transaction to be included in the block. The leader only needs to validate that the fee account has the balance to pay for the fee.
+يدفع حساب الرسوم [fee account](../terminology.md#fee_account) المُعاملة ليتم تضمينها في الكتلة (block). يحتاج القائد فقط إلى التحقق من أن حساب الرسوم لديه رصيد لدفع الرسوم.
 
-## Balance Cache
+## التخزين المُؤقت للرصيد (Balance Cache)
 
-For the duration of the leaders consecutive blocks, the leader maintains a temporary balance cache for all the processed fee accounts. The cache is a map of pubkeys to lamports.
+طوال فترة الكتل (blocks) المُتتالية للقادة (leaders)، يحتفظ القائد بمخزن مُؤقت للرصيد لجميع حسابات الرسوم التي تمت مُعالجتها. ذاكرة التخزين المُؤقت (cache) هي خريطة من المفاتيح العمومية (pubkeys) إلى الـ lamports.
 
-At the start of the first block the balance cache is empty. At the end of the last block the cache is destroyed.
+في بداية الكتلة (block) الأولى، تكون ذاكرة التخزين المُؤقت (cache) للرصيد فارغة. في نهاية الكتلة (block) الأخيرة يتم إتلاف ذاكرة التخزين المُؤقت (cache).
 
-The balance cache lookups must reference the same base fork for the entire duration of the cache. At the block boundary, the cache can be reset along with the base fork after replay stage finishes verifying the previous block.
+يجب أن تُشير عمليات البحث عن ذاكرة التخزين المُؤقت (cache) للرصيد إلى نفس الإنقسام أو الشوكة (fork) الأساسية طوال مُدة ذاكرة التخزين المُؤقت. عند حدود الكتلة (block)، يمكن إعادة تعيين ذاكرة التخزين المُؤقت (cache) مع إنقسام أو شوكة (fork) القاعدة بعد إنتهاء مرحلة إعادة التشغيل للتحقق من الكتلة السابقة.
 
-## Balance Check
+## التحقق من الرصيد (Balance Check)
 
-Prior to the balance check, the leader validates all the signatures in the transaction.
+قبل التحقق من الرصيد، يتحقق القائد (leader) من صحة جميع التوقيعات في المُعاملة.
 
-1. Verify the accounts are not in use and BlockHash is valid.
-2. Check if the fee account is present in the cache, or load the account from accounts_db and store the lamport balance in the cache.
-3. If the balance is less than the fee, drop the transaction.
-4. Subtract the fee from the balance.
-5. For all the keys in the transaction that are Credit-Debit and are referenced by an instruction, reduce their balance to 0 in the cache. The account fee is declared as Credit-Debit, but as long as it is not used in any instruction its balance will not be reduced to 0.
+1. تحقق من أن الحسابات ليست قيد الإستخدام وأن تجزئة الكتلة (Blockhash) صالحة.
+2. تحقق مما إذا كان حساب الرسوم موجودًا في ذاكرة التخزين المُؤقت (cache)، أو قم بتحميل الحساب من accounts_db وقم بتخزين رصيد الـ lamport في ذاكرة التخزين المُؤقت.
+3. إذا كان الرصيد أقل من الرسوم، قُم بإسقاط المُعاملة.
+4. إطرح الرسوم من الرصيد.
+5. بالنسبة لجميع المفاتيح الموجودة في المُعاملة والتي هي "دائن - مدين" (Credit-Debit) والمُشار إليها بواسطة تعليمات، قُم بتقليل رصيدها إلى 0 في ذاكرة التخزين المُؤقت (cache). يتم الإعلان عن رسوم الحساب كـ"دائن - مدين" (Credit-Debit)، ولكن طالما لم يتم إستخدامها في أي تعليمات، فلن يتم تخفيض رصيدها إلى 0.
 
-## Leader Replay
+## قائد إعادة العرض (Leader Replay)
 
-Leaders will need to replay their blocks as part of the standard replay stage operation.
+سيحتاج القادة (Leaders) إلى إعادة تشغيل الكتل (blocks) الخاصة بهم كجزء من عملية مرحلة الإعادة القياسية.
 
-## Leader Replay With Consecutive Blocks
+## قائد إعادة العرض مع كتل مُتتالية (Leader Replay With Consecutive Blocks)
 
-A leader can be scheduled to produce multiple blocks in a row. In that scenario the leader is likely to be producing the next block while the replay stage for the first block is playing.
+يُمكن جدولة القائد لإنتاج كتل (blocks) مُتعددة في صف واحد. في هذا السيناريو، من المُحتمل أن يقوم القائد بإنتاج الكتلة (block) التالية أثناء لعب مرحلة إعادة التشغيل للكتلة الأولى.
 
-When the leader finishes the replay stage it can reset the balance cache by clearing it, and set a new fork as the base for the cache which can become active on the next block.
+عندما ينتهي القائد من مرحلة إعادة التشغيل، يُمكنه إعادة ضبط توازن ذاكرة التخزين المُؤقت (cache) عن طريق مسحها، وتعيين إنقسام أو شوكة (fork) جديدة كأساس لذاكرة التخزين المُؤقت التي يُمكن أن تُصبح نشطة في الكتلة (block) التالية.
 
-## Reseting the Balance Cache
+## إعادة تعيين ذاكرة التخزين المُؤقت للرصيد (Reseting the Balance Cache)
 
-1. At the start of the block, if the balance cache is uninitialized, set the base fork for the balance cache to be the parent of the block and create an empty cache.
-2. if the cache is initialized, check if block's parents has a new frozen bank that is newer than the current base fork for the balance cache.
-3. if a parent newer than the cache's base fork exist, reset the cache to the parent.
+1. في بداية الكتلة (block)، إذا كانت ذاكرة التخزين المُؤقت للرصيد غير مُهيأة ، فقُم بتعيين الإنقسام أو الشوكة (fork) الأساسية لذاكرة التخزين المُؤقت للرصيد لتكون أصل الكتلة (block) وإنشاء ذاكرة تخزين مُؤقت فارغة.
+2. إذا تمت تهيئة ذاكرة التخزين المُؤقت، فتحقق مما إذا كان لدى والدي (parents) الكتلة بنكًا مُجمدًا جديدًا أحدث من إنقسام أو شوكة (fork) القاعدة الحالية لذاكرة التخزين المُؤقت للرصيد.
+3. إذا كان هناك أصل (parent) أحدث من الإنقسام الأساسي لذاكرة التخزين المُؤقت (cache)، فقُم بإعادة تعيين ذاكرة التخزين المُؤقت إلى الأصل.
 
-## Impact on Clients
+## التأثير على العملاء (Impact on Clients)
 
-The same fee account can be reused many times in the same block until it is used once as Credit-Debit by an instruction.
+يُمكن إعادة إستخدام حساب الرسوم نفسه عدة مرات في نفس الكتلة (block) حتى يتم إستخدامه مرة واحدة كـ"دائن - مدين" (Credit-Debit) من خلال تعليمات.
 
-Clients that transmit a large number of transactions per second should use a dedicated fee account that is not used as Credit-Debit in any instruction.
+يجب على العملاء الذين ينقلون عددًا كبيرًا من المُعاملات في الثانية الواحدة إستخدام حساب رسوم مُخصص لا يتم إستخدامه ك"دائن - مدين" (Credit-Debit) في أي تعليمات.
 
-Once an account fee is used as Credit-Debit, it will fail the balance check until the balance cache is reset.
+بمجرد إستخدام رسوم الحساب كـ" دائن - مدين" (Credit-Debit)، ستفشل في التحقق من الرصيد حتى يتم إعادة تعيين ذاكرة التخزين المُؤقت (cache) للرصيد.

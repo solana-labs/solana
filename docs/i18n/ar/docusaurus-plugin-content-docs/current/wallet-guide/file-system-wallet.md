@@ -1,65 +1,48 @@
 ---
-title: File System Wallet
+title: محفظة نظام الملفات
 ---
 
-This document describes how to create and use a file system wallet with the
-Solana CLI tools. A file system wallet exists as an unencrypted keypair file
-on your computer system's filesystem.
+يصف هذا المستند كيفية إنشاء واستخدام محفظة نظام الملفات بواسطة أدوات واجهة سطر الأوامر (CLI) في Solana. وتتواجد محفظة نظام الملفات كملف زوج مفاتيح غير مشفر على ملفات نظام جهاز الحاسوب.
 
-> File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
+> تعتبر محافظ نظام الملفات الطريقة الأقل أمانًا **least secure** لتخزين رموز SOL. وبالتالي لا نوصي **not recommended**. بتخزين كميات كبيرة من الرموز في محفظة نظام الملفات.
 
-## Before you Begin
+## قبل البدء
 
-Make sure you have
-[installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
+تأكد أنك قمت بتثبيت أدوات واجهة سطر الأوامر [installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
 
-## Generate a File System Wallet Keypair
+## إنشاء مفاتيح محفظة نظام الملفات
 
-Use Solana's command-line tool `solana-keygen` to generate keypair files. For
-example, run the following from a command-line shell:
+إستخدم أداة سطر الأوامر `solana-keygen` لإنشاء ملفات زوج المفاتيح. مثلًا، قم بكتابة الأمر التالي من نواة (shell) سطر الأوامر:
 
 ```bash
 mkdir ~/my-solana-wallet
 solana-keygen new --outfile ~/my-solana-wallet/my-keypair.json
 ```
 
-This file contains your **unencrypted** keypair. In fact, even if you specify
-a password, that password applies to the recovery seed phrase, not the file. Do
-not share this file with others. Anyone with access to this file will have access
-to all tokens sent to its public key. Instead, you should share only its public
-key. To display its public key, run:
+يحتوي هذا الملف على زوج المفاتيح الغير مُشَفَّرَة **unencrypted** الخاص بك. في الواقع، حتى إذا قمت بتحديد كلمة مرور، فإن كلمة المرور هذه تنطبق على كلمات الإسترداد، وليس الملف. لا تقم بمشاركة هذا الملف مع الآخرين. أي شخص لديه إمكانية الوصول إلى هذا الملف سيكون قادرًا على الوصول إلى جميع الرموز المرسلة إلى المفتاح العام الخاص به. بدلاً من ذلك، يجب عليك مشاركة المفتاح العام فقط. لعرض المفتاح العام، قم بكتابة:
 
 ```bash
 solana-keygen pubkey ~/my-solana-wallet/my-keypair.json
 ```
 
-It will output a string of characters, such as:
+سيخرج سلسلة من الرموز مثل:
 
 ```text
 ErRr1caKzK8L8nn4xmEWtimYRiTCAZXjBtVphuZ5vMKy
 ```
 
-This is the public key corresponding to the keypair in
-`~/my-solana-wallet/my-keypair.json`. The public key of the keypair file is
-your _wallet address_.
+هذا هو المفتاح العام لزوج المفاتيح في `~/my-solana-wallet/my-keypair.json`. أي أن المفتاح العام لملف زوج المفاتيح هو نفسه عنوان المحفظة _wallet address_.
 
-## Verify your Address against your Keypair file
+## تَحَقُّق من عنوانك من خلال مقارنته بملف زوج المفاتيح الخاص بك
 
-To verify you hold the private key for a given address, use
-`solana-keygen verify`:
+للتحقق من أنك تمتلك المفتاح الخاص لعنوان ما، قم بإستخدام الأمر `solana-keygen verify`:
 
 ```bash
 solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 ```
 
-where `<PUBKEY>` is replaced with your wallet address.
-The command will output "Success" if the given address matches the
-the one in your keypair file, and "Failed" otherwise.
+حيث يتم إستبدال `<PUBKEY>` بعنوان محفظتك. بالتالي سيقوم الأمر بإخراج رسالة "Success" إذا كان العنوان المعطى يتطابق مع العنوان المتواجد في ملف زوج المفاتيح، و"Failed" إذا لم يكن كذلك.
 
-## Creating Multiple File System Wallet Addresses
+## إنشاء عناوين محفظة ملفات نظام مُتَعَدِّدَة
 
-You can create as many wallet addresses as you like. Simply re-run the
-steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)
-and make sure to use a new filename or path with the `--outfile` argument.
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes.
+يمكنك إنشاء أي عدد تريده من عناوين المحفظة. ببساطة، قم بإعادة الخطوات في [Generate a File System Wallet](#generate-a-file-system-wallet-keypair) وتأكد من أنك تستخدم إسم ملف جديد أو جملة مسار `--outfile`. يمكن أن تكون عناوين المحفظة المُتَعَدِّدَة مفيدة إذا كنت ترغب في نقل الرموز بين حساباتك الخاصة لأغراض مختلفة.

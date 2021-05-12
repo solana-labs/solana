@@ -1,57 +1,57 @@
 ---
-title: Staking Rewards
+title: مُكافآت إثبات الحِصَّة أو التَحْصِيص (Staking Rewards)
 ---
 
-A Proof of Stake \(PoS\), \(i.e. using in-protocol asset, SOL, to provide secure consensus\) design is outlined here. Solana implements a proof of stake reward/security scheme for validator nodes in the cluster. The purpose is threefold:
+تم توضيح تصميم إثبات الحِصَّة \(PoS \) \ (على سبيل المثال، إستخدام الأصول داخل البروتوكول، رمز SOL، لتوفير إجماع آمن \) هنا. يتُطبق Solana دليلًا على إثبات الحِصَّة / أمان الحِصَّة لعُقد المُدقّقين (validator nodes) في المجموعة (cluster). الغرض ثلاثي:
 
-- Align validator incentives with that of the greater cluster through
+- ربط حوافز المُدقّقين (validators) مع حوافز المجموعة (cluster) الأكبر من خلال
 
-  skin-in-the-game deposits at risk
+  عمليات الإيداع مُعرضة للخطر
 
-- Avoid 'nothing at stake' fork voting issues by implementing slashing rules
+- تجنب مشكلات "لا شيء على المِحك" للتصويت على الإنقسام أو الشوكة (fork) من خلال تطبيق قواعد الإقتطاع (slashing)
 
-  aimed at promoting fork convergence
+  تهدف إلى تعزيز تقارب الإنقسام أو الشوكة (fork)
 
-- Provide an avenue for validator rewards provided as a function of validator
+- توفير وسيلة لمُكافآت المُدقّق (validator) المُقدمة كوظيفة للمُدقّق
 
-  participation in the cluster.
+  المُشاركة في الفُتحة (cluster).
 
-While many of the details of the specific implementation are currently under consideration and are expected to come into focus through specific modeling studies and parameter exploration on the Solana testnet, we outline here our current thinking on the main components of the PoS system. Much of this thinking is based on the current status of Casper FFG, with optimizations and specific attributes to be modified as is allowed by Solana's Proof of History \(PoH\) blockchain data structure.
+في حين أن العديد من تفاصيل التنفيذ المُحدد قيد النظر حاليًا ومن المُتوقع أن يتم التركيز عليها من خلال دراسات النمذجة المُحددة وإستكشاف المُعلمات على الشبكة التجريبية (testnet) لـ Solana ، فإننا نلخص هنا تفكيرنا الحالي حول المُكونات الرئيسية لنظام PoS. يعتمد الكثير من هذا التفكير على الوضع الحالي لـ Casper FFG، مع تحسينات وخصائص مُحددة يتم تعديلها كما هو مسموح به بواسطة هيكل بيانات بلوكشاين إثبات التاريخ أو \(PoH\) الخاص بـ Solana.
 
-## General Overview
+## لمحة عامة (General Overview)
 
-Solana's ledger validation design is based on a rotating, stake-weighted selected leader broadcasting transactions in a PoH data structure to validating nodes. These nodes, upon receiving the leader's broadcast, have the opportunity to vote on the current state and PoH height by signing a transaction into the PoH stream.
+يعتمد تصميم التحقق من صحة دفتر الأستاذ (ledger) الخاص بـ Solana على بث القائد (leader) المُختار والمُرجح بالحِصَّة (stake-weighted) مُعاملات في بنية بيانات PoH لعُقد المُدقّقين (validator nodes). هذه العُقد (nodes)، عند تلقي بث القائد، لديها الفرصة للتصويت على الحالة الحالية وإرتفاع PoH من خلال توقيع مُعاملة في تيار PoH.
 
-To become a Solana validator, one must deposit/lock-up some amount of SOL in a contract. This SOL will not be accessible for a specific time period. The precise duration of the staking lockup period has not been determined. However we can consider three phases of this time for which specific parameters will be necessary:
+لكي تُصبح مُدققًا (validators) في Solana، يجب على المرء إيداع / حجز بعض مبالغ SOL في العقد (contract). لن يكون الوصول إلى عملات SOL هذه مُتاحا لفترة زمنية مُحددة. لم يتم تحديد المُدة الدقيقة لفترة قفل التخزين (staking lockup period). مع ذلك، يُمكننا النظر في ثلاث مراحل في هذا الوقت والتي ستكون مُعلِّمات (parameters) مُحددة ضرورية لها:
 
-- _Warm-up period_: which SOL is deposited and inaccessible to the node,
+- الإحماء الإحماء _Warm-up period_: عندما يتم إيداع SOL ولا يُمكن الوصول إليها من العُقدة (node)،
 
-  however PoH transaction validation has not begun. Most likely on the order of
+  مع ذلك، لم يبدأ التحقق من صحة مُعاملة PoH. الأكثر إحتمالا حسب ترتيب
 
-  days to weeks
+  أيام إلى أسابيع
 
-- _Validation period_: a minimum duration for which the deposited SOL will be
+- فترة المُصادقة _Validation period_: الحد الأدنى للمُدة التي سيتم فيها إيداع SOL
 
-  inaccessible, at risk of slashing \(see slashing rules below\) and earning
+  لا يمكن الوصول إليها، مع خطر الإقتطاع (slashing) \ (أُنظر قواعد القطع أدناه \) والربح
 
-  rewards for the validator participation. Likely duration of months to a
+  مُكافآت لمُشاركة المُدقّق (validator). المُدة المُحتملة من شهور إلى
 
-  year.
+  سنة.
 
-- _Cool-down period_: a duration of time following the submission of a
+- فترة التبريد _Cool-down period_: المُدة الزمنية التالية لتقديم ملف
 
-  'withdrawal' transaction. During this period validation responsibilities have
+  مُعاملة "سحب". خلال فترة المُصادقة (period validation) هذه، المسؤوليات
 
-  been removed and the funds continue to be inaccessible. Accumulated rewards
+  تمت إزالتها ولا يزال يتعذر الوصول إلى الأموال. المُكافآت المُتراكمة
 
-  should be delivered at the end of this period, along with the return of the
+  يجب أن يتم تسليمها في نهاية هذه الفترة، إلى جانب عودة
 
-  initial deposit.
+  الإيداع الأولي.
 
-Solana's trustless sense of time and ordering provided by its PoH data structure, along with its [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast and transmission design, should provide sub-second transaction confirmation times that scale with the log of the number of nodes in the cluster. This means we shouldn't have to restrict the number of validating nodes with a prohibitive 'minimum deposits' and expect nodes to be able to become validators with nominal amounts of SOL staked. At the same time, Solana's focus on high-throughput should create incentive for validation clients to provide high-performant and reliable hardware. Combined with potential a minimum network speed threshold to join as a validation-client, we expect a healthy validation delegation market to emerge. To this end, Solana's testnet will lead into a "Tour de SOL" validation-client competition, focusing on throughput and uptime to rank and reward testnet validators.
+يجب أن يُوفر إحساس Solana غير الموثوق به للوقت والترتيب الذي يُوفره هيكل بيانات PoH الخاص به، جنبًا إلى جنب مع تصميم بيانات التوربين [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s)، أوقاتًا أقل من الثانية لتأكيد المُعاملة مع سجل عدد العُقد (nodes) في المجموعة (cluster). هذا يعني أنه لا ينبغي علينا تقييد عدد عُقد التدقيق (validator nodes) ذات الحد الأدنى من الإيداعات ونتوقع أن تُصبح العُقد (nodes) قادرة على أن تُصبح مُدقّقين (validators) بمقادير رمزية من SOL. في الوقت نفسه, يجب أن تُركز Solana على الإنتاجية العالية حافزًا لعُملاء المُصادقة (validation clients) لتوفير أجهزة عالية الأداء وموثوقة. بالإقتران مع الحد الأدنى المُحتمل لسرعة الشبكة للإنضمام كعميل مُصادقة (validation-client)، نتوقع ظهور سوق لتفويض المُصادقة. لهذه الغاية، ستُؤدي الشبكة التجريبية (testnet) لـ Solana إلى مُسابقة "Tour de SOL" لعميل المُصادقة (validation-client)، مع التركيز على الإنتاجية والجهوزية لتصنيف ومُكافأة مُدقّقي (validators) الشبكة التجريبية (testnet).
 
-## Penalties
+## العقوبات (Penalties)
 
-As discussed in the [Economic Design](ed_overview/ed_overview.md) section, annual validator interest rates are to be specified as a function of total percentage of circulating supply that has been staked. The cluster rewards validators who are online and actively participating in the validation process throughout the entirety of their _validation period_. For validators that go offline/fail to validate transactions during this period, their annual reward is effectively reduced.
+كما تمت مُناقشته في قسم التصميم الإقتصادي [Economic Design](ed_overview/ed_overview.md)، يجب تحديد أسعار الفائدة السنوية للمُدقّق (validator) كدالة لإجمالي النسبة المئوية للعرض المُتداول الذي تم تجميعه. تُكافئ المجموعة المُدقّقين (validators) المُتصلين بالأنترنات والمُشاركين بنشاط طوال عملية فترة المُصادقة _validation period_. بالنسبة للمُدقّقين (validators) الذين يتوقفون عن العمل / يفشلون في التدقيق من صحة المُعاملات خلال هذه الفترة، يتم تخفيض مُكافأتهم السنوية بشكل فعال.
 
-Similarly, we may consider an algorithmic reduction in a validator's active amount staked amount in the case that they are offline. I.e. if a validator is inactive for some amount of time, either due to a partition or otherwise, the amount of their stake that is considered ‘active’ \(eligible to earn rewards\) may be reduced. This design would be structured to help long-lived partitions to eventually reach finality on their respective chains as the % of non-voting total stake is reduced over time until a supermajority can be achieved by the active validators in each partition. Similarly, upon re-engaging, the ‘active’ amount staked will come back online at some defined rate. Different rates of stake reduction may be considered depending on the size of the partition/active set.
+بالمثل، قد نفكر في إجراء تخفيض خوارزمي في مقدار الحِصَّة النشط للمُدقّق (validator) في حالة عدم الإتصال بالأنترنات. بمعنى آخر. إذا كان المُدقّق (validator) غير نشط لبعض الوقت، إما بسبب التقسيم أو غير ذلك، فقد يتم تخفيض مقدار حِصّته (stake) التي تُعتبر "نشطة" \ (مُؤهلة لكسب المكافآت\). سيتم تصميم هذا التصميم لمُساعدة الأقسام طويلة العمر للوصول في النهاية إلى نهائية في شبكاتها الخاصة حيث يتم تقليل النسبة المئوية من إجمالي الحِصَّة (stake) غير المُصوتة بمرور الوقت حتى يُمكن تحقيق الأغلبية العظمى بواسطة المُدقّقين (validators) النشطين في كل قسم. بالمثل، عند إعادة الإشتراك، سيعود المبلغ "النشط" المُحَصَّص (staked) على الأنترنات بمُعدل مُحدد. يُمكن النظر في مُعدلات مُختلفة لتخفيض الحِصَّة (stake) إعتمادًا على حجم القسم / المجموعة النشطة.

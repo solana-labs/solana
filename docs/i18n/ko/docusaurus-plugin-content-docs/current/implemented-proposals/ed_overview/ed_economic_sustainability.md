@@ -1,9 +1,9 @@
 ---
-title: Economic Sustainability
+title: 경제적 지속 가능성
 ---
 
 **Subject to change.**
 
-Long term economic sustainability is one of the guiding principles of Solana’s economic design. While it is impossible to predict how decentralized economies will develop over time, especially economies with flexible decentralized governances, we can arrange economic components such that, under certain conditions, a sustainable economy may take shape in the long term. In the case of Solana’s network, these components take the form of token issuance \(via inflation\) and token burning.
+장기적인 경제적 지속 가능성은 Solana의 경제 설계의 기본 원칙 중 하나입니다. 탈 중앙화 된 경제, 특히 유연한 탈 중앙화 된 거버거버넌스가있는 경제가 시간이 지남에 따라 어떻게 발전 할 것인지 예측하는 것은 불가능하지만, 특정 조건에서 지속 가능한 경제가 장기적으로 형성 될 수 있도록 경제 구성 요소를 배치 할 수 있습니다. Solana 네트워크의 경우 이러한 구성 요소는 토큰 발행 \ (인플레이션을 통해 \) 및 토큰 소각의 형태를 취합니다.
 
-The dominant remittances from the Solana mining pool are validator rewards. The disinflationary mechanism is a flat, protocol-specified and adjusted, % of each transaction fee.
+Solana 마이닝 풀의 지배적 인 송금은 밸리데이터 보상입니다. 디스인플레이션 메커니즘은 각 거래 수수료의 일정 비율로 프로토콜에 지정되고 조정됩니다.

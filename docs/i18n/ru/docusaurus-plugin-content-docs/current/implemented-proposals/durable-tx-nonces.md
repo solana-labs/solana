@@ -1,38 +1,26 @@
 ---
-title: Durable Transaction Nonces
+title: Durable Nonce Транзакции
 ---
 
-## Problem
+## Проблематика
 
-To prevent replay, Solana transactions contain a nonce field populated with a
-"recent" blockhash value. A transaction containing a blockhash that is too old
-(~2min as of this writing) is rejected by the network as invalid. Unfortunately
-certain use cases, such as custodial services, require more time to produce a
-signature for the transaction. A mechanism is needed to enable these potentially
-offline network participants.
+Чтобы предотвратить возможность отправки одной и тойже транзакции дважды, для её генерации используется уникальное значение в поле nonce, которое заполняется хэшем блока (далее blockhash). Blockhash имеет срок валидности (на текущий момент около ~2мин.) по истечении которого транзакция будет отклонена, как невалидная. К сожалению, для некоторого числа применений, например различные кастодиальные услуги, требуется больше времени, чтобы подписать транзакцию. По этой причине необходим механизм, который бы позволил этим потенциальным участникам взаимодействовать с сетью оффлайн.
 
-## Requirements
+## Требования
 
-1. The transaction's signature needs to cover the nonce value
-2. The nonce must not be reusable, even in the case of signing key disclosure
+1. Подпись транзакции должна обязательно включать в себя значение nonce
+2. Значение nonce не может быть использовано дважды, даже если приватный ключ был скомпрометирован
 
-## A Contract-based Solution
+## Решение на основе смарт-контракта
 
-Here we describe a contract-based solution to the problem, whereby a client can
-"stash" a nonce value for future use in a transaction's `recent_blockhash`
-field. This approach is akin to the Compare and Swap atomic instruction,
-implemented by some CPU ISAs.
+Тут мы описываем решение данной проблемы, истечение срока валидности blockhash, с помощью смарт-контракта, благодаря которому, клиент может "отложить в копилку" nonce для использования в поле `recent_blockhash` будущей транзакции. Такой "отложенный" nonce будем называть durable nonce. Этот подход сродни тому, как некоторые CPU ISA реализуют атомарные инструкции Compare и Swap.
 
-When making use of a durable nonce, the client must first query its value from
-account data. A transaction is now constructed in the normal way, but with the
-following additional requirements:
+Чтобы воспользоваться durable nonce клиенту необходимо сначала запросить его значение из данных аккаунта, наша условная копилка, куда мы отложили наш nonce будущее. Дальше транзакция создается в обычным способом, но с несколькими новыми требованиями:
 
-1. The durable nonce value is used in the `recent_blockhash` field
-2. An `AdvanceNonceAccount` instruction is the first issued in the transaction
+1. Значение durable nonce используется в поле `recent_blockhash`. Обратите внимание, речь идет именно о поле в смарт-контракте, в инструментах Cli и Json Api название поля может отличаться
+2. Инструкция `AdvanceNonceAccount` в транзакции выдается первой
 
-### Contract Mechanics
-
-TODO: svgbob this into a flowchart
+### Механика контракта
 
 ```text
 Start
@@ -65,67 +53,30 @@ WithdrawInstruction(to, lamports)
   success
 ```
 
-A client wishing to use this feature starts by creating a nonce account under
-the system program. This account will be in the `Uninitialized` state with no
-stored hash, and thus unusable.
+Клиент, желающий использовать возможности durable nonce, в первую очередь должен создать одноразовые аккаунт, nonce account, с помощью системной программы. Этот аккаунт изначально будет находиться в состоянии `Uninitialized` и не будет хранить blockhash в качестве durable nonce значения, вот почему его ещё нельзя использовать.
 
-To initialize a newly created account, an `InitializeNonceAccount` instruction must be
-issued. This instruction takes one parameter, the `Pubkey` of the account's
-[authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
-must be [rent-exempt](rent.md#two-tiered-rent-regime) to meet the data-persistence
-requirements of the feature, and as such, require that sufficient lamports be
-deposited before they can be initialized. Upon successful initialization, the
-cluster's most recent blockhash is stored along with specified nonce authority
-`Pubkey`.
+Для инициализации только что созданного аккаунта, необходимо вызвать инструкцию `InitializeNonceAccount`. Эта инструкция принимает на вход только один параметр - `Публичный ключ` аккаунта с, которому мы передаем [право владения](../offline-signing/durable-nonce.md#nonce-authority) над созданным одноразовым аккаунтом. Одноразовый аккаунт должен удовлетворять условие [rent-exempt](rent.md#two-tiered-rent-regime), чтобы обеспечить постоянство данных на будущее, а это в свою очередь требует наличия определенного количества лэмпортов на счёту. Следовательно перед инициализацией вам необходимо будет пополнить баланс на минимально необходимую сумму. После успешной инициализации, последний валидный blockhash текущего кластера будет хранится вместе со значением `публичного ключа` текущего владельца одноразовго аккаунта.
 
-The `AdvanceNonceAccount` instruction is used to manage the account's stored nonce
-value. It stores the cluster's most recent blockhash in the account's state data,
-failing if that matches the value already stored there. This check prevents
-replaying transactions within the same block.
+Инструкция `AdvanceNonceAccount` используется для управления хранимым значением nonce. Инструкция обновляет, хранимый в данных состояния аккаунта последний валидный blockhash, если же полученное значение будет равнятся тому, что уже хранится, то инструкция вернет ошибку. Эта проверка предотвращает повторную отправку транзакции в том же блоке.
 
-Due to nonce accounts' [rent-exempt](rent.md#two-tiered-rent-regime) requirement,
-a custom withdraw instruction is used to move funds out of the account.
-The `WithdrawNonceAccount` instruction takes a single argument, lamports to withdraw,
-and enforces rent-exemption by preventing the account's balance from falling
-below the rent-exempt minimum. An exception to this check is if the final balance
-would be zero lamports, which makes the account eligible for deletion. This
-account closure detail has an additional requirement that the stored nonce value
-must not match the cluster's most recent blockhash, as per `AdvanceNonceAccount`.
+Поскольку у одноразовых аккаунтов есть требование к соответствию [rent-exempt](rent.md#two-tiered-rent-regime) состояния, используется специальная команда, которая позволяет вывести все средства со счёта одноразового аккаунта. Инструкция `WithdrawNonceAccount` принимает на вход только адин аргумент - количество лэмпортов для вывода и предотвращает падение баланса ниже минимально необходимого, чтобы сохранялось требование rent-exemption. Исключение из этой проверки является ситуация, когда окончательный баланс аккаунта становится нулевым, а таком случа аккаунт становится пригодным для удаления. Важной деталью удаления аккаунта является дополнительное требование: сохраненное значение nonce не должно совпадать с самым последним хешем блока кластера, так же, как и при использовании инструкции ` AdvanceNonceAccount `.
 
-The account's [nonce authority](../offline-signing/durable-nonce.md#nonce-authority)
-can be changed using the `AuthorizeNonceAccount` instruction. It takes one parameter,
-the `Pubkey` of the new authority. Executing this instruction grants full
-control over the account and its balance to the new authority.
+[Владельца](../offline-signing/durable-nonce.md#nonce-authority) одноразового аккаунта можно изменить с помощью инструкции `AuthorizeNonceAccount`. Эта инструкция принимает только один параметр - `публичный ключ` нового владельца. Выполнение этой инструкции даёт новому владельцу полный контроль над одноразовым аккаунтом и его балансом.
 
-> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
+> `AdvanceNonceAccount`, `WithdrawNonceAccount` и `AuthorizeNonceAccount` - все эти инструкции требуют передачи в качестве аргумента значение [текущего владельца](../offline-signing/durable-nonce.md#nonce-authority) для подписи транзакций.
 
-### Runtime Support
+### Поддержка среды выполнения
 
-The contract alone is not sufficient for implementing this feature. To enforce
-an extant `recent_blockhash` on the transaction and prevent fee theft via
-failed transaction replay, runtime modifications are necessary.
+Одного только контракта для реализации этого механизма недостаточно. Чтобы обеспечить наличие валидного значения blockhash в поле `recent_blockhash` и предотвратить потерю комиссии из-за неудачной попытки воспроизвести транзакции, необходимы изменения во время выполнения инструкций.
 
-Any transaction failing the usual `check_hash_age` validation will be tested
-for a Durable Transaction Nonce. This is signaled by including a `AdvanceNonceAccount`
-instruction as the first instruction in the transaction.
+Любая транзакций, не прошедшая обычну. проверку `check_hash_age` будет автоматически опробована как транзакция с использованием durable nonce. Об этом свидетельствует наличие в самом начале транзакции инструкции `AdvanceNonceAccount`.
 
-If the runtime determines that a Durable Transaction Nonce is in use, it will
-take the following additional actions to validate the transaction:
+Если среда выполнения определяет, что используется транзакция использующая durable nonce, то будут предприняты следующие дополнительные шаги для валидации транзакции:
 
-1. The `NonceAccount` specified in the `Nonce` instruction is loaded.
-2. The `NonceState` is deserialized from the `NonceAccount`'s data field and
-   confirmed to be in the `Initialized` state.
-3. The nonce value stored in the `NonceAccount` is tested to match against the
-   one specified in the transaction's `recent_blockhash` field.
+1. Одноразовый аккаунт `NonceAccount`, указанный в инструкции `Nonce` будет загружен.
+2. Далее должна произойти проверка его состояния к соответствию со значением `Initialized` для чего предварительно будет десериализован `NonceState` из поля `NonceAccount`.
+3. Далее значение nonce, хранящееся в `NonceAccount`, проверяется на соответствие значению, указанному в поле `recent_blockhash` транзакции.
 
-If all three of the above checks succeed, the transaction is allowed to continue
-validation.
+Если все три вышеперечисленные проверки пройдены, то транзакция может продолжить свою валидацию.
 
-Since transactions that fail with an `InstructionError` are charged a fee and
-changes to their state rolled back, there is an opportunity for fee theft if an
-`AdvanceNonceAccount` instruction is reverted. A malicious validator could replay the
-failed transaction until the stored nonce is successfully advanced. Runtime
-changes prevent this behavior. When a durable nonce transaction fails with an
-`InstructionError` aside from the `AdvanceNonceAccount` instruction, the nonce account
-is rolled back to its pre-execution state as usual. Then the runtime advances
-its nonce value and the advanced nonce account stored as if it succeeded.
+Поскольку с транзакций, которые завершаются ошибкой `InstructionError`, взимается комиссия, а их состояние откатывается в исходное, уплаченные комиссии при отмене инструкции `AdvanceNonceAccount` не возвращаются, что открывает возможность для "кражи комиссий". Вредоносный валидатор может воспроизводить неудачную транзакцию до тех пор, пока сохраненный одноразовый номер не будет обновлен. Среда выполнения препятствует такому поведению. Когда транзакция с использованием durable nonce завершается ошибкой `InstructionError`, помимо инструкции `AdvanceNonceAccount`, одноразовый аккаунт откатывается к состояния до выполнения инструкций транзакции. Затем среда выполнения оновляет хранящееся значение nonce, а одноразовый аккаунт сохраняет новое значение, как если бы транзакция завершилась успешно.

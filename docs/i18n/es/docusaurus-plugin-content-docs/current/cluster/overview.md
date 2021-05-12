@@ -1,42 +1,42 @@
 ---
-title: A Solana Cluster
+title: Un clúster de Solana
 ---
 
-A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this section, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
+Un clúster de Solana es un conjunto de validadores que trabajan juntos para atender las transacciones de los clientes y mantener la integridad del libro mayor. Muchos clusters pueden coexistir. Cuando dos clusters comparten un bloque de génesis común, intentan converger. De lo contrario, simplemente ignoran la existencia de la otra. Las transacciones enviadas a la persona equivocada se rechazan silenciosamente. En esta sección, discutiremos cómo se crea un clúster, cómo los nodos se unen al clúster, cómo comparten el libro mayor, cómo se aseguran de que el libro mayor se replique y cómo lidian con los nodos con errores y maliciosos.
 
-## Creating a Cluster
+## Creando un Cluster
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_. Additional validators then register with any registered member of the cluster.
+Antes de iniciar cualquier validación, primero es necesario crear una _ configuración de genesis _. La configuración hace referencia a dos claves públicas, una _ mint _ y un _ validador de arranque _. El validador que tiene la clave privada del validador de arranque es responsable de agregar las primeras entradas al libro mayor. Inicializa su estado interno con la cuenta del mint. Esta cuenta mantendrá el número de tokens nativos definidos por la configuración del génesis. El segundo validador se pone en contacto con el validador de arranque para registrarse como _ validador _. Luego, los validadores adicionales se registran con cualquier miembro registrado del clúster.
 
-A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries. Once the validator observes a sufficient number of copies exist, it deletes its copy.
+Un validador recibe todas las entradas del líder y envía votos confirmando que esas entradas son válidas. Después de votar, se espera que el validador guarde esas entradas. Una vez que el validador observa un número suficiente de copias existen, elimina su copia.
 
-## Joining a Cluster
+## Uniéndose a un Cluster
 
-Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+Los validadores ingresan al clúster a través de mensajes de registro enviados a su _ plano de control _. El plano de control se implementa mediante un protocolo _ gossip _, lo que significa que un nodo puede registrarse con cualquier nodo existente y esperar que su registro se propague a todos los nodos del clúster. El tiempo que tardan todos los nodos en sincronizarse es proporcional al cuadrado del número de nodos que participan en el clúster. Algorítmicamente, eso se considera muy lento, pero a cambio de ese tiempo, se le asegura a un nodo que eventualmente tendrá la misma información que cualquier otro nodo, y que esa información no puede ser censurada por ningún nodo.
 
-## Sending Transactions to a Cluster
+## Enviando transacciones a un cluster
 
-Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes, effectively appending them to the ledger.
+Los clientes envían transacciones al puerto de la Unidad de procesamiento de transacciones \ (TPU \) de cualquier validador. Si el nodo está en el rol de validador, reenvía la transacción al líder designado. Si en la función de líder, el nodo agrupa las transacciones entrantes, las marca de tiempo para crear una _ entrada _ y las coloca en el plano de datos _ del clúster. _. Una vez en el plano de datos, las transacciones son validadas por los nodos de validación, agregándolas efectivamente al libro mayor.
 
-## Confirming Transactions
+## Confirmando transacciones
 
-A Solana cluster is capable of subsecond _confirmation_ for up to 150 nodes with plans to scale up to hundreds of thousands of nodes. Once fully implemented, confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
+Un clúster de Solana es capaz de realizar una _ confirmación _ de hasta 150 nodos con planes de escalar hasta cientos de miles de nodos. Una vez implementado por completo, se espera que los tiempos de confirmación aumenten solo con el logaritmo del número de validadores, donde la base del logaritmo es muy alta. Si la base es mil, por ejemplo, significa que para los primeros mil nodos, la confirmación será la duración de tres saltos de red más el tiempo que tarda el validador más lento de una supermayoría en votar. Para los siguientes millones de nodos, la confirmación aumenta en un solo salto de red.
 
-Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
+Solana define la confirmación como la duración del tiempo desde que el líder marca el tiempo de una nueva entrada al momento en que reconoce una supermayoría de los votos del contador.
 
-A gossip network is much too slow to achieve subsecond confirmation once the network grows beyond a certain size. The time it takes to send messages to all nodes is proportional to the square of the number of nodes. If a blockchain wants to achieve low confirmation and attempts to do it using a gossip network, it will be forced to centralize to just a handful of nodes.
+Una red de chismes es demasiado lenta para lograr una confirmación en un segundo una vez que la red crece más allá de cierto tamaño. El tiempo que tarda en enviar mensajes a todos los nodos es proporcional al cuadrado del número de nodos. Si un blockchain quiere conseguir una baja confirmación e intenta hacerlo usando una red de chismes, se verá obligado a centralizar a un puñado de nodos.
 
-Scalable confirmation can be achieved using the follow combination of techniques:
+La confirmación escalable se puede conseguir utilizando la siguiente combinación de técnicas:
 
-1. Timestamp transactions with a VDF sample and sign the timestamp.
-2. Split the transactions into batches, send each to separate nodes and have
+1. Marque las transacciones con una muestra de VDF y firme la marca de tiempo.
+2. Divida las transacciones en lotes, envíe cada una a nodos separados y haga
 
-   each node share its batch with its peers.
+   que cada nodo comparta su lote con sus pares.
 
-3. Repeat the previous step recursively until all nodes have all batches.
+3. Repita el paso anterior de forma recursiva hasta que todos los nodos tengan todos los lotes.
 
-Solana rotates leaders at fixed intervals, called _slots_. Each leader may only produce entries during its allotted slot. The leader therefore timestamps transactions so that validators may lookup the public key of the designated leader. The leader then signs the timestamp so that a validator may verify the signature, proving the signer is owner of the designated leader's public key.
+Solana gira a los líderes en intervalos fijos, llamados _espacios_. Cada líder sólo puede producir entradas durante su ranura asignada. Por lo tanto, el líder marca el tiempo de las transacciones para que los validadores puedan buscar la clave pública del líder designado. El líder firma entonces la marca de tiempo para que un validador pueda verificar la firma, demostrando que el firmante es el propietario de la clave pública del líder designado.
 
-Next, transactions are broken into batches so that a node can send transactions to multiple parties without making multiple copies. If, for example, the leader needed to send 60 transactions to 6 nodes, it would break that collection of 60 into batches of 10 transactions and send one to each node. This allows the leader to put 60 transactions on the wire, not 60 transactions for each node. Each node then shares its batch with its peers. Once the node has collected all 6 batches, it reconstructs the original set of 60 transactions.
+A continuación, las transacciones se dividen en lotes para que un nodo pueda enviar transacciones a múltiples partes sin hacer copias múltiples. Si, por ejemplo, el líder necesitaba enviar 60 transacciones a 6 nodos, rompería esa colección de 60 en lotes de 10 transacciones y enviaría uno a cada nodo. Esto le permite al líder colocar 60 transacciones en el cable, no 60 transacciones para cada nodo. Cada nodo comparte su lote con sus pares. Una vez que el nodo ha recogido los 6 lotes, reconstruye el conjunto original de 60 transacciones.
 
-A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing, the approach is scaling well up to about 150 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).
+Un lote de transacciones sólo se puede dividir tantas veces antes de que sea tan pequeño que la información de cabecera se convierte en el principal consumidor del ancho de banda de la red. En el momento de esta escritura, el enfoque está escalando bien hasta unos 150 validadores. Para escalar hasta cientos de miles de validadores, cada nodo puede aplicar la misma técnica que el nodo de líder a otro conjunto de nodos de igual tamaño. A la técnica la llamamos [ _ Turbine Block Propogation _ ](turbine-block-propagation.md).

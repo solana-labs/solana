@@ -1,28 +1,28 @@
 ---
-title: Synchronization
+title: 동기화
 ---
 
-Fast, reliable synchronization is the biggest reason Solana is able to achieve such high throughput. Traditional blockchains synchronize on large chunks of transactions called blocks. By synchronizing on blocks, a transaction cannot be processed until a duration, called "block time", has passed. In Proof of Work consensus, these block times need to be very large \(~10 minutes\) to minimize the odds of multiple validators producing a new valid block at the same time. There's no such constraint in Proof of Stake consensus, but without reliable timestamps, a validator cannot determine the order of incoming blocks. The popular workaround is to tag each block with a [wallclock timestamp](https://en.bitcoin.it/wiki/Block_timestamp). Because of clock drift and variance in network latencies, the timestamp is only accurate within an hour or two. To workaround the workaround, these systems lengthen block times to provide reasonable certainty that the median timestamp on each block is always increasing.
+빠르고 안정적인 동기화는 솔라나가 높은 처리량을 달성 할 수있는 가장 큰 이유입니다. 전통적인 블록체인은 블록이라고하는 대규모 트랜잭션 청크에서 동기화됩니다. 블록에서 동기화하면 "블록 시간"이라는 기간이 경과 할 때까지 트랜잭션을 처리할 수 ​​없습니다. 작업 증명 합의에서 이러한 블록 시간은 여러 밸리데이터가 동시에 새로운 유효한 블록을 생성할 확률을 최소화하기 위해 매우 커야합니다\(~10분\). 지분 증명 합의에는 그러한 제약이 없지만 신뢰할 수 있는 타임스탬프가 없으면 밸리데이터가 들어오는 블록의 순서를 결정할 수 없습니다. 일반적인 해결 방법은 각 블록에 [wallclock timestamp](https://en.bitcoin.it/wiki/Block_timestamp)를 태그하는 것입니다. 클록 드리프트와 네트워크 지연 시간의 차이로 인해 타임 스탬프는 1 ~ 2 시간 이내에서만 정확합니다. 이 문제를 해결하기 위해 이러한 시스템은 각 블록의 중간 타임스탬프가 항상 증가하고 있다는 합리적인 확신을 제공하기 위해 블록 시간을 늘립니다.
 
-Solana takes a very different approach, which it calls _Proof of History_ or _PoH_. Leader nodes "timestamp" blocks with cryptographic proofs that some duration of time has passed since the last proof. All data hashed into the proof most certainly have occurred before the proof was generated. The node then shares the new block with validator nodes, which are able to verify those proofs. The blocks can arrive at validators in any order or even could be replayed years later. With such reliable synchronization guarantees, Solana is able to break blocks into smaller batches of transactions called _entries_. Entries are streamed to validators in realtime, before any notion of block consensus.
+솔라나는 _Proof of History_ 또는 _역사증명_라고 부르는 매우 다른 접근 방식을 취합니다. 리더 노드 "타임스탬프"는 마지막 증명 이후 일정 시간이 경과한 암호화 증명을 차단합니다. 증명으로 해시된 모든 데이터는 증명이 생성되기 전에 가장 확실하게 발생한 것입니다. 그런 다음 노드는 해당 증명을 확인할 수 있는 밸리데이터 노드와 새 블록을 공유합니다. 블록은 어떤 순서로든 밸리데이터에게 도착할 수 있으며 심지어 몇 년 후에 재생 될 수도 있습니다. 이러한 안정적인 동기화 보장을 통해 솔라나는 블록을 _entries_라는 작은 트랜잭션 배치로 나눌 수 있습니다. 항목은 블록 합의 개념에 앞서 실시간으로 밸리데이터에게 스트리밍됩니다.
 
-Solana technically never sends a _block_, but uses the term to describe the sequence of entries that validators vote on to achieve _confirmation_. In that way, Solana's confirmation times can be compared apples to apples to block-based systems. The current implementation sets block time to 800ms.
+솔라나는 기술적으로 _block_을 보내지 않지만 이 용어를 사용하여 밸리데이터가 _confirmation_을 달성하기 위해 투표하는 항목의 순서를 나타냅니다. 이런식으로 솔라나의 확정 시간은 블록 기반 시스템을 비교할 수 있습니다. 현재 구현은 블록 시간을 800ms로 설정되었습니다.
 
-What's happening under the hood is that entries are streamed to validators as quickly as a leader node can batch a set of valid transactions into an entry. Validators process those entries long before it is time to vote on their validity. By processing the transactions optimistically, there is effectively no delay between the time the last entry is received and the time when the node can vote. In the event consensus is **not** achieved, a node simply rolls back its state. This optimisic processing technique was introduced in 1981 and called [Optimistic Concurrency Control](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735). It can be applied to blockchain architecture where a cluster votes on a hash that represents the full ledger up to some _block height_. In Solana, it is implemented trivially using the last entry's PoH hash.
+내부에서 일어나는 일은 리더 노드가 유효한 트랜잭션 세트를 항목으로 일괄처리 할 수 있는 것처럼 항목이 밸리데이터에게 빠르게 스트리밍된다는 것입니다. 밸리데이터는 유효성에 대해 투표하기 훨씬 전에 해당 항목을 처리합니다. 트랜잭션을 낙관적으로 처리하면 마지막 항목이 수신된 시간과 노드가 투표할 수 있는 시간 사이에 지연이 없습니다. 합의가 **달성되지 않은**경우 노드는 단순히 상태를 롤백합니다. 이러한 낙천적인 처리 기법은 1981년에 소개되었으며 [Optimistic Concurrency Control](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735)라고 불립니다. 이는 클러스터가 전체 원장을 나타내는 해시에서 일부 _block height_까지 투표하는 블록체인 아키텍처에 적용 할 수 있습니다. 솔라나에서는 마지막 항목의 역사증명 해시를 사용하여 이를 간단하게 구현합니다.
 
-## Relationship to VDFs
+## VDF와의 관계
 
-The Proof of History technique was first described for use in blockchain by Solana in November of 2017. In June of the following year, a similar technique was described at Stanford and called a [verifiable delay function](https://eprint.iacr.org/2018/601.pdf) or _VDF_.
+역사증명 기법은 2017 년 11월 솔라나가 블록체인에 사용하기 위해 최초로 시작했습니다. 이듬해 6월 스탠포드에서 [verifiable delay function](https://eprint.iacr.org/2018/601.pdf) 또는 _VDF_이라는 유사한 기법을 발표했습니다.
 
-A desirable property of a VDF is that verification time is very fast. Solana's approach to verifying its delay function is proportional to the time it took to create it. Split over a 4000 core GPU, it is sufficiently fast for Solana's needs, but if you asked the authors of the paper cited above, they might tell you \([and have](https://github.com/solana-labs/solana/issues/388)\) that Solana's approach is algorithmically slow and it shouldn't be called a VDF. We argue the term VDF should represent the category of verifiable delay functions and not just the subset with certain performance characteristics. Until that's resolved, Solana will likely continue using the term PoH for its application-specific VDF.
+VDF의 바람직한 특성은 검증 시간이 매우 빠르다는 것입니다. 지연 함수를 확인하는 솔라나의 접근 방식은 이를 생성하는 데 걸린 시간에 비례합니다. 4000코어 GPU로 분할하면 솔라나의 요구에 충분히 빠르지만 위에 인용 된 논문의 저자에게 물어 보면 ([실제로](https://github.com/solana-labs/solana/issues/388)\) 솔라나의 접근 방식은 알고리즘 적으로 느리고 VDF라고 부르면 안될 것입니다. 우리는 VDF라는 용어가 특정 성능적 특성을 가진 부분 집합이 아니라 검증 가능한 지연 함수의 범주를 나타내야 한다고 주장합니다. 문제가 해결될 때 까지 솔라나는 애플리케이션 별 VDF에 역사증명아라는 용어를 계속 사용할 것입니다.
 
-Another difference between PoH and VDFs is that a VDF is used only for tracking duration. PoH's hash chain, on the other hand, includes hashes of any data the application observed. That data is a double-edged sword. On one side, the data "proves history" - that the data most certainly existed before hashes after it. On the other side, it means the application can manipulate the hash chain by changing _when_ the data is hashed. The PoH chain therefore does not serve as a good source of randomness whereas a VDF without that data could. Solana's [leader rotation algorithm](synchronization.md#leader-rotation), for example, is derived only from the VDF _height_ and not its hash at that height.
+역사증명과 VDF의 또 다른 차이점은 VDF는 추적 기간에만 사용된다는 것입니다. 반면에 역사증명의 해시 체인에는 애플리케이션이 관찰한 모든 데이터의 해시가 포함됩니다. 이는 양날의 검입니다. 한편, 데이터는 "역사를 증명"합니다. 데이터는 그 이후에 해시되기 전에 가장 확실하게 존재했기 때문입니다. 다른 한편으로는 애플리케이션이 데이터가 _언제_ 해시되었는지 바꿈으로서 해시 체인을 조작할 수 있다는 의미이기도 하기 때문입니다. 따라서 역사증명 체인은 임의성의 좋은 소스로 사용되지 않지만 해당 데이터가없는 VDF는 그럴 수 있습니다. 솔라나의 [리더 순환 알고리즘](synchronization.md#leader-rotation)을 예로 들자면, 이는 해당 높이의 해시가 아닌 VDF의 _height_에서 파생됩니다.
 
-## Relationship to Consensus Mechanisms
+## 합의 메커니즘과의 관계
 
-Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus. It is also used to improve the performance of the data plane protocols.
+역사증명은 합의 메커니즘이 아니지만 솔라나의 지분 증명 합의 성능을 개선하는 데 사용됩니다. 또한 데이터 플레인 프로토콜의 성능을 개선하는 데 사용됩니다.
 
-## More on Proof of History
+## 역사증명에 대한 추가 정보
 
-- [water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
-- [Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
+- [물시계 비유](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
+- [역사증명 개요](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)

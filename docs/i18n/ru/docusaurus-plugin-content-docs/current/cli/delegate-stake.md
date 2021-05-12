@@ -1,37 +1,25 @@
 ---
-title: Delegate Stake
+title: Делегирование ставки
 ---
 
-After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating _stake_ to a validator. Stake is what we call tokens
-in a _stake account_. Solana weights validator votes by the amount of stake
-delegated to them, which gives those validators more influence in determining
-then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. You earn more rewards
-the more stake you delegate.
+После того, как вы [ получили SOL ](transfer-tokens.md), вы можете подумать о том, чтобы их использовать, делегировав _ ставку _ валидатору. Ставка — это то, что мы называем токены в _аккаунте_. Solana взвешивает голоса валидаторов по размеру ставки делегированы им, что дает этим валидаторам больше влияния при определении следующего действительного блока транзакций в цепочке блоков. Затем Solana периодически генерирует новые SOL, чтобы вознаграждать делегировавших ставки и валидаторов. Вы получаете больше наград чем больше делегируете.
 
-## Create a Stake Account
-
-To delegate stake, you will need to transfer some tokens into a stake account.
-To create an account, you will need a keypair. Its public key will be used as
-the [stake account address](../staking/stake-accounts.md#account-address).
-No need for a password or encryption here; this keypair will be discarded right
-after creating the stake account.
+## Создание аккаунта для ставки
+Чтобы делегировать ставку, вам нужно будет перенести некоторое количество токенов на аккаунт ставки. Для созданияаккаунта вам понадобится ключевые пары. Публичный ключ будет использован как [адрес аккаунта ставки ](../staking/stake-accounts.md#account-address). Здесь нет необходимости в пароле или шифровании; эта пара ключей будет удалена сразу после создания аккаунта ставки.
 
 ```bash
 solana-keygen new --no-passphrase -o stake-account.json
 ```
 
-The output will contain the public key after the text `pubkey:`.
+Вывод будет содержать адрес после текста `pubkey:`.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-Copy the public key and store it for safekeeping. You will need it any time you
-want to perform an action on the stake account you create next.
+Скопируйте публичный ключ и храните его для в надежном месте. Вам это понадобится в любое время, когда вы хотите выполнить действие над аккаунтом ставки, которую вы создадите следующей.
 
-Now, create a stake account:
+Создание аккаунта для ставки:
 
 ```bash
 solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
@@ -39,20 +27,17 @@ solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-`<AMOUNT>` tokens are transferred from the account at the "from" `<KEYPAIR>` to
-a new stake account at the public key of stake-account.json.
+`<AMOUNT>` токены передаются с аккаунта "from" `<KEYPAIR>` на новый аккаунт на публичном ключе stake-account.json.
 
-The stake-account.json file can now be discarded. To authorize additional
-actions, you will use the `--stake-authority` or `--withdraw-authority` keypair,
-not stake-account.json.
+Теперь файл stack-account.json можно удалить. Чтобы авторизовать дополнительные действия, вы будете использовать пару ключей ` --stake-authority ` или ` --withdraw-authority `, не stake-account.json.
 
-View the new stake account with the `solana stake-account` command:
+Просмотреть ставку на новом аккаунте можно с помощью `solana stake-account` команда:
 
 ```bash
 solana stake-account <STAKE_ACCOUNT_ADDRESS>
 ```
 
-The output will look similar to this:
+Результат будет выглядеть примерно так:
 
 ```text
 Total Stake: 5000 SOL
@@ -61,13 +46,8 @@ Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
-### Set Stake and Withdraw Authorities
-
-[Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
-can be set when creating an account via the
-`--stake-authority` and `--withdraw-authority` options, or afterward with the
-`solana stake-authorize` command. For example, to set a new stake authority,
-run:
+### Установка Ставки и Вывода с помощью авторизации
+[ Ставка и вывод с помощью авторизации](../staking/stake-accounts.md#understanding-account-authorities) можно установить при создании аккаунта через Параметры `--stake-authority ` и ` --withdraw-author ` или после этого с помощью параметра ` solana stake-authorize ` команда. Например, чтобы установить авторизацию доступа, запустите:
 
 ```bash
 solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
@@ -75,70 +55,51 @@ solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-This will use the existing stake authority `<KEYPAIR>` to authorize a new stake
-authority `<PUBKEY>` on the stake account `<STAKE_ACCOUNT_ADDRESS>`.
+Это будет использовать существующие полномочия на ставку `<KEYPAIR>` для авторизации новой ставки `<PUBKEY>` на аккаунте для ставки `<STAKE_ACCOUNT_ADDRESS>`.
 
-### Advanced: Derive Stake Account Addresses
+### Дополнительно: Адреса аккаунта для получения ставки
 
-When you delegate stake, you delegate all tokens in the stake account to a
-single validator. To delegate to multiple validators, you will need multiple
-stake accounts. Creating a new keypair for each account and managing those
-addresses can be cumbersome. Fortunately, you can derive stake addresses using
-the `--seed` option:
+Когда вы делегируете ставку, вы делегируете все токены в аккаунте на счет одному валидатору. Чтобы делегировать нескольким валидаторам, вам потребуется несколько аккаунтов. Создание новой пары ключей для каждого аккаунта и управление этими адресами могут быть неудобными. К счастью, вы можете получить адреса ставок, используя параметр ` --seed `:
 
 ```bash
 solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STRING> <AMOUNT> \
     --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> --fee-payer <KEYPAIR>
 ```
 
-`<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
-number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts
-as the base address. The command derives a new address from the base address
-and seed string. To see what stake address the command will derive, use `solana create-address-with-seed`:
+`<STRING>` - произвольная строка длиной до 32 байтов, но обычно это номер, соответствующий производной аккаунта. Первый аккаунт мог бы быть "0", затем "1" и так далее. Публичный ключ `<STAKE_ACCOUNT_KEYPAIR>` выполняет функцию в качестве базового адреса. Команда получает новый адрес с базового адреса и инициализации строки. Чтобы увидеть, какую команду будет выдать команда, используйте `solana create-address-with-seed`:
 
 ```bash
-solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
+solana create-address-s-s-seed --from <PUBKEY> <SEED_STRING> STAKE
 ```
 
-`<PUBKEY>` is the public key of the `<STAKE_ACCOUNT_KEYPAIR>` passed to
-`solana create-stake-account`.
+`<PUBKEY>` является публичным ключом `<STAKE_ACCOUNT_KEYPAIR>` передан `solana create-stake-account`.
 
-The command will output a derived address, which can be used for the
-`<STAKE_ACCOUNT_ADDRESS>` argument in staking operations.
+Команда выведет полученный адрес, который может быть использован для аргумента `<STAKE_ACCOUNT_ADDRESS>` при операций со ставкой.
 
-## Delegate Stake
+## Делегирование
 
-To delegate your stake to a validator, you will need its vote account address.
-Find it by querying the cluster for the list of all validators and their vote
-accounts with the `solana validators` command:
+Чтобы делегировать свою ставку валидатору, вам понадобится его адрес для голосования. Найдите его, запросив кластер по списку всех валидаторов и их голоса аккаунтов с помощью команды `solana validators`:
 
 ```bash
 solana validators
 ```
 
-The first column of each row contains the validator's identity and the second
-is the vote account address. Choose a validator and use its vote account
-address in `solana delegate-stake`:
+Первый столбец каждой строки содержит идентификатор валидатора, а второй - адрес аккаунта для голосования. Выберите валидатор и используйте свой аккаунт для голосования в `solana delegate-stake`:
 
 ```bash
 solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-The stake authority `<KEYPAIR>` authorizes the operation on the account with
-address `<STAKE_ACCOUNT_ADDRESS>`. The stake is delegated to the vote account
-with address `<VOTE_ACCOUNT_ADDRESS>`.
+Права на управления ставкой `<KEYPAIR>` разрешает операцию над аккаунтом с адресом `<STAKE_ACCOUNT_ADDRESS>`. Ставка делегируется на счет для голосования с адресом `<VOTE_ACCOUNT_ADDRESS>`.
 
-After delegating stake, use `solana stake-account` to observe the changes
-to the stake account:
+После делегирования ставки, используйте `Solana учетную запись`, чтобы наблюдать за изменениями в аккаунте на долях:
 
 ```bash
 solana stake-account <STAKE_ACCOUNT_ADDRESS>
 ```
 
-You will see new fields "Delegated Stake" and "Delegated Vote Account Address"
-in the output. The output will look similar to this:
+Вы увидите новые поля "Делегированная ставка" и "Делегированный адрес аккаунта голосования" в выводе. Результат будет выглядеть примерно так:
 
 ```text
 Total Stake: 5000 SOL
@@ -150,53 +111,39 @@ Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
-## Deactivate Stake
+## Деактивация ставки
 
-Once delegated, you can undelegate stake with the `solana deactivate-stake`
-command:
+После делегирования вы можете отменить участие в акции `deactivate-coke` команда:
 
 ```bash
 solana deactivate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-The stake authority `<KEYPAIR>` authorizes the operation on the account
-with address `<STAKE_ACCOUNT_ADDRESS>`.
+Права на управления ставкой `<KEYPAIR>` разрешает операцию над аккаунтом с адресом `<STAKE_ACCOUNT_ADDRESS>`.
 
-Note that stake takes several epochs to "cool down". Attempts to delegate stake
-in the cool down period will fail.
+Обратите внимание, что ставка занимает несколько эпох, чтобы "охладиться". Попытки делегировать долю в период охлаждения не удаются.
 
-## Withdraw Stake
+## Вывод
 
-Transfer tokens out of a stake account with the `solana withdraw-stake` command:
+Перевод токенов вне аккаунта с помощью команды вывода `solana`:
 
 ```bash
-solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> <AMOUNT> \
-    --fee-payer <KEYPAIR>
+solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> \
+    --fee-payer <AMOUNT>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the withdraw authority, and `<AMOUNT>` is the number of tokens
-to transfer to `<RECIPIENT_ADDRESS>`.
+`<STAKE_ACCOUNT_ADDRESS>` это существующий аккаунт управляет ставкой `<KEYPAIR>` имеет право на вывод средств, и `<AMOUNT>` это количество токенов для передачи `<RECIPIENT_ADDRESS>`.
 
-## Split Stake
+## Разбить ставку
 
-You may want to delegate stake to additional validators while your existing
-stake is not eligible for withdrawal. It might not be eligible because it is
-currently staked, cooling down, or locked up. To transfer tokens from an
-existing stake account to a new one, use the `solana split-stake` command:
+Вы можете делегировать ставку дополнительным валидаторам, в то время как ваша существующая ставка не подлежит снятию. Это может быть неприемлемо, потому что это в настоящее время ставка "остывает" или заблокирована. Чтобы перенести токены из существующего аккаунта ставки в новый, используйте команду ` solana split-stack `:
 
 ```bash
-solana split-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAKE_ACCOUNT_KEYPAIR> <AMOUNT> \
-    --fee-payer <KEYPAIR>
+solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAKE_ACCOUNT_KEYPAIR> \
+    --fee-payer <AMOUNT>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the stake authority, `<NEW_STAKE_ACCOUNT_KEYPAIR>` is the
-keypair for the new account, and `<AMOUNT>` is the number of tokens to transfer
-to the new account.
+`<STAKE_ACCOUNT_ADDRESS>` - существующий аккаунт для ставки,с правами управления ставкой `<KEYPAIR>` - это пара ключей с правами на ставку, `<NEW_STAKE_ACCOUNT_KEYPAIR>` - это пара ключей для нового аккаунта, а `<AMOUNT>` - количество токенов для передачи для нового аккаунта.
 
-To split a stake account into a derived account address, use the `--seed`
-option. See
-[Derive Stake Account Addresses](#advanced-derive-stake-account-addresses)
-for details.
+Чтобы разделить аккаунт на полученный адрес аккаунта, используйте параметр `--seed`. Смотрите [Получить адрес аккаунта для ставки](#advanced-derive-stake-account-addresses) для информации.

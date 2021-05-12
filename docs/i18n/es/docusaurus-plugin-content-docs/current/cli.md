@@ -1,22 +1,16 @@
 ---
-title: Command-line Guide
+title: Guía de línea de comandos
 ---
 
-In this section, we will describe how to use the Solana command-line tools to
-create a _wallet_, to send and receive SOL tokens, and to participate in
-the cluster by delegating stake.
+En esta sección, describiremos cómo usar las herramientas de línea de comandos de Solana para crear una _billetera_, para enviar y recibir tokens SOL, y participar en el clúster delegando stake.
 
-To interact with a Solana cluster, we will use its command-line interface, also
-known as the CLI. We use the command-line because it is the first place the
-Solana core team deploys new functionality. The command-line interface is not
-necessarily the easiest to use, but it provides the most direct, flexible, and
-secure access to your Solana accounts.
+Para interactuar con un clúster Solana, usaremos su interfaz de línea de comandos, también conocido como la CLI. Utilizamos la línea de comandos porque es el primer lugar en que el equipo core de Solana despliega nuevas funcionalidades. La interfaz de línea de comandos no es necesariamente la más fácil de usar pero proporciona el acceso más directo, flexible y seguro a sus cuentas Solana.
 
-## Getting Started
+## Comenzando
 
-To get started using the Solana Command Line (CLI) tools:
+Para empezar a utilizar las herramientas de la línea de comandos de Solana (CLI):
 
-- [Install the Solana Tools](cli/install-solana-cli-tools.md)
-- [Choose a Cluster](cli/choose-a-cluster.md)
-- [Create a Wallet](wallet-guide/cli.md)
-- [Check out our CLI conventions](cli/conventions.md)
+- [Instalar las herramientas de Solana](cli/install-solana-cli-tools.md)
+- [Elegir un Clúster](cli/choose-a-cluster.md)
+- [Crear una Billetera](wallet-guide/cli.md)
+- [Consulte nuestras convenciones CLI](cli/conventions.md)

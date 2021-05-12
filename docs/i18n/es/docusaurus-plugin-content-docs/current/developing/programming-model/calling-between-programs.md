@@ -1,16 +1,12 @@
 ---
-title: Calling Between Programs
+title: Llamada entre programas
 ---
 
-## Cross-Program Invocations
+## Invocaciones interprogramas
 
-The Solana runtime allows programs to call each other via a mechanism called
-cross-program invocation. Calling between programs is achieved by one program
-invoking an instruction of the other. The invoking program is halted until the
-invoked program finishes processing the instruction.
+El tiempo de ejecución Solana permite a los programas llamarse unos a otros a través de un mecanismo llamado invocación entre programas.  La llamada entre programas se logra mediante un programa que invoca una instrucción del otro.  El programa de invocación se detiene hasta que el programa invocado termine de procesar la instrucción.
 
-For example, a client could create a transaction that modifies two accounts,
-each owned by separate on-chain programs:
+Por ejemplo, un cliente podría crear una transacción que modifique dos cuentas, cada una de ellas propiedad de programas separados en cadena:
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -20,8 +16,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-A client may to instead allow the `acme` program to conveniently invoke `token`
-instructions on the client's behalf:
+Un cliente puede, en cambio, permitir que el programa `acme` invoque convenientemente las instrucciones del `token` en nombre del cliente:
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -30,10 +25,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-Given two on-chain programs `token` and `acme`, each implementing instructions
-`pay()` and `launch_missiles()` respectively, acme can be implemented with a
-call to a function defined in the `token` module by issuing a cross-program
-invocation:
+Dados dos programas en cadena `token` y `acme`, cada uno de los cuales implementa las instrucciones`pay()` y `launch_missiles()` respectivamente, acme puede implementarse con una llamada a una función definida en el módulo `token` emitiendo una invocación interprograma:
 
 ```rust,ignore
 mod acme {
@@ -52,53 +44,23 @@ mod acme {
     }
 ```
 
-`invoke()` is built into Solana's runtime and is responsible for routing the
-given instruction to the `token` program via the instruction's `program_id`
-field.
+`invoke()` está integrado en el tiempo de ejecución de Solana y es responsable de enrutar la instrucción dada al programa `token` a través del campo `program_id` de la instrucción.
 
-Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked. This means that both the executable account (the
-ones that matches the instruction's program id) and the accounts passed to the
-instruction procesor.
+Tenga en cuenta que `invoke` requiere que el llamante pase todas las cuentas requeridas por la instrucción que se está invocando.  Esto significa que tanto la cuenta ejecutable (la que coincide con el id de programa de la instrucción) como las cuentas pasadas al procesador de la instrucción.
 
-Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
-accounts owned by `token`. It does this by applying the runtime's policy to the
-current state of the accounts at the time `acme` calls `invoke` vs. the initial
-state of the accounts at the beginning of the `acme`'s instruction. After
-`pay()` completes, the runtime must again ensure that `token` didn't modify any
-accounts owned by `acme` by again applying the runtime's policy, but this time
-with the `token` program ID. Lastly, after `pay_and_launch_missiles()`
-completes, the runtime must apply the runtime policy one more time, where it
-normally would, but using all updated `pre_*` variables. If executing
-`pay_and_launch_missiles()` up to `pay()` made no invalid account changes,
-`pay()` made no invalid changes, and executing from `pay()` until
-`pay_and_launch_missiles()` returns made no invalid changes, then the runtime
-can transitively assume `pay_and_launch_missiles()` as whole made no invalid
-account changes, and therefore commit all these account modifications.
+Antes de invocar `pay()`, el tiempo de ejecución debe asegurarse de que `acme` no ha modificado ninguna cuenta propiedad de `token`. Lo hace aplicando la política del tiempo de ejecución al estado actual de las cuentas en el momento en que `acme` llama a `invoke` frente al estado inicial de las cuentas al comienzo de la instrucción de `acme`. Después de que `pay()` se complete, el tiempo de ejecución debe volver a asegurarse de que `token` no modificó ninguna cuenta propiedad de `acme` aplicando de nuevo la política del tiempo de ejecución, pero esta vez con el ID del programa `token`. Por último, después de que `pay_and_launch_missiles()` finalice, el tiempo de ejecución debe aplicar la política de tiempo de ejecución una vez más, donde normalmente lo haría, pero utilizando todas las variables actualizadas `pre_*`. Si al ejecutar `pay_and_launch_missiles()` hasta `pay()` no se han realizado cambios no válidos en la cuenta `pay()` y no se han realizado cambios no válidos, y al ejecutar desde `pay()` hasta `pay_and_launch_missiles()`, entonces el tiempo de ejecución puede asumir transitivamente que `pay_and_launch_missiles()` en su totalidad no hizo cambios inválidos en la cuenta, y por lo tanto consignar todas estas modificaciones en la cuenta.
 
-### Instructions that require privileges
+### Instrucciones que requieren privilegios
 
-The runtime uses the privileges granted to the caller program to determine what
-privileges can be extended to the callee. Privileges in this context refer to
-signers and writable accounts. For example, if the instruction the caller is
-processing contains a signer or writable account, then the caller can invoke an
-instruction that also contains that signer and/or writable account.
+El tiempo de ejecución utiliza los privilegios concedidos al programa que llama para determinar qué privilegios pueden extenderse al que llama. En este contexto, los privilegios se refieren a los firmantes y a las cuentas con capacidad de escritura. Por ejemplo, si la instrucción que la persona que llama está procesando contiene un firmante o una cuenta escribible, entonces la persona que llama puede invocar una instrucción que también contiene ese firmante y/o cuenta escribible.
 
-This privilege extension relies on the fact that programs are immutable. In the
-case of the `acme` program, the runtime can safely treat the transaction's
-signature as a signature of a `token` instruction. When the runtime sees the
-`token` instruction references `alice_pubkey`, it looks up the key in the `acme`
-instruction to see if that key corresponds to a signed account. In this case, it
-does and thereby authorizes the `token` program to modify Alice's account.
+Esta ampliación de privilegios se basa en el hecho de que los programas son inmutables. En el caso del programa `acme`, el tiempo de ejecución puede tratar con seguridad la firma de la transacción como una firma de una instrucción `token`. Cuando el tiempo de ejecución ve que la instrucción `token` hace referencia a `alice_pubkey`, busca la clave en la instrucción `acme` para ver si esa clave corresponde a una cuenta firmada. En este caso, lo hace y con ello autoriza al programa `token` a modificar la cuenta Alice.
 
-### Program signed accounts
+### Programa de cuentas firmadas
 
-Programs can issue instructions that contain signed accounts that were not
-signed in the original transaction by using [Program derived
-addresses](#program-derived-addresses).
+Los programas pueden emitir instrucciones que contengan cuentas firmadas que no fueron firmadas en la transacción original utilizando [Direcciones derivadas del programa](#direccionesderivadasdelprograma).
 
-To sign an account with program derived addresses, a program may
-`invoke_signed()`.
+Para firmar una cuenta con direcciones derivadas del programa, un programa puede `invoke_signed()`.
 
 ```rust,ignore
         invoke_signed(
@@ -109,85 +71,52 @@ To sign an account with program derived addresses, a program may
         )?;
 ```
 
-### Call Depth
+### Profundidad de llamada
 
-Cross-program invocations allow programs to invoke other programs directly but
-the depth is constrained currently to 4.
+Las Invocaciones interprogramas permiten a los programas invocar directamente a otros programas, pero la profundidad está limitada actualmente a 4.
 
-### Reentrancy
+### Reentrada
 
-Reentrancy is currently limited to direct self recursion capped at a fixed
-depth. This restriction prevents situations where a program might invoke another
-from an intermediary state without the knowledge that it might later be called
-back into. Direct recursion gives the program full control of its state at the
-point that it gets called back.
+La reentrada se limita actualmente a la auto-recurrencia directa limitada a una profundidad fija. Esta restricción evita situaciones en las que un programa podría invocar a otro desde un estado intermedio sin saber que más tarde podría ser llamado de nuevo. La recursividad directa da al programa el control total de su estado en el momento en que es llamado de nuevo.
 
-## Program Derived Addresses
+## Direcciones derivadas del programa
 
-Program derived addresses allow programmaticly generated signature to be used
-when [calling between programs](#cross-program-invocations).
+Las direcciones derivadas del programa permiten utilizar la firma generada por el programa cuando hay [llamadas entre programas](#cross-program-invocations).
 
-Using a program derived address, a program may be given the authority over an
-account and later transfer that authority to another. This is possible because
-the program can act as the signer in the transaction that gives authority.
+Utilizando una dirección derivada del programa, se puede dar a un programa la autoridad sobre una cuenta y posteriormente transferir esa autoridad a otro. Esto es posible porque el programa puede actuar como el firmante en la transacción que da autoridad.
 
-For example, if two users want to make a wager on the outcome of a game in
-Solana, they must each transfer their wager's assets to some intermediary that
-will honor their agreement. Currently, there is no way to implement this
-intermediary as a program in Solana because the intermediary program cannot
-transfer the assets to the winner.
+Por ejemplo, si dos usuarios quieren hacer una apuesta sobre el resultado de un juego en Solana, cada uno debe transferir los activos de su apuesta a algún intermediario que cumpla su acuerdo. Actualmente, no hay manera de implementar este intermediario como un programa en Solana porque el programa intermediario no puede transferir los activos al ganador.
 
-This capability is necessary for many DeFi applications since they require
-assets to be transferred to an escrow agent until some event occurs that
-determines the new owner.
+Esta capacidad es necesaria para muchas aplicaciones DeFi, ya que requieren que los activos se transfieran a un agente de custodia hasta que se produzca algún evento que determine el nuevo propietario.
 
-- Decentralized Exchanges that transfer assets between matching bid and ask
-  orders.
+- Exchanges descentralizados que transfieren activos entre órdenes de compra y venta coincidentes.
 
-- Auctions that transfer assets to the winner.
+- Subastas que transfieren activos al ganador.
 
-- Games or prediction markets that collect and redistribute prizes to the
-  winners.
+- Juegos o mercados de predicción que recogen y redistribuyen premios a los ganadores.
 
-Program derived address:
+Dirección derivada del programa:
 
-1. Allow programs to control specific addresses, called program addresses, in
-   such a way that no external user can generate valid transactions with
-   signatures for those addresses.
+1. Permitir a los programas controlar direcciones específicas, llamadas direcciones del programa, en de tal manera que ningún usuario externo puede generar transacciones válidas con firmas para esas direcciones.
 
-2. Allow programs to programmatically sign for program addresses that are
-   present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
+2. Permitir a los programas firmar programáticamente para direcciones de programas que están presentes en instrucciones invocadas a través de [Invocaciones interprogramas](#cross-program-invocations).
 
-Given the two conditions, users can securely transfer or assign the authority of
-on-chain assets to program addresses and the program can then assign that
-authority elsewhere at its discretion.
+Dadas las dos condiciones, los usuarios pueden transferir o asignar de forma segura la autoridad de los activos de la cadena a las direcciones del programa y el programa puede entonces asignar esa autoridad en otro lugar a su discreción.
 
-### Private keys for program addresses
+### Claves privadas para direcciones del programa
 
-A Program address does not lie on the ed25519 curve and therefore has no valid
-private key associated with it, and thus generating a signature for it is
-impossible. While it has no private key of its own, it can be used by a program
-to issue an instruction that includes the Program address as a signer.
+Una dirección de programa no se encuentra en la curva ed25519 y, por tanto, no tiene una clave privada válida asociada, por lo que es imposible generar una firma para ella.  Aunque no tiene clave privada propia, puede ser utilizado por un programa para emitir una instrucción que incluya la dirección del Programa como firmante.
 
-### Hash-based generated program addresses
+### Direcciones de programa generadas en base a Hash
 
-Program addresses are deterministically derived from a collection of seeds and a
-program id using a 256-bit pre-image resistant hash function. Program address
-must not lie on the ed25519 curve to ensure there is no associated private key.
-During generation an error will be returned if the address is found to lie on
-the curve. There is about a 50/50 chance of this happening for a given
-collection of seeds and program id. If this occurs a different set of seeds or
-a seed bump (additional 8 bit seed) can be used to find a valid program address
-off the curve.
+Las direcciones de los programas se obtienen de forma determinista a partir de una colección de semillas y un identificador de programa mediante una función hash de 256 bits resistente a la preimagen.  La dirección del programa no debe estar en la curva ed25519 para asegurar que no hay una clave privada asociada. Durante la generación aparecerá un error si la dirección se encuentra en la curva.  La probabilidad de que esto ocurra es de un 50 % para una determinada colección de semillas y un identificador de programa.  Si esto ocurre, se puede utilizar un conjunto diferente de semillas o un bump de semillas (semilla adicional de 8 bits) para encontrar una dirección de programa válida fuera de la curva.
 
-Deterministic program addresses for programs follow a similar derivation path as
-Accounts created with `SystemInstruction::CreateAccountWithSeed` which is
-implemented with `Pubkey::create_with_seed`.
+Las direcciones de programa deterministas para los programas siguen una ruta de derivación similar a la de las cuentas creadas con `SystemInstruction::CreateAccountWithSeed` que se implementa con `system_instruction::create_address_with_seed`.
 
-For reference that implementation is as follows:
+Como referencia, esa implementación es la siguiente:
 
 ```rust,ignore
-pub fn create_with_seed(
+pub fn create_address_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -202,10 +131,9 @@ pub fn create_with_seed(
 }
 ```
 
-Programs can deterministically derive any number of addresses by using seeds.
-These seeds can symbolically identify how the addresses are used.
+Los programas pueden obtener determinadamente cualquier número de direcciones mediante el uso de semillas. Estas semillas pueden identificar simbólicamente cómo se utilizan las direcciones.
 
-From `Pubkey`::
+De `Pubkey`::
 
 ```rust,ignore
 /// Generate a derived program address
@@ -217,10 +145,9 @@ pub fn create_program_address(
 ) -> Result<Pubkey, PubkeyError>
 ```
 
-### Using program addresses
+### Utilizando las direcciones de los programas
 
-Clients can use the `create_program_address` function to generate a destination
-address.
+Los clientes pueden utilizar la función `create_program_address` para generar una dirección de destino.
 
 ```rust,ignore
 // deterministically derive the escrow key
@@ -235,15 +162,14 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair], &message);
 ```
 
-Programs can use the same function to generate the same address. In the function
-below the program issues a `token_instruction::transfer` from a program address
-as if it had the private key to sign the transaction.
+Los programas pueden utilizar la misma función para generar la misma dirección. En la siguiente función el programa emite un `token_instruction::transfer` desde una dirección del programa como si tuviera la clave privada para firmar la transacción.
 
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
+    keyed_accounts: &[KeyedAccount]
+) -> Result<()> {
+
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -257,24 +183,16 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction, accounts, &[&["escrow"]])
+    invoke_signed(&instruction,  &[&["escrow"]])?
 }
 ```
 
-### Instructions that require signers
+### Instrucciones que requieren firmantes
 
-The addresses generated with `create_program_address` are indistinguishable from
-any other public key. The only way for the runtime to verify that the address
-belongs to a program is for the program to supply the seeds used to generate the
-address.
+Las direcciones generadas con `create_program_address` son indistinguibles de cualquier otra clave pública. La única manera de que el tiempo de ejecución verifique que la dirección pertenece a un programa es que éste proporcione las semillas utilizadas para generar la dirección.
 
-The runtime will internally call `create_program_address`, and compare the
-result against the addresses supplied in the instruction.
+El tiempo de ejecución llamará internamente a `create_program_address`, y comparará el resultado con las direcciones suministradas en la instrucción.
 
-## Examples
+## Ejemplos
 
-Refer to [Developing with
-Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)
-and [Developing with
-C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples)
-for examples of how to use cross-program invocation.
+Consulte [Desarrollando con Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) y [Desarrollando con C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) para ver ejemplos de cómo utilizar las Invocaciones interprogramas.

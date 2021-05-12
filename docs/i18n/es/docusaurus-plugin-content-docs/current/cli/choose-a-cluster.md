@@ -1,43 +1,37 @@
 ---
-title: Connecting to a Cluster
+title: Conectandose a un cluster
 ---
 
-See [Solana Clusters](../clusters.md) for general information about the
-available clusters.
+Consulte [Solana Clusters](../clusters.md) para obtener información general sobre los clústers disponibles.
 
-## Configure the command-line tool
+## Configurar la herramienta de línea de comandos
 
-You can check what cluster the Solana command-line tool (CLI) is currently targeting by
-running the following command:
+Puede comprobar a qué clúster se dirige actualmente la herramienta de línea de comandos (CLI) de Solana ejecutando el siguiente comando:
 
 ```bash
-solana config get
+obtener config solana
 ```
 
-Use `solana config set` command to target a particular cluster. After setting
-a cluster target, any future subcommands will send/receive information from that
-cluster.
+Usa `solana config set` para seleccionar un clúster en particular. Después de establecer un clúster objetivo, cualquier subcomando futuro enviará/recibirá información de ese clúster.
 
-For example to target the Devnet cluster, run:
+Por ejemplo para seleccionar el clúster de Devnet, ejecutar:
 
 ```bash
-solana config set --url https://devnet.solana.com
+configuración de solana --url https://devnet.solana.com
 ```
 
-## Ensure Versions Match
+## Asegúrate de que las versiones coincidan
 
-Though not strictly necessary, the CLI will generally work best when its version
-matches the software version running on the cluster. To get the locally-installed
-CLI version, run:
+Aunque no es estrictamente necesario, el CLI generalmente funcionará mejor cuando su versión coincida con la versión de software ejecutándose en el clúster. Para obtener la versión CLI instalada localmente, ejecute:
 
 ```bash
 solana --version
 ```
 
-To get the cluster version, run:
+Para obtener la versión del cluster, ejecute:
 
 ```bash
-solana cluster-version
+versión de cluster de solana
 ```
 
-Ensure the local CLI version is greater than or equal to the cluster version.
+Asegúrese de que la versión local de CLI es mayor o igual a la versión del clúster.

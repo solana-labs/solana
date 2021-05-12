@@ -1,9 +1,9 @@
 ---
-title: Validation-client Economics
+title: 검증-클라이언트 경제학
 ---
 
-**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
+****** 변경 될 수 있습니다. Solana 포럼에서 가장 최근의 경제 토론을 따르십시오 : https : //forums.solana.com******
 
-Validator-clients are eligible to charge commission on inflationary rewards distributed to staked tokens. This compensation is for providing compute \(CPU+GPU\) resources to validate and vote on a given PoH state. These protocol-based rewards are determined through an algorithmic disinflationary schedule as a function of total token supply. The network is expected to launch with an annual inflation rate around 8%, set to decrease by 15% per year until a long-term stable rate of 1.5% is reached, however these parameters are yet to be finalized by the community. These issuances are to be split and distributed to participating validators, with around 95% of the issued tokens allocated for validator rewards initiall (the remaining 5% reserved for Foundation operating expenses). Because the network will be distributing a fixed amount of inflation rewards across the stake-weighted validator set, the yield observed for staked tokens will be primarily a function of the amount of staked tokens in relation to the total token supply.
+밸리데이터 클라이언트는 스테이킹 된 토큰에 분배 된 인플레이션 보상에 대해 수수료를 부과 할 수 있습니다. 이 보상은 주어진 역사증명 상태에 대한 유효성을 검사하고 투표하기 위해 컴퓨팅 \ (CPU + GPU \) 리소스를 제공하기위한 것입니다. 이러한 프로토콜 기반 보상은 총 토큰 공급의 함수로서 알고리즘 디스인플레이션 일정을 통해 결정됩니다. 이 네트워크는 연간 인플레이션 율이 약 8 %로 시작될 것으로 예상되며, 장기적으로 안정적인 비율 인 1.5 %에 도달 할 때까지 연간 15 % 씩 감소 할 것으로 예상되지만 이러한 매개 변수는 아직 커뮤니티에 의해 확정되지 않았습니다. 이러한 발행은 분할되어 참여 밸리데이터에게 배포되며 발행 된 토큰의 약 95 %는 밸리데이터 보상을 위해 할당됩니다 (나머지 5 %는 재단 운영 비용으로 예약 됨). 네트워크는 지분 가중 밸리데이터 세트 전체에 고정 된 양의 인플레이션 보상을 분배 할 것이기 때문에 스테이킹 된 토큰에 대해 관찰되는 수익률은 주로 총 토큰 공급량과 관련하여 스테이킹 된 토큰 양의 함수가 될 것입니다.
 
-Additionally, validator clients may earn revenue through fees via state-validation transactions. For clarity, we separately describe the design and motivation of these revenue distributions for validation-clients below: state-validation protocol-based rewards and state-validation transaction fees and rent.
+또한 밸리데이터 클라이언트는 주 검증 거래를 통해 수수료를 통해 수익을 올릴 수 있습니다. 명확하게하기 위해 아래에서 검증 클라이언트를위한 이러한 수익 분배의 설계와 동기를 별도로 설명합니다 : 상태 검증 프로토콜 기반 보상 및 상태 검증 거래 수수료 및 임대료.

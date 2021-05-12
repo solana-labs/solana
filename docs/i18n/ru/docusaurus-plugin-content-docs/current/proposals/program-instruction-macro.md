@@ -1,30 +1,20 @@
-# Program Instruction Macro
+# Инструкция по программе Макро
 
-## Problem
+## Проблематика
 
-Currently, inspecting an on-chain transaction requires depending on a
-client-side, language-specific decoding library to parse the instruction. If
-rpc methods could return decoded instruction details, these custom solutions
-would be unnecessary.
+В настоящее время проверка транзакции в цепочке требует зависимости от клиентской библиотеки декодирования, зависящей от языка, для синтаксического анализа инструкции.  Если бы методы rpc могли возвращать декодированные детали инструкций, в этих специальных решениях не было бы необходимости.
 
-We can deserialize instruction data using a program's Instruction enum, but
-decoding the account-key list into human-readable identifiers requires manual
-parsing. Our current Instruction enums have that account information, but only
-in variant docs.
+Мы можем десериализовать данные инструкций, используя перечисление инструкций программы, но декодирование списка ключей аккаунта в удобочитаемые идентификаторы требует ручного анализа. В наших текущих списках инструкций есть информация об этом аккаунте, но только в вариантах документов.
 
-Similarly, we have instruction constructor functions that duplicate nearly all
-the information in the enum, but we can't generate that constructor from the
-enum definition because the list of account references is in code comments.
+Точно так же у нас есть функции конструктора инструкций, которые дублируют почти всю информацию в перечислении, но мы не можем сгенерировать этот конструктор из определения перечисления, потому что список ссылок на аккаунты находится в комментариях к коду.
 
-Also, Instruction docs can vary between implementations, as there is no
-mechanism to ensure consistency.
+Кроме того, документы с инструкциями могут различаться в зависимости от реализации, поскольку отсутствует механизм обеспечения согласованности.
 
-## Proposed Solution
+## Предлагаемое решение
 
-Move the data from code comments to attributes, such that the constructors
-can be generated, and include all the documentation from the enum definition.
+Переместите данные из комментариев кода в атрибуты, чтобы можно было сгенерировать конструкторы, и включите всю документацию из определения перечисления.
 
-Here is an example of an Instruction enum using the new accounts format:
+Вот пример инструкции по формату новых аккаунтов:
 
 ```rust,ignore
 #[instructions(test_program::id())]
@@ -55,8 +45,7 @@ pub enum TestInstruction {
 }
 ```
 
-An example of the generated TestInstruction with docs:
-
+Пример созданной инструкции по тестированию с документами:
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -85,8 +74,7 @@ pub enum TestInstruction {
 }
 ```
 
-Generated constructors:
-
+Сгенерированные конструкторы:
 ```rust,ignore
 /// Transfer lamports
 ///
@@ -97,7 +85,7 @@ pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Inst
         AccountMeta::new(from_pubkey, true),
         AccountMeta::new(to_pubkey, false),
     ];
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
@@ -116,7 +104,7 @@ pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
         account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::Multisig,
         account_metas,
@@ -140,7 +128,7 @@ pub fn advance_nonce_account(
     if let Some(pubkey) = authorized_pubkey {
         account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::AdvanceNonceAccount,
         account_metas,
@@ -149,7 +137,7 @@ pub fn advance_nonce_account(
 
 ```
 
-Generated TestInstructionVerbose enum:
+Сгенерированное перечисление TestInstructionVerbose:
 
 ```rust,ignore
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -202,25 +190,7 @@ impl TestInstructionVerbose {
 
 ```
 
-## Considerations
+## Рекомендации
 
-1. **Named fields** - Since the resulting Verbose enum constructs variants with
-   named fields, any unnamed fields in the original Instruction variant will need
-   to have names generated. As such, it would be considerably more straightforward
-   if all Instruction enum fields are converted to named types, instead of unnamed
-   tuples. This seems worth doing anyway, adding more precision to the variants and
-   enabling real documentation (so developers don't have to do
-   [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
-   This will cause a little churn in our current code base, but not a lot.
-2. **Variable account lists** - This approach offers a couple options for
-   variable account lists. First, optional accounts may be added and tagged with
-   the `optional` keyword. However, currently only one optional account is
-   supported per instruction. Additional data will need to be added to the
-   instruction to support multiples, enabling identification of which accounts are
-   present when some but not all are included. Second, accounts that share the same
-   features may be added as a set, tagged with the `multiple` keyword. Like
-   optional accounts, only one multiple account set is supported per instruction
-   (and optional and multiple may not coexist). More complex instructions that
-   cannot be accommodated by `optional` or `multiple`, requiring logic to figure
-   out account order/representation, should probably be made into separate
-   instructions.
+1. **Named fields** - поскольку результирующее подробное перечисление создает варианты с именованными полями, для любых безымянных полей в исходном варианте инструкции должны быть сгенерированы имена. Таким образом, было бы намного проще, если бы все поля перечисления инструкций были преобразованы в именованные типы вместо безымянных кортежей. В любом случае кажется, что это стоит сделать, добавив больше точности к вариантам и включив реальную документацию (так что разработчикам не нужно делать [ это ](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140). Это вызовет небольшой отток в нашей текущей базе кода, но не сильно.
+2. **Variable account lists** - этот подход предлагает несколько вариантов для списков переменных аккаунтов. Во-первых, необязательные аккаунты могут быть добавлены и помечены ключевым словом ` optional `. Однако в настоящее время для каждой инструкции поддерживается только один дополнительный аккаунт. В инструкцию необходимо будет добавить дополнительные данные для поддержки кратных, позволяющих идентифицировать, какие аккаунты присутствуют, когда включены некоторые, но не все. Во-вторых, аккаунты с одинаковыми функциями могут быть добавлены в виде набора, помеченного ключевым словом ` multiple `. Как и в случае необязательных аккаунтов, для каждой инструкции поддерживается только один набор нескольких аккаунтов (а необязательные и несколько аккаунтов могут не сосуществовать). Более сложные инструкции, которые не могут быть размещены с помощью `optional` или `multiple`, требующих логики для определения порядка / представления аккаунтов, вероятно, следует оформить в отдельные инструкции.

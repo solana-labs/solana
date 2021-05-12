@@ -1,53 +1,35 @@
 ---
-title: Using Hardware Wallets on the Solana CLI
+title: استخدام المحافظ الخارجية في واجهة سطر الأوامر في Solana
 ---
 
-Signing a transaction requires a private key, but storing a private
-key on your personal computer or phone leaves it subject to theft.
-Adding a password to your key adds security, but many people prefer
-to take it a step further and move their private keys to a separate
-physical device called a _hardware wallet_. A hardware wallet is a
-small handheld device that stores private keys and provides some
-interface for signing transactions.
+يتطلب توقيع المعاملة مفتاحا خاصا، غير أن تخزين مفتاح خاص على حاسوبك الشخصي أو هاتفك يجعله عرضة للسرقة. ويعد إضافة كلمة مرور للمفتاح الخاص بك يزيده أمانًا، غير أن بعض الناس يفضلون زيادة الأمان من خلال نقل المفاتيح الخاصة إلى جهاز فيزيائي منفصل يدعى _hardware wallet_. المحفظة الخارجية هي عبارة عن جهاز صغير يمكن أن يحمل باليد ويقوم بتخزين أزواج المفاتيح عليها وتعرض واجهة لتوقيع المعاملات.
 
-The Solana CLI has first class support for hardware wallets. Anywhere
-you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
-can pass a _keypair URL_ that uniquely identifies a keypair in a
-hardware wallet.
+يتوفر في واجهة سطر الأوامر في Solana دعمًا من الدرجة الأولى للمحافظ الخارجية. في أي مكان تستخدم فيه مسار ملف زوج المفاتيح (يُشار إليه بـ `<KEYPAIR>` في مستندات الإستخدام) ، يمكنك تمرير زوج المفاتيح _keypair URL_ يُحَدِّد بشكل فريد زوج المفاتيح في محفظة الأجهزة.
 
-## Supported Hardware Wallets
+## المحافظ الخارجية المدعومة
 
-The Solana CLI supports the following hardware wallets:
+تدعم واجهة سطر الأوامر في Solana المحافظ الحقيقية التالية:
 
-- [Ledger Nano S and Ledger Nano X](hardware-wallets/ledger.md)
+- [Ledger Nano S و Ledger Nano X](hardware-wallets/ledger.md)
 
-## Specify a Keypair URL
+## تحديد رابط زوج مفاتيح
 
-Solana defines a keypair URL format to uniquely locate any Solana keypair on a
-hardware wallet connected to your computer.
+وتعرِّف Solana تنسيق رابط زوج المفاتيح لتحديد موقع أي زوج مفاتيح بشكل فريد على محفظة حقيقية متصلة بالكمبيوتر الخاص بك.
 
-The keypair URL has the following form, where square brackets denote optional
-fields:
+ويكون رابط زوج المفاتيح على الشكل التالي، حيث تشير الأقواس المعقوفة إلى حقول اختيارية:
 
 ```text
 usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 ```
 
-`WALLET_ID` is a globally unique key used to disambiguate multiple devices.
+`WALLET_ID` هو مفتاح فريد عالميًا ويستخدم للتعرف بشكل فريد على أجهزة متعددة.
 
-`DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
-The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
-are positive integers.
+`DERVIATION_PATH` يستخدم لتنقل إلى مفاتيح Solana داخل المحفظة الحقيقية الخاصة بك. ويكون المسار على الشكل `<ACCOUNT>[/<CHANGE>]`، حيث يكون كل من `ACCOUNT` و `CHANGE` أعدادًا صحيحة.
 
-For example, a fully qualified URL for a Ledger device might be:
+على سبيل المثال، قد يكون عنوان الـ URL المؤهل بالكامل لجهاز Ledger على الشكل التالي:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501). The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
+جميع المسارات المأخوذة تحتوي ضمنيًا على البادئة `44'/501'` والتي تشير إلى أن المسار يتبع [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) وأن أي مفتاح مأخوذ هو أحد مفاتيح Solana (عملة نوع 501). وتشير علامة التنصيص الواحدة إلى اشتقاق "متصلب". لأن Solana تستخدم أزواج المفاتيح من نوع Ed25519، تكون جميع الاشتقاقات صلبة وبالتالي يعتبر إضافة علامة التنصيص أمرًا اختياريًا وليس ضروريًا.

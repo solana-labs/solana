@@ -1,28 +1,22 @@
 ---
-title: instruction introspection
+title: النظر في التعليمات (instruction introspection)
 ---
 
-## Problem
+## المُشكل (Problem)
 
-Some smart contract programs may want to verify that another Instruction is present in a
-given Message since that Instruction could be be performing a verification of certain data,
-in a precompiled function. (See secp256k1_instruction for an example).
+قد ترغب بعض برامج العقود الذكية في التحقق من وجود تعليمة أخرى في رسالة معينة لأن تلك التعليمات يمكن أن تؤدي التحقق من بيانات معينة. في دالة مجمعة مسبقاً. (أُنظر على سبيل المثال secp256k1\_instruction).
 
-## Solution
+## الحل (Solution)
 
-Add a new sysvar Sysvar1nstructions1111111111111111111111111 that a program can reference
-and received the Message's instruction data inside, and also the index of the current instruction.
+أضف sysvar جديد Sysvar1nstructions1111111111111111111111111 يُمكن للبرنامج الرجوع إليه وإستلام بيانات تعليمات الرسالة بداخله، وكذلك فهرس التعليمات الحالية.
 
-Two helper functions to extract this data can be used:
+يمكن إستخدام وظيفتي مُساعد لإستخراج هذه البيانات:
 
 ```
 fn load_current_index(instruction_data: &[u8]) -> u16;
 fn load_instruction_at(instruction_index: usize, instruction_data: &[u8]) -> Result<Instruction>;
 ```
 
-The runtime will recognize this special instruction, serialize the Message instruction data
-for it and also write the current instruction index and then the bpf program can extract the
-necessary information from there.
+سيتعرف وقت التشغيل على هذه التعليمات الخاصة، ويقوم بتسلسل بيانات تعليمات الرسالة الخاصة بها وأيضًا كتابة فهرس التعليمات الحالي ومن ثم يُمكن لبرنامج bpf إستخراج المعلومات الضرورية من هناك.
 
-Note: custom serialization of instructions is used because bincode is about 10x slower
-in native code and exceeds current BPF instruction limits.
+ملاحظة: يتم إستخدام التسلسل المُخصص للتعليمات لأن الرمز Bincode يكون أبطأ بمقدار 10x في الكود الأصلي ويتجاوز حدود تعليمات الـ BPF الحالية.

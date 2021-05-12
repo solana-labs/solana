@@ -1,59 +1,59 @@
 ---
-title: Secure Vote Signing
+title: Firma de voto segura
 ---
 
-A validator receives entries from the current leader and submits votes confirming those entries are valid. This vote submission presents a security challenge, because forged votes that violate consensus rules could be used to slash the validator's stake.
+Un validador recibe entradas del líder actual y envía votos que confirman que esas entradas son válidas. Este envío de votos presenta un reto de seguridad, porque los votos falsos que violan las reglas de consenso podrían ser utilizados para reducir la participación del validador.
 
-The validator votes on its chosen fork by submitting a transaction that uses an asymmetric key to sign the result of its validation work. Other entities can verify this signature using the validator's public key. If the validator's key is used to sign incorrect data \(e.g. votes on multiple forks of the ledger\), the node's stake or its resources could be compromised.
+El validador vota en el fork elegido enviando una transacción que utiliza una clave asimétrica para firmar el resultado de su trabajo de validación. Otras entidades pueden verificar esta firma usando la clave pública del validador. Si la clave del validador se utiliza para firmar datos incorrectos (por ejemplo, votos en múltiples forks del ledger), la participación del nodo o sus recursos podrían verse comprometidos.
 
-Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
+Solana aborda este riesgo dividiendo un servicio separado _firmante de votos_ que evalúa cada voto para asegurar que no viola una condición de slashing.
 
-## Validators, Vote Signers, and Stakeholders
+## Validadores, firmantes de votos y poseedores de stake
 
-When a validator receives multiple blocks for the same slot, it tracks all possible forks until it can determine a "best" one. A validator selects the best fork by submitting a vote to it, using a vote signer to minimize the possibility of its vote inadvertently violating a consensus rule and getting a stake slashed.
+Cuando un validador recibe múltiples bloques para la misma ranura, rastrea todos los forks posibles hasta que pueda determinar uno "mejor". Un validador selecciona el mejor fork presentando un voto a el mismo, utilizando un firmante del voto para minimizar la posibilidad de que su voto viole inadvertidamente una regla de consenso y obtenga un recorte de stake.
 
-A vote signer evaluates the vote proposed by the validator and signs the vote only if it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. It doesn't need to process a full set of transactions.
+Un votante evalúa el voto propuesto por el validador y firma el voto sólo si no viola una condición de slashing. Un votante sólo necesita mantener el estado mínimo con respecto a los votos que firmó y los votos firmados por el resto del cluster. No necesita procesar un conjunto completo de transacciones.
 
-A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer's votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
+Un poseedor de stake es una identidad que tiene el control del capital participado. El poseedor de stake puede delegar su participación al firmante de los votos. Una vez que se delega una stake, los votos del firmante representan el peso del voto de todo el stake delegado, y producir recompensas para todos los stake delegados.
 
-Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
+Actualmente, hay una relación 1:1 entre los validadores y los firmantes de voto, y los poseedores de stake delegan toda su participación en un único firmante de voto.
 
-## Signing service
+## Servicio de firma
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
+El servicio de firma de votos consiste en un servidor RPC JSON y un procesador de solicitudes. Al arrancar, el servicio inicia el servidor RPC en un puerto configurado y espera las solicitudes de validador. Espera el siguiente tipo de solicitudes:
 
-1. Register a new validator node
+1. Registrar un nuevo nodo validador
 
-   - The request must contain validator's identity \(public key\)
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
-   - If a validator tries to register again, the service returns the public key from the pre-existing keypair
+    - La solicitud debe contener la identidad del validador \(clave pública\)
+    - La solicitud debe ser firmada con la clave privada del validador
+    - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
+    - El servicio crea una nueva clave asimétrica de votación para el validador, y devuelve la clave pública como respuesta
+    - Si un validador intenta registrarse de nuevo, el servicio devuelve la clave pública del par de claves preexistente
 
-2. Sign a vote
+2. Firma un voto
 
-   - The request must contain a voting transaction and all verification data
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service verifies the voting data
-   - The service returns a signature for the transaction
+    - La solicitud debe contener una transacción de votación y todos los datos de verificación
+    - La solicitud debe ser firmada con la clave privada del validador
+    - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
+    - El servicio verifica los datos de votación
+    - El servicio devuelve una firma para la transacción
 
-## Validator voting
+## Votación del validador
 
-A validator node, at startup, creates a new vote account and registers it with the cluster by submitting a new "vote register" transaction. The other nodes on the cluster process this transaction and include the new validator in the active set. Subsequently, the validator submits a "new vote" transaction signed with the validator's voting private key on each voting event.
+Un nodo validador, al iniciarse, crea una nueva cuenta de votos y la registra en el clúster enviando una nueva transacción de "registro de votos". Los demás nodos del clúster procesan esta transacción e incluyen el nuevo validador en el conjunto activo. Posteriormente, el validador presenta una transacción de "nuevo voto" firmada con la clave privada del validador en cada evento de votación.
 
-### Configuration
+### Configuración
 
-The validator node is configured with the signing service's network endpoint \(IP/Port\).
+El nodo validador está configurado con el punto final de red del servicio de firma \(IP/Port\).
 
-### Registration
+### Registro
 
-At startup, the validator registers itself with its signing service using JSON RPC. The RPC call returns the voting public key for the validator node. The validator creates a new "vote register" transaction including this public key, and submits it to the cluster.
+Al iniciar, el validador se registra con su servicio de firma usando JSON RPC. La llamada RPC devuelve la clave pública de votación para el nodo validador. El validador crea una nueva transacción de "registro de votos" incluyendo esta clave pública, y la envía al clúster.
 
-### Vote Collection
+### Recaudación de votos
 
-The validator looks up the votes submitted by all the nodes in the cluster for the last voting period. This information is submitted to the signing service with a new vote signing request.
+El validador busca los votos enviados por todos los nodos del clúster en el último periodo de votación. Esta información se envía al servicio de firma con una nueva solicitud de firma de voto.
 
-### New Vote Signing
+### Nueva firma de voto
 
-The validator creates a "new vote" transaction and sends it to the signing service using JSON RPC. The RPC request also includes the vote verification data. On success, the RPC call returns the signature for the vote. On failure, RPC call returns the failure code.
+El validador crea una transacción de "nuevo voto" y la envía al servicio de firma utilizando JSON RPC. La solicitud RPC también incluye los datos de verificación del voto. En caso de éxito, la llamada RPC devuelve la firma de la votación. En caso de fallo, la llamada RPC devuelve el código de falla.

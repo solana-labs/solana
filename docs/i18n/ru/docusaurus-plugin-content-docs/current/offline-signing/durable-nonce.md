@@ -1,107 +1,92 @@
 ---
-title: Durable Transaction Nonces
+title: Транзакции с использованием Durable Nonce
 ---
 
-Durable transaction nonces are a mechanism for getting around the typical
-short lifetime of a transaction's [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash).
-They are implemented as a Solana Program, the mechanics of which can be read
-about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
+Durable Nonce — механизм который позволяет обойти ограничение срока валидности значения [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash) в подписанной транзакции. Данное решение было имплементировано как Solana Program, о его принципах работы вы можете подробнее почитать в [предложении об улучшении](../implemented-proposals/durable-tx-nonces.md).
 
-## Usage Examples
+## Примеры использования
 
-Full usage details for durable nonce CLI commands can be found in the
-[CLI reference](../cli/usage.md).
+Полную информацию об использовании durable nonce с инструментами командной строки можно найти в разделе [Использование CLI](../cli/usage.md).
 
-### Nonce Authority
+### Владелец одноразового аккаунта
 
-Authority over a nonce account can optionally be assigned to another account. In
-doing so the new authority inherits full control over the nonce account from the
-previous authority, including the account creator. This feature enables the
-creation of more complex account ownership arrangements and derived account
-addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
-argument is used to specify this account and is supported by the following
-commands
+Значение Durable Nonce хранится в специальном одноразовом аккаунте, право упавления которым может быть передано от одного владельца к другому. При этом, новый владелец наследует полный котроль над одноразовым аккаунтом от предыдущего владельца, включая и создателя аккаунта. Эта функция позволяет создавать более сложные схемы владения и получать производные адреса, которые не связаны с ключ-парой. Чтобы обозначить такой аккаунт используется аргумент `--nonce-authority <AUTHORITY_KEYPAIR>`, который поддерживается следующими командами:
 
 - `create-nonce-account`
 - `new-nonce`
 - `withdraw-from-nonce-account`
 - `authorize-nonce-account`
 
-### Nonce Account Creation
+### Создание одноразового аккаунта
 
-The durable transaction nonce feature uses an account to store the next nonce
-value. Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
-so need to carry the minimum balance to achieve this.
+Механизм Durable Nonce использует специальный аккаунт для хранения следующего значения Nonce. Такой одноразовый аккаунт должен соответствовать критерию [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime), поэтому для этого требуется наличие минимального баланса.
 
-A nonce account is created by first generating a new keypair, then create the account on chain
+Одноразовый аккаунт создается путём генерации новой ключ-пары и её инициализации в кластере
 
-- Command
+- Команда
 
 ```bash
 solana-keygen new -o nonce-keypair.json
 solana create-nonce-account nonce-keypair.json 1
 ```
 
-- Output
+- Результат
 
 ```text
 2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
 ```
 
-> To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
+> Если вы хотите хранить ключ-пару оффлайн, используйте для этого [бумажный кошелёк](wallet-guide/paper-wallet.md), а тут можно узнать больше информации о [генерации ключ-пары](wallet-guide/paper-wallet.md#seed-phrase-generation)
 
-> [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-create-nonce-account)
 
-### Querying the Stored Nonce Value
+### Получение значения Durable Nonce
 
-Creating a durable nonce transaction requires passing the stored nonce value as
-the value to the `--blockhash` argument upon signing and submission. Obtain the
-presently stored nonce value with
+При подписании и отправке транзакции с использованием Durable Nonce, требуется передать хранимое в одноразовом аккаунте значения nonce в качестве значения для аргумента `--blockhash`. Получить текущее хранимое значение можно используя
 
-- Command
+- Команда
 
 ```bash
 solana nonce nonce-keypair.json
 ```
 
-- Output
+- Результат
 
 ```text
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-get-nonce)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-get-nonce)
 
-### Advancing the Stored Nonce Value
+### Обновление хранимого значения Nonce
 
-While not typically needed outside a more useful transaction, the stored nonce
-value can be advanced by
+Хотя обычно это не требуется, значение nonce может быть обновлено
 
-- Command
+- Команда
 
 ```bash
 solana new-nonce nonce-keypair.json
 ```
 
-- Output
+- Результат
 
 ```text
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-new-nonce)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-new-nonce)
 
-### Display Nonce Account
+### Вывод информации об одноразовом аккаунте
 
-Inspect a nonce account in a more human friendly format with
+Получить информацию об одноразовом аккаунте в более человекопонятной форме можно используя
 
-- Command
+- Команда
 
 ```bash
 solana nonce-account nonce-keypair.json
 ```
 
-- Output
+- Результат
 
 ```text
 balance: 0.5 SOL
@@ -109,68 +94,66 @@ minimum balance required: 0.00136416 SOL
 nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-nonce-account)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-nonce-account)
 
-### Withdraw Funds from a Nonce Account
+### Вывод средств с одноразового аккаунта
 
-Withdraw funds from a nonce account with
+Вывести отправленные средства с одноразовго аккаунта можно с помощью
 
-- Command
+- Команда
 
 ```bash
 solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0.5
 ```
 
-- Output
+- Результат
 
 ```text
 3foNy1SBqwXSsfSfTdmYKDuhnVheRnKXpoPySiUDBVeDEs6iMVokgqm7AqfTjbk7QBE8mqomvMUMNQhtdMvFLide
 ```
 
-> Close a nonce account by withdrawing the full balance
+> После вывода всех средств, одноразовый аккаунт перестает удовлетворять требованиям и будет закрыт
 
-> [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-withdraw-from-nonce-account)
 
-### Assign a New Authority to a Nonce Account
+### Переопределение владельца
 
-Reassign the authority of a nonce account after creation with
+Владельца одноразового аккаунта можно переопределить
 
-- Command
+- Команда
 
 ```bash
 solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 ```
 
-- Output
+- Результат
 
 ```text
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
+> [Более подробная инструкция в разделе CLI](../cli/usage.md#solana-authorize-nonce-account)
 
-## Other Commands Supporting Durable Nonces
+## Остальные команды с поддержкой Durable Nonce
 
-To make use of durable nonces with other CLI subcommands, two arguments must be
-supported.
+Любые другие команды, которые поддерживают два следующих аргумента, могут работать с Durable Nonce.
 
-- `--nonce`, specifies the account storing the nonce value
-- `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
+- `--nonce`, указывает одноразовый аккаунт, где хранится значение Durable Nonce
+- `--nonce-authority`, указывает на [владельца одноразового аккаунта](#nonce-authority), опционально
 
-The following subcommands have received this treatment so far
+К настоящему времени, перечисленные команды поддерживают работу с Durable Nonce
 
 - [`pay`](../cli/usage.md#solana-pay)
 - [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
 - [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 
-### Example Pay Using Durable Nonce
+### Пример использования команды pay с использованием Durable Nonce
 
-Here we demonstrate Alice paying Bob 1 SOL using a durable nonce. The procedure
-is the same for all subcommands supporting durable nonces
+Тут продемонстрированна оплата 1 SOL Бобу со сторны Алисы, где Алиса использует Durable Nonce. Алгоритм действий идентичен для любых комманд с поддержкой Durable Nonce
 
-#### - Create accounts
+#### - Создание аккаунтов
 
-First we need some accounts for Alice, Alice's nonce and Bob
+Сначала нам нужно создать ключ-пару для аккаунтов Алисы, одноразового аккаунта, которым будет владеть Алиса и аккаунт для Боба
 
 ```bash
 $ solana-keygen new -o alice.json
@@ -178,70 +161,66 @@ $ solana-keygen new -o nonce.json
 $ solana-keygen new -o bob.json
 ```
 
-#### - Fund Alice's account
+#### - Пополнение счёта аккаунта Алисы
 
-Alice will need some funds to create a nonce account and send to Bob. Airdrop
-her some SOL
+Для создания одноразового аккаунта требуется наличие минимальной суммы на счёту для вызова контракта. Также нам необходимы токены для отправки Бобу и оплаты транзакций. Отправим ей путем аирдропа немного SOL
 
 ```bash
-$ solana airdrop -k alice.json 1
-1 SOL
+$ solana airdrop -k alice.json 10
+10 SOL
 ```
 
-#### - Create Alice's nonce account
+#### - Создадим одноразовый
 
-Now Alice needs a nonce account. Create one
+Нам необходим одноразовый аккаунт, которым будет владеть только Алиса. Мы уже создали для него ключ-пару, осталось только проинициализировать его вызвав контракт
 
-> Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
+> В данном случае, мы не указываем [владельца одноразового аккаунта](#nonce-authority), поэтому Алиса с ключ-парой `alice.json` имеет полный контроль над ним
 
 ```bash
-$ solana create-nonce-account -k alice.json nonce.json 0.1
+$ solana create-nonce-account -k alice.json nonce.json 1
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
 ```
 
-#### - A failed first attempt to pay Bob
+#### - Первый блин комом
 
-Alice attempts to pay Bob, but takes too long to sign. The specified blockhash
-expires and the transaction fails
+Алиса попыталась отправить Бобу средства, но подпись заняла слишком много времени. Срок валидности указанного blockhash истек и транзакция была отменена сетью
 
 ```bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
 [2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 ```
 
-#### - Nonce to the rescue!
+#### - Durable Nonce для спасения!
 
-Alice retries the transaction, this time specifying her nonce account and the
-blockhash stored there
+В этот раз Алиса делает повторную попытку, но указывает свой одноразовый аккаунт и значение blockhash, которое там храниться
 
-> Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
+> Помните, что в данном случае Алиса, через свою ключ-пару `alice.json` подтверждает, что она является [владельцем](#nonce-authority) одноразового аккаунта
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 0.1 SOL
+balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
-#### - Success!
+#### - Успех!
 
-The transaction succeeds! Bob receives 0.01 SOL from Alice and Alice's stored
-nonce advances to a new value
+Транзакция прошла успешно! Боб получает на свой счёт 1 SOL, а хранимое значение nonce в одноразовом аккаунте, пренадлежащего Алисе, обновляется и готово для использования в следующей транзакции
 
 ```bash
 $ solana balance -k bob.json
-0.01 SOL
+1 SOL
 ```
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 0.1 SOL
+balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
 ```

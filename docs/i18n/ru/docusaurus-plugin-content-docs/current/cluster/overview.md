@@ -1,42 +1,42 @@
 ---
-title: A Solana Cluster
+title: Кластер Solana
 ---
 
-A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this section, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
+Solana - это набор валидаторов, работающих вместе для обслуживания клиентских транзакций и поддержания целостности бухгалтерской книги. Можете сосуществовать много кластеров. Когда два кластера имеют общий генезис, они пытаются конвертироваться. В противном случае они просто игнорируют существование другого. Транзакции, отправленные неправильно, не учитываются. В этом разделе мы обсудим, как создается кластер, как узлы присоединяются к кластеру, как они делятся книгой, как они обеспечивают их репликации, и как они справляются с ошибками и вредоносными узлами.
 
-## Creating a Cluster
+## Создание кластера
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_. Additional validators then register with any registered member of the cluster.
+Перед запуском валидаторов сначала нужно создать конфигурацию генеза __. Конфигурация ссылается на два публичных ключа, _мята_ и _валидатор загрузок_. Валидатор, содержащий приватный ключ проверки начальной загрузки, отвечает за добавление первых записей в книгу. Он инициализирует свое внутреннее состояние с учетной записью mint. Эта учетная запись будет содержать количество нативных токенов, определенных конфигурацией genesis. Второй валидатор затем связывается с валидатором начальной загрузки, чтобы зарегистрироваться как _валидатор_. Затем дополнительные валидаторы регистрируются в любом зарегистрированном члене кластера.
 
-A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries. Once the validator observes a sufficient number of copies exist, it deletes its copy.
+Валидатор получает все записи от лидера и подает голоса, подтверждающие правильность этих записей. После голосования ожидается сохранение этих записей. После того, как валидатор обнаружил достаточное количество копий, он удаляет свою копию.
 
-## Joining a Cluster
+## Создание кластера
 
-Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+Валидаторы вводят кластер через регистрационные сообщения, отправленные на его _контрольную плоскость_. Самолет управления реализован с использованием протокола _сплетения_,, что узел может зарегистрироваться с любым существующим узлом, и ожидать, что его регистрация будет распространяться на все узлы кластера. Время синхронизации всех узлов пропорционально квадрату количества узлов, участвующих в кластере. Алгоритмически, считается, что это очень медленно, но в обмен на это время, узел уверен, что в конце концов он имеет ту же информацию, что и все другие узлы, и что эта информация не может быть цензурой ни одного узла.
 
-## Sending Transactions to a Cluster
+## Отправка транзакций кластеру
 
-Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes, effectively appending them to the ledger.
+Клиенты отправляют транзакции любому устройству обработки транзакций \(TPU\) порту. Если узел входит в роль валидатора, он передает транзакцию назначенному лидеру. Если в роли лидера, узел объединяет входящие транзакции, то время метки времени они создают _запись_, и перемещает их на _плоскость данных кластера_. После того, как в панели данных транзакции проверяются узлами валидатора, эффективно прикладывая их к бухгалтерской книге.
 
-## Confirming Transactions
+## Подтверждение транзакций
 
-A Solana cluster is capable of subsecond _confirmation_ for up to 150 nodes with plans to scale up to hundreds of thousands of nodes. Once fully implemented, confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
+Кластер Solana способен получить подсекунду _подтверждения_ для до 150 узлов с планом масштабирования до сотен тысяч узлов. После полного выполнения, время подтверждения, как ожидается, увеличится только с логарифмом числа валидаторов, где база логарифма очень высока. Если база составляет одну тысячу, например, это означает, что для первых тысяч узлов, подтверждение будет длительностью три сетевых прыжков плюс время, которое занимает самый медленный валидатор супербольшинства для голосования. Для следующих миллионов узлов, подтверждение увеличивается только на одну сеть прыжков.
 
-Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
+Solana определяет подтверждение как длительность времени, когда лидер временной метки занимает новое место в момент, когда он признает чрезмерное большинство голосов.
 
-A gossip network is much too slow to achieve subsecond confirmation once the network grows beyond a certain size. The time it takes to send messages to all nodes is proportional to the square of the number of nodes. If a blockchain wants to achieve low confirmation and attempts to do it using a gossip network, it will be forced to centralize to just a handful of nodes.
+Сеть Gossip слишком медленная, чтобы получить субсекундное подтверждение после того, как сеть выросла за определенный размер. Время отправки сообщений всем узлам пропорционально квадрату количества узлов. Если блокчейн пытается достичь низкого уровня подтверждения и пытается сделать это с помощью сети сплетни, он будет вынужден централизовать только небольшое количество узлов.
 
-Scalable confirmation can be achieved using the follow combination of techniques:
+Масштабируемое подтверждение может быть достигнуто с помощью следующей комбинации методов:
 
-1. Timestamp transactions with a VDF sample and sign the timestamp.
-2. Split the transactions into batches, send each to separate nodes and have
+1. Временная метка с образцом VDF и подписью отметки времени.
+2. Разделить транзакции на пакеты, отправить каждый в отдельные узлы и иметь
 
-   each node share its batch with its peers.
+   каждый узел делится партией со своими соседями.
 
-3. Repeat the previous step recursively until all nodes have all batches.
+3. Повторять предыдущий шаг рекурсивно до тех пор, пока все узлы не будут иметь все партии.
 
-Solana rotates leaders at fixed intervals, called _slots_. Each leader may only produce entries during its allotted slot. The leader therefore timestamps transactions so that validators may lookup the public key of the designated leader. The leader then signs the timestamp so that a validator may verify the signature, proving the signer is owner of the designated leader's public key.
+Solana поворачивает лидеров с фиксированными интервалами, называемыми _слоты_. Каждый лидер может производить записи только во время его выделенного слота. Следовательно, лидер временных меток транзакций, с тем чтобы валидаторы могли искать открытые ключи назначенного лидера. Затем лидер подписывает временную метку, с тем чтобы валидатор мог проверить подпись, если подпись является владельцем открытого ключа назначенного руководителя.
 
-Next, transactions are broken into batches so that a node can send transactions to multiple parties without making multiple copies. If, for example, the leader needed to send 60 transactions to 6 nodes, it would break that collection of 60 into batches of 10 transactions and send one to each node. This allows the leader to put 60 transactions on the wire, not 60 transactions for each node. Each node then shares its batch with its peers. Once the node has collected all 6 batches, it reconstructs the original set of 60 transactions.
+Далее транзакции разбиваются на пакеты, с тем чтобы узел мог отправлять транзакции нескольким сторонам, не делая нескольких копий. Если, например, лидеру необходимо отправить 60 транзакций на 6 узлов, это нарушит эту коллекцию из 60 партий из 10 транзакций и пошлите по одному на каждый узел. Это позволяет лидеру помещать 60 транзакций по проводу, а не 60 транзакций для каждого узла. Затем каждый узел делится партией со своими соседями. После того, как узел собрал все 6 партий, он восстанавливает первоначальный набор из 60 транзакций.
 
-A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing, the approach is scaling well up to about 150 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).
+Партия транзакций может быть разделена только столько раз, прежде чем она настолько мала, что информация заголовка становится основным потребителем пропускной способности сети. На момент написания этого документа этот подход значительно расширяется до 150 валидаторов. Масштабировать до сотен тысяч валидаторов, каждый узел может применить ту же технику, что и узел лидера к другому набору узлов одинакового размера. Мы называем технику [_Turbine Block Propogation_](turbine-block-propagation.md).

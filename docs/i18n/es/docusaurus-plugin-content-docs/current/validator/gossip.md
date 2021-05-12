@@ -1,94 +1,92 @@
 ---
-title: Gossip Service
+title: Servicio Gossip
 ---
 
-The Gossip Service acts as a gateway to nodes in the control plane. Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a gossip protocol.
+El servicio Gossip actúa como una puerta de entrada a los nodos en el plano de control. Los validadores utilizan el servicio para asegurar que todos los demás nodos estén disponibles en un cluster. El servicio transmite información mediante un protocolo Gossip.
 
-## Gossip Overview
+## Vista general Gossip
 
-Nodes continuously share signed data objects among themselves in order to manage a cluster. For example, they share their contact information, ledger height, and votes.
+Los nodos comparten continuamente objetos de datos firmados entre sí para gestionar un cluster. Por ejemplo, comparten su información de contacto, la altura del ledger y los votos.
 
-Every tenth of a second, each node sends a "push" message and/or a "pull" message. Push and pull messages may elicit responses, and push messages may be forwarded on to others in the cluster.
+Cada décima de segundo, cada nodo envía un mensaje "push" y/o un mensaje "pull". Los mensajes push y pull pueden generar respuestas, y los mensajes push pueden ser enviados a otros en el cluster.
 
-Gossip runs on a well-known UDP/IP port or a port in a well-known range. Once a cluster is bootstrapped, nodes advertise to each other where to find their gossip endpoint \(a socket address\).
+Gossip se ejecuta en un conocido puerto UDP/IP o un puerto en un rango conocido. Una vez que un clúster se inicia, los nodos se anuncian mutuamente donde encontrar su punto final gossip \(una dirección de socket\).
 
-## Gossip Records
+## Registros Gossip
 
-Records shared over gossip are arbitrary, but signed and versioned \(with a timestamp\) as needed to make sense to the node receiving them. If a node receives two records from the same source, it updates its own copy with the record with the most recent timestamp.
+Los registros compartidos sobre gossip son arbitrarios, pero firmados y versionados \(con una marca de tiempo\) según sea necesario para tener sentido al nodo que los recibe. Si un nodo recibe dos registros de la misma fuente, actualiza su propia copia con el registro con la marca de tiempo más reciente.
 
-## Gossip Service Interface
+## Interfaz de servicio Gossip
 
-### Push Message
+### Mensaje Push
 
-A node sends a push message to tells the cluster it has information to share. Nodes send push messages to `PUSH_FANOUT` push peers.
+Un nodo envía un mensaje push para decirle al clúster que tiene información para compartir. Los nodos envían mensajes push a `PUSH_FANOUT` pares push.
 
-Upon receiving a push message, a node examines the message for:
+Al recibir un mensaje push, un nodo examina el mensaje para:
 
-1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
-2. New data: if the message is new to the node
+1. Duplicación: si el mensaje ha sido visto antes, el nodo suelta el mensaje y puede responder con `PushMessagePrune` si es reenviado desde un nodo bajo
+2. Nuevos datos: si el mensaje es nuevo en el nodo
 
-   - Stores the new information with an updated version in its cluster info and
+   - Guarda la nueva información con una versión actualizada en su información de clúster y
 
-     purges any previous older value
+     purga cualquier valor anterior antiguo
 
-   - Stores the message in `pushed_once` \(used for detecting duplicates,
+   - Guarda el mensaje en `pushed_once` \\(usado para detectar duplicados,
 
-     purged after `PUSH_MSG_TIMEOUT * 5` ms\)
+     purgado después de `PUSH_MSG_TIMEOUT * 5` ms\)
 
-   - Retransmits the messages to its own push peers
+   - Retransmite los mensajes a sus propios pares push
 
-3. Expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
+3. Caducidad: los nodos abandonan los mensajes push que son más antiguos que `PUSH_MSG_TIMEOUT`
 
-### Push Peers, Prune Message
+### Empujar pares, purgar mensaje
 
-A nodes selects its push peers at random from the active set of known peers. The node keeps this selection for a relatively long time. When a prune message is received, the node drops the push peer that sent the prune. Prune is an indication that there is another, higher stake weighted path to that node than direct push.
+Un nodo selecciona sus pares push al azar del conjunto activo de pares conocidos. El nodo mantiene esta selección por un tiempo relativamente largo. Cuando se recibe un mensaje de poda, el nodo abandona el peer push que envió la poda. La poda es un indicio de que hay otro camino ponderado más alto que el empuje directo.
 
-The set of push peers is kept fresh by rotating a new node into the set every `PUSH_MSG_TIMEOUT/2` milliseconds.
+El conjunto de pares push se mantiene fresco girando un nuevo nodo en el conjunto cada `PUSH_MSG_TIMEOUT/2` milisegundos.
 
-### Pull Message
+### Mensaje Pull
 
-A node sends a pull message to ask the cluster if there is any new information. A pull message is sent to a single peer at random and comprises a Bloom filter that represents things it already has. A node receiving a pull message iterates over its values and constructs a pull response of things that miss the filter and would fit in a message.
+Un nodo envía un mensaje pull para preguntar al clúster si hay alguna nueva información. Un mensaje pull es enviado a un solo par al azar y comprende un filtro de Bloom que representa cosas que ya tiene. Un nodo que recibe un mensaje pull iterará sobre sus valores y construirá una respuesta pull de cosas que faltan el filtro y caben en un mensaje.
 
-A node constructs the pull Bloom filter by iterating over current values and recently purged values.
+Un nodo construye el filtro pull Bloom iterando sobre los valores actuales y los valores purgados recientemente.
 
-A node handles items in a pull response the same way it handles new data in a push message.
+Un nodo maneja los elementos en una respuesta de la misma manera que maneja los nuevos datos en un mensaje push.
 
-## Purging
+## Purgando
 
-Nodes retain prior versions of values \(those updated by a pull or push\) and expired values \(those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) in `purged_values` \(things I recently had\). Nodes purge `purged_values` that are older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+Los nodos conservan versiones anteriores de los valores \\(los actualizados por un pull o push\\) y caducaron los valores \\(los anteriores que `GOSSIP_PULL_CRDS_TIMEOUT_MS`\\) en `purged_values` \\(cosas que recientemente tenía\\). Los nodos purged_values `purged_values` que son más antiguos que `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
 
-## Eclipse Attacks
+## Ataques Eclipse
 
-An eclipse attack is an attempt to take over the set of node connections with adversarial endpoints.
+Un ataque eclipse es un intento de tomar el control del conjunto de conexiones de nodo con puntos finales adversarios.
 
-This is relevant to our implementation in the following ways.
+Esto es relevante para nuestra implementación de las siguientes maneras.
 
-- Pull messages select a random node from the network. An eclipse attack on _pull_ would require an attacker to influence the random selection in such a way that only adversarial nodes are selected for pull.
-- Push messages maintain an active set of nodes and select a random fanout for every push message. An eclipse attack on _push_ would influence the active set selection, or the random fanout selection.
+- Los mensajes Pull seleccionan un nodo al azar de la red. Un ataque de eclipse sobre _pull_ requeriría que un atacante influyera en la selección aleatoria de tal manera que solo se seleccionen nodos adversarios para el pull.
+- Los mensajes push mantienen un conjunto activo de nodos y selecciona un fanout aleatorio para cada mensaje push. Un ataque de eclipse sobre _push_ influiría en la selección de conjunto activo, o en la selección de fanout aleatoria.
 
-### Time and Stake based weights
+### Pesos basados en el tiempo y el Stake
 
-Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
+Los pesos se calculan en función del `time since last picked` y el `natural log` del `stake weight`.
 
-Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes. This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a few multiples of ln\(`stake`\) seconds before it gets picked.
+Tomar el `ln` del peso del stake permite dar a todos los nodos una oportunidad más justa de la cobertura de la red en una cantidad razonable de tiempo. Esto ayuda a normalizar las posibles diferencias de `stake weight` entre nodos. De esta manera un nodo con bajo `bstake weight`, comparado con un nodo con un gran `stake weight` sólo tendrá que esperar unos cuantos múltiplos de ln\(`stake`\) segundos antes de ser elegido.
 
-There is no way for an adversary to influence these parameters.
+No hay forma de que un adversario influya en estos parámetros.
 
-### Pull Message
+### Mensaje Pull
 
-A node is selected as a pull target based on the weights described above.
+Un nodo es seleccionado como un pull target basado en las influencias descritas anteriormente.
 
-### Push Message
+### Mensaje Push
 
-A prune message can only remove an adversary from a potential connection.
+Un mensaje de poda sólo puede eliminar un adversario de una conexión potencial.
 
-Just like _pull message_, nodes are selected into the active set based on weights.
+Al igual que _pull message_, los nodos se seleccionan en el conjunto activo basado en los pesos.
 
-## Notable differences from PlumTree
+## Diferencias notables de PlumTree
 
-The active push protocol described here is based on
-[Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf).
-The main differences are:
+El protocolo push activo descrito aquí se basa en [Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf). Las principales diferencias son:
 
-- Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
-- Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.
+- Los mensajes push tienen un reloj firmado por el creador. Una vez que el reloj expira el mensaje es soltado. Un límite del salto es difícil de aplicar en un contexto adverso.
+- Un push vago no se implementa porque no es obvio cómo evitar que un adversario falsifique la huella digital del mensaje. Un enfoque ingenuo permitiría dar prioridad a un adversario en función de sus aportaciones.

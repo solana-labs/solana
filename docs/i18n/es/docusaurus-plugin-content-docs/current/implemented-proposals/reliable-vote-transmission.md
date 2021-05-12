@@ -1,60 +1,60 @@
 ---
-title: Reliable Vote Transmission
+title: Transmisión de voto fiable
 ---
 
-Validator votes are messages that have a critical function for consensus and continuous operation of the network. Therefore it is critical that they are reliably delivered and encoded into the ledger.
+Los votos de validadores son mensajes que tienen una función crítica para el consenso y el funcionamiento continuo de la red. Por lo tanto, es fundamental que se entreguen y codifiquen de forma fiable en el ledger.
 
-## Challenges
+## Desafíos
 
-1. Leader rotation is triggered by PoH, which is clock with high drift. So many nodes are likely to have an incorrect view if the next leader is active in realtime or not.
-2. The next leader may be easily be flooded. Thus a DDOS would not only prevent delivery of regular transactions, but also consensus messages.
-3. UDP is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger. Retransmittion could potentially cause an unintentional _thundering herd_ against the leader with a large number of validators. Worst case flood would be `(num_nodes * num_retransmits)`.
-4. Tracking if the vote has been transmitted or not via the ledger does not guarantee it will appear in a confirmed block. The current observed block may be unrolled. Validators would need to maintain state for each vote and fork.
+1. La rotación del líder es activada por el PoH, que es un reloj con alta deriva. Es probable que muchos nodos tengan una visión incorrecta si el próximo líder está activo en tiempo real o no.
+2. El próximo líder puede ser fácilmente inundado. Por lo tanto, un DDOS no sólo impediría la entrega de transacciones regulares, sino también mensajes de consenso.
+3. UDP no es confiable, y nuestro protocolo asíncrono requiere que cualquier mensaje que se transmita sea retransmitido hasta que sea observado en el contador. La retransmisión podría causar potencialmente un _rebote involuntario_ contra el líder con un gran número de validadores. El peor caso de inundación sería `(num_nodos * num_retransmisiones)`.
+4. El seguimiento de si el voto se ha transmitido o no a través del ledger no garantiza que aparezca en un bloque confirmado. El bloque observado actual puede ser desenrollado. Los validadores tendrían que mantener el estado de cada voto y fork.
 
-## Design
+## Diseño
 
-1. Send votes as a push message through gossip. This ensures delivery of the vote to all the next leaders, not just the next future one.
-2. Leaders will read the Crds table for new votes and encode any new received votes into the blocks they propose. This allows for validator votes to be included in rollback forks by all the future leaders.
-3. Validators that receive votes in the ledger will add them to their local crds table, not as a push request, but simply add them to the table. This shortcuts the push message protocol, so the validation messages do not need to be retransmitted twice around the network.
-4. CrdsValue for vote should look like this `Votes(Vec<Transaction>)`
+1. Envía los votos como un mensaje push a través de los gossip. Esto garantiza la entrega del voto a todos los próximos líderes, no sólo al próximo futuro.
+2. Los líderes leerán la tabla Crds para nuevos votos y codificarán los nuevos votos recibidos en los bloques que proponen. Esto permite que los votos de los validadores sean incluidos en los forks de cancelación por todos los futuros líderes.
+3. Los validadores que reciban votos en el ledger los agregarán a su tabla local de crds, no como una solicitud push, sino que simplemente se añaden a la tabla. Esto acorta el protocolo de mensajes push, por lo que los mensajes de validación no necesitan ser retransmitidos dos veces por la red.
+4. Valor de CrdsValue para el voto debe verse como este `Votos (Vec<Transaction>)`
 
-Each vote transaction should maintain a `wallclock` in its data. The merge strategy for Votes will keep the last N set of votes as configured by the local client. For push/pull the vector is traversed recursively and each Transaction is treated as an individual CrdsValue with its own local wallclock and signature.
+Cada transacción de votación debe mantener un `reloj de pared` en sus datos. La estrategia de fusión de votos mantendrá el último conjunto N de votos configurado por el cliente local. Para empujar/tirar el vector se recorre recursivamente y cada transacción se trata como un CrdsValue individual con su propio reloj de pared local y su firma.
 
-Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transfered between any nodes.
+El gossip está diseñado para una reproducción eficiente del estado. Los mensajes que se envían a través de gossip-push se envían por lotes y se propagan con un árbol de expansión mínimo al resto de la red. Cualquier fallo parcial en el árbol se reparan activamente con el protocolo de gossip-pull mientras se minimiza la cantidad de datos transferidos entre cualquier nodo.
 
-## How this design solves the Challenges
+## Cómo resuelve este diseño los Desafíos
 
-1. Because there is no easy way for validators to be in sync with leaders on the leader's "active" state, gossip allows for eventual delivery regardless of that state.
-2. Gossip will deliver the messages to all the subsequent leaders, so if the current leader is flooded the next leader would have already received these votes and is able to encode them.
-3. Gossip minimizes the number of requests through the network by maintaining an efficient spanning tree, and using bloom filters to repair state. So retransmit back-off is not necessary and messages are batched.
-4. Leaders that read the crds table for votes will encode all the new valid votes that appear in the table. Even if this leader's block is unrolled, the next leader will try to add the same votes without any additional work done by the validator. Thus ensuring not only eventual delivery, but eventual encoding into the ledger.
+1. Porque no hay una manera fácil de sincronizar los validadores con los líderes en el estado "activo" del líder, el gossip permite una entrega eventual independientemente de ese estado.
+2. El Gossip enviará los mensajes a todos los líderes subsiguientes, así que si el líder actual es inundado, el próximo líder ya habría recibido estos votos y es capaz de codificarlos.
+3. Gossip minimiza el número de peticiones a través de la red manteniendo un árbol de expansión eficiente, y usando filtros bloom para reparar el estado. Por lo tanto, no es necesario retransmitir la retroceso y los mensajes son por lotes.
+4. Los líderes que lean la tabla de crds de votos codificarán todos los nuevos votos válidos que aparecen en la tabla. Incluso si el bloque de este líder está desenrollado, el próximo líder intentará añadir los mismos votos sin ningún trabajo adicional realizado por el validador. De este modo, no sólo la entrega final, sino la codificación final en el ledger.
 
-## Performance
+## Rendimiento
 
-1. Worst case propagation time to the next leader is Log\(N\) hops with a base depending on the fanout. With our current default fanout of 6, it is about 6 hops to 20k nodes.
-2. The leader should receive 20k validation votes aggregated by gossip-push into MTU-sized shreds. Which would reduce the number of packets for 20k network to 80 shreds.
-3. Each validators votes is replicated across the entire network. To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes. `(20,000 nodes * 256 bytes * 5)`.
+1. Lo peor del tiempo de propagación para el próximo líder es Log\(N\) salta con una base dependiendo del fanout. Con nuestro actual fanout predeterminado de 6, es de unos 6 saltos a 20k nodos.
+2. El líder debe recibir 20k votos de validación agregados por gossip en fragmentos de MTUsize. Lo que reduciría el número de paquetes para la red 20k a 80 trozos.
+3. Cada voto de validadores es replicado en toda la red. Para mantener una cola de 5 votos anteriores la tabla de Crds crecería 25 megabytes. `(20,000 nodos * 256 bytes * 5)`.
 
-## Two step implementation rollout
+## Implementación en dos etapas
 
-Initially the network can perform reliably with just 1 vote transmitted and maintained through the network with the current Vote implementation. For small networks a fanout of 6 is sufficient. With small network the memory and push overhead is minor.
+Inicialmente la red puede funcionar de forma fiable con sólo 1 voto transmitido y mantenido a través de la red con la implementación actual del voto. Para redes pequeñas un fanout de 6 es suficiente. Con una pequeña red la memoria y la sobrecarga de empuje es menor.
 
-### Sub 1k validator network
+### Sub1k red de validadores
 
-1. Crds just maintains the validators latest vote.
-2. Votes are pushed and retransmitted regardless if they are appearing in the ledger.
-3. Fanout of 6.
-4. Worst case 256kb memory overhead per node.
-5. Worst case 4 hops to propagate to every node.
-6. Leader should receive the entire validator vote set in 4 push message shreds.
+1. Crds sólo mantiene el voto más reciente de los validadores.
+2. Los votos son empujados y retransmitidos sin importar si están apareciendo en el ledger.
+3. Fanout de 6.
+4. Peor caso de 256kb sobrecarga de memoria por nodo.
+5. En el peor de los casos, 4 saltos para propagarse a cada nodo.
+6. El líder debe recibir todo el voto del validador establecido en 4 fragmentos de mensajes push.
 
-### Sub 20k network
+### Sub20k de red
 
-Everything above plus the following:
+Todo por encima de lo siguiente:
 
-1. CRDS table maintains a vector of 5 latest validator votes.
-2. Votes encode a wallclock. CrdsValue::Votes is a type that recurses into the transaction vector for all the gossip protocols.
-3. Increase fanout to 20.
-4. Worst case 25mb memory overhead per node.
-5. Sub 4 hops worst case to deliver to the entire network.
-6. 80 shreds received by the leader for all the validator messages.
+1. La tabla CRDS mantiene un vector de 5 últimos votos de validador.
+2. Los votos codifican un reloj de pared. CrdsValue::Votes es un tipo que se repite en el vector de transacciones para todos los protocolos gossip.
+3. Aumenta el fanout a 20.
+4. En el peor de los casos, 25 mb de memoria por nodo.
+5. Sub 4 saltos en el peor de los casos para entregar a toda la red.
+6. 80 fragmentos recibidos por el líder para todos los mensajes del validador.

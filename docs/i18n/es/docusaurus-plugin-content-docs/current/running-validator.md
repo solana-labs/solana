@@ -1,7 +1,7 @@
 ---
-title: Running a Validator
+title: Ejecutando un Validador
 ---
 
-This section describes how run a Solana validator node.
+Esta sección describe cómo ejecutar un nodo validador de Solana.
 
-There are several clusters available to connect to, see [choosing a Cluster](cli/choose-a-cluster.md) for an overview of each.
+Hay varios clústers disponibles para conectarse, consulte [eligiendo un Clúster](cli/choose-a-cluster.md) para obtener una visión general de cada uno de ellos.

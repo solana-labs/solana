@@ -1,88 +1,88 @@
 ---
-title: Leader Rotation
+title: Ротация Лидера
 ---
 
-At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
+В любой момент кластер ожидает, что только один валидатор будет производить бухгалтерские записи. Имея только одного лидера одновременно, все валидаторы могут повторять одинаковые копии книги. Однако недостаток лишь одного лидера состоит в том, что злонамеренный лидер способен цензурировать голоса и транзакции. Так как цензуру нельзя отличать от сетевых пакетов, кластер не может просто выбрать один узел для хранения роли лидера бессрочно. Вместо этого кластер сводит к минимуму влияние злонамеренного лидера, вращая, какой узел берет на себя лидерство.
 
-Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that an entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
+Каждый валидатор выбирает предполагаемого лидера с использованием того же алгоритма, который описан ниже. Когда валидатор получает новую подписанную бухгалтерскую книгу, он может быть уверен, что запись была произведена ожидаемым лидером. Порядок слотов, которые назначает каждому лидеру, называется _график лидеров_.
 
-## Leader Schedule Rotation
+## Ротация Лидера
 
-A validator rejects blocks that are not signed by the _slot leader_. The list of identities of all slot leaders is called a _leader schedule_. The leader schedule is recomputed locally and periodically. It assigns slot leaders for a duration of time called an _epoch_. The schedule must be computed far in advance of the slots it assigns, such that the ledger state it uses to compute the schedule is finalized. That duration is called the _leader schedule offset_. Solana sets the offset to the duration of slots until the next epoch. That is, the leader schedule for an epoch is calculated from the ledger state at the start of the previous epoch. The offset of one epoch is fairly arbitrary and assumed to be sufficiently long such that all validators will have finalized their ledger state before the next schedule is generated. A cluster may choose to shorten the offset to reduce the time between stake changes and leader schedule updates.
+Валидатор отклоняет блоки, не подписанные _ лидером слота _. Список идентичностей всех лидеров слотов называется _расписание лидеров_. Расписание Лидера пересчитывается локально и периодически. Он назначает лидеров на длительное время под названием _эпоха_. Расписание должно быть рассчитано заблаговременно до назначенных ячеек, таким образом, что состояние бухгалтерской книги оно использует для вычисления графика завершено. Эта продолжительность называется _ смещением расписания лидера _. Solana задает смещение на продолжительность слотов до следующей эпохи. То есть, график лидера эпохи рассчитывается по состоянию бухгалтерской книги в начале предыдущей эпохи. Смещение одной эпохи является достаточно произвольным и, как предполагается, достаточно длинным, чтобы все проверяющие лица завершили свою бухгалтерскую книгу до составления следующего графика. Кластер может сократить смещение для сокращения времени между изменениями ставки и обновлением лидерского расписания.
 
-While operating without partitions lasting longer than an epoch, the schedule only needs to be generated when the root fork crosses the epoch boundary. Since the schedule is for the next epoch, any new stakes committed to the root fork will not be active until the next epoch. The block used for generating the leader schedule is the first block to cross the epoch boundary.
+При работе без разделов длиннее эпохи, расписание нужно генерировать только тогда, когда корневая ветка пересекает границу эпохи. Поскольку расписание на следующую эпоху, любые новые ставки, направленные на корневую ветку, не будут активными до следующей эпохи. Блок, используемый для формирования плана лидера, является первым блоком, пересекающим границу эпохи.
 
-Without a partition lasting longer than an epoch, the cluster will work as follows:
+Без раздела, проходящего дольше, чем эпоха, группа будет работать следующим образом:
 
-1. A validator continuously updates its own root fork as it votes.
-2. The validator updates its leader schedule each time the slot height crosses an epoch boundary.
+1. Валидатор постоянно обновляет свои корневые ветки при голосовании.
+2. Валидатор обновляет график каждый раз, когда высота слота пересекает границу эпохи.
 
-For example:
+Например:
 
-The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100, 101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
+Длительность эпохи 100 слотов. Корневая ветка обновляется с высоты слота от ветки 99 до ветки, рассчитанной при высоте слота 102. Форки с ячейками на высоте 100, 101 были пропущены из-за сбоев. Новое расписание лидера рассчитывается с помощью форка на высоте слота 102. Он активен от слота 200 до обновления снова.
 
-No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
+Никаких несоответствий не существует, так как каждый валидатор, который проводит голосование с кластером, пропущен 100 и 101 когда его корень проходит 102. Все валидаторы, независимо от формы голосования, будут привержены корню 102, или потомку 102.
 
-### Leader Schedule Rotation with Epoch Sized Partitions.
+### Расписание Лидера поворачивается с Эпохи Разбитых Участков.
 
-The duration of the leader schedule offset has a direct relationship to the likelihood of a cluster having an inconsistent view of the correct leader schedule.
+Продолжительность сметы смещения руководителя имеет прямое отношение к вероятности кластера с непоследовательным взглядом на правильный график руководителя.
 
-Consider the following scenario:
+Рассмотрим следующий сценарий:
 
-Two partitions that are generating half of the blocks each. Neither is coming to a definitive supermajority fork. Both will cross epoch 100 and 200 without actually committing to a root and therefore a cluster-wide commitment to a new leader schedule.
+Два раздела, которые генерируют половину блоков каждой. Ни один из них не приезжает на окончательную ветку супербольшинства. И то и другое перейдет к 100 и 200 эпоху, фактически не взяв на себя обязательств по корню и тем самым взяв на себя обязательства по новому графику лидера.
 
-In this unstable scenario, multiple valid leader schedules exist.
+В этом нестабильном сценарии существует несколько допустимых расписаний лидеров.
 
-- A leader schedule is generated for every fork whose direct parent is in the previous epoch.
-- The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
+- Для каждого форка, непосредственно родителя которого находится в предыдущей эпохе, формируется график лидеров.
+- График лидера действителен после начала следующей эпохи для потомков до тех пор, пока не будет обновлен.
 
-Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much much larger then slot time and the expected length for a fork to be committed to root.
+Расписание каждого раздела будет изменяться после того, как раздел длится больше чем эпох. По этой причине длительность эпохи должна быть гораздо большим, чем слот-время и ожидаемая длина ветки должна быть привержена root.
 
-After observing the cluster for a sufficient amount of time, the leader schedule offset can be selected based on the median partition duration and its standard deviation. For example, an offset longer then the median partition duration plus six standard deviations would reduce the likelihood of an inconsistent ledger schedule in the cluster to 1 in 1 million.
+После соблюдения кластера достаточно времени, Предварительное смещение может быть выбрано исходя из средней продолжительности раздела и его стандартного отклонения. Например, длиннее смещения, чем медиана продолжительности разделов плюс шесть стандартных отклонений снизит вероятность того, что несогласованный график работы в этой группе вопросов достигнет 1 миллиона.
 
-## Leader Schedule Generation at Genesis
+## Генерация расписания Лидера в Генезисе
 
-The genesis config declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis config as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
+Конфиг genesis объявляет первого лидера первой эпохи. Этот лидер заканчивается в соответствии с первыми двумя эпохами, поскольку лидер также формируется в слоте 0 на следующий эпох. Длина первых двух эпох также может быть определена в конфигурации genesis. Минимальная длина первых эпохи должна быть больше или равна максимальной глубине отката, как это определено в [Башне BFT](../implemented-proposals/tower-bft.md).
 
-## Leader Schedule Generation Algorithm
+## Генерация расписания Лидера в Генезисе
 
-Leader schedule is generated using a predefined seed. The process is as follows:
+Расписание Лидера сгенерировано с помощью предопределенного seed. Этот процесс является следующим:
 
-1. Periodically use the PoH tick height \(a monotonically increasing counter\) to seed a stable pseudo-random algorithm.
-2. At that height, sample the bank for all the staked accounts with leader identities that have voted within a cluster-configured number of ticks. The sample is called the _active set_.
-3. Sort the active set by stake weight.
-4. Use the random seed to select nodes weighted by stake to create a stake-weighted ordering.
-5. This ordering becomes valid after a cluster-configured number of ticks.
+1. Периодически используйте высоту РоН тика \(монотонно увеличивающийся счет\) для создания стабильного алгоритма псевдослучайного выбора.
+2. На этой высоте дайте образец банку для всех счетов с идентификаторами лидера, которые проголосовали в пределах кластера настроенного количества тиков. Образец называется _активным набором_.
+3. Сортировка активного по весу пикета.
+4. Используйте случайный семенной знак для выбора узлов, взвешенных по цене, чтобы создать расчетно-взвешенный порядок в каждом конкретном случае.
+5. Этот порядок становится действительным после настраиваемого кластером количества тиков.
 
-## Schedule Attack Vectors
+## Расписание Векторов атаки
 
-### Seed
+### Сид
 
-The seed that is selected is predictable but unbiasable. There is no grinding attack to influence its outcome.
+Выбранные семена предсказуемы, но непредсказуемы. Не существует грабежей, влияющих на его результат.
 
-### Active Set
+### Активный набор
 
-A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
+Лидер может предсказать активный набор путем цензуры валидатора голосов. Для лидеров существует два возможных способа цензуры активного набора:
 
-- Ignore votes from validators
-- Refuse to vote for blocks with votes from validators
+- Игнорировать голоса от валидаторов
+- Отклонить голосование за блоки голосами от валидаторов
 
-To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
+Снизить вероятность цензуры, активный набор рассчитывается по границе смещения лидера в течение _активного установленного времени выборки_. Продолжительность отбора активной выборки достаточно длинная, чтобы голоса были собраны несколькими лидерами.
 
-### Staking
+### Стейкинг
 
-Leaders can censor new staking transactions or refuse to validate blocks with new stakes. This attack is similar to censorship of validator votes.
+Лидеры могут цензурить новые операции разбивки или отказываться проверять блоки с помощью новых ставок. Эта атака аналогична цензуре валидаторов голосов.
 
-### Validator operational key loss
+### Потеря рабочего ключа валидатора
 
-Leaders and validators are expected to use ephemeral keys for operation, and stake owners authorize the validators to do work with their stake via delegation.
+Руководители и валидаторы должны использовать эфемерные ключи для эксплуатации, а владельцы уполномочивают валидаторов работать с их интересами через делегирование.
 
-The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly by co-signing a validator vote even though the stake is currently delegated to a validator.
+Кластер должен быть способен восстановить после потери всех эфемерных ключей, используемых лидерами и валидаторами, которые могут происходить через общую уязвимость программного обеспечения, разделяемую всеми узлами. Владельцы размещения должны иметь возможность голосовать непосредственно путем совместного подписания голосования валидатора, даже если ставка в настоящее время делегирована валидатору.
 
-## Appending Entries
+## Добавление записей
 
-The lifetime of a leader schedule is called an _epoch_. The epoch is split into _slots_, where each slot has a duration of `T` PoH ticks.
+Время жизни расписания лидера называется _эпоха_. Эпоха делится на _слотов_, где продолжительность каждой слота `T` РоН тиков.
 
-A leader transmits entries during its slot. After `T` ticks, all the validators switch to the next scheduled leader. Validators must ignore entries sent outside a leader's assigned slot.
+Лидер передает записи во время своего слота. После `Т` тиков, все валидаторы переключаются на следующего запланированного лидера. Валидаторы должны игнорировать записи, отправленные вне назначенного лидера.
 
-All `T` ticks must be observed by the next leader for it to build its own entries on. If entries are not observed \(leader is down\) or entries are invalid \(leader is buggy or malicious\), the next leader must produce ticks to fill the previous leader's slot. Note that the next leader should do repair requests in parallel, and postpone sending ticks until it is confident other validators also failed to observe the previous leader's entries. If a leader incorrectly builds on its own ticks, the leader following it must replace all its ticks.
+Все `T` такты должны соблюдаться следующим лидером для того, чтобы создать свои собственные записи. Если записи не замечены \(лидер недоступен\) или записи недопустимы \(лидер ошибочно или злонамеренно\), Следующий лидер должен предъявить тики, чтобы заполнить ячейку предыдущего лидера. Обратите внимание, что следующий лидер должен выполнять запросы на ремонт параллельно, и откладывать отсылку тиков до тех пор, пока он не будет уверен, другие валидаторы также не будут соблюдать предыдущие позиции лидера. Если лидер некорректно строится на собственных листах, то следующий за ним лидер должен заменить все его тики.

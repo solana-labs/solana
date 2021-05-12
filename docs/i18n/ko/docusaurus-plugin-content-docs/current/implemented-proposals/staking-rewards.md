@@ -1,57 +1,57 @@
 ---
-title: Staking Rewards
+title: 스테이킹 보상
 ---
 
-A Proof of Stake \(PoS\), \(i.e. using in-protocol asset, SOL, to provide secure consensus\) design is outlined here. Solana implements a proof of stake reward/security scheme for validator nodes in the cluster. The purpose is threefold:
+지분 증명 \ (PoS \), \ (즉, 안전한 합의를 제공하기 위해 프로토콜 내 자산 SOL 사용 \) 설계가 여기에 요약되어 있습니다. Solana는 클러스터의 밸리데이터 노드에 대한 지분 증명 보상 / 보안 체계를 구현합니다. 목적은 세 가지입니다.
 
-- Align validator incentives with that of the greater cluster through
+- -밸리데이터 인센티브를 더 큰 클러스터의 인센티브와 정렬
 
-  skin-in-the-game deposits at risk
+  위험에 처한 게임 내 예금
 
-- Avoid 'nothing at stake' fork voting issues by implementing slashing rules
+- -슬래싱 규칙을 구현하여 포크 투표 문제를 '위탁 없음'방지
 
-  aimed at promoting fork convergence
+  포크 수렴 촉진을 목표로
 
-- Provide an avenue for validator rewards provided as a function of validator
+- -밸리데이터의 기능으로 제공되는 밸리데이터 보상의 통로 제공
 
-  participation in the cluster.
+  클러스터 참여.
 
-While many of the details of the specific implementation are currently under consideration and are expected to come into focus through specific modeling studies and parameter exploration on the Solana testnet, we outline here our current thinking on the main components of the PoS system. Much of this thinking is based on the current status of Casper FFG, with optimizations and specific attributes to be modified as is allowed by Solana's Proof of History \(PoH\) blockchain data structure.
+특정 구현에 대한 많은 세부 사항이 현재 고려 중이며 Solana 테스트 넷의 특정 모델링 연구 및 매개 변수 탐색을 통해 초점을 맞출 것으로 예상되지만 여기서는 PoS 시스템의 주요 구성 요소에 대한 현재 생각을 요약합니다. 이러한 사고의 대부분은 Solana의 Proof of History \ (역사증명 \) 블록체인 데이터 구조에서 허용하는대로 최적화 및 특정 속성이 수정되는 Casper FFG의 현재 상태를 기반으로합니다.
 
-## General Overview
+## 일반 개요
 
-Solana's ledger validation design is based on a rotating, stake-weighted selected leader broadcasting transactions in a PoH data structure to validating nodes. These nodes, upon receiving the leader's broadcast, have the opportunity to vote on the current state and PoH height by signing a transaction into the PoH stream.
+Solana의 원장 검증 설계는 역사증명 데이터 구조의 거래를 검증 노드에 브로드 캐스팅하는 순환 지분 가중치 선택된 리더를 기반으로합니다. 리더의 방송을 수신하면 이러한 노드는 거래를 역사증명 스트림에 서명하여 현재 상태와 역사증명 높이에 투표 할 수 있습니다.
 
-To become a Solana validator, one must deposit/lock-up some amount of SOL in a contract. This SOL will not be accessible for a specific time period. The precise duration of the staking lockup period has not been determined. However we can consider three phases of this time for which specific parameters will be necessary:
+Solana 밸리데이터가 되려면 컨트랙트에 일정량의 SOL을 입금 / 잠금해야합니다. 이 SOL은 특정 기간 동안 액세스 할 수 없습니다. 스테이킹 락업 기간의 정확한 기간은 결정되지 않았습니다. 그러나 특정 매개 변수가 필요한이 시간의 세 단계를 고려할 수 있습니다.
 
-- _Warm-up period_: which SOL is deposited and inaccessible to the node,
+- _Warm-up period_ : 어떤 SOL이 입금되고 노드에 액세스 할 수 없는지,
 
-  however PoH transaction validation has not begun. Most likely on the order of
+  그러나 역사증명 트랜잭션 유효성 검사가 시작되지 않았습니다. 대부분의 순서에
 
-  days to weeks
+  며칠에서 몇 주
 
-- _Validation period_: a minimum duration for which the deposited SOL will be
+- _Validation period_ : 입금 된 SOL이 유지되는 최소 기간
 
-  inaccessible, at risk of slashing \(see slashing rules below\) and earning
+  액세스 할 수 없으며 \ (아래의 슬래싱 규칙 참조 \) 및 수익을 올릴 위험이 있습니다.
 
-  rewards for the validator participation. Likely duration of months to a
+  밸리데이터 참여에 대한 보상. 가능한 개월 기간
 
-  year.
+  년.
 
 - _Cool-down period_: a duration of time following the submission of a
 
-  'withdrawal' transaction. During this period validation responsibilities have
+  '출금'거래. 이 기간 동안 검증 책임은
 
-  been removed and the funds continue to be inaccessible. Accumulated rewards
+  제거되고 자금은 계속 액세스 할 수 없습니다. 누적 보상
 
-  should be delivered at the end of this period, along with the return of the
+  이 기간이 끝나면 반품과 함께 배송되어야합니다.
 
-  initial deposit.
+  초기 예금.
 
-Solana's trustless sense of time and ordering provided by its PoH data structure, along with its [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast and transmission design, should provide sub-second transaction confirmation times that scale with the log of the number of nodes in the cluster. This means we shouldn't have to restrict the number of validating nodes with a prohibitive 'minimum deposits' and expect nodes to be able to become validators with nominal amounts of SOL staked. At the same time, Solana's focus on high-throughput should create incentive for validation clients to provide high-performant and reliable hardware. Combined with potential a minimum network speed threshold to join as a validation-client, we expect a healthy validation delegation market to emerge. To this end, Solana's testnet will lead into a "Tour de SOL" validation-client competition, focusing on throughput and uptime to rank and reward testnet validators.
+\[터빈\] (https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) 데이터 방송 및 전송 설계와 함께 역사증명 데이터 구조에서 제공하는 Solana의 신뢰할 수없는 시간 감각과 순서는 1 초 미만을 제공해야합니다. 클러스터의 노드 수 로그에 따라 확장되는 트랜잭션 확인 시간 이는 금지 된 '최소 예치금'으로 검증 노드의 수를 제한 할 필요가 없으며 노드가 명목상의 SOL 지분을 가진 밸리데이터가 될 수있을 것으로 기 대해서는 안된다는 것을 의미합니다. 동시에, 높은 처리량에 대한 Solana의 초점은 검증 클라이언트가 고성능의 안정적인 하드웨어를 제공하도록 인센티브를 제공해야합니다. 검증 클라이언트로 참여할 수있는 잠재적 인 최소 네트워크 속도 임계 값과 함께 건강한 검증 위임 시장이 나타날 것으로 예상됩니다. 이를 위해 Solana의 테스트 넷은 테스트 넷 밸리데이터의 순위를 매기고 보상하기위한 처리량 및 가동 시간에 초점을 맞춘 "Tour de SOL"검증 클라이언트 경쟁으로 이어질 것입니다.
 
-## Penalties
+## 페널티
 
-As discussed in the [Economic Design](ed_overview/ed_overview.md) section, annual validator interest rates are to be specified as a function of total percentage of circulating supply that has been staked. The cluster rewards validators who are online and actively participating in the validation process throughout the entirety of their _validation period_. For validators that go offline/fail to validate transactions during this period, their annual reward is effectively reduced.
+\[Economic Design\] (ed_overview / ed_overview.md) 섹션에서 논의 된 바와 같이, 연간 밸리데이터 이자율은 스테이킹 된 순환 공급의 총 비율의 함수로 지정됩니다. 클러스터는 온라인 상태이고 _ 검증 기간 _ 전체 동안 검증 프로세스에 적극적으로 참여한 밸리데이터에게 보상합니다. 이 기간 동안 오프라인 상태가되거나 거래를 검증하지 못한 밸리데이터의 경우 연간 보상이 효과적으로 감소합니다.
 
-Similarly, we may consider an algorithmic reduction in a validator's active amount staked amount in the case that they are offline. I.e. if a validator is inactive for some amount of time, either due to a partition or otherwise, the amount of their stake that is considered ‘active’ \(eligible to earn rewards\) may be reduced. This design would be structured to help long-lived partitions to eventually reach finality on their respective chains as the % of non-voting total stake is reduced over time until a supermajority can be achieved by the active validators in each partition. Similarly, upon re-engaging, the ‘active’ amount staked will come back online at some defined rate. Different rates of stake reduction may be considered depending on the size of the partition/active set.
+마찬가지로, 밸리데이터이 오프라인 상태 인 경우 밸리데이터의 활성 스테이킹 금액을 알고리즘 방식으로 줄이는 것을 고려할 수 있습니다. I.e. 즉 분할 또는 기타 이유로 인해 밸리데이터가 일정 시간 동안 비활성 상태 인 경우 '활성'으로 간주되는 \ (보상을받을 수있는 \) 지분의 양이 줄어들 수 있습니다. 이 설계는 각 파티션의 활성 밸리데이터가 과반수를 달성 할 수있을 때까지 시간이 지남에 따라 투표를하지 않는 총 지분의 %가 감소하므로 수명이 긴 파티션이 결국 각 체인에서 최종성에 도달 할 수 있도록 구조화됩니다. 마찬가지로 재 참여시 '활성'스테이킹 금액이 정해진 비율로 온라인으로 돌아옵니다. 파티션 / 활성 세트의 크기에 따라 다른 비율의 지분 감소가 고려 될 수 있습니다.

@@ -1,220 +1,90 @@
 ---
-title: "Accounts"
+title: "Cuentas"
 ---
 
-## Storing State between Transactions
+## Almacenando Estado entre Transacciones
 
-If the program needs to store state between transactions, it does so using
-_accounts_. Accounts are similar to files in operating systems such as Linux.
-Like a file, an account may hold arbitrary data and that data persists beyond
-the lifetime of a program. Also like a file, an account includes metadata that
-tells the runtime who is allowed to access the data and how.
+Si el programa necesita almacenar el estado entre las transacciones, lo hace usando _cuentas_. Las cuentas son similares a archivos en sistemas operativos como Linux. Al igual que un archivo, una cuenta puede contener datos arbitrarios y esos datos persisten más allá de la vida útil de un programa. También como un archivo, una cuenta incluye metadatos que le dice al tiempo de ejecución quién puede acceder a los datos y cómo.
 
-Unlike a file, the account includes metadata for the lifetime of the file. That
-lifetime is expressed in "tokens", which is a number of fractional native
-tokens, called _lamports_. Accounts are held in validator memory and pay
-["rent"](#rent) to stay there. Each validator periodically scans all accounts
-and collects rent. Any account that drops to zero lamports is purged. Accounts
-can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
-number of lamports.
+A diferencia de un archivo, la cuenta incluye metadatos para la vida útil del archivo. Que el tiempo de vida se expresa en "tokens", que es un número de tokens nativo fraccional, llamado _lamports_. Las cuentas se mantienen en memoria del validador y pagan ["renta"](#rent) para permanecer allí. Cada validador analiza periódicamente todas las cuentas y cobra alquiler. Cualquier cuenta que cae a cero lamports es purgada.  Las cuentas también pueden marcarse como [rent-exempt](#rent-exemption) si contienen un número de lamports.
 
-In the same way that a Linux user uses a path to look up a file, a Solana client
-uses an _address_ to look up an account. The address is a 256-bit public key.
+Del mismo modo que un usuario de Linux usa una ruta para buscar un archivo, un cliente Solana utiliza una _dirección_ para buscar una cuenta. La dirección es una clave pública de 256 bits.
 
-## Signers
+## Firmadores
 
-Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. When a
-corresponding digital signature is present it signifies that the holder of the
-account's private key signed and thus "authorized" the transaction and the
-account is then referred to as a _signer_. Whether an account is a signer or not
-is communicated to the program as part of the account's metadata. Programs can
-then use that information to make authority decisions.
+Las transacciones pueden incluir [firmas digitales](terminology.md#signature) correspondientes a las claves públicas de las cuentas referenciadas por la transacción. Cuando la firma digital correspondiente está presente, significa que el titular de la clave privada de la cuenta firmó y, por tanto, "autorizó" la transacción y la cuenta se denomina entonces como _firmante_. Si una cuenta es un firmante o no se comunica al programa como parte de los metadatos de la cuenta. Los programas pueden usar esa información para tomar decisiones de autoridad.
 
-## Read-only
+## Sólo lectura
 
-Transactions can [indicate](transactions.md#message-header-format) that some of
-the accounts it references be treated as _read-only accounts_ in order to enable
-parallel account processing between transactions. The runtime permits read-only
-accounts to be read concurrently by multiple programs. If a program attempts to
-modify a read-only account, the transaction is rejected by the runtime.
+Las transacciones pueden [indicar](transactions.md#message-header-format) que algunas de las cuentas que hace referencia son tratadas como _cuentas de solo lectura_ para permitir procesamiento de cuentas paralelas entre transacciones. El tiempo de ejecución permite que las cuentas de solo lectura sean leídas simultáneamente por varios programas. Si un programa intenta modificar una cuenta de solo lectura, la transacción es rechazada por el tiempo de ejecución.
 
-## Executable
+## Ejecutable
 
-If an account is marked "executable" in its metadata then it is considered a
-program which can be executed by including the account's public key an
-instruction's [program id](transactions.md#program-id). Accounts are marked as
-executable during a successful program deployment process by the loader that
-owns the account. For example, during BPF program deployment, once the loader
-has determined that the BPF bytecode in the account's data is valid, the loader
-permanently marks the program account as executable. Once executable, the
-runtime enforces that the account's data (the program) is immutable.
+Si una cuenta está marcada como "ejecutable" en sus metadatas, entonces se considera un programa que puede ejecutarse incluyendo la clave pública de la cuenta una instrucción [id de programa](transactions.md#program-id). Los clientes son marcados como ejecutables durante un proceso de despliegue exitoso del programa por el cargador que posee la cuenta.  Por ejemplo, durante el despliegue del programa BPF, una vez que el cargador ha determinado que el bytecode BPF en los datos de la cuenta es válido, el cargador marca permanentemente la cuenta del programa como ejecutable.  Una vez ejecutable, el tiempo de ejecución impone que los datos de la cuenta (el programa) son inmutables.
 
-## Creating
+## Creando
 
-To create an account a client generates a _keypair_ and registers its public key
-using the `SystemProgram::CreateAccount` instruction with preallocated a fixed
-storage size in bytes. The current maximum size of an account's data is 10
-megabytes.
+Para crear una cuenta, un cliente genera un keypair __ y registra su clave pública usando la instrucción `SystemProgram::CreateAccount` con un tamaño de almacenamiento fijo en bytes. El tamaño máximo actual de los datos de una cuenta es de 10 megabytes.
 
-An account address can be any arbitrary 256 bit value, and there are mechanisms
-for advanced users to create derived addresses
-(`SystemProgram::CreateAccountWithSeed`,
-[`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
+Una dirección de cuenta puede ser cualquier valor arbitrario de 256 bits, y hay mecanismos para usuarios avanzados para crear direcciones derivadas (`SystemProgram::CreateAccountWithSeed`, [`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
 
-Accounts that have never been created via the system program can also be passed
-to programs. When an instruction references an account that hasn't been
-previously created the program will be passed an account that is owned by the
-system program, has zero lamports, and zero data. But, the account will reflect
-whether it is a signer of the transaction or not and therefore can be used as an
-authority. Authorities in this context convey to the program that the holder of
-the private key associated with the account's public key signed the transaction.
-The account's public key may be known to the program or recorded in another
-account and signify some kind of ownership or authority over an asset or
-operation the program controls or performs.
+Las cuentas que nunca han sido creadas a través del programa del sistema también pueden pasarse a los programas. Cuando una instrucción hace referencia a una cuenta que no ha sido creada previamente, se le pasará al programa una cuenta que es propiedad del programa del sistema, tiene cero lamports y cero datos. Pero, la cuenta reflejará si es un firmante de la transacción o no y, por lo tanto, puede ser utilizada como una autoridad. Las autoridades en este contexto transmiten al programa que el titular de la clave privada asociada a la clave pública de la cuenta firmó la transacción. La clave pública de la cuenta puede ser conocida por el programa o registrada en otra cuenta y significa algún tipo de propiedad o autoridad sobre un activo o el funcionamiento del programa controla o realiza.
 
-## Ownership and Assignment to Programs
+## Propiedad y asignación a programas
 
-A created account is initialized to be _owned_ by a built-in program called the
-System program and is called a _system account_ aptly. An account includes
-"owner" metadata. The owner is a program id. The runtime grants the program
-write access to the account if its id matches the owner. For the case of the
-System program, the runtime allows clients to transfer lamports and importantly
-_assign_ account ownership, meaning changing owner to different program id. If
-an account is not owned by a program, the program is only permitted to read its
-data and credit the account.
+Una cuenta creada es inicializada para ser _propiedad_ de un programa integrado llamado el programa de sistema y se llama una _cuenta de sistema_ apropiadamente. Una cuenta incluye metadatos "propietarios". El propietario es un id del programa. El tiempo de ejecución otorga al programa permisos de escritura a la cuenta si su id coincide con el propietario. Para el caso del programa del sistema, el tiempo de ejecución permite a los clientes transferir lamports y es importante _asignar_ la propiedad de la cuenta, significa cambiar el propietario a otro id de programa. Si una cuenta no es propiedad de un programa, el programa solo puede leer sus datos y acreditar la cuenta.
 
-## Verifying validity of unmodified, reference-only accounts
+## Renta
 
-For security purposes, it is recommended that programs check the validity of any
-account it reads but does not modify.
+Mantener las cuentas vivas en Solana incurre en un costo de almacenamiento llamado _renta_ porque el clúster debe mantener activamente los datos para procesar cualquier transacción futura en ella. Esto es diferente de Bitcoin y Ethereum, donde las cuentas de almacenamiento no incurren en ningún costo.
 
-The security model enforces that an account's data can only be modified by the
-account's `Owner` program. Doing so allows the program to trust that the data
-passed to them via accounts they own will be in a known and valid state. The
-runtime enforces this by rejecting any transaction containing a program that
-attempts to write to an account it does not own. But, there are also cases
-where a program may merely read an account they think they own and assume the
-data has only been written by themselves and thus is valid. But anyone can
-issues instructions to a program, and the runtime does not know that those
-accounts are expected to be owned by the program. Therefore a malicious user
-could create accounts with arbitrary data and then pass these accounts to the
-program in the place of a valid account. The arbitrary data could be crafted in
-a way that leads to unexpected or harmful program behavior.
+La renta es cargada del saldo de una cuenta por el tiempo de ejecución en el primer acceso (incluyendo la creación inicial de la cuenta) en la época actual por las transacciones o una vez por una época si no hay transacciones. La comisión es actualmente una tasa fija, medida en bytes-times-epochs. La comisión puede cambiar en el futuro.
 
-To check an account's validity, the program should either check the account's
-address against a known value or check that the account is indeed owned
-correctly (usually owned by the program itself).
+Para facilitar el cálculo de la renta, ésta se cobra siempre para una sola época completa. El alquiler no se prorratea, lo que significa que no hay tasas ni reembolsos por épocas parciales. Esto significa que, al crear la cuenta, la primera renta cobrada no es para la época parcial actual, sino que se cobra por adelantado para la siguiente época completa. Los cobros de renta posteriores son para otras épocas futuras. Por otro lado, si el saldo de una cuenta ya cobrada cae por debajo de otra cuota de alquiler a mitad de época, la cuenta seguirá existiendo durante la época actual y se purgará inmediatamente al comienzo de la siguiente.
 
-One example is when programs read a sysvar. Unless the program checks the
-address or owner, it's impossible to be sure whether it's a real and valid
-sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks
-the sysvar's validity during
-deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+Las cuentas pueden estar exentas del pago del alquiler si mantienen un saldo mínimo. Esta exención de alquiler se describe a continuación.
 
-If the program always modifies the account in question, the address/owner check
-isn't required because modifying an unowned (could be the malicious account with
-the wrong owner) will be rejected by the runtime, and the containing transaction
-will be thrown out.
+### Calculación del alquiler
 
-## Rent
+Nota: La tarifa de alquiler puede cambiar en el futuro.
 
-Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
-cluster must actively maintain the data to process any future transactions on
-it. This is different from Bitcoin and Ethereum, where storing accounts doesn't
-incur any costs.
+A partir de la escritura, la tarifa fija de alquiler es 19.055441478439427 lamports por byte-epoch en la red de pruebas y clusters mainnet-beta. Una [época ](terminology.md#epoch) tiene como objetivo ser de 2 días (Para devnet, la tasa de alquiler 0,3608183131797095 lamports por byte-epoc con su época de 54m36s de duración).
 
-The rent is debited from an account's balance by the runtime upon the first
-access (including the initial account creation) in the current epoch by
-transactions or once per an epoch if there are no transactions. The fee is
-currently a fixed rate, measured in bytes-times-epochs. The fee may change in
-the future.
-
-For the sake of simple rent calculation, rent is always collected for a single,
-full epoch. Rent is not pro-rated, meaning there are neither fees nor refunds
-for partial epochs. This means that, on account creation, the first rent
-collected isn't for the current partial epoch, but collected up front for the
-next full epoch. Subsequent rent collections are for further future epochs. On
-the other end, if the balance of an already-rent-collected account drops below
-another rent fee mid-epoch, the account will continue to exist through the
-current epoch and be purged immediately at the start of the upcoming epoch.
-
-Accounts can be exempt from paying rent if they maintain a minimum balance. This
-rent-exemption is described below.
-
-### Calculation of rent
-
-Note: The rent rate can change in the future.
-
-As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch
-on the testnet and mainnet-beta clusters. An [epoch](terminology.md#epoch) is
-targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports
-per byte-epoch with its 54m36s-long epoch).
-
-This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching
-to 3.56 SOL per mebibyte-year):
+Este valor se calcula para el objetivo 0.01 SOL por mebibyte-day (exactamente coincidiendo a 3.56 SOL por mebibyte-año):
 
 ```text
-Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
+Tarifa de alquiler: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(aprox. día en un año) / (1024 * 1024)(1 MiB) / (365.25/2)(epocas en 1 año)
 ```
 
-And rent calculation is done with the `f64` precision and the final result is
-truncated to `u64` in lamports.
+Y el cálculo del alquiler se hace con la precisión `f64` y el resultado final se trunca a `u64` en lamports.
 
-The rent calculation includes account metadata (address, owner, lamports, etc)
-in the size of an account. Therefore the smallest an account can be for rent
-calculations is 128 bytes.
+El cálculo del alquiler incluye metadatos de la cuenta (dirección, propietario, lámports, etc) en el tamaño de una cuenta. Por lo tanto, la cuenta más pequeña puede ser para el alquiler cálculos es de 128 bytes.
 
-For example, an account is created with the initial transfer of 10,000 lamports
-and no additional data. Rent is immediately debited from it on creation,
-resulting in a balance of 7,561 lamports:
+Por ejemplo, se crea una cuenta con la transferencia inicial de 10.000 lamports y sin datos adicionales. El alquiler se debitará inmediatamente al crear, resultando en un saldo de 7,561 lamports:
+
 
 ```text
-Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
-Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
+Alquiler: 2.439 = 19,055441478439427 (tasa de alquiler) * 128 bytes (tamaño mínimo de la cuenta) * 1 (época) Saldo de la cuenta: 7.561 = 10.000 (lamports transferidas) - 2.439 (tasa de alquiler de esta cuenta para una época)
 ```
 
-The account balance will be reduced to 5,122 lamports at the next epoch even if
-there is no activity:
+El saldo de la cuenta se reducirá a 5,122 lamports en la siguiente época incluso si no hay actividad:
 
 ```text
-Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fee for an epoch)
+Saldo de la cuenta: 5.122 = 7.561 (saldo actual) - 2.439 (cuota de alquiler de esta cuenta por una época)
 ```
 
-Accordingly, a minimum-size account will be immediately removed after creation
-if the transferred lamports are less than or equal to 2,439.
+En consecuencia, una cuenta de tamaño mínimo será inmediatamente eliminada después de la creación si los lamports transferidos son menores o iguales a 2,439.
 
-### Rent exemption
+### Exención de alquiler
 
-Alternatively, an account can be made entirely exempt from rent collection by
-depositing at least 2 years-worth of rent. This is checked every time an
-account's balance is reduced and rent is immediately debited once the balance
-goes below the minimum amount.
+Alternativamente, se puede hacer una cuenta completamente exenta de la recolección de alquileres depositando al menos 2 años de alquiler. Esto se comprueba cada vez que se reduce el saldo de una cuenta y el alquiler se debita inmediatamente una vez que el saldo se encuentre por debajo de la cantidad mínima.
 
-Program executable accounts are required by the runtime to be rent-exempt to
-avoid being purged.
+Las cuentas ejecutables del programa son requeridas por el tiempo de ejecución para ser rent-exempt a evitar ser purgadas.
 
-Note: Use the [`getMinimumBalanceForRentExemption` RPC
-endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the
-minimum balance for a particular account size. The following calculation is
-illustrative only.
+Nota: Utilice el endpoint [`getMinimumBalanceForRentExemption` RPC ](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) para calcular el balance mínimo para un tamaño de cuenta en particular. El siguiente cálculo es solo ilustrativo.
 
-For example, a program executable with the size of 15,000 bytes requires a
-balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
+Por ejemplo, un programa ejecutable con el tamaño de 15,000 bytes requiere un saldo de 105,290,880 lamports (=~ 0.105 SOL) para ser rent-exempt:
 
 ```text
-105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
+105,290,880 = 19.055441478439427 (tarifa de comisión) * (128 + 15_000)(tamaño de la cuenta incluyendo metadatos) * ((365.25/2) * 2)(épocas en 2 años)
 ```
-
-Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
-
-```text
-$ solana rent 15000
-Rent per byte-year: 0.00000348 SOL
-Rent per epoch: 0.000288276 SOL
-Rent-exempt minimum: 0.10529088 SOL
-```
-
-Note: Rest assured that, should the storage rent rate need to be increased at some
-point in the future, steps will be taken to ensure that accounts that are rent-exempt
-before the increase will remain rent-exempt afterwards

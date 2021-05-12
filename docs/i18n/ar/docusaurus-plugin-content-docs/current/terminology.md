@@ -1,314 +1,303 @@
 ---
-title: Terminology
+title: المُصطلحات
 ---
 
-The following terms are used throughout the documentation.
+هذه المُصطلحات الآتية مُستخدمة بكثرة في جميع الوثائق.
 
-## account
+## الحساب
 
-A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
+ملف دائم تتم معالجته بواسطة المفتاح العام [ public key](terminology.md#public-key) وبواسطة [lamports](terminology.md#lamport) تتبعه بشكل دائم.
 
-## app
+## تطبيق
 
-A front-end application that interacts with a Solana cluster.
+تطبيق واجهة أمامية يتفاعل مع مجموعة Solana.
 
-## bank state
+## حالة البنك
 
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+نتيجة تفسير جميع البرامج في دفتر الأستاذ عند إرتفاع علامة [tick height](terminology.md#tick-height) مُعين. ويتضمن على الأقل مجموعة جميع الحسابات [accounts](terminology.md#account) التي تحتوي على رموز [native tokens](terminology.md#native-tokens) غير صفرية.
 
-## block
+## الكُتلة (block)
 
-A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
+وهي مجموعة متلاصقة من المدخلات [entries](terminology.md#entry) في دفتر الأستاذ (ledger) ويغطيها صوت [vote](terminology.md#ledger-vote). ينتج القائد [leader](terminology.md#leader) بحد أقصى كتلة واحدة لكل فُتحة [slot](terminology.md#slot).
 
-## blockhash
+## تجزئة الكُتلة (blockhash)
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+هي تجزئة مقاومة الصورة الأولية [hash](terminology.md#hash) في دفتر الأستاذ [ledger](terminology.md#ledger) عند ارتفاع كتلة [block height](terminology.md#block-height) معين. وهو مأخوذ من آخر مُعرف دخول [entry id](terminology.md#entry-id) في الفُتحة
 
-## block height
+## إرتفاع الكتلة (block height)
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
+وهو عدد الكتل [blocks](terminology.md#block) أسفل الكتلة الحالية. أول كتلة بعد كتلة مرحلة التكوين[genesis block](terminology.md#genesis-block) لها إرتفاع بقيمة واحد.
 
-## bootstrap validator
+## المُدقّق التمهيدي (bootstrap validator)
 
-The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
+هو أول مُدقّق [validator](terminology.md#validator) يقوم بإنتاج كتلة [block](terminology.md#block).
 
-## CBC block
+## كتلة CBC
 
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+وهي أصغر جزء مشفر من دفتر الأستاذ (ledger)، وأي قطعة مشفرة من دفتر الأستاذ (ledger) ستكون مكونة من مجموعة كتل CBC. `ledger_segment_size / cbc_block_size` ليكون دقيقًا.
 
-## client
+## العميل (Client)
 
-A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
+A [node](terminology.md#node) والتي تستخدم المجموعة [cluster](terminology.md#cluster).
 
-## cluster
+## المجموعة (cluster)
 
-A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
+وهي عبارة عن مجموعة من المدقّقين [validators](terminology.md#validator) الذين يقومون بالحفاظ على دفتر أستاذ [ledger](terminology.md#ledger) واحد.
 
-## confirmation time
+## زمن التأكيد
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and creating a [confirmed block](terminology.md#confirmed-block).
+الزمن بحسب ساعة الحائط بين إنشاء قائد [leader](terminology.md#leader) علامة دخول [tick entry](terminology.md#tick) وإنشائه كتلة مؤكدة [confirmed block](terminology.md#confirmed-block).
 
-## confirmed block
+## كتلة مؤكدة
 
-A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+هي كتلة [block](terminology.md#block) قد حصلت على غالبية [supermajority](terminology.md#supermajority) في أصوات دفتر الأستاذ [ledger votes](terminology.md#ledger-vote) بتفسير لدفتر الأستاذ يتوافق مع الذي لدى القائد.
 
-## control plane
+## لوحة التحكم (control plane)
 
-A gossip network connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
+وهي عبارة عن شبكة القيل والقال والتي تربط جميع العقد [nodes](terminology.md#node) في مجموعة ما [cluster](terminology.md#cluster).
 
-## cooldown period
+## فترة التبريد (cooldown period)
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+عبارة عن عدد من الفترات [epochs](terminology.md#epoch) بعد تعطيل حصة [stake](terminology.md#stake) حتى تصبح متاحة للسحب تدريجيًا. خلال تلك الفترة، يعتبر التحصيص "غير منشِّط". للمزيد من المعلومات حول الإحماء والتبريد: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
-## credit
+## الرصيد (credit)
 
-See [vote credit](terminology.md#vote-credit).
+راجع إئتمان التصويت [vote credit](terminology.md#vote-credit).
 
-## data plane
+## لوحة البيانات (data plane)
 
-A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
+وهي عبارة عن شبكة متعددة البث والتي تستخدم لتدقيق المدخلات [entries](terminology.md#entry) بكفاءة والحصول على إجماع.
 
-## drone
+## الطائرة الآلية (drone)
 
-An off-chain service that acts as a custodian for a user's private key. It typically serves to validate and sign transactions.
+وهي عبارة عن خدمة خارج السلسلة والتي تقوم بدور القيّم على المفتاخ الخاص للمستخدم. وعادة ما تقوم بتدقيق المعاملات وتوقيعها.
 
-## entry
+## المُدخلة (entry)
 
-An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#tick) or a [transactions entry](terminology.md#transactions-entry).
+وتكون المدخلة في دفتر الإستاذ [ledger](terminology.md#ledger) إما عبارة عن علامة [tick](terminology.md#tick) أو مدخلة معاملات [transactions entry](terminology.md#transactions-entry).
 
-## entry id
+## مُعرف المُدخلة (entry id)
 
-A preimage resistant [hash](terminology.md#hash) over the final contents of an entry, which acts as the [entry's](terminology.md#entry) globally unique identifier. The hash serves as evidence of:
+هي تجزئة مقاومة الصورة الأولية [hash](terminology.md#hash) على المحتويات النهائية لمدخلة ما، والتي تعمل كمعرف فريد عالمي ل [entry's](terminology.md#entry). وتعتبر التجزئة بمثابة دليل على:
 
-- The entry being generated after a duration of time
-- The specified [transactions](terminology.md#transaction) are those included in the entry
-- The entry's position with respect to other entries in [ledger](terminology.md#ledger)
+- أن المُدخلة تم توليدها بعد فترة من الزمن
+- أن المعاملات [transactions](terminology.md#transaction) المحددة هي تلك المدرجة في المدخلة
+- موقع المدخلة بالنسبة لغيرها من المدخلات في دفتر الأستاذ [ledger](terminology.md#ledger)
 
-See [Proof of History](terminology.md#proof-of-history).
+راجع إثبات التاريخ [Proof of History](terminology.md#proof-of-history).
 
-## epoch
+## الفترة (epoch)
 
-The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
+وهي عبارة عن المدة، أو عدد الفُتحات [slots](terminology.md#slot) على سبيل المثال، والتي يكون جدول القائد [leader schedule](terminology.md#leader-schedule) عندها صالحًا.
 
-## fee account
+## حساب الرسوم
 
-The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
+يتعبر حساب الرسوم في المعاملات بأنه الذي يدفع تكلفة إدخال المعاملة في دفتر الأستاذ (ledger). وهذا هو الحساب الأول في المعاملة. يجب أن يتم الإعلان بأن هذا الحساب قابل للقراءة والكتابة (يمكن التعديل عليه) في المعاملة لأن الدفع للمعاملة يؤخذ من ميزانية الحساب.
 
-## finality
+## وقت إثبات المُعاملة (Finality)
 
-When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common [root](terminology.md#root).
+عندما تتشارك العقد التي تمثل ثلثي الحصة [stake](terminology.md#stake) نفس الجذر [root](terminology.md#root).
 
-## fork
+## الإنقسام أو الشوكة (fork)
 
-A [ledger](terminology.md#ledger) derived from common entries but then diverged.
+وهو عبارة عن [ledger](terminology.md#ledger) مأخوذ من مدخلات مشتركة ولكنه يتباعد بعد ذلك.
 
-## genesis block
+## كتلة مرحلة التكوين (genesis block)
 
-The first [block](terminology.md#block) in the chain.
+وهي عبارة عن أول كتلة [block](terminology.md#block) في السلسلة.
 
-## genesis config
+## تحضير إعدادات مرحلة التكوين
 
-The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
+وهو عبارة عن ملف التكوين الذي يقوم بتجهيز دفتر الأستاذ [ledger](terminology.md#ledger) من أجل كتلة مرحلة التكوين [genesis block](terminology.md#genesis-block).
 
-## hash
+## التجزئة (hash)
 
-A digital fingerprint of a sequence of bytes.
+وهي عبارة عن بصمة رقمية لسلسلة من البايتات.
 
-## inflation
+## التَضَخُّم (inflation)
 
-An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
+وهو عبارة عن زيادة في معروض الرموز مع الزمن المستغرق من أجل تمويل مكافآت التدقيق وتمويل التطوير المستمر لـ Solana.
 
-## instruction
+## التعليمات (Instructions)
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
+وهي عبارة عن أصغر وحدة في برنامج ما [program](terminology.md#program) والتي يمكن للعميل [client](terminology.md#client) أن يدرجها في أي معاملة [transaction](terminology.md#transaction).
 
-## keypair
+## زوج المفاتيح (keypair)
 
-A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key).
+ويتكون من مفتاح عام [public key](terminology.md#public-key) ومفتاح خاص [private key](terminology.md#private-key) مقابل له.
 
-## lamport
+## لامبورت (lamport)
 
-A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
+هو عبارة عن رمز أصلي [native token](terminology.md#native-token) كسري يحمل قيمة 0.000000001 [sol](terminology.md#sol).
 
-## leader
+## القائد (leader)
 
-The role of a [validator](terminology.md#validator) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+هو الدور الذي يلعبه المدقق [validator](terminology.md#validator) عندما يسمح للمدخلات [entries](terminology.md#entry) إلى دفتر الأستاذ [ledger](terminology.md#ledger).
 
-## leader schedule
+## جدول القائد (leader schedule)
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+وهو عبارة عن سلسلة المفاتيح العمومية [public keys](terminology.md#public-key) لمدقّق ما [validator](terminology.md#validator). وتستخدم المجموعة جدول القائد لتحديد القائد [leader](terminology.md#leader) من بين المدققين في أي لحظة من الزمن.
 
-## ledger
+## دفتر الأستاذ (ledger)
 
-A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+وهو عبارة عن قائمة من المدخلات [entries](terminology.md#entry) التي تحتوي على معاملات [transactions](terminology.md#transaction) الموقعة بواسطة عملاء [clients](terminology.md#client). من الناحية النظرية، يمكن تتبعه إلى كتلة مرحلة التكوين [genesis block](terminology.md#genesis-block)، إلا أن دفتر الأستاذ الفعلي الخاص بالمدققين [validators](terminology.md#validator) قد يحتوي فقط على كتل [blocks](terminology.md#block) للحفاظ على استخدام ذاكرة التخزين لأن القديم منها غير لازم لتدقيق الكتل المستقبلية بحسب التصميم.
 
-## ledger vote
+## تصويت دفتر الأستاذ
 
-A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a [validator's](terminology.md#validator) affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+وهو عبارة عن تجزئة [hash](terminology.md#hash) حالة المدقّق [validator's state](terminology.md#bank-state) عند ارتفاع علامة معين [tick height](terminology.md#tick-height). ويشمل التحقق من تأكيد المدقق [validator's](terminology.md#validator) بشأن استلامه كتلة معينة [block](terminology.md#block)، وكذلك الالتزام بعدم التصويت لكتلة [block](terminology.md#block) متعارضة \ (مثلًا: شوكة [fork](terminology.md#fork)\) لمدة محددة من الوقت، فترة الإغلاق [lockout](terminology.md#lockout).
 
-## light client
+## العميل الخفيف (light client)
 
-A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [validator](terminology.md#validator).
+هو ذلك العميل [client](terminology.md#client) الذي يمكنه أن يؤكد أنه يشير إلى مجموعة [cluster](terminology.md#cluster) صالحة. ويقوم بالتحقق من دفتر الأستاذ أكثر من العميل الرقيق [thin client](terminology.md#thin-client) وأقل من المدقّق [validator](terminology.md#validator).
 
-## loader
+## المُحمِّل (Loader)
 
-A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
+وهو عبارة عن برنامج [program](terminology.md#program) لديه القدرة على تفسير الترميز الثنائي للبرامج الأخرى على السلسلة.
 
-## lockout
+## فترة القِفْل (lockout)
 
-The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+وهي الفترة التي يكون فيها المدقّقُ [validator](terminology.md#validator) غير قادر على التصويت [vote](terminology.md#ledger-vote) على شوكة أو انقسام [fork](terminology.md#fork) آخر.
 
-## native token
+## الرمز الأصلي (native token)
 
-The [token](terminology.md#token) used to track work done by [nodes](terminology.md#node) in a cluster.
+هو رمز [token](terminology.md#token) يستخدم لتتبع العمل الذي قامت به العقد [nodes](terminology.md#node) في مجموعة ما.
 
-## node
+## العُقدة (node)
 
-A computer participating in a [cluster](terminology.md#cluster).
+وهو عبارة عن جهاز حاسوب يعمل ضمن مجموعة [cluster](terminology.md#cluster).
 
-## node count
+## عدد العُقدة (node count)
 
-The number of [validators](terminology.md#validator) participating in a [cluster](terminology.md#cluster).
+وهو عدد المدققين [validators](terminology.md#validator) المشاركين في مجموعة [cluster](terminology.md#cluster).
 
-## PoH
+## إثبات التاريخ (PoH)
 
-See [Proof of History](terminology.md#proof-of-history).
+انظر [Proof of History](terminology.md#proof-of-history).
 
-## point
+## النقطة (point)
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the [validator](terminology.md#validator) [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a [stake](terminology.md#stake) during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+وهي رصيد ذا وزن [credit](terminology.md#credit) في نظام المكافآت. في نظام مكافآت المدقق [validator](terminology.md#validator) [rewards regime](cluster/stake-delegation-and-rewards.md)، يكون عدد النقاط التي تستحقها حصة ما [stake](terminology.md#stake) خلال فترة سداد المدفوعات هو ناتج رصيد التصويت [vote credits](terminology.md#vote-credit) المكتسب وعدد الـ lamports الخاضعة للتحصيص.
 
-## private key
+## المفتاح الخاص (private key)
 
-The private key of a [keypair](terminology.md#keypair).
+وهو المفتاح الخاص من زوج المفاتيح [keypair](terminology.md#keypair).
 
-## program
+## البرنامج (program)
 
-The code that interprets [instructions](terminology.md#instruction).
+هو عبارة عن شيفرة تفسر التعليمات [instructions](terminology.md#instruction).
 
-## program id
+## مُعرف البرنامج (program id)
 
-The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
+وهو المفتاح العام الخاص بحساب [account](terminology.md#account) يحتوي على برنامج [program](terminology.md#program).
 
-## Proof of History
+## إثبات التاريخ
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+وهو عبارة عن حصة الإثباتات والتي يثبت كل واحد منها أن بعض البيانات قد وجدت قبل إنشاء الإثبات وأن مدة محددة من الوقت قد مرت قبل الإثبات الأخير. تمامًا مثل دالة التأخير القابلة للتحقق [VDF](terminology.md#verifiable-delay-function)، يمكن أن يتم توثيق دليل إثبات التاريخ في وقت أقل من الوقت المستهلك في إنشائه.
 
-## public key
+## المفتاح العمومي (public key)
 
-The public key of a [keypair](terminology.md#keypair).
+وهو المفتاح العام من زوج المفاتيح [keypair](terminology.md#keypair).
 
-## root
+## الجذر (root)
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a [validator](terminology.md#validator). The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+هو عبارة عن كتلة [block](terminology.md#block) أو فُتحة [slot](terminology.md#slot) وصلت أقصى إغلاق [lockout](terminology.md#lockout) على مدقق [validator](terminology.md#validator). ويعد الجذر أعلى كتلة والتي تعتبر أصل جميع الانقسامات على مدقق ما. وتعتبر جميع كتل جذر معين جذرًا بالتعدي. والكتل التي لا تعد أصلًا ولا فرعًا للجذر يتم استثناؤها ولا تؤخذ بعين الاعتبار في الإجماع، ومن الممكن أن يتم تجاهلها.
 
-## runtime
+## وقت التشغيل (runtime)
 
-The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
+وهو المكون الذي يكون فيه المدقّقُ [validator](terminology.md#validator) مسؤولًا عن تشغيل برنامج معين [program](terminology.md#program).
 
-## shred
+## القِطَعة (shred)
 
-A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
+هي عبارة عن جزء من الكتلة [block](terminology.md#block)؛ وهي أصغر وحدة مرسلة بين المدقّقين [validators](terminology.md#validator).
 
-## signature
+## التوقيع (signature)
 
-A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
+وهو توقيع من نوع 64-byte ed25519 لR (32-bytes) و S (32-bytes). بشرط أن تكون R عبارة عن نقطة إدوارد ليست ذات ترتيب صغير، و S مدرج على مدى 0 <= S < L. هذا الشرط يضمن عدم حصول تحول في التوقيع. يجب أن يكون لكل معاملة توقيع واحد على الأقل لحساب الرسوم [fee account](terminology#fee-account). وبالتالي، يمكن لأول توقيع في المعاملة أن يتم التعامل معه على أنه معرف المعاملة [transacton id](terminology.md#transaction-id)
 
-## skipped slot
+## الفُتحة (Slot)
 
-A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+هي تلك الفترة من الزمن والتي يستطيع القائد [leader](terminology.md#leader) أن يستوعب فيها المعاملات ويقوم بإنتاج كتلة [block](terminology.md#block).
 
-Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+## العقد الذكي (smart contract)
 
-## slot
+وهو عبارة عن مجموعة من القيود التي بمجرد حصولها تقوم بإرسال إشارة إلى برنامج ما أن بعض تحديثات حساب محدد مسبقًا قد تم السماح بها.
 
-The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+## عملة sol
 
-Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
+هي عبارة عن رموز أصلية [native token](terminology.md#native-token) يمكن تتبعها بواسطة مجموعة [cluster](terminology.md#cluster) يمكن لشركة Solana التعرف عليها.
 
-## smart contract
+## الحِصَّة (stake)
 
-A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
+الرموز التي يتم أخذها إلى المجموعة [cluster](terminology.md#cluster) إذا تم إثبات وجود سلوك خبيث لمدقق ما [validator](terminology.md#validator).
 
-## sol
+## الأغلبية العُظمى (supermajority)
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+الغالبية العظمى من مجموعة [cluster](terminology.md#cluster) هي ثلثا المجموعة.
 
-## stake
+## مُتغير النظام (sysvar)
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
+وهو عبارة عن حساب [account](terminology.md#account) مغلف يتم توفيره بواسطة وقت التشغيل للسماح للبرامج بالوصول إلى حالة الشبكة مثل الارتفاع الحالي للعلامة، والمكافآت، والنقاط [points](terminology.md#point)، والقيم، إلخ.
 
-## supermajority
+## العميل الرقيق (thin client)
 
-2/3 of a [cluster](terminology.md#cluster).
+وهو العميل [client](terminology.md#client) الذي يثق بأنه يتواصل مع مجموعة [cluster](terminology.md#cluster) صالحة.
 
-## sysvar
+## العلامة (الـ tick)
 
-A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
+هي مدخلة [entry](terminology.md#entry) في دفتر الأستاذ والتي تقوم بتقدير مدة ساعة الحائط.
 
-## thin client
+## إرتفاع العلامة (tick height)
 
-A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
+وهي العلامة [tick](terminology.md#tick) النونية في دفتر الأستاذ [ledger](terminology.md#ledger).
 
-## tick
+## الرمز (token)
 
-A ledger [entry](terminology.md#entry) that estimates wallclock duration.
+هو عنصر نادر قابل للاستبدال في مجموعة الرموز.
 
-## tick height
+## المُعاملة في الثانية الواحدة (tps)
 
-The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
+عدد المعاملات [Transactions](terminology.md#transaction) المنجزة في الثانية الواحدة.
 
-## token
+## المُعاملة (transaction)
 
-A scarce, fungible member of a set of tokens.
+وهي عبارة عن واحدة أو أكثر من التعليمات [instructions](terminology.md#instruction) الموقعة بواسطة العميل [client](terminology.md#client) باستخدام واحد أو أكثر من أزواج المفاتيح [keypairs](terminology.md#keypair) ويتم تنفيذها بشكل تلقائي باحتمالين اثنين فقط: النجاح أو الفشل.
 
-## tps
+## معرف المُعاملة (transaction id)
 
-[Transactions](terminology.md#transaction) per second.
+وهو عبارة عن أول توقيع [signature](terminology.md#signature) في المعاملة [transaction](terminology.md#transaction) والذي يمكن استخدامه للتعرف بشكل فريد على المعاملة في كافة دفتر الأستاذ [ledger](terminology.md#ledger).
 
-## transaction
+## تأكيدات المُعاملة (transaction confirmations)
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
+هو عبارة عن عدد الكتل المؤكدة [confirmed blocks](terminology.md#confirmed-block) منذ قبول المعاملة في دفتر الأستاذ [ledger](terminology.md#ledger). ويتم الانتهاء من المعاملة عندما تصبح كتلتها جذرًا [root](terminology.md#root).
 
-## transaction id
+## مُدخلة المُعاملات (transactions entry)
 
-The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
+عبارة عن مجموعة من المعاملات [transactions](terminology.md#transaction) التي يمكن تنفيذها بالتوازي.
 
-## transaction confirmations
+## المُدقّق (validator)
 
-The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
+هو عضو له كامل الصلاحية في مجموعة [cluster](terminology.md#cluster) ويكون مسؤولًا عن تدقيق دفتر الأستاذ [ledger](terminology.md#ledger) وإنتاج كتل [blocks](terminology.md#block) جديدة.
 
-## transactions entry
+## دالّة التأخير التي يُمكن التَحَقُّق منها (VDF)
 
-A set of [transactions](terminology.md#transaction) that may be executed in parallel.
+انظر [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## validator
+## دالّة التأخير التي يُمكن التَحَقُّق منها (Verifiable Delay Function)
 
-A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
+وهي دالة تستغرق وقتًا محددًا لتنفيذها وتنتج دليلًا على تشغيلها، والذي يمكن التحقق منه فيما بعد في وقت أقل مما استغرقته في إنتاجها.
 
-## VDF
+## التصويت (vote)
 
-See [verifiable delay function](terminology.md#verifiable-delay-function).
+انظر تصويت دفتر الأستاذ [ledger vote](terminology.md#ledger-vote).
 
-## verifiable delay function
+## رصيد التصويت (vote credit)
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+هو حصيلة مكافأة المدققين [validators](terminology.md#validator). يتم مكافأة المدقق بائتمان التصويت في حساب التصويت الخاص به عندما يصبح المدقق جذرًا [root](terminology.md#root).
 
-## vote
+## المحفظة (wallet)
 
-See [ledger vote](terminology.md#ledger-vote).
+هي عبارة عن مجموعة من أزواج المفاتيح [keypairs](terminology.md#keypair).
 
-## vote credit
+## فترة الإحماء (warmup period)
 
-A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
-
-## wallet
-
-A collection of [keypairs](terminology.md#keypair).
-
-## warmup period
-
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+عبارة عن عدد من الفترات [epochs](terminology.md#epoch) بعد تفويض حصة [stake](terminology.md#stake) حتى تصبح فعالة بشكل تدريجي. وخلال هذه الفترة، تعتبر الحصة "منشطة". للمزيد من المعلومات حول الإحماء والتبريد: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

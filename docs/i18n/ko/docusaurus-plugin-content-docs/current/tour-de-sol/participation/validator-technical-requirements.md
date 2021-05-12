@@ -1,11 +1,11 @@
 ---
-title: Requirements to run a validator
+title: 유효성 검사기를 실행하기위한 요구 사항
 ---
 
-## Hardware
+## 하드웨어
 
-See [suggested hardware configuration here](../../running-validator/validator-reqs.md).
+\[여기에서 제안 된 하드웨어 구성\] (../../ running-validator / validator-reqs.md)을 참조하십시오.
 
-## Software
+## 소프트웨어
 
-- We build and run on Ubuntu 20.04
+- -Ubuntu 18.04에서 빌드하고 실행합니다. 일부 사용자는 Ubuntu 16.04에서 실행할 때 문제가 발생했습니다.

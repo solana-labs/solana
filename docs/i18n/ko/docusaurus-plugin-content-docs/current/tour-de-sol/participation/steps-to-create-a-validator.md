@@ -1,11 +1,7 @@
 ---
-title: Steps to create a validator
+title: 유효성 검사기를 만드는 단계
 ---
 
-To create a Solana validator, follow the normal [validator workflow](../../running-validator/validator-start.md)
-targeting the [Testnet cluster](../../clusters.md).
+Solana 밸리데이터를 만들려면 \[Testnet 클러스터\] (../../ clusters.md)를 대상으로하는 일반 \[검사기 워크 플로\] (../../ running-validator / validator-start.md)를 따릅니다.
 
-Note that Testnet validators are automatically staked by a process that runs
-every Epoch. If your validator is running correctly then in a couple of days it
-will be staked (and automatically destaked if offline for a prolonged period of
-time).
+Testnet 밸리데이터는 모든 Epoch를 실행하는 프로세스에 의해 자동으로 스테이킹됩니다. 밸리데이터가 올바르게 실행되고 있으면 며칠 내에 스테이킹됩니다 (오랫 동안 오프라인 인 경우 자동으로 디스 테이킹 됨).

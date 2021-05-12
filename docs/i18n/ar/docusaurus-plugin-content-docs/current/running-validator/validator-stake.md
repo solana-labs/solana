@@ -1,102 +1,80 @@
 ---
-title: Staking
+title: إثبات الحِصَّة أو التَّحْصِيص (Staking)
 ---
 
-**By default your validator will have no stake.** This means it will be
-ineligible to become leader.
+بشكل إفتراضي لن يكون للمُدقّق (validator) الخاص بك أي حِصَّة **By default your validator will have no stake.** هذا يعني أنه لن يكون مُؤهلاً ليصبح قائدًا (leader).
 
-## Monitoring Catch Up
+## مُراقبة اللَّحاق بالركب (Monitoring Catch Up)
 
-To delegate stake, first make sure your validator is running and has caught up
-to the cluster. It may take some time to catch up after your validator boots.
-Use the `catchup` command to monitor your validator through this process:
+لتفويض حِصَّة (stake)، تأكد أولاً من تشغيل المُدقّق (validator) الخاص بك ومن أنه قد أُلحق بالمجموعة (cluster). قد يستغرق الأمر بعض الوقت للحاق بالركب بعد بدأ الإشتغال أو التمهيد (boot) للمُدقّق (validator) الخاص بك. إستخدم الأمر `catchup` لمُراقبة المُدقّق (validator) الخاص بك من خلال هذه العملية:
 
 ```bash
 solana catchup ~/validator-keypair.json
 ```
 
-Until your validator has caught up, it will not be able to vote successfully and
-stake cannot be delegated to it.
+إلى أن يتم إلتحاق المُدقّق (validator) الخاص بك، لن يكون قادرًا على التصويت بنجاح ولا يُمكن تفويض الحِصَّة (stake) له.
 
-Also if you find the cluster's slot advancing faster than yours, you will likely
-never catch up. This typically implies some kind of networking issue between
-your validator and the rest of the cluster.
+إذا وجدت أيضًا أن فُتحة (Slot) المجموعة (cluster) تتقدم أسرع من فُتحاتك، فمن المُحتمل ألا تلحق بالركب مُطلقًا. يُشير هذا عادةً إلى نوع من مُشكلة الشبكات بين المُدقّق (validator) وبقية المجموعة (cluster).
 
-## Create Stake Keypair
+## إنشاء زوج مفاتيح الحِصَّة (Create Stake Keypair)
 
-If you haven’t already done so, create a staking keypair. If you have completed
-this step, you should see the “validator-stake-keypair.json” in your Solana
-runtime directory.
+إذا لم تكن قد قُمت بذلك بالفعل، فقُم بإنشاء زوج مفاتيح إثبات حِصَّة أو تَّحْصِيص (staking keypair). إذا أكملت هذه الخطوة، يجب أن ترى "Validator-stock-keypair.json" في دليل وقت تشغيل Solana.
 
 ```bash
 solana-keygen new -o ~/validator-stake-keypair.json
 ```
 
-## Delegate Stake
+## تفويض الحِصَّة (Delegate Stake)
 
-Now delegate 1 SOL to your validator by first creating your stake account:
+الآن قُم بتفويض عدد 1 SOL إلى المُدقّق (validator) الخاص بك عن طريق إنشاء حساب الحِصَّة (stake account) الخاص بك أولاً:
 
 ```bash
 solana create-stake-account ~/validator-stake-keypair.json 1
 ```
 
-and then delegating that stake to your validator:
+ثم تفويض تلك الحِصَّة (stake) إلى جهة المُدقّق (validator) الخاص بك:
 
 ```bash
 solana delegate-stake ~/validator-stake-keypair.json ~/vote-account-keypair.json
 ```
 
-> Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
+> لا تُفوض رموز SOL المُتبقية، لأن المُدقّق (validator) الخاص بك سيستخدم هذه الرموز للتصويت.
 
-Stakes can be re-delegated to another node at any time with the same command,
-but only one re-delegation is permitted per epoch:
+يُمكن إعادة تفويض الحِصص (stakes) إلى عُقدة (node) أخرى في أي وقت بإستخدام نفس الأمر البرمجي، ولكن يُسمح بإعادة تفويض واحدة فقط لكل فترة (epoch):
 
 ```bash
 solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-keypair.json
 ```
 
-Assuming the node is voting, now you're up and running and generating validator
-rewards. Rewards are paid automatically on epoch boundaries.
+بإفتراض أن العُقدة (node) تقوم بالتصويت، فأنت الآن تعمل وتعمل وتحصل على مُكافآت المُدقّق (validator). يتم دفع المكافآت تلقائيًا على حدود الفترة (epoch).
 
-The rewards lamports earned are split between your stake account and the vote
-account according to the commission rate set in the vote account. Rewards can
-only be earned while the validator is up and running. Further, once staked, the
-validator becomes an important part of the network. In order to safely remove a
-validator from the network, first deactivate its stake.
+يتم تقسيم المُكافآت المُكتسبة بين حساب حِصَّتك (stake) وحساب التصويت وفقًا لسعر العمولة المُحدد في حساب التصويت. لا يُمكن ربح المُكافآت إلا أثناء تشغيل المُدقّق (validator). علاوة على ذلك، بمجرد التعطيل، يُصبح المُدقّق (validator) جزءًا مُهمًا من الشبكة. من أجل إزالة المُدقّق (validator) بأمان من الشبكة، قُم أولاً بإلغاء تنشيط حِصَّته (stake).
 
-At the end of each slot, a validator is expected to send a vote transaction.
-These vote transactions are paid for by lamports from a validator's identity
-account.
+في نهاية كل فُتحة (Slot)، من المُتوقع أن يُرسل المُدقّق (validator) مُعاملة تصويت. يتم دفع تكاليف مُعاملات التصويت هذه عن طريق الـ lamports من حساب هوية المُدقّق (validator).
 
-This is a normal transaction so the standard transaction fee will apply. The
-transaction fee range is defined by the genesis block. The actual fee will
-fluctuate based on transaction load. You can determine the current fee via the
-[RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash)
-before submitting a transaction.
+هذه مُعاملة عادية لذا سيتم تطبيق رسوم المُعاملة القياسية. يتم تحديد نطاق رسوم المُعاملة بواسطة كتلة مرحلة التكوين (genesis block). سوف تتقلب الرسوم الفعلية بناءً على حمل المُعاملة. يُمكنك تحديد الرسوم الحالية عبر الحصول على تجزئة الكُتلة الحديثة [RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash) قبل إرسال المُعاملة.
 
-Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).
+تعرف على المزيد حول رسوم المُعاملات [transaction fees here](../implemented-proposals/transaction-fees.md).
 
-## Validator Stake Warm-up
+## فترة إحماء حِصَّة المُدقّق (Validator Stake Warm-up)
 
-To combat various attacks on consensus, new stake delegations are subject to
-a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
-period.
+لمُكافحة الهجمات المُختلفة على الإجماع (consensus)، تخضع تفويضات الحِصَّة (stake) الجديدة لفترة إحماء [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown).
 
-Monitor a validator's stake during warmup by:
+مُراقبة حِصَّة (stake) المُدقّق (validator) أثناء فترة الإحماء (warmup) من خلال:
 
-- View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
-- View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
-- `solana validators` displays the current active stake of all validators, including yours
+- عرض حساب التصويت الخاص بك: `solana vote-account ~/vote-account-keypair.json` يعرض هذا الوضع الحالي لجميع الأصوات التي أرسلها المُدقّق (validator) إلى الشبكة.
+- عرض حساب حِصَّتك (stake) وتفضيل التفويض وتفاصيل حِصَّتك:`solana stake-account ~/validator-stake-keypair.json`
+- يعرض `solana validators` الحِصَّة (stake) النشطة الحالية لجميع المُدقّقين (validators)، بما في ذلك حِصَّتك حِصَّتك
 - `solana stake-history` shows the history of stake warming up and cooling down over recent epochs
-- Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
-- Once your stake is warmed up, you will see a stake balance listed for your validator by running `solana validators`
+- قُم بالبحث عن رسائل السجل في المُدقّق (validator) الذي يُشير إلى الفُتحة القائد (leader slot) التالية: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. الفُتحة القائد (leader slot) التالية هي #### `
+- بمجرد أن يتم تسخين حِصَّتك (stake)، سترى رصيد حِصَّة (stake) مُدرجًا للمُدقّق (validator) الخاص بك بتشغيل `solana validators`
 
-## Monitor Your Staked Validator
+## مُراقبة المُدقّق المُحَصِّص الخاص بك (Monitor Your Staked Validator)
 
-Confirm your validator becomes a [leader](../terminology.md#leader)
+تأكد من أن المُدقّق (validator) الخاص بك يُصبح قائد [leader](../terminology.md#leader)
 
-- After your validator is caught up, use the `solana balance` command to monitor the earnings as your validator is selected as leader and collects transaction fees
-- Solana nodes offer a number of useful JSON-RPC methods to return information about the network and your validator's participation. Make a request by using curl \(or another http client of your choosing\), specifying the desired method in JSON-RPC-formatted data. For example:
+- بعد ضبط المُدقّق (validator) الخاص بك، إستخدم الأمر `solana balance` لمُراقبة الأرباح حيث يتم إختيار المُدقّق (validator) الخاص بك كقائد (leader) ويجمع رسوم المُعاملات
+- تُقدم العُقد (nodes) في Solana عددًا من الطُرق JSON-RPC المُفيدة لعرض معلومات حول الشبكة ومُشاركة المُدقّق (validator). قُم بتقديم طلب بإستخدام curl \ (أو عميل http آخر من إختيارك \) ، مع تحديد الطريقة المطلوبة في البيانات بتنسيق JSON-RPC. على سبيل المثال:
 
 ```bash
   // Request
@@ -106,27 +84,20 @@ Confirm your validator becomes a [leader](../terminology.md#leader)
   {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
 ```
 
-Helpful JSON-RPC methods:
+طرق JSON-RPC المُساعدة:
 
-- `getEpochInfo`[An epoch](../terminology.md#epoch) is the time, i.e. number of [slots](../terminology.md#slot), for which a [leader schedule](../terminology.md#leader-schedule) is valid. This will tell you what the current epoch is and how far into it the cluster is.
-- `getVoteAccounts` This will tell you how much active stake your validator currently has. A % of the validator's stake is activated on an epoch boundary. You can learn more about staking on Solana [here](../cluster/stake-delegation-and-rewards.md).
-- `getLeaderSchedule` At any given moment, the network expects only one validator to produce ledger entries. The [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation) is called the “leader”. This will return the complete leader schedule \(on a slot-by-slot basis\) for currently activated stake, the identity pubkey will show up 1 or more times here.
+- الأمر البرمجي " الحصول على معلومات الفترة " `getEpochInfo` [An epoch](../terminology.md#epoch) هو الوقت، أي الفُتحات [slots](../terminology.md#slot)، حيث يكون جدول القائد [leader schedule](../terminology.md#leader-schedule) صالحًا. سيُخبرك هذا ما هي الفترة (epoch) الحالية ومدى وجود المجموعة (cluster) فيها.
+- سيُخبرك الأمر البرمجي " الحصول على حِسابات التصويت "`getVoteAccounts` هذا بمقدار الحِصَّة (stake) النَشِطة التي يمتلكها المُدقّق (validator) حاليًا. يتم تنشيط نسبة مئوية % من حِصَّة (stake) المُدقّق (validator) على حدود الفترة (epoch). يُمكنك معرفة المزيد حول إثبات الحِصَّة أو التَّحْصِيص (staking) على Solana هنا [here](../cluster/stake-delegation-and-rewards.md).
+- الأمر البرمجي " الحصول على جدول القائد " `getLeaderSchedule` في أي لحظة، تتوقع الشبكة أن يقوم مُدقّق (validator) واحد فقط بإنتاج مُدخلات دفتر الأستاذ (ledger entries). المُدقّق المُحدد حاليًا لإنتاج مُدخلات دفتر الأستاذ [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation) يُسمى "القائد". سيُعيد هذا الجدول الزمني الكامل للقائد \ (على أساس فُتحة تلو الأخرى \) للحِصَّة (stake) النشطة حاليًا، وسيظهر مفتاح الهوية العمومي (identity pubkey) مرة واحدة أو أكثر هنا.
 
-## Deactivating Stake
+## إلغاء تنشيط الحِصَّة (Deactivating Stake)
 
-Before detaching your validator from the cluster, you should deactivate the
-stake that was previously delegated by running:
+قبل فصل المُدقّق (validator) الخاص بك عن المجموعة (cluster)، يجب إلغاء تنشيط الحِصَّة (stake) التي تم تفويضها مسبقًا عن طريق تشغيل:
 
 ```bash
 solana deactivate-stake ~/validator-stake-keypair.json
 ```
 
-Stake is not deactivated immediately and instead cools down in a similar fashion
-as stake warm up. Your validator should remain attached to the cluster while
-the stake is cooling down. While cooling down, your stake will continue to earn
-rewards. Only after stake cooldown is it safe to turn off your validator or
-withdraw it from the network. Cooldown may take several epochs to complete,
-depending on active stake and the size of your stake.
+لم يتم إلغاء تنشيط الحِصَّة (stake) فورا وبدلا من ذلك تبرد (cools down) بطريقة مُماثلة كما الحِصَّة (stake) في فترة الإحماء (warmup). يجب أن يظل المُدقّق (validators) الخاصة بك متصلا بالمجموعة (cluster) أثناء فترة تبريد (cooldown) الحِصَّة (stake). أثناء فترة التبريد (cooldown)، سوف تستمر حِصَّتك (stake) في كسب المكافآت. فقط بعد فترة تبريد (cooldown) الحِصَّة (stake)، يكون من الآمن إيقاف تشغيل المُدقّق (validator) الخاص بك أو سحبه من الشبكة. قد يستغرق فترة التبريد (cooldown) عدة فترات (epochs) حتى تكتمل، إعتمادًا على الحِصَّة (stake) النشطة وحجم حِصَّتك (stake).
 
-Note that a stake account may only be used once, so after deactivation, use the
-cli's `withdraw-stake` command to recover the previously staked lamports.
+لاحظ أنه لا يجوز إستخدام حساب الحِصَّة (stake account) إلا مرة واحدة، لذلك بعد التعطيل، إستخدم الأمر cli's `withdraw-stake` لإستعادة الـ lamports المُكدس سابقًا.

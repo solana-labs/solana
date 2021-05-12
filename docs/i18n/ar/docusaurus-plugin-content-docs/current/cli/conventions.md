@@ -1,80 +1,59 @@
 ---
-title: Using Solana CLI
+title: إستخدام أداة CLI الخاصة بSolana
 ---
 
-Before running any Solana CLI commands, let's go over some conventions that
-you will see across all commands. First, the Solana CLI is actually a collection
-of different commands for each action you might want to take. You can view the list
-of all possible commands by running:
+قبل تشغيل أي أوامر بأداة CLI الخاصة بSolana، دعنا ننتقل إلى بعض الإصطلاحات التي ستراها عبر جميع الأوامر. أولا، إن أداة CLI الخاصة بSolana هي في الواقع عبارة عن مجموعة أوامر مختلفة لكل إجراء قد ترغب في إتخاذه. يمكنك عرض قائمة جميع الأوامر الممكنة عن طريق تشغيل:
 
 ```bash
 solana --help
 ```
 
-To zoom in on how to use a particular command, run:
+لتقريب الصورة أكثر حول كيفية إستخدام أمر معين، قم بتشغيل:
 
 ```bash
 solana <COMMAND> --help
 ```
 
-where you replace the text `<COMMAND>` with the name of the command you want
-to learn more about.
+حيث تستبدل النص `<COMMAND>` بإسم الأمر الذي تريده لمعرفة المزيد عن ذلك.
 
-The command's usage message will typically contain words such as `<AMOUNT>`,
-`<ACCOUNT_ADDRESS>` or `<KEYPAIR>`. Each word is a placeholder for the _type_ of
-text you can execute the command with. For example, you can replace `<AMOUNT>`
-with a number such as `42` or `100.42`. You can replace `<ACCOUNT_ADDRESS>` with
-the base58 encoding of your public key, such as
-`9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
+عادة ما تحتوي رسالة إستخدام الأوامر على كلمات مثل `<AMOUNT>`، `<ACCOUNT_ADDRESS>` أو `<KEYPAIR>`. كل كلمة هي نائب عنصر نائب لنوع _type_ النص الذي يُمكنك تتنفيذ الأمر به. على سبيل المثال، يُمكنك إستبدال `<AMOUNT>` بعدد مثل `42` أو `100.42`. يُمكنك إستبدال `<ACCOUNT_ADDRESS>` بتشفير base58 للمفتاح العمومي (pubkey) الخاص بك، مثل `9grmKMwTiZwUHSExjtbFzHLPTdWoXcg1bZkhvwTrTww`.
 
-## Keypair conventions
+## إصطلاحات زوج المفاتيح (Keypair conventions)
 
-Many commands using the CLI tools require a value for a `<KEYPAIR>`. The value
-you should use for the keypair depend on what type of
-[command line wallet you created](../wallet-guide/cli.md).
+العديد من الأوامر التي تستخدم أدوات CLI تتطلب قيمة لـ `<KEYPAIR>`. القيمة التي يجب أن تستخدمها لزوج المفاتيح (keypair) تعتمد على نوع محفظة سطر الأوامر التي قُمت بإنشائها [command line wallet you created](../wallet-guide/cli.md).
 
-For example, the way to display any wallet's address
-(also known as the keypair's pubkey), the CLI help document shows:
+على سبيل المثال، طريقة عرض أي عنوان محفظة (يعرف أيضا بإسم الـ pubkey الخاص بالـ keypair)، وثيقة المساعدة لأداة CLI تعرض ما يلي:
 
 ```bash
 solana-keygen pubkey <KEYPAIR>
 ```
 
-Below, we show how to resolve what you should put in `<KEYPAIR>` depending
-on your wallet type.
+نعرض أدناه الحل لما يجب أن تضعه في `<KEYPAIR>` إعتمادا على نوع محفظتك.
 
-#### Paper Wallet
+#### المحفظة الورقية (Paper Wallet)
 
-In a paper wallet, the keypair is securely derived from the seed words and
-optional passphrase you entered when the wallet was create. To use a paper
-wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help
-documents, enter the uri scheme `prompt://` and the program will prompt you to
-enter your seed words when you run the command.
+في المحفظة الورقية، يتم إشتقاق زوج المفاتيح (keypair) بشكل آمن من كلمات الإستِرداد (seed words) و عبارة كلمة المرور (passphrase) الإختيارية التي أدخلتها عند إنشاء المحفظة. لإستخدام محفظة ورقية لزوج المفاتيح (keypair) في أي مكان `<KEYPAIR>` يظهر النص في أمثلة أو مُستندات المُساعدة، أدخل الكلمة `ASK` وسيُطالبك البرنامج بإدخال كلمات الإستِرداد (seed words) الخاصة بك عند تشغيل الأمر.
 
-To display the wallet address of a Paper Wallet:
+لعرض عنوان المحفظة لمحفظة ورقية (Paper Wallet):
 
 ```bash
-solana-keygen pubkey prompt://
+solana-keygen pubkey ASK
 ```
 
-#### File System Wallet
+#### محفظة نظام الملفات (File System Wallet)
 
-With a file system wallet, the keypair is stored in a file on your computer.
-Replace `<KEYPAIR>` with the complete file path to the keypair file.
+مع محفظة نظام الملفات، يتم تخزين زوج المفاتيح (keypair) في ملف على جهاز الكمبيوتر الخاص بك. إستبدل `<KEYPAIR>` بمسار الملف الكامل لملف زوج المفاتيح (keypair).
 
-For example, if the file system keypair file location is
-`/home/solana/my_wallet.json`, to display the address, do:
+على سبيل المثال، إذا كان مسار ملف زوج المفاتيح (keypair) في نظام الملفات هو `/home/solana/my_wallet.json`، لعرض مسار العنوان، قُم بما يلي:
 
 ```bash
-solana-keygen pubkey /home/solana/my_wallet.json
+solana-keygen pubke/home/solana/my_wallet.json
 ```
 
-#### Hardware Wallet
+#### المحفظة الخارجية (Hardware Wallet)
 
-If you chose a hardware wallet, use your
-[keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),
-such as `usb://ledger?key=0`.
+إذا إخترت محفظة خارجية (hardware wallet)، إستخدم زوج المفاتيح رابط [keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key)، مثل `usb://ledger?key=0`.
 
 ```bash
-solana-keygen pubkey usb://ledger?key=0
+solana-keygen pubke://ledger?key=0
 ```

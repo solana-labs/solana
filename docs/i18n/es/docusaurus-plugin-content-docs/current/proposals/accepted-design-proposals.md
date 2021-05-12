@@ -1,11 +1,5 @@
 ---
-title: Accepted Design Proposals
+title: Propuestas de diseño aceptadas
 ---
 
-The following architectural proposals have been accepted by the Solana team,
-but are not yet fully implemented.
-The proposals may be implemented as described, implemented differently as
-issues in the designs become evident, or not implemented at all.
-If implemented, the proposal will be moved to
-[Implemented Proposals](../implemented-proposals/implemented-proposals.md)
-and the details will be added to relevant sections of the docs.
+El equipo de Solana ha aceptado las siguientes propuestas de arquitectura pero aún no están completamente implementadas. Las propuestas pueden implementarse tal y como están descritas, implementarse de manera diferente ya queclos problemas en los diseños se vuelven evidentes, o pueden no implementarse en absoluto. Si se implementa, la propuesta se moverá a [Propuestas implementadas](../implemented-proposals/implemented-proposals.md) y los detalles se añadirán a las secciones relevantes de la documentación.

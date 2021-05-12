@@ -12,7 +12,7 @@ title: 如何注册
 
 _如果您先前已经完成了 SLP 或 TdS 的 KYC/AML，那么同一个实体/个人就不需要这个步骤了。 我们不接受美国 实体或个人。_
 
-#### 3) 加入我们的 Discord
+#### 3) 加入我们的Discord
 
 所有 Tour de SOL 验证程序**都需要**加入，因为这是我们的主要通信渠道：https://discord.gg/N3mqAfa
 

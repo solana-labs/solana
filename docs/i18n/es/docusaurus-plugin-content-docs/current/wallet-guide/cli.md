@@ -1,67 +1,39 @@
 ---
-title: Command Line Wallets
+title: Carteras de línea de comandos
 ---
 
-Solana supports several different types of wallets that can be used to interface
-directly with the Solana command-line tools.
+Solana soporta varios tipos de monederos que pueden utilizarse para interactuar directamente con las herramientas de línea de comandos de Solana.
 
-**If you are unfamiliar with using command line programs and just want to be able
-to send and receive SOL tokens, we recommend setting up a third-party
-[App Wallet](apps.md)**.
+**Si no estás familiarizado con el uso de programas de línea de comandos y sólo quieres poder enviar y recibir tokens SOL, te recomendamos que configures una aplicación de terceros [Billetera de aplicaciones](apps.md)**.
 
-To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
+Para utilizar una cartera de línea de comandos, primero debe [instalar las herramientas de Solana CLI](../cli/install-solana-cli-tools.md)
 
-## File System Wallet
+## Cartera del Sistema de Archivos
 
-A _file system wallet_, aka an FS wallet, is a directory in your computer's
-file system. Each file in the directory holds a keypair.
+Una billetera del sistema de archivos __, conocida como una billetera FS, es un directorio en el sistema de archivos de su computadora. Cada archivo en el directorio contiene un keypair.
 
-### File System Wallet Security
+### Seguridad de la cartera del sistema de archivos
 
-A file system wallet is the most convenient and least secure form of wallet. It
-is convenient because the keypair is stored in a simple file. You can generate as
-many keys as you would like and trivially back them up by copying the files. It
-is insecure because the keypair files are **unencrypted**. If you are the only
-user of your computer and you are confident it is free of malware, an FS wallet
-is a fine solution for small amounts of cryptocurrency. If, however, your
-computer contains malware and is connected to the Internet, that malware may
-upload your keys and use them to take your tokens. Likewise, because the
-keypairs are stored on your computer as files, a skilled hacker with physical
-access to your computer may be able to access it. Using an encrypted hard
-drive, such as FileVault on MacOS, minimizes that risk.
+Una cartera de sistema de archivos es la forma de cartera más conveniente y menos segura. Es conveniente porque el keypair se almacena en un archivo simple. Puedes generar tantas claves como quieras y hacer una copia de seguridad trivial copiando los archivos. Es inseguro porque los archivos del par de claves son **sin cifrar**. Si usted es el único usuario de su computadora y está seguro de que está libre de malware, una cartera FS es una buena solución para pequeñas cantidades de criptomonedas. Sin embargo, si su computadora contiene malware y está conectada a Internet, ese malware puede subir sus claves y usarlas para tomar sus tokens. Del mismo modo, debido a que los keypair se almacenan en su computadora como archivos, un hacker experto con acceso físico a tu ordenador puede ser capaz de acceder a él. Usar un disco encriptado duro, como FileVault en MacOS, minimiza ese riesgo.
 
-[File System Wallet](file-system-wallet.md)
+[Cartera del Sistema de Archivos](file-system-wallet.md)
 
-## Paper Wallet
+## Cartera de papel
 
-A _paper wallet_ is a collection of _seed phrases_ written on paper. A seed
-phrase is some number of words (typically 12 or 24) that can be used to
-regenerate a keypair on demand.
+Una cartera de papel __ es una colección de _frases de semilla_ escritas en papel. Una semilla es un número de palabras (normalmente 12 o 24) que pueden ser usadas para regenerar un par de claves bajo demanda.
 
-### Paper Wallet Security
+### Seguridad de cartera de papel
 
-In terms of convenience versus security, a paper wallet sits at the opposite
-side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
-offers excellent security. That high security is further amplified when paper
-wallets are used in conjunction with
-[offline signing](../offline-signing.md). Custody services such as
-[Coinbase Custody](https://custody.coinbase.com/) use this combination.
-Paper wallets and custody services are an excellent way to secure a large number
-of tokens for a long period of time.
+En términos de conveniencia frente a seguridad, una cartera de papel se encuentra al lado opuesto del espectro de una cartera de FS. Es terriblemente incómodo de usar, pero ofrece una seguridad excelente. Esa alta seguridad se amplifica aún más cuando se utilizan carteras de papel junto con una [firma sin conexión](../offline-signing.md). Los servicios de Custodia como [Coinbase Custody](https://custody.coinbase.com/) usan esta combinación. Las carteras de papel y los servicios de custodia son una excelente manera de asegurar un gran número de tokens durante un largo período de tiempo.
 
-[Paper Wallets](paper-wallet.md)
+[Carteras de papel](paper-wallet.md)
 
-## Hardware Wallet
+## Cartera Hardware
 
-A hardware wallet is a small handheld device that stores keypairs and provides
-some interface for signing transactions.
+Una cartera de hardware es un pequeño dispositivo de mano que almacena keypairs y proporciona alguna interfaz para firmar transacciones.
 
-### Hardware Wallet Security
+### Seguridad de billetera Hardware
 
-A hardware wallet, such as the
-[Ledger hardware wallet](https://www.ledger.com/), offers a great blend of
-security and convenience for cryptocurrencies. It effectively automates the
-process of offline signing while retaining nearly all the convenience of a file
-system wallet.
+Una cartera de hardware, como la [cartera de hardware Ledger](https://www.ledger.com/), ofrece una gran mezcla de seguridad y comodidad para criptomonedas. Automatiza efectivamente el proceso de firma sin conexión mientras conserva casi toda la comodidad de una cartera de sistema de archivo.
 
-[Hardware Wallets](hardware-wallets.md)
+[Carteras Hardware](hardware-wallets.md)

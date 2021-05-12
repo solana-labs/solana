@@ -1,36 +1,36 @@
 ---
-title: Managing Forks
+title: إدارة الإنقسامات أو الشوكات (Managing Forks)
 ---
 
-The ledger is permitted to fork at slot boundaries. The resulting data structure forms a tree called a _blockstore_. When the validator interprets the blockstore, it must maintain state for each fork in the chain. We call each instance an _active fork_. It is the responsibility of a validator to weigh those forks, such that it may eventually select a fork.
+يسمح دفتر الأستاذ (ledger) بالإنقسامات أو الشوكات (forks) عند حدود الفُتحة (slot). بنية البيانات الناتجة تُشكل شجرة تُسمى مخزن الكُتلة _blockstore_. عندما يُفسر المُدقّق (validator) مخزن الكُتلة (blockstore)، يجب أن يُحافظ على حالة كل إنقسام أو شوكة (fork) في الشبكة. نطلق على كل حالة إسم إنقسام إنقسام أو شوكة نشطة _active fork_. تقع على عاتق المُدقّق (validator) مسؤولية تقييم وزن تلك الإنقسامات أو الشوكات (forks)، بحيث يُمكنه في النهاية إختيار الإنقسام أو الشوكة (fork).
 
-A validator selects a fork by submiting a vote to a slot leader on that fork. The vote commits the validator for a duration of time called a _lockout period_. The validator is not permitted to vote on a different fork until that lockout period expires. Each subsequent vote on the same fork doubles the length of the lockout period. After some cluster-configured number of votes \(currently 32\), the length of the lockout period reaches what's called _max lockout_. Until the max lockout is reached, the validator has the option to wait until the lockout period is over and then vote on another fork. When it votes on another fork, it performs an operation called _rollback_, whereby the state rolls back in time to a shared checkpoint and then jumps forward to the tip of the fork that it just voted on. The maximum distance that a fork may roll back is called the _rollback depth_. Rollback depth is the number of votes required to achieve max lockout. Whenever a validator votes, any checkpoints beyond the rollback depth become unreachable. That is, there is no scenario in which the validator will need to roll back beyond rollback depth. It therefore may safely _prune_ unreachable forks and _squash_ all checkpoints beyond rollback depth into the root checkpoint.
+يُحدد المُدقّق (validator) الإنقسام أو الشوكة (fork) عن طريق إرسال صوت إلى قائد (leader) الفُتحة (slot) لذلك الإنقسام أو الشوكة (fork). يُلزم الصوت المُدقّق (validator) لمدة زمنية تُسمى فترة القِفْل _lockout period_. لا يُسمح المُدقّق (validator) بالتصويت على إنقسام أو شوكة (fork) مُختلفة حتى تنتهي فترة القِفْل (lockout period) هذه. كل تصويت لاحق على نفس الإنقسام أو الشوكة (fork) يُضاعف طول فترة القِفْل (lockout period). بعد عدد بعض أصوات الفُتحة المُهيئة (cluster-configured) \(حاليا 32\)، يصل طول فترة القِفْل (lockout period) إلى ما يُسمى الحد الأقصى للقِفْل _max lockout_. حتى يتم الوصول إلى الحد الأقصى للقِفْل (max lockout)، لدى المُدقّق (validator) خيار الإنتظار حتى تنتهي فترة القِفْل (lockout period) ثم التصويت على إنقسام أو شوكة (fork) أخرى. عندما يصوت على إنقسام أو شوكة (fork) أخرى، فإنه يُنفذ عملية تسمى التراجع _rollback_، حيث تعود الحالة إلى الوراء في الوقت المُناسب إلى نقطة تَحَقُّق (checkpoint) مُشتركة ثم تقفز إلى الأمام إلى طرف الإنقسام أو الشوكة (fork) التي صوتت للتو. الحد الأقصى للمسافة التي يُمكن أن يرجع إليها الإنقسام أو الشوكة (fork) يُسمى عُمْق التراجع _rollback depth_. عُمْق التراجع (rollback depth) هو عدد الأصوات المطلوبة لتحقيق الحد الأقصى للقِفْل (max lockout). عندما يُصوت أحد المُدقّقين (validator)، تُصبح أي نقاط تَحَقُّق (checkpoints) خارج عُمْق التراجع (rollback depth) غير قابلة للوصول إليها. ذلك يعني أنه لا يوجد سيناريو يحتاج فيه المُدقّق (validator) إلى التراجع إلى ما يتجاوز عُمْق التراجع (rollback depth). لذلك يُصبح بالإمكان وبكل أمان ضغط _prune_ الإنقسامات أو الشوكات (forks) الغير قابلة للوصول إليها و _squash_ في جميع نقاط التَحَقُّق (checkpoints) التي تتجاوز عُمْق التراجع (rollback depth) إلى نقطة التَحَقُّق الجذرية (root checkpoint).
 
-## Active Forks
+## الإنقسامات أو الشوكات النشطة (Active Forks)
 
-An active fork is as a sequence of checkpoints that has a length at least one longer than the rollback depth. The shortest fork will have a length exactly one longer than the rollback depth. For example:
+الإنقسام أو الشوكة (fork) النشطة كسلسلة من نقاط التَحَقُّق (checkpoints) التي يكون طولها أطول من عُمْق التراجع (rollback depth) بمُعدل مرة واحدة على الأقل. أقصر إنقسام أو شوكة (fork) سيكون لها طول أطول بالضبط من عُمْق التراجع (rollback depth). على سبيل المثال:
 
-![Forks](/img/forks.svg)
+![الإنقسامات أو الشوكات (forks)](/img/forks.svg)
 
-The following sequences are _active forks_:
+التسلسل التالي هو الإنقسامات أو الشوكات النشطة _active forks_:
 
 - {4, 2, 1}
 - {5, 2, 1}
 - {6, 3, 1}
 - {7, 3, 1}
 
-## Pruning and Squashing
+## الضغط (Pruning) والسحق (Squashing)
 
-A validator may vote on any checkpoint in the tree. In the diagram above, that's every node except the leaves of the tree. After voting, the validator prunes nodes that fork from a distance farther than the rollback depth and then takes the opportunity to minimize its memory usage by squashing any nodes it can into the root.
+يُمكن للمُدقّق (validator) أن يُصوت على أي نقطة تَحَقُّق (checkpoint) في الشجرة. في الرسم البياني أعلاه، كل عُقَدة (node) بإستثناء أوراق الشجرة. بعد التصويت، يقوم المُدقّق (valdiator) بضغط (prune) العُقَد (nodes) التي تتفرع من مسافة أبعد من عُمْق التراجع (rollback depth)، ثم ينتهز الفرصة لتقليل إستخدام الذاكرة (memory usage) عن طريق سحق (squash) أي عُقَد (nodes) يُمكنها الوصول إلى الجذر (root).
 
-Starting from the example above, with a rollback depth of 2, consider a vote on 5 versus a vote on 6. First, a vote on 5:
+بدءا بالمثال أعلاه، مع عُمْق تراجع (rollback depth) يصل إلى 2، فكر في التصويت على 5 مُقابل التصويت على 6. أولا، التصويت على 5:
 
-![Forks after pruning](/img/forks-pruned.svg)
+![الإنقسامات أو الشوكات (forks) بعد الضغط (pruning)](/img/forks-pruned.svg)
 
-The new root is 2, and any active forks that are not descendants from 2 are pruned.
+الجذر (root) الجديد هو 2، وأي إنقسامات أو شوكات نشطة (active forks) لا تنحدر من الجذر (root) عدد 2 يتم ضغطها (pruned).
 
-Alternatively, a vote on 6:
+كبديل لذلك، التصويت على 6:
 
-![Forks](/img/forks-pruned2.svg)
+![الإنقسامات أو الشوكات (Forks)](/img/forks-pruned2.svg)
 
-The tree remains with a root of 1, since the active fork starting at 6 is only 2 checkpoints from the root.
+تظل الشجرة ذات جذر (root) عدد 1، لأن الإنقسام أو الشوكة النشطة (active fork) التي تبدأ من 6 تبعد فقط مسافة عدد 2 نقاط التَحَقُّق (checkpoints) من الجذر (root).

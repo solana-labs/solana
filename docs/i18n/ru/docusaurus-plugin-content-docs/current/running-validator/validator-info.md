@@ -1,38 +1,38 @@
 ---
-title: Publishing Validator Info
+title: Публикация информации о валидаторе
 ---
 
-You can publish your validator information to the chain to be publicly visible to other users.
+Вы можете опубликовать информацию валидаторе в блокчейне, которая будет доступна всем другим пользователям.
 
-## Run solana validator-info
+## Solana validator-info
 
-Run the solana CLI to populate a validator info account:
+Запустите solana CLI для заполнения информации о валидаторе:
 
 ```bash
 solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
 ```
 
-For details about optional fields for VALIDATOR_INFO_ARGS:
+Для получения подробной информации о дополнительных полях для VALIDATOR_INFO_ARGS:
 
 ```bash
 solana validator-info publish --help
 ```
 
-## Example Commands
+## Примеры команд
 
-Example publish command:
+Пример команды публикации:
 
 ```bash
 solana validator-info publish "Elvis Validator" -n elvis -w "https://elvis-validates.com"
 ```
 
-Example query command:
+Пример команды запроса:
 
 ```bash
 solana validator-info get
 ```
 
-which outputs
+ожидаемый вывод
 
 ```text
 Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
@@ -42,23 +42,20 @@ Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
 
 ## Keybase
 
-Including a Keybase username allows client applications \(like the Solana
-Network Explorer\) to automatically pull in your validator public profile,
-including cryptographic proofs, brand identity, etc. To connect your validator
-pubkey with Keybase:
+Имя пользователя Keybase позволяет клиентским приложениям (например Solana Network Explorer) автоматически получить доступ в ваш публичный профиль, включая криптографические доказательства, идентификацию бренда и т. д. Чтобы подключить ваш валидатор с помощью Keybase:
 
-1. Join [https://keybase.io/](https://keybase.io/) and complete the profile for your validator
-2. Add your validator **identity pubkey** to Keybase:
+1. Зарегистрируйтесь на [https://keybase.io/](https://keybase.io/) и заполните профиль
+2. Добавьте ваш валидатор validator **identity pubkey** в Keybase:
 
-   - Create an empty file on your local computer called `validator-<PUBKEY>`
-   - In Keybase, navigate to the Files section, and upload your pubkey file to
+   - Создайте пустой файл на локальном компьютере с названием `validator-<PUBKEY>`
+   - В Keybase перейдите в раздел Files и загрузите ваш pubkey в
 
-     a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
+     подкаталог `solana` в вашей публичной папке: `/keybase/public/<KEYBASE_USERNAME>/solana`
 
-   - To check your pubkey, ensure you can successfully browse to
+   - Чтобы проверить ваш pubkey, убедитесь, что вы можете успешно перейти на
 
      `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
 
-3. Add or update your `solana validator-info` with your Keybase username. The
+3. Добавьте или обновите ваш `solana validator-info` с вашим логином Keybase. The
 
    CLI will verify the `validator-<PUBKEY>` file

@@ -1,16 +1,9 @@
 ---
-title: Support / Troubleshooting
+title: Soporte / Resolución de problemas
 ---
 
-If you have questions or are having trouble setting up or using your wallet
-of choice, please make sure you've read through all the relevant pages in our
-[Wallet Guide](paper-wallet.md). The Solana team is working hard to support new
-features on popular wallets, and we do our best to keep our documents up to date
-with the latest available features.
+Si tiene preguntas o está teniendo problemas para configurar o usar su billetera de elección, por favor asegúrate de haber leído todas las páginas relevantes en nuestra [Guía de Billetera](paper-wallet.md). El equipo de Solana está trabajando duro para soportar nuevas características en carteras populares, y hacemos todo lo posible para mantener nuestros documentos actualizados con las últimas características disponibles.
 
-If you have questions after reading the docs, feel free to reach out to us on
-our [Telegram](https://t.me/solanaio).
+Si tienes preguntas después de leer la documentación, no dudes en contactarnos en nuestro [Telegram](https://t.me/solanaio).
 
-For **technical support**, reach out to us on
-[Discord](https://discordapp.com/invite/pquxPsq), using the #wallet-support
-channel in our Community section.
+Para **soporte técnico**, contáctenos en [Discord](https://discordapp.com/invite/pquxPsq), usando el canal de #wallet-support en nuestra sección de Comunidad.

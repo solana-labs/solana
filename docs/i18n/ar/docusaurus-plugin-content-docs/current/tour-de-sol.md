@@ -1,11 +1,11 @@
 ---
-title: Introduction
+title: مُقدمة
 ---
 
-## Welcome!
+## أهلا بك!
 
-This guide contains information about how to participate in Solana's Tour de SOL. Questions? Comments? Keep on reading!
+يحتوي هذا الدليل على معلومات عن كيفية المُشاركة في Tour de SOL (جولة للتعرف على SOL) الخاص بـ Solana. أية أسئلة؟ أية تعليقات؟ أرسل بريد إلكتروني إلى ryan@solana.com
 
-### Learn more about Tour de SOL
+### [تعرف على المزيد حول Tour de SOL الخاص بـ Solana](https://solana.com/tds/)
 
-If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.
+إذا لم تقُم بالتسجيل بعد، إملأ النموذج في [https://solana.com/tds/](https://solana.com/tds/) أولا.

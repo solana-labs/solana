@@ -1,105 +1,105 @@
 ---
-title: Inter-chain Transaction Verification
+title: التحقق من المُعاملات عبر الشبكة (Inter-chain Transaction Verification)
 ---
 
-## Problem
+## المُشكل (Problem)
 
-Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
+التطبيقات عبر الشبكة (Inter-chain) ليست جديدة على النظام البيئي للأصول الرقمية؛ في الواقع، حتى منصات التداول المركزية (centralized exchanges) الأصغر لا تزال تُقزِّم بشكل قاطع جميع تطبيقات الشبكة الأُحادية (single chain) مُجتمعة من حيث المُستخدمين والحجم. إنهم يحصلون على تقييمات ضخمة وقد أمضوا سنوات في تحسين مُنتجاتهم الأساسية بشكل فعال لمجموعة واسعة من المُستخدمين النهائيين. مع ذلك، تتمحور عملياتهم الأساسية حول الآليات التي تتطلب من المُستخدمين أن يثقوا بها من جانب واحد، وعادة ما يكون ذلك مع القليل من اللجوء أو الحماية من الخسارة العرضية. قد أدى ذلك إلى كسر النظام البيئي الأوسع للأصول الرقمية على طول خطوط الشبكة لأن حلول التشغيل البيني (interoperability) عادةً:
 
-- Are technically complex to fully implement
-- Create unstable network scale incentive structures
-- Require consistent and high level cooperation between stakeholders
+- مُعقدة من الناحية الفنية للتنفيذ الكامل
+- إنشاء شبكة غير مُستقرة لهياكل الحوافز على نطاق واسع
+- تتطلب تعاونًا مُتسقًا وعالي المُستوى بين حاملي الحِصَّة (Stakeholders)
 
-## Proposed Solution
+## الحل المُقترح
 
-Simple Payment Verification \(SPV\) is a generic term for a range of different methodologies used by light clients on most major blockchain networks to verify aspects of the network state without the burden of fully storing and maintaining the chain itself. In most cases, this means relying on a form of hash tree to supply a proof of the presence of a given transaction in a certain block by comparing against a root hash in that block’s header or equivalent. This allows a light client or wallet to reach a probabilistic level of certainty about on-chain events by itself with a minimum of trust required with regard to network nodes.
+نظام تحقق بسيط من الدفع (Simple Payment Verification\(SPV\) هو مُصطلح عام لمجموعة من المنهجيات المُختلفة التي يستخدمها العملاء الخفيفون (light clients) على مُعظم شبكات البلوكشاين الرئيسية للتحقق من جوانب حالة الشبكة دون عبء التخزين الكامل للشبكة نفسها وصيانتها. في مُعظم الحالات، يعني هذا الإعتماد على شكل من أشكال تجزئة الشجرة (hash tree) لتقديم دليل على وجود مُعاملة مُعينة في كتلة (block) مُعينة من خلال المُقارنة مع تجزئة الجذر (root hash) في رأس تلك الكتلة (block) أو ما يُعادلها. يسمح هذا للعميل الخفيف (light client) أو المحفظة بالوصول إلى مُستوى إحتمالي من اليقين حول الأحداث على الشبكة بحد أدنى من الثقة المطلوبة فيما يتعلق يعُقد (nodes) الشبكة.
 
-Traditionally the process of assembling and validating these proofs is carried out off chain by nodes, wallets, or other clients, but it also offers a potential mechanism for inter-chain state verification. However, by moving the capability to validate SPV proofs on-chain as a smart contract while leveraging the archival properties inherent to the blockchain, it is possible to construct a system for programmatically detecting and verifying transactions on other networks without the involvement of any type of trusted oracle or complex multi-stage consensus mechanism. This concept is broadly generalisable to any network with an SPV mechanism and can even be operated bilaterally on other smart contract platforms, opening up the possibility of cheap, fast, inter-chain transfer of value without relying on collateral, hashlocks, or trusted intermediaries.
+تقليديًا، تتم عملية تجميع هذه الأدلة والتحقق منها خارج الشبكة عن طريق العُقد (nodes) أو المحافظ أو عملاء آخرين، ولكنها توفر أيضًا آلية مُحتملة للتحقق من الحالة عبر الشبكة (Inter-chain). مع ذلك، من خلال نقل القدرة على التحقق من صحة إثباتات الـ SPV على الشبكة (On-Chain) كعقد ذكي (smart contract) مع الإستفادة من الخصائص الأرشيفية المُتأصلة في البلوكشاين، من المُمكن إنشاء نظام للكشف والتحقق من المُعاملات على الشبكات الأخرى برمجيًا دون مُشاركة أي نوع من أوراكل (oracle) موثوق به أو آلية إجماع (consensus) مُتعددة المراحل ومُعقدة. هذا المفهوم قابل للتعميم على نطاق واسع لأي شبكة بها آلية SPV ويُمكن حتى تشغيلها بشكل ثنائي على منصات عقود ذكية (smart contracts) أخرى، مما يفتح إمكانية نقل قيمة رخيصة وسريعة عبر الشبكات (Inter-chain) دون الإعتماد على الضمانات أو أقفال التجزئة (hashlocks) أو الوسطاء الموثوق بهم.
 
-Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of applications and contracts able to interoperate across the variegated and every growing platform ecosystem.
+إن إختيار الإستفادة من الآليات الراسخة والمُستقرة من الناحية التنموية الشائعة بالفعل في جميع شبكات البلوكشاين الرئيسية يسمح لحلول التشغيل البيني (interoperability) القائمة على الـ SPV أن تكون أبسط بشكل كبير من الأساليب المُنظمة والمُتعددة المراحل. كجزء من هذا، فإنهم يستغنون عن الحاجة إلى معايير إتصال عبر الشبكة (Inter-chain) مُتفق عليها على نطاق واسع والمُنظمات الكبيرة مُتعددة الأطراف التي تكتبها لصالح مجموعة من الخدمات القائمة على العقود المُنفصلة التي يُمكن إستخدامها بسهولة من خلال عقود المُتَّصِل (caller) من خلال تنسيق التجريد المُشترك. سيُؤدي ذلك إلى وضع الأساس لمجموعة واسعة من التطبيقات والعقود القادرة على التشغيل البيني (interoperate) عبر نظام بيئي مُتنوع وكل نظام بيئي مُتنامي.
 
-## Terminology
+## المُصطلحات (Terminology)
 
-SPV Program - Client-facing interface for the inter-chain SPV system, manages participant roles. SPV Engine - Validates transaction proofs, subset of the SPV Program. Client - The caller to the SPV Program, typically another solana contract. Prover - Party who generates proofs for transactions and submits them to the SPV Program. Transaction Proof - Created by Provers, contains a merkle proof, transaction, and blockheader reference. Merkle Proof - Basic SPV proof that validates the presence of a transaction in a certain block. Block Header - Represents the basic parameters and relative position of a given block. Proof Request - An order placed by a client for verification of transaction\(s\) by provers. Header Store - A data structure for storing and referencing ranges of block headers in proofs. Client Request - Transaction from the client to the SPV Program to trigger creation of a Proof Request. Sub-account - A Solana account owned by another contract account, without its own private key.
+برنامج SPV أو SPV Program - واجهة مُواجهة العميل (Client-facing interface) لنظام SPV عبر الشبكة (Inter-chain)، تُدير أدوار المُشاركين. مُحرك SPV - يتحقق من صحة إثباتات المُعاملات، وهي مجموعة فرعية من برنامج SPV. العميل - المُتَّصِل (caller) ببرنامج SPV، عادةً ما يكون عقد solana آخر. المُتثبِّت (Prover) - الطرف الذي يُنشئ البراهين للمُعاملات ويُقدمها إلى برنامج SPV. إثبات المُعاملة - الذي تم إنشاؤه بواسطة المُتثبِّتين (Provers)، يحتوي على إثباتات merkle والمُعاملات ومرجع رأس الكتلة (blockheader). إثبات Merkle أو Merkle Proof - إثبات SPV الأساسي الذي يتحقق من وجود مُعاملة في كتلة (block) مُعينة. رأس الكتلة (Block Header) - يمثل المُعلمات (parameters) الأساسية والموضع النسبي لكتلة (block) مُعينة. طلب إثبات (Proof Request) - طلب مُقدم من العميل للتحقق من المُعاملة \(المعاملات\) بواسطة المُتثبِّتين (Provers). مخزن الرأس (Header Store) - هيكل بيانات للتخزين والإشارة إلى نطاقات رؤوس الكتل (block headers) في الإثباتات. طلب العميل (Client Request) - مُعاملة من العميل إلى برنامج SPV لبدء إنشاء طلب إثبات (Proof Request). حساب فرعي (Sub-account) - حساب Solana مملوك لحساب عقد آخر، بدون مفتاحه الخاص (private key).
 
-## Service
+## الخدمة (Service)
 
-SPV Programs run as contracts deployed on the Solana network and maintain a type of public marketplace for SPV proofs that allows any party to submit both requests for proofs as well as proofs themselves for verification in response to requests. There will be multiple SPV Program instances active at any given time, at least one for each connected external network and potentially multiple instances per network. SPV program instances will be relatively consistent in their high level API and feature sets with some variation between currency platforms \(Bitcoin, Litecoin\) and smart contract platforms owing to the potential for verification of network state changes beyond simply transactions. In every case regardless of network, the SPV Program relies on an internal component called an SPV engine to provide stateless verification of the actual SPV proofs upon which the higher level client facing features and api are built. The SPV engine requires a network specific implementation, but allows easy extension of the larger inter-chain ecosystem by any team who chooses to carry out that implementation and drop it into the standard SPV program for deployment.
+تعمل برامج SPV كعقود مُنتشرة على شبكة Solana وتُحافظ على نوع من الأسواق العامة لإثباتات SPV التي تسمح لأي طرف بإرسال طلبات الإثبات وكذلك الإثباتات نفسها للتحقق إستجابة للطلبات. سيكون هناك العديد من مثيلات برنامج SPV نشطة في أي وقت مُحدد، واحدة على الأقل لكل شبكة خارجية مُتصلة ومن المُحتمل أن تكون مثيلات (instances) مُتعددة لكل شبكة. ستكون مثيلات (instances) برنامج SPV مُتسقة نسبيًا في واجهة برمجة التطبيقات (API) عالية المُستوى ومجموعات الميزات مع بعض الإختلاف بين عملات المنصات \(Bitcoin و Litecoin \) ومنصات العقود الذكية (smart contract platforms) نظرًا لإمكانية التحقق من تغييرات حالة الشبكة بما يتجاوز مُجرد المُعاملات. في كل حالة بغض النظر عن الشبكة، يعتمد برنامج SPV على مُكون داخلي يُسمى مُحرك SPV لتوفير التحقق بدون حالة إثباتات SPV الفعلية التي يتم البناء عليها لكل من ميزات واجهة العميل (client facing features) ذات المُستوى الأعلى وواجهة برمجة التطبيقات (API). يتطلب مُحرك SPV تطبيقًا خاصًا بالشبكة، ولكنه يسمح بسهولة تمديد النظام البيئي الأكبر عبر الشبكة (Inter-chain) من قبل أي فريق يختار تنفيذ هذا التنفيذ وإفلاته في برنامج SPV القياسي للنشر.
 
-For purposes of Proof Requests, the requester is referred to as the program client, which in most if not all cases will be another Solana Contract. The client can choose to submit a request pertaining to a specific transaction or to include a broader filter that can apply to any of a range of parameters of a transaction including its inputs, outputs, and amount. For example, A client could submit a request for any transaction sent from a given address A to address B with the amount X after a certain time. This structure can be used in a range of applications, such as verifying a specific intended payment in the case of an atomic swap or detecting the movement of collateral assets for a loan.
+لأغراض طلبات الإثبات (Proof Requests)، يُشار إلى مُقدم الطلب بإسم عميل البرنامج (program client)، والذي سيكون في مُعظم الحالات، إن لم يكن جميع الحالات، عقد Solana آخر. يُمكن للعميل إختيار تقديم طلب يتعلق بمُعاملة مُعينة أو تضمين عامل تصفية أوسع يمكن تطبيقه على أي مجموعة من مُعلِّمات (parameters) المُعاملة بما في ذلك المُدخلات (inputs) والمُخرجات (outputs) والمبلغ. على سبيل المثال، يُمكن للعميل تقديم طلب لأي مُعاملة يتم إرسالها من عنوان مُعين A إلى العنوان B بالمبلغ X بعد وقت مُعين. يمكن إستخدام هذا الهيكل في مجموعة من التطبيقات، مثل التحقق من دفعة مُحددة مقصودة في حالة المُقايضة الذرية (atomic swap) أو الكشف عن حركة الأصول الضمانية للقرض.
 
-Following submission of a Client Request, assuming that it is successfully validated, a proof request account is created by the SPV program to track the progress of the request. Provers use the account to specify the request they intend to fill in the proofs they submit for validation, at which point the SPV program validates those proofs and if successful, saves them to the account data of the request account. Clients can monitor the status of their requests and see any applicable transactions alongside their proofs by querying the account data of the request account. In future iterations when supported by Solana, this process will be simplified by contracts publishing events rather than requiring a polling style process as described.
+بعد تقديم طلب العميل (Client Request)، بإفتراض أنه تم التحقق من صحته بنجاح، يتم إنشاء حساب طلب إثبات (proof request account) بواسطة برنامج SPV لتتبع تقدم الطلب. يستخدم المُتثبِّتون (Provers) الحساب لتحديد الطلب الذي يعتزمون ملء الأدلة التي يُقدمونها للتحقق، وعند هذه النقطة يتحقق برنامج SPV من صحة تلك الإثباتات، وفي حالة نجاحها، يحفظها في بيانات حساب حساب الطلب (request account). يُمكن للعملاء مُراقبة حالة طلباتهم والإطلاع على أي مُعاملات قابلة للتطبيق جنبًا إلى جنب مع إثباتاتهم من خلال الإستعلام عن بيانات الحساب لحساب الطلب. في التكرارات المُستقبلية عندما تدعمها Solana، سيتم تبسيط هذه العملية من خلال عقود تنشر الأحداث بدلاً من طلب عملية أسلوب الإقتراع كما هو مُوضح.
 
-## Implementation
+## التنفيذ (Implementation)
 
-The Solana Inter-chain SPV mechanism consists of the following components and participants:
+تتكون آلية عبر الشبكة (Inter-chain) الخاصة بـ SPV في Solana من المُكونات والمُشاركين التاليين:
 
-### SPV engine
+### محرك SPV أو SPV engine
 
-A contract deployed on Solana which statelessly verifies SPV proofs for the caller. It takes as arguments for validation:
+عقد تم نشره على Solana يتحقق بدون حالة من أدلة SPV للمُتَّصِل (caller). يأخذ كحجج للتحقق من الصحة:
 
-- An SPV proof in the correct format of the blockchain associated with the program
-- Reference\(s\) to the relevant block headers to compare that proof against
-- The necessary parameters of the transaction to verify
+- إثبات SPV أو SPV proof بالتنسيق الصحيح للبلوكشاين المُرتبط بالبرنامج
+- قم بالرجوع إلى \(s\) رؤوس الكتل (block headers) ذات الصلة لمُقارنة هذا الإثبات
+- المُعلمات (parameters) الضرورية للمُعاملة التي سيتم التحقق منها
 
-  If the proof in question is successfully validated, the SPV program saves proof
+  إذا تم التحقق من صحة الإثبات المعني بالأمر بنجاح، يقوم برنامج SPV بحفظ دليل
 
-  of that verification to the request account, which can be saved by the caller to
+  ذلك التحقق إلى حساب الطلب (request account)، والذي يُمكن للمُتَّصِل (caller) حفظه في
 
-  its account data or otherwise handled as necessary. SPV programs also expose
+  بيانات حسابه أو التعامل معه بطريقة أخرى حسب الضرورة. تعرض برامج SPV أيضا
 
-  utilities and structs used for representation and validation of headers,
+  المرافق والهياكل المُستخدمة في التمثيل والتحقق من صحة الرؤوس
 
-  transactions, hashes, etc. on a chain by chain basis.
+  والمُعاملات والتجزئة (hash) وما إلى ذلك على أساس شبكة تلو الأخرى.
 
-### SPV program
+### برنامج SPV أو SPV program
 
-A contract deployed on Solana which coordinates and intermediates the interaction between Clients and Provers and manages the validation of requests, headers, proofs, etc. It is the primary point of access for Client contracts to access the inter-chain. SPV mechanism. It offers the following core features:
+عقد تم نشره في Solana ينسق ويتوسط التفاعل بين العملاء (Clients) والمُثبِّتين (Provers) ويدير التحقق من صحة الطلبات (requests) والرؤوس (headers) والإثباتات (proofs) وما إلى ذلك. إنها نقطة الوصول الأساسية لعقود العملاء للوصول إلى عبر الشبكة (Inter-chain). آلية SPV أو SPV mechanism. تُقدم الميزات الأساسية التالية:
 
-- Submit Proof Request - allows client to place a request for a specific proof or set of proofs
-- Cancel Proof Request - allows client to invalidate a pending request
-- Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
+- إرسال طلب إثبات (Proof Request) - يسمح للعميل بتقديم طلب لإثبات مُحدد أو مجموعة من الإثباتات
+- إلغاء طلب إثبات (Cancel Proof Request) - يسمح للعميل بإبطال طلب مُعلق
+- طلب إثبات الملء (Fill Proof Request) - يستخدمه المُتثبِّتون (Provers) لتقديم إثبات للتحقق من صحته يتوافق مع طلب إثبات مُعين
 
-  The SPV program maintains a publicly available listing of valid pending Proof
+  يحتفظ برنامج SPV بقائمة مُتاحة للجمهور من الإثبات المُعلق الصالح
 
-  Requests in its account data for the benefit of the Provers, who monitor it and
+  الطلبات في بيانات حسابها لصالح مُقدمي الخدمة الذين يُراقبونها و
 
-  enclose references to target requests with their submitted proofs.
+  ويُرفقون مراجع للطلبات المُستهدفة مع الإثباتات المُقدمة منهم.
 
-### Proof Request
+### طلب إثبات (Proof Request)
 
-A message sent by the Client to the SPV engine denoting a request for a proof of a specific transaction or set of transactions. Proof Requests can either manually specify a certain transaction by its hash or can elect to submit a filter that matches multiple transactions or classes of transactions. For example, a filter matching “any transaction from address xxx to address yyy” could be used to detect payment of a debt or settlement of an inter-chain swap. Likewise, a filter matching “any transaction from address xxx” could be used by a lending or synthetic token minting contract to monitor and react to changes in collateralization. Proof Requests are sent with a fee, which is disbursed by the SPV engine contract to the appropriate Prover once a proof matching that request is validated.
+رسالة يُرسلها العميل إلى مُحرك SPV تُشير إلى طلب إثبات لمُعاملة مُعينة أو مجموعة مُعاملات. يُمكن لطلبات الإثبات (Proof Requests) إما تحديد مُعاملة مُعينة يدويًا عن طريق التجزئة (hash) الخاصة بها أو يُمكن أن تختار إرسال عامل تصفية (filter) يُطابق مُعاملات مُتعددة أو فئات من المُعاملات. على سبيل المثال، يُمكن إستخدام عامل تصفية (filter) يُطابق "أي مُعاملة من العنوان xxx إلى العنوان yyy" لإكتشاف سداد دين أو تسوية مُقايضة عبر الشبكة (Inter-chain). بالمثل، يُمكن إستخدام عامل تصفية (filter) يُطابق "أي مُعاملة من العنوان xxx" من خلال عقد إقراض أو عقد سك رمز إصطناعي (synthetic token minting) لمُراقبة التغييرات في الضمانات والإستجابة لها. يتم إرسال طلبات الإثبات مُقابل رسوم، يتم صرفها من خلال عقد مُحرك SPV إلى المُثبِّت (Prover) المُناسب بمجرد التحقق من صحة إثبات يطابق هذا الطلب.
 
-### Request Book
+### كتاب الطلبات (Request Book)
 
-The public listing of valid, open Proof Requests available to provers to fill or for clients to cancel. Roughly analogous to an orderbook in an exchange, but with a single type of listing rather than two separate sides. It is stored in the account data of the SPV program.
+القائمة العامة لطلبات الإثبات (Proof Requests) الصالحة والمفتوحة المُتاحة للإثبات لملئها أو للعملاء لإلغائها. يشبه تقريبًا دفتر الطلبات في منصة التداول (exchange)، ولكن بنوع واحد من القائمة بدلاً من جانبين مُنفصلين. يتم تخزينها في بيانات حساب برنامج SPV.
 
-### Proof
+### الإثباتات (Proof)
 
-A proof of the presence of a given transaction in the blockchain in question. Proofs encompass both the actual merkle proof and reference\(s\) to a chain of valid sequential block headers. They are constructed and submitted by Provers in accordance with the specifications of the publicly available Proof Requests hosted on the request book by the SPV program. Upon Validation, they are saved to the account data of the relevant Proof Request, which can be used by the Client to monitor the state of the request.
+دليل على وجود مُعاملة مُعينة في البلوكشاين المقصودة. تشمل البراهين كلاً من برهان Merkle الفعلي والمرجع \(s\) إلى شبكة رؤوس كتل (block headers) مُتسلسلة صالحة. يتم إنشاؤها وإرسالها بواسطة Provers وفقًا لمُواصفات طلبات الإثبات (Proof Requests) المُتاحة للجمهور والمُستضافة في كتاب الطلب بواسطة برنامج SPV. عند التحقق من الصحة، يتم حفظها في بيانات الحساب الخاصة بطلب الإثبات ذي الصلة، والذي يُمكن للعميل إستخدامه لمُراقبة حالة الطلب.
 
-### Client
+### العميل (Client)
 
-The originator of a request for a transaction proof. Clients will most often be other contracts as parts of applications or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
+مُنشئ طلب إثبات المُعاملة (transaction proof). غالبًا ما يكون العملاء عقودًا أخرى كأجزاء من التطبيقات أو مُنتجات مالية مُحددة مثل القروض (loans) والمُقايضات (swaps) والضمان (escrow) وما إلى ذلك. يقوم العميل في أي دورة عملية تحقق مُعينة بتقديم طلب العميل (ClientRequest) مبدئيًا والذي يبلغ المُعلمات (parameters) والرسوم (fee)، وإذا تم التحقق من صحته بنجاح، يُؤدي إلى إنشاء حساب طلب إثبات (Proof Request account) بواسطة برنامج SPV. يجوز للعميل أيضًا تقديم إلغاء الطلب (CancelRequest) للإشارة إلى طلب إثبات (Proof Request) نشط للإشارة إليه على أنه غير صالح لأغراض تقديم الإثبات.
 
-### Prover
+### المُثبِّت (Prover)
 
-The submitter of a proof that fills a Proof Request. Provers monitor the request book of the SPV program for outstanding Proof Requests and generate matching proofs, which they submit to the SPV program for validation. If the proof is accepted, the fee associated with the Proof Request in question is disbursed to the Prover. Provers typically operate as Solana Blockstreamer nodes that also have access to a Bitcoin node, which they use for purposes of constructing proofs and accessing block headers.
+مُقدم إثبات يملأ طلب إثبات (Proof Request). يقوم المُثبِّتون (Provers) بمُراقبة دفتر الطلبات الخاص ببرنامج SPV لطلبات الإثبات (Proof Requests) المُعلقة وإنشاء الإثباتات المُطابقة التي يُرسلونها إلى برنامج SPV للتحقق من صحتها. إذا تم قبول الدليل، فسيتم دفع الرسوم المُرتبطة بطلب الإثبات المعني إلى المُثبِّت (Prover). تعمل الأمثال عادةً كعُقد (nodes) كتلة بث (Blockstreamer) لـSolana التي يُمكنها أيضًا الوصول إلى عُقدة الـ Bitcoin، والتي يستخدمونها لأغراض إنشاء الإثباتات والوصول إلى رؤوس الكتلة (block headers).
 
-### Header Store
+### مخزن الرأس (Header Store)
 
-An account-based data structure used to maintain block headers for the purpose of inclusion in submitted proofs by reference to the header store account. header stores can be maintained by independent entities, since header chain validation is a component of the SPV program proof validation mechanism. Fees that are paid out by Proof Requests to Provers are split between the submitter of the merkle proof itself and the header store that is referenced in the submitted proof. Due to the current inability to grow already allocated account data capacity, the use case necessitates a data structure that can grow indefinitely without rebalancing. Sub-accounts are accounts owned by the SPV program without their own private keys that are used for storage by allocating blockheaders to their account data. Multiple potential approaches to the implementation of the header store system are feasible:
+بنية بيانات قائمة على الحساب تُستخدم للإحتفاظ برؤوس الكتل (block headers) بغرض التضمين في البراهين المُرسلة بالرجوع إلى حساب مخزن الرأس (header store account). يمكن الإحتفاظ بمخازن الرأس (header stores) بواسطة كيانات مُستقلة، نظرًا لأن التحقق من صحة رأس الشبكة هو أحد مُكونات آلية التحقق من صحة برنامج SPV. يتم تقسيم الرسوم التي يتم دفعها بواسطة طلبات الإثبات (Proof Requests) إلى المُتثبِّتين (Provers) بين مقدم إثبات Merkle نفسه ومُخزن الرأس المُشار إليه في الإثبات المُقدم. نظرًا لعدم القدرة الحالية على زيادة سعة بيانات الحساب المُخصصة بالفعل، تتطلب حالة الإستخدام بنية بيانات يُمكن أن تنمو إلى أجل غير مُسمى دون إعادة التوازن. الحسابات الفرعية هي حسابات مملوكة لبرنامج SPV بدون مفاتيح خاصة بها يتم إستخدامها للتخزين عن طريق تخصيص رؤوس الكتلة (blockheaders) لبيانات حساباتهم. تُعد الأساليب المُحتملة المُتعددة لتنفيذ نظام مخزن الرأس (Header Store) مُمكنة:
 
-Store Headers in program sub-accounts indexed by Public address:
+مخزن الرؤوس (Store Headers) في الحسابات الفرعية للبرنامج المُفهرسة حسب العنوان العام (Public address):
 
-- Each sub-account holds one header and has a public key matching the blockhash
-- Requires same number of account data lookups as confirmations per verification
-- Limit on number of confirmations \(15-20\) via max transaction data ceiling
-- No network-wide duplication of individual headers
+- يحتوي كل حساب فرعي على رأس واحد وله مفتاح عمومي (public key) يُطابق تجزئة الكتلة (Blockhash)
+- يتطلب نفس عدد عمليات البحث عن بيانات الحساب مثل التأكيدات لكل عملية تحقق
+- تحديد عدد التأكيدات \(15-20\) عبر الحد الأقصى لبيانات المُعاملة
+- لا يُوجد تكرار على مُستوى الشبكة للرؤوس الفردية
 
-Linked List of multiple sub-accounts storing headers:
+قائمة مُرتبطة بالعديد من الحسابات الفرعية التي تُخزن الرؤوس:
 
-- Maintain sequential index of storage accounts, many headers per storage account
-- Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
-- Compact sequential data address format allows any number of confirmations and fast lookups
-- Facilitates network-wide header duplication inefficiencies
+- الإحتفاظ بالفهرس المتسلسل لحسابات التخزين، العديد من الرؤوس لكل حساب تخزين
+- عمليات البحث عن بيانات الحساب بحد أقصى 2 لـ & Gt &gt;99.9% من عمليات التحقق \(1 للأغلبية\)
+- يسمح تنسيق عنوان البيانات التسلسلي المضغوط بأي عدد من التأكيدات وعمليات البحث السريعة
+- تسهيل إزدواجية الرأس على مُستوى الشبكة

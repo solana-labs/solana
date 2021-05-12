@@ -1,11 +1,11 @@
 ---
-title: Snapshot Verification
+title: Проверка снепшота
 ---
 
-## Problem
+## Проблематика
 
-Snapshot verification of the account states is implemented, but the bank hash of the snapshot which is used to verify is falsifiable.
+Верификация снепшота с состоянием аккаунтов реализована, но банковский хэш снепшота, который используется для проверки, может быть фальсифицирован.
 
-## Solution
+## Решение
 
-While a validator is processing transactions to catch up to the cluster from the snapshot, use incoming vote transactions and the commitment calculator to confirm that the cluster is indeed building on the snapshotted bank hash. Once a threshold commitment level is reached, accept the snapshot as valid and start voting.
+Пока валидатор обрабатывает транзакции, чтобы догнать кластер из снепшота, используйте входящие голосовые транзакции и калькулятор подтверждений, чтобы убедиться, что кластер действительно строится на соответствующем хэше банка. Как только порог подтверждений достигнут, примите снепшот как валидный и запустите голосование.

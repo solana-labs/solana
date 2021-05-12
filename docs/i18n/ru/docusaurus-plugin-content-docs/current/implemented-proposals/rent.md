@@ -1,69 +1,69 @@
 ---
-title: Rent
+title: Аренда
 ---
 
-Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
+Аккаунты в Solana могут иметь контролируемое владельцем состояние \ (` Account:: data ` \), которое отличается от баланса аккаунта \ (` Account:: lamports ` \). Поскольку валидаторам в сети необходимо поддерживать рабочую копию этого состояния в памяти, сеть взимает плату за потребление этого ресурса, основанную на времени и пространстве, также известную как аренда.
 
-## Two-tiered rent regime
+## Двухуровневый режим аренды
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
+Счета, на которых поддерживается минимальный остаток, эквивалентный 2 годам арендной платы, не облагаются. _2 years_ основан на том факте, что стоимость оборудования снижается на 50% каждые 2 года, и результирующей сходимости из-за того, что это геометрический ряд. Со счетов, баланс которых ниже этого порога, взимается арендная плата по ставке, указанной в генезисе, в лампортах за байт-год. Сеть взимает арендную плату за каждую эпоху в кредит на следующую эпоху, а ` Account:: rent_epoch ` отслеживает следующий раз, когда арендная плата должна быть снята со счета.
 
-Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
+В настоящее время стоимость аренды фиксирована на генезисе. Однако ожидается, что он будет динамичным, отражая стоимость базового оборудования для хранения данных в то время. Таким образом, обычно ожидается, что цена будет снижаться по мере снижения стоимости оборудования по мере развития технологий.
 
-## Timings of collecting rent
+## Сроки сбора аренды
 
-There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
+Существует два времени сбора ренты со счетов: \ (1 \) при ссылке на транзакцию, \ (2 \) периодически, один раз в эпоху. \ (1 \) включает транзакцию для создания самой нового аккаунта, и это происходит во время обычной обработки транзакции банком как часть фазы загрузки. \ (2 \) существует, чтобы гарантировать сбор ренты с устаревших счетов, на которые вообще не ссылаются в последние эпохи. \ (2 \) требует полного сканирования аккаунтов и распространяется на эпоху на основе префикса адреса аккаунта, чтобы избежать скачков нагрузки из-за этого сбора арендной платы.
 
-On the contrary, rent collection isn't applied to accounts that are directly manipulated by any of protocol-level bookkeeping processes including:
+Напротив, сбор арендной платы не применяется к счетам, которые напрямую управляются какими-либо бухгалтерскими процессами на уровне протокола, включая:
 
-- The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
-- The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
-- The distribution of transaction fee at the end of every slot
+- Распределение самого сбора ренты (в противном случае это может вызвать рекурсивную обработку сбора ренты)
+- Распределение вознаграждений за стекинг в начале каждой эпохи (чтобы уменьшить всплеск обработки в начале новой эпохи)
+- Распределение комиссии за транзакцию в конце каждого слота
 
-Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
+Даже если эти процессы выходят за рамки сбора ренты, все управляемые аккаунты в конечном итоге будут обрабатываться с помощью механизма \ (2 \).
 
-## Actual processing of collecting rent
+## Фактическая обработка взыскания ренты
 
-Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
+Арендная плата взимается за одну эпоху, и аккаунты имеют ` Account:: rent_epoch `, равный ` current_epoch ` или ` current_epoch + 1 ` в зависимости от режима аренды.
 
-If the account is in the exempt regime, `Account::rent_epoch` is simply updated to `current_epoch`.
+Если аккаунт находится в освобожденном режиме, ` Account:: rent_epoch ` просто обновляется до ` current_epoch `.
 
-If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to `current_epoch + 1` (= next epoch). If the amount of rent due is less than one lamport, no changes are made to the account.
+Если аккаунт не освобождена от налогов, разница между следующей эпохой и ` Account:: rent_epoch ` используется для расчета суммы арендной платы, причитающейся с этого аккаунта \ (через ` Rent:: due () ` \). Любые дробные лэмпорты вычисления усекаются. Причитающаяся арендная плата вычитается из ` Account:: lamports `, а ` Account:: rent_epoch ` обновляется до ` current_epoch + 1 ` (= следующая эпоха). Если сумма арендной платы меньше одного лэмпорта, изменения в счет не вносятся.
 
-Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
+Аккаунты на балансе которых недостаточно для погашения причитающейся арендной платы, просто не загружаются.
 
-A percentage of the rent collected is destroyed. The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
+Процент собранной аренды уничтожается. Остальные распределяются между аккаунтами валидатора по весу, сбору за транзакцию в конце каждого слота.
 
-Finally, rent collection happens according to the protocol-level account updates like the rent distribution to validators, meaning there is no corresponding transaction for rent deductions. So, rent collection is rather invisible, only implicitly observable by a recent transaction or predetermined timing given its account address prefix.
+Наконец, сбор арендной платы происходит в соответствии с обновлениями аккаунта на уровне протокола, такими как распределение арендной платы между валидаторами, что означает отсутствие соответствующей транзакции для удержаний арендной платы. Таким образом, сбор арендной платы является довольно невидимым, только неявно наблюдаемым по недавней транзакции или заранее определенному времени с учетом префикса адреса учетной записи.
 
-## Design considerations
+## Соображения в дизайне
 
-### Current design rationale
+### Обоснование текущего дизайна
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
+В соответствии с предыдущим планом НЕ возможно иметь аккаунты, которые остаются, никогда не касаются и никогда не должны платить арендную плату. Счета всегда платят арендную плату ровно один раз для каждой эпохи, за исключением аккаунтов без арендной платы, sysvar и исполняемых файлов.
 
-This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
+Это преднамеренный выбор дизайна. В противном случае можно было бы инициировать несанкционированный сбор арендной платы с помощью инструкции ` Noop ` любым, кто может получить несправедливую прибыль от арендной платы (лидер на данный момент) или сэкономить арендную плату с учетом ожидаемых колебаний арендной платы.
 
-As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
+В качестве еще одного побочного эффекта этого выбора также обратите внимание, что этот периодический сбор арендной платы эффективно вынуждает валидатор оптимистично не хранить устаревшие аккаунты в холодном хранилище и экономить стоимость хранения, что неблагоприятно для владельцев аккаунтов и может привести к задержке транзакций на них дольше. чем другие. С другой стороны, это не позволяет злоумышленникам накапливать значительное количество мусорных учетных записей, что обременяет валидаторов.
 
-As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
+Как общее следствие этого дизайна, все учетные записи одинаково хранятся как рабочий набор валидатора с одинаковыми характеристиками производительности, что прямо отражает единую структуру ценообразования арендной платы.
 
-### Ad-hoc collection
+### Ad-hoc коллекция
 
-Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
+Рассматривался вопрос о сборе арендной платы по мере необходимости \ (т.е. всякий раз, когда счета были загружены / открыты \). К числу вопросов, связанных с таким подходом, относятся:
 
-- accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
+- аккаунты загруженные как «только кредит» для транзакции, вполне разумно предполагать, что они будут иметь причитающуюся арендную плату
 
-  but would not be writable during any such transaction
+  но не будет доступен для записи во время любой такой транзакции
 
-- a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
+- желателен механизм "выбить кусты" \ (то есть найти аккаунты, за которые нужно платить за аренду \),
 
-  lest accounts that are loaded infrequently get a free ride
+  чтобы аккаунты, которые загружаются нечасто, не получили бесплатную поездку
 
-### System instruction for collecting rent
+### Системная инструкция по сбору ренты
 
-Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
+Рассматривался вопрос о сборе ренты с помощью системной инструкции, поскольку он, естественно, распределял ренту между активными узлами и узлами, взвешенными по ставкам, и мог производиться постепенно. Тем не менее:
 
-- it would have adversely affected network throughput
-- it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
-- someone would have to issue the transactions
+- это оказало бы неблагоприятное воздействие на пропускную способность сети
+- для этого потребуется специальный регистр во время выполнения, так как аккаунты с владельцами, не принадлежащими к SystemProgram, могут быть списаны этой инструкцией
+- кто-то должен будет оформить транзакции

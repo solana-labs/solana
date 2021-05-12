@@ -1,11 +1,11 @@
 ---
-title: Introduction
+title: Introducción
 ---
 
-## Welcome!
+## Bienvenido!
 
-This guide contains information about how to participate in Solana's Tour de SOL. Questions? Comments? Keep on reading!
+Esta guía contiene información sobre cómo participar en el Tour de SOL de Solana. ¿Preguntas? ¿Comentarios? Email ryan@solana.com
 
-### Learn more about Tour de SOL
+### [Más información sobre Tour de SOL](https://solana.com/tds/)
 
-If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.
+Si aún no se ha registrado, complete el formulario en [https://solana.com/tds/](https://solana.com/tds/) primero.

@@ -1,56 +1,44 @@
 ---
-title: Offline Transaction Signing
+title: توقيع المُعاملات دون راجعتصال
 ---
 
-Some security models require keeping signing keys, and thus the signing
-process, separated from transaction creation and network broadcast. Examples
-include:
+تتطلب بعض نماذج الأمان الإحتفاظ بمفاتيح التوقيع، وبالتالي عملية التوقيع، مُنفصلة عن إنشاء المُعاملات والبث الشبكي. تشمل الأمثلة ما يلي:
 
-- Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
-  signing device
+- جمع التوقيعات من الموقعين المتباينين جغرافيا في مخطط متعدد التوقيعات [multi-signature scheme](cli/usage.md#multiple-witnesses)
+- عمليات التوقيع بإستخدام فجوة الهواء [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking)) جهاز تسجيل غير مُتصل بالأنترنات
 
-This document describes using Solana's CLI to separately sign and submit a
-transaction.
+يصف هذا المُستند كيفية إستخدام Solana's CLI لتوقيع وتسليم العملية بشكل مُنفصل.
 
-## Commands Supporting Offline Signing
+## الأوامر التي تدعم التوقيع بدون إتصال
 
-At present, the following commands support offline signing:
+الأوامر التالي تدعم التوقيع دون اتصال في الوقت الحالي:
 
-- [`create-stake-account`](cli/usage.md#solana-create-stake-account)
-- [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
-- [`delegate-stake`](cli/usage.md#solana-delegate-stake)
-- [`split-stake`](cli/usage.md#solana-split-stake)
-- [`stake-authorize`](cli/usage.md#solana-stake-authorize)
-- [`stake-set-lockup`](cli/usage.md#solana-stake-set-lockup)
-- [`transfer`](cli/usage.md#solana-transfer)
-- [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
+- [`إنشاء حساب إثبات الحصة`](cli/usage.md#solana-create-stake-account)
+- [`تعطيل الحصة`](cli/usage.md#solana-deactivate-stake)
+- [`تفويض الحصة`](cli/usage.md#solana-delegate-stake)
+- [`تقسيم الحصة`](cli/usage.md#solana-split-stake)
+- [`تفويض الحصة`](cli/usage.md#solana-stake-authorize)
+- [`قفل مجموعة الحصة`](cli/usage.md#solana-stake-set-lockup)
+- [`تحويل`](cli/usage.md#solana-transfer)
+- [`سحب حصة`](cli/usage.md#solana-withdraw-stake)
 
-## Signing Transactions Offline
+## توقيع المُعاملات دون إتصال
 
-To sign a transaction offline, pass the following arguments on the command line
+لتوقيع مُعاملة بدون إتصال، قم بتمرير الأسباب التالية إلى سطر الأوامر
 
-1. `--sign-only`, prevents the client from submitting the signed transaction
-   to the network. Instead, the pubkey/signature pairs are printed to stdout.
-2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to
-   fill the transaction's `recent_blockhash` field. This serves a number of
-   purposes, namely:
-   _ Eliminates the need to connect to the network and query a recent blockhash
-   via RPC
-   _ Enables the signers to coordinate the blockhash in a multiple-signature
-   scheme
+1. `--sign-only` يمنع العميل من تسليم عملية مسجلة إلى الشبكة. ويتم عرض زوجي المفتاح العام والتوقيع بدلًا من ذلك في المخرج القياسي.
+2. `--blockhash BASE58_HASH`, يسمح للمتصل بتحديد القيمة المستخدمة لتعبئة حقل العملية `recent_blockhash`. ويخدم هذا الأمر عددًا من الأغراض، وتحديدًا: _ يلغي الحاجة إلى الاتصال بالشبكة ويستعلم عن blockhash حديث من خلال RPC _ يمكّن الموقعين من تنسيق blockhash بمخطط متعدد التوقيعات
 
-### Example: Offline Signing a Payment
+### مثال: توقيع دفعة دون إتصال
 
-Command
+أمر
 
 ```bash
 solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     recipient-keypair.json 1
 ```
 
-Output
+الناتج
 
 ```text
 
@@ -61,19 +49,16 @@ Signers (Pubkey=Signature):
 {"blockhash":"5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF","signers":["FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN"]}'
 ```
 
-## Submitting Offline Signed Transactions to the Network
+## تقديم معاملات مُوقّعة دون إتصال إلى الشبكة
 
-To submit a transaction that has been signed offline to the network, pass the
-following arguments on the command line
+لتقديم معاملة تم توقيعها دون اتصال إلى الشبكة، عليك تمرير الحجج التالية إلى سطر الأوامر
 
-1. `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
-2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
-   includes the pubkey/signature pairs directly in the transaction rather than
-   signing it with any local keypair(s)
+1. `--blockhash BASE58_HASH`, يجب أن يكون نفس تجزئة الكُتلة (Blockhash) كما تم استخدامه في التوقيع
+2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, واحد لكل موقع دون إتصال. هذا يشمل زوجي المفتاح العام والتوقيع في العملية بدلًا من توقيعها مع أي زوج مفاتيح (أو أزواج مفاتيح) محلية
 
-### Example: Submitting an Offline Signed Payment
+### مثال: تقديم دفعة مُوقّعة دون إتصال
 
-Command
+أمر
 
 ```bash
 solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
@@ -81,22 +66,19 @@ solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomS
     recipient-keypair.json 1
 ```
 
-Output
+الناتج
 
 ```text
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
 ```
 
-## Offline Signing Over Multiple Sessions
+## توقيع بدون إتصال عبر جلسات مُتعددة
 
-Offline signing can also take place over multiple sessions. In this scenario,
-pass the absent signer's public key for each role. All pubkeys that were specified,
-but no signature was generated for will be listed as absent in the offline signing
-output
+يمكن أن يحدث التوقيع دون إتصال عبر جلسات مُتعددة. في هذا السيناريو، قم بتمرير المفتاح العام المفقود للموقع لكل دور. جميع المفاتيح العامة التي تم تحديدها، ولكن لم يتم إنشاء توقيع لها سيتم إضافتها كمفقودة في نتائج التوقيع دون اتصال
 
-### Example: Transfer with Two Offline Signing Sessions
+### مثال: التحويل خلال جلستي توقيع دون إإتصال
 
-Command (Offline Session #1)
+أمر (جلسة رقم 1 دون إتصال)
 
 ```text
 solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -106,7 +88,7 @@ solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --from 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Output (Offline Session #1)
+الناتج (جلسة رقم 1 دون اتصال)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -116,7 +98,7 @@ Absent Signers (Pubkey):
   674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Command (Offline Session #2)
+أمر (جلسة رقم 2 دون اتصال)
 
 ```text
 solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -126,7 +108,7 @@ solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --fee-payer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Output (Offline Session #2)
+ناتج (جلسة رقم 2 دون اتصال)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -136,7 +118,7 @@ Absent Signers (Pubkey):
   3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Command (Online Submission)
+أمر (تقديم عبر الإنترنت)
 
 ```text
 solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -147,16 +129,12 @@ solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --signer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy=ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-Output (Online Submission)
+ناتج (تقديم الإنترنت)
 
 ```text
 ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-## Buying More Time to Sign
+## كسب المزيد من الوقت للتوقيع
 
-Typically a Solana transaction must be signed and accepted by the network within
-a number of slots from the blockhash in its `recent_blockhash` field (~2min at
-the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
-need.
+ويجب في العادة أن يتم توقيع وقبول معاملة Solana من قبل الشبكة خلال عدد من الفتحات من blockhash في `recent_blockhash` حقل (دقيقتان تقريبًا من وقت هذه الكتابة). إذا استغرقت عملية توقيعك مدة أطول من ذلك، فإن [Durable Transaction Nonce](offline-signing/durable-nonce.md) بإمكانه إعطاءك الوقت الإضافية اللازم.

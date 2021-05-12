@@ -1,197 +1,194 @@
 ---
-title: Stake Delegation and Rewards
+title: Recompensas y Delegación de Stake
 ---
 
-Stakers are rewarded for helping to validate the ledger. They do this by delegating their stake to validator nodes. Those validators do the legwork of replaying the ledger and sending votes to a per-node vote account to which stakers can delegate their stakes. The rest of the cluster uses those stake-weighted votes to select a block when forks arise. Both the validator and staker need some economic incentive to play their part. The validator needs to be compensated for its hardware and the staker needs to be compensated for the risk of getting its stake slashed. The economics are covered in [staking rewards](../implemented-proposals/staking-rewards.md). This section, on the other hand, describes the underlying mechanics of its implementation.
+Los participantes son recompensados por ayudar a validar el registro. Lo hacen delegando su stake en nodos validadores. Esos validadores hacen el trabajo preliminar de reproducir el ledger y enviar votos a una cuenta de voto por nodo en la que los participantes pueden delegar su stake. El resto del grupo utiliza esos votos ponderados por stake para seleccionar un bloque cuando surgen forks. Tanto el validador como el staker necesitan algún incentivo económico para desempeñar su papel. El validador debe ser compensado por su hardware y el staker debe ser compensado por el riesgo de que se reduzca su stake. Los aspectos económicos se tratan en [ recompensas de stake ](../implemented-proposals/staking-rewards.md). Esta sección, por otra parte, describe los mecanismos subyacentes de su implementación.
 
-## Basic Design
+## Diseño básico
 
-The general idea is that the validator owns a Vote account. The Vote account tracks validator votes, counts validator generated credits, and provides any additional validator specific state. The Vote account is not aware of any stakes delegated to it and has no staking weight.
+La idea general es que el validador posee una cuenta de voto. La cuenta de voto rastrea los votos del validador, cuenta los créditos generados por el validador, y proporciona cualquier estado específico del validador. La cuenta de voto no tiene conocimiento de ningun stake delegado en ella y no tiene peso de staking.
 
-A separate Stake account \(created by a staker\) names a Vote account to which the stake is delegated. Rewards generated are proportional to the amount of lamports staked. The Stake account is owned by the staker only. Some portion of the lamports stored in this account are the stake.
+Una cuenta de stake separada \ (creada por un participante \) nombra una cuenta de votación a la que se delega el stake. Las recompensas generadas son proporcionales a la cantidad de lamports en stake. La cuenta Stake es propiedad del participante solamente. Parte de los lamports almacenados en esta cuenta son el stake.
 
-## Passive Delegation
+## Delegación Pasiva
 
-Any number of Stake accounts can delegate to a single Vote account without an interactive action from the identity controlling the Vote account or submitting votes to the account.
+Cualquier número de cuentas Stake puede delegar a una sola cuenta de voto sin una acción interactiva de la identidad que controla la cuenta de voto o envía votos a la cuenta.
 
-The total stake allocated to a Vote account can be calculated by the sum of all the Stake accounts that have the Vote account pubkey as the `StakeState::Stake::voter_pubkey`.
+El stake total asignado a una cuenta de voto puede ser calculada por la suma de todas las cuentas de Stake que tienen la pubkey de la cuenta de Voto como `StakeState::Stake::voter_pubkey`.
 
-## Vote and Stake accounts
+## Cuentas de voto y Stake
 
-The rewards process is split into two on-chain programs. The Vote program solves the problem of making stakes slashable. The Stake program acts as custodian of the rewards pool and provides for passive delegation. The Stake program is responsible for paying rewards to staker and voter when shown that a staker's delegate has participated in validating the ledger.
+El proceso de recompensas se divide en dos programas en cadena. El programa Vote resuelve el problema de hacer que los stakes sean cortados. El programa Stake actúa como custodio del grupo de recompensas y prevé la delegación pasiva. El programa Stake es responsable de pagar recompensas a los interesados y votantes cuando se muestra que el delegado de un participante ha participado en la validación del titular.
 
-### VoteState
+### Estado de la votación
 
-VoteState is the current state of all the votes the validator has submitted to the network. VoteState contains the following state information:
+Estado de voto es el estado actual de todos los votos que el validador ha enviado a la red. El Estado de voto contiene la siguiente información de estado:
 
-- `votes` - The submitted votes data structure.
-- `credits` - The total number of rewards this Vote program has generated over its lifetime.
-- `root_slot` - The last slot to reach the full lockout commitment necessary for rewards.
-- `commission` - The commission taken by this VoteState for any rewards claimed by staker's Stake accounts. This is the percentage ceiling of the reward.
-- Account::lamports - The accumulated lamports from the commission. These do not count as stakes.
-- `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
-- `node_pubkey` - The Solana node that votes in this account.
-- `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address and the authorized vote signer.
+- `votes` - La estructura de datos de los votos enviados.
+- `credits` -El número total de recompensas que este programa de Voto ha generado a lo largo de su vida.
+- `root_slot` - La última ranura para alcanzar el compromiso completo de bloqueo necesario para obtener recompensas.
+- `comisión` - La comisión tomada por este Estado del Voto para cualquier recompensa reclamada por las cuentas de stake del participante. Este es el porcentaje máximo de la recompensa.
+- Account::lamports: los lamports acumulados de la comisión. Estos no cuentan como participaciones.
+- `authorized_voter` - solo esta identidad está autorizada para enviar votos. Este campo sólo puede ser modificado por esta identidad.
+- `node_pubkey` - El nodo Solana que vota en esta cuenta.
+- ` Authorized_withdrawer `: la identidad de la entidad a cargo de los importes de esta cuenta, separada de la dirección de la cuenta y del firmante de voto autorizado.
 
 ### VoteInstruction::Initialize\(VoteInit\)
 
-- `account[0]` - RW - The VoteState.
+- `account[0]` - RW - El Estado del voto.
 
-  `VoteInit` carries the new vote account's `node_pubkey`, `authorized_voter`, `authorized_withdrawer`, and `commission`.
+  `VoteInit` lleva la nueva cuenta de voto `node_pubkey`, `authorized_voter`, `authorized_withdrawal`y `comisión`.
 
-  other VoteState members defaulted.
+  otros miembros del Estado con Voto incumplieron.
 
 ### VoteInstruction::Authorize\(Pubkey, VoteAuthorize\)
 
-Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
+Actualiza la cuenta con un nuevo votante o retiro autorizado, según el parámetro VoteAuthorize \(`Voter` o `Withdrawer`\). La transacción debe estar firmada por la cuenta de voto actual `authorized_voter` o `authorized_withdrawal` de la cuenta de voto.
 
-- `account[0]` - RW - The VoteState.
-  `VoteState::authorized_voter` or `authorized_withdrawer` is set to `Pubkey`.
+- `account[0]` - RW - El Estado del voto. `VoteState::authorized_voter` o `authorized_withdrawal` está establecido en `Pubkey`.
 
 ### VoteInstruction::Vote\(Vote\)
 
-- `account[0]` - RW - The VoteState.
-  `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](../implemented-proposals/tower-bft.md).
-- `account[1]` - RO - `sysvar::slot_hashes` A list of some N most recent slots and their hashes for the vote to be verified against.
-- `account[2]` - RO - `sysvar::clock` The current network time, expressed in slots, epochs.
+- `account[0]` - RW - El estado del Voto. `VoteState::lockouts` y `VoteState::credits` se actualizan de acuerdo a las reglas de bloqueo de votación ver [Tower BFT](../implemented-proposals/tower-bft.md).
+- `account[1]` - RO - `sysvar::slot_hashes` Una lista de algunas N ranuras más recientes y sus hash para que la votación se verifique en su lugar.
+- `account[2]` - RO - `sysvar::clock` El tiempo actual de red, expresado en ranuras, epochs.
 
-### StakeState
+### Estado del Stake
 
-A StakeState takes one of four forms, StakeState::Uninitialized, StakeState::Initialized, StakeState::Stake, and StakeState::RewardsPool. Only the first three forms are used in staking, but only StakeState::Stake is interesting. All RewardsPools are created at genesis.
+Un StakeState toma uno de cuatro formularios, StakeState::Uninitialized, StakeState::Initialized, StakeState::StakeState::Stake, y StakeState::RewardsPool. Sólo las tres primeras formas se utilizan en e lstaking, pero sólo StakeState::Stake es interesante. Todas las RewardsPools se crean en génesis.
 
 ### StakeState::Stake
 
-StakeState::Stake is the current delegation preference of the **staker** and contains the following state information:
+StakeState::Stake es la preferencia actual de la delegación de la **staker** y contiene la siguiente información de estado:
 
-- Account::lamports - The lamports available for staking.
-- `stake` - the staked amount \(subject to warmup and cooldown\) for generating rewards, always less than or equal to Account::lamports.
-- `voter_pubkey` - The pubkey of the VoteState instance the lamports are delegated to.
-- `credits_observed` - The total credits claimed over the lifetime of the program.
-- `activated` - the epoch at which this stake was activated/delegated. The full stake will be counted after warmup.
-- `deactivated` - the epoch at which this stake was de-activated, some cooldown epochs are required before the account is fully deactivated, and the stake available for withdrawal.
-- `authorized_staker` - the pubkey of the entity that must sign delegation, activation, and deactivation transactions.
-- `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address, and the authorized staker.
+- Account::lamports - Los lamports disponibles para hacer staking.
+- `stake` - la cantidad puesta en stake \(sujeto a warmup y enfriamiento\) para generar recompensas, siempre menor o igual a Account::lamports.
+- `voter_pubkey` - La llave de la instancia de VoteState a la que se delegan los lamports.
+- `credits_observed` - Los créditos totales reclamados durante la vida del programa.
+- ` activated `: la época en la que se activó / delegó este stake. El stake total se contará después de warmup.
+- `deactivated` -la época en la que se desactivó este stake, se requieren algunas épocas de enfriamiento antes de que la cuenta se desactive por completo, y el stake disponible para el retiro.
+- `authorized_staker` - la pubkey de la entidad que debe firmar las transacciones de delegación, activación y desactivación.
+- `authorized_wither` - la identidad de la entidad responsable de los lamports de esta cuenta, separados de la dirección de la cuenta y el participante autorizado.
 
-### StakeState::RewardsPool
+### StakeState::Fondo de recompensas
 
-To avoid a single network-wide lock or contention in redemption, 256 RewardsPools are part of genesis under pre-determined keys, each with std::u64::MAX credits to be able to satisfy redemptions according to point value.
+Para evitar un único bloqueo o contención en toda la red, 256 RewardsPools son parte de la génesis bajo claves predeterminadas, cada uno con std::u64::MAX créditos para poder satisfacer canjeos de acuerdo al valor del punto.
 
-The Stakes and the RewardsPool are accounts that are owned by the same `Stake` program.
+Los Stakes y RewardsPool son cuentas que pertenecen al mismo programa `Stake`.
 
-### StakeInstruction::DelegateStake
+### Instrucción de Stake::Delegar Stake
 
-The Stake account is moved from Initialized to StakeState::Stake form, or from a deactivated (i.e. fully cooled-down) StakeState::Stake to activated StakeState::Stake. This is how stakers choose the vote account and validator node to which their stake account lamports are delegated. The transaction must be signed by the stake's `authorized_staker`.
+La cuenta de stake se mueve de la forma Inicializada a la forma StakeState::Stake, o de una StakeState::Stake desactivada (es decir, totalmente enfriada) a una StakeState::Stake activada. Así es como los stakers eligen la cuenta de voto y el nodo validador al que se delegan los lamports de su cuenta de stake. La transacción debe ser firmada por el `authorized_staker` del stake.
 
-- `account[0]` - RW - The StakeState::Stake instance. `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`, `StakeState::Stake::voter_pubkey` is initialized to `account[1]`. If this is the initial delegation of stake, `StakeState::Stake::stake` is initialized to the account's balance in lamports, `StakeState::Stake::activated` is initialized to the current Bank epoch, and `StakeState::Stake::deactivated` is initialized to std::u64::MAX
-- `account[1]` - R - The VoteState instance.
-- `account[2]` - R - sysvar::clock account, carries information about current Bank epoch.
-- `account[3]` - R - sysvar::stakehistory account, carries information about stake history.
-- `account[4]` - R - stake::Config account, carries warmup, cooldown, and slashing configuration.
+- `account[0]` - RW - The StakeState::Stake instance. `StakeState::Stake::credits_observed` se inicializa en `VoteState::credits`, `StakeState::Stake::voter_pubkey` se inicializa en `cuenta[1]`. Si esta es la delegación inicial del stake, `El estado de stake::Stake::bet` se inicializa al saldo de la cuenta en lamports, `StakeState::Stake::activated` está inicializado en la época actual del Banco, y `StakeState::Stake::deactivated` está inicializado a std::u64::MAX
+- `account[1]` - R - La instancia de VoteState.
+- `cuenta[2]` - R - cuenta sysvar::clock porta información sobre epoch bancario actual.
+- `cuenta[3]` - R - cuenta sysvar::stakehistory, lleva información sobre el historial de estaciones.
+- `cuenta[4]` - R - stake::Cuenta de configuración, lleva configuración warmup, tiempo de recarga y configuración de Slashing.
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
-Updates the account with a new authorized staker or withdrawer, according to the StakeAuthorize parameter \(`Staker` or `Withdrawer`\). The transaction must be by signed by the Stakee account's current `authorized_staker` or `authorized_withdrawer`. Any stake lock-up must have expired, or the lock-up custodian must also sign the transaction.
+Actualiza la cuenta con un nuevo staker o retiro autorizado, según el parámetro StakeAuthorize \(`Staker` o `Withdrawer`\). La transacción debe estar firmada por la cuenta actual de Stakee `authorized_staker` o `authorized_withdrawal` de la cuenta de participantes. Cualquier bloqueo de participación debe haber expirado, o el custodio del bloqueo también debe firmar la transacción.
 
-- `account[0]` - RW - The StakeState.
+- `account[0]` - RW - El estado de participación.
 
-  `StakeState::authorized_staker` or `authorized_withdrawer` is set to to `Pubkey`.
+  `StakeState::authorized_staker` o `authorized_Remove` se establece en `Pubkey`.
 
-### StakeInstruction::Deactivate
+### StakeInstruction::Desactivar
 
-A staker may wish to withdraw from the network. To do so he must first deactivate his stake, and wait for cooldown.
-The transaction must be signed by the stake's `authorized_staker`.
+Un participante puede querer retirarse de la red. Para hacerlo, primero debe desactivar su stake y esperar a que se enfrie. La transacción debe estar firmada por la `authorized_staker` del stake.
 
-- `account[0]` - RW - The StakeState::Stake instance that is deactivating.
-- `account[1]` - R - sysvar::clock account from the Bank that carries current epoch.
+- `account[0]` - RW - La instancia de StakeState::Stake que está desactivando.
+- `account[1]` - R - cuenta sysvar::clock del Banco que lleva la época actual.
 
-StakeState::Stake::deactivated is set to the current epoch + cooldown. The account's stake will ramp down to zero by that epoch, and Account::lamports will be available for withdrawal.
+StakeState::Stake::deactivated está establecido en el epoch + enfriamiento actual. La apuesta de la cuenta se reducirá a cero por esa época, y Account::lamports estará disponible para retiro.
 
 ### StakeInstruction::Withdraw\(u64\)
 
-Lamports build up over time in a Stake account and any excess over activated stake can be withdrawn. The transaction must be signed by the stake's `authorized_withdrawer`.
+Los lamports se acumulan a lo largo del tiempo en una cuenta de Stake y se puede retirar cualquier exceso de stake activado. La transacción debe estar firmada por el `authorized_withdrawal` de la participación.
 
-- `account[0]` - RW - The StakeState::Stake from which to withdraw.
-- `account[1]` - RW - Account that should be credited with the withdrawn lamports.
-- `account[2]` - R - sysvar::clock account from the Bank that carries current epoch, to calculate stake.
-- `account[3]` - R - sysvar::stake_history account from the Bank that carries stake warmup/cooldown history.
+- `cuenta[0]` - RW - El StakeState::Stake desde el cual retirarse.
+- `cuenta[1]` - RW - Cuenta que debe ser acreditada con los lamports retirados.
+- `cuenta[2]` - R - cuenta sysvar::clock del Banco que lleva la época actual, para calcular el stake.
+- `cuenta[3]` - R - cuenta sysvar::stake_history del Banco que lleva la historia warmup/cooldown de la inversión.
 
-## Benefits of the design
+## Beneficios del diseño
 
-- Single vote for all the stakers.
-- Clearing of the credit variable is not necessary for claiming rewards.
-- Each delegated stake can claim its rewards independently.
-- Commission for the work is deposited when a reward is claimed by the delegated stake.
+- Voto único para todos los participantes.
+- La eliminación de la variable de crédito no es necesaria para reclamar recompensas.
+- Cada stake delegada puede reclamar sus recompensas de forma independiente.
+- La comisión para el trabajo se deposita cuando el stake delegado reclama una recompensa.
 
-## Example Callflow
+## Ejemplo de flujo de llamadas
 
-![Passive Staking Callflow](/img/passive-staking-callflow.png)
+![Flujo de llamada pasivo](/img/passive-staking-callflow.png)
 
-## Staking Rewards
+## Recompensas de Staking
 
-The specific mechanics and rules of the validator rewards regime is outlined here. Rewards are earned by delegating stake to a validator that is voting correctly. Voting incorrectly exposes that validator's stakes to [slashing](../proposals/slashing.md).
+Aquí se describen los mecanismos específicos y las reglas del régimen de recompensas del validador. Las recompensas se ganan delegando el stake a un validador que vota correctamente. La votación expone incorrectamente ese stake del validador a [slashing](../proposals/slashing.md).
 
-### Basics
+### Básicos
 
-The network pays rewards from a portion of network [inflation](../terminology.md#inflation). The number of lamports available to pay rewards for an epoch is fixed and must be evenly divided among all staked nodes according to their relative stake weight and participation. The weighting unit is called a [point](../terminology.md#point).
+La red paga recompensas de una porción de la inflación [de la red](../terminology.md#inflation). El número de lamports disponibles para pagar las recompensas de una época es fijo y debe repartirse equitativamente entre todos los nodos puestos en stake en función de su peso relativo en stake y su participación. La unidad de pesaje se llama un [punto](../terminology.md#point).
 
-Rewards for an epoch are not available until the end of that epoch.
+Las recompensas por un epicentro no están disponibles hasta el final de esa época.
 
-At the end of each epoch, the total number of points earned during the epoch is summed and used to divide the rewards portion of epoch inflation to arrive at a point value. This value is recorded in the bank in a [sysvar](../terminology.md#sysvar) that maps epochs to point values.
+Al final de cada época, el número total de puntos ganados durante el epicentro se resume y se utiliza para dividir la porción de recompensas de la inflación de épocas para llegar a un valor punto. Este valor se registra en el banco en un [sysvar](../terminology.md#sysvar) que mapea épocas a valores puntuales.
 
-During redemption, the stake program counts the points earned by the stake for each epoch, multiplies that by the epoch's point value, and transfers lamports in that amount from a rewards account into the stake and vote accounts according to the vote account's commission setting.
+Durante la redención, el programa de stake cuenta los puntos ganados por stake por cada época, multiplica ese valor por el valor de puntos de las épocas. y transfiere lamports en esa cantidad de una cuenta de premios a las cuentas de stake y votos de acuerdo a la configuración de la comisión de la cuenta de voto.
 
-### Economics
+### Economía
 
-Point value for an epoch depends on aggregate network participation. If participation in an epoch drops off, point values are higher for those that do participate.
+El valor de punto para una época depende de la participación de la red agregada. Si la participación en una época cae, los valores de los puntos son más altos para aquellos que sí participan.
 
-### Earning credits
+### Ganar créditos
 
-Validators earn one vote credit for every correct vote that exceeds maximum lockout, i.e. every time the validator's vote account retires a slot from its lockout list, making that vote a root for the node.
+Los validadores ganan un crédito de voto por cada voto correcto que supere el bloqueo máximo, es decir, cada vez que la cuenta de votos del validador retira una ranura de su lista de bloqueo, convirtiendo ese voto en raíz para el nodo.
 
-Stakers who have delegated to that validator earn points in proportion to their stake. Points earned is the product of vote credits and stake.
+Los participantes que han delegado a ese validador ganan puntos en proporción a su stake. Los puntos ganados son el producto de los créditos de voto y el stake.
 
-### Stake warmup, cooldown, withdrawal
+### Calentamiento, enfriamiento y retiro de stake
 
-Stakes, once delegated, do not become effective immediately. They must first pass through a warmup period. During this period some portion of the stake is considered "effective", the rest is considered "activating". Changes occur on epoch boundaries.
+Los stake, una vez delegados, no se hacen efectivas de inmediato. Primero deben pasar por un período de calentamiento. Durante este período, una parte del stake se considera "efectiva", el resto se considera "activando". Los cambios ocurren en los límites de épocas.
 
-The stake program limits the rate of change to total network stake, reflected in the stake program's `config::warmup_rate` \(set to 25% per epoch in the current implementation\).
+El programa de stake limita la tasa de cambio a la participación total en la red, reflejado en el programa de stake `config::warmup_rate` \\(establecido a 25% por época en la implementación actual\).
 
-The amount of stake that can be warmed up each epoch is a function of the previous epoch's total effective stake, total activating stake, and the stake program's configured warmup rate.
+La cantidad de stake que se puede calentar en cada época es una función del stake efectivo total de la época anterior, total de activación de stake, y la tasa de calentamiento configurada por el programa de stake.
 
-Cooldown works the same way. Once a stake is deactivated, some part of it is considered "effective", and also "deactivating". As the stake cools down, it continues to earn rewards and be exposed to slashing, but it also becomes available for withdrawal.
+El tiempo de enfriamiento funciona de la misma forma. Una vez que un stake es desactivada, parte de el se considera "efectiva", y también "desactivando". A medida que el stake se enfría, sigue ganando recompensas y se expone a un slashing, pero también está disponible para retirarse.
 
-Bootstrap stakes are not subject to warmup.
+Las apuestas de Bootstrap no están sujetas a calentamiento.
 
-Rewards are paid against the "effective" portion of the stake for that epoch.
+Las recompensas se pagan contra la porción "efectiva" del stake por esa época.
 
-#### Warmup example
+#### Ejemplo de Calentamiento
 
-Consider the situation of a single stake of 1,000 activated at epoch N, with network warmup rate of 20%, and a quiescent total network stake at epoch N of 2,000.
+Consideremos la situación de un solo stake de 1.000 es activada en la época N, con velocidad warmup de red de 20%, y una quiescente participación total de red la época N de 2.000.
 
-At epoch N+1, the amount available to be activated for the network is 400 \(20% of 2000\), and at epoch N, this example stake is the only stake activating, and so is entitled to all of the warmup room available.
+En la época N+1, la cantidad disponible para activar para la red es 400 \(20% de 2000\), y en la época N, este stake de ejemplo es el único que se activa, y por lo tanto tiene derecho a toda la sala warmup disponible.
 
-| epoch | effective | activating | total effective | total activating |
-| :---- | --------: | ---------: | --------------: | ---------------: |
-| N-1   |           |            |           2,000 |                0 |
-| N     |         0 |      1,000 |           2,000 |            1,000 |
-| N+1   |       400 |        600 |           2,400 |              600 |
-| N+2   |       880 |        120 |           2,880 |              120 |
-| N+3   |      1000 |          0 |           3,000 |                0 |
+| época | efectiva | activando | efectivo total | activación total |
+|:----- | --------:| ---------:| --------------:| ----------------:|
+| N-1   |          |           |          2,000 |                0 |
+| N     |        0 |     1,000 |          2,000 |            1,000 |
+| N+1   |      400 |       600 |          2,400 |              600 |
+| N+2   |      880 |       120 |          2,880 |              120 |
+| N+3   |     1000 |         0 |          3,000 |                0 |
 
-Were 2 stakes \(X and Y\) to activate at epoch N, they would be awarded a portion of the 20% in proportion to their stakes. At each epoch effective and activating for each stake is a function of the previous epoch's state.
+Si se activaran 2 stakes \(X y Y\) en la época N, se les concedería una porción del 20% en proporción a su stake. En cada época efectiva y activada para cada stake es una función del estado anterior de época.
 
-| epoch | X eff | X act | Y eff | Y act | total effective | total activating |
-| :---- | ----: | ----: | ----: | ----: | --------------: | ---------------: |
-| N-1   |       |       |       |       |           2,000 |                0 |
-| N     |     0 | 1,000 |     0 |   200 |           2,000 |            1,200 |
-| N+1   |   333 |   667 |    67 |   133 |           2,400 |              800 |
-| N+2   |   733 |   267 |   146 |    54 |           2,880 |              321 |
-| N+3   |  1000 |     0 |   200 |     0 |           3,200 |                0 |
+| época | X eff | X act | Y eff | Y act | efectivo total | activación total |
+|:----- | -----:| -----:| -----:| -----:| --------------:| ----------------:|
+| N-1   |       |       |       |       |          2,000 |                0 |
+| N     |     0 | 1,000 |     0 |   200 |          2,000 |            1,200 |
+| N+1   |   333 |   667 |    67 |   133 |          2,400 |              800 |
+| N+2   |   733 |   267 |   146 |    54 |          2,880 |              321 |
+| N+3   |  1000 |     0 |   200 |     0 |          3,200 |                0 |
 
-### Withdrawal
+### Retiro
 
-Only lamports in excess of effective+activating stake may be withdrawn at any time. This means that during warmup, effectively no stake can be withdrawn. During cooldown, any tokens in excess of effective stake may be withdrawn \(activating == 0\). Because earned rewards are automatically added to stake, withdrawal is generally only possible after deactivation.
+Sólo se pueden retirar en cualquier momento los lamports que superen el stake activado. Esto significa que durante el warmup, en realidad no se puede retirar ninguna participación. Durante el tiempo de enfriamiento, cualquier token que supere el stake efectivo puede ser retirado \(activando == 0\). Debido a que las recompensas ganadas se añaden automáticamente al stake, el retiro sólo es posible después de la desactivación.
 
-### Lock-up
+### Bloqueo
 
-Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as an epoch height, i.e. the minimum epoch height that must be reached by the network before the stake account balance is available for withdrawal, unless the transaction is also signed by a specified custodian. This information is gathered when the stake account is created, and stored in the Lockup field of the stake account's state. Changing the authorized staker or withdrawer is also subject to lock-up, as such an operation is effectively a transfer.
+Las cuentas de stake apoyan la noción de bloqueo, en el que el saldo de la cuenta de stake no está disponible para retiro hasta un momento específico. El bloqueo se especifica como una altura de época es decir, la altura de época mínima que debe alcanzar la red antes de que el saldo de la cuenta de stake esté disponible para retiro, a menos que la transacción también esté firmada por un custodio especificado. Esta información se recopila cuando se crea la cuenta de stake y se almacena en el campo Bloqueo del estado de la cuenta de stake. Cambiar el participante o retiro autorizado también está sujeto a bloqueo, ya que dicha operación es efectivamente una transferencia.

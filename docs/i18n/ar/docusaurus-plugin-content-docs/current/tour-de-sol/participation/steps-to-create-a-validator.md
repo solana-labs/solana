@@ -1,11 +1,7 @@
 ---
-title: Steps to create a validator
+title: خطوات إنشاء مُدقّق (Steps to create a validator)
 ---
 
-To create a Solana validator, follow the normal [validator workflow](../../running-validator/validator-start.md)
-targeting the [Testnet cluster](../../clusters.md).
+لإنشاء مُدقّق (validator) في Solana، قُم بإتباع العادي سير عمل المُدقّق [validator workflow](../../running-validator/validator-start.md) الذي يستهدف مجموعة الشبكة التجريبية [Testnet cluster](../../clusters.md).
 
-Note that Testnet validators are automatically staked by a process that runs
-every Epoch. If your validator is running correctly then in a couple of days it
-will be staked (and automatically destaked if offline for a prolonged period of
-time).
+لاحظ أن مُدقّقي (validators) الشبكة التجريبية (testnet) يتم تخزينهم تلقائيًا من خلال عملية يتم تشغيلها كل فترة (epoch). إذا كان المُدقّق (validator) الخاص بك يعمل بشكل صحيح، فسيتم تخزينه في غضون يومين (وسيتم إزالته تلقائيًا إذا كان غير مُتصل بالأنترنات لفترة طويلة من الوقت).

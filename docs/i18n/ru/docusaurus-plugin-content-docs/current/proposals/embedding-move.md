@@ -1,37 +1,37 @@
 ---
-title: Embedding the Move Language
+title: Встраивание языка Перемещения
 ---
 
-## Problem
+## Проблематика
 
-Solana enables developers to write on-chain programs in general purpose programming languages such as C or Rust, but those programs contain Solana-specific mechanisms. For example, there isn't another chain that asks developers to create a Rust module with a `process_instruction(KeyedAccounts)` function. Whenever practical, Solana should offer application developers more portable options.
+Solana позволяет разработчикам писать программы в цепочке на языках программирования общего назначения, таких как C или Rust, но эти программы содержат механизмы, специфичные для Solana. Например, нет другой цепочки, которая просит разработчиков создать модуль Rust с функцией ` process_instruction (KeyedAccounts) `. По возможности Solana должна предлагать разработчикам приложений более портативные варианты.
 
-Until just recently, no popular blockchain offered a language that could expose the value of Solana's massively parallel [runtime](../validator/runtime.md). Solidity contracts, for example, do not separate references to shared data from contract code, and therefore need to be executed serially to ensure deterministic behavior. In practice we see that the most aggressively optimized EVM-based blockchains all seem to peak out around 1,200 TPS - a small fraction of what Solana can do. The Libra project, on the other hand, designed an on-chain programming language called Move that is more suitable for parallel execution. Like Solana's runtime, Move programs depend on accounts for all shared state.
+До недавнего времени ни один популярный блокчейн не предлагал язык, который мог бы раскрыть ценность массивно-параллельной [ среды выполнения ](../validator/runtime.md) Solana. Например, контракты Solidity не отделяют ссылки на общие данные от кода контракта, и поэтому должны выполняться последовательно, чтобы гарантировать детерминированное поведение. На практике мы видим, что наиболее агрессивно оптимизированные блокчейны на основе EVM, похоже, достигают пика около 1200 TPS - небольшая часть того, что может сделать Solana. С другой стороны, проект Libra разработал язык программирования в цепочке под названием Move, который больше подходит для параллельного выполнения. Как и среда выполнения Solana, программы Move зависят от аккаунтов для всего общего состояния.
 
-The biggest design difference between Solana's runtime and Libra's Move VM is how they manage safe invocations between modules. Solana took an operating systems approach and Libra took the domain-specific language approach. In the runtime, a module must trap back into the runtime to ensure the caller's module did not write to data owned by the callee. Likewise, when the callee completes, it must again trap back to the runtime to ensure the callee did not write to data owned by the caller. Move, on the other hand, includes an advanced type system that allows these checks to be run by its bytecode verifier. Because Move bytecode can be verified, the cost of verification is paid just once, at the time the module is loaded on-chain. In the runtime, the cost is paid each time a transaction crosses between modules. The difference is similar in spirit to the difference between a dynamically-typed language like Python versus a statically-typed language like Java. Solana's runtime allows applications to be written in general purpose programming languages, but that comes with the cost of runtime checks when jumping between programs.
+Самая большая разница в дизайне между средой выполнения Solana и движущейся виртуальной машиной Libra заключается в том, как они управляют безопасными вызовами между модулями. Solana применила подход к операционным системам, а Libra - на предметно-ориентированном языковом подходе. Во время выполнения модуль должен вернуться в среду выполнения, чтобы гарантировать, что модуль вызывающего абонента не записал данные, принадлежащие вызываемому. Точно так же, когда вызываемый объект завершает работу, он должен снова вернуться к среде выполнения, чтобы гарантировать, что вызываемый объект не записал данные, принадлежащие вызывающему. Move, с другой стороны, включает расширенную систему типов, которая позволяет выполнять эти проверки с помощью своего верификатора байт-кода. Поскольку байт-код Move можно проверить, стоимость проверки оплачивается только один раз, когда модуль загружается в цепочку. Во время выполнения стоимость оплачивается каждый раз, когда транзакция проходит между модулями. Разница по духу аналогична разнице между языком с динамической типизацией, таким как Python, и языком со статической типизацией, таким как Java. Среда выполнения Solana позволяет писать приложения на языках программирования общего назначения, но это связано с затратами на проверки времени выполнения при переключении между программами.
 
-This proposal attempts to define a way to embed the Move VM such that:
+Это предложение пытается определить способ встраивания Move VM таким образом, чтобы:
 
-- cross-module invocations within Move do not require the runtime's
+- межмодульные вызовы в Move не требуют среды выполнения
 
-  cross-program runtime checks
+  межпрограммные проверки во время выполнения
 
-- Move programs can leverage functionality in other Solana programs and vice
+- Программы перемещения могут влиять на функциональность других программ Solana и наоборот
 
-  versa
+  наоборот
 
-- Solana's runtime parallelism is exposed to batches of Move and non-Move
+- Параллелизм времени выполнения Solana доступен для пакетов Move и non-Move
 
-  transactions
+  транзакции
 
-## Proposed Solution
+## Предлагаемое решение
 
-### Move VM as a Solana loader
+### Переместить виртуальную машину как загрузчик Solana
 
-The Move VM shall be embedded as a Solana loader under the identifier `MOVE_PROGRAM_ID`, so that Move modules can be marked as `executable` with the VM as its `owner`. This will allow modules to load module dependencies, as well as allow for parallel execution of Move scripts.
+Виртуальная машина Move должна быть встроена как загрузчик Solana под идентификатором ` MOVE_PROGRAM_ID `, чтобы модули Move могли быть помечены как `executable` с виртуальной машиной в качестве его `owner`. Это позволит модулям загружать зависимости модулей, а также позволит параллельное выполнение сценариев Move.
 
-All data accounts owned by Move modules must set their owners to the loader, `MOVE_PROGRAM_ID`. Since Move modules encapsulate their account data in the same way Solana programs encapsulate theirs, the Move module owner should be embedded in the account data. The runtime will grant write access to the Move VM, and Move grants access to the module accounts.
+Все аккаунты данных, принадлежащие модулям Move, должны установить своих владельцев на загрузчик, ` MOVE_PROGRAM_ID `. Поскольку модули Move инкапсулируют данные своих аккаунтов так же, как программы Solana инкапсулируют свои, владелец модуля Move должен быть встроен в данные аккаунтов. Среда выполнения предоставит доступ на запись к Move VM, а Move предоставит доступ к аккаунтам модуля.
 
-### Interacting with Solana programs
+### Взаимодействие с программами Solana
 
-To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust BPF programs.
+Чтобы вызывать инструкции в программах, не относящихся к Move, Solana потребуется расширить виртуальную машину Move с помощью системного вызова ` process_instruction () `. Он будет работать так же, как программы ` process_instruction () ` Rust BPF.

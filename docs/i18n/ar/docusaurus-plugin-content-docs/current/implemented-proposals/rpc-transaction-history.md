@@ -1,110 +1,66 @@
-# Long term RPC Transaction History
+# تاريخ مُعاملات RPC طويل المدى (Long term RPC Transaction History)
+هناك حاجة إلى أن يخدم الـ RPC ما لا يقل عن 6 أشهر من سجل المُعاملات.  السجل الحالي، بترتيب الأيام، غير كافٍ للمُستخدمين المُتلقين للمعلومات.
 
-There's a need for RPC to serve at least 6 months of transaction history. The
-current history, on the order of days, is insufficient for downstream users.
+لا يُمكن تخزين 6 أشهر من بيانات المُعاملة عمليًا في دفتر الأستاذ rocksdb الخاص بالمُدقّق (validator)، لذا من الضروري وجود مخزن بيانات خارجي.   سيستمر دفتر الأستاذ rocksdb الخاص بالمُدقّق في العمل كمصدر أساسي للبيانات، ثم يعود إلى مخزن البيانات الخارجي.
 
-6 months of transaction data cannot be stored practically in a validator's
-rocksdb ledger so an external data store is necessary. The validator's
-rocksdb ledger will continue to serve as the primary data source, and then will
-fall back to the external data store.
+نقاط نهاية الـ RPC المُتأثرة هي:
+* [getFirstAvailableBlock](developing/clients/jsonrpc-api.md#getfirstavailableblock)
+* [getConrecmedBlock](developing/clients/jsonrpc-api.md#getconfirmedblock)
+* [getConfirmedBlocks](developing/clients/jsonrpc-api.md#getconfirmedblocks)
+* [getConfirmedSignaturesForAddress](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+* [getConfirmedTransaction](developing/clients/jsonrpc-api.md#getconfirmedtransaction)
+* [getSignatureStatuses](developing/clients/jsonrpc-api.md#getsignaturestatuses)
 
-The affected RPC endpoints are:
+لاحظ أن الحصول على وقت الكُتلة [getBlockTime](developing/clients/jsonrpc-api.md#getblocktime) غير مدعوم، لأنه بمُجرد إصلاح https://github.com/solana-labs/solana/issues/10089، يُمكن إزالة `getBlockTime`.
 
-- [getFirstAvailableBlock](developing/clients/jsonrpc-api.md#getfirstavailableblock)
-- [getConfirmedBlock](developing/clients/jsonrpc-api.md#getconfirmedblock)
-- [getConfirmedBlocks](developing/clients/jsonrpc-api.md#getconfirmedblocks)
-- [getConfirmedSignaturesForAddress](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
-- [getConfirmedTransaction](developing/clients/jsonrpc-api.md#getconfirmedtransaction)
-- [getSignatureStatuses](developing/clients/jsonrpc-api.md#getsignaturestatuses)
+بعض قيود تصميم النظام:
+* حجم البيانات المُراد تخزينها والبحث عنها يمكن أن يقفز بسرعة إلى terabytes، وهو غير قابل للتغيير.
+* يجب أن يكون النظام خفيفًا قدر الإمكان بالنسبة لـ SREs.  على سبيل المثال، فإن مجموعة قواعد بيانات الـ SQL التي تتطلب SRE لمُراقبة العُقد (nodes) وإعادة توازنها بإستمرار أمر غير مرغوب فيه.
+* يجب أن تكون البيانات قابلة للبحث في الوقت الفعلي - الإستعلامات المُجمعة التي تستغرق دقائق أو ساعات لتشغيلها غير مقبولة.
+* من السهل نسخ البيانات في جميع أنحاء العالم لتحديد موقعها مع نقاط نهاية RPC التي ستستخدمها.
+* يجب أن يكون التفاعل مع مخزن البيانات الخارجي أمرًا سهلاً ولا يتطلب إعتمادًا على مُخاطرة قليلة الإستخدام لمكتبات التعليمات البرمجية المدعومة من المُجتمع
 
-Note that [getBlockTime](developing/clients/jsonrpc-api.md#getblocktime)
-is not supported, as once https://github.com/solana-labs/solana/issues/10089 is
-fixed then `getBlockTime` can be removed.
+بناءً على هذه القيود، يتم تحديد مُنتج BigTable من Google كمخزن للبيانات.
 
-Some system design constraints:
+## مُخطط الجدول (Table Schema)
+يتم إستخدام مثيل BigTable للإحتفاظ بجميع بيانات المُعاملات، مُقسمة إلى جداول مُختلفة للبحث السريع.
 
-- The volume of data to store and search can quickly jump into the terabytes,
-  and is immutable.
-- The system should be as light as possible for SREs. For example an SQL
-  database cluster that requires an SRE to continually monitor and rebalance
-  nodes is undesirable.
-- Data must be searchable in real time - batched queries that take minutes or
-  hours to run are unacceptable.
-- Easy to replicate the data worldwide to co-locate it with the RPC endpoints
-  that will utilize it.
-- Interfacing with the external data store should be easy and not require
-  depending on risky lightly-used community-supported code libraries
+قد يتم نسخ البيانات الجديدة إلى المثيل في أي وقت دون التأثير على البيانات الموجودة، وجميع البيانات غير قابلة للتغيير.  بشكل عام، من المُتوقع أن يتم تحميل البيانات الجديدة بمجرد إكتمال الفترة (epoch) الحالية ولكن لا توجد قيود على تكرار تفريغ البيانات.
 
-Based on these constraints, Google's BigTable product is selected as the data
-store.
+يتم تنظيف البيانات القديمة تلقائيًا عن طريق تكوين سياسة الإحتفاظ بالبيانات لجداول المثيل بشكل مُناسب ، وتختفي تمامًا.  لذلك يُصبح ترتيب وقت إضافة البيانات مهمًا.  على سبيل المثال، إذا تمت إضافة البيانات من الفترة (epoch) عدد N-1 بعد البيانات من الفترة عدد N، فإن بيانات الفترة الأقدم ستُعمر بعد البيانات الأحدث.  مع ذلك، بخلاف إنتاج ثقوب _holes_ في نتائج الإستعلام، لن يكون لهذا النوع من الحذف غير المُرتب أي تأثير سيء.  لاحظ أن طريقة التنظيف هذه تسمح بشكل فعال بتخزين كمية غير محدودة من بيانات المُعاملات، مُقيدة فقط بالتكاليف المالية للقيام بذلك.
 
-## Table Schema
+يدعم تخطيط الجدول نقاط نهاية الـ RPC الموجودة فقط.  قد تتطلب نقاط نهاية الـ RPC الجديدة في المُستقبل إضافات إلى المُخطط ومن المُحتمل أن تتكرر عبر جميع المُعاملات لإنشاء بيانات التعريف الضرورية.
 
-A BigTable instance is used to hold all transaction data, broken up into
-different tables for quick searching.
+## الولوج إلى BigTable
+يحتوي BigTable على نقطة نهاية الـ gRPC يمكن الوصول إليها بإستخدام [tonic](https://crates.io/crates/crate)] وواجهة برمجة التطبيقات الأولية (API) الخاصة بـ protobuf، حيث لا يُوجد حاليًا صندوق Rust ذي مُستوى أعلى لـ BigTable.  من الناحية العملية، يجعل هذا تحليل نتائج إستعلامات BigTable أكثر تعقيدًا ولكنه ليس مُشكلة مُهمة.
 
-New data may be copied into the instance at anytime without affecting the existing
-data, and all data is immutable. Generally the expectation is that new data
-will be uploaded once an current epoch completes but there is no limitation on
-the frequency of data dumps.
+## بيانات المجتمع (Data Population)
+سيحدث المُحتوى المُستمر لبيانات المثيل في إيقاع فترة (epoch) من خلال إستخدام الأمر `solana-ledger-tool` الجديد الذي سيحول بيانات rocksdb لنطاق فُتحة (Slot) مُعين إلى مُخطط المثيل.
 
-Cleanup of old data is automatic by configuring the data retention policy of the
-instance tables appropriately, it just disappears. Therefore the order of when data is
-added becomes important. For example if data from epoch N-1 is added after data
-from epoch N, the older epoch data will outlive the newer data. However beyond
-producing _holes_ in query results, this kind of unordered deletion will
-have no ill effect. Note that this method of cleanup effectively allows for an
-unlimited amount of transaction data to be stored, restricted only by the
-monetary costs of doing so.
+سيتم تشغيل نفس العملية مرة واحدة يدويًا لإعادة تعبئة بيانات دفتر الأستاذ (ledger) الحالية.
 
-The table layout s supports the existing RPC endpoints only. New RPC endpoints
-in the future may require additions to the schema and potentially iterating over
-all transactions to build up the necessary metadata.
+### Block Table أو جدول الكتلة: ` block `
 
-## Accessing BigTable
+يحتوي هذا الجدول على بيانات الكتلة (block) المضغوطة لفُتحة (Slot) مُعينة.
 
-BigTable has a gRPC endpoint that can be accessed using the
-[tonic](https://crates.io/crates/crate)] and the raw protobuf API, as currently no
-higher-level Rust crate for BigTable exists. Practically this makes parsing the
-results of BigTable queries more complicated but is not a significant issue.
+يتم إنشاء مفتاح الصف (row key) من خلال أخذ تمثيل سداسي عشري (hexadecimal) صغير مُكون من 16 رقمًا للفُتحة (Slot)، للتأكد من أن الفُتحة الأقدم ذات الكتلة (block) المؤكدة ستكون دائمًا أولًا عند إدراج الصفوف.  على سبيل المثال، مفتاح الصف للفُتحة 42 سيكون 000000000000002a.
 
-## Data Population
+بيانات الصف مضغوطة بهيكلة `StoredConfirmedBlock`.
 
-The ongoing population of instance data will occur on an epoch cadence through the
-use of a new `solana-ledger-tool` command that will convert rocksdb data for a
-given slot range into the instance schema.
 
-The same process will be run once, manually, to backfill the existing ledger
-data.
+### جدول بحث توقيع مُعاملة عنوان الحساب: `tx-by-addr`
 
-### Block Table: `block`
+يحتوي هذا الجدول على المُعاملات التي تُؤثر على عنوان مُعين.
 
-This table contains the compressed block data for a given slot.
+مفتاح الصف (row key) هو `<base58
+address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits> `.  بيانات الصف (row data) مضغوطة بهيكلة `TransactionByAddrInfo`.
 
-The row key is generated by taking the 16 digit lower case hexadecimal
-representation of the slot, to ensure that the oldest slot with a confirmed
-block will always be first when the rows are listed. eg, The row key for slot
-42 would be 000000000000002a.
+إن الحصول على إطراء الشخص للفُتحة (Slot) يسمح بإدراج الفُتحات التي تضمن أن الفُتحة الأحدث مع المُعاملات التي تؤثر على العنوان سيتم إدراجها دائمًا أولاً.
 
-The row data is a compressed `StoredConfirmedBlock` struct.
+لم تتم فهرسة عناوين Sysvar.  مع ذلك، فإن البرامج المُستخدمة بشكل مُتكرر مثل التصويت (Vote) أو النظام (System) هي، ومن المُحتمل أن يكون لها صف لكل فُتحة (Slot) مُؤكدة.
 
-### Account Address Transaction Signature Lookup Table: `tx-by-addr`
+### جدول بحث توقيع المُعاملة: `tx`
 
-This table contains the transactions that affect a given address.
+يقوم هذا الجدول بتعيين توقيع المُعاملة إلى الكتلة (block) المُؤكدة، والفهرس داخل تلك الكتلة.
 
-The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. The row
-data is a compressed `TransactionByAddrInfo` struct.
-
-Taking the one's compliment of the slot allows for listing of slots ensures that
-the newest slot with transactions that affect an address will always
-be listed first.
-
-Sysvar addresses are not indexed. However frequently used programs such as
-Vote or System are, and will likely have a row for every confirmed slot.
-
-### Transaction Signature Lookup Table: `tx`
-
-This table maps a transaction signature to its confirmed block, and index within that block.
-
-The row key is the base58-encoded transaction signature.
-The row data is a compressed `TransactionInfo` struct.
+مفتاح الصف (row key) هو توقيع المُعاملة بترميز base58. بيانات الصف عبارة عن هيكل مضغوط لمعلومات المُعاملة `TransactionInfo`.

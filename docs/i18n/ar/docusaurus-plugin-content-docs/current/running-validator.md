@@ -1,7 +1,7 @@
 ---
-title: Running a Validator
+title: تشغيل مُدقّق (Running a Validator)
 ---
 
-This section describes how run a Solana validator node.
+هذا القسم حول كيفية تشغيل عقدة مُدقّق في Solana.
 
-There are several clusters available to connect to, see [choosing a Cluster](cli/choose-a-cluster.md) for an overview of each.
+هناك العديد من المجموعات المتاحة للإتصال، راجع إختيار مجموعة [choosing a Cluster](cli/choose-a-cluster.md) لعرض أي منها.

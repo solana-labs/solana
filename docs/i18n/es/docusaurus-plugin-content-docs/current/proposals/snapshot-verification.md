@@ -1,11 +1,11 @@
 ---
-title: Snapshot Verification
+title: Verificación de Snapshot
 ---
 
-## Problem
+## Problema
 
-Snapshot verification of the account states is implemented, but the bank hash of the snapshot which is used to verify is falsifiable.
+La verificación Snapshot de los estados de la cuenta se implementa, pero el hash bancario del Snapshot que se utiliza para verificar es falsificable.
 
-## Solution
+## Solución
 
-While a validator is processing transactions to catch up to the cluster from the snapshot, use incoming vote transactions and the commitment calculator to confirm that the cluster is indeed building on the snapshotted bank hash. Once a threshold commitment level is reached, accept the snapshot as valid and start voting.
+Mientras un validador está procesando transacciones para llegar al clúster desde el Snapshot, usar transacciones de voto entrantes y la calculadora de compromiso para confirmar que el clúster se está construyendo sobre el hash bancario snapshotted. Una vez alcanzado el nivel de compromiso de umbral, acepte el snapshot como válido y comience a votar.

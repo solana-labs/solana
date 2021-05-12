@@ -1,13 +1,13 @@
 ---
-title: Anatomy of a Validator
+title: 유효성 검사기의 구조
 ---
 
-![Validator block diagrams](/img/validator.svg)
+![[검증기 블록 다이어그램] (/ img / validator.svg)](/img/validator.svg)
 
-## Pipelining
+## 파이프라이닝
 
-The validators make extensive use of an optimization common in CPU design, called _pipelining_. Pipelining is the right tool for the job when there's a stream of input data that needs to be processed by a sequence of steps, and there's different hardware responsible for each. The quintessential example is using a washer and dryer to wash/dry/fold several loads of laundry. Washing must occur before drying and drying before folding, but each of the three operations is performed by a separate unit. To maximize efficiency, one creates a pipeline of _stages_. We'll call the washer one stage, the dryer another, and the folding process a third. To run the pipeline, one adds a second load of laundry to the washer just after the first load is added to the dryer. Likewise, the third load is added to the washer after the second is in the dryer and the first is being folded. In this way, one can make progress on three loads of laundry simultaneously. Given infinite loads, the pipeline will consistently complete a load at the rate of the slowest stage in the pipeline.
+유효성 검사기는 _pipelining_이라는 CPU 설계에서 공통적 인 최적화를 광범위하게 사용합니다. 파이프라이닝은 일련의 단계에서 처리해야하는 입력 데이터 스트림이 있고 각 단계를 담당하는 다른 하드웨어가있을 때 작업에 적합한 도구입니다. 전형적인 예는 세탁기와 건조기를 사용하여 여러 세탁물을 세탁 / 건조 / 접는 것입니다. 건조 및 건조 전에 세척이 이루어져야 접히지 만 세 가지 작업은 각각 별도의 장치에서 수행됩니다. 효율성을 극대화하기 위해 _stages_의 파이프 라인을 생성합니다. 세탁기를 한 단계, 건조기를 다른 단계, 접는 과정을 세 번째 단계라고하겠습니다. 파이프 라인을 가동하기 위해 첫 번째 세탁물을 건조기에 추가 한 직후 세탁기에 두 번째 세탁물을 추가합니다. 마찬가지로, 세 번째로드는 두 번째로드가 건조기에 있고 첫 번째로드가 접힌 후 세탁기에 추가됩니다. 이런 식으로 세 번의 세탁물을 동시에 진행할 수 있습니다. 무한로드가 주어지면 파이프 라인은 파이프 라인에서 가장 느린 단계의 속도로 지속적으로로드를 완료합니다.
 
-## Pipelining in the Validator
+## 밸리데이터에서 파이프라이닝
 
-The validator contains two pipelined processes, one used in leader mode called the TPU and one used in validator mode called the TVU. In both cases, the hardware being pipelined is the same, the network input, the GPU cards, the CPU cores, writes to disk, and the network output. What it does with that hardware is different. The TPU exists to create ledger entries whereas the TVU exists to validate them.
+유효성 검사기에는 두 개의 파이프 라인 프로세스가 포함되어 있습니다. 하나는 TPU라고하는 리더 모드에서 사용되고 다른 하나는 TVU라고하는 유효성 검사기 모드에서 사용됩니다. 두 경우 모두 파이프 라인되는 하드웨어, 네트워크 입력, GPU 카드, CPU 코어, 디스크에 쓰기 및 네트워크 출력은 동일합니다. 해당 하드웨어로 수행하는 작업은 다릅니다. TPU는 원장 항목을 생성하기 위해 존재하는 반면 TVU는이를 검증하기 위해 존재합니다.

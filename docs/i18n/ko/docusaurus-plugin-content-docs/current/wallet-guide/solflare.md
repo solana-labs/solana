@@ -1,201 +1,93 @@
 ---
-title: SolFlare Web Wallet
+title: SolFlare 웹 지갑
 ---
 
-## Introduction
+## 소개
 
-[SolFlare.com](https://solflare.com/) is a community-created web wallet built
-specifically for Solana.
-SolFlare supports sending and receiving native SOL tokens as well as sending and
-receiving SPL Tokens (Solana's ERC-20 equivalent).
-SolFlare also supports staking of SOL tokens.
+\[SolFlare.com\] (https://solflare.com/)은 Solana를 위해 특별히 제작 된 커뮤니티 생성 웹 지갑입니다. SolFlare는 네이티브 SOL 토큰을 보내고받을 수있을뿐만 아니라 SPL 토큰 (Solana의 ERC-20에 해당)을 보내고받는 것을 지원합니다. SolFlare는 SOL 토큰의 스테이킹도 지원합니다.
 
-As a _non-custodial_ wallet, your private keys are not stored by the SolFlare
-site itself, but rather they are stored in an encrypted
-[Keystore File](#using-a-keystore-file) or on a
-[Ledger Nano S or X hardware wallet](#using-a-ledger-nano-hardware-wallet).
+_non-custodial_ 지갑 인 개인 키는 SolFlare 사이트 자체에 저장되지 않고 암호화 된 \[Keystore File\] (# using-a-keystore-file) 또는 \[Ledger Nano S 또는 X 하드웨어 지갑\] (# using-a-ledger-nano-hardware-wallet).
 
-This guide describes how to set up a wallet using SolFlare, how to send and
-receive SOL tokens, and how to create and manage a stake account.
+이 가이드는 SolFlare를 사용하여 지갑을 설정하는 방법, SOL 토큰을 보내고받는 방법, 스테이킹 계정을 만들고 관리하는 방법을 설명합니다.
 
-## Getting Started
+## 시작하기
 
-Go to https://www.solflare.com in a supported browser. Most popular web browsers
-should work when interacting with a Keystore File, but currently only
-Chrome and Brave are supported when interacting with a Ledger Nano.
+지원되는 브라우저에서 https://www.solflare.com으로 이동합니다.  대부분의 인기있는 웹 브라우저는 Keystore 파일과 상호 작용할 때 작동해야하지만 현재는 Ledger Nano와 상호 작용할 때 Chrome 및 Brave 만 지원됩니다.
 
-### Using a Keystore File
+### 키 스토어 파일 사용
 
-#### Create a new Keystore File
+#### 새 키 스토어 파일스토어 파일
+생성 키로 지갑을 생성하려면 "지갑 만들기"를 클릭하고 "키 스토어 파일 사용"을 선택합니다.  프롬프트에 따라 키 저장소 파일을 암호화하는 데 사용할 암호를 만든 다음 새 파일을 컴퓨터에 다운로드합니다.  그런 다음 다운로드가 올바르게 저장되었는지 확인하기 위해 키 저장소 파일을 사이트에 다시 업로드하라는 메시지가 표시됩니다.
 
-To create a wallet with a Keystore file, click on "Create a Wallet" and select
-"Using Keystore File". Follow the prompts to create a password which will be
-used to encrypt your Keystore file, and then to download the new file to your
-computer. You will be prompted to then upload the Keystore file back to the site
-to verify that the download was saved correctly.
+****** 참고 : 키 저장소 파일 또는 암호화에 사용 된 암호를 분실하면 해당 지갑에있는 모든 자금이 영구적으로 손실됩니다.  Solana 팀이나 SolFlare 개발자는 분실 된 키를 복구하는 데 도움을 줄 수 없습니다.****
 
-**NOTE: If you lose your Keystore file or the password used to encrypt it, any
-funds in that wallet will be lost permanently. Neither the Solana team nor the
-SolFlare developers can help you recover lost keys.**
+저장소 파일의 백업 사본을 주 컴퓨터와는 별도의 외장 드라이브에 저장하고 비밀번호를 별도의 위치에 저장하는 것을 고려할 수 있습니다.
 
-You may want to consider saving a backup copy of your Keystore file on an
-external drive separate from your main computer, and storing your password in a
-separate location.
+#### 키 스토어 파일로 지갑에 액세스
+이전에 생성 된 키 스토어 파일로 SolFlare를 사용하려면 "지갑 액세스"를 클릭하고 "키 스토어 파일 사용"을 선택합니다.  새 키 저장소 파일을 방금 생성 한 경우 액세스 페이지로 직접 이동합니다. 비밀번호를 입력하고 키 스토어 파일을 업로드하라는 메시지가 표시되면 지갑 인터페이스 메인 페이지로 이동합니다.
 
-#### Access your wallet with a Keystore File
+### Ledger Nano 하드웨어 지갑 사용Nano 사용
 
-To use SolFlare with a previously created Keystore file, click on
-"Access a Wallet" and select "Using Keystore File". If you just created a new
-Keystore file, you will be taken to the Access page directly.
-You will be prompted to enter the password and upload your Keystore file,
-then you will be taken to the wallet interface main page.
+*참고 :에 대한 현재 제한 사항은 \[알려진 문제\] (ledger-live.md # known-issues)를 참조하세요.*
 
-### Using a Ledger Nano hardware wallet
+#### 초기 장치 설정
+하여 Nano에 연결하고 Solana 앱을 열어 장치 화면에 "Application is Ready"가 표시되도록합니다.
 
-_NOTE: Please see [known issues](ledger-live.md#known-issues) for any current
-limitations in using the Nano._
+#### Ledger 주소를 선택
+Plug in your Nano and open the Solana app so the device screen displays "Application is Ready".
 
-#### Initial Device Setup
+SolFlare 홈페이지에서 "Access a Wallet"을 클릭 한 다음 "Using Ledger Nano S | Ledger Nano X"를 선택합니다.  "유도 경로 선택"에서 유일한 옵션을 선택합니다
 
-To use a Ledger Nano with SolFlare, first ensure you have
-[set up your Nano](ledger-live.md) and have [installed the latest version of
-the Solana app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app)
-on your device.
+``.<code>Solana-44` / 501` /``</code>
 
-#### Select a Ledger address to access
+참고 : 브라우저에서 SolFlare가 Ledger 장치와 통신 할 수 있는지 묻는 메시지를 표시 할 수 있습니다.  이를 허용하려면 클릭하십시오.
 
-Plug in your Nano and open the Solana app so the device screen displays
-"Application is Ready".
+하단 드롭 다운 상자에서 상호 작용할 주소를 선택한 다음 "액세스"를 클릭합니다.
 
-From the SolFlare home page, click "Access a Wallet" then select "Using Ledger
-Nano S | Ledger Nano X". Under "Select derivation path", select the only option:
+Ledger 장치는 많은 수의 개인 키 및 관련 공용 주소를 파생 할 수 있습니다. 이를 통해 동일한 장치에서 임의의 수의 다른 계정을 관리하고 상호 작용할 수 있습니다.
 
-`` Solana - 44`/501`/ ``
+Ledger 장치에서 파생 된 주소로 자금을 입금하는 경우 SolFlare를 사용할 때 해당 자금에 액세스 할 수 있도록 동일한 주소에 액세스해야합니다.  잘못된 주소에 연결 한 경우 로그 아웃을 클릭하고 올바른 주소로 다시 연결하면됩니다.
 
-Note: Your browser may prompt you to ask if SolFlare may communicate with your
-Ledger device. Click to allow this.
+## 네트워크 선택
 
-Select an address to interact with from the lower drop down box then click "Access".
+Solana는 \[세 개의 개별 네트워크\] (../ clusters)를 유지하고 있으며, 각 네트워크는 Solana 생태계를 지원하는 목적을 가지고 있습니다.  메인 넷 베타는 기본적으로 SolFlare에서 선택됩니다. 이는 교환 및 기타 프로덕션 앱이 배포되는 영구 네트워크이기 때문입니다.  다른 네트워크를 선택하려면 지갑 대시 보드 상단에서 Mainnet, Testnet 또는 Devnet 중 현재 선택된 네트워크의 이름을 클릭 한 다음 사용하려는 네트워크의 이름을 클릭하십시오.
 
-The Ledger device can derive a large number of private keys and associated
-public addresses. This allows you to manage and interact with an arbitrary
-number of different accounts from the same device.
+## SOL 토큰 보내기 및 받기
 
-If you deposit funds to an address derived from your Ledger device,
-make sure to access the same address when using SolFlare to be able to access
-those funds. If you connect to the incorrect address,
-simply click Logout and re-connect with the correct address.
+### 받기
+토큰을 지갑으로 받으려면 누군가가 토큰을 지갑 주소로 전송해야합니다.  주소는 화면 왼쪽 상단에 표시되며 복사 아이콘을 클릭하여 주소를 복사하고 토큰을 보내는 사람에게 제공 할 수 있습니다.  다른 지갑이나 거래소에 토큰을 보유하고 있다면이 주소로도 인출 할 수 있습니다.  전송이 완료되면 SolFlare에 표시된 잔액이 몇 초 내에 업데이트됩니다.
 
-## Select a Network
+### 보내기
+지갑 주소에 토큰이 있으면 오른쪽 상단의 "Transfer SOL"을 클릭하여 다른 지갑 주소 또는 교환 입금 주소로 보낼 수 있습니다.  송금 할 수취인 주소와 SOL 금액을 입력하고 "제출"을 클릭합니다.  \[키를 사용하여 거래에 서명\] (# signing-a-transaction)하기 전에 거래 세부 정보를 확인하라는 메시지가 표시되고 네트워크에 제출됩니다.
 
-Solana maintains [three distinct networks](../clusters), each of which has
-its own purpose in supporting the Solana ecosystem. Mainnet Beta is selected by
-default on SolFlare, as this is the permanent network where exchanges and other
-production apps are deployed. To select a different network, click on the name
-of the currently selected network at the top of the wallet dashboard, either
-Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
-using.
+## SOL 토큰
+스테이킹 SolFlare는 스테이킹 계정 및 위임 생성 및 관리를 지원합니다.  Solana에서 스테이킹이 일반적으로 작동하는 방식에 대해 알아 보려면 \[스테이킹 가이드\] (../ staking)를 확인하세요.
 
-## Sending and Receiving SOL Tokens
+### 스테이킹 계정
+생성 지갑에있는 일부 SOL 토큰을 사용하여 새 스테이킹 계정을 생성 할 수 있습니다. 지갑 메인 페이지에서 페이지 상단의 "Staking"을 클릭합니다.  오른쪽 상단에서 "계정 만들기"를 클릭합니다.  새 스테이킹 계정에 자금을 조달하는 데 사용할 SOL 금액을 입력하십시오.  이 금액은 지갑에서 인출되어 스테이킹 계정으로 이체됩니다.  지갑은 여전히 ​​스테이킹 계정과 관련된 거래 수수료를 지불하는 데 사용되므로 전체 지갑 잔액을 스테이킹 계정으로 이체하지 마십시오.  지갑 계정에 최소 1 개의 SOL을 남겨 두는 것이 좋습니다.
 
-### Receiving
+제출하고 \[거래에 서명\] (# signing-a-transaction)하면 "Your Staking Accounts"라고 표시된 상자에 새 스테이킹 계정이 표시됩니다.
 
-To receive tokens into your wallet, someone must transfer some to your wallet's
-address. The address is displayed at the top-left on the screen, and you can
-click the Copy icon to copy the address and provide it to whoever is sending you
-tokens. If you hold tokens in a different wallet or on an exchange, you can
-withdraw to this address as well. Once the transfer is made, the balance shown
-on SolFlare should update within a few seconds.
+SolFlare에서 생성 된 스테이킹 계정은 지갑 주소를 새 계정의 \[스테이킹 및 인출 권한\] (../ staking / stake-accounts # understanding-account-authorities)으로 설정하여 지갑의 키에 모든 거래에 서명 할 권한을 부여합니다.
 
-### Sending
+### 스테이킹 계정보기
+메인 월렛 대시 보드 페이지 또는 스테이킹 대시 보드 페이지에서 스테이킹 계정은 "내 스테이킹 계정"상자에 표시됩니다.  스테이킹 계정은 지갑과 다른 주소에 있습니다.
 
-Once you have some tokens at your wallet address, you can send them to any other
-wallet address or an exchange deposit address by clicking "Transfer SOL" in the
-upper-right corner. Enter the recipient address and the amount of SOL to
-transfer and click "Submit". You will be prompted to confirm the details of the
-transaction before you [use your key to sign the transaction](#signing-a-transaction)
-and then it will be submitted to the network.
+SolFlare는 \[선택한 네트워크\] (# select-a-network)에서 지갑 주소가 \[stake Authority\] (../ staking / stake-accounts # understanding-account-authorities)로 할당 된 모든 지분 계정을 찾습니다. SolFlare 외부에서 생성 된 스테이킹 계정도 표시되며 로그인 한 지갑이 스테이킹 권한으로 지정되어있는 한 관리 할 수 ​​있습니다.
 
-## Staking SOL Tokens
+### 스테이킹 계정의 토큰 위임
+\[밸리데이터을 선택\] (../ staking # select-a-validator)하면 스테이킹 계정 중 하나의 토큰을 그들에게 위임 할 수 있습니다.  스테이킹 대시 보드에서 표시된 스테이킹 계정의 오른쪽에있는 "위임"을 클릭합니다. 드롭 다운 목록에서 위임 할 유효성 검사기를 선택하고 위임을 클릭합니다.
 
-SolFlare supports creating and managing stake accounts and delegations. To learn
-about how staking on Solana works in general, check out our
-[Staking Guide](../staking).
+스테이킹 된 토큰의 위임을 해제하려면 (스테이킹 비활성화라고도 함) 프로세스는 비슷합니다.  스테이킹 페이지에서 위임 된 스테이킹 계정의 오른쪽에있는 "위임 해제"버튼을 클릭하고 지시를 따릅니다.
 
-### Create a Stake Account
+### 스테이킹 계정
+분할 기존 스테이킹 계정을 두 개의 스테이킹 계정으로 분할 할 수 있습니다.  지갑에 의해 제어되는 지분 계정의 주소를 클릭하고 작업 표시 줄 아래에서 "분할"을 클릭합니다.  분할하려는 SOL 토큰의 양을 지정하십시오.  이것은 새로운 스테이킹 계정에있는 토큰의 양이 될 것이며 기존 스테이킹 계정 잔액은 같은 양으로 줄어들 것입니다.  스테이킹 계정을 분할하면 토큰 양이 다른 여러 밸리데이터에게 위임 할 수 있습니다. 스테이킹 계정을 원하는만큼 분할하여 원하는만큼 스테이킹 계정을 만들 수 있습니다.
 
-You can use some of the SOL tokens in your wallet to create a new stake account.
-From the wallet main page click "Staking" at the top of the page. In the upper-
-right, click "Create Account". Enter the amount of SOL you want to use to
-fund your new stake account. This amount will be withdrawn from your wallet
-and transfered to the stake account. Do not transfer your entire wallet balance
-to a stake account, as the wallet is still used to pay any transaction fees
-associated with your stake account. Consider leaving at least 1 SOL in your
-wallet account.
+## 거래 서명
+하여 지갑에 액세스 한 경우 거래에 서명하기 위해 키가 필요할 때마다 암호를 입력하라는 메시지가 표시됩니다.
 
-After you submit and [sign the transaction](#signing-a-transaction) you will see
-your new stake account appear in the box labeled "Your Staking Accounts".
+### 키 스토어 파일 사용 키 스토어 파일을 사용
+토큰을 다른 지갑으로 보내거나 지분 위임과 같은 거래를 제출할 때마다 개인 키를 사용하여 거래에 서명해야 네트워크에서 승인 할 수 있습니다.
 
-Stake accounts created on SolFlare set your wallet address as the
-[staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities)
-for your new account, which gives your wallet's key the authority to sign
-for any transactions related to the new stake account.
-
-### View your Stake Accounts
-
-On the main Wallet dashboard page or on the Staking dashboard page, your stake
-accounts will be visible in the "Your Staking Accounts" box. Stake accounts
-exist at a different address from your wallet.
-
-SolFlare will locate any display all stake accounts on the
-[selected network](#select-a-network)
-for which your wallet address is assigned as the
-[stake authority](../staking/stake-accounts#understanding-account-authorities).
-Stake accounts that were created outside of SolFlare will also be displayed and
-can be managed as long as the wallet you logged in with is assigned as the stake
-authority.
-
-### Delegate tokens in a Stake Account
-
-Once you have [selected a validator](../staking#select-a-validator), you may
-delegate the tokens in one of your stake accounts to them. From the Staking
-dashboard, click "Delegate" at the right side of a displayed stake account.
-Select the validator you wish to delegate to from the drop down list and click
-Delegate.
-
-To un-delegate your staked tokens (also called deactivating your stake), the
-process is similar. On the Staking page, at the right side of a delegated stake
-account, click the "Undelegate" button and follow the prompts.
-
-### Split a Stake Account
-
-You may split an existing stake account into two stake accounts. Click on the
-address of a stake account controlled by your wallet, and under the Actions bar,
-click "Split". Specify the amount of SOL tokens you want to split. This will be
-the amount of tokens in your new stake account and your existing stake account
-balance will be reduced by the same amount. Splitting your stake account
-allows you to delegate to multiple different validators with different amounts
-of tokens. You may split a stake account as many times as you want, to create
-as many stake accounts as you want.
-
-## Signing a Transaction
-
-Any time you submit a transaction such as sending tokens to another wallet or
-delegating stake, you need to use your private key to sign the transaction so
-it will be accepted by the network.
-
-### Using a Keystore File
-
-If you accessed your wallet using a Keystore file, you will be prompted to enter
-your password any time the key is needed to sign a transaction.
-
-### Using a Ledger Nano
-
-If you accessed your wallet with a Ledger Nano, you will be prompted to
-confirm the pending transaction details on your device whenever the key is needed
-to sign. On the Nano, use the left and right buttons to view and confirm all of the
-transaction details. If everything looks correct, keep clicking the right button
-until the screen shows "Approve". Click both buttons to approve the transaction.
-If something looks incorrect, press the right button once more so the screen shows
-"Reject" and press both buttons to reject the transaction. After you approve
-or reject a transaction, you will see this reflected on the SolFlare page.
+### Ledger Nano 사용 Ledger Nano로
+지갑에 액세스 한 경우 키를 서명해야 할 때마다 장치에서 보류중인 거래 세부 정보를 확인하라는 메시지가 표시됩니다. Nano에서 왼쪽 및 오른쪽 버튼을 사용하여 모든 거래 세부 정보를보고 확인합니다.  모든 것이 올 바르면 화면에 "승인"이 표시 될 때까지 오른쪽 버튼을 계속 클릭합니다.  두 버튼을 모두 클릭하여 거래를 승인합니다. 잘못된 것 같으면 오른쪽 버튼을 한 번 더 눌러 화면에 "거부"를 표시하고 두 버튼을 모두 눌러 거래를 거부합니다.  거래를 승인하거나 거부하면 SolFlare 페이지에 반영된 것을 볼 수 있습니다.

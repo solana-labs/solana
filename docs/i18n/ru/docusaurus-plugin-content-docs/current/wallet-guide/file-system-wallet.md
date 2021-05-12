@@ -1,65 +1,48 @@
 ---
-title: File System Wallet
+title: Файловый кошелек
 ---
 
-This document describes how to create and use a file system wallet with the
-Solana CLI tools. A file system wallet exists as an unencrypted keypair file
-on your computer system's filesystem.
+Этот документ описывает, как создавать и использовать файловый кошелек с инструментами Solana CLI. Файловый кошелек существует в виде незашифрованного файла с ключ-парой в файловой системе вашего компьютера или другого устройства.
 
-> File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
+> Файловый кошелек - **наименее безопасный** метод хранения токенов SOL. Мы настоятельно **не рекомендуем** хранить значительное количество токенов на файловом кошельке.
 
-## Before you Begin
+## Прежде чем начать
 
-Make sure you have
-[installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
+Перед началом убедитесь, что у вас установленны [инструменты командной строки Solana](../cli/install-solana-cli-tools.md)
 
-## Generate a File System Wallet Keypair
+## Генерация ключ-пары
 
-Use Solana's command-line tool `solana-keygen` to generate keypair files. For
-example, run the following from a command-line shell:
+Используйте `solana-keygen` - инструмент командной строки Solana, для создания файла ключ-пары. Для примера, выполните следующие команды в терминале или командной строке:
 
 ```bash
 mkdir ~/my-solana-wallet
 solana-keygen new --outfile ~/my-solana-wallet/my-keypair.json
 ```
 
-This file contains your **unencrypted** keypair. In fact, even if you specify
-a password, that password applies to the recovery seed phrase, not the file. Do
-not share this file with others. Anyone with access to this file will have access
-to all tokens sent to its public key. Instead, you should share only its public
-key. To display its public key, run:
+Этот файл содержит вашу **незашифрованный ключ-пару**. На самом деле, даже если при создании вы укажете пароль, этот пароль будет применяться для восстановления мнемонической фразы, а не самого файла. Соответственно ни в коем случае, не делитесь ни с кем этим файлом. Любой у кого есть доступ к этому файлу, будет также иметь доступ ко всем токенам, находящимся на адресе этого кошелька. Вместо целого файла, вы должны передавать другим людям только ваш публичный ключ, или иными словами адрес кошелька. Чтобы отобразить публичный ключ, запустите:
 
 ```bash
 solana-keygen pubkey ~/my-solana-wallet/my-keypair.json
 ```
 
-It will output a string of characters, such as:
+Результатом работы станет вывод строки вроде этой:
 
 ```text
 ErRr1caKzK8L8nn4xmEWtimYRiTCAZXjBtVphuZ5vMKy
 ```
 
-This is the public key corresponding to the keypair in
-`~/my-solana-wallet/my-keypair.json`. The public key of the keypair file is
-your _wallet address_.
+Этот публичный ключ соответствует ключ-паре, которую мы создали в начале: `~/my-solana-wallet/my-keypair.json`. Публичный ключ из файла ключ-пары - _это адрес вашего кошелька_.
 
-## Verify your Address against your Keypair file
+## Подтверждение адреса с помощью файла ключ-пары
 
-To verify you hold the private key for a given address, use
-`solana-keygen verify`:
+Чтобы убдиться, что вы владеете приватным ключом от какого либо адреса, используйте команду `solana-keygen verify`:
 
 ```bash
 solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 ```
 
-where `<PUBKEY>` is replaced with your wallet address.
-The command will output "Success" if the given address matches the
-the one in your keypair file, and "Failed" otherwise.
+где `<PUBKEY>` соответствует адресу вашего кошелька. В случае успеха, если адрес соответствует имеющемуся приватному ключу, команда вернет "Success", при ином исходе будет возвращено сообщение "Failed".
 
-## Creating Multiple File System Wallet Addresses
+## Создание нескольких файловых кошельков
 
-You can create as many wallet addresses as you like. Simply re-run the
-steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)
-and make sure to use a new filename or path with the `--outfile` argument.
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes.
+Вы можете создать столько кошельков, сколько захотите. Просто повторите шаги из раздела [Генерация ключ-пары](#generate-a-file-system-wallet-keypair) и убедитесь, что используете новое имя файла или путь к нему, указанный в аргументе `--outfile`. Несколько кошельков могут пригодится в случае, если вы хотите хранить ваши токены на кошельках, которые предназначены для разных целей.

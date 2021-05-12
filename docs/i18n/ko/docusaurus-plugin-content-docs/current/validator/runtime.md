@@ -18,9 +18,9 @@ The engine maps public keys to accounts and routes them to the program's entrypo
 
 ### Execution
 
-Transactions are batched and processed in a pipeline. The TPU and TVU follow a slightly different path. The TPU runtime ensures that PoH record occurs before memory is committed.
+Transactions are batched and processed in a pipeline. The TPU and TVU follow a slightly different path. The TPU runtime ensures that 역사증명 record occurs before memory is committed.
 
-The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
+The TVU runtime ensures that 역사증명 verification occurs before the runtime processes any transactions.
 
 ![Runtime pipeline](/img/runtime.svg)
 

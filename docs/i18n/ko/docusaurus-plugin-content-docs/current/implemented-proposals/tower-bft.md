@@ -2,137 +2,137 @@
 title: Tower BFT
 ---
 
-This design describes Solana's _Tower BFT_ algorithm. It addresses the following problems:
+이 디자인은 Solana의 _Tower BFT_ 알고리즘을 설명합니다. 다음 문제를 해결합니다.
 
-- Some forks may not end up accepted by the supermajority of the cluster, and voters need to recover from voting on such forks.
-- Many forks may be votable by different voters, and each voter may see a different set of votable forks. The selected forks should eventually converge for the cluster.
-- Reward based votes have an associated risk. Voters should have the ability to configure how much risk they take on.
+- -일부 포크는 클러스터의 과반수에 의해 승인되지 않을 수 있으며, 유권자는 이러한 포크에 대한 투표에서 회복해야합니다.
+- -많은 포크는 서로 다른 투표자가 투표 할 수 있으며 각 투표자는 서로 다른 투표 포크 세트를 볼 수 있습니다. 선택한 포크는 결국 클러스터를 위해 수렴해야합니다.
+- -보상 기반 투표에는 관련 위험이 있습니다. 유권자는 자신이 감수 할 위험의 정도를 구성 할 수 있어야합니다.
 - The [cost of rollback](tower-bft.md#cost-of-rollback) needs to be computable. It is important to clients that rely on some measurable form of Consistency. The costs to break consistency need to be computable, and increase super-linearly for older votes.
 - ASIC speeds are different between nodes, and attackers could employ Proof of History ASICS that are much faster than the rest of the cluster. Consensus needs to be resistant to attacks that exploit the variability in Proof of History ASIC speed.
 
 For brevity this design assumes that a single voter with a stake is deployed as an individual validator in the cluster.
 
-## Time
+## 시각
 
-The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
+간결함을 위해이 설계는 지분이있는 단일 유권자가 클러스터의 개별 밸리데이터로 배치된다고 가정합니다.
 
-Proof of History is used to create a deterministic round robin schedule for all the active leaders. At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork. For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
+기록 증명은 모든 활성 리더에 대한 결정적 라운드 로빈 일정을 만드는 데 사용됩니다. 주어진 시간에 원장 자체에서 계산할 수있는 단 1 명의 리더 만이 포크를 제안 할 수 있습니다. 자세한 내용은 \[fork generation\] (../ cluster / fork-generation.md) 및 \[leader rotation\] (../ cluster / leader-rotation.md)를 참조하세요.
 
-## Lockouts
+## 잠금
 
-The purpose of the lockout is to force a validator to commit opportunity cost to a specific fork. Lockouts are measured in slots, and therefor represent a real-time forced delay that a validator needs to wait before breaking the commitment to a fork.
+잠금의 목적은 밸리데이터가 특정 포크에 기회 비용을 부과하도록하는 것입니다. 잠금은 슬롯에서 측정되며, 따라서 밸리데이터가 포크에 대한 약속을 위반하기 전에 기다려야하는 실시간 강제 지연을 나타냅니다.
 
-Validators that violate the lockouts and vote for a diverging fork within the lockout should be punished. The proposed punishment is to slash the validator stake if a concurrent vote within a lockout for a non-descendant fork can be proven to the cluster.
+잠금을 위반하고 잠금 내의 분기 포크에 투표하는 밸리데이터은 처벌을 받아야합니다. 제안 된 처벌은 비 하위 포크에 대한 잠금 내에서 동시 투표가 클러스터에 입증 될 수있는 경우 밸리데이터 지분을 삭감하는 것입니다.
 
-## Algorithm
+## 알고리즘
 
-The basic idea to this approach is to stack consensus votes and double lockouts. Each vote in the stack is a confirmation of a fork. Each confirmed fork is an ancestor of the fork above it. Each vote has a `lockout` in units of slots before the validator can submit a vote that does not contain the confirmed fork as an ancestor.
+이 접근 방식의 기본 아이디어는 합의 투표와 이중 잠금을 쌓는 것입니다. 스택의 각 투표는 포크의 확인입니다. 확인 된 각 포크는 그 위에있는 포크의 조상입니다. 밸리데이터가 조상으로서 확인 된 포크를 포함하지 않는 투표를 제출하기 전에 각 투표는 슬롯 단위로 '잠금'을가집니다.
 
-When a vote is added to the stack, the lockouts of all the previous votes in the stack are doubled \(more on this in [Rollback](tower-bft.md#Rollback)\). With each new vote, a validator commits the previous votes to an ever-increasing lockout. At 32 votes we can consider the vote to be at `max lockout` any votes with a lockout equal to or above `1<<32` are dequeued \(FIFO\). Dequeuing a vote is the trigger for a reward. If a vote expires before it is dequeued, it and all the votes above it are popped \(LIFO\) from the vote stack. The validator needs to start rebuilding the stack from that point.
+투표가 스택에 추가되면 스택에있는 모든 이전 투표의 잠금이 두 배가됩니다. \ (\[롤백\] (tower-bft.md # Rollback) \). 새로운 투표가있을 때마다 밸리데이터은 이전 투표를 계속해서 증가하는 잠금에 적용합니다. 32 표에서 우리는 투표가 '최대 잠금'인 것으로 간주 할 수 있습니다. 잠금이 '1 << 32'이상인 모든 투표는 대기열에서 제외됩니다 \ (FIFO \). 투표 대기열에서 빼는 것이 보상의 트리거입니다. 투표가 대기열에서 제외되기 전에 만료되면 해당 투표와 그 위에있는 모든 투표가 투표 스택에서 \ (LIFO \) 팝됩니다. 유효성 검사기는 해당 지점에서 스택 재 구축을 시작해야합니다.
 
-### Rollback
+### 롤백
 
-Before a vote is pushed to the stack, all the votes leading up to vote with a lower lock time than the new vote are popped. After rollback lockouts are not doubled until the validator catches up to the rollback height of votes.
+투표가 스택으로 푸시되기 전에 새 투표보다 잠금 시간이 더 짧은 투표로 이어지는 모든 투표가 표시됩니다. 롤백 후 잠금은 유효성 검사기가 투표의 롤백 높이를 따라 잡을 때까지 두 배가되지 않습니다.
 
 For example, a vote stack with the following state:
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | --------: | ------: | -------------------: |
+| ----:| ---------:| -------:| --------------------:|
 |    4 |         4 |       2 |                    6 |
 |    3 |         3 |       4 |                    7 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-_Vote 5_ is at time 9, and the resulting state is
+예를 들어 다음 상태의 투표 스택 :
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | --------: | ------: | -------------------: |
+| ----:| ---------:| -------:| --------------------:|
 |    5 |         9 |       2 |                   11 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-_Vote 6_ is at time 10
+_ 투표 6_은 시간 10입니다.
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | --------: | ------: | -------------------: |
+| ----:| ---------:| -------:| --------------------:|
 |    6 |        10 |       2 |                   12 |
 |    5 |         9 |       4 |                   13 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-At time 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at time 11 is applied the votes including and above _vote 2_ will be popped.
+10시에 새로운 투표가 이전 투표를 따라 잡았습니다. 그러나 _vote 2_는 10시에 만료되므로 11시에 _vote 7_이 적용되면 _vote 2_ 이상을 포함한 투표가 팝됩니다.
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | --------: | ------: | -------------------: |
+| ----:| ---------:| -------:| --------------------:|
 |    7 |        11 |       2 |                   13 |
 |    1 |         1 |      16 |                   17 |
 
-The lockout for vote 1 will not increase from 16 until the stack contains 5 votes.
+투표 1에 대한 잠금은 스택에 5 표가 포함될 때까지 16에서 증가하지 않습니다.
 
-### Slashing and Rewards
+### Slashing 및 Rewards
 
-Validators should be rewarded for selecting the fork that the rest of the cluster selected as often as possible. This is well-aligned with generating a reward when the vote stack is full and the oldest vote needs to be dequeued. Thus a reward should be generated for each successful dequeue.
+Validator는 나머지 클러스터가 가능한 한 자주 선택한 포크를 선택하여 보상을 받아야합니다. 이는 투표 스택이 가득 차고 가장 오래된 투표를 대기열에서 빼야 할 때 보상을 생성하는 것과 잘 맞습니다. 따라서 각 성공적인 대기열 제거에 대해 보상이 생성되어야합니다.
 
-### Cost of Rollback
+### 롤백의 롤백
 
 Cost of rollback of _fork A_ is defined as the cost in terms of lockout time to the validator to confirm any other fork that does not include _fork A_ as an ancestor.
 
-The **Economic Finality** of _fork A_ can be calculated as the loss of all the rewards from rollback of _fork A_ and its descendants, plus the opportunity cost of reward due to the exponentially growing lockout of the votes that have confirmed _fork A_.
+비용 _fork A_비용은 _fork A_를 조상으로 포함하지 않는 다른 모든 포크를 확인하기 위해 밸리데이터에게 잠금 시간 측면에서 비용으로 정의됩니다.
 
-### Thresholds
+### 임계 값
 
-Each validator can independently set a threshold of cluster commitment to a fork before that validator commits to a fork. For example, at vote stack index 7, the lockout is 256 time units. A validator may withhold votes and let votes 0-7 expire unless the vote at index 7 has at greater than 50% commitment in the cluster. This allows each validator to independently control how much risk to commit to a fork. Committing to forks at a higher frequency would allow the validator to earn more rewards.
+각 유효성 검사기는 해당 유효성 검사기가 포크에 커밋하기 전에 포크에 대한 클러스터 커밋 임계 값을 독립적으로 설정할 수 있습니다. 예를 들어, 투표 스택 인덱스 7에서 잠금은 256 시간 단위입니다. 밸리데이터은 투표를 보류 할 수 있으며 인덱스 7의 투표가 클러스터에서 50 %를 초과하지 않는 한 투표 0-7이 만료되도록 할 수 있습니다. 이를 통해 각 밸리데이터는 포크에 얼마나 많은 위험을 감수할지 독립적으로 제어 할 수 있습니다. 더 높은 빈도로 포크를 수행하면 밸리데이터이 더 많은 보상을받을 수 있습니다.
 
-### Algorithm parameters
+### 알고리즘 매개 변수
 
-The following parameters need to be tuned:
+다음 매개 변수를 조정해야합니다
 
-- Number of votes in the stack before dequeue occurs \(32\).
-- Rate of growth for lockouts in the stack \(2x\).
-- Starting default lockout \(2\).
-- Threshold depth for minimum cluster commitment before committing to the fork \(8\).
-- Minimum cluster commitment size at threshold depth \(50%+\).
+- .-대기열에서 빼기 전에 스택의 투표 수 \ (32 \).
+- -스택의 잠금에 대한 증가율 \ (2x \).
+- -기본 잠금 \ (2 \) 시작.
+- -포크 \ (8 \)에 커밋하기 전에 최소 클러스터 커밋에 대한 임계 값 깊이.
+- -임계 값 깊이에서 최소 클러스터 커밋 크기 \ (50 % + \).
 
-### Free Choice
+### 자유 선택
 
-A "Free Choice" is an unenforcible validator action. There is no way for the protocol to encode and enforce these actions since each validator can modify the code and adjust the algorithm. A validator that maximizes self-reward over all possible futures should behave in such a way that the system is stable, and the local greedy choice should result in a greedy choice over all possible futures. A set of validator that are engaging in choices to disrupt the protocol should be bound by their stake weight to the denial of service. Two options exits for validator:
+"자유 선택"은 강제 할 수없는 밸리데이터 작업입니다. 각 유효성 검사기가 코드를 수정하고 알고리즘을 조정할 수 있기 때문에 프로토콜이 이러한 작업을 인코딩하고 시행 할 수있는 방법이 없습니다. 가능한 모든 미래에 대한 자기 보상을 극대화하는 밸리데이터은 시스템이 안정된 방식으로 행동해야하며, 지역 탐욕스러운 선택은 가능한 모든 미래에 대해 탐욕스러운 선택을 가져야합니다. 프로토콜을 방해하기위한 선택에 관여하는 일련의 밸리데이터는 서비스 거부에 대한 지분 가중치에 구속되어야합니다. 밸리데이터를위한 두 가지 옵션이 있습니다
 
 - a validator can outrun previous validator in virtual generation and submit a concurrent fork
 - a validator can withhold a vote to observe multiple forks before voting
 
-In both cases, the validator in the cluster have several forks to pick from concurrently, even though each fork represents a different height. In both cases it is impossible for the protocol to detect if the validator behavior is intentional or not.
+두 경우 모두 클러스터의 밸리데이터는 동시에 선택할 수있는 여러 포크를 가지고 있습니다. , 비록 각 포크가 다른 높이를 나타내더라도. 두 경우 모두 프로토콜이 유효성 검사기 동작이 의도적 인 것인지 여부를 감지하는 것은 불가능합니다.
 
-### Greedy Choice for Concurrent Forks
+### 동시 포크를위한 탐욕스러운 선택
 
-When evaluating multiple forks, each validator should use the following rules:
+여러 포크를 평가할 때 각 밸리데이터는 다음 규칙을 사용해야합니다.
 
-1. Forks must satisfy the _Threshold_ rule.
-2. Pick the fork that maximizes the total cluster lockout time for all the ancestor forks.
-3. Pick the fork that has the greatest amount of cluster transaction fees.
-4. Pick the latest fork in terms of PoH.
+1. 포크는 _Threshold_ 규칙을 충족해야합니다.
+2. 모든 상위 포크에 대한 총 클러스터 잠금 시간을 최대화하는 포크를 선택합니다.
+3. 클러스터 트랜잭션 수수료가 가장 많은 포크를 선택합니다.
+4. 역사증명 측면에서 최신 포크를 선택합니다.
 
-Cluster transaction fees are fees that are deposited to the mining pool as described in the [Staking Rewards](staking-rewards.md) section.
+.-밸리데이터는 가상 생성에서 이전 밸리데이터를 능가하고 동시 포크를 제출할 수 있습니다.-밸리데이터는 투표 전에 여러 포크를 관찰하기 위해 투표를 보류 할 수 있습니다
 
-## PoH ASIC Resistance
+## 역사증명 ASIC 저항
 
-Votes and lockouts grow exponentially while ASIC speed up is linear. There are two possible attack vectors involving a faster ASIC.
+투표 및 잠금은 기하 급수적으로 증가하는 반면 ASIC 속도는 선형 적입니다. 더 빠른 ASIC와 관련된 두 가지 가능한 공격 벡터가 있습니다.
 
-### ASIC censorship
+### ASIC 검열
 
-An attacker generates a concurrent fork that outruns previous leaders in an effort to censor them. A fork proposed by this attacker will be available concurrently with the next available leader. For nodes to pick this fork it must satisfy the _Greedy Choice_ rule.
+공격자는 검열을 위해 이전 리더를 능가하는 동시 포크를 생성합니다. 이 공격자가 제안한 포크는 사용 가능한 다음 리더와 동시에 사용할 수 있습니다. 노드가이 포크를 선택하려면 _Greedy Choice_ 규칙을 충족해야합니다.
 
-1. Fork must have equal number of votes for the ancestor fork.
-2. Fork cannot be so far a head as to cause expired votes.
-3. Fork must have a greater amount of cluster transaction fees.
+1. 포크는 조상 포크에 대해 동일한 수의 표를 가져야합니다.
+2. 포크는 만료 된 투표를 유발할만큼 머리가 될 수 없습니다.
+3. 포크는 더 많은 양의 클러스터 거래 수수료를 가져야합니다.
 
-This attack is then limited to censoring the previous leaders fees, and individual transactions. But it cannot halt the cluster, or reduce the validator set compared to the concurrent fork. Fee censorship is limited to access fees going to the leaders but not the validators.
+이 공격은 이전 리더 수수료 및 개별 거래를 검열하는 것으로 제한됩니다. 그러나 클러스터를 중지하거나 동시 포크에 비해 유효성 검사기 세트를 줄일 수는 없습니다. 수수료 검열은 밸리데이터이 아닌 리더에게가는 액세스 수수료로 제한됩니다.
 
-### ASIC Rollback
+### ASIC 롤백
 
-An attacker generates a concurrent fork from an older block to try to rollback the cluster. In this attack the concurrent fork is competing with forks that have already been voted on. This attack is limited by the exponential growth of the lockouts.
+공격자는 클러스터를 롤백하기 위해 이전 블록에서 동시 포크를 생성합니다. 이 공격에서 동시 포크는 이미 투표 된 포크와 경쟁합니다. 이 공격은 잠금의 기하 급수적 인 증가에 의해 제한됩니다.
 
-- 1 vote has a lockout of 2 slots. Concurrent fork must be at least 2 slots ahead, and be produced in 1 slot. Therefore requires an ASIC 2x faster.
-- 2 votes have a lockout of 4 slots. Concurrent fork must be at least 4 slots ahead and produced in 2 slots. Therefore requires an ASIC 2x faster.
-- 3 votes have a lockout of 8 slots. Concurrent fork must be at least 8 slots ahead and produced in 3 slots. Therefore requires an ASIC 2.6x faster.
-- 10 votes have a lockout of 1024 slots. 1024/10, or 102.4x faster ASIC.
-- 20 votes have a lockout of 2^20 slots. 2^20/20, or 52,428.8x faster ASIC.
+- -1 개의 투표는 2 개의 슬롯이 잠 깁니다. 동시 포크는 최소 2 개의 슬롯 앞에 있어야하며 1 개의 슬롯에서 생성되어야합니다. Therefore requires an ASIC 2x faster.
+- -2 개의 투표는 4 개의 슬롯이 잠 깁니다. 동시 포크는 최소 4 개의 슬롯 앞에 있어야하며 2 개의 슬롯에서 생성되어야합니다. Therefore requires an ASIC 2x faster.
+- -3 개 투표는 8 개 슬롯 잠금을가집니다. 동시 포크는 최소 8 개 슬롯 앞에 있어야하며 3 개 슬롯에서 생성되어야합니다. 따라서 ASIC 2.6 배 더 빠른 속도가 필요합니다.
+- -10 개의 투표는 1024 개의 슬롯이 잠 깁니다. 1024/10 또는 102.4 배 더 빠른 ASIC.
+- -20 개의 투표는 2 ^ 20 개의 슬롯 잠금을가집니다. 2 ^ 20 / 20 또는 52,428.8 배 더 빠른 ASIC.

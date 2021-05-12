@@ -1,31 +1,29 @@
 ---
-title: Compensation
+title: Recompensas
 ---
 
-## Compensation Calculation
+## Cálculo de recompensas <a id="how-are-rewards-calculated"></a>
 
-Compensation will be calculated according to the compensation design described in [this forum post](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132).
+Las recompensas se calcularán de acuerdo con el diseño de compensación descrito en [esta publicación del foro](https://forums.solana.com/t/tour-de-sol-stage-1-preliminary-compensation-design/79) y [esta hoja de cálculo](https://docs.google.com/spreadsheets/d/11puBSw2THdO4wU-uyDEic-D03jg4ZAooVpcZU0w_4gI/edit#gid=218406032).
 
-Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for additional compensation details.
+Consulte también las seccion “2\(f\) Detalles del Tour de Sol" de los [TERMIINOS DE PARTICIPACIO DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) para información adicional relacionada con las recompensas.
 
-## Requirements to Receive Rewards
+## Requisitos para recibir recompensas <a id="what-are-the-requirements-to-receive-rewards"></a>
 
-Participants must have signed the Tour de SOL participation agreement,
-passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form
-\(depending on your residency\) prior to participating in the Tour.
+Los participantes deben haber firmado el acuerdo de participación Tour de SOL, aprobado KYC/AML como un individuo a través de la plataforma de CoinList, así como rellenar el formulario de impuestos W-8 BEN o W-9 \(dependiendo de su residencia\) antes de participar en el Tour. Un participante puede participar en todas y cada una de las etapas que comiencen después de completar el registro. Las fechas finales de inscripción se anunciarán públicamente por etapa.
 
-A participant may participate in any and all stages that begin after they
-complete registration. The final registrations dates will be announced
-publicly on a stage-by-stage basis.
+Por último, los participantes deben firmar el [Acuerdo de Token estándar de Solana](https://drive.google.com/open?id=1O4cEUZzeSNoVcncbHcEegAqPgjT-7hcy). El Acuerdo de Token estará disponible por Solana antes de la fecha de emisión de recompensas.
 
-## Tax Implications
+Consulte también las secciones "2\(i\) & 2\(j\) Detalles del Tour de Sol" de los [TERMIINOS DE PARTICIPACIO DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) para obtener información adicional relacionada con la recepción de recompensas.
 
-Participants are entering into a service agreement with Solana with discretionary compensation associated with the services. They are not considered to be a full-time employee of the company and therefore Solana is collecting W-9 and W-8 BEN forms in order to support tax reporting obligations, if applicable. Solana recommends participants consult with a tax accountant to understand any potential tax implications.
+## Implicaciones de impuestos <a id="what-are-the-tax-implications-of-the-rewards"></a>
 
-Also, as stated in Sections 2i, 2k and 10c of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view):
+Los participantes celebran un acuerdo de servicios con Solana con una compensación discrecional asociada a los servicios. No se les considera empleados a tiempo completo de la empresa y, por lo tanto, Solana está recogiendo los formularios W-9 y W-8 BEN para respaldar las obligaciones de declaración de impuestos, si es aplicable. Solana recomienda a los participantes consultar con un contador fiscal para entender cualquier posible implicación fiscal.
 
-> 2i - To receive any SOL Reward, a Finalist must sign the Company’s standard form of SOL Reward Agreement which will include the terms and conditions governing the ownership and use of the SOL that are issued as the SOL Reward, including but not limited to applicable lockups required by securities laws, blackout dates and tax reporting information.
+También, como se indica en las secciones 2i, 2k y 10c del [TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL ](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view):
 
-> 2k - To receive any SOL Reward, a Finalist must sign the Company’s standard form of SOL Reward Agreement which will include the terms and conditions governing the ownership and use of the SOL that are issued as the SOL Reward, including but not limited to applicable lockups required by securities laws, blackout dates and tax reporting information.
+> 2i - Para recibir cualquier recompensa SOL, un Finalista debe firmar la forma estándar de la Empresa de Acuerdo de Recompensa SOL que incluirá los términos y condiciones que rigen la propiedad y el uso del SOL emitidos como Recompensa SOL, incluyendo pero no limitado a los bloqueos aplicables requeridos por las leyes de valores, fechas de cancelación e información impositiva.
 
-> 10c - You are responsible for complying with all laws and regulations applicable to your transactions on any Protocol, including, but not limited to, the Commodity Exchange Act and the regulations promulgated thereunder by the U.S. Commodity Futures Trading Commission \(“CFTC”\), the federal securities laws and the regulations promulgated thereunder by the U.S. Securities and Exchange Commission \(“SEC”\), and the tax laws applicable to any remuneration received by you from Company.
+> 2k - Para recibir cualquier recompensa SOL, un Finalista debe firmar la forma estándar de la Empresa de Acuerdo de Recompensa SOL que incluirá los términos y condiciones que rigen la propiedad y el uso del SOL emitidos como Recompensa SOL, incluyendo pero no limitado a los bloqueos aplicables requeridos por las leyes de valores, fechas de cancelación e información impositiva.
+
+> 10c - Usted es responsable de cumplir con todas las leyes y reglamentos aplicables a sus transacciones en cualquier Protocolo, incluyendo, pero no limitado a, la Ley de Intercambio de Productos y las regulaciones promulgadas por los Estados Unidos. Commodity Futures Trading Commission \(“CFTC”\), las leyes federales de valores y las regulaciones promulgadas por los Estados Unidos. Securities and Exchange Commission \(“SEC”\), y las leyes tributarias aplicables a cualquier declaración recibida por usted de la compañía.

@@ -1,48 +1,24 @@
 ---
-title: Mobile App Wallets
+title: Кошельки для мобильных приложений
 ---
 
-Solana is supported by multiple third-party apps which should provide a familiar
-experience for most people who are new or experienced with using crypto wallets.
-
-## Exodus
-
-Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
-
-Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
-
-Exodus includes live charts, a built-in exchange, and 24/7 human support.
+Solana поддерживается несколькими сторонними приложениями, которые должны обеспечить знакомый опыт для большинства людей, которые новички или имеют опыт использования криптовалютных кошельков.
 
 ## Trust Wallet
+[ Trust Wallet ](https://trustwallet.com/) - это приложение, доступное для iOS и Android, которое можно использовать для отправки и получения токенов SOL.
 
-[Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
-and can be used to send and receive SOL tokens.
+*Примечание. Trust Wallet не поддерживает стейкинг-аккаунты или операции стейкинга*
 
-_Note: Trust Wallet does not support stake accounts or staking operations_
+### Безопасность Trust Wallet
 
-### Trust Wallet Security
+Токены, хранящиеся в Trust Wallet, защищены настолько, насколько безопасно устройство, на котором установлено приложение. Любой, кто сможет разблокировать ваш телефон или планшет, может использовать приложение Trust Wallet и перенести ваши токены. Для повышения безопасности вы можете добавить пароль в приложение Trust Wallet. Чтобы добавить код доступа Trust Wallet, откройте приложение и перейдите в «Настройки» - >; Безопасность - > Код доступа.
 
-Tokens held in Trust Wallet are only as secure as the device on which the app is
-installed. Anyone who is able to unlock your phone or tablet may be able to
-use the Trust Wallet app and transfer your tokens. To improve security,
-you can add a passcode to the Trust Wallet application.
-To add a Trust Wallet passcode, open the app and go to
-Settings -> Security -> Passcode.
+Если кто-то получит доступ к вашему приложению Trust Wallet, он сможет получить доступ к вашей исходной фразе для восстановления. Любой, у кого есть доступ к вашей исходной фразе, сможет воссоздать ключи вашего Trust Wallet на другом устройстве. Оттуда они могут подписывать транзакции с этого устройства, а не на вашем собственном телефоне или планшете. Начальная фраза отображается при создании нового кошелька, и ее также можно просмотреть в любое время в приложении, выполнив следующие действия:
 
-If someone gains access to your Trust Wallet application, they can access your
-recovery seed phrase.
-Anyone who has access to your seed phrase will be able to recreate
-your Trust Wallet keys on a different device. From there, they could
-sign transactions from that device rather than on your own phone or tablet.
-The seed phrase is displayed when a new wallet is created and it can also be
-viewed at any later time in the app by following these steps:
-
-- Go to Setting -> Wallets
-- Under the Options menu for a particular wallet tap "Show Recovery Phrase"
+- Перейти в настройке -> Кошельки
+- В меню «Параметры» для конкретного кошелька нажмите «Показать фразу восстановления»
 
 ## Coin98
+[Coin98](https://coin98.app/) это приложение доступно для iOS и Android и может быть использовано для отправки и получения SOL токенов.
 
-[Coin98](https://coin98.app/) is an app available for iOS and Android and can
-be used to send and receive SOL tokens.
-
-_Note: Coin98 does not support stake accounts or staking operations_
+*Примечание: Coin98 не поддерживает стейк аккаунты или операции стейкинга*

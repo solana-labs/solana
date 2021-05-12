@@ -1,69 +1,69 @@
 ---
-title: The Runtime
+title: El tiempo de ejecución
 ---
 
-## The Runtime
+## El tiempo de ejecución
 
-The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
+El tiempo de ejecución es un procesador de transacciones simultáneo. Las transacciones especifican sus dependencias de datos y la asignación de memoria dinámica es explícita. Separando el código del programa del estado en el que opera, el tiempo de ejecución es capaz de coreografiar el acceso simultáneo. Las transacciones que sólo acceden a las cuentas de sólo lectura se ejecutan en paralelo, mientras que las transacciones que acceden a las cuentas de escritura se ejecutan en serie. El tiempo de ejecución interactúa con el programa a través de un punto de entrada con una interfaz bien definida. Los datos almacenados en una cuenta son un tipo opaco, un array de bytes. El programa tiene control total sobre sus contenidos.
 
-The transaction structure specifies a list of public keys and signatures for those keys and a sequential list of instructions that will operate over the states associated with the account keys. For the transaction to be committed all the instructions must execute successfully; if any abort the whole transaction fails to commit.
+La estructura de la transacción especifica una lista de claves públicas y firmas para esas claves y una lista secuencial de instrucciones que operarán sobre los estados asociados a las claves de las cuentas. Para que la transacción se confirme, todas las instrucciones deben ejecutarse con éxito; si alguna falla, toda la transacción no se confirma.
 
-#### Account Structure
+#### Estructura de Cuenta
 
-Accounts maintain a lamport balance and program-specific memory.
+Las cuentas mantienen un balance de lamps y memoria específica del programa.
 
-## Transaction Engine
+## Motor de transacciones
 
-The engine maps public keys to accounts and routes them to the program's entrypoint.
+El motor asigna las claves públicas a cuentas y las lleva al punto de entrada del programa.
 
-### Execution
+### Ejecución
 
-Transactions are batched and processed in a pipeline. The TPU and TVU follow a slightly different path. The TPU runtime ensures that PoH record occurs before memory is committed.
+Las transacciones se procesan por lotes y se procesan en un pipeline. El TPU y el TVU siguen un camino ligeramente diferente. El tiempo de ejecución TPU asegura que el registro PoH ocurra antes de que la memoria sea confirmada.
 
-The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
+El tiempo de ejecución TVU asegura que la verificación PoH se produzca antes de que el tiempo de ejecución procese cualquier transacción.
 
-![Runtime pipeline](/img/runtime.svg)
+![Tiempo de ejecución del pipeline](/img/runtime.svg)
 
-At the _execute_ stage, the loaded accounts have no data dependencies, so all the programs can be executed in parallel.
+En la etapa _ejecutar_, las cuentas cargadas no tienen dependencias de datos, por lo que todos los programas pueden ejecutarse en paralelo.
 
-The runtime enforces the following rules:
+El tiempo de ejecución impone las siguientes reglas:
 
-1. Only the _owner_ program may modify the contents of an account. This means that upon assignment data vector is guaranteed to be zero.
-2. Total balances on all the accounts is equal before and after execution of a transaction.
-3. After the transaction is executed, balances of read-only accounts must be equal to the balances before the transaction.
-4. All instructions in the transaction executed atomically. If one fails, all account modifications are discarded.
+1. Solo el programa _propietario_ puede modificar el contenido de una cuenta. Esto significa que al asignar el vector de datos está garantizado a ser cero.
+2. Los saldos totales en todas las cuentas son iguales antes y después de la ejecución de una transacción.
+3. Después de ejecutar la transacción, los saldos de las cuentas de sólo lectura deben ser iguales a los saldos antes de la transacción.
+4. Todas las instrucciones de la transacción ejecutada atómicamente. Si uno falla, todas las modificaciones de la cuenta serán descartadas.
 
-Execution of the program involves mapping the program's public key to an entrypoint which takes a pointer to the transaction, and an array of loaded accounts.
+La ejecución del programa implica mapear la clave pública del programa a un punto de entrada que toma un puntero a la transacción, y un array de cuentas cargadas.
 
-### SystemProgram Interface
+### Interfaz de programa del sistema
 
-The interface is best described by the `Instruction::data` that the user encodes.
+La interfaz es mejor descrita por la `Instruction::data` que el usuario codifica.
 
-- `CreateAccount` - This allows the user to create an account with an allocated data array and assign it to a Program.
-- `CreateAccountWithSeed` - Same as `CreateAccount`, but the new account's address is derived from
-  - the funding account's pubkey,
-  - a mnemonic string (seed), and
-  - the pubkey of the Program
-- `Assign` - Allows the user to assign an existing account to a program.
-- `Transfer` - Transfers lamports between accounts.
+- `CreateAccount` - Permite al usuario crear una cuenta con una matriz de datos asignada y asignarla a un Programa.
+- `CreateAccountWithSeed` - Igual que `CreateAccount`, pero la dirección de la nueva cuenta deriva de
+  - el pubkey de la cuenta de fondos,
+  - una cadena mnemónica (semilla), y
+  - la pubkey del programa
+- `Asignar` - Permite al usuario asignar una cuenta existente a un programa.
+- `Transferencia` - Transfiere lamports entre cuentas.
 
-### Program State Security
+### Programa de Seguridad de Estado
 
-For blockchain to function correctly, the program code must be resilient to user inputs. That is why in this design the program specific code is the only code that can change the state of the data byte array in the Accounts that are assigned to it. It is also the reason why `Assign` or `CreateAccount` must zero out the data. Otherwise there would be no possible way for the program to distinguish the recently assigned account data from a natively generated state transition without some additional metadata from the runtime to indicate that this memory is assigned instead of natively generated.
+Para que la blockchain funcione correctamente, el código del programa debe ser resistente a las entradas del usuario. Por eso en este diseño el código específico del programa es el único código que puede cambiar el estado de la matriz de bytes de datos en los Cuentas que se le asignan. También es la razón por la que `Asignar` o `CrearCuenta` deben poner a cero los datos. De lo contrario, no habría forma de que el programa distinguiera los datos de la cuenta recientemente asignados de una transición de estado generada de forma nativa sin algunos metadatos adicionales del tiempo de ejecución para indicar que esta memoria es asignada en lugar de generada de forma nativa.
 
-To pass messages between programs, the receiving program must accept the message and copy the state over. But in practice a copy isn't needed and is undesirable. The receiving program can read the state belonging to other Accounts without copying it, and during the read it has a guarantee of the sender program's state.
+Para pasar mensajes entre programas, el programa receptor debe aceptar el mensaje y copiar el estado de nuevo. Pero en la práctica una copia no es necesaria y es inaceptable. El programa receptor puede leer el estado de otros clientes sin copiarlo, y durante la lectura tiene una garantía del estado del programa del remitente.
 
-### Notes
+### Notas
 
-- There is no dynamic memory allocation. Client's need to use `CreateAccount` instructions to create memory before passing it to another program. This instruction can be composed into a single transaction with the call to the program itself.
-- `CreateAccount` and `Assign` guarantee that when account is assigned to the program, the Account's data is zero initialized.
-- Transactions that assign an account to a program or allocate space must be signed by the Account address' private key unless the Account is being created by `CreateAccountWithSeed`, in which case there is no corresponding private key for the account's address/pubkey.
-- Once assigned to program an Account cannot be reassigned.
-- Runtime guarantees that a program's code is the only code that can modify Account data that the Account is assigned to.
-- Runtime guarantees that the program can only spend lamports that are in accounts that are assigned to it.
-- Runtime guarantees the balances belonging to accounts are balanced before and after the transaction.
-- Runtime guarantees that instructions all executed successfully when a transaction is committed.
+- No hay asignación dinámica de memoria. El cliente necesita usar `CreateAccount` instrucciones para crear memoria antes de pasarla a otro programa. Esta instrucción se puede componer en una sola operación con la llamada al propio programa.
+- `CrearCuenta` y `Asignar` garantizan que cuando se asigna la cuenta al programa, los datos de la Cuenta se inicializan a cero.
+- Las transacciones que asignan una cuenta a un programa o asignan espacio deben estar firmadas por la clave privada de la dirección de la cuenta a menos que la cuenta esté siendo creada por `CreateAccountWithSeed`, en cuyo caso no hay una clave privada correspondiente para la dirección/pubkey de la cuenta.
+- Una vez asignado al programa no se puede reasignar una cuenta.
+- El tiempo de ejecución garantiza que el código de un programa es el único que puede modificar los datos de la Cuenta a la que está asignada.
+- El tiempo de ejecución garantiza que el programa sólo puede gastar lamports que están en las cuentas que se le asignan.
+- El tiempo de ejecución garantiza que los saldos de las cuentas estén equilibrados antes y después de la transacción.
+- El tiempo de ejecución garantiza que todas las instrucciones se ejecuten con éxito cuando se confirma una transacción.
 
-## Future Work
+## Trabajo futuro
 
-- [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)
+- [Continuaciones y señales para transacciones de larga duración](https://github.com/solana-labs/solana/issues/1485)

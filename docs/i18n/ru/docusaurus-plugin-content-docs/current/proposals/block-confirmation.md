@@ -1,85 +1,45 @@
 ---
-title: Block Confirmation
+title: Подтверждение блока
 ---
 
-A validator votes on a PoH hash for two purposes. First, the vote indicates it
-believes the ledger is valid up until that point in time. Second, since many
-valid forks may exist at a given height, the vote also indicates exclusive
-support for the fork. This document describes only the former. The latter is
-described in [Tower BFT](../implemented-proposals/tower-bft.md).
+Валидатор голосует за хэш PoH для двух целей. Во-первых, голосование показывает, что, по его мнению, реестр действителен до этого момента. Во-вторых, так как действующих форков может существовать с заданной высотой, голосование также указывает на исключительную поддержку форка. Этот документ описывает только первые документы. Последний описан в [башне BFT](../implemented-proposals/tower-bft.md).
 
-## Current Design
+## Текущий дизайн
 
-To start voting, a validator first registers an account to which it will send
-its votes. It then sends votes to that account. The vote contains the tick
-height of the block it is voting on. The account stores the 32 highest heights.
+Чтобы начать голосование, валидатор сначала регистрирует аккаунт, на который будет отправлять свои голоса. Затем он отправляет голоса на этот счет. Голосование содержит высоту флага для блока, за который он голосует. В аккаунте хранятся 32 самых высоких высоты.
 
-### Problems
+### Проблематика
 
-- Only the validator knows how to find its own votes directly.
+- Только валидатор знает, как напрямую найти свои собственные голоса.
 
-  Other components, such as the one that calculates confirmation time, needs to
-  be baked into the validator code. The validator code queries the bank for all
-  accounts owned by the vote program.
+  Другие компоненты, такие как тот, который вычисляет время подтверждения, необходимо встроить в код валидатора. Код валидатора запрашивает у банка все счета, принадлежащие программе голосования.
 
-- Voting ballots do not contain a PoH hash. The validator is only voting that
-  it has observed an arbitrary block at some height.
+- Бюллетени для голосования не содержат хеш-код PoH. Валидатор голосует только за то, что он заметил произвольный блок на некоторой высоте.
 
-- Voting ballots do not contain a hash of the bank state. Without that hash,
-  there is no evidence that the validator executed the transactions and
-  verified there were no double spends.
+- Бюллетени для голосования не содержат хеша состояния банка. Без этого хэша нет свидетельств того, что валидатор выполнил транзакции и подтвердил отсутствие двойных расходов.
 
-## Proposed Design
+## Предложенный дизайн
 
-### No Cross-block State Initially
+### Первоначально нет состояния кросс-блока
 
-At the moment a block is produced, the leader shall add a NewBlock transaction
-to the ledger with a number of tokens that represents the validation reward.
-It is effectively an incremental multisig transaction that sends tokens from
-the mining pool to the validators. The account should allocate just enough
-space to collect the votes required to achieve a supermajority. When a
-validator observes the NewBlock transaction, it has the option to submit a vote
-that includes a hash of its ledger state (the bank state). Once the account has
-sufficient votes, the vote program should disperse the tokens to the
-validators, which causes the account to be deleted.
+В момент создания блока лидер должен добавить транзакцию NewBlock в реестр с количеством токенов, которые представляют собой вознаграждение за проверку. По сути, это инкрементная транзакция с несколькими подписями, которая отправляет токены из пула майнинга валидаторам. В учетной записи должно быть достаточно места для сбора голосов, необходимых для получения квалифицированного большинства. Когда валидатор наблюдает за транзакцией NewBlock, он имеет возможность отправить голосование, которое включает хэш состояния его реестра (состояние банка). Как только аккаунт наберет достаточно голосов, программа голосования должна распределить токены между валидаторами, что приведет к удалению аккаунта.
 
-#### Logging Confirmation Time
+#### Время подтверждения регистрации
 
-The bank will need to be aware of the vote program. After each transaction, it
-should check if it is a vote transaction and if so, check the state of that
-account. If the transaction caused the supermajority to be achieved, it should
-log the time since the NewBlock transaction was submitted.
+Банку необходимо будет знать о программе голосования. После каждой транзакции он должен проверять, является ли это транзакцией голосования, и если да, то проверять состояние аккаунта. Если сделка привела к получению сверхквалифицированного большинства, она должна записать время с момента отправки транзакции NewBlock.
 
-### Finality and Payouts
+### Окончание и выплаты
 
-[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm. It proposes
-that payment to miners be postponed until the _stack_ of validator votes reaches
-a certain depth, at which point rollback is not economically feasible. The vote
-program may therefore implement Tower BFT. Vote instructions would need to
-reference a global Tower account so that it can track cross-block state.
+[ Tower BFT ](../implemented-proposals/tower-bft.md) - это предлагаемый алгоритм выбора форка. Предлагается отложить выплату майнерам до тех пор, пока _stack_ голосов валидаторов не достигнет определенной глубины, при которой откат не является экономически целесообразным. Таким образом, программу голосования может выполнять Tower BFT. Инструкции по голосованию должны ссылаться на глобальный аккаунт Tower, чтобы он мог отслеживать кросс-блочное состояние.
 
-## Challenges
+## Задачи
 
-### On-chain voting
+### Голосование по цепочке
 
-Using programs and accounts to implement this is a bit tedious. The hardest
-part is figuring out how much space to allocate in NewBlock. The two variables
-are the _active set_ and the stakes of those validators. If we calculate the
-active set at the time NewBlock is submitted, the number of validators to
-allocate space for is known upfront. If, however, we allow new validators to
-vote on old blocks, then we'd need a way to allocate space dynamically.
+Использование программ и аккаунтов для реализации этого немного утомительно. Самая трудная часть — это выяснить, сколько свободного места нужно выделить в NewBlock. Две переменные являются активным набором __ и ставками этих валидаторов. Если мы посчитаем активное значение во время отправки NewBlock, то количество валидаторов для этого уже известно. Если, однако, мы разрешим новым валидаторам голосовать за старые блоки, нам понадобится способ динамического распределения пространства.
 
-Similar in spirit, if the leader caches stakes at the time of NewBlock, the
-vote program doesn't need to interact with the bank when it processes votes. If
-we don't, then we have the option to allow stakes to float until a vote is
-submitted. A validator could conceivably reference its own staking account, but
-that'd be the current account value instead of the account value of the most
-recently finalized bank state. The bank currently doesn't offer a means to
-reference accounts from particular points in time.
+Аналогично духу, если лидер кэширует ставки во время NewBlock, программе голосования не нужно взаимодействовать с банком при обработке голосов. Если мы этого не сделаем, то у нас есть возможность разрешить колебания ставок до тех пор, пока не будет проведено голосование. Предположительно, валидатор может ссылаться на свой собственный счет для стекинга, но это будет текущая стоимость счета, а не стоимость счета последнего завершенного состояния банка. В настоящее время банк не предлагает возможности ссылаться на счета в определенные моменты времени.
 
-### Voting Implications on Previous Blocks
+### Последствия голосования для предыдущих блоков
 
-Does a vote on one height imply a vote on all blocks of lower heights of
-that fork? If it does, we'll need a way to lookup the accounts of all
-blocks that haven't yet reached supermajority. If not, the validator could
-send votes to all blocks explicitly to get the block rewards.
+Означает ли голосование по одной высоте голосование по всем блокам с более низкой высотой этого форка? Если это так, нам понадобится способ поиска аккаунтов всех блоков, которые еще не достигли супербольшинства. Если нет, валидатор может явно отправлять голоса всем блокам, чтобы получить вознаграждение за блок.

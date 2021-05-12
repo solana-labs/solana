@@ -1,59 +1,59 @@
 ---
-title: Secure Vote Signing
+title: Безопасное подписание голоса
 ---
 
-A validator receives entries from the current leader and submits votes confirming those entries are valid. This vote submission presents a security challenge, because forged votes that violate consensus rules could be used to slash the validator's stake.
+Валидатор получает записи от текущего лидера и подает голоса, подтверждающие правильность этих записей. Это предложение голосования представляет собой вызов безопасности, поскольку поддельные голоса, нарушающие правила консенсуса, могут быть использованы для наследования доли валидатора.
 
-The validator votes on its chosen fork by submitting a transaction that uses an asymmetric key to sign the result of its validation work. Other entities can verify this signature using the validator's public key. If the validator's key is used to sign incorrect data \(e.g. votes on multiple forks of the ledger\), the node's stake or its resources could be compromised.
+Валидатор голосует за выбранный форк, представив транзакцию, которая использует асимметричный ключ для подписания результатов ее проверки. Другие сущности могут проверить эту подпись, используя публичный ключ валидатора. Если ключ проверки используется для входа некорректных данных \(e.g. голоса на нескольких ветках решетки\), процент узла или его ресурсы могут быть скомпрометированы.
 
-Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
+Solana устраняет этот риск, разделяя отдельного _участника голоса,_ который оценивает каждый голос, чтобы убедиться, что он не нарушает условие слэш.
 
-## Validators, Vote Signers, and Stakeholders
+## Валидаторы, Голосующие и Стейкхолдеры
 
-When a validator receives multiple blocks for the same slot, it tracks all possible forks until it can determine a "best" one. A validator selects the best fork by submitting a vote to it, using a vote signer to minimize the possibility of its vote inadvertently violating a consensus rule and getting a stake slashed.
+Когда валидатор получает несколько блоков для одного и того же слота, он отслеживает все возможные форки до тех пор, пока не сможет определить "лучшее". Валидатор выбирает лучшие форки, представив ему голос, используя подписчика голосования, чтобы случайно свести к минимуму возможность его голосования, нарушив правило консенсуса и получив слэш.
 
-A vote signer evaluates the vote proposed by the validator and signs the vote only if it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. It doesn't need to process a full set of transactions.
+Участник голосования оценивает голосование, предложенное валидатором, и подписывает голос только в том случае, если он не нарушает условие вычеркивания. Подписчику голосовать нужно только поддерживать минимальное состояние в отношении подписанных голосов, а голоса подписаны остальной частью кластера. Ей не нужно обрабатывать полный набор транзакций.
 
-A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer's votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
+Заинтересованная сторона - это идентификация, которая имеет контроль над продуманным капиталом. Заинтересованная сторона может делегировать свою долю участнику голосования. Как только определено в делегировании, голоса подписавшего участника голосования представляют голос всех заявок делегаций, и выдачу наград за все делегированные ставки.
 
-Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
+В настоящее время существует связь 1:1 между валидаторами и подписчиками голосования, а заинтересованные стороны делегируют всю свою долю одному участнику.
 
-## Signing service
+## Подпись сервиса
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
+Служба подписания голосования состоит из JSON RPC сервера и процессора запросов. При запуске служба запускает сервер RPC на заданном порту и ждет проверки запросов. Ожидается следующий тип запросов:
 
-1. Register a new validator node
+1. Зарегистрировать новый узел проверки
 
-   - The request must contain validator's identity \(public key\)
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
-   - If a validator tries to register again, the service returns the public key from the pre-existing keypair
+    - Запрос должен содержать идентификатор валидатора \(открытый ключ\)
+    - Запрос должен быть подписан с приватным ключом валидатора
+    - Сервис отбрасывает запрос, если подпись запроса не может быть проверена
+    - Служба создает новый асимметричный ключ голосования для валидатора и возвращает публичный ключ в ответ
+    - Если валидатор попытается зарегистрироваться снова, служба возвращает открытый ключ с существующей клавиатуры
 
-2. Sign a vote
+2. Подписать голос
 
-   - The request must contain a voting transaction and all verification data
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service verifies the voting data
-   - The service returns a signature for the transaction
+    - Запрос должен содержать транзакцию голосования и все данные проверки
+    - Запрос должен быть подписан с приватным ключом валидатора
+    - Сервис отбрасывает запрос, если подпись запроса не может быть проверена
+    - Служба проверяет данные голосования
+    - Служба возвращает подпись для транзакции
 
 ## Validator voting
 
-A validator node, at startup, creates a new vote account and registers it with the cluster by submitting a new "vote register" transaction. The other nodes on the cluster process this transaction and include the new validator in the active set. Subsequently, the validator submits a "new vote" transaction signed with the validator's voting private key on each voting event.
+Узел валидатора при запуске создает новую учетную запись голосования и регистрирует ее в кластере, представив новую транзакцию "Реестра голосов". Другие узлы в кластере обрабатывают эту транзакцию и включают новый валидатор в активном наборе. После этого валидатор отправляет транзакцию "нового голосования", подписанную с закрытым ключом валидатора при каждом голосовании.
 
-### Configuration
+### Конфигурация
 
-The validator node is configured with the signing service's network endpoint \(IP/Port\).
+Узел валидатора настроен с сетевой конечной точкой службы подписания \(IP/Port\).
 
-### Registration
+### Регистрация
 
-At startup, the validator registers itself with its signing service using JSON RPC. The RPC call returns the voting public key for the validator node. The validator creates a new "vote register" transaction including this public key, and submits it to the cluster.
+При запуске валидатор регистрируется с помощью сервиса подписей, используя JSON RPC. RPC вызов возвращает публичный ключ голосования для узла валидатора. Валидатор создает новую транзакцию "регистра голосов", включающую этот публичный ключ, и передает ее кластеру.
 
-### Vote Collection
+### Подборка голосования
 
-The validator looks up the votes submitted by all the nodes in the cluster for the last voting period. This information is submitted to the signing service with a new vote signing request.
+За последний период голосования валидатор ищет голоса, представленные всеми узлами кластера. Эта информация передается в службу подписи с новым запросом на подписание голоса.
 
-### New Vote Signing
+### Новая подпись голоса
 
-The validator creates a "new vote" transaction and sends it to the signing service using JSON RPC. The RPC request also includes the vote verification data. On success, the RPC call returns the signature for the vote. On failure, RPC call returns the failure code.
+Валидатор создает "новый голос" транзакцию и отправляет ее в службу подписания, используя JSON RPC. Запрос RPC также включает данные проверки голоса. При успешном завершении RPC-вызов возвращает подпись для голосования. При сбое RPC-вызов возвращает код ошибки.

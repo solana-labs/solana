@@ -1,30 +1,20 @@
-# Program Instruction Macro
+# Macro de Instrucción de Programa
 
-## Problem
+## Problema
 
-Currently, inspecting an on-chain transaction requires depending on a
-client-side, language-specific decoding library to parse the instruction. If
-rpc methods could return decoded instruction details, these custom solutions
-would be unnecessary.
+Actualmente, la inspección de una transacción en la cadena requiere depender de una biblioteca de decodificación del lado del cliente, específica del lenguaje, para analizar la instrucción.  Si los métodos rpc pudieran devolver los detalles de las instrucciones decodificadas, estas soluciones personalizadas serían innecesarias.
 
-We can deserialize instruction data using a program's Instruction enum, but
-decoding the account-key list into human-readable identifiers requires manual
-parsing. Our current Instruction enums have that account information, but only
-in variant docs.
+Podemos deserializar los datos de las instrucciones utilizando el enum de instrucciones de un programa, pero la decodificación de la lista de claves de la cuenta en identificadores legibles para el ser humano requiere un análisis manual. Si los métodos rpc pudieran devolver los detalles de las instrucciones decodificadas, estas soluciones personalizadas serían innecesarias. Nuestros enums de Instrucción actuales tienen esa información de cuenta, pero solo en documentos variantes.
 
-Similarly, we have instruction constructor functions that duplicate nearly all
-the information in the enum, but we can't generate that constructor from the
-enum definition because the list of account references is in code comments.
+Del mismo modo, tenemos funciones constructoras de instrucciones que duplican casi toda la información del enum, pero no podemos generar ese constructor a partir de la definición del enum porque la lista de referencias de cuentas está en los comentarios del código.
 
-Also, Instruction docs can vary between implementations, as there is no
-mechanism to ensure consistency.
+Además, los documentos de instrucción pueden variar entre implementaciones, ya que no hay mecanismo para asegurar la consistencia.
 
-## Proposed Solution
+## Solución propuesta
 
-Move the data from code comments to attributes, such that the constructors
-can be generated, and include all the documentation from the enum definition.
+Mueva los datos de los comentarios de código a los atributos, de tal manera que los constructores puedan ser generados, e incluya toda la documentación de la definición de enum.
 
-Here is an example of an Instruction enum using the new accounts format:
+Aquí hay un ejemplo de un enum de Instrucción usando el nuevo formato de cuentas:
 
 ```rust,ignore
 #[instructions(test_program::id())]
@@ -55,8 +45,7 @@ pub enum TestInstruction {
 }
 ```
 
-An example of the generated TestInstruction with docs:
-
+Un ejemplo de la TestInstruction generada con docs:
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -85,8 +74,7 @@ pub enum TestInstruction {
 }
 ```
 
-Generated constructors:
-
+Constructores generados:
 ```rust,ignore
 /// Transfer lamports
 ///
@@ -97,7 +85,7 @@ pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Inst
         AccountMeta::new(from_pubkey, true),
         AccountMeta::new(to_pubkey, false),
     ];
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
@@ -116,7 +104,7 @@ pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
         account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::Multisig,
         account_metas,
@@ -140,7 +128,7 @@ pub fn advance_nonce_account(
     if let Some(pubkey) = authorized_pubkey {
         account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::AdvanceNonceAccount,
         account_metas,
@@ -149,7 +137,7 @@ pub fn advance_nonce_account(
 
 ```
 
-Generated TestInstructionVerbose enum:
+Enumeración generada de TestInstructionVerbose:
 
 ```rust,ignore
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -202,25 +190,7 @@ impl TestInstructionVerbose {
 
 ```
 
-## Considerations
+## Consideraciones
 
-1. **Named fields** - Since the resulting Verbose enum constructs variants with
-   named fields, any unnamed fields in the original Instruction variant will need
-   to have names generated. As such, it would be considerably more straightforward
-   if all Instruction enum fields are converted to named types, instead of unnamed
-   tuples. This seems worth doing anyway, adding more precision to the variants and
-   enabling real documentation (so developers don't have to do
-   [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
-   This will cause a little churn in our current code base, but not a lot.
-2. **Variable account lists** - This approach offers a couple options for
-   variable account lists. First, optional accounts may be added and tagged with
-   the `optional` keyword. However, currently only one optional account is
-   supported per instruction. Additional data will need to be added to the
-   instruction to support multiples, enabling identification of which accounts are
-   present when some but not all are included. Second, accounts that share the same
-   features may be added as a set, tagged with the `multiple` keyword. Like
-   optional accounts, only one multiple account set is supported per instruction
-   (and optional and multiple may not coexist). More complex instructions that
-   cannot be accommodated by `optional` or `multiple`, requiring logic to figure
-   out account order/representation, should probably be made into separate
-   instructions.
+1. **Campos con nombre** - Dado que el enum resultante de Verbose construye variantes con campos con nombre, cualquier campo sin nombre en la variante original de Instrucción necesitará tener nombres generados. Por lo tanto, sería mucho más sencillo si todos los campos de enumeraciones de instrucción se convirtieran en tipos con nombre, en lugar de tuplas sin nombre. Esto parece que vale la pena hacerlo de todos modos, añadiendo más precisión a las variantes y permitiendo una documentación real (para que los desarrolladores no tengan que hacer [esto](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140). Esto causará un poco de movimiento en nuestra base de código actual, pero no mucho.
+2. **Listas de cuentas variables** - Este enfoque ofrece un par de opciones para las listas de cuentas variables. En primer lugar, se pueden añadir cuentas opcionales y etiquetarlas con la palabra clave `opcional`. Sin embargo, actualmente solo una cuenta opcional es soportada por instrucción. Será necesario añadir datos adicionales a la instrucción para soportar los múltiplos, permitiendo identificar qué cuentas están presentes cuando se incluyen algunas pero no todas. En segundo lugar, las cuentas que comparten las mismas características pueden añadirse como un conjunto, etiquetado con la palabra clave `múltiple`. Al igual que las cuentas opcionales, sólo se admite un conjunto de cuentas múltiples por instrucción ( opcional y múltiple no pueden coexistir). Las instrucciones más complejas que no pueden ser acomodadas por `opcional` o `múltiple`, y que requieren una lógica para averiguar orden/representación de la cuenta, probablemente deberían convertirse en instrucciones separadas.

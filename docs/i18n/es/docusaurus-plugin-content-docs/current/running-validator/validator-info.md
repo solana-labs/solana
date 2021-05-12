@@ -1,38 +1,38 @@
 ---
-title: Publishing Validator Info
+title: Publicando información del validador
 ---
 
-You can publish your validator information to the chain to be publicly visible to other users.
+Puedes publicar tu información de validador en la cadena para que sea visible públicamente para otros usuarios.
 
-## Run solana validator-info
+## Ejecutar información del validador de solana
 
-Run the solana CLI to populate a validator info account:
-
-```bash
-solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
-```
-
-For details about optional fields for VALIDATOR_INFO_ARGS:
+Ejecutar el CLI de solana para rellenar una cuenta de información de validador:
 
 ```bash
-solana validator-info publish --help
+solana validator-info publique --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
 ```
 
-## Example Commands
-
-Example publish command:
+Para detalles sobre campos opcionales para VALIDATOR_INFO_ARGS:
 
 ```bash
-solana validator-info publish "Elvis Validator" -n elvis -w "https://elvis-validates.com"
+solana validator- info publish --help
 ```
 
-Example query command:
+## Ejemplos de comandos
+
+Ejemplo de comando de publicación:
+
+```bash
+solana validator-info publicar "Elvis Validator" -n elvis -w "https://elvis-validates.com"
+```
+
+Ejemplo de comando de consulta:
 
 ```bash
 solana validator-info get
 ```
 
-which outputs
+que produce
 
 ```text
 Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
@@ -42,23 +42,20 @@ Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
 
 ## Keybase
 
-Including a Keybase username allows client applications \(like the Solana
-Network Explorer\) to automatically pull in your validator public profile,
-including cryptographic proofs, brand identity, etc. To connect your validator
-pubkey with Keybase:
+Incluyendo un nombre de usuario Keybase permite a las aplicaciones cliente \(como Solana Network Explorer\) extraer automáticamente el perfil público del validador, incluyendo pruebas criptográficas, identidad de marca, etc. Para conectar su validador pubkey con Keybase:
 
-1. Join [https://keybase.io/](https://keybase.io/) and complete the profile for your validator
-2. Add your validator **identity pubkey** to Keybase:
+1. Únete a [https://keybase.io/](https://keybase.io/) y completa el perfil de tu validador
+2. Añade tu validador **identidad pubkey** a Keybase:
 
-   - Create an empty file on your local computer called `validator-<PUBKEY>`
-   - In Keybase, navigate to the Files section, and upload your pubkey file to
+   - Crea un archivo vacío en tu ordenador local llamado `validator-<PUBKEY>`
+   - En la base de teclas, navega a la sección Archivos y sube tu archivo pubkey a
 
-     a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
+     `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
 
-   - To check your pubkey, ensure you can successfully browse to
+   - Para comprobar tu pubkey, asegúrate de que puedes navegar con éxito
 
      `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<PUBKEY>`
 
-3. Add or update your `solana validator-info` with your Keybase username. The
+3. Añade o actualiza tu información de validador de `solana` con tu nombre de usuario de Keybase. El
 
-   CLI will verify the `validator-<PUBKEY>` file
+   CLI verificará el archivo `validator-<PUBKEY>`

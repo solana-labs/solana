@@ -1,9 +1,9 @@
 ---
-title: Economic Sustainability
+title: الإستدامة الإقتصادية (Economic Sustainability)
 ---
 
-**Subject to change.**
+**قابل للتغيير.**
 
-Long term economic sustainability is one of the guiding principles of Solana’s economic design. While it is impossible to predict how decentralized economies will develop over time, especially economies with flexible decentralized governances, we can arrange economic components such that, under certain conditions, a sustainable economy may take shape in the long term. In the case of Solana’s network, these components take the form of token issuance \(via inflation\) and token burning.
+تعد الإستدامة الإقتصادية على المدى الطويل أحد المبادئ التوجيهية لتصميم Solana الإقتصادية. في حين أنه من المُستحيل التنبؤ بكيفية تطور الإقتصادات اللامركزية بمرور الوقت، لا سيما الإقتصادات ذات الحوكمة اللامركزية المرنة، يمكننا ترتيب المُكونات الإقتصادية بحيث، في ظل ظروف مُعينة، قد يتشكل إقتصاد مُستدام على المدى الطويل. في حالة شبكة Solana، تأخذ هذه المُكونات شكل إصدار رمز \ (عبر التضخم \) وحرق الرمز.
 
-The dominant remittances from the Solana mining pool are validator rewards. The disinflationary mechanism is a flat, protocol-specified and adjusted, % of each transaction fee.
+التحويلات السائدة من مُجمع التعدين في Solana هي مكافآت المُدقق (validator). آلية الحد من التضخم (disinflationary mechanism) هي نسبة ثابتة ومُحددة من قبل البروتوكول ومُعدلة، % من رسوم كل مُعاملة.

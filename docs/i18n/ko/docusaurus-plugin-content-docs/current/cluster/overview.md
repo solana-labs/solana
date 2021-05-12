@@ -1,42 +1,42 @@
 ---
-title: A Solana Cluster
+title: 솔라나 클러스터
 ---
 
-A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this section, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
+솔라나 클러스터는 클라이언트 트랜잭션을 지원하고 원장의 무결성을 유지하기 위해 함께 작동하는 밸리데이터 세트입니다. 다수의 클러스터가 공존할 수 있습니다. 두 클러스터가 공통 생성 블록을 공유하면 수렴을 시도합니다. 그렇지 않으면 단순히 다른 블록의 존재를 무시합니다. 잘못된 거래로 전송된 사항은 거부됩니다. 이 섹션에서는 클러스터가 생성되는 방법, 노드가 클러스터에 참여하는 방법, 원장을 공유하는 방법, 원장이 복제되었는지 확인하는 방법, 버그 및 악성 노드에 대처하는 방법에 대해 설명합니다.
 
-## Creating a Cluster
+## Berkley Packet Filter (BPF)
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_. Additional validators then register with any registered member of the cluster.
+밸리데이터를 시작하기 전에 먼저 _제네시스 설정_을 만들어야합니다. 설정은 두 개의 공개키, _mint_bootstrap validator_ 를 참조합니다. 부트스트랩 밸리데이터의 개인키를 보유한 밸리데이터는 최초의 항목을 원장에 추가하는 역할을 합니다. 부트스트랩 밸리데이터는 민트의 계정으로 내부 상태를 초기화합니다. 해당 계정은 제네시스 구성에 정의된 네이티브 토큰 수를 보유합니다. 두 번째 밸리데이터는 부트스트랩 밸리데이터에 연락하여 _밸리데이터_로 등록합니다. 그런 다음 추가 밸리데이터는 클러스터의 등록된 구성원으로 등록됩니다.</p>
 
-A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries. Once the validator observes a sufficient number of copies exist, it deletes its copy.
+밸리데이터는 리더로부터 모든 항목을 수신하고 해당 항목이 유효한지 확인하는 투표를 제출합니다. 투표 후 밸리데이터는 해당 항목을 저장해야합니다. 밸리데이터가 충분한 수의 사본이 존재하는 것을 확인하면 사본을 삭제합니다.
 
-## Joining a Cluster
+## 클러스터 참여
 
-Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+밸리데이터는 _제어 플레인_으로 전송된 등록 메시지를 통해 클러스터에 들어갑니다. 제어 플레인은 _gossip_ 프로토콜을 사용하여 구현됩니다. 즉, 노드는 기존 노드에 등록할 수 있으며 해당 정보는 클러스터의 모든 노드에 전파될 것입니다. 모든 노드가 동기화하는 데 걸리는 시간은 클러스터에 참여하는 노드 수의 제곱에 비례합니다. 알고리즘 적으로는 매우 느린 것으로 간주되지만 그 대가로 노드는 결국 다른 모든 노드와 동일한 정보를 갖게되며 해당 정보는 한 노드에 의해 검열 될 수 없음을 보장합니다.
 
-## Sending Transactions to a Cluster
+## 클러스터에 트랜잭션 전송
 
-Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes, effectively appending them to the ledger.
+클라이언트는 모든 밸리데이터의 트랜잭션 처리 장치 \(TPU\) 포트로 트랜잭션을 보냅니다. 노드가 밸리데이터 역할에 있으면 트랜잭션을 지정된 리더에게 전달합니다. 리더 역할의 경우 노드는 수신 트랜잭션을 번들로 묶고 _항목_을 생성하는 타임스탬프를 지정한 다음 클러스터의 _데이터 플레인_에 푸시합니다. 데이터 플레인에서 트랜잭션은 밸리데이터 노드에 의해 검증되어 원장에 효과적으로 추가됩니다.
 
-## Confirming Transactions
+## 트랜잭션 확정
 
-A Solana cluster is capable of subsecond _confirmation_ for up to 150 nodes with plans to scale up to hundreds of thousands of nodes. Once fully implemented, confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
+솔라나 클러스터는 최대 150개의 노드에 대해 1 초 미만의 _확인_이 가능하며 최대 수십만 개의 노드로 확장할 계획입니다. 완전히 구현되면 확인 시간은 로그의 밑 수가 매우 높은 밸리데이터 수의 로그로만 증가할 것으로 예상됩니다. 예를 들어, 밑수가 1,000이라면, 첫 1,000 개의 노드에 대한 확인은 3개의 네트워크에 건너가는 시간에 최고 다수의 밸리데이터가 투표하는 데 걸리는 가장 긴 시간을 더한 시간입니다. 다음 100만개의 노드에 대해 확인은 네트워크 건너뛰기가 1회만 증가합니다.
 
-Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
+솔라나에서 확정이라 함은 압도적 다수가 원장에 행한 투표를 인지했을 때 리더가 신규 엔트리를 포함하고 타임스탬프를 찍는 기간으로 정의합니다.
 
-A gossip network is much too slow to achieve subsecond confirmation once the network grows beyond a certain size. The time it takes to send messages to all nodes is proportional to the square of the number of nodes. If a blockchain wants to achieve low confirmation and attempts to do it using a gossip network, it will be forced to centralize to just a handful of nodes.
+가십 네트워크는 네트워크가 특정 크기 이상으로 커지면 1초 미만의 확정을 달성하기에는 너무 느립니다. 모든 노드에 메시지를 보내는 데 걸리는 시간은 노드 수의 제곱에 비례합니다. 블록체인이 낮은 수준의 확정을 원하고 가십 네트워크를 사용하여 이를 시도하면 소수의 노드로 중앙 집중화가 이뤄져야 합니다.
 
-Scalable confirmation can be achieved using the follow combination of techniques:
+확장 가능한 확정성은 다음 기법들의 조합으로 이뤄질 수 있습니다:
 
-1. Timestamp transactions with a VDF sample and sign the timestamp.
-2. Split the transactions into batches, send each to separate nodes and have
+1. VDF 샘플로 트랜잭션을 타임스탬프하고 타임스탬프에 서명합니다.
+2. 트랜잭션을 배치로 분할하고 각각을 별도의 노드로 보내고
 
-   each node share its batch with its peers.
+   각 노드는 해당 배치를 피어와 공유합니다.
 
-3. Repeat the previous step recursively until all nodes have all batches.
+3. 모든 노드에 일괄 처리가 있을 때까지 이전 단계를 반복합니다.
 
-Solana rotates leaders at fixed intervals, called _slots_. Each leader may only produce entries during its allotted slot. The leader therefore timestamps transactions so that validators may lookup the public key of the designated leader. The leader then signs the timestamp so that a validator may verify the signature, proving the signer is owner of the designated leader's public key.
+솔라나는 _슬롯_이라고하는 고정된 간격으로 리더를 순환합니다. 각 리더는 할당된 슬롯 동안에만 항목을 생성할 수 있습니다. 따라서 리더는 밸리데이터가 지정된 리더의 공개키를 조회할 수 있도록 트랜잭션에 타임스탬프를 찍습니다. 그런 다음 리더는 타임스탬프에 서명하여 밸리데이터가 서명을 확인할 수 있도록 하여 서명자가 지정된 리더의 공개키의 소유자임을 증명합니다.
 
-Next, transactions are broken into batches so that a node can send transactions to multiple parties without making multiple copies. If, for example, the leader needed to send 60 transactions to 6 nodes, it would break that collection of 60 into batches of 10 transactions and send one to each node. This allows the leader to put 60 transactions on the wire, not 60 transactions for each node. Each node then shares its batch with its peers. Once the node has collected all 6 batches, it reconstructs the original set of 60 transactions.
+다음으로 트랜잭션은 배치로 분할되어 노드가 여러 복사본을 만들지 않고도 여러 당사자에게 트랜잭션을 보낼 수 있습니다. 예를 들어 리더가 6개의 노드에 60개의 트랜잭션을 보내야하는 경우 해당 60개의 컬렉션을 10개의 트랜잭션 배치로 나누고 각 노드에 하나씩 보냅니다. 이를 통해 리더는 각 노드에 대해 60 개의 트랜잭션이 아닌 60 개의 트랜잭션을 와이어에 넣을 수 있습니다. 그런 다음 각 노드는 해당 배치를 피어와 공유합니다. 노드가 6개의 배치를 모두 수집하면 원래 60 개의 트랜잭션 집합을 재구성합니다.
 
-A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing, the approach is scaling well up to about 150 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).
+트랜잭션 일괄 처리는 헤더 정보가 네트워크 대역폭의 주요 소비자가 될 정도로 작아지기 전 까지만 여러 번 분할할 수 있습니다. 현재 접근 방식은 약 150명의 밸리데이터 까지 확장되고 있습니다. 수십만 명의 밸리데이터로 확장하기 위해 각 노드는 리더 노드와 동일한 방식을 동일한 크기의 다른 노드 집합에 적용 할 수 있습니다. 이 기술을 [_터빈 블록 전파_](turbine-block-propagation.md)라고합니다.

@@ -1,69 +1,69 @@
 ---
-title: The Runtime
+title: وقت التشغيل (The Runtime)
 ---
 
-## The Runtime
+## وقت التشغيل (The Runtime)
 
-The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
+وقت التشغيل هو عبارة عن المُعالج المُتزامن للمُعاملات. تقوم المُعاملات بتحديد إعتمادات بياناتها مُسبقًا بحيث يكون تخصيص الذاكرة الديناميكية واضحًا. من خلال عزل ترميز البرنامج عن الحالة التي يعمل بها، يكون وقت التشغيل قادرًا على إجراء الوصول المُتزامن (choreograph concurrent access). يتم تفعيل الوصول إلى المُعاملات عن طريق حسابات للقراءة فقط (read-only accounts) بالتوازي، بينما يكون الوصول إلى الحسابات القابلة للتعديل تسلسليًا. يتفاعل وقت التشغيل مع البرنامج من خلال نقطة دخول بواجهة مُحَدَّدة جيدًا. تكون البيانات المُخزنة على حساب بنوع مُبهم، أو مجموعة من البايتات. يستطيع البرنامج التحكم بشكل كامل بمُحتوياته.
 
-The transaction structure specifies a list of public keys and signatures for those keys and a sequential list of instructions that will operate over the states associated with the account keys. For the transaction to be committed all the instructions must execute successfully; if any abort the whole transaction fails to commit.
+يُحَدِّد هيكل المُعاملة قائمة من المفاتيح العامة (public keys) والتواقيع الخاصة بهذه المفاتيح وقائمة مُتسلسلة من التعليمات التي تعمل على جميع الحالات المُرتبطة بمفاتيح الحسابات. لكي يتم تنفيذ المُعاملة، يجب أن تنفذ جميع الأوامر بنجاح؛ وأي فشل فيها يُؤدي إلى فشل تفيذ المُعاملة.
 
-#### Account Structure
+#### هيكل الحساب (Account Structure)
 
-Accounts maintain a lamport balance and program-specific memory.
+تحتفظ الحسابات برصيد lamport وذاكرة خاصة بالبرنامج.
 
-## Transaction Engine
+## مُحَرِّك المُعاملات (Transaction Engine)
 
-The engine maps public keys to accounts and routes them to the program's entrypoint.
+يقوم المُحرك بتعيين المفاتيح العامة (public keys) للحسابات وتوجيهها إلى نقطة دخول البرنامج.
 
-### Execution
+### التنفيذ (Execution)
 
-Transactions are batched and processed in a pipeline. The TPU and TVU follow a slightly different path. The TPU runtime ensures that PoH record occurs before memory is committed.
+يتم تجميع المُعاملات ومُعالجتها في خط الأنابيب (pipeline). يتبع TPU و TVU مسارًا مُختلفًا قليلاً. يضمن وقت تشغيل TPU حدوث سجل PoH قبل تخصيص الذاكرة.
 
-The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
+يضمن وقت تشغيل TVU حدوث التَحَقُّق من PoH قبل أن يُعالج وقت التشغيل أي مُعاملات.
 
 ![Runtime pipeline](/img/runtime.svg)
 
-At the _execute_ stage, the loaded accounts have no data dependencies, so all the programs can be executed in parallel.
+في مرحلة التنفيذ _execute_ ، لا تحتوي الحسابات المُحمّلة على تبعيات للبيانات، لذلك يُمكن تنفيذ جميع البرامج بشكل مُتوازٍ.
 
-The runtime enforces the following rules:
+يفرض وقت التشغيل القواعد التالية:
 
-1. Only the _owner_ program may modify the contents of an account. This means that upon assignment data vector is guaranteed to be zero.
-2. Total balances on all the accounts is equal before and after execution of a transaction.
-3. After the transaction is executed, balances of read-only accounts must be equal to the balances before the transaction.
-4. All instructions in the transaction executed atomically. If one fails, all account modifications are discarded.
+1. يحق فقط لمالك _owner_ البرنامج تعديل مُحتويات الحساب. هذا يعني أن ناقلات البيانات عند التعيين مضمونة بأن تكون صفرا.
+2. إجمالي الأرصدة في جميع الحسابات مُتساوٍ قبل تنفيذ المُعاملة وبعدها.
+3. بعد تنفيذ المُعاملة، يجب أن تكون أرصدة الحسابات للقراءة فقط (read-only accounts) مُساوية للأرصدة قبل المُعاملة.
+4. يتم تنفيذ جميع التعليمات الواردة في المُعاملة بشكل تلقائي. إذا فشل أحدها، يتم تجاهل جميع تعديلات الحساب.
 
-Execution of the program involves mapping the program's public key to an entrypoint which takes a pointer to the transaction, and an array of loaded accounts.
+يتضمن تنفيذ البرنامج تعيين المفتاح العام للبرنامج (program's public key) إلى نقطة الدخول التي تأخذ مُؤشرًا إلى المُعاملة، ومجموعة من الحسابات المُحمّلة.
 
-### SystemProgram Interface
+### واجهة برنامج النظام (SystemProgram Interface)
 
-The interface is best described by the `Instruction::data` that the user encodes.
+أفضل وصف للواجهة هو `Instruction::data` التي يقوم المُستخدم بترميزها.
 
-- `CreateAccount` - This allows the user to create an account with an allocated data array and assign it to a Program.
-- `CreateAccountWithSeed` - Same as `CreateAccount`, but the new account's address is derived from
-  - the funding account's pubkey,
-  - a mnemonic string (seed), and
-  - the pubkey of the Program
-- `Assign` - Allows the user to assign an existing account to a program.
-- `Transfer` - Transfers lamports between accounts.
+- إنشاء حساب ` CreateAccount ` - يتيح ذلك للمُستخدم إنشاء حساب بمصفوفة بيانات مُخَصَّصَة وتعيينه إلى أحد البرامج.
+- إنشاء حساب بالبذور ` CreateAccountWithSeed ` - مثل إنشاء حساب ` CreateAccount `، لكن عنوان الحساب الجديد هو
+  - المفتاح العمومي (pubkey) لحساب التمويل،
+  - سلسلة الرموز المُختصرة (mnemonic string)، و
+  - المفتاح العمومي (pubkey) الخاص بالبرنامج
+- تعيين `Assign` - يسمح للمُستخدم بتعيين حساب موجود لأحد البرامج.
+- تحويل `Transfer` - ينقل الـ lamports بين الحسابات.
 
-### Program State Security
+### برنامج أمن الحالة (Program State Security)
 
-For blockchain to function correctly, the program code must be resilient to user inputs. That is why in this design the program specific code is the only code that can change the state of the data byte array in the Accounts that are assigned to it. It is also the reason why `Assign` or `CreateAccount` must zero out the data. Otherwise there would be no possible way for the program to distinguish the recently assigned account data from a natively generated state transition without some additional metadata from the runtime to indicate that this memory is assigned instead of natively generated.
+لكي يعمل البلوكشاين بشكل صحيح، يجب أن يكون رمز البرنامج مرنًا لإدخالات المُستخدم. هذا هو السبب في أن الكود الخاص بالبرنامج في هذا التصميم هو الرمز الوحيد الذي يُمكنه تغيير حالة مصفوفة بايت البيانات في الحسابات المُخَصَّصَة لها. وهو أيضًا السبب الذي يجعل التعيين `Assign` أو إنشاء حساب ` CreateAccount ` يجب أن يستبعد البيانات. خلاف ذلك، لن تكون هناك طريقة مُمكنة للبرنامج للتمييز بين بيانات الحساب المُعَيَّنة مُؤخرًا من إنتقال الحالة الذي تم إنشاؤه محليًا دون بعض البيانات الوصفية الإضافية من وقت التشغيل للإشارة إلى أن هذه الذاكرة مُخَصَّصَة بدلاً من إنشاؤها محليًا.
 
-To pass messages between programs, the receiving program must accept the message and copy the state over. But in practice a copy isn't needed and is undesirable. The receiving program can read the state belonging to other Accounts without copying it, and during the read it has a guarantee of the sender program's state.
+لتمرير الرسائل بين البرامج، يجب أن يقبل البرنامج المُتَلَقَّي الرسالة ونسخ الحالة. لكن من الناحية العملية، لا تُوجد حاجة إلى نُسخة وهي غير مرغوب فيها. يُمكن للبرنامج المُتَلَقَّي (receiving program) قراءة الحالة التي تنتمي إلى حسابات أخرى دون نسخها، وخلال القراءة يكون لديه ضمان لحالة البرنامج المُرسل (sender program's state).
 
-### Notes
+### المُلاحظات
 
-- There is no dynamic memory allocation. Client's need to use `CreateAccount` instructions to create memory before passing it to another program. This instruction can be composed into a single transaction with the call to the program itself.
-- `CreateAccount` and `Assign` guarantee that when account is assigned to the program, the Account's data is zero initialized.
-- Transactions that assign an account to a program or allocate space must be signed by the Account address' private key unless the Account is being created by `CreateAccountWithSeed`, in which case there is no corresponding private key for the account's address/pubkey.
-- Once assigned to program an Account cannot be reassigned.
-- Runtime guarantees that a program's code is the only code that can modify Account data that the Account is assigned to.
-- Runtime guarantees that the program can only spend lamports that are in accounts that are assigned to it.
-- Runtime guarantees the balances belonging to accounts are balanced before and after the transaction.
-- Runtime guarantees that instructions all executed successfully when a transaction is committed.
+- لا يُوجد تخصيص للذاكرة الديناميكية. يحتاج العميل إلى إستخدام إرشادات إنشاء حساب `CreateAccount` لإنشاء ذاكرة قبل تمريرها إلى برنامج آخر. يُمكن أن تتكون هذه التعليمات في مُعاملة واحدة مع إستدعاء البرنامج نفسه.
+- يضمن إنشاء حساب `CreateAccount` و التعيين `Assign` أنه عند تعيين الحساب للبرنامج، يتم تهيئة بيانات الحساب إلى الصفر.
+- يجب توقيع المُعاملات التي تعين حسابًا لبرنامج أو تُخَصّص مساحة عن طريق المفتاح الخاص (private key) لعنوان الحساب ما لم يتم إنشاء الحساب بواسطة إنشاء حساب بالبذور ` CreateAccountWithSeed `، وفي هذه الحالة لا يوجد مفتاح خاص (private key) مُطابق لعنوان الحساب / المفتاح العمومي (pubkey).
+- بمُجرد تعيين الحساب للبرنامج لا يُمكن إعادة تعيينه.
+- يضمن وقت التشغيل أن رمز البرنامج هو الرمز الوحيد الذي يُمكنه تعديل بيانات الحساب التي تم تعيين الحساب لها.
+- يضمن وقت التشغيل أن البرنامج يُمكنه فقط إنفاق الـ lamports الموجودة في الحسابات المُخَصَّصَة له.
+- يضمن وقت التشغيل مُوازنة الأرصدة الخاصة بالحسابات قبل المُعاملة وبعدها.
+- يضمن وقت التشغيل تنفيذ جميع التعليمات بنجاح عند تنفيذ المُعاملة.
 
-## Future Work
+## الأعمال المُستقبلية
 
-- [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)
+- [الإستمرارية والإشارات للمُعاملات طويلة الأمد](https://github.com/solana-labs/solana/issues/1485)

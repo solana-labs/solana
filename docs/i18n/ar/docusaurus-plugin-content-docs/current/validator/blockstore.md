@@ -1,91 +1,91 @@
 ---
-title: Blockstore
+title: مخزن الكتلة (Blockstore)
 ---
 
-After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../cluster/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.
+عندما تصل كتلة (block) ما إلى النهائية، تشكل جميع الكتل من تلك الكتلة حتى نصل إلى كتلة مرحلة التكوين سلسلة خطية بالإسم المعروف، بلوكشاين. لكن حتى هذه النقطة، يجب على المُدقّق أن يحافظ على جميع السلاسل التي يحتمل أن تكون صالحة، ومُسَمَّاة بالإنقسامات أو الشوكات _forks_. يُمكن إيجاد وصف العملية التي تتشكل فيها الإنقسامات أو الشوكات بشكل طبيعي نتيجة لتدوير القائد في عملية توليد الإنقسامات أو الشوكات [fork generation](../cluster/fork-generation.md). بُنية بيانات مخزن الكتلة _blockstore_ الموصوف هنا هو حول كيفية تعامل المُدقّق مع هذه الإنقسامات أو الشوكات (forks) حتى يتم الإنتهاء من الكتل.
 
-The blockstore allows a validator to record every shred it observes on the network, in any order, as long as the shred is signed by the expected leader for a given slot.
+يسمح مخزن الكتلة للمُدقّق بتسجيل كل جزئية يُلاحظها على الشبكة، في أي ترتيب، طالما أن القِطَعة (shred) مُوقّعة بواسطة المُدير المُتوقّع لفُتحة مُعينة.
 
-Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred index` \(within the slot\). This permits the skip-list structure of the Solana protocol to be stored in its entirety, without a-priori choosing which fork to follow, which Entries to persist or when to persist them.
+يتم نقل القِطَع (shreds) إلى مساحة مفتاح قابلة للتشعب أي للإنقسام أو الشوكة، وهي مجموعة الفتحة الرئيسية مكونة من `leader slot` + `shred index` \(داخل الفتحة\). يسمح ذلك بتخزين هيكل قائمة التخطي لبروتوكول Solana بكامله، دون إختيار مُسبق لإتباع أي إنقسام أو شوكة (fork)، أو إستمرارية مُدخلات ما أو متى تستمر فيها.
 
-Repair requests for recent shreds are served out of RAM or recent files and out of deeper storage for less recent shreds, as implemented by the store backing Blockstore.
+يتم تنفيذ طلبات الإصلاح القِطَع (shreds) الأخيرة من ذاكرة الوصول العشوائي (RAM) أو الملفات الحديثة، ومن سعة التخزين الأكثر عمقًا لللقِطَع (shreds) الأقدم، كما هو مُنفذ من قبل مخزن الكتلة الداعم للتخزين.
 
-## Functionalities of Blockstore
+## وظائف مخزن الكتلة
 
-1. Persistence: the Blockstore lives in the front of the nodes verification
+1. الإستمرارية: يتواجد مخزن الكتلة في مُقدمة خط أنابيب عُقَد التَحَقُّق
 
-   pipeline, right behind network receive and signature verification. If the
+   مُباشرةً وراء تأكيد إستلام وتوقيع الشبكة. ولكن
 
-   shred received is consistent with the leader schedule \(i.e. was signed by the
+   إذا كانت القِطَعة (shred) المُستلمة مُتوافقة مع الجدول الزمني الرئيسي \ (أي تم التوقيع عليها من قبل
 
-   leader for the indicated slot\), it is immediately stored.
+   قائد للفتحة المُشار إليها \)، فسيتم تخزينها على الفور.
 
-2. Repair: repair is the same as window repair above, but able to serve any
+2. الإصلاح: الإصلاح هو نفسه إصلاح النافذة أعلاه، ولكنه قادر على خدمة أي
 
-   shred that's been received. Blockstore stores shreds with signatures,
+   قِطَع (shreds) تم إستلامها. يقوم مخزن الكُتلة بتخزين القِطَع (shreds) مع التوقيعات،
 
-   preserving the chain of origination.
+   مما يُحافظ على سلسلة المنشأ.
 
-3. Forks: Blockstore supports random access of shreds, so can support a
+3. الشوكات أو الانقسامات (Forks): يدعم مخزن الكتلة الوصول العشوائي إلى القِطَع (shreds)، لذا يُمكن أن يدعم
 
-   validator's need to rollback and replay from a Bank checkpoint.
+   حاجة المُدقّق للتراجع وإعادة التشغيل من نقطة تفتيش البنك.
 
-4. Restart: with proper pruning/culling, the Blockstore can be replayed by
+4. إعادة التشغيل: بواسطة التقليم والاِنتِقَاء (pruning/culling) المُناسب، يُمكن إعادة تشغيل مخزن الكتلة من خلال
 
-   ordered enumeration of entries from slot 0. The logic of the replay stage
+   التعداد المُرتب للمُدخلات من الفُتحة 0. منطق مرحلة الإعادة
 
-   \(i.e. dealing with forks\) will have to be used for the most recent entries in
+   \(أي التعامل مع الإنقسامات أو الشوكات\) يجب أن يستخدم لأحدث المُدخلات في
 
-   the Blockstore.
+   مخزن الكتلة.
 
-## Blockstore Design
+## تصميم مخزن الكتلة (Blockstore Design)
 
-1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
-2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
+1. يتم تخزين المُدخلات في مخزن الكتلة كأزواج القيمة المفتاحية، حيث يكون المفتاح هو فهرس الفُتحة المُتداخلة وفهرس القِطَعة (shred) للمُدخلة، والقيمة هي بيانات المُدخلة. مُلاحظة، تُعد مُؤشرات القِطَعة (shred) مبنية على صفر لكل فُتحة \(أي أنها أقرب إلى الفُتحة\).
+2. يُحافظ مخزن الكتلة على البيانات الوصفية لكل فُتحة، في بنية `SlotMeta` وتحتوي على:
 
-   - `slot_index` - The index of this slot
-   - `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
-   - `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
-   - `received` - The highest received shred index for the slot
-   - `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+   - `slot_index` - فهرس هذه الفُتحة
+   - `num_blocks` - عدد الكتل في الفُتحة\(المُستخدمة للتسلسل غلى فُتحة سابقة\)
+   - `consumed` - فهرس أعلى قِطَعة `n`، أي أن لجميع `m < n`، هناك قِطَعة في هذه الفُتحة بفهرس قِطَعة مساوٍ لـ `n` \(أي أعلى فهرس قِطَعة مُتتالية\).
+   - `received` - أعلى فهرس مُسْتَلَم للفُتحة
+   - `next_slots` - قائمة الفُتحات المُستقبلية التي يُمكن أن تتسلسل إليها هذه الفُتحة. وتُستخدم عند إعادة بناء
 
-     the ledger to find possible fork points.
+     دفتر الأستاذ (ledger) لإيجاد نقاط الإنقسام أو الشوكات (forks) المُحتملة.
 
-   - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
+   - `last_index` - فهرس القِطَعة المُعَلَم كآخر قِطَعة في الفُتحة. هذه العلامة على قِطَعة (shred) سيتم إعدادها من قبل المُدير لفُتحة عندما يقومون بتحويل آخر قِطَعة في فُتحة ما.
+   - `is_rooted` - صحيحة إذا وفقط إذا كانت كل كتلة من فُتحة...0 تُشكل سلسلة كاملة بدون أي فجوات. يمكننا إشتقاق is_rooted لكل فُتحة بإتباع القواعد التالية. لتكن فُتحة \(n\) فُتحة بفهرس `n`، وفُتحة \(n\).is_full\(\) صحيحة إذا كانت الفُتحة بفهرس `n` تمتلك كافة العلامات المُتوقعة لتلك الفُتحة. لنفترض أن is_rooted\(n\) الجملة التي تجعل "الفُتحة \(n\).is_rooted is صحيحة". إذًا:
 
      is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
 
-3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
-4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
+3. التسلسل - عندما تصل فُتحة جديدة `x` نقوم بالتحقق من عدد الكتل \(`num_blocks`\) لتلك الفُتحة الجديدة \(هذه المعلومات مرمّزة في القِطَعة\). نعرف بعد ذلك أن هذه الفُتحة الجديدة تتسلسل إلى فُتحة `x - num_blocks`.
+4. الإشتراكات - يوم مخزن الكتلة بتسجيل مجموعة من الفُتحات التي تم "الإشتراك" فيها. وهذا يعني أن المُدخلات التي تتسلسل إلى هذه الفُتحات سوف يتم إرسالها من خلال قناة مخزن الكتلة للإستهلات بواسطة مرحلة الإعادة (ReplayStage). لمزيد من التفاصيل قم بمُراجعة واجهات برمجة تطبيقات متجر الكُتلة `Blockstore APIs`.
+5. إشعارات التحديث - يقوم مخزن الكتلة بإشعار المُستمعين عندما يتم قلب slot\(n\).is_rooted من خطأ إلى صواب لأي `n`.
 
-## Blockstore APIs
+## واجهات برمجة تطبيقات متجر الكُتلة (Blockstore APIs)
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
+يوفر مخزن الكتلة واجهة برمجة تطبيقات (API) مبني على الإشتراك والتي تستخدمها مرحلة الإعادة (ReplayStage) للسؤال عن المُدخلات التي تهتم بها. سيتم إرسال المُدخلات من خلال قناة يوفرها مخزن الكتلة. ويكون إشتراك واجهات برمجة التطبيقات (API's) كالتالي: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: يُعيد الفُتحات الجديدة المُتصلة بأي عنصر من القائمة `slot_indexes`.
 
-1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
+1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: يُعيد مُتجه المُدخلة للفُتحة التي تبدأ بـ `entry_start_index`، مُخفية النتيجة عند `max` إذا `max_entries == Some(max)`، وما عدا ذلك لا يكون هناك حد علوي على طول تجه الإعادة المفروض.
 
-Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
+مُلاحظة: هذا يعني بصورة جميعة أن مرحلة الإعادة سوف تعرف الآن عندما تنتهي فُتحة ما، وتشترك بالفُتحة التالية والتي تهتم بها للحصول على المجموعة التالية من المُدخلات. سابقًا، كان يقع عبء تسلسل الفُتحات على مخزن الكتلة.
 
-## Interfacing with Bank
+## التفاعل مع البنك
 
-The bank exposes to replay stage:
+يُعَرَّض البنك لمرحلة الإعادة:
 
-1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last
+1. `prev_hash`: أي سلسلة إثبات تاريخ (PoH) يعمل عليها كما هو مُشار من قبل التجزئة الخاصة بآخر
 
-   entry it processed
+   مُدخلة تمت مُعالجتها
 
-2. `tick_height`: the ticks in the PoH chain currently being verified by this
+2. `tick_height`: العلامات في سلسلة إثبات التاريخ (PoH) المُؤثقة حاليًا بواسطة هذا
 
-   bank
+   البنك
 
-3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
+3. `votes`: مجموعة السجلات التي تحتوي: 1. `prev_hashes`: أي شيء بعد هذا التصويت يجب أن يتسلسل إلى PoH 2. `tick_height`: ارتفاع العلامة الذي تم طرح هذا التصويت عنده 3. فترة الإقفال `lockout period`: كم طول المُدة التي يجب أن يتم فيها مُراقبة السلسلة لتكون في دفتر الأستاذ (ledger) لكي
 
-   be able to be chained below this vote
+   يكون قادرًا على أن يتم إدراجها في السلسلة أسفل هذا التصويت
 
-Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
+تستخدم مرحلة الإعادة واجهات برمجة تطبيقات متجر الكُتلة (Blockstore APIs) لإيجاد أطول سلسلة من المُدخلات والتي تستطيع أن ترتبط بالتصويت السابق. إذا كانت سلسلة المُدخلات تلك غير قادرة على الإرتباط بآخر صوت، فإن مرحلة الإعادة تقوم بإرجاع البنك إلى ذلك التصويت وتُعيد بناء السلسلة من هناك.
 
-## Pruning Blockstore
+## تقليم مخزن الكُتلة (Pruning Blockstore)
 
-Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.
+بمُجرد أن تكون مُدخلات مخزن الكتلة قديمة كفاية، يُصبح تمثيل جميع الإنقسامات أو الشوكات (forks) المُمكنة أقل أهمية، ربما حتى أكثر تعقيدًا لإعادة البناء فور إعادة التشغيل. ولكن بمُجرد أن تصل أصوات مُدقّق ما لأقصى إقفال، يُمكن تقليم وحذف أي مُحتوى مخزن كتلة غير موجود على سلسلة إثبات لاتاريخ (PoH chain) لذلك التصويت.

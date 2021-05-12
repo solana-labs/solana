@@ -1,94 +1,92 @@
 ---
-title: Gossip Service
+title: خدمة القيل والقال (Gossip Service)
 ---
 
-The Gossip Service acts as a gateway to nodes in the control plane. Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a gossip protocol.
+تعمل خدمة القيل والقال (Gossip Service) كبوابة للعقد في لوحة التحكم. ويستخدم المُدقّقون هذه الخدمة لتأكيد توافر المعلومات لدى جميع العقد في مجموعة ما. وتقوم الخدمة ببث معلومات باستخدام بروتوكول القيل والقال (gossip protocol).
 
-## Gossip Overview
+## نظرة عامة على خدمة القيل والقال
 
-Nodes continuously share signed data objects among themselves in order to manage a cluster. For example, they share their contact information, ledger height, and votes.
+تتشارك العقود باستمرار عناصر البيانات الموقع فيما بينها من أجل إدارة المجموعة. فهم، على سبيل المثال؛ يتشاركون معلومات الاتصال، وارتفاع ledger، والأصوات.
 
-Every tenth of a second, each node sends a "push" message and/or a "pull" message. Push and pull messages may elicit responses, and push messages may be forwarded on to others in the cluster.
+كل عشر من الثانية، ترسل كل عقدة رسالة "دفع" (push) و/أو رسالة "سحب" (pull). ومن الممكن أن تحصل رسائل الدفع والسحب على استجابات، ويمكن كذلك إعادة توجيه رسائل الدفع إلى آخرين في المجموعة.
 
-Gossip runs on a well-known UDP/IP port or a port in a well-known range. Once a cluster is bootstrapped, nodes advertise to each other where to find their gossip endpoint \(a socket address\).
+ويعمل بروتوكول القيل والقال على منفذ UDP/IP معروف، أو منفذ في مدى متعارف عليه. وبمجرد أن يبدأ تمهيد مجموعة، تعلن العقد لبعضها البعض أين تجد نقطة نهاية القيل والقال الخاصة بها \(عنوان مقبس\).
 
-## Gossip Records
+## سجلات القيل والقال
 
-Records shared over gossip are arbitrary, but signed and versioned \(with a timestamp\) as needed to make sense to the node receiving them. If a node receives two records from the same source, it updates its own copy with the record with the most recent timestamp.
+تتم مشاركة السجلات بواسطة خدمة القيل والقال بشكل عشوائي، إلا أنه يتم توقيعها وترقيمها \(بختم زمني\) بحسب الحاجة لتكون ذات معنى بالنسبة للعقد التي تستقبلها. وفي حال تلقت عقدة ما سجلين اثنين من نفس المصدر، فإنها تقوم بتحديث نسختها الخاصة بالسجل ذي الختم الزمني الأحدث.
 
-## Gossip Service Interface
+## واجهة خدمة القيل والقال
 
-### Push Message
+### رسالة الدفع
 
-A node sends a push message to tells the cluster it has information to share. Nodes send push messages to `PUSH_FANOUT` push peers.
+ترسل العقدة رسالة دفع لإعلام المجموعة بأن لديها معلومات لمشاركتها. وتقوم العقد بدورها بإرسال رسائل دفع إلى `PUSH_FANOUT` نظراء الدفع.
 
-Upon receiving a push message, a node examines the message for:
+عند تلقي رسالة دفع، تقوم العقدة بتفحص الرسالة من أجل الكشف عن:
 
-1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
-2. New data: if the message is new to the node
+1. التكرار: إذا كانت الرسالة قد أرسلت من قبل، تقوم العقدة بإسقاط الرسالة وقد ترد بضغط رسالة الدفع `PushMessagePrune` إذا كانت موجهة من عُقدة مُحَصِّصة أدنى
+2. بيانات جديدة: إذا كانت الرسالة جديدة بالنسبة للعُقدة
 
-   - Stores the new information with an updated version in its cluster info and
+   - تقوم بتخزين المعلومات الجديدة بنسخة مُحدثة في معلومات المجموعة الخاصة بها و
 
-     purges any previous older value
+     فرمتة أي قيمة قديمة سابقة
 
-   - Stores the message in `pushed_once` \(used for detecting duplicates,
+   - تقوم بتخزين الرسالة في `pushed_once` \(تستخدم للكشف عن التكرارات،
 
-     purged after `PUSH_MSG_TIMEOUT * 5` ms\)
+     وفرمتتها بعد `PUSH_MSG_TIMEOUT * 5` ملي ثانية\)
 
-   - Retransmits the messages to its own push peers
+   - تُعيد إرسال الرسالة إلى أقران الدفع الخاصة بها
 
-3. Expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
+3. إنتهاء الصلاحية: تقوم العقد بإسقاط رسائل الدفع الأقدم من `PUSH_MSG_TIMEOUT`
 
-### Push Peers, Prune Message
+### أقران الدفع، رسالة الضغط
 
-A nodes selects its push peers at random from the active set of known peers. The node keeps this selection for a relatively long time. When a prune message is received, the node drops the push peer that sent the prune. Prune is an indication that there is another, higher stake weighted path to that node than direct push.
+تقوم العقدة باختيار أقران الدفع الخاصة بها بشكل عشوائي من المجموعة النشطة من الأقران المعروفين. وتحتفظ العقدة بهذا الاختيار لمدة طويلة نسبيًا. عندما يتم تلقي رسالة تقليم، تقوم العُقدة بإسقاط قرين الدفع الذي قام بإرسال التقليم. ويعتبر التقليم مُؤشرًا على وجود مسار حِصَّة أعلى وزنًا إلى تلك العُقدة من الدفع المُباشر.
 
-The set of push peers is kept fresh by rotating a new node into the set every `PUSH_MSG_TIMEOUT/2` milliseconds.
+يتم الإحتفاظ بمجموعة أقران الدفع مُحدثة من خلال تدوير عُقدة جديدة في المجموعة كل `PUSH_MSG_TIMEOUT/2` جزء من الثانية.
 
-### Pull Message
+### رسالة السحب
 
-A node sends a pull message to ask the cluster if there is any new information. A pull message is sent to a single peer at random and comprises a Bloom filter that represents things it already has. A node receiving a pull message iterates over its values and constructs a pull response of things that miss the filter and would fit in a message.
+تقوم العُقدة بإرسال رسالة سحب لسؤال المجموعة ما إذا كانت هناك أي معلومات جديدة. ويتم إرسال رسالة سحب إلى نظير واحد بشكل عشوائي وتشكل فِلتر بلوم (Bloom filter) الذي يُمثل الأشياء التي تمتلكها مُسبقًا. وتتكرر العُقدة التي تستلم رسالة سحب فوق قيمها، وتقوم بإنشاء إستجابة سحب للأشياء التي تفتقر إلى الفلتر وتتناسب مع الرسالة.
 
-A node constructs the pull Bloom filter by iterating over current values and recently purged values.
+تقوم العُقدة ببناء فِلتر سحب بلووم (pull Bloom filter) من خلال تكرار القِيَم الحالية و القِيَم التي تمت فرمتتها مُؤخرًا.
 
-A node handles items in a pull response the same way it handles new data in a push message.
+تتعامل العُقدة مع عناصر في إستجابة السحب (pull response) بنفس الطريقة التي تتعامل فيها مع البيانات الجديدة في رسالة الدفع (push message).
 
-## Purging
+## الفرمتة (Purging)
 
-Nodes retain prior versions of values \(those updated by a pull or push\) and expired values \(those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) in `purged_values` \(things I recently had\). Nodes purge `purged_values` that are older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+تحتفظ العُقَد بنسخ سابقة من القِيَم \(التي تم تحديثها بواسطة سحب أو دفع\) والقِيَم مُنتهية الصلاحية \(القِيَم الأقدم من `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) في `purged_values` \(الأشياء المُمتلكة حديثًا\). تقوم العُقَد بفرمتة `purged_values` القِيَم الأقدم من `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
 
-## Eclipse Attacks
+## هجمات الخسوف (Eclipse Attacks)
 
-An eclipse attack is an attempt to take over the set of node connections with adversarial endpoints.
+يعد هجوم الخسوف مُحاولة الإستيلاء على مجموعة إتصالات عُقدة بواسطة بنقاط نهاية الخصومة.
 
-This is relevant to our implementation in the following ways.
+هذا الأمر هام بالنسبة لتطبيقنا الطرق التالية.
 
-- Pull messages select a random node from the network. An eclipse attack on _pull_ would require an attacker to influence the random selection in such a way that only adversarial nodes are selected for pull.
-- Push messages maintain an active set of nodes and select a random fanout for every push message. An eclipse attack on _push_ would influence the active set selection, or the random fanout selection.
+- تقوم رسائل السحب باختيار عقدة عشوائية من الشبكة. هجوم الخسوف على _pull_ يتطلب تأثير المُهاجم على الإختيار العشوائي بطريقة يتم فيها إختيار العُقَد العدائية فقط للسحب.
+- تبقي رسائل الدفع مجموعة نَشِطة من العُقَد وتقوم بإختيار مُرسل معلومات (fanout) عشوائي لكل رسالة دفع. في حين يقوم هجوم الخسوف على _push_ بالتأثير على قائمة الإختيار النَشِطة، أو الإختيار العشوائي لمُرسل المعلومات.
 
-### Time and Stake based weights
+### الزمن والأوزان القائمة على الحِصَّة
 
-Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
+يتم حساب الأوزان بناء على زمن آخر إختيار لها `time since last picked` والسجل الطبيعي `natural log` لوزن الحِصَّة `stake weight`.
 
-Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes. This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a few multiples of ln\(`stake`\) seconds before it gets picked.
+يسمح أخذ اللوغاريتم الطبيعي `ln` وزن الحِصَّة بإعطاء جميع العُقَد فرصة أكثر عدلًا لتغطية الشبكة في مُدة معقولة من الزمن. يُساعد ذلك في جعل أكبر فرق مُمكن في وزن الحِصَّة `stake weight` أكثر إستقرارًا بين العُقَد. بهذه الطريقة سيكون على العُقدة ذات وزن الحِصَّة المُنخفض `stake weight` مُقارنة بعُقدة ذات وزن حِصَّة أكبر `stake weight` الإنتظار بضعة أضعاف اللوغاريتم الطبيعي للحِصَّة ln\(`stake`\) من الثواني قبل أن يتم إختيارها.
 
-There is no way for an adversary to influence these parameters.
+وليس هنالك من سبيل للخصم أن يقوم بالتأثير على هذه المعايير.
 
-### Pull Message
+### رسالة السحب (Pull Message)
 
-A node is selected as a pull target based on the weights described above.
+يتم إختيار عُقدة كهدف سحب بناءً على الأوزان الموصوفة أعلاه.
 
-### Push Message
+### رسالة الدفع (Push Message)
 
-A prune message can only remove an adversary from a potential connection.
+تقوم رسالة التقليم بإزالة خصم من إتصال مُحتمل.
 
-Just like _pull message_, nodes are selected into the active set based on weights.
+تمامًا مثل رسالة الدفع _pull message_، يتم إختيار العُقَد إلى داخل المجموعة النَشِطة بناءً على الوزن.
 
-## Notable differences from PlumTree
+## فُروق ملحوظة من PlumTree
 
-The active push protocol described here is based on
-[Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf).
-The main differences are:
+بروتوكول الدفع النَشِط الموصوف هنا مبني على [Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf). والفروق الأساسية هي:
 
-- Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
-- Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.
+- لرسائل الدفع ساعة حائط مُوقّعة من قبل المصدر. بمجرد إنتهاء صلاحية ساعة الحائظ، يتم إسقاط الرسالة. ومن الصعب فرض حد للقفزة في أجواء عدائية.
+- لا يتم تطبيق الدفع الكسول (Lazy Push) لأنه ما من طريقة واضحة لمنع الخصم من تزوير البصمة الرقمية للرسالة. من شأن إتباع نهج ساذج (naive approach) أن يسمح بإعطاء الأولوية للخصم من أجل السحب إستنادا إلى مُدخلاتهم.

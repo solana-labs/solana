@@ -1,30 +1,20 @@
-# Program Instruction Macro
+# برنامج التعليمات الكلي (Program Instruction Macro)
 
-## Problem
+## المُشكل
 
-Currently, inspecting an on-chain transaction requires depending on a
-client-side, language-specific decoding library to parse the instruction. If
-rpc methods could return decoded instruction details, these custom solutions
-would be unnecessary.
+في الوقت الحالي، يتطلب فحص مُعاملة على الشبكة (On-Chain) إعتمادًا على مكتبة فك تشفير خاصة باللغات من جانب العميل لتحليل التعليمات.  إذا تمكنت طرق الـ rpc من إرجاع تفاصيل التعليمات التي تم فك ترميزها، فلن تكون هذه الحلول المُخَصَّصة ضرورية.
 
-We can deserialize instruction data using a program's Instruction enum, but
-decoding the account-key list into human-readable identifiers requires manual
-parsing. Our current Instruction enums have that account information, but only
-in variant docs.
+يُمكننا إلغاء تسلسل بيانات التعليمات بإستخدام تعداد تعليمات البرنامج، لكن فك تشفير قائمة مفتاح الحساب (account-key) إلى مُعرفات مُمكن للبشر قراءتها يتطلب تحليلًا يدويًا. تحتوي تعدادات تعليماتنا الحالية على معلومات الحساب هذه، ولكن فقط في مُستندات مُختلفة.
 
-Similarly, we have instruction constructor functions that duplicate nearly all
-the information in the enum, but we can't generate that constructor from the
-enum definition because the list of account references is in code comments.
+بالمثل، لدينا وظائف مُنشئ التعليمات التي تُكرر جميع المعلومات الموجودة في التعداد تقريبًا، ولكن لا يمكننا إنشاء هذا المُنشئ من تعريف التعداد لأن قائمة مراجع الحساب موجودة في تعليقات التعليمات البرمجية.
 
-Also, Instruction docs can vary between implementations, as there is no
-mechanism to ensure consistency.
+يُمكن أيضًا أن تختلف مُستندات التعليمات بين التطبيقات، حيث لا توجد آلية لضمان الإتساق.
 
-## Proposed Solution
+## الحل المُقترح (Proposed Solution)
 
-Move the data from code comments to attributes, such that the constructors
-can be generated, and include all the documentation from the enum definition.
+قُم بنقل البيانات من تعليقات التعليمات البرمجية (code comments) إلى السِّمات (attributes)، بحيث يُمكن إنشاء المُنشئات (constructors)، وتضمين جميع الوثائق من تعريف التعداد.
 
-Here is an example of an Instruction enum using the new accounts format:
+فيما يلي مثال على تعداد تعليمي بإستخدام تنسيق الحسابات الجديد:
 
 ```rust,ignore
 #[instructions(test_program::id())]
@@ -55,8 +45,7 @@ pub enum TestInstruction {
 }
 ```
 
-An example of the generated TestInstruction with docs:
-
+مثال لتعليمات الإختبار التي تم إنشاؤها بإستخدام المُستندات:
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -85,8 +74,7 @@ pub enum TestInstruction {
 }
 ```
 
-Generated constructors:
-
+المُنشئات المُولَّدة (Generated constructors):
 ```rust,ignore
 /// Transfer lamports
 ///
@@ -97,7 +85,7 @@ pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Inst
         AccountMeta::new(from_pubkey, true),
         AccountMeta::new(to_pubkey, false),
     ];
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
@@ -116,7 +104,7 @@ pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
         account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::Multisig,
         account_metas,
@@ -140,7 +128,7 @@ pub fn advance_nonce_account(
     if let Some(pubkey) = authorized_pubkey {
         account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
-    Instruction::new_with_bincode(
+    Instruction::new(
         test_program::id(),
         &TestInstruction::AdvanceNonceAccount,
         account_metas,
@@ -149,7 +137,7 @@ pub fn advance_nonce_account(
 
 ```
 
-Generated TestInstructionVerbose enum:
+إرشادات الإختبار التعدادي المطوّل (Generated TestInstructionVerbose enum):
 
 ```rust,ignore
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -202,25 +190,7 @@ impl TestInstructionVerbose {
 
 ```
 
-## Considerations
+## الإعتبارات (Considerations)
 
-1. **Named fields** - Since the resulting Verbose enum constructs variants with
-   named fields, any unnamed fields in the original Instruction variant will need
-   to have names generated. As such, it would be considerably more straightforward
-   if all Instruction enum fields are converted to named types, instead of unnamed
-   tuples. This seems worth doing anyway, adding more precision to the variants and
-   enabling real documentation (so developers don't have to do
-   [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
-   This will cause a little churn in our current code base, but not a lot.
-2. **Variable account lists** - This approach offers a couple options for
-   variable account lists. First, optional accounts may be added and tagged with
-   the `optional` keyword. However, currently only one optional account is
-   supported per instruction. Additional data will need to be added to the
-   instruction to support multiples, enabling identification of which accounts are
-   present when some but not all are included. Second, accounts that share the same
-   features may be added as a set, tagged with the `multiple` keyword. Like
-   optional accounts, only one multiple account set is supported per instruction
-   (and optional and multiple may not coexist). More complex instructions that
-   cannot be accommodated by `optional` or `multiple`, requiring logic to figure
-   out account order/representation, should probably be made into separate
-   instructions.
+1. الحقول المُسَمَّاة **Named fields** - نظرًا لأن تعداد Verbose الناتج يبني مُتغيرات مع الحقول المُسماة، فإن أي حقول غير مُسماة في مُتغير (variant) التعليمات الأصلي ستحتاج إلى إنشاء أسماء. على هذا النحو، سيكون الأمر أكثر وضوحًا إذا تم تحويل جميع حقول تعداد التعليمات إلى أنواع مُسماة، بدلاً من المجموعات غير المُسماة. يبدو أن هذا يستحق القيام به على أي حال، إضافة المزيد من الدقة إلى المُتغيرات (variants) وتمكين التوثيق الحقيقي (حتى لا يضطر المطورون إلى القيام بـ [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140) وهذا سيُؤدي إلى حدوث القليل من التغيير في قاعدة الشفرة الحالية، ولكن ليس كثيرًا.
+2. قوائم الحسابات المُتَغَيِّرَة **Variable account lists** - يُوفر هذا الأسلوب عِدَّة خيارات لقوائم الحسابات المُتَغَيِّرَة. أولاً، يمكن إضافة حسابات إختيارية وتمييزها بإستخدام كلمة رئيسية `optional`. مع ذلك، يتم حاليًا دعم حساب إختياري واحد فقط لكل تعليمة. يجب إضافة بيانات إضافية إلى التعليمة (instruction) لدعم المُضاعفات، مما يُتيح تحديد الحسابات الموجودة عند تضمين بعضها وليس كلها. ثانيًا، يُمكن إضافة الحسابات التي تشترك في نفس الميزات كمجموعة، يتم تمييزها بالكلمة الأساسية `multiple`. مثل الحسابات الإختيارية، يتم دعم مجموعة حسابات مُتعددة واحدة فقط لكل تعليمة (instruction) (وقد لا تتواجد مجموعة إختيارية ومُتعددة). التعليمات الأكثر تعقيدًا التي لا يُمكن إستيعابها بواسطة `optional` أو `multiple`، والتي تتطلب منطقًا لمعرفة أمر / تمثيل الحساب، يجب أن يتم تحويلها على الأرجح إلى تعليمات (instructions) مُنفصلة.

@@ -1,91 +1,91 @@
 ---
-title: Blockstore
+title: 블록스토어
 ---
 
-After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../cluster/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.
+블록이 최종성에 도달하면 그 블록부터 기원 블록까지 모든 블록이 익숙한 이름의 블록체인을 가진 선형 체인을 형성합니다. 그러나 그 시점까지 유효성 검사기는 _forks_라고하는 잠재적으로 유효한 모든 체인을 유지해야합니다. 리더 회전의 결과로 포크가 자연적으로 형성되는 과정은[포크 생성](../cluster/fork-generation.md)에 설명되어 있습니다. 여기에 설명 된 _blockstore_ 데이터 구조는 블록이 완성 될 때까지 유효성 검사기가 이러한 포크에 대처하는 방법입니다.
 
-The blockstore allows a validator to record every shred it observes on the network, in any order, as long as the shred is signed by the expected leader for a given slot.
+블록 스토어는 주어진 슬롯에 대해 예상되는 리더가 파쇄에 서명하는 한, 밸리데이터가 네트워크에서 관찰 한 모든 파쇄를 순서에 관계없이 기록 할 수 있도록합니다.
 
-Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred index` \(within the slot\). This permits the skip-list structure of the Solana protocol to be stored in its entirety, without a-priori choosing which fork to follow, which Entries to persist or when to persist them.
+파쇄는 '리더 슬롯'+ '파쇄 인덱스'\ (슬롯 내)의 튜플 인 포크 가능한 키 공간으로 이동됩니다. 이것은 솔라나 프로토콜의 스킵리스트 구조가 어떤 포크를 따를 지, 어떤 엔트리를 지속할지 또는 언제 지속 할지를 사전에 선택하지 않고도 전체적으로 저장되도록 허용합니다.
 
-Repair requests for recent shreds are served out of RAM or recent files and out of deeper storage for less recent shreds, as implemented by the store backing Blockstore.
+최근 파쇄에 대한 수리 요청은 상점 지원 Blockstore에 의해 구현 된대로 RAM 또는 최근 파일에서 제공되며 최근 파쇄에 대해 더 깊은 저장소에서 제공됩니다.
 
-## Functionalities of Blockstore
+## Blockstore의 기능
 
-1. Persistence: the Blockstore lives in the front of the nodes verification
+1. 지속성 : Blockstore는있는 노드 확인앞쪽에
 
-   pipeline, right behind network receive and signature verification. If the
+   네트워크 수신 및 서명 확인 바로 뒤에파이프 라인있습니다. 만일
 
-   shred received is consistent with the leader schedule \(i.e. was signed by the
+   분쇄기(즉,\의 지도자에의해 서명  \ 지도자의 일정과
 
-   leader for the indicated slot\), it is immediately stored.
+   지시 된 슬롯 된)일치,그것은 바로 저장됩니다.
 
-2. Repair: repair is the same as window repair above, but able to serve any
+2. 수리 : 수리는 위의 창문 수리와 동일하지만할 수
 
-   shred that's been received. Blockstore stores shreds with signatures,
+   수령 한 파쇄를 처리있습니다. Blockstore는 서명과 함께 조각을 저장
 
-   preserving the chain of origination.
+   하여 기원 체인을 보존합니다.
 
-3. Forks: Blockstore supports random access of shreds, so can support a
+3. 포크 : Blockstore는 파쇄의 임의 액세스를 지원하므로지원할 수 있습니다
 
-   validator's need to rollback and replay from a Bank checkpoint.
+   은행 체크 포인트에서 롤백 및 재생해야하는 밸리데이터의 요구를.
 
-4. Restart: with proper pruning/culling, the Blockstore can be replayed by
+4. 재시작 : 적절한 프 루닝 / 컬링을 통해 Blockstore는재생 될 수 있습니다
 
-   ordered enumeration of entries from slot 0. The logic of the replay stage
+   슬롯 0의 항목을 순서대로 열거하여. 재생 단계의 논리
 
-   \(i.e. dealing with forks\) will have to be used for the most recent entries in
+   \ (즉, 포크 처리 \)는 가장 최근의 항목에 사용되어야
 
-   the Blockstore.
+   Blockstore.
 
-## Blockstore Design
+## Blockstore DesignBlockstore의
 
-1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
-2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
+1. 1.항목은 키-값 쌍으로 저장됩니다. 여기서 키는 항목에 대한 연결된 슬롯 인덱스와 파쇄 인덱스이고 값은 항목 데이터입니다. 파쇄 인덱스는 각 슬롯에 대해 0부터 시작합니다. \ (즉, 슬롯에 상대적입니다 \).
+2. Blockstore는 다음을 포함하는`SlotMeta` 구조체의 각 슬롯에 대한 메타 데이터를 유지합니다.
 
    - `slot_index` - The index of this slot
-   - `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
-   - `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
+   - `slot_index`-이 슬롯의 인덱스슬롯 -`num_blocks`-의 블록 수 \ (이전 슬롯에 연결하는 데 사용됨 \ ) -`consumed`-가장 높은 파쇄 인덱스`n`.
+   - 모든`m <n`에 대해이 슬롯에 파쇄 인덱스가`n` \ (즉, 가장 높은 연속 파쇄 인덱스 \) 인 파쇄가 존재합니다.
    - `received` - The highest received shred index for the slot
-   - `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+   - `next_slots` - 해당 슬롯이 체인될 수 있는 미래 슬롯 리스트 리빌딩 때 쓰임
 
-     the ledger to find possible fork points.
+     가능한 포크 포인트를 찾기 위해 원장을 재.
 
-   - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
+   - `last_index`-이 슬롯에 대한 마지막 파쇄로 플래그 된 파쇄의 인덱스입니다. 파쇄의이 플래그는 슬롯에 대한 마지막 파쇄를 전송할 때 슬롯에 대한 리더에 의해 설정됩니다.
+   - `is_rooted`-0 ... 슬롯의 모든 블록이 구멍없이 완전한 시퀀스를 형성한다면 참입니다. 다음 규칙을 사용하여 각 슬롯에 대해 is_rooted를 유도 할 수 있습니다. slot \ (n \)을 인덱스`n '이있는 슬롯으로, slot \ (n \). is_full \ (\)은 인덱스가`n` 인 슬롯에 해당 슬롯에 대해 예상되는 모든 틱이있는 경우 true입니다. is_rooted \ (n \)를 "the slot \ (n \). is_rooted is true"라는 문장으로 지정합니다. 그런 다음 :
 
-     is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
+     is_rooted \ (0 \) is_rooted \ (n + 1 \) iff \ (is_rooted \ (n \) and slot \ (n \). is_full \ (\)
 
-3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
-4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
+3. Chaining-새 슬롯을 위해 파쇄 할 때`x`가 도착하면 해당 새 슬롯에 대한 블록 수 \ (`num_blocks` \)를 확인합니다. \ (이 정보는 조각으로 인코딩됩니다 \). 그러면이 새 슬롯이 슬롯`x-num_blocks`에 연결된다는 것을 알 수 있습니다.
+4. 구독-Blockstore는 "구독"된 슬롯 세트를 기록합니다. 이는 이러한 슬롯에 연결된 항목이 ReplayStage에서 소비하기 위해 Blockstore 채널로 전송됨을 의미합니다. 자세한 내용은 'Blockstore API'를 참조하십시오 .5.
+5. 업데이트 알림-Blockstore는 모든`n '에 대해 slot \ (n \). is_rooted가 false에서 true로 바뀌면 리스너에게 알립니다.
 
-## Blockstore APIs
+## Blockstore API
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
+Blockstore는 ReplayStage가 관심있는 항목을 요청하는 데 사용하는 구독 기반 API를 제공합니다. 항목은 Blockstore에 의해 노출 된 채널로 전송됩니다. 이러한 구독 API는 다음과 같습니다. 1.`fn get_slots_since (slot_indexes : & [u64])-> Vec <SlotMeta>`: 새 항목을 반환합니다. 목록`slot_indexes`의 모든 요소에 연결되는 슬롯.
 
-1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
+1. 1.`fn get_slot_entries (slot_index : u64, entry_start_index : usize, max_entries : Option <u64>)-> Vec <Entry>`:`entry_start_index`로 시작하는 슬롯에 대한 엔트리 벡터를 반환합니다. `max_entries == Some (max)`, 그렇지 않으면 반환 벡터의 길이에 대한 상한이 부과되지 않습니다.
 
-Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
+참고 : 누적 적으로 이것은 이제 리플레이 단계에서 슬롯이 언제 완료되었는지 알고 다음 항목 세트를 얻기 위해 관심있는 다음 슬롯을 구독해야 함을 의미합니다. 이전에는 슬롯 체인의 부담이 Blockstore에있었습니다.
 
-## Interfacing with Bank
+## 은행과의 인터페이스
 
-The bank exposes to replay stage:
+은행은 재생 단계에 노출됩니다
 
-1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last
+1. 3.`votes` : 다음을 포함하는 레코드 스택 : 1.`prev_hashes` :이 투표 이후의 모든 것이 역사증명 2에서 연결되어야하는 것.`tick_height` :이 투표가 캐스팅 된 틱 높이 3.`잠금 기간`:원장에 체인이 얼마나 오래 남아 있는지 확인해야합니다.
 
-   entry it processed
+   처리항목
 
-2. `tick_height`: the ticks in the PoH chain currently being verified by this
+2. 2.`tick_height` : 현재 확인중인 역사증명 체인의 틱 이의해
 
-   bank
+   은행에
 
-3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
+3. `votes`: a stack of records that contain: 1. 1.`prev_hash` :한 마지막의 해시로 표시되는 작업중인 PoH 체인 1.`prev_hash` :한 마지막의 해시로 표시되는 작업중인 역사증명 체인 `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
 
-   be able to be chained below this vote
+   이 투표 아래에 체인이 연결될 수 있도록
 
-Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
+재생 단계에서는 Blockstore API를 사용하여 이전 투표에 매달릴 수있는 가장 긴 항목 체인을 찾습니다. 해당 항목 체인이 최신 투표를 중단하지 않으면 재생 단계는 은행을 해당 투표로 롤백하고 거기에서 체인을 재생합니다.
 
-## Pruning Blockstore
+## Blockstore 정리 Blockstore
 
-Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.
+항목이 충분히 오래되면 가능한 모든 포크가 유용하지 않게되고 다시 시작할 때 재생에 문제가 될 수도 있습니다. 그러나 밸리데이터의 투표가 최대 잠금에 도달하면 해당 투표에 대한 역사증명 체인에없는 모든 Blockstore 콘텐츠를 정리하고 말소 할 수 있습니다.

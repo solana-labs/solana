@@ -1,107 +1,61 @@
 ---
-title: Validator Timestamp Oracle
+title: Validador Timestamp Oracle
 ---
 
-Third-party users of Solana sometimes need to know the real-world time a block
-was produced, generally to meet compliance requirements for external auditors or
-law enforcement. This proposal describes a validator timestamp oracle that
-would allow a Solana cluster to satisfy this need.
+Los usuarios externos de Solana a veces necesitan saber la hora en que se produjo un bloque en el mundo real, generalmente para cumplir con los requisitos de los auditores externos o la aplicación de la ley. Esta propuesta describe un oráculo de marca de tiempo validador que permitiría a un clúster Solana satisfacer esta necesidad.
 
-The general outline of the proposed implementation is as follows:
+El esquema general de la aplicación propuesta es el siguiente:
 
-- At regular intervals, each validator records its observed time for a known slot
-  on-chain (via a Timestamp added to a slot Vote)
-- A client can request a block time for a rooted block using the `getBlockTime`
-  RPC method. When a client requests a timestamp for block N:
+- En intervalos regulares, cada validador registra el tiempo observado para una ranura conocida en cadena (a través de una marca de tiempo añadida a una ranura de voto)
+- Un cliente puede solicitar un tiempo de bloque para un bloque root usando el método RPC `getBlockTime`. Cuando un cliente solicita una marca de tiempo para el bloque N:
 
-  1. A validator determines a "cluster" timestamp for a recent timestamped slot
-     before block N by observing all the timestamped Vote instructions recorded on
-     the ledger that reference that slot, and determining the stake-weighted mean
-     timestamp.
+  1. Un validador determina una marca de tiempo de un "cluster" para una ranura reciente con marca de tiempo antes del bloque N, observando todas las instrucciones de Voto con marca de tiempo registradas en el ledger que hace referencia a esa ranura, y determinando la marca de tiempo media ponderada por el stake.
 
-  2. This recent mean timestamp is then used to calculate the timestamp of
-     block N using the cluster's established slot duration
+  2. Esta marca de tiempo media reciente se utiliza entonces para calcular la marca de tiempo del bloque N de usando la duración establecida en el cluster
 
-Requirements:
+Requisitos:
 
-- Any validator replaying the ledger in the future must come up with the same
-  time for every block since genesis
-- Estimated block times should not drift more than an hour or so before resolving
-  to real-world (oracle) data
-- The block times are not controlled by a single centralized oracle, but
-  ideally based on a function that uses inputs from all validators
-- Each validator must maintain a timestamp oracle
+- Cualquier validador que reproduzca el ledger en el futuro debe obtener la misma hora para cada bloque desde el génesis
+- Los tiempos de bloque estimados no deben deslizar más de una hora antes de resolver a datos (oráculos) del mundo real
+- Los tiempos de bloque no son controlados por un único oráculo centralizado, pero idealmente basado en una función que utiliza entradas de todos los validadores
+- Cada validador debe mantener un oráculo de marca de tiempo
 
-The same implementation can provide a timestamp estimate for a not-yet-rooted
-block. However, because the most recent timestamped slot may or may not be
-rooted yet, this timestamp would be unstable (potentially failing requirement
-1). Initial implementation will target rooted blocks, but if there is a use case
-for recent-block timestamping, it will be trivial to add the RPC apis in the
-future.
+La misma implementación puede proporcionar una estimación de marca de tiempo para un bloque aún no arraigado. Sin embargo, debido a que la ranura con la marca de tiempo más reciente puede o no estar arraigada todavía, esta marca de tiempo sería inestable (fallando potencialmente al requisito 1). La implementación inicial se centrará en los bloques arraigados, pero si hay un caso de uso para el sellado de tiempo de los bloques recientes, será trivial añadir las apis RPC en el futuro.
 
-## Recording Time
+## Tiempo de grabación
 
-At regular intervals as it is voting on a particular slot, each validator
-records its observed time by including a timestamp in its Vote instruction
-submission. The corresponding slot for the timestamp is the newest Slot in the
-Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
-identity keypair as a usual Vote. In order to enable this reporting, the Vote
-struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
+A intervalos regulares mientras se vota en una ranura particular, cada validador registra su tiempo observado incluyendo una marca de tiempo en su envío de instrucciones de voto. La ranura correspondiente a la marca de tiempo es la ranura más nueva del vector de votos (`Vote::slots.iter().max()`). Está firmado por el keypair de identidad del validador como un Voto habitual. Para habilitar este informe, la estructura Vote necesita ser extendida para incluir un campo timestamp, `timestamp: Option<UnixTimestamp>`, que se establecerá como`None` en la mayoría de los votos.
 
-As of https://github.com/solana-labs/solana/pull/10630, validators submit a
-timestamp every vote. This enables implementation of a block time caching
-service that allows nodes to calculate the estimated timestamp immediately after
-the block is rooted, and cache that value in Blockstore. This provides
-persistent data and quick queries, while still meeting requirement 1) above.
+A partir de https://github.com/solana-labs/solana/pull/10630, los validadores presentan una marca de tiempo en cada voto. Esto permite la implementación de un servicio de almacenamiento en caché de la hora del bloque que permite a los nodos calcular la marca de tiempo estimada inmediatamente después de que el bloque se arraigue, y almacenar en caché ese valor en Blockstore. Esto proporciona datos persistentes y consultas rápidas, mientras que el requisito 1) sigue siendo el anterior.
 
-### Vote Accounts
+### Votar cuentas
 
-A validator's vote account will hold its most recent slot-timestamp in VoteState.
+La cuenta de voto de un validador llevará su marca de tiempo más reciente en VoteState.
 
-### Vote Program
+### Programa de votos
 
-The on-chain Vote program needs to be extended to process a timestamp sent with
-a Vote instruction from validators. In addition to its current process_vote
-functionality (including loading the correct Vote account and verifying that the
-transaction signer is the expected validator), this process needs to compare the
-timestamp and corresponding slot to the currently stored values to verify that
-they are both monotonically increasing, and store the new slot and timestamp in
-the account.
+El programa de Voto en cadena necesita ser extendido para procesar una marca de tiempo enviada con una instrucción de voto de validadores. Además de su funcionalidad actual de process_vote (incluyendo la carga de la cuenta de voto correcta y la verificación de que el firmante de transacción es el validador esperado), este proceso necesita comparar la marca de tiempo y la ranura correspondiente con los valores almacenados actualmente para verificar que ambos están aumentando monótonamente, y almacenar la nueva ranura y la marca de tiempo en la cuenta.
 
-## Calculating Stake-Weighted Mean Timestamp
+## Cálculo de la media ponderada del Stake
 
-In order to calculate the estimated timestamp for a particular block, a
-validator first needs to identify the most recently timestamped slot:
+Para calcular la marca de tiempo estimada para un bloque en particular, un validador primero necesita identificar la ranura timestamped más recientemente:
 
 ```text
 let timestamp_slot = floor(current_slot / timestamp_interval);
 ```
 
-Then the validator needs to gather all Vote WithTimestamp transactions from the
-ledger that reference that slot, using `Blockstore::get_slot_entries()`. As these
-transactions could have taken some time to reach and be processed by the leader,
-the validator needs to scan several completed blocks after the timestamp_slot to
-get a reasonable set of Timestamps. The exact number of slots will need to be
-tuned: More slots will enable greater cluster participation and more timestamp
-datapoints; fewer slots will speed how long timestamp filtering takes.
+Entonces el validador necesita reunir todas las transacciones de Vote WithTimestamp del ledger que hace referencia a esa ranura, usando `Blockstore::get_slot_entries()`. Como estas transacciones podrían haber tardado algún tiempo en llegar y ser procesadas por el líder, el validador necesita escanear varios bloques completados después del timestamp_slot para obtener un conjunto razonable de Timestamps. El número exacto de ranuras tendrá que ser ajustado: Más ranuras permitirán una mayor participación del clúster y más puntos de datos de las marcas de tiempo; menos ranuras acelerarán el tiempo de filtrado de las marcas de tiempo.
 
-From this collection of transactions, the validator calculates the
-stake-weighted mean timestamp, cross-referencing the epoch stakes from
-`staking_utils::staked_nodes_at_epoch()`.
+A partir de esta colección de transacciones, el validador calcula la marca de tiempo media ponderada por los stake, con referencias cruzadas a lo stakes de época de `staking_utils::staked_nodes_at_epoch()`.
 
-Any validator replaying the ledger should derive the same stake-weighted mean
-timestamp by processing the Timestamp transactions from the same number of
-slots.
+Cualquier validador que vuelva a reproducir el ledger debe derivar la misma marca de tiempo ponderada por la apuesta procesando las transacciones de la marca de tiempo del mismo número de ranuras.
 
-## Calculating Estimated Time for a Particular Block
+## Cálculo del tiempo estimado para un bloque concreto
 
-Once the mean timestamp for a known slot is calculated, it is trivial to
-calculate the estimated timestamp for subsequent block N:
+Una vez calculada la marca de tiempo media para una ranura conocida, es trivial calcular la marca de tiempo estimada para el siguiente bloque N:
 
 ```text
 let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
-where `block_n_slot_offset` is the difference between the slot of block N and
-the timestamp_slot, and `slot_duration` is derived from the cluster's
-`slots_per_year` stored in each Bank
+donde `block_n_slot_offset` es la diferencia entre la ranura del bloque N y el timestamp_slot, y `slot_duration` se deriva del `slots_per_year` del cluster almacenado en cada Banco

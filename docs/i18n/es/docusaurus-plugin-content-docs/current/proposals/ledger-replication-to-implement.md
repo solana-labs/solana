@@ -1,359 +1,353 @@
 ---
-title: Ledger Replication
+title: Replicación del Ledger
 ---
 
-Note: this ledger replication solution was partially implemented, but not
-completed. The partial implementation was removed by
-https://github.com/solana-labs/solana/pull/9992 in order to prevent the security
-risk of unused code. The first part of this design document reflects the
-once-implemented parts of ledger replication. The
-[second part of this document](#ledger-replication-not-implemented) describes the
-parts of the solution never implemented.
+Nota: esta solución de replicación de ledger fue parcialmente implementada, pero no completada. La implementación parcial fue removida por https://github.com/solana-labs/solana/pull/9992 para prevenir el riesgo de seguridad de código no utilizado. La primera parte de este documento de diseño refleja las partes una vez implementadas de la replicación del ledger. La [segunda parte de este documento](#ledger-replication-not-implemented) describe las partes de la solución nunca implementadas.
 
-## Proof of Replication
+## Prueba de Replicación
 
-At full capacity on a 1gbps network solana will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
+A plena capacidad en una red de 1gbps solana generará 4 petabytes de datos por año. Para evitar que la red se centralice alrededor de validadores que tienen que almacenar la totalidad de los datos, este protocolo propone una forma para que los nodos mineros proporcionen capacidad de almacenamiento para las piezas de los datos.
 
-The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as it's hashed. The simple solution is to periodically regenerate the hash based on a signed PoH value. This ensures that all the data is present during the generation of the proof and it also requires validators to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `number_of_proofs * data_size`
+La idea básica de Prueba de Replicación es cifrar un conjunto de datos con una clave simétrica pública usando el cifrado CBC, luego cifrar el conjunto de datos cifrados. El principal problema con el enfoque ingenuo es que un nodo de almacenamiento deshonesto puede transmitir el cifrado y eliminar los datos a medida que se encripten. La solución simple es regenerar periódicamente el hash basado en un valor de PoH firmado. Esto asegura que todos los datos estén presentes durante la generación de la prueba y también requiere que los validadores tengan la totalidad de los datos cifrados presentes para la verificación de todas las pruebas de cada identidad. Así que el espacio necesario para validar es `number_of_proofs * data_size`
 
-## Optimization with PoH
+## Optimización con PoH
 
-Our improvement on this approach is to randomly sample the encrypted segments faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the segments stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. The total space required for verification is `1_ledger_segment + 2_cbc_blocks * number_of_identities` with core count equal to `number_of_identities`. We use a 64-byte chacha CBC block size.
+Nuestra mejora en este enfoque es la muestra aleatoria de los segmentos cifrados más rápido de lo que se necesita para cifrar, y registra el hash de esas muestras en el contador de PoH. Así, los segmentos permanecen en el mismo orden exacto para cada PoRep y la verificación puede transmitir los datos y verificar todas las pruebas en un solo lote. De esta manera podemos verificar múltiples pruebas simultáneamente, cada una en su propio núcleo CUDA. El espacio total requerido para la verificación es `1_ledger_segment + 2_cbc_blocks * number_of_identities` con número de núcleo igual a `number_of_identities`. Utilizamos un tamaño de bloque CBC de 64 bytes.
 
-## Network
+## Red
 
-Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
+Validadores para PoRep son los mismos validadores que están verificando transacciones. Si un archivador puede probar que un validador verificó un PoRep, entonces el validador no recibirá una recompensa por ese epoch.
 
-Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
+Los Archivadores son _clientes ligeros especializados_. Descargan una parte del ledger \(también conocido como segmento de la unidad\) y lo almacenan, y proporcionan PoReps de almacenar el ledger. Por cada archivero PoRep verificado gana una recompensa de sol de la piscina minera.
 
-## Constraints
+## Restricciones
 
-We have the following constraints:
+Tenemos las siguientes restricciones:
 
-- Verification requires generating the CBC blocks. That requires space of 2
+- La verificación requiere generar los bloques CBC. Eso requiere un espacio de 2
 
-  blocks per identity, and 1 CUDA core per identity for the same dataset. So as
+  por identidad, y 1 núcleo CUDA por identidad para el mismo conjunto de datos. Así que como
 
-  many identities at once should be batched with as many proofs for those
+  muchas identidades a la vez deberían ser combinadas con tantas pruebas para esas
 
-  identities verified concurrently for the same dataset.
+  identidades verificadas simultáneamente para el mismo conjunto de datos.
 
-- Validators will randomly sample the set of storage proofs to the set that
+- Los validadores mostrarán aleatoriamente el conjunto de pruebas de almacenamiento al conjunto que
 
-  they can handle, and only the creators of those chosen proofs will be
+  pueden manejar, y sólo los creadores de las pruebas elegidas serán
 
-  rewarded. The validator can run a benchmark whenever its hardware configuration
+  recompensadas. El validador puede ejecutar una prueba de rendimiento cada vez que su configuración de hardware
 
-  changes to determine what rate it can validate storage proofs.
+  cambien para determinar qué tasa puede validar las pruebas de almacenaje.
 
-## Validation and Replication Protocol
+## Protocolo de validación y replicación
 
-### Constants
+### Constantes
 
-1. SLOTS_PER_SEGMENT: Number of slots in a segment of ledger data. The
+1. SLOTS_PER_SEGMENT: Número de ranuras en un segmento de datos de ledger. La
 
-   unit of storage for an archiver.
+   unidad de almacenamiento para un archivero.
 
-2. NUM_KEY_ROTATION_SEGMENTS: Number of segments after which archivers
+2. NUM_KEY_ROTATION_SEGMENTS: Número de segmentos después de los cuales archiveros
 
-   regenerate their encryption keys and select a new dataset to store.
+   regenerar sus claves de cifrado y seleccionar un nuevo conjunto de datos para almacenar.
 
-3. NUM_STORAGE_PROOFS: Number of storage proofs required for a storage proof
+3. NUM_STORAGE_PROOFS: Número de pruebas de almacenamiento requeridas para una prueba de almacenamiento
 
-   claim to be successfully rewarded.
+   y reclamar ser recompensado con éxito.
 
-4. RATIO_OF_FAKE_PROOFS: Ratio of fake proofs to real proofs that a storage
+4. RATIO_OF_FAKE_PROOFS: Ratio de pruebas falsas a pruebas reales que un almacenamiento
 
-   mining proof claim has to contain to be valid for a reward.
+   debe contener para que la reclamación de prueba minera sea válida para una recompensa.
 
-5. NUM_STORAGE_SAMPLES: Number of samples required for a storage mining
+5. NUM_STORAGE_SAMPLES: Número de muestras requeridas para una minería de almacenamiento
 
-   proof.
+   prueba.
 
-6. NUM_CHACHA_ROUNDS: Number of encryption rounds performed to generate
+6. NUM_CHACHA_ROUNDS: Número de rondas de cifrado realizadas para generar
 
-   encrypted state.
+   estado cifrado.
 
-7. NUM_SLOTS_PER_TURN: Number of slots that define a single storage epoch or
+7. NUM_SLOTS_PER_TURN: Número de ranuras que definen un único epicentro de almacenamiento o
 
-   a "turn" of the PoRep game.
+   un "turno" del juego PoRep.
 
-### Validator behavior
+### Comportamiento del validador
 
-1. Validators join the network and begin looking for archiver accounts at each
+1. Los validadores se unen a la red y comienzan a buscar cuentas de archivador en cada uno de los
 
-   storage epoch/turn boundary.
+   límites de la época de almacenamiento/vuelta.
 
-2. Every turn, Validators sign the PoH value at the boundary and use that signature
+2. Cada turno, los validadores firman el valor de PoH en el límite y utilizan esa firma
 
-   to randomly pick proofs to verify from each storage account found in the turn boundary.
+   para seleccionar aleatoriamente pruebas para verificar de cada cuenta de almacenamiento encontrada en el límite de turno.
 
-   This signed value is also submitted to the validator's storage account and will be used by
+   Este valor firmado también se envía a la cuenta de almacenamiento del validador y será utilizado por
 
-   archivers at a later stage to cross-verify.
+   los archivadores en una etapa posterior para verificarla.
 
-3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
+3. Cada slot `NUM_SLOTS_PER_TURN` el validador anuncia el valor de PoH. Este es el valor
 
-   is also served to Archivers via RPC interfaces.
+   se sirve también a Archivers a través de interfaces RPC.
 
-4. For a given turn N, all validations get locked out until turn N+3 \(a gap of 2 turn/epoch\).
+4. Para un turno N determinado, todas las validaciones se bloquean hasta el turno N+3 (un intervalo de 2 turnos/epocas).
 
-   At which point all validations during that turn are available for reward collection.
+   En ese momento todas las validaciones durante ese turno están disponibles para la recolección de recompensas.
 
-5. Any incorrect validations will be marked during the turn in between.
+5. Cualquier validación incorrecta será marcada durante el turno intermedio.
 
-### Archiver behavior
+### Comportamiento de archivador
 
-1. Since an archiver is somewhat of a light client and not downloading all the
+1. Dado que un archivador es algo así como un cliente ligero y no descarga todos los
 
-   ledger data, they have to rely on other validators and archivers for information.
+   datos del ledger tienen que depender de otros validadores y archiveros para obtener información.
 
-   Any given validator may or may not be malicious and give incorrect information, although
+   Cualquier validador puede o no ser malicioso y dar información incorrecta, aunque
 
-   there are not any obvious attack vectors that this could accomplish besides having the
+   no hay ningún vector de ataque obvios que esto pueda conseguir además de tener el
 
-   archiver do extra wasted work. For many of the operations there are a number of options
+   archivador hacer trabajo extra malgastado. Para muchas de las operaciones hay varias opciones
 
-   depending on how paranoid an archiver is:
+   dependiendo de lo paranoico que sea el archivero:
 
-   - \(a\) archiver can ask a validator
-   - \(b\) archiver can ask multiple validators
-   - \(c\) archiver can ask other archivers
-   - \(d\) archiver can subscribe to the full transaction stream and generate
+   - \(a\) archivador puede preguntar a un validador
+   - \(b\) archivador puede preguntar a varios validadores
+   - \(c\) archivador puede preguntar a otros archiveros
+   - \(d\) archivador puede suscribirse al flujo completo de transacciones y generar
 
-     the information itself \(assuming the slot is recent enough\)
+     la información misma \\(asumiendo que la ranura es lo suficientemente reciente\\)
 
-   - \(e\) archiver can subscribe to an abbreviated transaction stream to
+   - \(e\) archivador puede suscribirse a un flujo de transacciones abreviado a
 
-     generate the information itself \(assuming the slot is recent enough\)
+     generar la información en sí misma \(asumiendo que la ranura es lo suficientemente reciente\)
 
-2. An archiver obtains the PoH hash corresponding to the last turn with its slot.
-3. The archiver signs the PoH hash with its keypair. That signature is the
+2. Un archivador obtiene el hash PoH correspondiente al último turno con su ranura.
+3. El archivador firma el hash PoH con su keypair. Esa firma es la
 
-   seed used to pick the segment to replicate and also the encryption key. The
+   semilla usada para escoger el segmento para replicar y también la clave de cifrado. El
 
-   archiver mods the signature with the slot to get which segment to
+   archivador mods la firma con el slot para obtener a qué segmento
 
-   replicate.
+   replicar.
 
-4. The archiver retrives the ledger by asking peer validators and
+4. El archivador recupera el ledger preguntando a los validadores de los pares y
 
-   archivers. See 6.5.
+   archiveros. Ver 6.5.
 
-5. The archiver then encrypts that segment with the key with chacha algorithm
+5. El archivador entonces cifra ese segmento con la clave con el algoritmo chacha
 
-   in CBC mode with `NUM_CHACHA_ROUNDS` of encryption.
+   en modo CBC con `NUM_CHACHA_ROUNDS` de cifrado.
 
-6. The archiver initializes a chacha rng with the a signed recent PoH value as
+6. El archivador inicializa un rng de chacha con un valor reciente firmado como
 
-   the seed.
+   la semilla.
 
-7. The archiver generates `NUM_STORAGE_SAMPLES` samples in the range of the
+7. El archivador genera muestras `NUM_STORAGE_SAMPLES` en el rango del
 
-   entry size and samples the encrypted segment with sha256 for 32-bytes at each
+   tamaño de la entrada y muestrea el segmento encriptado con sha256 para 32-bytes en cada
 
-   offset value. Sampling the state should be faster than generating the encrypted
+   valor de compensación. El muestreo del estado debe ser más rápido que la generación del cifrado
 
-   segment.
+   segmento.
 
-8. The archiver sends a PoRep proof transaction which contains its sha state
+8. El archivador envía una transacción de prueba PoRep que contiene su estado sha
 
-   at the end of the sampling operation, its seed and the samples it used to the
+   al final de la operación de muestreo, su semilla y las muestras que solía
 
-   current leader and it is put onto the ledger.
+   el líder actual y se pone en el ledger.
 
-9. During a given turn the archiver should submit many proofs for the same segment
+9. Durante un turno dado el archivador debe presentar muchas pruebas para el mismo segmento
 
-   and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
+   y basado en el `RATIO_OF_FAKE_PROOFS` algunas de esas pruebas deben ser falsas.
 
-10. As the PoRep game enters the next turn, the archiver must submit a
+10. A medida que el juego de PoRep entra en el siguiente turno, el archivador debe enviar un
 
-    transaction with the mask of which proofs were fake during the last turn. This
+    transacción con la máscara de que las pruebas eran falsas durante el último turno. Esta
 
-    transaction will define the rewards for both archivers and validators.
+    transacción definirá las recompensas tanto para los archiveros como para los validadores.
 
-11. Finally for a turn N, as the PoRep game enters turn N + 3, archiver's proofs for
+11. Finalmente para un turno N, mientras el juego PoRep entra en la ronda N + 3, pruebas del archivero durante
 
-    turn N will be counted towards their rewards.
+    el turno N se contabilizará para sus recompensas.
 
-### The PoRep Game
+### El Juego PoRep
 
-The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep games can be in progress but each in a different stage.
+El juego Prueba de Replicación tiene 4 etapas primarias. Por cada "turno" múltiples juegos de PoRep pueden estar en progreso pero cada uno en una etapa diferente.
 
-The 4 stages of the PoRep Game are as follows:
+Las 4 etapas del juego PoRep son las siguientes:
 
-1. Proof submission stage
-   - Archivers: submit as many proofs as possible during this stage
-   - Validators: No-op
-2. Proof verification stage
-   - Archivers: No-op
-   - Validators: Select archivers and verify their proofs from the previous turn
-3. Proof challenge stage
-   - Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
-   - Validators: No-op
-4. Reward collection stage
-   - Archivers: Collect rewards for 3 turns ago
-   - Validators: Collect rewards for 3 turns ago
+1. Etapa de presentación de prueba
+   - Archivadores: presentar tantas pruebas como sea posible durante esta etapa
+   - Validadores: No-op
+2. Fase de verificación de prueba
+   - Archivadores: No-op
+   - Validadores: Seleccione archiveros y verifique sus pruebas de la ronda anterior
+3. Fase de prueba del desafío
+   - Archivadores: Enviar la máscara de prueba con justificaciones \(para pruebas falsas presentadas hace 2 turnos\)
+   - Validadores: No-op
+4. Fase de colección de recompensas
+   - Archivadores: Recoge recompensas por 3 turnos atrás
+   - Validadores: Recoge recompensas por 3 turnos atrás
 
-For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
+Por cada turno del juego PoRep, tanto Validadores como Archivers evalúan cada etapa. Las etapas se ejecutan como transacciones separadas en el programa de almacenamiento.
 
-### Finding who has a given block of ledger
+### Buscando quién tiene un bloque determinado de ledger
 
-1. Validators monitor the turns in the PoRep game and look at the rooted bank
+1. Los validadores supervisan los turnos en el juego PoRep y miran el banco arraigado
 
-   at turn boundaries for any proofs.
+   a su vez los límites para cualquier prueba.
 
-2. Validators maintain a map of ledger segments and corresponding archiver public keys.
+2. Los validadores mantienen un mapa de segmentos de ledger y claves públicas de archivador correspondientes.
 
-   The map is updated when a Validator processes an archiver's proofs for a segment.
+   El mapa se actualiza cuando un Validador procesa las pruebas de un archivero para un segmento.
 
-   The validator provides an RPC interface to access the this map. Using this API, clients
+   El validador proporciona una interfaz RPC para acceder al mapa. Usando esta API, los clientes
 
-   can map a segment to an archiver's network address \(correlating it via cluster_info table\).
+   pueden mapear un segmento a la dirección de red de un archivero \(correlacionándolo a través de la tabla cluster_info\).
 
-   The clients can then send repair requests to the archiver to retrieve segments.
+   Los clientes pueden enviar solicitudes de reparación al archivador para recuperar segmentos.
 
-3. Validators would need to invalidate this list every N turns.
+3. Los validadores necesitarían invalidar esta lista cada N turnos.
 
-## Sybil attacks
+## Ataques Sybil
 
-For any random seed, we force everyone to use a signature that is derived from a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
+Para cualquier semilla aleatoria, obligamos a todos a utilizar una firma que se deriva de un hash PoH en el límite del turno. Todo el mundo usa el mismo contador, así que el mismo hash PoH está firmado por cada participante. A continuación, cada una de las firmas está vinculada criptográficamente al keypair, lo que impide que un líder pueda moler el valor resultante para más de una identidad.
 
-Since there are many more client identities then encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
+Dado que hay muchas más identidades de clientes y luego identidades de cifrado, necesitamos dividir la recompensa para varios clientes, y evitar que los ataques Sybil generen muchos clientes para adquirir el mismo bloque de datos. Para seguir siendo BFT queremos evitar que una sola entidad humana almacene todas las réplicas de un solo trozo del ledger.
 
-Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
+Nuestra solución es forzar a los clientes a seguir utilizando la misma identidad. Si la primera ronda se utiliza para adquirir el mismo bloque para muchas identidades de clientes, la segunda ronda para las mismas identidades del cliente forzará una redistribución de las firmas y, por lo tanto, las identidades y bloques de PoRep. Así para obtener una recompensa para los archiveros necesitan almacenar el primer bloque de forma gratuita y la red puede recompensar las identidades de clientes vividas durante mucho tiempo más que las nuevas.
 
-## Validator attacks
+## Ataques de validador
 
-- If a validator approves fake proofs, archiver can easily out them by
+- Si un validador aprueba pruebas falsas, el archivador puede fácilmente sacarlas
 
-  showing the initial state for the hash.
+  mostrando el estado inicial para el hash.
 
-- If a validator marks real proofs as fake, no on-chain computation can be done
+- Si un validador marca pruebas reales como falsas, no se puede hacer ningún cálculo en cadena
 
-  to distinguish who is correct. Rewards would have to rely on the results from
+  para distinguir cual es correcto. Las recompensas deberían depender de los resultados de
 
-  multiple validators to catch bad actors and archivers from being denied rewards.
+  múltiples validadores para atrapar a los malos actores y evitar que se les nieguen las recompensas.
 
-- Validator stealing mining proof results for itself. The proofs are derived
+- Validador robando resultados de prueba de minería para sí mismo. Las pruebas se derivan
 
-  from a signature from an archiver, since the validator does not know the
+  de una firma de un archivero, ya que el validador no conoce la
 
-  private key used to generate the encryption key, it cannot be the generator of
+  clave privada usada para generar la clave de cifrado, no puede ser el generador de
 
-  the proof.
+  la prueba.
 
-## Reward incentives
+## Incentivos de recompensa
 
-Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by archivers may require a higher fee than a normal transaction to represent the computational cost required by validators.
+Las pruebas falsas son fáciles de generar pero difíciles de verificar. Por esta razón, Las transacciones a prueba de PoRep generadas por archiveros pueden requerir una comisión más alta que una transacción normal para representar el costo computacional requerido por los validadores.
 
-Some percentage of fake proofs are also necessary to receive a reward from storage mining.
+También es necesario cierto porcentaje de pruebas falsas para recibir una recompensa por la minería de almacenamiento.
 
-## Notes
+## Notas
 
-- We can reduce the costs of verification of PoRep by using PoH, and actually
+- Podemos reducir los costes de verificación de PoRep usando PoH, y de hecho
 
-  make it feasible to verify a large number of proofs for a global dataset.
+  hacer que sea factible verificar un gran número de pruebas para un conjunto de datos globales.
 
-- We can eliminate grinding by forcing everyone to sign the same PoH hash and
+- Podemos eliminar la molienda obligando a todos a firmar el mismo hash PoH y
 
-  use the signatures as the seed
+  usar las firmas como semilla
 
-- The game between validators and archivers is over random blocks and random
+- El juego entre validadores y archivadores es sobre bloques aleatorios e
 
-  encryption identities and random data samples. The goal of randomization is
+  identidades de cifrado aleatorias y muestras de datos aleatorias. El objetivo de la aleatorización es
 
-  to prevent colluding groups from having overlap on data or validation.
+  evitar que los grupos coludidos se superpongan en los datos o la validación.
 
-- Archiver clients fish for lazy validators by submitting fake proofs that
+- Los clientes del archivador pescan a los validadores perezosos presentando pruebas falsas que
 
-  they can prove are fake.
+  pueden demostrar que son falsas.
 
-- To defend against Sybil client identities that try to store the same block we
+- Para defenderse de las identidades de clientes Sybil que intentan almacenar el mismo bloque
 
-  force the clients to store for multiple rounds before receiving a reward.
+  obligamos a los clientes a almacenar durante varias rondas antes de recibir una recompensa.
 
-- Validators should also get rewarded for validating submitted storage proofs
+- Los validadores también deberían ser recompensados por validar las pruebas de almacenamiento
 
-  as incentive for storing the ledger. They can only validate proofs if they
+  enviadas como incentivo para almacenar el ledger. Sólo pueden validar las pruebas si
 
-  are storing that slice of the ledger.
+  almacenan esa porción del ledger.
 
-# Ledger Replication Not Implemented
+# Replicación de Ledger no implementada
 
-Replication behavior yet to be implemented.
+Comportamiento de replicación aún por implementar.
 
-## Storage epoch
+## Época de almacenamiento
 
-The storage epoch should be the number of slots which results in around 100GB-1TB of ledger to be generated for archivers to store. Archivers will start storing ledger when a given fork has a high probability of not being rolled back.
+La época de almacenamiento debe ser el número de ranuras que resulta en alrededor de 100GB-1TB de ledger que se generará para los archivadores para almacenar. Los archivadores comenzarán a almacenar el ledgerr cuando un fork determinado tenga una alta probabilidad de no ser revertida.
 
-## Validator behavior
+## Comportamiento del validador
 
-1. Every NUM_KEY_ROTATION_TICKS it also validates samples received from
+1. Cada NUM_KEY_ROTATION_TICKS también valida las muestras recibidas de
 
-   archivers. It signs the PoH hash at that point and uses the following
+   archivadores. Firma el hash PoH en ese punto y utiliza el siguiente
 
-   algorithm with the signature as the input:
+   algoritmo con la firma como entrada:
 
-   - The low 5 bits of the first byte of the signature creates an index into
+   - Los 5 bits bajos del primer byte de la firma crean un índice en
 
-     another starting byte of the signature.
+     otro byte inicial de la firma.
 
-   - The validator then looks at the set of storage proofs where the byte of
+   - El validador mira el conjunto de pruebas de almacenamiento donde el byte de
 
-     the proof's sha state vector starting from the low byte matches exactly
+     el vector de estado sha de prueba a partir del byte bajo coincide exactamente
 
-     with the chosen byte\(s\) of the signature.
+     con el byte\(s\) seleccionado de la firma.
 
-   - If the set of proofs is larger than the validator can handle, then it
+   - Si el conjunto de pruebas es mayor que el validador puede manejar, entonces
 
-     increases to matching 2 bytes in the signature.
+     aumenta hasta que coincida con 2 bytes en la firma.
 
-   - Validator continues to increase the number of matching bytes until a
+   - El validador sigue aumentando el número de bytes coincidentes hasta que se encuentra un
 
-     workable set is found.
+     conjunto viable.
 
-   - It then creates a mask of valid proofs and fake proofs and sends it to
+   - Luego crea una máscara de pruebas válidas y pruebas falsas y la envía a
 
-     the leader. This is a storage proof confirmation transaction.
+     el líder. Esta es una transacción de confirmación de prueba de almacenamiento.
 
-2. After a lockout period of NUM_SECONDS_STORAGE_LOCKOUT seconds, the
+2. Después de un periodo de bloqueo de NUM_SECONDS_STORAGE_LOCKOUT segundos, el
 
-   validator then submits a storage proof claim transaction which then causes the
+   el validador presenta entonces una transacción de reclamación de prueba de almacenamiento que hace que el
 
-   distribution of the storage reward if no challenges were seen for the proof to
+   distribución de la recompensa de almacenamiento si no se han visto retos para la prueba a los
 
-   the validators and archivers party to the proofs.
+   validadores y archivadores parte de las pruebas.
 
-## Archiver behavior
+## Comportamiento de archivador
 
-1. The archiver then generates another set of offsets which it submits a fake
+1. A continuación, el archivador genera otro conjunto de compensaciones que presenta una prueba falsa
 
-   proof with an incorrect sha state. It can be proven to be fake by providing the
+   con un estado sha incorrecto. Se puede demostrar que es falsa proporcionando
 
-   seed for the hash result.
+   la semilla del resultado hash.
 
-   - A fake proof should consist of an archiver hash of a signature of a PoH
+   - Una prueba falsa debe consistir en un hash del archivador de una firma de un
 
-     value. That way when the archiver reveals the fake proof, it can be
+     valor PoH. De esta manera, cuando el archivador revele la prueba falsa, ésta podrá ser
 
-     verified on chain.
+     verificada en cadena.
 
-2. The archiver monitors the ledger, if it sees a fake proof integrated, it
+2. El archivero supervisa el ledgerr, si ve una prueba falsa integrada, crea
 
-   creates a challenge transaction and submits it to the current leader. The
+   una transacción de desafío y la presenta al líder actual. La
 
-   transacation proves the validator incorrectly validated a fake storage proof.
+   transacción demuestra que el validador validó incorrectamente una prueba de almacenamiento falsa.
 
-   The archiver is rewarded and the validator's staking balance is slashed or
+   El archivero es recompensado y el saldo del staking del validador es recortado o
 
-   frozen.
+   congelado.
 
-## Storage proof contract logic
+## Lógica de contrato de prueba de almacenamiento
 
-Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similiar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
+Cada archivador y validador tendrán su propia cuenta de almacenamiento. La cuenta del validador estaría separada de su id de gossip similar a su cuenta de voto. Estos deberían ser implementados como dos programas uno que maneja al validador como el firmante de claves y otro para el archivero. De esa manera cuando los programas hacen referencia a otras cuentas, pueden comprobar el id del programa para asegurarse de que es una cuenta de validador o archivador a la que hacen referencia.
 
-### SubmitMiningProof
+### Enviar prueba de minería
 
 ```text
 SubmitMiningProof {
@@ -364,13 +358,13 @@ SubmitMiningProof {
 keys = [archiver_keypair]
 ```
 
-Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
+Los Archivers crean estos datos después de minar sus datos contables almacenados para un determinado valor de hash. La ranura es la ranura final del segmento del ledger que están almacenando, el sha_state el resultado del archivador usando la función hash para muestrear su segmento de ledger cifrado. La firma es la que se creó cuando se firmó un valor PoH para la época de almacenamiento actual. La lista de pruebas de la época actual de almacenamiento debe guardarse en el estado de la cuenta, y luego transferirse a una lista de pruebas de la época anterior cuando ésta pase. En una determinada época de almacenamiento, un determinado archivero sólo debe presentar pruebas para un segmento.
 
-The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS_PER_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
+El programa debe tener una lista de ranuras que son ranuras de minería de almacenamiento válidas. Esta lista debe ser mantenida manteniendo un seguimiento de las ranuras que están enraizadas en las que una parte significativa de la red ha votado con un alto valor de bloqueo. tal vez 32 votos de viejo. Cada número de ranuras SLOTS_PER_SEGMENT será añadido a este conjunto. El programa debería comprobar que la ranura está en este conjunto. El conjunto se puede mantener recibiendo un AdvertiseStorageRecentBlockHash y comprobando el estado de su banco/Tower BFT.
 
-The program should do a signature verify check on the signature, public key from the transaction submitter and the message of the previous storage epoch PoH value.
+El programa debe verificar la firma de la firmante, clave pública desde el envío de la transacción y el mensaje del valor de poH de almacenamiento anterior.
 
-### ProofValidation
+### Validación
 
 ```text
 ProofValidation {
@@ -379,9 +373,9 @@ ProofValidation {
 keys = [validator_keypair, archiver_keypair(s) (unsigned)]
 ```
 
-A validator will submit this transaction to indicate that a set of proofs for a given segment are valid/not-valid or skipped where the validator did not look at it. The keypairs for the archivers that it looked at should be referenced in the keys so the program logic can go to those accounts and see that the proofs are generated in the previous epoch. The sampling of the storage proofs should be verified ensuring that the correct proofs are skipped by the validator according to the logic outlined in the validator behavior of sampling.
+Un validador enviará esta transacción para indicar que un conjunto de pruebas para un segmento determinado son válidas/no válidas o se omite donde el validador no lo mire. Los keypairs de los archivadores que miró deben ser referenciados en las claves para que la lógica del programa pueda ir a esas cuentas y ver que las pruebas se generan en la época anterior. El muestreo de las pruebas de almacenamiento debe verificarse asegurando que el validador omita las pruebas correctas de acuerdo con la lógica expuesta en el comportamiento de muestreo del validador.
 
-The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
+Las claves del archivador incluidas indicarán las muestras de almacenamiento a las que se hace referencia; la longitud de la proof_mask debe verificarse con el conjunto de pruebas de almacenamiento en la cuenta(s) del archivador referenciado, y debe coincidir con el número de pruebas presentadas en la época de almacenamiento anterior en el estado de dicha cuenta del archivador.
 
 ### ClaimStorageReward
 
@@ -391,9 +385,9 @@ ClaimStorageReward {
 keys = [validator_keypair or archiver_keypair, validator/archiver_keypairs (unsigned)]
 ```
 
-Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for an archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
+Los archivadores y validadores utilizarán esta transacción para obtener tokens pagados de un estado del programa en el que SubmitStorageProof, ProofValidation y ChallengeProofValidations están en un estado en el que las pruebas han sido presentadas y validadas y no hay ChallengeProofValidations que hagan referencia a esas pruebas. En el caso de un validador, debe hacer referencia a los keypairs del archivador para los que ha validado pruebas en la época correspondiente. Y para un archivador debe hacer referencia a los keypairs del validador para los que ha validado y quiere ser recompensado.
 
-### ChallengeProofValidation
+### Validación a prueba de desafío
 
 ```text
 ChallengeProofValidation {
@@ -403,7 +397,7 @@ ChallengeProofValidation {
 keys = [archiver_keypair, validator_keypair]
 ```
 
-This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash_seed_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
+Esta transacción es para atrapar validadores perezosos que no están haciendo el trabajo para validar pruebas. Un archivador enviará esta transacción cuando vea que un validador ha aprobado una transacción falsa de SubmitMiningProof. Dado que el archivador es un cliente ligero que no mira la cadena completa, tendrá que pedir esta información a un validador o a un conjunto de validadores, tal vez mediante una llamada RPC para obtener todas las ProofValidations de un determinado segmento en la época de almacenamiento anterior. El programa buscará en el estado de la cuenta del validador ver que un ProofValidation es enviado en la época de almacenamiento anterior y hash el hash_seed_value y ver que el hash coincide con la transacción SubmitMiningProof y que el validador lo marcó como válido. De ser así, entonces salvará el desafío a la lista de desafíos que tiene en su estado.
 
 ### AdvertiseStorageRecentBlockhash
 
@@ -414,4 +408,4 @@ AdvertiseStorageRecentBlockhash {
 }
 ```
 
-Validators and archivers will submit this to indicate that a new storage epoch has passed and that the storage proofs which are current proofs should now be for the previous epoch. Other transactions should check to see that the epoch that they are referencing is accurate according to current chain state.
+Los validadores y archiveros presentarán esto para indicar que ha pasado una nueva época de almacenamiento y que las pruebas de almacenamiento que son actuales deben ser ahora para la época anterior. Las demás transacciones deben comprobar que la época a la que hacen referencia es exacta según el estado actual de la cadena.

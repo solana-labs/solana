@@ -1,9 +1,5 @@
 ---
-title: Implemented Design Proposals
+title: Предложения о реализации архитектуры
 ---
 
-The following architectural proposals have been accepted and implemented
-by the Solana team. Any designs that may be subject to future change are noted
-in the specific proposal page.
-Design proposals that have been accepted but not yet implemented are found in
-[Accepted Proposals](../proposals/accepted-design-proposals.md).
+Следующие предложения о реализации архитектуры были приняты и реализованы командой Solana.  Любой дизайн архитектуры, который может быть изменен в будущем, отмечен на странице каждого конкретного предложения. Предложения о реализации архитектуры, которые были приняты но ещё не реализованы перечислены на странице [Принятые предложения о реализации архитектуры](../proposals/accepted-design-proposals.md).

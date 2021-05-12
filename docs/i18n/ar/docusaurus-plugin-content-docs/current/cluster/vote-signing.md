@@ -1,59 +1,59 @@
 ---
-title: Secure Vote Signing
+title: التوقيع الآمن على التصويت (Secure Vote Signing)
 ---
 
-A validator receives entries from the current leader and submits votes confirming those entries are valid. This vote submission presents a security challenge, because forged votes that violate consensus rules could be used to slash the validator's stake.
+يستلم المُدقّق (validator) جميع المُدخلات (entries) من القائد (leader) ويُقدم أصواتا تُؤكد صِّحَّة تلك المُدخلات (entries). يُشكل هذا التصويت تحديا أمنيا، لأن الأصوات المزورة التي تنتهك قواعد الإجماع (consensus) يُمكن أن تُستخدم للإقتطاع (slash) من حِصَّة (stake) المُدقّق (validator).
 
-The validator votes on its chosen fork by submitting a transaction that uses an asymmetric key to sign the result of its validation work. Other entities can verify this signature using the validator's public key. If the validator's key is used to sign incorrect data \(e.g. votes on multiple forks of the ledger\), the node's stake or its resources could be compromised.
+يصوت المُدقّق (validator) على الإنقسام أو الشوكة (fork) المُختارة بتقديم مُعاملة تستخدم مفتاح غير مُتماثل (asymmetric key) لتوقيع نتيجة عمل التَحَقُّق من صحتها. يمكن لكيانات أخرى التحقق من هذا التوقيع بإستخدام المفتاح العمومي (public key) للمُدقّق (validator). إذا تم إستخدام مفتاح المُدقّق (validator) لتوقيع بيانات غير صحيحة \(على سبيل المثال التصويت على عدة إنقسامات أو شوكات (forks) في دفتر الأستاذ (ledger)، أو حِصَّة (stake) العُقدة (node) أو مواردها يُمكن أن تتعرض للخطر.
 
-Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
+تُعالج Solana هذا الخطر بتقسيم خدمة المُوَقِّع على التصويت _vote signer_ لتقييم كل تصويت للتأكد من أنه لا ينتهك شرط الإقتطاع (slashing).
 
-## Validators, Vote Signers, and Stakeholders
+## المُدقّقون (Validators)، الموقِّعون على التصويت (Vote Signers) وحاملوا الحِصَّة (Stakeholders)
 
-When a validator receives multiple blocks for the same slot, it tracks all possible forks until it can determine a "best" one. A validator selects the best fork by submitting a vote to it, using a vote signer to minimize the possibility of its vote inadvertently violating a consensus rule and getting a stake slashed.
+عندما يتلقى مُدقّق (validator) كتل (blocks) مُتعددة لنفس الفُتحة (slot)، فإنه يتتبع جميع الإنقسامات أو الشوكات (forks) المُمكنة حتى يتمكن من تحديد "أفضلها". يقوم المُدقّق (validator) بإختيار أفضل إنقسام أو شوكة (fork) وذلك بإرسال تصويت إليها، مُستخدما مُوَقِّع تصويت (vote signer) لتقليل إمكانية تصويته عن غير قصد بإنتهاك قاعدة الإجماع (consensus) والإقتطا من الحِصَّة (stake).
 
-A vote signer evaluates the vote proposed by the validator and signs the vote only if it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. It doesn't need to process a full set of transactions.
+يقوم المُوَقِّع على التصويت (vote signer) بتقييم التصويت الذي إقترحه المُدقّق (validator) عليه ولا يُوَقِّع على التصويت إلا إذا كان ذلك لا ينتهك شرط الإقتطاع (slashing). لا يحتاج المُوَقِّع على التصويت (vote signer) إلا إلى الحفاظ على الحد الأدنى من حالة الأصوات التي وَقّع عليها والتصويت الذي وقَّعته بقية المجموعة (cluster). لا يحتاج إلى مُعالجة مجموعة كاملة من المُعاملات.
 
-A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer's votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
+حامل الحِصَّة (Stakeholder) هي هوية تتحكم في رأس المال الذي يتم إثبات الحِصَّة عليه أو تحْصِيصه (staked capital). يمكن لحامل الحِصَّة (Stakeholder) أن يُفَوِّض حِصَّته (stake) إلى المُوَقِّع على التصويت (vote signer). وبمجرد تفويض حِصَّة (stake) ما، تمثل أصوات المُوَقِّع على التصويت (vote signer) وزن التصويت لجميع الحِصص (stakes) المُفوضة، وتُنتج مُكافآت (rewards) لجميع الحِصص (stakes) المُفَوَّضَة.
 
-Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
+هناك حاليا علاقة 1:1 بين المُدقّقين (validators) ومُوَقِّعي الأصوات (vote signers)، ويُفَوِّض حاملوا الحِصَّة (Stakeholders) كامل حِصّتهم (stake) إلى مُوَقِّع صوت (vote signer) واحد.
 
-## Signing service
+## خدمة التَّوقيع (Signing service)
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
+تتألف خدمة التَّوقيع على التصويت (vote signing service) من خادم JSON RPC ومُعالج الطلبات (request processor). عند بدء التشغيل، تشغل الخدمة خادم RPC في منفذ مُعَد (configured port) وتنتظر طلبات المُدقّق. وهي تتوقع النوع التالي من الطلبات:
 
-1. Register a new validator node
+1. تسجيل عُقدة تدقيق (valdiator node) جديدة
 
-   - The request must contain validator's identity \(public key\)
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
-   - If a validator tries to register again, the service returns the public key from the pre-existing keypair
+    - يجب أن يحتوي الطلب على هوية المُدقّق (validator) أي المفتاح العمومي \(public key\)
+    - يجب توقيع الطلب بإستخدام المفتاح الخاص (private key) للمُدقّق (validator)
+    - تُسقط الخدمة الطلب إذا تعذّر التحقق من توقيع الطلب
+    - الخدمة تخلق مفتاح تصويت غير متماثل (voting asymmetric key) جديد للمُدقّق (validator)، وتُعيد المفتاح العمومي (public key) كرد
+    - إذا حاول أحد المُدقّقين (validator) التسجيل مرة أخرى، تُرجع الخدمة المفتاح العمومي (public key) من أزواج المفاتيح (keypair) الموجودة من قبل
 
-2. Sign a vote
+2. توقيع التصويت (Sign a vote)
 
-   - The request must contain a voting transaction and all verification data
-   - The request must be signed with the validator's private key
-   - The service drops the request if signature of the request cannot be verified
-   - The service verifies the voting data
-   - The service returns a signature for the transaction
+    - يجب أن يحتوي الطلب على مُعاملة تصويت (voting transaction) وجميع بيانات التَحَقُّق
+    - يجب توقيع الطلب بإستخدام المفتاح الخاص (private key) للمُدقّق (validator)
+    - تُسقط الخدمة الطلب إذا تعذّر التحقق من توقيع الطلب
+    - تتحقق الخدمة من بيانات التصويت ( voting data)
+    - تقوم الخدمة بإرجاع توقيع للمُعاملة
 
-## Validator voting
+## تصويت المُدقّق (validator voting)
 
-A validator node, at startup, creates a new vote account and registers it with the cluster by submitting a new "vote register" transaction. The other nodes on the cluster process this transaction and include the new validator in the active set. Subsequently, the validator submits a "new vote" transaction signed with the validator's voting private key on each voting event.
+عند بدء التشغيل تُنشئ عُقد التدقيق (validator nodes) حساب تصويت (vote account) جديد وتُسجله مع المجموعة (cluster) عن طريق تقديم مُعاملة "سجل تصويت" (vote register) جديدة. العُقَد (nodes) الأخرى في المجموعة تُعالج هذه المُعاملة وتتضمن المُدقّق (validator) الجديد في المجموعة النشطة. يُقدم المُدقّق (validator) في وقت لاحق مُعاملة "تصويت جديد" (new vote) ةوقعة بالمفتاح الخاص (private key) بالتصويت للمُدقّق (validator) على كل حدث تصويتي.
 
-### Configuration
+### الإعدادات (Configuration)
 
-The validator node is configured with the signing service's network endpoint \(IP/Port\).
+تم إعداد عُقَد التدقيق (validator nodes) مع نقطة نهاية شبكة خدمة التوقيع \(IP/Port\).
 
-### Registration
+### التسجيل (Registration)
 
-At startup, the validator registers itself with its signing service using JSON RPC. The RPC call returns the voting public key for the validator node. The validator creates a new "vote register" transaction including this public key, and submits it to the cluster.
+عند بدء التشغيل، يسجل المُدقّق (validator) نفسه بخدمة التوقيع بإستخدام JSON RPC. تُرجع مُكالمة RPC المفتاح العام للتصويت (voting public key) لعُقدة التدقيق (valdiator node). يقوم المُدقّق (validator) بإنشاء مُعاملة "سجل تصويت" (vote register) جديدة تتضمن المفتاح العمومي (public key)، ويُقدمها إلى المجموعة (cluster).
 
-### Vote Collection
+### تجميع الأصوات (Vote Collection)
 
-The validator looks up the votes submitted by all the nodes in the cluster for the last voting period. This information is submitted to the signing service with a new vote signing request.
+يبحث المُدقّق (validator) عن الأصوات المُقدمة من جميع العُقد (nodes) في المجموعة (cluster) لفترة التصويت الأخيرة. تُقدَّم هذه المعلومات إلى دائرة التوقيع (signing service) مع طلب جديد للتوقيع على التصويت.
 
-### New Vote Signing
+### توقيع تصويت جديد (New Vote Signing)
 
-The validator creates a "new vote" transaction and sends it to the signing service using JSON RPC. The RPC request also includes the vote verification data. On success, the RPC call returns the signature for the vote. On failure, RPC call returns the failure code.
+يقوم المُدقّق (validator) بإنشاء مُعاملة "تصويت جديد" (new vote) وإرسالها إلى خدمة التوقيع (signing service) بإستخدام JSON RPC. كما يشمل طلب الRPC بيانات التحقق من التصويت. عند النجاح، يدعو الRPC إلى إعادة التوقيع لعرضه على التصويت. عند الفشل، يُرجاع الRPC رمز الفشل.

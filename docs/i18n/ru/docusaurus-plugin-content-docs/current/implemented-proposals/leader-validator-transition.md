@@ -1,52 +1,52 @@
 ---
-title: Leader-to-Validator Transition
+title: Переход лидера к валидатору
 ---
 
-A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
+Валидатор обычно тратит свое время на валидируя блоки. Однако, если стейкер делегирует свой стейк валидатору, то этот валидатор будет время от времени выбираться в качестве _слот лидера_. Являясь лидером слота, валидатор отвечает за производство блоков во время назначенного _слота_. Длительность слота занимает какое-то число предварительно настроенных _тиков_. Продолжительность этих тиков оценивается с помощью _PoH Recorder_, описанного ниже в этом документе.
 
 ## BankFork
 
-BankFork tracks changes to the bank state over a specific slot. Once the final tick has been registered the state is frozen. Any attempts to write to are rejected.
+BankFork отслеживает изменения в состоянии банка в определенном слоте. После того, как финальный тик был зарегистрирован, состояние банка замораживается. Любые попытки внести запись, будут отклонены.
 
-## Validator
+## Валидатор
 
-A validator operates on many different concurrent forks of the bank state until it generates a PoH hash with a height within its leader slot.
+Валидатор работает с множеством различных параллельных ветвей состояния банка, пока не сгенерирует хэш PoH с высотой в пределах слота своего лидера.
 
-## Slot Leader
+## Лидер слота
 
-A slot leader builds blocks on top of only one fork, the one it last voted on.
+Лидер слота генерирует блоки только на одном из форков, на последнем, за который проголосовали.
 
 ## PoH Recorder
 
-Slot leaders and validators use a PoH Recorder for both estimating slot height and for recording transactions.
+Лидеры слотов и валидаторы используют PoH Recorder как для оценки высоты слота, так и для записи транзакций.
 
-### PoH Recorder when Validating
+### PoH Recorder: Режим Валидатора
 
-The PoH Recorder acts as a simple VDF when validating. It tells the validator when it needs to switch to the slot leader role. Every time the validator votes on a fork, it should use the fork's latest [blockhash](../terminology.md#blockhash) to re-seed the VDF. Re-seeding solves two problems. First, it synchronizes its VDF to the leader's, allowing it to more accurately determine when its leader slot begins. Second, if the previous leader goes down, all wallclock time is accounted for in the next leader's PoH stream. For example, if one block is missing when the leader starts, the block it produces should have a PoH duration of two blocks. The longer duration ensures the following leader isn't attempting to snip all the transactions from the previous leader's slot.
+PoH Recorder работает как простая VDF (Verifiable Delay Function) когда выполняет валидацию. Он сообщает валидатору, когда ему нужно переключиться на роль лидера слота. Каждый раз, когда валидатор голосует за форк, он должен использовать последние [blockhash](../terminology.md#blockhash), чтобы повторно инициализировать VDF. Повторная инициализация решает две проблемы. Во-первых, он синхронизирует свой VDF с лидером, что позволяет ему более точно определять, когда начнется его слот. Во-вторых, если предыдущий лидер выходит из строя, то все временные метки учитываются в потоке PoH следующего лидера. Например, если при запуске лидера не хватает одного блока, то у создаваемого им блока должна быть длительность PoH, равная двум блокам. Более длительная продолжительность гарантирует, что следующий лидер не пытается отсечь все транзакции из слота предыдущего лидера.
 
-### PoH Recorder when Leading
+### PoH Recorder: Режим Лидера
 
-A slot leader use the PoH Recorder to record transactions, locking their positions in time. The PoH hash must be derived from a previous leader's last block. If it isn't, its block will fail PoH verification and be rejected by the cluster.
+Лидер слотов использует PoH Recorder для записи транзакций, фиксируя свои позиции во времени. Хэш значение PoH должно быть получено из последнего блока предыдущего лидера. Если это не так, его блок не пройдет верификацию PoH и будет отклонен кластером.
 
-The PoH Recorder also serves to inform the slot leader when its slot is over. The leader needs to take care not to modify its bank if recording the transaction would generate a PoH height outside its designated slot. The leader, therefore, should not commit account changes until after it generates the entry's PoH hash. When the PoH height falls outside its slot any transactions in its pipeline may be dropped or forwarded to the next leader. Forwarding is preferred, as it would minimize network congestion, allowing the cluster to advertise higher TPS capacity.
+PoH Recorder также служит для информирования лидера слота о завершении его слота. Лидер должен позаботиться о том, чтобы не изменять свой банк, если запись транзакции приведет к возникновению высоты PoH за пределами назначенного слота. Лидер, следовательно, не должен фиксировать изменения в аккаунте до тех пор, пока он не сгенерирует хэш PoH записи. Когда высота PoH выходит за пределы своего слота, любые транзакции находящиеся в его обработке могут быть отброшены или перенаправлены следующему лидеру. Перенаправление является предпочтительнее, поскольку оно минимизирует перегрузку сети, позволяя кластеру достигать более высокой пропускной способности TPS.
 
-## Validator Loop
+## Цикл валидатора
 
-The PoH Recorder manages the transition between modes. Once a ledger is replayed, the validator can run until the recorder indicates it should be the slot leader. As a slot leader, the node can then execute and record transactions.
+PoH Recorder обеспечивает переход между режимами. После воспроизведения реестра валидатор может работать до тех пор, пока Recorder не укажет, что он должен стать лидером слота. В качестве лидера узел может выполнять и записывать транзакции.
 
-The loop is synchronized to PoH and does a synchronous start and stop of the slot leader functionality. After stopping, the validator's TVU should find itself in the same state as if a different leader had sent it the same block. The following is pseudocode for the loop:
+Этот цикл синхронизирован с PoH и делает синхронный запуск и остановку функционала слот лидера. После остановки TVU(Transaction Validation Unit) валидатор должен оказаться в таком же состоянии, как если бы другой лидер отправил ему тот же блок. Ниже приводится псевдокод цикла:
 
-1. Query the LeaderScheduler for the next assigned slot.
-2. Run the TVU over all the forks. 1. TVU will send votes to what it believes is the "best" fork. 2. After each vote, restart the PoH Recorder to run until the next assigned
+1. Запросить у LeaderScheduler следующий назначенный слот.
+2. Запустить TVU на всех форках. 1. TVU отправит голоса за то, что, по его мнению, является «лучшим» форком. 2. После каждого голосования перезапустите PoH Recorder для запуска до следующего назначенного
 
-   slot.
+   слота.
 
-3. When time to be a slot leader, start the TPU. Point it to the last fork the
+3. Запустить TPU(Transaction Processing Unit), если пришло время стать лидером слота. Направить в него данные последнего форка
 
-   TVU voted on.
+   за который проголосовал TVU.
 
-4. Produce entries until the end of the slot. 1. For the duration of the slot, the TVU must not vote on other forks. 2. After the slot ends, the TPU freezes its BankFork. After freezing,
+4. Производить записи до конца слота. 1. На время текущего слота, TVU не должен голосовать за другие форки. 2. После того, как слот закончился, TPU замораживает свой BankFork. После замораживания,
 
-   the TVU may resume voting.
+   TVU может возобновить голосование.
 
-5. Goto 1.
+5. Перейти к пункту 1.

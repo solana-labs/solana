@@ -1,314 +1,303 @@
 ---
-title: Terminology
+title: Терминология
 ---
 
-The following terms are used throughout the documentation.
+Следующие термины используются во всей документации.
 
-## account
+## аккаунт
 
-A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
+Постоянный файл, адресованный [публичным ключом](terminology.md#public-key) и [Лэмпорт](terminology.md#lamport) отслеживает его срок службы.
 
-## app
+## приложение
 
-A front-end application that interacts with a Solana cluster.
+Приложение для фронт-энда, которое взаимодействует с кластером Solana.
 
-## bank state
+## статус банка
 
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+Результат интерпретации всех программ в реестре на заданной [tick height](terminology.md#tick-height). Он включает по крайней мере набор всех [аккаунтов](terminology.md#account) с нулевыми [родными токенами](terminology.md#native-tokens).
 
-## block
+## блок
 
-A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
+Непрерывный набор [entries](terminology.md#entry) в реестре, охваченных голосованием [vote](terminology.md#ledger-vote). [Лидер](terminology.md#leader) производит не более одного блока на [слот](terminology.md#slot).
 
-## blockhash
+## блок-хэш
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+Стойкий к предыдущему образу [хэш](terminology.md#hash) [реестр](terminology.md#ledger) на заданной [высоте блока](terminology.md#block-height). Снято с последнего [id записи](terminology.md#entry-id) в ячейке
 
-## block height
+## высота блока
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
+Число блоков [](terminology.md#block) под текущим блоком. Первый блок после [блока генезиса](terminology.md#genesis-block) имеет высоту один.
 
-## bootstrap validator
+## bootstrap валидатор
 
-The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
+Первый [валидатор](terminology.md#validator), создавший [block](terminology.md#block).
 
-## CBC block
+## CBC блок
 
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+Самый маленький чанк с зашифрованным шифрованием - зашифрованный сегмент реестра будет состоять из многих блоков CBC. `ledger_segment_size / cbc_block_size` если быть точным.
 
-## client
+## клиент
 
-A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
+[узел](terminology.md#node), который использует [кластер](terminology.md#cluster).
 
-## cluster
+## кластер
 
-A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
+Набор валидаторов [](terminology. md#validator) поддерживающих один [реестра ](terminology. md#ledger).
 
-## confirmation time
+## время подтверждения
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and creating a [confirmed block](terminology.md#confirmed-block).
+Продолжительность времени между [лидером](terminology.md#leader), создающим [запись тика](terminology.md#tick), и созданием [подтвержденного блока](terminology.md#confirmed-block).
 
-## confirmed block
+## подтвержденный блок
 
-A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+Блок [](terminology.md#block), который получил [супербольшинство](terminology.md#supermajority) из [голосов](terminology.md#ledger-vote) с интерпретацией реестра, которая соответствует лидеру.
 
-## control plane
+## контрольная плоскость
 
-A gossip network connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
+Gossip сеть, соединяющая все [узлы](terminology.md#node) [кластера](terminology.md#cluster).
 
-## cooldown period
+## время ожидания
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+Некоторое количество [эпох](terminology.md#epoch) после того, как [стейк](terminology.md#stake) был деактивирован, пока он постепенно становится доступен для снятия. В течение этого периода ставка считается "дезактивированной". Больше информации о: [прогревать и перезарядить](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
-## credit
+## кредит
 
-See [vote credit](terminology.md#vote-credit).
+Смотрите [кредит на голосование](terminology.md#vote-credit).
 
-## data plane
+## плоскость данных
 
-A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
+Групповая сеть, используемая для эффективной валидации [записей](terminology.md#entry) и достижения консенсуса.
 
-## drone
+## дрон
 
-An off-chain service that acts as a custodian for a user's private key. It typically serves to validate and sign transactions.
+off-chain служба, которая действует как хранитель приватного ключа пользователя. Обычно служит для проверки и подписания транзакций.
 
-## entry
+## запись
 
-An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#tick) or a [transactions entry](terminology.md#transactions-entry).
+Запись в [реестр ](terminology.md#ledger) либо [флаг](terminology.md#tick), либо [запись транзакций](terminology.md#transactions-entry).
 
-## entry id
+## id записи
 
-A preimage resistant [hash](terminology.md#hash) over the final contents of an entry, which acts as the [entry's](terminology.md#entry) globally unique identifier. The hash serves as evidence of:
+Хэш [устойчивый к прообразу](terminology.md#hash) над финальным содержанием записи, который выступает в качестве [уникального идентификатора](terminology.md#entry) в мире. Хэш служит доказательством того, что:
 
-- The entry being generated after a duration of time
-- The specified [transactions](terminology.md#transaction) are those included in the entry
-- The entry's position with respect to other entries in [ledger](terminology.md#ledger)
+- Запись создается по прошествии некоторого времени
+- Указанные [транзакции](terminology.md#transaction) включены в запись
+- Позиция записи по отношению к другим записям в [реестр ](terminology.md#ledger)
 
-See [Proof of History](terminology.md#proof-of-history).
+Смотрите [Proof of History](terminology.md#proof-of-history).
 
-## epoch
+## эпоха
 
-The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
+Время, т.е. количество [слотов](terminology.md#slot), для которого [график лидера](terminology.md#leader-schedule) является действительным.
 
-## fee account
+## комиссионный счет
 
-The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
+Комиссионный счет в транзакции оплачивается за счет включения транзакции в реестр. Это первый аккаунт в транзакции. Этот аккаунт должен быть объявлен в транзакции Запись/Чтение(доступен для записи), так как оплата за транзакцию уменьшает остаток на счете.
 
-## finality
+## финальный
 
-When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common [root](terminology.md#root).
+Когда узлы, представляющие 2/3 доли [](terminology.md#stake), имеют общий [корневой блок](terminology.md#root).
 
-## fork
+## форк
 
-A [ledger](terminology.md#ledger) derived from common entries but then diverged.
+[Реестр](terminology.md#ledger) произведен от общих записей, но затем ответвлен.
 
-## genesis block
+## блок генезиса
 
-The first [block](terminology.md#block) in the chain.
+Первый блок [](terminology.md#block) в цепочке.
 
-## genesis config
+## генезис конфигурация
 
-The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
+Конфигурационный файл, который подготавливает [реестр](terminology.md#ledger) для [генезисного блока](terminology.md#genesis-block).
 
-## hash
+## хэш
 
-A digital fingerprint of a sequence of bytes.
+Цифровой отпечаток пальца последовательности байтов.
 
-## inflation
+## инфляция
 
-An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
+Увеличение количества токенов с течением времени, используемое для финансирования вознаграждения за подтверждение и финансирования дальнейшего развития Solana.
 
-## instruction
+## инструкция
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
+Наименьшая единица [программы](terminology.md#program), которую [клиент](terminology.md#client) может включить в [транзакцию](terminology.md#transaction).
 
-## keypair
+## пара ключей
 
-A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key).
+[публичный ключ](terminology.md#public-key) и соответствующий [приватный ключ](terminology.md#private-key).
 
-## lamport
+## лэмпорт
 
-A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
+Дробный [родной токен](terminology.md#native-token) со значением 0.000000001 [sol](terminology.md#sol).
 
-## leader
+## лидер
 
-The role of a [validator](terminology.md#validator) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+Роль валидатора [](terminology.md#validator), когда он добавляет [записи](terminology.md#entry) в [реестр](terminology.md#ledger).
 
-## leader schedule
+## график лидера
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+Последовательность проверки [](terminology.md#validator) [публичных ключей](terminology.md#public-key). Кластер использует график лидера, чтобы определить, какой валидатор является [лидером](terminology.md#leader) в любой момент времени.
 
-## ledger
+## реестр
 
-A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+Список [записей,](terminology.md#entry) содержащих [транзакций](terminology.md#transaction) подписанных [клиентами](terminology.md#client). Концептуально это можно проследить до [блока генезиса](terminology.md#genesis-block), но в реестре [валидаторов](terminology.md#validator) могут быть только новые [блоки](terminology.md#block) для экономии использования хранилища, поскольку старые не нужны для проверки будущих блоков по дизайну.
 
-## ledger vote
+## голос за реестр
 
-A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a [validator's](terminology.md#validator) affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+[Хеш](terminology.md#hash) [состояния валидатора](terminology.md#bank-state) на заданной [высоте тика](terminology.md#tick-height). Он содержит подтверждение [валидатора](terminology.md#validator) о том, что полученный блок [](terminology.md#block) был проверен, а также обещание не голосовать за конфликтующий блок [](terminology.md#block) \(i.. [Форк](terminology.md#fork)\) на определенное количество времени, блокировка [на](terminology.md#lockout) период.
 
-## light client
+## лёгкий клиент
 
-A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [validator](terminology.md#validator).
+Тип [клиента](terminology.md#client), который может проверить правильность указания [кластера](terminology.md#cluster). Он выполняет больше проверок реестра, чем [тонкий клиент](terminology.md#thin-client), и меньше, чем [валидатор](terminology.md#validator).
 
-## loader
+## загрузчик
 
-A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
+Программа [](terminology.md#program) с возможностью интерпретировать бинарную кодировку других on-chain программ.
 
-## lockout
+## блокировка
 
-The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+Продолжительность времени, в течение которого [валидатор](terminology.md#validator) не может [проголосовать](terminology.md#ledger-vote) за другой [форк](terminology.md#fork).
 
-## native token
+## родной токен
 
-The [token](terminology.md#token) used to track work done by [nodes](terminology.md#node) in a cluster.
+[token](terminology.md#token) используется для отслеживания работы, выполненной [узлами](terminology.md#node) в кластере.
 
-## node
+## узел
 
-A computer participating in a [cluster](terminology.md#cluster).
+Компьютер, участвующий в [кластере](terminology.md#cluster).
 
-## node count
+## количество узлов
 
-The number of [validators](terminology.md#validator) participating in a [cluster](terminology.md#cluster).
+Число валидаторов [](terminology.md#validator) участвующих в [кластере](terminology.md#cluster).
 
 ## PoH
 
-See [Proof of History](terminology.md#proof-of-history).
+Смотрите [Proof of History](terminology.md#proof-of-history).
 
-## point
+## точка
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the [validator](terminology.md#validator) [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a [stake](terminology.md#stake) during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+Взвешенный [кредит](terminology.md#credit) в режиме вознаграждения. В валидаторе [](terminology.md#validator) [режима вознаграждения](cluster/stake-delegation-and-rewards.md), количество баллов, причитающихся за ставку [](terminology.md#stake) во время погашения является произведением заработанных [баллов за голосования,](terminology.md#vote-credit) и количества поставленных лэмпортов.
 
-## private key
+## приватный ключ
 
-The private key of a [keypair](terminology.md#keypair).
+Приватный ключ [пары ключей](terminology.md#keypair).
 
-## program
+## программа
 
-The code that interprets [instructions](terminology.md#instruction).
+Код, который интерпретирует [инструкции](terminology.md#instruction).
 
-## program id
+## id программы
 
-The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
+Публичный ключ аккаунта [](terminology.md#account), содержащей [программу](terminology.md#program).
 
 ## Proof of History
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+Стек доказательств, каждое из которых доказывает, что некоторые данные существовали до того, как доказательство было создано, и что точный промежуток времени прошел до предыдущего доказательства. Как и [VDF](terminology.md#verifiable-delay-function), Proof of History может быть проверено за меньшее время, чем потребовалось для создания.
 
-## public key
+## публичный ключ
 
-The public key of a [keypair](terminology.md#keypair).
+Публичный ключ [пары ключей](terminology.md#keypair).
 
-## root
+## корневой блок
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a [validator](terminology.md#validator). The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+Блок [](terminology.md#block) или [слот](terminology.md#slot), который достиг максимума [блокировки](terminology.md#lockout) на [валидаторе](terminology.md#validator). Корневой блок - это самый высокий блок, который является предком всех активных форков на валидаторе. Все исходные блоки корневого блока также являются переходным корневым блоком. Блоки, не являющиеся предком, а не потомком корневого блока, исключаются из рассмотрения на основе консенсуса и могут быть распущены.
 
-## runtime
+## время работы
 
-The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
+Компонент проверки [](terminology.md#validator) ответственный за выполнение [программы](terminology.md#program).
 
-## shred
+## фрагмент
 
-A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
+Часть [ блока](terminology.md#block); наименьшее количество переданных между [валидаторами](terminology.md#validator).
 
-## signature
+## подпись
 
-A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
+64-байтовая ed25519 подпись R (32-байт) и S (32-байт). С требованием о том, что R является упакованной точкой Edwards, не маленьким порядком и S является скалярным диапазоном 0 <= S < L. Это требование гарантирует, что подпись не будет признана. Каждая транзакция должна иметь по крайней мере одну подпись для [счета комиссии](terminology#fee-account). Таким образом, первая подпись в транзакции может рассматриваться как [трансактоновый id](terminology.md#transaction-id)
 
-## skipped slot
+## слот
 
-A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+Период времени, за который лидер [](terminology.md#leader) проглотит транзакции и производит [блок](terminology.md#block).
 
-Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+## смарт-контракт
 
-## slot
-
-The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
-
-Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
-
-## smart contract
-
-A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
+Набор ограничений, которые, будучи удовлетворенными, сигнализируют программе о том, что разрешены некоторые предопределенные обновления учетной записи.
 
 ## sol
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+[родной токен](terminology.md#native-token) отслеживается [кластером](terminology.md#cluster), признанным компанией Solana.
 
-## stake
+## ставка
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
+Токены, исключающие [кластер](terminology.md#cluster), если может быть доказано злонамеренное поведение [валидатора](terminology.md#validator).
 
-## supermajority
+## супербольшинство
 
-2/3 of a [cluster](terminology.md#cluster).
+2/3 из [кластера](terminology.md#cluster).
 
 ## sysvar
 
-A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
+Синтетическая [аккаунта](terminology.md#account) предоставленная во время выполнения для предоставления программам доступа к состоянию сети, например текущая высота тика, награды [очков](terminology.md#point) и т.д.
 
-## thin client
+## тонкий клиент
 
-A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
+Тип [клиента](terminology.md#client), который может проверить правильность указания [кластера](terminology.md#cluster).
 
-## tick
+## тик
 
-A ledger [entry](terminology.md#entry) that estimates wallclock duration.
+Ledger [записи](terminology.md#entry), которая показывает длительность времени.
 
-## tick height
+## высота тика
 
-The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
+Девятый [тик](terminology.md#tick) в [реестре](terminology.md#ledger).
 
-## token
+## токен
 
-A scarce, fungible member of a set of tokens.
+Редкая взаимозаменяемая часть набора токенов.
 
-## tps
+## твс
 
-[Transactions](terminology.md#transaction) per second.
+[Транзакций](terminology.md#transaction) в секунду.
 
-## transaction
+## транзакция
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
+Одна или более [инструкций](terminology.md#instruction) подписанных [клиентом](terminology.md#client) с использованием одного или более [ключей](terminology.md#keypair) и выполненных атомарно с двумя возможными результатами: успех или неудачу.
 
-## transaction id
+## id транзакции
 
-The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
+Первая [подпись](terminology.md#signature) в [транзакции](terminology.md#transaction), которая может быть использована для уникальной идентификации транзакции в полном [реестре](terminology.md#ledger).
 
-## transaction confirmations
+## подтверждения транзакций
 
-The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
+Число подтвержденных блоков [](terminology.md#confirmed-block), поскольку транзакция была принята в [реестр](terminology.md#ledger). Транзакция завершается после того, как ее блок станет [корневым блоком](terminology.md#root).
 
-## transactions entry
+## проводка транзакций
 
-A set of [transactions](terminology.md#transaction) that may be executed in parallel.
+Набор транзакций [](terminology.md#transaction), которые могут выполняться параллельно.
 
-## validator
+## валидаторы
 
-A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
+Полноценный участник в [кластере](terminology.md#cluster) ответственный за проверку [реестра](terminology.md#ledger) и создание новых [блоков](terminology.md#block).
 
-## VDF
+## ПФЗ
 
-See [verifiable delay function](terminology.md#verifiable-delay-function).
+См. [проверяемую функцию задержки](terminology.md#verifiable-delay-function).
 
-## verifiable delay function
+## проверяемая функция задержки
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+Функция, для выполнения которой требуется фиксированное количество времени, которая создает доказательство того, что она выполнялась, которое затем может быть проверено за меньшее время, чем потребовалось для создания.
 
-## vote
+## голос
 
-See [ledger vote](terminology.md#ledger-vote).
+См. [голос в реестре](terminology.md#ledger-vote).
 
-## vote credit
+## голосовать за кредит
 
-A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+Награда [валидаторов](terminology.md#validator). Голосование засчитывается валидатору в его учетной записи голосования, когда валидатор достигает [корня](terminology.md#root).
 
-## wallet
+## кошелек
 
-A collection of [keypairs](terminology.md#keypair).
+Коллекция [пары ключей](terminology.md#keypair).
 
-## warmup period
+## период разогрева
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Некоторое количество [эпох](terminology.md#epoch) после того, как [стейк](terminology.md#stake) был деактивирован, пока он постепенно становится доступен для снятия. В течение этого периода ставка считается "дезактивированной". Больше информации о: [разогреве и ожидании](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

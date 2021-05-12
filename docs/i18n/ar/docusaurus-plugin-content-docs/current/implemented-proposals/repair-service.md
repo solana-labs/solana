@@ -1,108 +1,58 @@
 ---
-title: Repair Service
+title: خدمة الإصلاح (Repair Service)
 ---
 
-## Repair Service
+## خدمة الصيانة (Repair Service)
 
-The RepairService is in charge of retrieving missing shreds that failed to be
-delivered by primary communication protocols like Turbine. It is in charge of
-managing the protocols described below in the `Repair Protocols` section below.
+تتولى خدمة الصيانة (RepairService) مسؤولية إسترداد الأجزاء المفقودة التي فشل تسليمها بواسطة بروتوكولات الإتصال الأساسية مثل التوربين (Turbine). إنه مسؤول عن إدارة البروتوكولات المُوضحة أدناه في قسم بروتوكولات الإصلاح `Repair Protocols` أدناه.
 
-## Challenges:
+## التحديات (Challenges):
 
-1\) Validators can fail to receive particular shreds due to network failures
+1\) يمكن أن يفشل المُدقّقون (validators) في تلقي أشلاء صغيرة مُعينة بسبب فشل الشبكة
 
-2\) Consider a scenario where blockstore contains the set of slots {1, 3, 5}.
-Then Blockstore receives shreds for some slot 7, where for each of the shreds
-b, b.parent == 6, so then the parent-child relation 6 -&gt; 7 is stored in
-blockstore. However, there is no way to chain these slots to any of the
-existing banks in Blockstore, and thus the `Shred Repair` protocol will not
-repair these slots. If these slots happen to be part of the main chain, this
-will halt replay progress on this node.
+2\) ضع في إعتبارك سيناريو حيث يحتوي مخزن الكتلة (blockstore) على مجموعة الفتحات {1, 3, 5}. ثم يتلقى مخزن الكتلة (blockstore) أشلاء صغيرة لبعض الفتحة عدد 7، حيث لكل من الأجزاء المقطوعة b، حيث يمثل والد b أو b.parent العدد 6 أو b.parent == 6، وبالتالي فإن العلاقة بين الوالدين والطفل 6 -&gt; 7 يتم تخزين 7 في مخزن الكتلة (blockstore). مع ذلك، لا تُوجد طريقة لربط هذه الفُتحات (Slots) بأي من البنوك الموجودة في مخزن الكتلة (blockstore)، وبالتالي لن يقوم بروتوكول إصلاح الشظايا `Shred Repair` بإصلاح هذه الفُتحات (Slots). إذا كانت هذه الفُتحات (Slots) جزءًا من الشبكة الرئيسية، فسيؤدي ذلك إلى إيقاف تقدم إعادة التشغيل على هذه العُقدة (node).
 
-## Repair-related primitives
+## الأوليات المُتعلقة بالإصلاح (Repair-related primitives)
 
-Epoch Slots:
-Each validator advertises separately on gossip the various parts of an
-`Epoch Slots`:
+فترة الفُتحات (Epoch Slots): يُعلن كل مُدقّق (validator) بشكل مُنفصل عن القيل والقال (gossip) المختلفة من فترة الفُتحات `Epoch Slots`:
 
-- The `stash`: An epoch-long compressed set of all completed slots.
-- The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
-  slots starting from some some slot `M`, where `N` is the number of slots
-  that will fit in an MTU-sized packet.
+- المخبأ `stash`: مجموعة مضغوطة مُدتها فترة (epoch) من جميع الفُتحات (slots) المُكتملة.
+- ذاكره التخزين المُؤقت `cache`: تشفير طول التشغيل (RLE) لآخر فُتحة `N` مُكتملة تبدأ من بعض الفُتحة `M`، حيث `N` هو عدد الفُتحات التي تُناسب حزمة بحجم MTU.
 
-`Epoch Slots` in gossip are updated every time a validator receives a
-complete slot within the epoch. Completed slots are detected by blockstore
-and sent over a channel to RepairService. It is important to note that we
-know that by the time a slot `X` is complete, the epoch schedule must exist
-for the epoch that contains slot `X` because WindowService will reject
-shreds for unconfirmed epochs.
+يتم تحديث فترة الفُتحات `Epoch Slots` في القيل والقال (gossip) في كل مرة يتلقى فيها المُدقّق (validator) فتحة كاملة خلال الفترة (epoch). يتم إكتشاف الفُتحات المُكتملة بواسطة مخزن الكتلة (blockstore) وإرسالها عبر قناة إلى خدمة الصيانة (RepairService). من المهم مُلاحظة أننا نعلم أنه بحلول الوقت الذي تكتمل فيه الفُتحة `X`، يجب أن يكون جدول الفترة (epoch) موجودًا للفترة التي تحتوي على الفُتحة `X` لأن WindowService سترفض الأشلاء المقطوعة لفترات غير مُؤكدة.
 
-Every `N/2` completed slots, the oldest `N/2` slots are moved from the
-`cache` into the `stash`. The base value `M` for the RLE should also
-be updated.
+كل `N/2` فُتحة مُكتملة، يتم نقل أقدم `N/2` فُتحة من ذاكره التخزين المُؤقت `cache` إلى المخبأ `stash`. يجب أيضًا تحديث القيمة الأساسية `M` لـ RLE.
 
-## Repair Request Protocols
+## بروتوكولات طلب الإصلاح (Repair Request Protocols)
 
-The repair protocol makes best attempts to progress the forking structure of
-Blockstore.
+يبذل بروتوكول الإصلاح أفضل المُحاولات لإحراز تقدم في بنية الإنقسام أو الشوكة (fork) لمخزن الكتلة (blockstore).
 
-The different protocol strategies to address the above challenges:
+إستراتيجيات البروتوكول المُختلفة لمُواجهة التحديات المذكورة أعلاه:
 
-1. Shred Repair \(Addresses Challenge \#1\): This is the most basic repair
-   protocol, with the purpose of detecting and filling "holes" in the ledger.
-   Blockstore tracks the latest root slot. RepairService will then periodically
-   iterate every fork in blockstore starting from the root slot, sending repair
-   requests to validators for any missing shreds. It will send at most some `N`
-   repair reqeusts per iteration. Shred repair should prioritize repairing
-   forks based on the leader's fork weight. Validators should only send repair
-   requests to validators who have marked that slot as completed in their
-   EpochSlots. Validators should prioritize repairing shreds in each slot
-   that they are responsible for retransmitting through turbine. Validators can
-   compute which shreds they are responsible for retransmitting because the
-   seed for turbine is based on leader id, slot, and shred index.
+1. إصلاح الأشلاء \ (تحدي العناوين \#1\): هذا هو بروتوكول الإصلاح الأساسي، بهدف إكتشاف وملء "الثقوب" في دفتر الأستاذ (ledger). يتتبع مخزن الكتلة (blockstore) أحدث فُتحة جذر (root slot). ستقوم خدمة الصيانة (RepairService) بعد ذلك بتكرار كل إنقسام أو شوكة (fork) في مخزن الكتلة (blockstore) بشكل دوري بدءًا من فُتحة الجذر (root slot)، وإرسال طلبات الإصلاح إلى المُدقّقين (validators) بحثًا عن أي أشلاء مفقودة. سيرسل بحد أقصى `N` طلب إصلاح لكل تكرار. يجب أن يُعطي إصلاح الأشلاء الأولوية لإصلاح الإنقسامات أو الشوكات (forks) بناءً على وزن إنقسام أو شوكة القائد. يجب على المُدقّقين (validators) إرسال طلبات الإصلاح فقط إلى المُدقّقين الذين وضعوا علامة على تلك الفُتحة (Slot) على أنها مُكتملة في فترة الفُتحة (EpochSlot) الخاصة بهم. يجب على المُدقّقين (validators) إعطاء الأولوية لإصلاح القطع في كل فُتحة (Slot) يكونون مسؤولين عنها لإعادة الإرسال عبر التوربين (turbine). يُمكن للمُدقّقين (validators) حساب الأشلاء التي تكون مسؤولة عن إعادة إرسالها لأن بذرة التوربين (turbine) تعتمد على مُعرف القائد (leader id) والفُتحة (Slot) ومُؤشر التقطيع.
 
-   Note: Validators will only accept shreds within the current verifiable
-   epoch \(epoch the validator has a leader schedule for\).
+   مُلاحظة: لن يقبل المُدقّقون (validators) سوى الأشلاء الصغيرة الموجودة في الفترة (epoch) الحالية القابلة للتحقق \ (فترة المُدقّق التي تحتوي على جدول القائد لـ\).
 
-2. Preemptive Slot Repair \(Addresses Challenge \#2\): The goal of this
-   protocol is to discover the chaining relationship of "orphan" slots that do not
-   currently chain to any known fork. Shred repair should prioritize repairing
-   orphan slots based on the leader's fork weight.
+2. الإصلاح الوقائي للفُتحة \ (تحدي العناوين \#2\): الهدف من هذا البروتوكول هو إكتشاف علاقة التسلسل للفُتحات "المعزولة" التي لا ترتبط حاليًا بأي إنقسام أو شوكة (fork) معروف. يجب أن يُعطي إصلاح الأشلاء الأولوية لإصلاح الفُتحات "المعزولة" (orphan slots) بناءً على وزن إنقسام أو شوكة (fork) القائد.
 
-   - Blockstore will track the set of "orphan" slots in a separate column family.
-   - RepairService will periodically make `Orphan` requests for each of
-     the orphans in blockstore.
+   - سيتتبع مخزن الكتلة (blockstore) مجموعة الفُتحات "المعزولة" (orphan slots) في عائلة أعمدة مُنفصلة.
+   - ستقدم خدمة الصيانة (RepairService) بشكل دوري بطلب طلبات معزولة `Orphan` لكل من الأيتام (orphans) في مخزن الكتلة (blockstore).
 
-     `Orphan(orphan)` request - `orphan` is the orphan slot that the
-     requestor wants to know the parents of `Orphan(orphan)` response -
-     The highest shreds for each of the first `N` parents of the requested
-     `orphan`
+     `Orphan(orphan)` طلب الـ - `orphan` هو الفُتحة اليتيمة (orphan slot) التي يُريد مُقدم الطلب معرفة آباء `Orphan(orphan)`- أعلى أشلاء لكل من أول `N` أولياء الـ `orphan` المطلوب
 
-     On receiving the responses `p`, where `p` is some shred in a parent slot,
-     validators will:
+     عند تلقي الردود `p`، حيث يكون `p` عبارة عن تمزيق في الفُتحة الرئيسية، فإن المُدقّقين (validators) سوف:
 
-     - Insert an empty `SlotMeta` in blockstore for `p.slot` if it doesn't
-       already exist.
-     - If `p.slot` does exist, update the parent of `p` based on `parents`
+     - قُم بإدخال `SlotMeta` فارغًا في مخزن الكتلة (blockstore) لـ `p.slot` إذا لم يكن موجودًا بالفعل.
+     - إذا كان `p.slot` موجودًا، فقُم بتحديث أصل `p` بناءً على `parents`
 
-     Note: that once these empty slots are added to blockstore, the
-     `Shred Repair` protocol should attempt to fill those slots.
+     مُلاحظة: بمجرد إضافة هذه الفُتحات الفارغة إلى مخزن الكتلة (blockstore)، يجب أن يُحاول بروتوكول إصلاح الشظايا `Shred Repair` ملء تلك الفُتحات.
 
-     Note: Validators will only accept responses containing shreds within the
-     current verifiable epoch \(epoch the validator has a leader schedule
-     for\).
+     مُلاحظة: لن يقبل المُدقّقون (validators) إلا الردود التي تحتوي على أشلاء صغيرة ضمن الفترة (epoch) الحالية القابلة للتحقق \ (فترة المُدقّق التي تحتوي على جدول القائد لـ\).
 
-Validators should try to send orphan requests to validators who have marked that
-orphan as completed in their EpochSlots. If no such validators exist, then
-randomly select a validator in a stake-weighted fashion.
+يجب أن يُحاول المُدقّقون (validators) إرسال الطلبات المعزولة (orphan requests) إلى المُدقّقين الذين وضعوا علامة على هذا اليتيم (orphan) على أنه مُكتمل في فترة الفُتحات (EpochSlots). إذا لم تكن مثل هذه المُدقّقات (validators) موجودة، فإختر مُدققًا عشوائيًا بطريقة المُرجحة بالحِصَّة (stake-weighted).
 
-## Repair Response Protocol
+## بروتوكول إستجابة الإصلاح (Repair Response Protocol)
 
-When a validator receives a request for a shred `S`, they respond with the
-shred if they have it.
+عندما يتلقى المُدقّق (validator) طلبًا للحصول على أشلاء `S`، يستجيبون بالأشلاء إذا كان لديهم.
 
-When a validator receives a shred through a repair response, they check
-`EpochSlots` to see if <= `1/3` of the network has marked this slot as
-completed. If so, they resubmit this shred through its associated turbine
-path, but only if this validator has not retransmitted this shred before.
+عندما يستقبل المُدقّق (validator) شضية (Shred) من خلال إستجابة إصلاح، يقوم بفحص `EpochSlots` لمعرفة ما إذا كانت <= `1/3` من الشبكة قد حددت هذه الفُتحة (Slot) على أنها مُكتملة. إذا كان الأمر كذلك، فإنهم يُعيدون تقديم هذه الشظية من خلال مسار التوربين (turbin) المُرتبط به، ولكن فقط إذا لم يقم هذا المُدقق بإعادة إرسال هذه الشضية من قبل.

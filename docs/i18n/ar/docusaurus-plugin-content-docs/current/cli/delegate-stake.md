@@ -1,37 +1,25 @@
 ---
-title: Delegate Stake
+title: تفويض الحِصَّة (Delegate Stake)
 ---
 
-After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating _stake_ to a validator. Stake is what we call tokens
-in a _stake account_. Solana weights validator votes by the amount of stake
-delegated to them, which gives those validators more influence in determining
-then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. You earn more rewards
-the more stake you delegate.
+بعد أن تتلقى عُملة [received SOL](transfer-tokens.md)، قد تُفكر في إستخدامها عن طريق تفويض الحِصَّة _stake_ للمُدقّق (validator). إثبات الحِصَّة أو التَّحْصِيص (stake) هو ما نعتبره رموز في حِساب إثبات الحِصَّة أو التَّحْصِيص _stake account_. تقدر Solana التصويت على أساس كمية الرموز التي يتم إثبات حصتها المُفَوَّضَة لهم، ما يعطي هؤلاء المُدقّقين (validators) تأثيرا أكبر في تحديد الكتلة (block) الصالحة التالية من المُعاملات في شبكة البلوكشاين. تقوم Solana بعد ذلك بتوليد عملات SOL جديدة بشكل دوري لمُكافأة المحصِّصين (stakers) والمُدقّقين (validators). تكسب المُزيد من المكافآت كلما زادت الحِصَّة (stake) التي تُفَوِّضُها.
 
-## Create a Stake Account
-
-To delegate stake, you will need to transfer some tokens into a stake account.
-To create an account, you will need a keypair. Its public key will be used as
-the [stake account address](../staking/stake-accounts.md#account-address).
-No need for a password or encryption here; this keypair will be discarded right
-after creating the stake account.
+## إنشاء حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake Account)
+لتفويض الحِصَّة (stake)، سوف تحتاج إلى تحويل بعض العملات إلى حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account). لإنشاء حساب، ستحتاج إلى زوج مفاتيح (keypair). سيتم إستخدام المفتاح العمومي (Pubkey) الخاص به كعنوان حِساب إثبات الحِصَّة أو التَّحْصِيص [stake account address](../staking/stake-accounts.md#account-address). لا حاجة إلى كلمة مرور أو تشفير هنا؛ سيتم تجاهل زوج المفاتيح (keypair) هذا مُباشرة بعد إنشاء حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account).
 
 ```bash
 solana-keygen new --no-passphrase -o stake-account.json
 ```
 
-The output will contain the public key after the text `pubkey:`.
+سيحتوي المُخرج (output) على المفتاح العمومي (public key) بعد النص `pubkey:`.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-Copy the public key and store it for safekeeping. You will need it any time you
-want to perform an action on the stake account you create next.
+قم بنسخ المفتاح العمومي (public key) وخزنه في مكان آمن للحفاظ عليه. ستحتاج إليه في أي وقت تُريد فيه تنفيذ إجراء ما على حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account) الذي تُنشئه بعد ذلك.
 
-Now, create a stake account:
+أنشأ الآن حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account):
 
 ```bash
 solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
@@ -39,35 +27,27 @@ solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-`<AMOUNT>` tokens are transferred from the account at the "from" `<KEYPAIR>` to
-a new stake account at the public key of stake-account.json.
+`<AMOUNT>` يتم نقل العملات من الحساب في "من" `<KEYPAIR>` إلى حِساب إثبات حِصَّة أو تحْصِيص (Stake account) جديد في المفتاح العمومي (public key) لـ stake-account.json.
 
-The stake-account.json file can now be discarded. To authorize additional
-actions, you will use the `--stake-authority` or `--withdraw-authority` keypair,
-not stake-account.json.
+يُمكن الآن تجاهل ملف stake-account.json. للسماح بإتخاذ إجراءات إضافية، سوف تستخدم سُلطة التَّحْصِيص `--stake-authority` أو زوج مفاتيح (keypair) سُلطة سحب الرصيد `--withdraw-authority`، وليس stake-account.json.
 
-View the new stake account with the `solana stake-account` command:
+عرض حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account) الجديد مع أمر `solana stake-account`:
 
 ```bash
-solana stake-account <STAKE_ACCOUNT_ADDRESS>
+حساب-إثبات الحصة الخاص بSolana <STAKE_ACCOUNT_ADDRESS>
 ```
 
-The output will look similar to this:
+سيبدو المُخرَج (output) مُماثلا لهذا:
 
 ```text
-Total Stake: 5000 SOL
-Stake account is undelegated
-Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
-Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+مجموع الحصة: 5000 SOL
+إثبات الحصة لم يتم تفويضه
+سلطة إثبات الحصة: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEGug9oCdvQ5F
+سلطة السحب: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEGug9oCdvQ5F
 ```
 
-### Set Stake and Withdraw Authorities
-
-[Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
-can be set when creating an account via the
-`--stake-authority` and `--withdraw-authority` options, or afterward with the
-`solana stake-authorize` command. For example, to set a new stake authority,
-run:
+### تعيين الحِصَّة (Set Stake) وسُلطة سحب الرصيد (Withdraw Authorities)
+سُلطات إثبات الحِصَّة وسحب الرصيد [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities) يُمكن تعيينها عند إنشاء حساب عن طريق خيارات سُلطة التَّحْصِيص `--stake-authority` و وسحب الرصيد `--withdraw-authority`، أو بعد ذلك مع أمر الإذن بالتَّحْصِيص `solana stake-authorize`. على سبيل المثال، لتعيين سُلطة إثبات حِصَّة أو تحْصِيص (Stake authority) جديدة، قُم بتشغيل:
 
 ```bash
 solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
@@ -75,128 +55,95 @@ solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-This will use the existing stake authority `<KEYPAIR>` to authorize a new stake
-authority `<PUBKEY>` on the stake account `<STAKE_ACCOUNT_ADDRESS>`.
+سوف يستخدم هذا سُلطة إثبات الحِصَّة أو التَّحْصِيص (Stake authority) الحالية `<KEYPAIR>` للإذن بسلطة إثبات حِصَّة جديدة `<PUBKEY>` على حساب إثبات الحِصَّة أو التَّحْصِيص `<STAKE_ACCOUNT_ADDRESS>`.
 
-### Advanced: Derive Stake Account Addresses
+### خيار مُتقدم: إشتقاق عناوين حِساب إثبات الحِصَّة أو التَّحْصِيص (Derive Stake Account Addresses)
 
-When you delegate stake, you delegate all tokens in the stake account to a
-single validator. To delegate to multiple validators, you will need multiple
-stake accounts. Creating a new keypair for each account and managing those
-addresses can be cumbersome. Fortunately, you can derive stake addresses using
-the `--seed` option:
+عندما تُفَوِّضُ الحِصَّة، تُفَوِّضُ جميع العملات الموجودة في الحساب إلى مُدقّق (validator) واحد فقط. للتفويض لأكثر من مُدقّق (validator)، ستحتاج إلى حِسابات إثبات حِصَّة أو تحْصِيص (Stake accounts) مُتعددة. إنشاء زوج مفاتيح (keypair) جديد لكل حساب وإدارة تلك العناوين يُمكن أن يكون عملا مُرهقا. لحسن الحظ، يُمكنك إشتقاق عناوين إثبات إثبات الحِصَّة أو التَّحْصِيص بإستخدام الخيار `--seed`:
 
 ```bash
 solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STRING> <AMOUNT> \
     --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> --fee-payer <KEYPAIR>
 ```
 
-`<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
-number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts
-as the base address. The command derives a new address from the base address
-and seed string. To see what stake address the command will derive, use `solana create-address-with-seed`:
+`<STRING>` سلسلة إعتباطية تصل إلى 32 bytes، لكن ستكون عادة رقما يُقابل الحساب المُشتق. قد يكون الحساب الأول "0"، ثم "1"، وهلم جرا. المفتاح العمومي لزوج مفاتيح حِساب إثبات الحِصَّة أو التَّحْصِيص `<STAKE_ACCOUNT_KEYPAIR>` يلعب دور العنوان الأساسي. يستمد الأمر عنوانا جديدا من العنوان الأساسي والسلسلة الأولية أو الأصلية (seed string). لمعرفة عنوان إثبات الحِصَّة أو التَّحْصِيص الذي سيشمله الأمر، إستخدم الأمر `solana create-address-with -seed`:
 
 ```bash
 solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
 ```
 
-`<PUBKEY>` is the public key of the `<STAKE_ACCOUNT_KEYPAIR>` passed to
-`solana create-stake-account`.
+`<PUBKEY>` هو المفتاح العمومي لزوج مفاتيح حِساب إثبات الحِصَّة أو التَّحْصِيص `<STAKE_ACCOUNT_KEYPAIR>` الذي ينتقل إلى `solana create-stake-account`.
 
-The command will output a derived address, which can be used for the
-`<STAKE_ACCOUNT_ADDRESS>` argument in staking operations.
+سيُولد الأمر عنوانا مُشتقا، يمكن إستخدامه كحجة زوج مفاتيح حِساب إثبات الحِصَّة أو التَّحْصِيص `<STAKE_ACCOUNT_ADDRESS>` في عمليات إثبات الحِصَّة.
 
-## Delegate Stake
+## تفويض إثبات الحِصَّة أو التَّحْصِيص (Delegate Stake)
 
-To delegate your stake to a validator, you will need its vote account address.
-Find it by querying the cluster for the list of all validators and their vote
-accounts with the `solana validators` command:
+لتفويض حِصَّتك إلى المُدقّق (validator)، ستحتاج إلى عنوان حِساب التصويت (vote account) الخاص به. إبحث عنه من خلال الإستعلام عن المجموعة لقائمة جميع المُدقّقين (validators) و حساباتهم مع أمر `solana validators`:
 
 ```bash
 solana validators
 ```
 
-The first column of each row contains the validator's identity and the second
-is the vote account address. Choose a validator and use its vote account
-address in `solana delegate-stake`:
+العمود الأول من كل صف يحتوي على هوية المُدقّق (validator) و العمود الثاني هو عنوان حساب التصويت. إختر المُدقّق (validator) وإستخدم عنوان حساب التصويت الخاص به في `solana delegate-stake`:
 
 ```bash
 solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-The stake authority `<KEYPAIR>` authorizes the operation on the account with
-address `<STAKE_ACCOUNT_ADDRESS>`. The stake is delegated to the vote account
-with address `<VOTE_ACCOUNT_ADDRESS>`.
+سُلطة إثبات الحِصَّة أو التَّحْصِيص`<KEYPAIR>` تأذن بالعملية على الحساب مع عنوان زوج مفاتيح حِساب إثبات الحِصَّة `<STAKE_ACCOUNT_ADDRESS>`. تم تفويض الحِصَّة إلى حساب التصويت مع عنوان زوج مفاتيح حِساب إثبات الحِصَّة أو التَّحْصِيص `<VOTE_ACCOUNT_ADDRESS>`.
 
-After delegating stake, use `solana stake-account` to observe the changes
-to the stake account:
+بعد تفويض الحِصَّة، إستخدم `solana stake-account` لمُراقبة التغييرات إلى حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account):
 
 ```bash
 solana stake-account <STAKE_ACCOUNT_ADDRESS>
 ```
 
-You will see new fields "Delegated Stake" and "Delegated Vote Account Address"
-in the output. The output will look similar to this:
+سترى في المخرجات حقلين جديدين "Delegated Stake" و "Delegated Vote Account Address". سيبدو المُخرَج (output) مماثلا لهذا:
 
 ```text
-Total Stake: 5000 SOL
-Credits Observed: 147462
-Delegated Stake: 4999.99771712 SOL
-Delegated Vote Account Address: CcaHc2L43ZWjwCHART3oZoJvHLAe9hzT2DJNUpBzoTN1
-Stake activates starting from epoch: 42
-Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
-Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+مجموع المساهمة: 5000 SOL
+الإعتمادات الملحوظة: 147462
+الحصة المفوضة: 4999. 9771712 SOL
+عنوان حساب التصويت المفوض: CcaHc2L43ZWjwCHART3oZoJVHLAe9hzT2DJNUpzoTN1
+يتم تنشيط الحصة بدءا من الحقبة: 42
+سلطة الحصة: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+سلطة الإنسحاب: EXU95vqs93yPeCAUe7mPPu6HbRUmTFPEGug9oCdvQ5F
 ```
 
-## Deactivate Stake
+## إلغاء إثبات الحِصَّة أو التَّحْصِيص (Deactivate Stake)
 
-Once delegated, you can undelegate stake with the `solana deactivate-stake`
-command:
+بمجرد تفويضك، يُمكنك إلغاء تفويضك للحِصَّة مع الأمر `solana disactive-stake`:
 
 ```bash
 solana deactivate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> \
     --fee-payer <KEYPAIR>
 ```
 
-The stake authority `<KEYPAIR>` authorizes the operation on the account
-with address `<STAKE_ACCOUNT_ADDRESS>`.
+سُلطة إثبات الحِصَّة أو التَّحْصِيص `<KEYPAIR>` تأذن بالعملية على الحساب مع عنوان حِساب إثبات الحِصَّة أو التَّحْصِيص `<STAKE_ACCOUNT_ADDRESS>`.
 
-Note that stake takes several epochs to "cool down". Attempts to delegate stake
-in the cool down period will fail.
+لاحظ أن الحِصَّة تستغرق عدة فترات (epochs) حتى "تبرد" (cool down). سوف تفشل مُحاولات تفويض الحِصَّة في فترة التهدئة.
 
-## Withdraw Stake
+## سحب الحِصَّة (Withdraw Stake)
 
-Transfer tokens out of a stake account with the `solana withdraw-stake` command:
+نقل الرموز من حساب الحِصَّة مع أمر سحب الحِصَّة `solana withdraw-stake`:
 
 ```bash
 solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the withdraw authority, and `<AMOUNT>` is the number of tokens
-to transfer to `<RECIPIENT_ADDRESS>`.
+`<STAKE_ACCOUNT_ADDRESS>` هو حِساب إثبات الحِصَّة الموجود. سُلطة إثبات الحِصَّة `<KEYPAIR>` هي سُلطة سحب الرصيد، و `<AMOUNT>` هو عدد الرموز التي سيتم نقلها إلى `<RECIPIENT_ADDRESS>`.
 
-## Split Stake
+## تقسيم الحِصَّة (Split Stake)
 
-You may want to delegate stake to additional validators while your existing
-stake is not eligible for withdrawal. It might not be eligible because it is
-currently staked, cooling down, or locked up. To transfer tokens from an
-existing stake account to a new one, use the `solana split-stake` command:
+قد ترغب في تفويض الحِصَّة للمُدقّقين (validators) الإضافيين بينما حِصَّك الموجودة غير مُؤهلة للسحب. قد لا تكون مُؤهلة لأنها حاليا في حالة القيام بعملية إثبات الحِصَّة أو التَّحْصِيص، تبريد أو محجوزة. لنقل الرموز من حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account) الموجود إلى حساب جديد، إستخدم أمر تقسيم الحِصَّة `solana split-stake`:
 
 ```bash
 solana split-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAKE_ACCOUNT_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, the stake authority
-`<KEYPAIR>` is the stake authority, `<NEW_STAKE_ACCOUNT_KEYPAIR>` is the
-keypair for the new account, and `<AMOUNT>` is the number of tokens to transfer
-to the new account.
+`<STAKE_ACCOUNT_ADDRESS>` هو حساب إثبات الحصة الموجود. سلطة إثبات الحصة `<KEYPAIR>` هي سلطة إثبات الحصة، `<NEW_STAKE_ACCOUNT_KEYPAIR>` هو زوج الkeypair للحساب الجديد، و `<AMOUNT>` هو عدد الرموز المراد تحويلها إلى الحساب الجديد.
 
-To split a stake account into a derived account address, use the `--seed`
-option. See
-[Derive Stake Account Addresses](#advanced-derive-stake-account-addresses)
-for details.
+لتقسيم حساب إثبات حصة إلى عنوان حساب مشتق، إستخدم خيار `--seed`. راجع عناوين حساب إثبات الحصة المشتقة [Derive Stake Account Addresses](#advanced-derive-stake-account-addresses) لمزيد من التفاصيل.

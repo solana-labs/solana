@@ -1,28 +1,22 @@
 ---
-title: instruction introspection
+title: introducción de instrucción
 ---
 
-## Problem
+## Problema
 
-Some smart contract programs may want to verify that another Instruction is present in a
-given Message since that Instruction could be be performing a verification of certain data,
-in a precompiled function. (See secp256k1_instruction for an example).
+Algunos programas de contratos inteligentes pueden querer verificar que otra Instrucción está presente en un mensaje dado, ya que esa Instrucción podría estar realizando una verificación de ciertos datos. en una función recompilada. (Ver secp256k1\_instruction para un ejemplo).
 
-## Solution
+## Solución
 
-Add a new sysvar Sysvar1nstructions1111111111111111111111111 that a program can reference
-and received the Message's instruction data inside, and also the index of the current instruction.
+Añadir un nuevo sysvar Sysvar1nstructions111111111111111111111111111111111111111 al que un programa puede hacer referencia y recibir los datos de instrucciones del mensaje dentro de él, y también el índice de la instrucción actual.
 
-Two helper functions to extract this data can be used:
+Se pueden utilizar dos funciones de ayuda para extraer estos datos:
 
 ```
 fn load_current_index(instruction_data: &[u8]) -> u16;
-fn load_instruction_at(instruction_index: usize, instruction_data: &[u8]) -> Result<Instruction>;
+fn load_instruction_at(instruction_index: usize, instruction_data: &[u8]) -> Resultado<Instruction>;
 ```
 
-The runtime will recognize this special instruction, serialize the Message instruction data
-for it and also write the current instruction index and then the bpf program can extract the
-necessary information from there.
+El tiempo de ejecución reconocerá esta instrucción especial, serializa los datos de instrucciones del mensaje para él y también escribe el índice de instrucciones actual y luego el programa bpf puede extraer información necesaria desde allí.
 
-Note: custom serialization of instructions is used because bincode is about 10x slower
-in native code and exceeds current BPF instruction limits.
+Nota: la serialización personalizada de las instrucciones se utiliza porque el bincode es aproximadamente 10x más lento en el código nativo y excede los límites actuales de instrucciones BPF.

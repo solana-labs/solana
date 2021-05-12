@@ -2,8 +2,8 @@
 title: TVU
 ---
 
-![TVU Block Diagram](/img/tvu.svg)
+![Диаграмма блока TVU](/img/tvu.svg)
 
-## Retransmit Stage
+## Этап ретрансляции
 
-![Retransmit Block Diagram](/img/retransmit_stage.svg)
+![Диаграмма блока ретрансляции](/img/retransmit_stage.svg)

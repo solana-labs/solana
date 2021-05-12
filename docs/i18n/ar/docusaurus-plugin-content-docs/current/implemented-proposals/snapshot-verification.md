@@ -1,52 +1,44 @@
 ---
-title: Snapshot Verification
+title: التحقق من اللقطة (Snapshot Verification)
 ---
 
-## Problem
+## المُشكل (Problem)
 
-When a validator boots up from a snapshot, it needs a way to verify the account set matches what the rest of the network sees quickly. A potential
-attacker could give the validator an incorrect state, and then try to convince it to accept a transaction that would otherwise be rejected.
+عندما يقوم المُدقّق (validator) بالتمهيد من لقطة، فإنه يحتاج إلى طريقة للتحقق من أن مجموعة الحساب تتطابق مع ما تراه بقية الشبكة بسرعة. يُمكن للمهاجم المُحتمل أن يُعطي المُدقّق (validator) حالة غير صحيحة، ثم يُحاول إقناعه بقبول مُعاملة قد يتم رفضها بخلاف ذلك.
 
-## Solution
+## الحل (Solution)
 
-Currently the bank hash is derived from hashing the delta state of the accounts in a slot which is then combined with the previous bank hash value.
-The problem with this is that the list of hashes will grow on the order of the number of slots processed by the chain and become a burden to both
-transmit and verify successfully.
+يتم حاليًا إشتقاق تجزئة البنك (bank hash) من تجزئة حالة delta للحسابات في فُتحة (Slot) يتم دمجها بعد ذلك مع قيمة تجزئة البنك السابقة. تكمن المُشكلة في ذلك في أن قائمة التجزئة ستزداد بترتيب عدد الفُتحات (Slots) التي تتم مُعالجتها بواسطة الشبكة وتصبح عبئًا على كل من عمليتي الإرسال والتحقق بنجاح.
 
-Another naive method could be to create a merkle tree of the account state. This has the downside that with each account update, the merkle tree
-would have to be recomputed from the entire account state of all live accounts in the system.
+يمكن أن تكون الطريقة الساذجة الأخرى هي إنشاء شجرة Merkle لحالة الحساب. هذا له جانب سلبي أنه مع كل تحديث للحساب، يجب إعادة حساب شجرة Merkle من حالة الحساب بالكامل لجميع الحسابات النشطة أو الشغالة في النظام.
 
-To verify the snapshot, we do the following:
+للتحقق من اللقطة (snapshot)، نقوم بما يلي:
 
-On account store of non-zero lamport accounts, we hash the following data:
+في مخزن الحساب الخاص بحسابات الـ lamport غير الصفرية، نقوم بتجزئة (hash) البيانات التالية:
 
-- Account owner
-- Account data
-- Account pubkey
-- Account lamports balance
-- Fork the account is stored on
+- مالك الحساب (Account owner)
+- بيانات الحساب (Account data)
+- حساب المفتاح العمومي (Account pubkey)
+- رصيد الـ lamports في الحساب (Account lamports balance)
+- الإنقسام أو الشوكة (fork) المُخزن عليها الحساب (Fork the account is stored on)
 
-Use this resulting hash value as input to an expansion function which expands the hash value into an image value.
-The function will create a 440 byte block of data where the first 32 bytes are the hash value, and the next 440 - 32 bytes are
-generated from a Chacha RNG with the hash as the seed.
+إستخدم قيمة التجزئة (hash) الناتجة هذه كمدخل لوظيفة التوسيع التي تُوسع قيمة التجزئة إلى قيمة الصورة. ستُنشئ الوظيفة كتلة (block) بحجم 440 byte من البيانات حيث تكون أول 32 byte هي قيمة التجزئة، ويتم إنشاء 440-32 byte التالية من Chacha RNG مع التجزئة على أنها البذور (seed).
 
-The account images are then combined with xor. The previous account value will be xored into the state and the new account value also xored into the state.
+ثم يتم دمج صور الحساب مع xor. سيتم عمل xor لقيمة الحساب السابقة في الحالة وقيمة الحساب الجديد أيضًا في الحالة.
 
-Voting and sysvar hash values occur with the hash of the resulting full image value.
+تحدث قيم التصويت وتجزئة sysvar مع تجزئة قيمة الصورة الكاملة الناتجة.
 
-On validator boot, when it loads from a snapshot, it would verify the hash value with the accounts set. It would then
-use SPV to display the percentage of the network that voted for the hash value given.
+عند تشغيل المُدقّق (validator)، عندما يتم تحميلها من لقطة، فإنها تتحقق من قيمة التجزئة مع مجموعة الحسابات. سيستخدم بعد ذلك SPV لعرض النسبة المئوية للشبكة التي صوتت لقيمة التجزئة المُعطاة.
 
-The resulting value can be verified by a validator to be the result of xoring all current account states together.
+يمكن التحقق من القيمة الناتجة بواسطة المُدقّق (validator) لتكون نتيجة لعملية الـ xor لجميع حالات الحساب الجاري معًا.
 
-A snapshot must be purged of zero lamport accounts before creation and during verify since the zero lamport accounts do not affect the hash value but may cause
-a validator bank to read that an account is not present when it really should be.
+يجب أن تكون اللقطة (snapshot) خالية من حسابات الـ lamport الصفرية قبل الإنشاء وأثناء التحقق نظرًا لأن حسابات حسابات الـ lamport الصفرية لا تُؤثر على قيمة التجزئة ولكنها قد تتسبب في أن يقرأ بنك التدقيق (validator bank) أن الحساب غير موجود في الوقت الذي يجب أن يكون فيه بالفعل.
 
-An attack on the xor state could be made to influence its value:
+يمكن إجراء هجوم على حالة الـ xor للتأثير على قيمتها:
 
-Thus the 440 byte image size comes from this paper, avoiding xor collision with 0 \(or thus any other given bit pattern\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
+بالتالي فإن حجم الصورة 440 byte يأتي من هذا الورق، مما يُؤدي إلى تجنب تصادم الـ xor مع 0 \ (أو بالتالي أي نمط بت آخر مُعين\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
 
-The math provides 128 bit security in this case:
+توفر الرياضيات أمان 128 bit في هذه الحالة:
 
 ```text
 O(k * 2^(n/(1+lg(k)))

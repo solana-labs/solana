@@ -81,7 +81,7 @@ title: 乐观确认
 
 证明是元素`(validator_id，validator_vote(X，S))`的列表，其中：
 
-1. 所有验证节点 ID 的质押总和`> 1/3`
+1. 所有验证节点ID的质押总和`> 1/3`
 
 2. 对于每 `(validator_id, validator_voite(X, S))`，在 `S` 中存在一些插槽 `s` 其中： _ a.`s` 不是两者的共同祖先 `validator_vote.last` 和 `vote.last` 和 `new_vote.last`。 _ b. `s` 不是 `validator_voote.last` 的后代。 \* c. `s + s.lockout() >= old_vote.last` (隐含着验证节点仍然被锁定在`old_vote.last`的`s` 插槽)。
 

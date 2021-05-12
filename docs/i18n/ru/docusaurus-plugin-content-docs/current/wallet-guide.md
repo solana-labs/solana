@@ -1,63 +1,27 @@
 ---
-title: Solana Wallet Guide
+title: Руководство по кошельку Solana
 ---
 
-This document describes the different wallet options that are available to users
-of Solana who want to be able to send, receive and interact with
-SOL tokens on the Solana blockchain.
+В этом документе описаны различные варианты кошелька, доступные пользователям Solana, которые хотят отправлять, получать и взаимодействовать с Токенами SOL в блокчейне Solana.
 
-## What is a Wallet?
+## Что такое кошелек?
 
-A crypto wallet is a device or application that stores a collection of keys and
-can be used to send, receive,
-and track ownership of cryptocurrencies. Wallets can take many forms.
-A wallet might be a directory or file in your computer's file system,
-a piece of paper, or a specialized device called a _hardware wallet_.
-There are also various smartphone apps and computer programs
-that provide a user-friendly way to create and manage wallets.
+Крипто-кошелек - это устройство или приложение, которое хранит набор ключей и может использоваться для отправки, получения и отслеживания владения криптовалютами. Кошельки могут принимать разные формы. Кошелек может быть каталогом или файлом в файловой системе вашего компьютера, листом бумаги или специализированным устройством, называемым _аппаратным кошельком_. Также существуют различные приложения для смартфонов и компьютерные программы которые обеспечивают удобный способ создания кошельков и управления ими.
 
-A _keypair_ is a securely generated _private key_ and its
-cryptographically-derived _public key_. A private key and its corresponding
-public key are together known as a _keypair_.
-A wallet contains a collection of one or more keypairs and provides some means
-to interact with them.
+_Пара ключей_ - это надежно сгенерированный _приватный ключ_ и его _публичний ключ_, полученный криптографическим путем. Приватный ключ и соответствующий ему публичный ключ совместно известны как _пара ключей_. Кошелек содержит набор из одной или нескольких пар ключей и предоставляет средства для взаимодействия с ними.
 
-The _public key_ (commonly shortened to _pubkey_) is known as the wallet's
-_receiving address_ or simply its _address_. The wallet address **may be shared
-and displayed freely**. When another party is going to send some amount of
-cryptocurrency to a wallet, they need to know the wallet's receiving address.
-Depending on a blockchain's implementation, the address can also be used to view
-certain information about a wallet, such as viewing the balance,
-but has no ability to change anything about the wallet or withdraw any tokens.
+_Публичный ключ_ (обычно сокращенно _pubkey_) известен как _адрес получения_ кошелька или просто его _адрес_. Адрес кошелька **может быть опубликован и распространен свободно**. Когда другая сторона собирается отправить некоторое количество криптовалюты на кошелек, ей необходимо знать адрес получения кошелька. В зависимости от реализации блокчейна адрес также может использоваться для просмотра определенной информации о кошельке, например, просмотра баланса, но не имеет возможности что-либо изменить в кошельке или вывести какие-либо токены.
 
-The _private key_ is required to digitally sign any transactions to send
-cryptocurrencies to another address or to make any changes to the wallet.
-The private key **must never be shared**. If someone gains access to the
-private key to a wallet, they can withdraw all the tokens it contains.
-If the private key for a wallet is lost, any tokens that have been sent
-to that wallet's address are **permanently lost**.
+_Приватный ключ_ требуется для цифровой подписи любых транзакций, чтобы отправлять криптовалюту на другой адрес или вносить какие-либо изменения в кошелек. Закрытый ключ **никогда не должен передаваться**. Если кто-то получит доступ к закрытому ключу в кошельке, он может снять все токены, которые он содержит. Если закрытый ключ для кошелька потерялся, любые токены, которые были отправлены на адрес этого кошелька будут ** навсегда потеряны**.
 
-Different wallet solutions offer different approaches to keypair security and
-interacting with the keypair and sign transactions to use/spend the tokens.
-Some are easier to use than others.
-Some store and back up private keys more securely.
-Solana supports multiple types of wallets so you can choose the right balance
-of security and convenience.
+Различные решения для кошельков предлагают разные подходы к безопасности пары ключей и взаимодействию с парой ключей и подписанию транзакций для использования / расходования токенов. Некоторые из них проще в использовании, чем другие. Некоторые хранят и создают резервные копии закрытых ключей более безопасно. Solana поддерживает несколько типов кошельков, поэтому вы можете выбрать правильный баланс безопасности и удобства.
 
-**If you want to be able to receive SOL tokens on the Solana blockchain,
-you first will need to create a wallet.**
+**Если вы хотите иметь возможность получать токены SOL на блокчейне Solana, сначала вам нужно будет создать кошелек.**
 
-## Supported Wallets
+## Поддерживаемые кошельки
 
-Solana supports several types of wallets in the Solana native
-command-line app as well as wallets from third-parties.
+Solana поддерживает несколько типов кошельков в собственном приложении Solana, а также кошельки других разработчиков.
 
-For the majority of users, we recommend using one of the
-[app wallets](wallet-guide/apps.md) or a browser-based
-[web wallet](wallet-guide/web-wallets.md), which will provide a more familiar
-user experience rather than needing to learn command line tools.
+Для большинства пользователей мы рекомендуем использовать один из кошельков приложения [](wallet-guide/apps.md) или основанный на браузере [веб-кошелёк](wallet-guide/web-wallets.md),, который даст более понятные пользовательские навыки, вместо того, чтобы изучать инструменты командной строки.
 
-For advanced users or developers, the [command-line wallets](wallet-guide/cli.md)
-may be more appropriate, as new features on the Solana blockchain will always be
-supported on the command line first before being integrated into third-party
-solutions.
+Для опытных пользователей или разработчиков, [кошельки командной строки](wallet-guide/cli.md) могут быть более уместными, так как новые возможности блокчейна Solana всегда будут поддерживаться в командной строке перед интеграцией в сторонние решения.

@@ -1,105 +1,105 @@
 ---
-title: Inter-chain Transaction Verification
+title: Проверка межсетевых транзакций
 ---
 
-## Problem
+## Проблематика
 
-Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
+Межсетевые приложения не новы для экосистемы цифровых активов; Фактически, даже небольшие централизованные биржи по-прежнему категорически превосходят все приложения с единой цепью, вместе взятые, с точки зрения пользователей и объема. Они имеют огромные оценки и потратили годы на эффективную оптимизацию своих основных продуктов для широкого круга конечных пользователей. Однако их основные операции сосредоточены вокруг механизмов, которые требуют от пользователей одностороннего доверия им, как правило, практически без каких-либо средств правовой защиты или защиты от случайной потери. Это привело к расколу более широкой экосистемы цифровых активов по сетевым линиям, поскольку обычно решения для обеспечения взаимодействия:
 
-- Are technically complex to fully implement
-- Create unstable network scale incentive structures
-- Require consistent and high level cooperation between stakeholders
+- Технически сложно полностью реализовать
+- Создание нестабильных структур стимулирования масштаба сети
+- Требовать последовательного и высокого уровня сотрудничества между заинтересованными сторонами
 
-## Proposed Solution
+## Предлагаемое решение
 
-Simple Payment Verification \(SPV\) is a generic term for a range of different methodologies used by light clients on most major blockchain networks to verify aspects of the network state without the burden of fully storing and maintaining the chain itself. In most cases, this means relying on a form of hash tree to supply a proof of the presence of a given transaction in a certain block by comparing against a root hash in that block’s header or equivalent. This allows a light client or wallet to reach a probabilistic level of certainty about on-chain events by itself with a minimum of trust required with regard to network nodes.
+Простая проверка платежей \ (SPV \) - это общий термин для ряда различных методологий, используемых легкими клиентами в большинстве крупных сетей блокчейнов для проверки аспектов состояния сети без бремени полного хранения и обслуживания самой цепочки. В большинстве случаев это означает использование некоторой формы хеш-дерева для предоставления доказательства наличия данной транзакции в определенном блоке путем сравнения с корневым хешем в заголовке этого блока или его эквивалентом. Это позволяет легкому клиенту или кошельку самостоятельно достичь вероятностного уровня уверенности в событиях в цепочке с минимальным уровнем доверия, требуемым в отношении сетевых узлов.
 
-Traditionally the process of assembling and validating these proofs is carried out off chain by nodes, wallets, or other clients, but it also offers a potential mechanism for inter-chain state verification. However, by moving the capability to validate SPV proofs on-chain as a smart contract while leveraging the archival properties inherent to the blockchain, it is possible to construct a system for programmatically detecting and verifying transactions on other networks without the involvement of any type of trusted oracle or complex multi-stage consensus mechanism. This concept is broadly generalisable to any network with an SPV mechanism and can even be operated bilaterally on other smart contract platforms, opening up the possibility of cheap, fast, inter-chain transfer of value without relying on collateral, hashlocks, or trusted intermediaries.
+Традиционно процесс сборки и проверки этих доказательств выполняется вне сети узлами, кошельками или другими клиентами, но он также предлагает потенциальный механизм для межцепочечной проверки состояния. Однако, переместив возможность проверки доказательств SPV в цепочку в виде смарт-контракта с одновременным использованием архивных свойств, присущих цепочке блоков, можно создать систему для программного обнаружения и проверки транзакций в других сетях без участия каких-либо типов доверенный оракул или сложный многоступенчатый механизм консенсуса. Эта концепция может быть широко распространена на любую сеть с механизмом SPV и даже может работать на двусторонней основе на других платформах смарт-контрактов, открывая возможность дешевой, быстрой межцепочечной передачи стоимости без использования залога, хэш-блоков или доверенных посредников.
 
-Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of applications and contracts able to interoperate across the variegated and every growing platform ecosystem.
+Использование преимуществ хорошо отработанных и стабильных в развитии механизмов, уже общих для всех основных блокчейнов, позволяет решениям взаимодействия на основе SPV быть значительно проще, чем согласованные многоэтапные подходы. Как часть этого, они избавляются от необходимости в широко согласованных стандартах межсетевой связи и от крупных многосторонних организаций, которые пишут их в пользу набора дискретных контрактных услуг, которые могут быть легко использованы с помощью контрактов вызывающих абонентов через общие формат абстракции. Это заложит основу для широкого спектра приложений и контрактов, способных взаимодействовать в рамках разнообразной и каждой растущей экосистемы платформ.
 
-## Terminology
+## Терминология
 
-SPV Program - Client-facing interface for the inter-chain SPV system, manages participant roles. SPV Engine - Validates transaction proofs, subset of the SPV Program. Client - The caller to the SPV Program, typically another solana contract. Prover - Party who generates proofs for transactions and submits them to the SPV Program. Transaction Proof - Created by Provers, contains a merkle proof, transaction, and blockheader reference. Merkle Proof - Basic SPV proof that validates the presence of a transaction in a certain block. Block Header - Represents the basic parameters and relative position of a given block. Proof Request - An order placed by a client for verification of transaction\(s\) by provers. Header Store - A data structure for storing and referencing ranges of block headers in proofs. Client Request - Transaction from the client to the SPV Program to trigger creation of a Proof Request. Sub-account - A Solana account owned by another contract account, without its own private key.
+SPV Program (Программа SPV) - клиентский интерфейс для межцепочечной системы SPV, управляет ролями участников. SPV Engine(Движок SPV) - проверяет доказательства транзакций, часть программы SPV. Client - вызывающий абонент программы SPV, обычно другой контракт Solana. Prover - Сторона, которая генерирует доказательства транзакций и отправляет их в программу SPV. Transaction Proof(Подтверждение транзакции) - создано Provers, содержит ссылку на доказательство Меркла, транзакцию и заголовок блока. Merkle Proof(Подтверждение Меркла) - базовое доказательство SPV, которое проверяет наличие транзакции в определенном блоке. Block Header (Заголовок блока) - представляет основные параметры и относительное положение данного блока. Proof Request(Запрос подтверждения) - заказ, размещенный клиентом для проверки транзакции \ (s \) проверяющими. Header Store(Хранилище заголовков) - структура данных для хранения и ссылки на диапазоны заголовков блоков в доказательствах. Client Request(Клиентский запрос) - транзакция от клиента к программе SPV для инициирования создания запроса подтверждения. Sub-account (Дополнительный аккаунт) - аккаунт Solana, принадлежащая другому контракту аккаунта, без собственного приватного ключа.
 
-## Service
+## Сервис
 
-SPV Programs run as contracts deployed on the Solana network and maintain a type of public marketplace for SPV proofs that allows any party to submit both requests for proofs as well as proofs themselves for verification in response to requests. There will be multiple SPV Program instances active at any given time, at least one for each connected external network and potentially multiple instances per network. SPV program instances will be relatively consistent in their high level API and feature sets with some variation between currency platforms \(Bitcoin, Litecoin\) and smart contract platforms owing to the potential for verification of network state changes beyond simply transactions. In every case regardless of network, the SPV Program relies on an internal component called an SPV engine to provide stateless verification of the actual SPV proofs upon which the higher level client facing features and api are built. The SPV engine requires a network specific implementation, but allows easy extension of the larger inter-chain ecosystem by any team who chooses to carry out that implementation and drop it into the standard SPV program for deployment.
+Программы SPV выполняются как контракты, развернутые в сети Solana, и поддерживают своего рода общедоступную торговую площадку для доказательств SPV, которая позволяет любой стороне подавать как запросы доказательств, так и сами доказательства для проверки в ответ на запросы. В любой момент времени будет активным несколько экземпляров программы SPV, по крайней мере, по одному для каждой подключенной внешней сети и, возможно, несколько экземпляров в каждой сети. Экземпляры программ SPV будут относительно согласованы в своем высокоуровневом API и наборах функций с некоторыми вариациями между валютными платформами \ (Bitcoin, Litecoin\) и платформами смарт-контрактов из-за возможности проверки изменений состояния сети, помимо простых транзакций. In every case regardless of network, the SPV Program relies on an internal component called an SPV engine to provide stateless verification of the actual SPV proofs upon which the higher level client facing features and api are built. Механизм SPV требует реализации для конкретной сети, но позволяет легко расширять более крупную межцепочечную экосистему любой командой, которая решит реализовать эту реализацию и включить ее в стандартную программу SPV для развертывания.
 
-For purposes of Proof Requests, the requester is referred to as the program client, which in most if not all cases will be another Solana Contract. The client can choose to submit a request pertaining to a specific transaction or to include a broader filter that can apply to any of a range of parameters of a transaction including its inputs, outputs, and amount. For example, A client could submit a request for any transaction sent from a given address A to address B with the amount X after a certain time. This structure can be used in a range of applications, such as verifying a specific intended payment in the case of an atomic swap or detecting the movement of collateral assets for a loan.
+Для целей запросов на подтверждение запрашивающая сторона называется клиентом программы, который в большинстве, если не во всех случаях, будет другим контрактом Solana. Клиент может выбрать отправку запроса, относящегося к конкретной транзакции, или включение более широкого фильтра, который может применяться к любому из диапазона параметров транзакции, включая ее входы, выходы и сумму. Например, клиент может отправить запрос на любую транзакцию, отправленную с данного адреса A на адрес B, с суммой X через определенное время. Эта структура может использоваться в ряде приложений, таких как проверка конкретного предполагаемого платежа в случае атомарного свопа или обнаружение движения залоговых активов по ссуде.
 
-Following submission of a Client Request, assuming that it is successfully validated, a proof request account is created by the SPV program to track the progress of the request. Provers use the account to specify the request they intend to fill in the proofs they submit for validation, at which point the SPV program validates those proofs and if successful, saves them to the account data of the request account. Clients can monitor the status of their requests and see any applicable transactions alongside their proofs by querying the account data of the request account. In future iterations when supported by Solana, this process will be simplified by contracts publishing events rather than requiring a polling style process as described.
+После отправки клиентского запроса, при условии, что он успешно проверен, программа SPV создает учетную запись запроса подтверждения для отслеживания хода выполнения запроса. Проверяющие используют аккаунт, чтобы указать запрос, который они намереваются заполнить в доказательствах, которые они отправляют для проверки, после чего программа SPV проверяет эти доказательства и в случае успеха сохраняет их в аккаунта данных аккаунта запроса. Клиенты могут отслеживать статус своих запросов и видеть любые применимые транзакции вместе со своими доказательствами, запрашивая данные аккаунта аккаунта запроса. В будущих итерациях, когда будет поддерживаться Solana, этот процесс будет упрощен за счет публикации событий контрактами, вместо того, чтобы требовать процесса стиля опроса, как описано.
 
-## Implementation
+## Реализация
 
-The Solana Inter-chain SPV mechanism consists of the following components and participants:
+Механизм Solana Inter-chain SPV состоит из следующих компонентов и участников:
 
-### SPV engine
+### Движок SPV
 
-A contract deployed on Solana which statelessly verifies SPV proofs for the caller. It takes as arguments for validation:
+Контракт, развернутый на Solana, который без сохранения состояния проверяет доказательства SPV для вызывающего. В качестве аргументов для проверки он принимает:
 
-- An SPV proof in the correct format of the blockchain associated with the program
-- Reference\(s\) to the relevant block headers to compare that proof against
-- The necessary parameters of the transaction to verify
+- Подтверждение SPV в правильном формате блокчейна, связанного с программой
+- Ссылка \ (s \) на соответствующие заголовки блоков, чтобы сравнить это подтверждение с
+- Необходимые параметры транзакции для проверки
 
-  If the proof in question is successfully validated, the SPV program saves proof
+  Если рассматриваемое доказательство успешно подтверждено, программа SPV сохраняет доказательство
 
-  of that verification to the request account, which can be saved by the caller to
+  этой проверки в аккаунт запроса, которая может быть сохранена вызывающим абонентом в
 
-  its account data or otherwise handled as necessary. SPV programs also expose
+  данные своего аккаунта или обрабатываются иным образом по мере необходимости. SPV программы также раскрывают
 
-  utilities and structs used for representation and validation of headers,
+  утилиты и структуры, используемые для представления и проверки заголовков,
 
-  transactions, hashes, etc. on a chain by chain basis.
+  транзакции, хэши и т. д. по цепочке.
 
-### SPV program
+### SPV программа
 
-A contract deployed on Solana which coordinates and intermediates the interaction between Clients and Provers and manages the validation of requests, headers, proofs, etc. It is the primary point of access for Client contracts to access the inter-chain. SPV mechanism. It offers the following core features:
+Контракт, развернутый на Solana, который координирует и обеспечивает взаимодействие между Клиентами и Проверяющими, а также управляет проверкой запросов, заголовков, доказательств и т. д. Это основная точка доступа для клиентских контрактов к межцепочечной сети. Механизм SPV. Он предлагает следующие основные возможности:
 
-- Submit Proof Request - allows client to place a request for a specific proof or set of proofs
-- Cancel Proof Request - allows client to invalidate a pending request
-- Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
+- Отправить запрос подтверждения - позволяет клиенту разместить запрос на конкретное доказательство или набор доказательств
+- Отменить запрос подтверждения - позволяет клиенту признать недействительным ожидающий запрос
+- Заполнить запрос подтверждения - используется Доказывающими для подачи на проверку доказательства, соответствующего данному запросу подтверждения
 
-  The SPV program maintains a publicly available listing of valid pending Proof
+  Программа SPV поддерживает общедоступный список действительных ожидающих подтверждения
 
-  Requests in its account data for the benefit of the Provers, who monitor it and
+  Запрашивает данные своего аккаунта в пользу Проверяющих, которые его отслеживают и
 
-  enclose references to target requests with their submitted proofs.
+  прилагайте ссылки на целевые запросы к поданным доказательствам.
 
-### Proof Request
+### Подтверждение запроса
 
-A message sent by the Client to the SPV engine denoting a request for a proof of a specific transaction or set of transactions. Proof Requests can either manually specify a certain transaction by its hash or can elect to submit a filter that matches multiple transactions or classes of transactions. For example, a filter matching “any transaction from address xxx to address yyy” could be used to detect payment of a debt or settlement of an inter-chain swap. Likewise, a filter matching “any transaction from address xxx” could be used by a lending or synthetic token minting contract to monitor and react to changes in collateralization. Proof Requests are sent with a fee, which is disbursed by the SPV engine contract to the appropriate Prover once a proof matching that request is validated.
+Сообщение, отправленное Клиентом механизму SPV, обозначающее запрос на подтверждение конкретной транзакции или набора транзакций. Запросы на подтверждение могут либо вручную указать определенную транзакцию по ее хешу, либо выбрать отправку фильтра, который соответствует нескольким транзакциям или классам транзакций. Например, фильтр, соответствующий «любая транзакция с адреса xxx на адрес yyy», может использоваться для обнаружения выплаты долга или урегулирования межцепочечного свопа. Аналогичным образом, фильтр, соответствующий «любой транзакции с адреса xxx», может использоваться в контракте на кредитование или добычу синтетических токенов для отслеживания и реагирования на изменения в обеспечении. Запросы на подтверждение отправляются с оплатой, которая выплачивается по контракту с механизмом SPV соответствующему проверу после подтверждения соответствия этого запроса.
 
-### Request Book
+### Запросить книгу
 
-The public listing of valid, open Proof Requests available to provers to fill or for clients to cancel. Roughly analogous to an orderbook in an exchange, but with a single type of listing rather than two separate sides. It is stored in the account data of the SPV program.
+Публичный список действительных открытых запросов на подтверждение, доступных доказывающим сторонам для заполнения или клиентам для отмены. Примерно аналогично книге заказов на бирже, но с одним типом листинга, а не с двумя отдельными сторонами. Он хранится в аккаунте данных программы SPV.
 
-### Proof
+### Подтверждение
 
-A proof of the presence of a given transaction in the blockchain in question. Proofs encompass both the actual merkle proof and reference\(s\) to a chain of valid sequential block headers. They are constructed and submitted by Provers in accordance with the specifications of the publicly available Proof Requests hosted on the request book by the SPV program. Upon Validation, they are saved to the account data of the relevant Proof Request, which can be used by the Client to monitor the state of the request.
+Подтверждение наличия данной транзакции в данном блокчейне. Подтверждение охватывают как фактическое доказательство Меркла, так и ссылку \ (s \) на цепочку допустимых последовательных заголовков блоков. Они создаются и отправляются проверяющими в соответствии со спецификациями общедоступных запросов на подтверждение, размещенных в книге запросов программой SPV. После проверки они сохраняются в данных аккаунта соответствующего запроса подтверждения, которые могут использоваться Клиентом для отслеживания состояния запроса.
 
-### Client
+### Клиент
 
-The originator of a request for a transaction proof. Clients will most often be other contracts as parts of applications or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
+Отправитель запроса на подтверждение транзакции. Клиентами чаще всего будут другие контракты как части приложений или определенных финансовых продуктов, таких как ссуды, свопы, условное депонирование и т. д. Клиент в любом заданном цикле процесса проверки первоначально отправляет ClientRequest, который сообщает параметры и плату, и в случае успешной проверки приводит к созданию аккаунта Proof Request программой SPV. Клиент также может подать CancelRequest со ссылкой на активный запрос подтверждения, чтобы обозначить его как недействительный для целей представления доказательств.
 
-### Prover
+### Проверяющий
 
-The submitter of a proof that fills a Proof Request. Provers monitor the request book of the SPV program for outstanding Proof Requests and generate matching proofs, which they submit to the SPV program for validation. If the proof is accepted, the fee associated with the Proof Request in question is disbursed to the Prover. Provers typically operate as Solana Blockstreamer nodes that also have access to a Bitcoin node, which they use for purposes of constructing proofs and accessing block headers.
+Податель доказательства, заполняющий запрос на подтверждение. Проверящие отслеживают книгу запросов программы SPV на предмет невыполненных запросов на подтверждение и генерируют соответствующие доказательства, которые они отправляют программе SPV для проверки. Если доказательство принято, то оплата, связанная с соответствующим подтверждением запроса, выплачивается Проверяющему. Проверящие обычно работают как узлы Solana Blockstream, которые также имеют доступ к узлу Bitcoin, который они используют для построения доказательств и доступа к заголовкам блоков.
 
-### Header Store
+### Заголовок блока
 
-An account-based data structure used to maintain block headers for the purpose of inclusion in submitted proofs by reference to the header store account. header stores can be maintained by independent entities, since header chain validation is a component of the SPV program proof validation mechanism. Fees that are paid out by Proof Requests to Provers are split between the submitter of the merkle proof itself and the header store that is referenced in the submitted proof. Due to the current inability to grow already allocated account data capacity, the use case necessitates a data structure that can grow indefinitely without rebalancing. Sub-accounts are accounts owned by the SPV program without their own private keys that are used for storage by allocating blockheaders to their account data. Multiple potential approaches to the implementation of the header store system are feasible:
+Структура данных на основе аккаунта, используемая для поддержки заголовков блоков с целью включения в представленные доказательства путем ссылки на аккаунт хранилища заголовков. хранилища заголовков могут поддерживаться независимыми объектами, поскольку проверка цепочки заголовков является компонентом механизма проверки подтверждения программы SPV. Сборы, которые выплачиваются проверяющими с помощью запросов на подтверждение, делятся между отправителем самого доказательства Меркла и хранилищем заголовков, на которое имеется ссылка в представленном доказательстве. Из-за текущей неспособности увеличить уже выделенную емкость данных аккаунта, вариант использования требует структуры данных, которая может расти бесконечно без перебалансировки. Субаккаунты - это аккаунты, принадлежащие программе SPV без собственных приватных ключей, которые используются для хранения путем выделения заголовков блоков для данных их аккаунтов. Возможны многочисленные потенциальные подходы к реализации системы заголовков:
 
-Store Headers in program sub-accounts indexed by Public address:
+Хранить заголовки в субсчетах программы, проиндексированных по публичному адресу:
 
-- Each sub-account holds one header and has a public key matching the blockhash
-- Requires same number of account data lookups as confirmations per verification
-- Limit on number of confirmations \(15-20\) via max transaction data ceiling
-- No network-wide duplication of individual headers
+- Каждый субаккаунт содержит один заголовок и имеет публичный ключ, соответствующий блокхэшу
+- Требуется такое же количество поисков данных аккаунта как и подтверждения на верификацию
+- Ограничение на количество подтверждений \ (15-20 \) через максимальный лимит данных транзакции
+- Отсутствие дублирования отдельных заголовков по всей сети
 
-Linked List of multiple sub-accounts storing headers:
+Связанный список нескольких субсчетов, хранящих заголовки:
 
-- Maintain sequential index of storage accounts, many headers per storage account
-- Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
-- Compact sequential data address format allows any number of confirmations and fast lookups
-- Facilitates network-wide header duplication inefficiencies
+- Поддерживать последовательный индекс аккаунта хранения, много заголовков на аккаунт хранения
+- Не более 2 запросов к данным аккаунта для & gt; 99,9% проверок \ (1 для большинства \)
+- Компактный последовательный формат адреса данных позволяет любое количество подтверждений и быстрого поиска
+- Снижает эффективность дублирования заголовков в масштабе всей сети

@@ -1,43 +1,37 @@
 ---
-title: Connecting to a Cluster
+title: Подключение к кластеру
 ---
 
-See [Solana Clusters](../clusters.md) for general information about the
-available clusters.
+Общую информацию о доступных кластерах можно получить по ссылке [Кластеры Solana](../clusters.md).
 
-## Configure the command-line tool
+## Настройка инструмента командной строки
 
-You can check what cluster the Solana command-line tool (CLI) is currently targeting by
-running the following command:
+Чтобы проверить, с каким кластером в настоящее время работает инструмент командной строки Solana (CLI), выполните следующую команду:
 
 ```bash
 solana config get
 ```
 
-Use `solana config set` command to target a particular cluster. After setting
-a cluster target, any future subcommands will send/receive information from that
-cluster.
+Для выбора нужного кластера используйте команду `solana config set`. После настройки подключения к нужному кластеру все последующие субкоманды будут обмениваться информацией с этим кластером.
 
-For example to target the Devnet cluster, run:
+Например, для подключения к кластеру Devnet выполните следующую команду:
 
 ```bash
 solana config set --url https://devnet.solana.com
 ```
 
-## Ensure Versions Match
+## Проверка соответствия версий
 
-Though not strictly necessary, the CLI will generally work best when its version
-matches the software version running on the cluster. To get the locally-installed
-CLI version, run:
+Данные действия не являются обязательными, но, как правило, инструмент командной строки работает лучше, если его версия совпадает с версией ПО, работающего в кластере. Чтобы узнать версию установленного инструмента командной строки, выполните следующую команду:
 
 ```bash
 solana --version
 ```
 
-To get the cluster version, run:
+Чтобы узнать версию ПО, работающего в кластере, выполните следующую команду:
 
 ```bash
 solana cluster-version
 ```
 
-Ensure the local CLI version is greater than or equal to the cluster version.
+Убедитесь, что версия локального инструмента командной строки совпадает с версией ПО кластера, либо является более новой.

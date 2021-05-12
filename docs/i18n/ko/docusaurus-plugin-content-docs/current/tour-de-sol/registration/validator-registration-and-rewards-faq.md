@@ -1,49 +1,53 @@
 ---
-title: Registration FAQ
+title: 등록 FAQ
 ---
 
-The [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) should be considered the authoritative resource for any participation questions.
+\[TOUR DE SOL 참여 약관\] (https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing)은 참여 질문에 대한 신뢰할 수있는 리소스로 간주되어야합니다.
 
-## Is registration mandatory?
+## 등록은 필수인가요?
 
-Yes. Registration is mandatory. Registration is rolling, we host month-long Tour de SOL stages on a monthly basis and new participants will need to wait until the start of the next stage to be on-boarded. [Registration information lives here](how-to-register.md).
+예. 등록은 필수입니다. 등록이 진행 중이며 한 달 동안 Tour de SOL 단계를 매월 개최하며 신규 참가자는 다음 단계가 시작될 때까지 기다려야합니다. \[등록 정보는 여기에 있습니다\] (등록 방법 .md).
 
-## Who’s eligible to participate?
+## 참여 자격은?
 
-Please see section “1 Eligibility; KYC Requirements” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) for details.
+섹션“1 자격; 자세한 내용은 \[TOUR DE SOL 참여 약관\] (https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing)의 KYC 요구 사항 '을 참조하세요.
 
-## Do I have to complete the KYC/AML process to participate?
+## 참여하려면 KYC / AML 절차를 완료해야하나요?
 
-Yes. Completing the KYC/AML process is mandatory.
+예. KYC / AML 절차를 완료하는 것은 필수입니다. Tour de SOL 1 단계 이전에 절차를 완료하지 않으면 Tour de SOL에 참여할 수 없습니다.
 
-## What are my responsibilities as a Tour de Sol participant?
+우리는 Tour de Sol KYC / AML 프로세스를 관리하기 위해 Coinlist와 파트너 관계를 맺었습니다. \[여기에서 프로세스 둘러보기\] (https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) 및 \[여기에서 프로세스 완료\] (https://docs.google .com / presentation / d / 1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4 / edit # slide = id.g5dff17f5e5_0_44).
 
-Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+## Tour de Sol 참가자로서 나의 책임은 무엇입니까?
 
-## How is the “90% of the active Tour event time” responsibility calculated?
+자세한 내용은 \[TOUR DE SOL 참여 약관\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)의 '2c Tour de SOL 세부 정보'섹션을 참조하세요.
 
-To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
+### “활성 투어 이벤트 시간의 50 %”책임은 어떻게 계산됩니까?
 
-## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
+특정 단계에서 보상을 받으려면 유효성 검사기가 해당 단계 슬롯의 & gt; = 50 %에 투표를 제출해야합니다.
 
-No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+밸리데이터가 한 단계에 대해 & gt; = 50 %의 투표를 제출할 수없고 여전히 해당 단계에 대한 상을 받아야한다고 생각하는 경우 Solana에 재검토를 청원 할 수 있습니다.
 
-## Can a validator be disqualified from the Tour de Sol?
+## Tour de Sol 테스트 넷 토큰과 Solana 메인 넷 토큰간에 관계가 있나요?
 
-Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
+아니요. 자세한 내용은 \[TOUR DE SOL 참여 약관\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)의 '2d Tour de SOL 세부 정보'섹션을 참조하세요.
 
-Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
+## 밸리데이터이 Tour de Sol에서 실격 될 수 있습니까?
 
-### More questions related to Prohibited Conduct:
+예. 밸리데이터이 금지 된 행위에 관여하거나 위의 질문 \ # 4에 설명 된 최소 수준의 서비스를 제공하지 않으면 Tour de SOL에서 실격 처리됩니다.
 
-#### As referenced in section “4 Prohibited Conduct”, what would be an example of providing Tour Services from a jurisdiction other than the jurisdiction of my residence? Does this mean my server has to reside in the jurisdiction of my residence?
+금지 된 행위에 대한 자세한 설명은 \[TOUR DE SOL 참여 약관\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)의 "4 금지 된 행위"섹션을 참조하십시오.
 
-No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
+### 금지 된 행위와 관련된 추가 질문 :
 
-## How are rewards calculated?
+#### "4 금지 된 행위"섹션에 언급 된 바와 같이, 제 거주지 관할권이 아닌 다른 관할권에서 투어 서비스를 제공하는 예는 무엇입니까? 이것은 내 서버가 내 거주지 관할권에 있어야 함을 의미합니까?
 
-Please see the [Rewards section](rewards.md) for details
+아니요. 서버는 참가자의 거주지와 다른 다른 관할권에있을 수 있습니다. \[TOUR DE SOL PARTICIPATION TERMS\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)에 서명함으로써 참가자는 미국에 거주하거나 미국 외부에서 서비스를 제공한다고 진술했습니다.
 
-## How will we know what information we can and cannot share publicly?
+## 보상은 어떻게 계산 되나요?
 
-Please see [Confidentiality](confidentiality.md).
+자세한 내용은 \[리워드 섹션\] (rewards.md)을 참조하세요.
+
+## 공개적으로 공유 할 수있는 정보와 공유 할 수없는 정보를 어떻게 알 수 있습니까?
+
+\[Confidentiality\] (confidentiality.md)를 참조하십시오.

@@ -1,7 +1,7 @@
 ---
-title: Confidentiality
+title: Confidencialidad
 ---
 
-**Section 8 of the** [**TOUR DE SOL PARTICIPATION TERMS**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) **references confidentiality.**
+**Sección 8 de los** [**TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) **hace referencia a la confidencialidad.**
 
-Solana doesn’t intend to share any confidential information during the Tour de SOL. However, if we do, it will be called out as such within our communications verbally, by email, etc. Unless information is specifically called out as such, the information should not be considered confidential and we welcome you to share it.
+Solana no tiene la intención de compartir ninguna información confidencial durante el Tour de SOL. Sin embargo, si lo hacemos, se llamará como tal dentro de nuestras comunicaciones verbalmente, por correo electrónico, etc. A menos que la información se indique específicamente como tal, la información no debe considerarse confidencial y le damos la bienvenida a compartirla.

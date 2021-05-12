@@ -1,52 +1,52 @@
 ---
-title: Leader-to-Validator Transition
+title: Leader-to-Validator 전환
 ---
 
-A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
+밸리데이터은 일반적으로 블록을 검증하는 데 시간을 보냅니다. 그러나 스테이커가 자신의 지분을 밸리데이터에게 위임하면 때때로 _ 슬롯 리더 _로 선정됩니다. 슬롯 리더로서 유효성 검사기는 할당 된 _slot_ 동안 블록을 생성 할 책임이 있습니다. 슬롯에는 미리 구성된 _ticks_의 기간이 있습니다. 이러한 틱의 지속 시간은이 문서의 뒷부분에서 설명하는 _역사증명 Recorder_로 추정됩니다.
 
 ## BankFork
 
-BankFork tracks changes to the bank state over a specific slot. Once the final tick has been registered the state is frozen. Any attempts to write to are rejected.
+BankFork는 특정 슬롯에서 은행 상태의 변경 사항을 추적합니다. 마지막 틱이 등록되면 상태가 고정됩니다. 쓰기 시도는 거부됩니다.
 
-## Validator
+## 유효성
 
-A validator operates on many different concurrent forks of the bank state until it generates a PoH hash with a height within its leader slot.
+검사기 밸리데이터는 리더 슬롯 내에서 높이가있는 역사증명 해시를 생성 할 때까지 은행 상태의 여러 다른 동시 포크에서 작동합니다.
 
-## Slot Leader
+## 슬롯 리더
 
-A slot leader builds blocks on top of only one fork, the one it last voted on.
+슬롯 리더는 마지막으로 투표 한 포크 하나만 위에 블록을 만듭니다.
 
-## PoH Recorder
+## 역사증명 레코더
 
-Slot leaders and validators use a PoH Recorder for both estimating slot height and for recording transactions.
+슬롯 리더 및 밸리데이터는 슬롯 높이를 추정하고 트랜잭션을 기록하기 위해 역사증명 레코더를 사용합니다.
 
-### PoH Recorder when Validating
+### 검증
 
-The PoH Recorder acts as a simple VDF when validating. It tells the validator when it needs to switch to the slot leader role. Every time the validator votes on a fork, it should use the fork's latest [blockhash](../terminology.md#blockhash) to re-seed the VDF. Re-seeding solves two problems. First, it synchronizes its VDF to the leader's, allowing it to more accurately determine when its leader slot begins. Second, if the previous leader goes down, all wallclock time is accounted for in the next leader's PoH stream. For example, if one block is missing when the leader starts, the block it produces should have a PoH duration of two blocks. The longer duration ensures the following leader isn't attempting to snip all the transactions from the previous leader's slot.
+시 역사증명 레코더 역사증명 레코더는 검증시 간단한 VDF 역할을합니다. 슬롯 리더 역할로 전환해야 할 때 유효성 검사자에게 알려줍니다. 밸리데이터가 포크에 투표 할 때마다 포크의 최신 \[blockhash\] (../ terminology.md # blockhash)를 사용하여 VDF를 다시 시드해야합니다. 재시 딩은 두 가지 문제를 해결합니다. 먼저 VDF를 리더의 VDF와 동기화하여 리더 슬롯이 시작되는시기를보다 정확하게 결정할 수 있습니다. 둘째, 이전 리더가 다운되면 모든 벽시계 시간이 다음 리더의 역사증명 스트림에 포함됩니다. 예를 들어 리더가 시작될 때 하나의 블록이 누락 된 경우 생성되는 블록은 두 블록의 역사증명 기간을 가져야합니다. 더 긴 기간은 다음 리더가 이전 리더의 슬롯에서 모든 트랜잭션을 캡처하지 않도록합니다.
 
-### PoH Recorder when Leading
+### 선두 일 때 역사증명 레코더
 
-A slot leader use the PoH Recorder to record transactions, locking their positions in time. The PoH hash must be derived from a previous leader's last block. If it isn't, its block will fail PoH verification and be rejected by the cluster.
+슬롯 리더는 역사증명 레코더를 사용하여 거래를 기록하고 제 시간에 위치를 고정합니다. 역사증명 해시는 이전 리더의 마지막 블록에서 파생되어야합니다. 그렇지 않은 경우 해당 블록은 역사증명 확인에 실패하고 클러스터에서 거부됩니다.
 
-The PoH Recorder also serves to inform the slot leader when its slot is over. The leader needs to take care not to modify its bank if recording the transaction would generate a PoH height outside its designated slot. The leader, therefore, should not commit account changes until after it generates the entry's PoH hash. When the PoH height falls outside its slot any transactions in its pipeline may be dropped or forwarded to the next leader. Forwarding is preferred, as it would minimize network congestion, allowing the cluster to advertise higher TPS capacity.
+역사증명 레코더는 슬롯이 끝났을 때 슬롯 리더에게 알리는 역할도합니다. 거래를 기록하면 지정된 슬롯 외부에서 역사증명 높이가 생성되는 경우 리더는 은행을 수정하지 않도록주의해야합니다. 따라서 리더는 항목의 역사증명 해시를 생성 할 때까지 계정 변경 사항을 커밋해서는 안됩니다. 역사증명 높이가 슬롯을 벗어나면 파이프 라인의 모든 트랜잭션이 삭제되거나 다음 리더에게 전달 될 수 있습니다. 포워딩은 네트워크 정체를 최소화하여 클러스터가 더 높은 TPS 용량을 광고 할 수 있도록하므로 선호됩니다.
 
 ## Validator Loop
 
-The PoH Recorder manages the transition between modes. Once a ledger is replayed, the validator can run until the recorder indicates it should be the slot leader. As a slot leader, the node can then execute and record transactions.
+역사증명 레코더는 모드 간 전환을 관리합니다. 원장이 재생되면 레코더가 슬롯 리더가되어야한다고 표시 할 때까지 유효성 검사기를 실행할 수 있습니다. 슬롯 리더로서 노드는 트랜잭션을 실행하고 기록 할 수 있습니다.
 
-The loop is synchronized to PoH and does a synchronous start and stop of the slot leader functionality. After stopping, the validator's TVU should find itself in the same state as if a different leader had sent it the same block. The following is pseudocode for the loop:
+루프는 역사증명에 동기화되고 슬롯 리더 기능의 동기식 시작 및 중지를 수행합니다. 중지 한 후 유효성 검사기의 TVU는 다른 리더가 동일한 블록을 보낸 것처럼 동일한 상태에 있어야합니다. 다음은 루프에 대한 의사 코드입니다.
 
-1. Query the LeaderScheduler for the next assigned slot.
-2. Run the TVU over all the forks. 1. TVU will send votes to what it believes is the "best" fork. 2. After each vote, restart the PoH Recorder to run until the next assigned
+1. LeaderScheduler에 할당 된 다음 슬롯을 쿼리합니다.
+2. 모든 포크에서 TVU를 실행합니다. 1. TVU는 "최고"포크라고 생각하는 것에 투표를 보낼 것입니다. 2. 각 투표 후 역사증명 레코더를 다시 시작하여 할당 된 다음까지 실행
 
-   slot.
+   슬롯합니다.
 
-3. When time to be a slot leader, start the TPU. Point it to the last fork the
+3. 슬롯 리더가 될 때가되면 TPU를 시작합니다.한 마지막 포크를 가리 Point it to the last fork the 이를 TVU가 투표한 마지막 포크로
 
-   TVU voted on.
+   향하게 합니다.
 
-4. Produce entries until the end of the slot. 1. For the duration of the slot, the TVU must not vote on other forks. 2. After the slot ends, the TPU freezes its BankFork. After freezing,
+4. 슬롯이 끝날 때까지 항목을 생성합니다. 1. 슬롯 기간 동안 TVU는 다른 포크에 투표해서는 안됩니다. 2. 슬롯이 끝나면 TPU가 BankFork를 고정시킵니다. 동결 후
 
-   the TVU may resume voting.
+   TVU는 투표를 재개 할 수 있습니다.
 
-5. Goto 1.
+5. 이동 1

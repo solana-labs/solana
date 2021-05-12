@@ -1,55 +1,55 @@
 ---
-title: Leader-to-Leader Transition
+title: الإنتقال من قائد إلى قائد (Leader-to-Leader Transition)
 ---
 
-This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
+يصف هذا التصميم كيفية قيام القادة بنقل إنتاج PoH دفتر الأستاذ (ledger) بين بعضهم البعض حيث يقوم كل قائد (leader) بإنشاء الفُتحة (Slot) الخاصة به.
 
-## Challenges
+## التحديات (Challenges)
 
-Current leader and the next leader are both racing to generate the final tick for the current slot. The next leader may arrive at that slot while still processing the current leader's entries.
+القائد الحالي والقائد التالي كلاهما يتسابقان لتوليد العلامة النهائية للفُتحة (Slot) الحالية. قد يصل القائد التالي إلى تلك الفُتحة (Slot) بينما لا يزال يُعالج مُدخلات (entries) القائد الحالي.
 
-The ideal scenario would be that the next leader generated its own slot right after it was able to vote for the current leader. It is very likely that the next leader will arrive at their PoH slot height before the current leader finishes broadcasting the entire block.
+السيناريو المثالي هو أن يكون القائد التالي قد أنشأ مكانه الخاص مُباشرة بعد أن كان قادرًا على التصويت للقائد الحالي. من المُحتمل جدًا أن يصل القائد التالي إلى إرتفاع فُتحة PoH قبل أن ينتهي القائد الحالي من بث الكتلة (block) بأكملها.
 
-The next leader has to make the decision of attaching its own block to the last completed block, or wait to finalize the pending block. It is possible that the next leader will produce a block that proposes that the current leader failed, even though the rest of the network observes that block succeeding.
+يجب على القائد التالي إتخاذ قرار إرفاق الكتلة (block) الخاصة به بآخر كتلة مُكتملة، أو الإنتظار لإنهاء الكتلة المُعلقة. من المُمكن أن يقوم القائد التالي بإنتاج كتلة (block) تقترح فشل القائد الحالي، على الرغم من أن بقية الشبكة تلاحظ نجاح هذا الحظر.
 
-The current leader has incentives to start its slot as early as possible to capture economic rewards. Those incentives need to be balanced by the leader's need to attach its block to a block that has the most commitment from the rest of the network.
+لدى القائد الحالي حوافز لبدء فُتحته (slot) في أقرب وقت مُمكن للحصول على المُكافآت الإقتصادية. يجب أن تكون هذه الحوافز مُتوازنة من خلال حاجة القائد إلى ربط كتلته (block) بكتلة لديها أكبر قدر من الإلتزام من بقية الشبكة.
 
-## Leader timeout
+## مُهلة القائد (Leader timeout)
 
-While a leader is actively receiving entries for the previous slot, the leader can delay broadcasting the start of its block in real time. The delay is locally configurable by each leader, and can be dynamically based on the previous leader's behavior. If the previous leader's block is confirmed by the leader's TVU before the timeout, the PoH is reset to the start of the slot and this leader produces its block immediately.
+بينما يتلقى القائد بنشاط مُدخلات (entries) للفُتحة (Slot) السابقة، يُمكن للقائد تأخير بث بداية الكتلة (block) الخاصة به في الوقت الفعلي. التأخير قابل للتعديل محليًا بواسطة كل قائد، ويُمكن أن يعتمد ديناميكيًا على سلوك القائد السابق. إذا تم تأكيد كتلة (block) القائد السابق بواسطة TVU الخاص بالزعيم قبل إنتهاء المُهلة، تتم إعادة تعيين PoH إلى بداية الفُتحة (Slot) ويقوم هذا القائد بإنتاج الكتلة (block) الخاصة به على الفور.
 
-The downsides:
+الجوانب السلبية:
 
-- Leader delays its own slot, potentially allowing the next leader more time to
+- يقوم القائد بتأخير الفُتحة (Slot) الخاصة به، مما قد يُتيح للقائد التالي مزيدًا من الوقت لذلك
 
-  catch up.
+  اللحاق بالركب.
 
-The upsides compared to guards:
+المكاسب مُقارنة بالحراس:
 
-- All the space in a block is used for entries.
-- The timeout is not fixed.
-- The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
-- This design doesn't require a ledger hard fork to update.
-- The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
-- The leader can speculatively generate the last tick from the last received entry.
-- The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
+- يتم إستخدام كل المساحة في الكتلة (block) للمُدخلات (entries).
+- المُهلة غير ثابتة.
+- المُهلة الزمنية محلية بالنسبة للقائد، وبالتالي يُمكن أن تكون ذكية. يُمكن للقائد أن يأخذ في الحسبان أداء التوربين (turbine).
+- هذا التصميم لا يتطلب إنقسام أو شوكة (fork) دفتر الأستاذ (ledger) للتحديث.
+- يُمكن للقائد السابق نقل المُدخل (entry) الأخير في الكتلة (block) بشكل مُتكرر إلى القائد التالي، ويُمكن للقائد التالي أن يُقرر بشكل مُضارب أن يثق به لإنشاء الكتلة (block) الخاصة به دون التحقق من الكتلة (block) السابقة.
+- يُمكن للقائد أن يُولد بشكل مضارب آخر علامة (tick) من آخر دخول تم إستلامه.
+- يمكن للقائد مُعالجة المُعاملات بشكل مُضارب وتخمين أي منها لن يتم ترميزه بواسطة القائد السابق. هذا هو أيضا ناقل هجوم الرقابة (censorship attack vector). قد يحجب القائد الحالي المُعاملات التي يتلقاها من العملاء حتى يتمكن من تشفيرها في الفُتحة (Slot) الخاصة به. بمُجرد المُعالجة، يُمكن إعادة المُدخلات (entries) في PoH بسرعة.
 
-## Alternative design options
+## خيارات التصميم البديلة (Alternative design options)
 
-### Guard tick at the end of the slot
+### وضع علامة (tick) الحراسة في نهاية الفُتحة (Guard tick at the end of the slot)
 
-A leader does not produce entries in its block after the _penultimate tick_, which is the last tick before the first tick of the next slot. The network votes on the _last tick_, so the time difference between the _penultimate tick_ and the _last tick_ is the forced delay for the entire network, as well as the next leader before a new slot can be generated. The network can produce the _last tick_ from the _penultimate tick_.
+لا ينتج القائد مُدخلات (entries) في الكتلة (block) الخاصة به بعد العلامة قبل الأخيرة _penultimate tick_، وهي العلامة (tick) الأخيرة قبل العلامة الأولى في الفُتحة (Slot) التالية. تُصوت الشبكة على العلامة الأخيرة _last tick_، وبالتالي فإن الفارق الزمني بين العلامة قبل الأخيرة _penultimate tick_و العلامة الأخيرة _last tick_ هو التأخير الإجباري للشبكة بأكملها، بالإضافة إلى القائد التالي قبل إنشاء فُتحة (Slot) جديدة. يُمكن أن تُنتج الشبكة _last tick_ من _penultimate tick_.
 
-If the next leader receives the _penultimate tick_ before it produces its own _first tick_, it will reset its PoH and produce the _first tick_ from the previous leader's _penultimate tick_. The rest of the network will also reset its PoH to produce the _last tick_ as the id to vote on.
+إذا تلقى القائد التالي العلامة قبل الأخيرة _penultimate tick_ قبل أن ينتج علامته الأولى _first tick_الخاصة به، فسوف يُعيد تعيين PoH الخاص به وينتج علامته الأولى _first tick_ من العلامة قبل الأخيرة _penultimate tick_ للقائد السابق. ستقوم بقية الشبكة أيضًا بإعادة تعيين PoH الخاص بها لإنتاج _last tick_ كمُعرف للتصويت عليه.
 
-The downsides:
+الجوانب السلبية:
 
-- Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
-- Average case confirmation time for a transaction would be at least 50ms worse.
-- It is part of the ledger definition, so to change this behavior would require a hard fork.
-- Not all the available space is used for entries.
+- كل تصويت، وبالتالي كل تأكيد، يتأخر بمُهلة مُحددة. عدد 1 tick، أو حوالي 100جزء من الثانية الواحدة.
+- سيكون مُتوسط وقت تأكيد حالة للمُعاملة أسوأ بمقدار 50 100جزء من الثانية الواحدة على الأقل.
+- إنه جزء من تعريف دفتر الأستاذ (ledger)، لذا فإن تغيير هذا السلوك يتطلب إنقسام أو شوكة (fork).
+- لا يتم إستخدام كل المساحة المُتاحة للمُدخلات (entries).
 
-The upsides compared to leader timeout:
+الإيجابيات مُقارنة بمُهلة القائد:
 
-- The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
-- The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.
+- تلقى القائد التالي جميع المُدخلات (entries)، لذلك يُمكنه بدء مُعالجة المُعاملات دون تسجيلها في PoH.
+- يُمكن للقائد السابق أن يُرسل بشكل مُتكرر المُدخل (entry) الأخير الذي يحتوي على العلامة (tick) قبل الأخيرة _penultimate tick_ إلى القائد التالي. يُمكن للقائد التالي أن يولد العلامة الأخيرة _last tick_ على سبيل التخمين بمجرد أن يتلقى العلامة قبل الأخيرة _penultimate tick_، حتى قبل التحقق منه.

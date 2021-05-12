@@ -1,67 +1,39 @@
 ---
-title: Command Line Wallets
+title: Кошельки для командной строки
 ---
 
-Solana supports several different types of wallets that can be used to interface
-directly with the Solana command-line tools.
+Solana поддерживает несколько различных типов кошельков, которые можно использовать для непосредственного взаимодействия с инструментами командной строки Solana.
 
-**If you are unfamiliar with using command line programs and just want to be able
-to send and receive SOL tokens, we recommend setting up a third-party
-[App Wallet](apps.md)**.
+**Если вы не знакомы с использованием инструментов CLI и лишь хотите иметь возможность получать и отправлять токены SOL, мы настоятельно рекомендуем воспользоваться доступными сторонними [предложениями](apps.md)**.
 
-To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
+Чтобы использовать консоль командной строки, вы должны сначала [установить инструменты Solana CLI](../cli/install-solana-cli-tools.md)
 
-## File System Wallet
+## Файловый кошелек
 
-A _file system wallet_, aka an FS wallet, is a directory in your computer's
-file system. Each file in the directory holds a keypair.
+_Файловый кошелек_, aka FS-кошелек (File System), является каталогом файловой системы вашего компьютера. Каждый файл в этом каталоге содержит ключ-пару.
 
-### File System Wallet Security
+### Безопасность файловых кошельков
 
-A file system wallet is the most convenient and least secure form of wallet. It
-is convenient because the keypair is stored in a simple file. You can generate as
-many keys as you would like and trivially back them up by copying the files. It
-is insecure because the keypair files are **unencrypted**. If you are the only
-user of your computer and you are confident it is free of malware, an FS wallet
-is a fine solution for small amounts of cryptocurrency. If, however, your
-computer contains malware and is connected to the Internet, that malware may
-upload your keys and use them to take your tokens. Likewise, because the
-keypairs are stored on your computer as files, a skilled hacker with physical
-access to your computer may be able to access it. Using an encrypted hard
-drive, such as FileVault on MacOS, minimizes that risk.
+FS-кошельки одни из самых удобных и простых в использовании, но являются наименее безопасным вариантом для хранения и управления средствами. Их удобство заключается в простом хранении ключ-пары в виде файла на вашем устройстве. Вы можете сгенерировать столько ключей, сколько пожелаете, а затем тривиально забэкапить их просто скопировав нужные файлы. Но это не небезопасно, потому что файлы с ключами **незашифрованы**. Если вы единственный пользователь компьютера и вы уверенны, что ваше устройство не содержит вредоносных программ, FS-кошелек будет приемлемым решением для хранения и управления небольшим балансом криптовалют. Однако, если ваш компьютер окажется заражен вредоносной программой, и к тому же будет подключен к Интернету, то вредоносное ПО может прочесть ваши ключи и использовать их, чтобы похитить ваши токены. Аналогично и с физическим доступом, поскольку ключ-пары хранятся на вашем компьютере в виде файлов, умелый хакер, получив доступ к вашему устройству, сможет похитить средства с ваших кошельков. Использование зашифрованного жесткого диска, например, используя FileVault на MacOS, поможет минимизировать такие риски, но гарантировать 100% защиту такой подход всё равно не может.
 
-[File System Wallet](file-system-wallet.md)
+[Файловый кошелек](file-system-wallet.md)
 
-## Paper Wallet
+## Бумажный кошелек
 
-A _paper wallet_ is a collection of _seed phrases_ written on paper. A seed
-phrase is some number of words (typically 12 or 24) that can be used to
-regenerate a keypair on demand.
+_Бумажный кошелёк_ - это список _мнемонических фраз_, записанных на бумаге. Мнемо-фраза или seed-фраза - это набор слов (обычно от 12 до 24), которые используются для генерации ключ-пары (публичный и приватный ключи) при необходимости.
 
-### Paper Wallet Security
+### Безопасность бумажного кошелька
 
-In terms of convenience versus security, a paper wallet sits at the opposite
-side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
-offers excellent security. That high security is further amplified when paper
-wallets are used in conjunction with
-[offline signing](../offline-signing.md). Custody services such as
-[Coinbase Custody](https://custody.coinbase.com/) use this combination.
-Paper wallets and custody services are an excellent way to secure a large number
-of tokens for a long period of time.
+С точки зрения сравнения удобства м безопасности, бумажный кошелек находится на противоположном берегу от файлового кошелька. Им максимально неудобно пользоваться, но он предоставляет высокую степень защиты. Эта высокая степень защиты дополнительно увеличивается, если бумажный кошелек используется для [подписания транзакций оффлайн](../offline-signing.md). Кастодиальные сервисы вроде [Coinbase Custody](https://custody.coinbase.com/) используют такую комбинацию. Бумажные кошельки и кастодиальные сервисы - это хороший способ обезопасить значительное количество токенов в долгосрочном периоде.
 
-[Paper Wallets](paper-wallet.md)
+[Бумажный кошелек](paper-wallet.md)
 
-## Hardware Wallet
+## Аппаратный кошелек
 
-A hardware wallet is a small handheld device that stores keypairs and provides
-some interface for signing transactions.
+Аппаратный кошелёк — это небольшое устройство, которое хранит ключ-пары и предоставляет некоторый интерфейс для подписания транзакций.
 
-### Hardware Wallet Security
+### Безопасность аппаратного кошелька
 
-A hardware wallet, such as the
-[Ledger hardware wallet](https://www.ledger.com/), offers a great blend of
-security and convenience for cryptocurrencies. It effectively automates the
-process of offline signing while retaining nearly all the convenience of a file
-system wallet.
+Аппаратный кошелек, такой как [Ledger](https://www.ledger.com/), предлагает отличное сочетание безопасности и удобства. Он максимально упрощает и автоматизирует процесс оффлайн подписи транзакций, сохраняя при этом почти все удобство файлового кошелька.
 
-[Hardware Wallets](hardware-wallets.md)
+[Аппаратные кошельки](hardware-wallets.md)

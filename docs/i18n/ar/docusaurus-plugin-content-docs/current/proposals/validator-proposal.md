@@ -1,54 +1,29 @@
 ---
-title: Validator
+title: المُدقّق (validator)
 ---
 
-## History
+## التاريخ (History)
 
-When we first started Solana, the goal was to de-risk our TPS claims. We knew
-that between optimistic concurrency control and sufficiently long leader slots,
-that PoS consensus was not the biggest risk to TPS. It was GPU-based signature
-verification, software pipelining and concurrent banking. Thus, the TPU was
-born. After topping 100k TPS, we split the team into one group working toward
-710k TPS and another to flesh out the validator pipeline. Hence, the TVU was
-born. The current architecture is a consequence of incremental development with
-that ordering and project priorities. It is not a reflection of what we ever
-believed was the most technically elegant cross-section of those technologies.
-In the context of leader rotation, the strong distinction between leading and
-validating is blurred.
+عندما بدأنا Solana لأول مرة، كان الهدف هو التخلص من مخاطر مُطالبات عدد المُعاملات في الثانية الواحدة (TPS). كنا نعلم أنه بين التحكم المُتفائل في التزامن وفُتحات القائد (leader slots) الطويلة بما فيه الكفاية، لم يكن إجماع PoS هو الخطر الأكبر على عدد المُعاملات في الثانية الواحدة (TPS). لقد كان التحقق من التوقيع المُستند إلى وحدة مُعالجة الرسومات (GPU-based signature)، وتوجيه البرامج، والخدمات المصرفية المُتزامنة. وهكذا، تم إنشاء وحدة TPU. بعد تجاوز 100 ألف مُعاملة في الثانية الواحدة (100k TPS)، قُمنا بتقسيم الفريق إلى مجموعة واحدة تعمل نحو 710 ألف مُعاملة في الثانية الواحدة (710k TPS) ومجموعة أخرى لتجسيد خط أنابيب المُدقّق (validator pipeline). ومن ثم، ولدت TVU. الهيكل الحالي هو نتيجة للتطوير التدريجي مع هذا الترتيب وأولويات المشروع. إنه ليس إنعكاسًا لما إعتقدنا أنه المقطع العرضي الأكثر أناقة من الناحية الفنية من تلك التقنيات. في سياق تناوب القائد (leader rotation)، يكون التمييز القوي بين القيادة (leading) والمُصادقة (validating) غير واضحان.
 
-## Difference between validating and leading
+## الفرق بين المُصادقة و القيادة (Difference between validating and leading)
 
-The fundamental difference between the pipelines is when the PoH is present. In
-a leader, we process transactions, removing bad ones, and then tag the result
-with a PoH hash. In the validator, we verify that hash, peel it off, and
-process the transactions in exactly the same way. The only difference is that
-if a validator sees a bad transaction, it can't simply remove it like the
-leader does, because that would cause the PoH hash to change. Instead, it
-rejects the whole block. The other difference between the pipelines is what
-happens _after_ banking. The leader broadcasts entries to downstream validators
-whereas the validator will have already done that in RetransmitStage, which is
-a confirmation time optimization. The validation pipeline, on the other hand,
-has one last step. Any time it finishes processing a block, it needs to weigh
-any forks it's observing, possibly cast a vote, and if so, reset its PoH hash
-to the block hash it just voted on.
+الفرق الأساسي بين خطوط الأنابيب (pipelines) هو عندما يكون الـ PoH موجودًا. في القائد، نقوم بمُعالجة المُعاملات، وإزالة السيئ منها، ثم وضع علامة PoH hash على النتيجة. في المُدقّق (validator)، نتحقق من التجزئة (hash) ونقشرها ونُعالج المُعاملات بنفس الطريقة تمامًا. الإختلاف الوحيد هو أنه إذا رأى المُدقّق (validator) مُعاملة سيئة، فلا يُمكنه إزالتها ببساطة كما يفعل القائد (leader)، لأن ذلك قد يتسبب في تغيير تجزئة الـ PoH hash. بدلاً من ذلك، يُرفض الكتلة (block) بأكملها. الفرق الآخر بين خطوط الأنابيب (pipelines) هو ما يحدث بعد _after_ الـ banking. يبث القائد (leader) المُدخلات (entries) إلى المُدقّقين (validators) المُتلقين للمعلومات بينما يكون المُدقّق قد فعل ذلك بالفعل في إعادة الإرسال (RetransmitStage)، وهو تحسين وقت التأكيد. من ناحية أخرى، فإن خط أنابيب المُصادقة (validation pipeline) له خطوة أخيرة. في أي وقت تنتهي فيه من ممُعالجة كتلة (block)، يجب أن تزن أي إنقسامات أو شوكات (forks) تُراقبها، وربما تدلي بصوت، وإذا كان الأمر كذلك، فقُم بإعادة تعيين تجزئة PoH إلى تجزئة الكتلة (block hash) التي صوّت عليها للتو.
 
-## Proposed Design
+## التصميم المُقترح (Proposed Design)
 
-We unwrap the many abstraction layers and build a single pipeline that can
-toggle leader mode on whenever the validator's ID shows up in the leader
-schedule.
+نقوم بفك غلاف العديد من طبقات التجريد وبناء خط أنابيب (pipeline) واحد يُمكنه تبديل وضع القائد (leader) كلما ظهر مُعرف المُدقّق (validator ID) في جدول القائد (leader schedule).
 
-![Validator block diagram](/img/validator-proposal.svg)
+![مُخطط كتلة المُدقّق (Validator block diagram)](/img/validator-proposal.svg)
 
-## Notable changes
+## تغييرات ملحوظة (Notable changes)
 
-- Hoist FetchStage and BroadcastStage out of TPU
-- BankForks renamed to Banktree
-- TPU moves to new socket-free crate called solana-tpu.
-- TPU's BankingStage absorbs ReplayStage
-- TVU goes away
-- New RepairStage absorbs Shred Fetch Stage and repair requests
-- JSON RPC Service is optional - used for debugging. It should instead be part
-  of a separate `solana-blockstreamer` executable.
-- New MulticastStage absorbs retransmit part of RetransmitStage
-- MulticastStage downstream of Blockstore
+- مرحلة إحضار الرافعة (FetchStage) ومرحلة البث (BroadcastStage) خارج الـ TPU
+- تمت إعادة تسمية إنقسامات أو شوكات البنك (BankForks) إلى شجرة البنك (Banktree)
+- ينتقل TPU إلى صندوق جديد بدون مِقبس (socket-free) يُسمى solana-tpu.
+- تمتص مرحلة الخدمات المصرفية (BankingStage) من الـ TPU مرحلة إعادة التشغيل (ReplayStage)
+- يذهب الـ TVU بعيدا
+- تمتص مرحلة الإصلاح (RepairStage) الجديدة مرحلة إحضار الشضية (Stage Shred Fetch) وطلبات الإصلاح
+- خدمة JSON RPC إختيارية - تستخدم لتصحيح الأخطاء. يجب أن يكون بدلاً من ذلك جزءًا من ملف مُنفصل قابل للتنفيذ `solana-blockstreamer`.
+- تمتص مرحلة الإرسال المُتعدد (MulticastStage) الجديدة جزءًا من إعادة إرسال إعادة الإرسال (RetransmitStage)
+- مرحلة الإرسال المُتعدد (MulticastStage) مصب لمخزن الكتلة (blockstore)

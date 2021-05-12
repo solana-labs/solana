@@ -1,26 +1,26 @@
 ---
-title: Testing Programs
+title: إختبار البرامج (Testing Programs)
 ---
 
-Applications send transactions to a Solana cluster and query validators to confirm the transactions were processed and to check each transaction's result. When the cluster doesn't behave as anticipated, it could be for a number of reasons:
+تُرسل التطبيقات المُعاملات إلى مجموعة Solana وتستفسر عن المُدقّقين (validators) لتأكيد مُعالجة المُعاملات وللتحقق من نتيجة كل مُعاملة. عندما لا تتصرف المجموعة (cluster) كما هو مُتوقع، فقد يكون ذلك لعدد من الأسباب:
 
-- The program is buggy
-- The BPF loader rejected an unsafe program instruction
-- The transaction was too big
-- The transaction was invalid
-- The Runtime tried to execute the transaction when another one was accessing
+- البرنامج مشوب بالأخطاء
+- رفض مُحمّل BPF تعليمات البرنامج غير الآمنة
+- المُعاملة كبيرة جداً
+- المُعاملة غير صحيحة
+- حاول وقت التشغيل تنفيذ المُعاملة عندما كانت مُعاملة أخرى تُحاول الدخول
 
-  the same account
+  نفس الحساب
 
-- The network dropped the transaction
-- The cluster rolled back the ledger
-- A validator responded to queries maliciously
+- أسقطت الشبكة المُعاملة
+- تم تدوير المجموعة (cluster) في دفتر الأستاذ (ledger)
+- قام المُدقّق (validators) بالرد على الإستفسارات بشكل ضار
 
-## The AsyncClient and SyncClient Traits
+## سمات AsyncClient و SyncClient
 
-To troubleshoot, the application should retarget a lower-level component, where fewer errors are possible. Retargeting can be done with different implementations of the AsyncClient and SyncClient traits.
+لإستكشاف الأخطاء وإصلاحها، يجب أن يُعيد التطبيق إستهداف مُكون ذي مستوى أدنى، حيث يكون إحتمال حدوث أخطاء أقل. يُمكن إجراء إعادة الإستهداف بتطبيقات مختلفة لسمات AsyncClient و SyncClient.
 
-Components implement the following primary methods:
+تنفذ المُكونات الطرق الأساسية التالية:
 
 ```text
 trait AsyncClient {
@@ -32,22 +32,22 @@ trait SyncClient {
 }
 ```
 
-Users send transactions and asynchrounously and synchrounously await results.
+يُرسل المُستخدمون المُعاملات وينتظرون النتائج بشكل غير مُتزامن (asynchrounously) ومُتزامن (synchrounously).
 
-### ThinClient for Clusters
+### عميل ThinClient للمجموعات (Clusters)
 
-The highest level implementation, ThinClient, targets a Solana cluster, which may be a deployed testnet or a local cluster running on a development machine.
+يستهدف التطبيق ذو المُستوى الأعلى، ThinClient، مجموعة Solana، والتي قد تكون شبكة إختبار مُنتشرة أو مجموعة محلية تعمل على جهاز تطوير.
 
-### TpuClient for the TPU
+### عميل TpuClient لـ TPU
 
-The next level is the TPU implementation, which is not yet implemented. At the TPU level, the application sends transactions over Rust channels, where there can be no surprises from network queues or dropped packets. The TPU implements all "normal" transaction errors. It does signature verification, may report account-in-use errors, and otherwise results in the ledger, complete with proof of history hashes.
+المُستوى التالي هو تنفيذ TPU، والذي لم يتم تنفيذه بعد. على مُستوى TPU، يُرسل التطبيق المُعاملات عبر قنوات Rust، حيث لا يُمكن أن يكون هناك مُفاجآت من قوائم إنتظار الشبكة أو الحزم (packets) المُسقطة. يُنفذ TPU جميع أخطاء المُعاملات "العادية". يقوم بالتحقق من التوقيع، وقد يبلغ عن أخطاء الحساب قيد الإستخدام، وبخلاف ذلك ينتج عنه دفتر الأستاذ (ledger)، مُكتمل بإثبات تجزئات التاريخ (proof of history hashes).
 
-## Low-level testing
+## إختبار مُنخفض المُستوى (Low-level testing)
 
-### BankClient for the Bank
+### عميل البنك للبنك (BankClient for the Bank)
 
-Below the TPU level is the Bank. The Bank doesn't do signature verification or generate a ledger. The Bank is a convenient layer at which to test new on-chain programs. It allows developers to toggle between native program implementations and BPF-compiled variants. No need for the Transact trait here. The Bank's API is synchronous.
+يوجد البنك تحت مُستوى TPU. لا يقوم البنك بالتحقق من صحة التوقيع أو إنشاء دفتر الأستاذ (ledger). يُعتبر البنك طبقة (layer) مُلائمة يُمكن من خلالها إختبار البرامج الجديدة على الشبكة (on-chain). يسمح للمُطورين بالتبديل بين تطبيقات البرامج الأصلية والمُتغيرات المُجمعة من BPF. لا حاجة لسمة المُعاملات هنا. واجهة برمجة التطبيقات (API) الخاصة بالبنك مُتزامنة.
 
-## Unit-testing with the Runtime
+## إختبار الوحدة مع وقت التشغيل (Unit-testing with the Runtime)
 
-Below the Bank is the Runtime. The Runtime is the ideal test environment for unit-testing. By statically linking the Runtime into a native program implementation, the developer gains the shortest possible edit-compile-run loop. Without any dynamic linking, stack traces include debug symbols and program errors are straightforward to troubleshoot.
+أدناه، البنك هو وقت التشغيل. وقت التشغيل هو بيئة الإختبار المثالية لإختبار الوحدة. من خلال ربط وقت التشغيل بشكل ثابت بتطبيق برنامج أصلي، يكتسب المُطور أقصر حلقة مُمكنة للتحرير والترجمة والتشغيل (edit-compile-run). بدون أي إرتباط ديناميكي، تتضمن تتبعات المُكدس (stack) رموز تصحيح الأخطاء وتكون أخطاء البرنامج مُباشرة لإستكشاف الأخطاء وإصلاحها.

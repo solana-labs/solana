@@ -1,52 +1,48 @@
 ---
-title: Solana Clusters
+title: مجموعات Solana
 ---
 
-Solana maintains several different clusters with different purposes.
+تحافظ Solana على العديد من المجموعات المختلفة لأغراض مختلفة.
 
-Before you begin make sure you have first
-[installed the Solana command line tools](cli/install-solana-cli-tools.md)
+قبل البدء، تأكد من أنك قمت أولًا [installed the Solana command line tools](cli/install-solana-cli-tools.md)
 
-Explorers:
+تصفح:
 
 - [http://explorer.solana.com/](https://explorer.solana.com/).
 - [http://solanabeach.io/](http://solanabeach.io/).
 
-## Devnet
+## شبكة المُطوِّرين (Devnet)
 
-- Devnet serves as a playground for anyone who wants to take Solana for a
-  test drive, as a user, token holder, app developer, or validator.
-- Application developers should target Devnet.
-- Potential validators should first target Devnet.
-- Key differences between Devnet and Mainnet Beta:
-  - Devnet tokens are **not real**
-  - Devnet includes a token faucet for airdrops for application testing
-  - Devnet may be subject to ledger resets
-  - Devnet typically runs a newer software version than Mainnet Beta
-- Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
-- Metrics environment variable for Devnet:
-
+- تعد شبكة المطورين الساحة التي يجتمع فيها أي شخص يريد أن يجعل من Solana اختبار قيادة، كمستخدم، أو حامل رموز، أو مطور تطبيقات، أو مدقق.
+- لذا فإن على مطوري التطبيقات أن يكون هدفهم شبكة المطورين.
+- وكذلك ينبغي للمدققين المحتملين أن يكون هدفهم الأول شبكة المطورين.
+- الاختلافات الجوهرية بين شبكة المطورين والشبكة التجريبية الرئيسية:
+  - تعد رموز شبكة المطورين غير حقبقية **not real**
+  - وتشمل شبكة المطورين صنبور التوزيع الحر لاختبار التطبيقات
+  - تخضع شبكة المطورين لإعادة تعيين دفتر الأستاذ
+  - وعادة ما تقوم شبكة المطورين بتشغيل إصدار برنامج أحدث من الشبكة التجريبية الرئيسية
+- نقطة دخول القيل والقال لشبكة المطورين: `entrypoint.devnet.solana.com:8001`
+- متغير بيئة القياسات لشبكة المطورين:
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+- رابط عنوان RPC لشبكة المطورين: `https://devnet.solana.com`
 
-- RPC URL for Devnet: `https://devnet.solana.com`
-
-##### Example `solana` command-line configuration
+##### مثال تأكيد سطر أوامر `solana`
 
 ```bash
 solana config set --url https://devnet.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### مثال سطر أوامر `solana-validator`
 
 ```bash
 $ solana-validator \
-    --identity validator-keypair.json \
-    --vote-account vote-account-keypair.json \
+    --identity ~/validator-keypair.json \
+    --vote-account ~/vote-account-keypair.json \
     --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --no-untrusted-rpc \
-    --ledger ledger \
+    --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
@@ -55,48 +51,41 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-The `--trusted-validator`s is operated by Solana
+يتم تشغيل المدققين الموثوقين `--trusted-validator` من قبل Solana
 
-## Testnet
+## الشبكة التجريبية (Testnet)
 
-- Testnet is where we stress test recent release features on a live
-  cluster, particularly focused on network performance, stability and validator
-  behavior.
-- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
-  encourage malicious behavior and attacks on the network to help us find and
-  squash bugs or network vulnerabilities.
-- Testnet tokens are **not real**
-- Testnet may be subject to ledger resets.
-- Testnet includes a token faucet for airdrops for application testing
-- Testnet typically runs a newer software release than both Devnet and
-  Mainnet Beta
-- Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
-- Metrics environment variable for Testnet:
-
+- الشبكة التجريبية هي الموقع الذي نقوم فيه بالتأكيد على تجريب خصائص آخر إصدار على مجموعة متصلة، ومرتكزة بشكل خاص على أداء الشبكة واستقرارها وسلوك المدقق.
+- وتعمل مبادرة [Tour de SOL](tour-de-sol.md) على الشبكة التجريبية حيث نقوم بتحفيز السلوك الخبيث والهجمات على الشبكة للمساعدة في إيجاد ثغرات أو نقاط ضعف.
+- تعد رموز شبكة المطورين غير حقيقية **not real**
+- تخضع الشبكة التجريبية لإعادة تعيين دفتر الأستاذ.
+- تشمل الشبكة التجريبية على صنبور التوزيع الحر لاختبار التطبيقات
+- وعادة ما تقوم الشبكة التجريبية بتشغيل إصدار برنامج أحدث شبكة المطورين والشبكة التجريبية الرئيسية
+- نقطة دخول القيل والقال لشبكة المطورين: `entrypoint.testnet.solana.com:8001`
+- متغير بيئة القياسات للشبكة التجريبية:
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+- رابط عنوان RPC للشبكة التجريبية: `https://testnet.solana.com`
 
-- RPC URL for Testnet: `https://testnet.solana.com`
-
-##### Example `solana` command-line configuration
+##### مثال تأكيد سطر أوامر `solana`
 
 ```bash
 solana config set --url https://testnet.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### مثال سطر أوامر `solana-validator`
 
 ```bash
 $ solana-validator \
-    --identity validator-keypair.json \
-    --vote-account vote-account-keypair.json \
+    --identity ~/validator-keypair.json \
+    --vote-account ~/vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --trusted-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
+    --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --no-untrusted-rpc \
-    --ledger ledger \
+    --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
@@ -105,40 +94,34 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-The identity of the `--trusted-validator`s are:
+هوية `--الموثوق به`s هي:
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Foundation (testnet.solana.com)
-- `7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY` - Solana Foundation (Break RPC node)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
+- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - كسر عقدة RPC (Solana)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
-## Mainnet Beta
+## الشبكة التجريبية الرئيسية (mainnet beta)
 
-A permissionless, persistent cluster for early token holders and launch partners.
-Currently, rewards and inflation are disabled.
+هي عبارة عن مجموعة ثابتة لا تحتاج إلى إذن لحاملي الرموز الأوائل وشركاء الانطلاق. حاليًا، تعتبر المكافآت والتضخم غير مفعلة.
 
-- Tokens that are issued on Mainnet Beta are **real** SOL
-- If you have paid money to purchase/be issued tokens, such as through our
-  CoinList auction, these tokens will be transferred on Mainnet Beta.
-  - Note: If you are using a non-command-line wallet such as
-    [Solflare](wallet-guide/solflare.md),
-    the wallet will always be connecting to Mainnet Beta.
-- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
-- Metrics environment variable for Mainnet Beta:
-
+- الرموز التي تم إصدارها على الشبكة الرئيسية التجريبية **real** SOL
+- إذا قمت بدفع المال لشراء إنشاء رموز من أجلك، مثلًا من خلال مزاد CoinList، فبالإمكان تحويل هذه الرموز على الشبكة الرئيسية التجريبية.
+  - ملاحظة: إذا كنت تستخدم محفظة لا تحتوي على سطر أوامر مثل [Solflare](wallet-guide/solflare.md)، فستكون المحفظة متصلة دائمًا بالشبكة الرئيسية التجريبية.
+- نقطة دخول القيل والقال للشبكة الرئيسية التجريبية: `entrypoint.mainnet-beta.solana.com:8001`
+- متغير بيئة القياسات للشبكة الرئيسية التجريبية:
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+- رابط عنوان RPC للشبكة الرئيسية التجريبية: `https://api.mainnet-beta.solana.com`
 
-- RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
-
-##### Example `solana` command-line configuration
+##### مثال تأكيد سطر أوامر `solana`
 
 ```bash
 solana config set --url https://api.mainnet-beta.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### مثال سطر أوامر `solana-validator`
 
 ```bash
 $ solana-validator \
@@ -149,7 +132,7 @@ $ solana-validator \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
     --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --no-untrusted-rpc \
-    --ledger ledger \
+    --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \
@@ -163,4 +146,4 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-All four `--trusted-validator`s are operated by Solana
+يتم تشغيل المدققين الموثوقين الأربعة `--trusted-validator` من قبل Solana

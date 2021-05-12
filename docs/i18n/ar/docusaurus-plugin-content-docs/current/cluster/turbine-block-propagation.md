@@ -1,101 +1,88 @@
 ---
-title: Turbine Block Propagation
+title: توربين إنتشار الكتل (Turbine Block Propogation)
 ---
 
-A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for sharing any data it receives with the other nodes in its neighborhood, as well as propagating the data on to a small set of nodes in other neighborhoods. This way each node only has to communicate with a small number of nodes.
+تستخدم مجموعة Solana آلية نشر كتل مُتَعَدِّدَة الطبقات (multi-layer block propagation mechanism) تُسَمَّى توربين _Turbine_ لبث قِطَع (shreds) الصفقات لجميع العُقَد (nodes) مع الحد الأدنى من الرسائل المُكرّرة. تقسم المجموعة (cluster) نفسها إلى مجموعات صغيرة من العُقَد (nodes)، تُسَمَّى أحياء _neighborhoods_. كل عُقدة (node) مسؤولة عن مُشاركة أي بيانات تتلقاها مع العُقَد (nodes) الأخرى في حيها (neighborhood)، بالإضافة إلى نشر البيانات على مجموعة صغيرة من العُقَد (nodes) في أحياء (neighborhoods) أخرى. بهذه الطريقة يجب على كل عُقدة (node) أن تتصل بعدد صغير فقط من العُقد (nodes).
 
-During its slot, the leader node distributes shreds between the validator nodes in the first neighborhood \(layer 0\). Each validator shares its data within its neighborhood, but also retransmits the shreds to one node in some neighborhoods in the next layer \(layer 1\). The layer-1 nodes each share their data with their neighborhood peers, and retransmit to nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
+خلال الفُتحة (slot) الخاصة بها، تقوم العُقدة القائد (leader node) بتوزيع القِطَع (shreds) بين عُقَد التدقيق (validator nodes) في الحي (neighborhood) الأول \(layer 0\). يُشارك كل مُدقّق (validator) بياناته داخل حيه (neighborhood)، ولكنه يُعيد أيضا نقل القِطَع (shreds) إلى عُقدة (node) واحدة في بعض الأحياء (neighborhoods) في الطبقة التالية \(layer 1\). كل عُقد (nodes) الطبقة 1 تشارك بياناتها مع أقرانهم في الأحياء (neighborhood)، وإعادة الإرسال إلى العُقد (nodes) في الطبقة التالية، وما إلى ذلك، حتى تتلقى جميع العُقَد (nodes) في المجموعة جميع القِطَع (shreds).
 
-## Neighborhood Assignment - Weighted Selection
+## تعيين الجوار - الإختيار المُرَجَّح (Neighborhood Assignment - Weighted Selection)
 
-In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
+لكي يعمل إنتشار مستوى البيانات، يجب أن تتفق المجموعة (cluster) بأكملها على كيفية تقسيم الكتلة إلى أحياء (neighborhoods). لتحقيق ذلك، يتم فرز جميع عُقد المُدقّقين (validator nodes) المعترف بهم \("أقران TVU \) حسب الحِصَّة (stake) وتخزينها في قائمة. ثم يتم فهرسة هذه القائمة بطرق مختلفة لمعرفة حدود الحي (neighborhood) وإعادة نقل الأقران. على سبيل المثال، سيقوم القائد (leader) ببساطة بإختيار العُقد (nodes) الأولى لتكوين الطبقة 0. ستكون هذه تلقائيا لأصحاب أعلى حِصَّة (highest stake holders)، مما يسمح لأكثر الأصوات تأثيرا ووزنا بالعودة إلى القائد (leader) أولا. تستخدم عُقد الطبقة 0 والطبقة السفلية نفس المنطق للعثور على جيرانهم وأقرانهم من الطبقة التالية.
 
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
+للحد من إمكانية إنتقال ناقلات الهجوم (attack vectors)، يتم نقل كل قِطَعة (shred) منها عبر شجرة (tree) عشوائية من الأحياء (neighborhoods). كل عُقدة (node) تستخدم نفس مجموعة العُقد (nodes) التي تمثل المجموعة (cluster). يتم توليد شجرة عشوائية من المجموعة لكل قطعة بإستخدام بذرة (seed) مُشتقِّة من مُعرف القائد (leader)، الفُتحة (slot) وفهرس القِطَع (shred index).
 
-## Layer and Neighborhood Structure
+## طبقة وبنية الحي (Layer and Neighborhood Structure)
 
-The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
+يقوم القائد (leader) الحالي ببثاته الأولية على حد أقصى `DATA_PLANE_FANOUT` العُقد (nodes). إذا كانت هذه الطبقة 0 أصغر من عدد العُقد (nodes) في المجموعة (cluster)، فإن آلية تبديل مستوى البيانات (data plane fanout mechanism) تضيف الطبقات أدناه. الطبقات اللاحقة تتبع هذه القيود لتحديد سعة الطبقة (layer-capacity): كل حي (neighborhood) يحتوي على `DATA_PLANE_FANOUT` عُقد (nodes). الطبقة 0 تبدأ مع عدد 1 حي (neighborhood) مع عُقد التبديل (fanout nodes). يزداد عدد العُقد (nodes) في كل طبقة إضافية حسب عامل الإستيعات (factor of fanout).
 
-As mentioned above, each node in a layer only has to broadcast its shreds to its neighbors and to exactly 1 node in some next-layer neighborhoods, instead of to every TVU peer in the cluster. A good way to think about this is, layer 0 starts with 1 neighborhood with fanout nodes, layer 1 adds fanout neighborhoods, each with fanout nodes and layer 2 will have `fanout * number of nodes in layer 1` and so on.
+كما ذكر أعلاه، يجب على كل عُقدة (node) في طبقة فقط أن تبث قِطَعها (shreds) إلى جيرانها وإلى عُقدة (node) واحدة بالضبط في أحياء (neighborhoods) الطبقة المُوالية، بدلا من كل أقران وحدة TVU في المجموعة (cluster). طريقة جيدة للتفكير في هذا هو، الطبقة 0 تبدأ بعدد 1 حي (neighborhood) بعُقد توزيع (fanout nodes)، وتضيف الطبقة 1 أحياء توزيع (fanout neighborhoods)، كل منها يحتوي على عُقد توزيع (fanout nodes)، وستحتوي الطبقة 2 على توزيع * عدد العُقَد (nodes) في الطبقة 1 `fanout * number of nodes in layer 1` وهلم جرا.
 
-This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes.
+بهذه الطريقة يجب على كل عُقدة (node) الإتصال فقط بحد أقصى `2 * DATA_PLANE_FANOUT - 1` عُقدة (nodes).
 
-The following diagram shows how the Leader sends shreds with a fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
+يُوضح الرسم البياني التالي كيف يُرسل القائد (Leader) قِطَعه (shreds) مع توزيع (fanout) عدد 2 إلى الحي (neighborhood) عدد 0 في الطبقة 0 وكيف تتبادل العُقد (nodes) في الحي (neighborhood) عدد 0 بياناتها مع بعضها البعض.
 
-![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
+![يُرسل القائد (leader) القِطَع (shreds) إلى الحي (neighborhood) عدد 0 في الطبقة 0](/img/data-plane-seeding.svg)
 
-The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
+الرسم البياني التالي يُوضح كيف أن الحي (neighborhood) عدد 0 يخدم الأحياء (neighborhoods) عدد 1 و 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
+![الحي (neighborhood) عدد 0 يُوزع إلى الحي (neighborhood) عدد 1 و 2](/img/data-plane-fanout.svg)
 
-Finally, the following diagram shows a two layer cluster with a fanout of 2.
+أخيرا، يظهر الرسم البياني التالي مجموعة (cluster) من الطبقتين مع توزيع (fanout) من 2.
 
-![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
+![مجموعة (cluster) من الطبقتين مع توزيع (fanout) من 2](/img/data-plane.svg)
 
-### Configuration Values
+### قيم الإعدادات (Configuration Values)
 
-`DATA_PLANE_FANOUT` - Determines the size of layer 0. Subsequent layers grow by a factor of `DATA_PLANE_FANOUT`. The number of nodes in a neighborhood is equal to the fanout value. Neighborhoods will fill to capacity before new ones are added, i.e if a neighborhood isn't full, it _must_ be the last one.
+`DATA_PLANE_FANOUT` - يحدد حجم الطبقة 0. الطبقات اللاحقة تنمو بعامل `DATA_PLANE_FANOUT`. عدد العُقد (nodes) في الحي (neighborhood) مساوٍ لقيمة التوزيع (fanout). ستمتلئ سعة الأحياء (neighborhoods) قبل إضافة أحياء جديدة، على سبيل المثال، إذا لم يكن الحي (neighborhood) ممتلئا، يجب أن يكون _must_ هو الأخير.
 
-Currently, configuration is set when the cluster is launched. In the future, these parameters may be hosted on-chain, allowing modification on the fly as the cluster sizes change.
+يتم حاليا تعيين الإعدادات عند إطلاق المجموعة (cluster). قد يتم في المُستقبل إستضافة هذه المُعلمات (parameters) على الشبكة (on-chain)، مما يسمح بإدخال تعديلات في أي وقت عندما تتغير أحجام المجموعات (cluster).
 
-## Calculating the required FEC rate
+## حساب مُعدل الFEC المطلوب (Calculating the required FEC rate)
 
-Turbine relies on retransmission of packets between validators. Due to
-retransmission, any network wide packet loss is compounded, and the
-probability of the packet failing to reach its destination increases
-on each hop. The FEC rate needs to take into account the network wide
-packet loss, and the propagation depth.
+يعتمد التوربين (Turbine) على إعادة إرسال الحزم بين المُدقّقين (validators). بسبب إعادة الإرسال، يتم مضاعفة فقدان أي حزمة شبكة واسعة، وإحتمال فشل الحزمة في الوصول إلى وجهتها يزيد مع كل قفزة (hop). ينبغي أن يأخذ مُعدل FEC في الإعتبار فقدان الحزمة على نطاق الشبكة وعمق الإنتشار.
 
-A shred group is the set of data and coding packets that can be used
-to reconstruct each other. Each shred group has a chance of failure,
-based on the likelyhood of the number of packets failing that exceeds
-the FEC rate. If a validator fails to reconstruct the shred group,
-then the block cannot be reconstructed, and the validator has to rely
-on repair to fixup the blocks.
+المجموعة المُمَزَّقَة (shred group) هي مجموعة من حزم البيانات وحزم التشفير التي يُمكن إستخدامها لإعادة بناء بعضها البعض. كل مجموعة مُمَزَّقَة (shred group) لديها فرصة للفشل، إستنادا إلى إحتمال تجاوز عدد الحِزم الفاشلة مُعدل الFEC. إذا فشل المُدقّق (validator) في إعادة بناء المجموعة المُمَزَّقَة، فلا يُمكن إعادة بناء الكتلة (block)، ويتعين على المُدقّق (validator) الإعتماد على الإصلاح لإصلاح الكتل (blocks).
 
-The probability of the shred group failing can be computed using the
-binomial distribution. If the FEC rate is `16:4`, then the group size
-is 20, and at least 4 of the shreds must fail for the group to fail.
-Which is equal to the sum of the probability of 4 or more trails failing
-out of 20.
+يمكن حساب إحتمال فشل المجموعة المُمَزَّقَة (shred group) بإستخدام التوزيع الثنائي (binomial distribution). إذا كان مُعدل FEC هو ` 16: 4 ` ، فإن حجم المجموعة هو 20، ويجب أن تفشل 4 قِطَع (shreds) على الأقل حتى تفشل المجموعة. وهو ما يساوي مجموع إحتمال فشل 4 مسارات أو أكثر من أصل 20.
 
-Probability of a block succeeding in turbine:
+إحتمالية نجاح الكتلة (block) في التوربين (turbine):
 
-- Probability of packet failure: `P = 1 - (1 - network_packet_loss_rate)^2`
-- FEC rate: `K:M`
-- Number of trials: `N = K + M`
-- Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P, trials = N, failures = i)`
-- Shreds per block: `G`
-- Block success rate: `B = (1 - S) ^ (G / N)`
-- Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
+- إحتمال فشل الحزمة: `P = 1 - (1 - network_packet_loss_rate)^2`
+- مُعدل FEC: `K:M`
+- عدد التجارب: `N = K + M`
+- مُعدل فشل المجموعة المُمَزَّقَة: `S = SUM of i=0 -> M for binomial(prob_failure = P, trials = N, failures = i)`
+- القِطَع (shreds) لكل كتلة: `G`
+- مُعدل نجاح الكتلة: `B = (1 - S) ^ (G / N)`
+- التوزيع الثنائي (Binomial distribution) بالضبط لـ `i` يُنتُج مع إحتمال P في التجارب N يتم تعريفها على أنها `(N choose i) * P^i * (1 - P)^(N-i)`
 
-For example:
+على سبيل المثال:
 
-- Network packet loss rate is 15%.
-- 50k tps network generates 6400 shreds per second.
-- FEC rate increases the total shreds per block by the FEC ratio.
+- مُعدل فقدان حِزمة الشبكة (Network packet loss) هو 15%.
+- تُولد شبكة ذات إنتاجية 50 ألف مُعاملة في الثانية الواحدة (50k tps) عدد 6400 قِطَعة في الثانية الواحدة.
+- يزيد مُعدل الـ FEC إجمالي القِطَع (shreds) لكل كتلة (block) حسب مُعدل الـ FEC.
 
-With a FEC rate: `16:4`
+بمُعدل FEC: `K:M`
 
 - `G = 8000`
 - `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
 - `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775, trials = 20, failures = i) = 0.689414`
 - `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
 
-With FEC rate of `16:16`
+بمُعدل FEC `16:16`
 
 - `G = 12800`
 - `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.002132`
 - `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
 
-With FEC rate of `32:32`
+بمُعدل FEC `32:32`
 
 - `G = 12800`
 - `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
 - `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
 
-## Neighborhoods
+## الأحياء (Neighborhoods)
 
-The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
+الرسم البياني التالي يُوضح كيف يتفاعل حيان (two neighborhoods) في طبقات مُختلفة. لشل حي (neighborhood) ما، هناك ما يكفي من العُقد (nodes) \(رموز المحو +1\) من الحي (neighborhood) أعلاه بحاجة إلى الفشل. بما أن كل حي يتلقى القِطَع (shreds) من عُقَد (nodes) مُتعددة في حي (neighborhood) في الطبقة العليا، كنا بحاجة إلى فشل كبير في الشبكة في الطبقات العليا لنحصل على بيانات منقوصة.
 
-![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)
+![الأعمال الداخلية في حي ما (neighborhood)](/img/data-plane-neighborhood.svg)

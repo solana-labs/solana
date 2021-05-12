@@ -1,108 +1,58 @@
 ---
-title: Repair Service
+title: Servicio de reparación
 ---
 
-## Repair Service
+## Servicio de reparación
 
-The RepairService is in charge of retrieving missing shreds that failed to be
-delivered by primary communication protocols like Turbine. It is in charge of
-managing the protocols described below in the `Repair Protocols` section below.
+El Servicio de reparación se encarga de recuperar los fragmentos perdidos que no han podido ser entregados por los protocolos de comunicación primarios como Turbine. Se encarga de gestionar los protocolos descritos a continuación en la sección Protocolos de reparación. Se encarga de gestionar los protocolos que se describen a continuación en el apartado `Repair Protocols`.
 
-## Challenges:
+## Desafíos:
 
-1\) Validators can fail to receive particular shreds due to network failures
+1\) Los validadores pueden fallar al recibir fragmentos particulares debido a fallos de red
 
-2\) Consider a scenario where blockstore contains the set of slots {1, 3, 5}.
-Then Blockstore receives shreds for some slot 7, where for each of the shreds
-b, b.parent == 6, so then the parent-child relation 6 -&gt; 7 is stored in
-blockstore. However, there is no way to chain these slots to any of the
-existing banks in Blockstore, and thus the `Shred Repair` protocol will not
-repair these slots. If these slots happen to be part of the main chain, this
-will halt replay progress on this node.
+2\) Considera un escenario donde el blockstore contiene el conjunto de espacios {1, 3, 5}. Luego Blockstore recibe fragmentos para una ranura 7, donde para cada una de las ranuras b, b. parent == 6, así que la relación padre-hijo 6 -&gt; 7 se almacena en blockstore. Sin embargo, no hay forma de encadenar estas ranuras a ninguno de los bancos existentes en Blockstore, y por lo tanto el protocolo de `Reparación ` no reparará estas ranuras. Si estas ranuras forman parte de la cadena principal, se detendrá el progreso de la reproducción en este nodo.
 
-## Repair-related primitives
+## Primitivas relacionadas con la reparación
 
-Epoch Slots:
-Each validator advertises separately on gossip the various parts of an
-`Epoch Slots`:
+Ranuras de época: Cada validador anuncia por separado en gossip las distintas partes de una `Epoch Slots`:
 
-- The `stash`: An epoch-long compressed set of all completed slots.
-- The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
-  slots starting from some some slot `M`, where `N` is the number of slots
-  that will fit in an MTU-sized packet.
+- El `stash`: Un conjunto comprimido de una época de todas las ranuras completadas.
+- El `cache`: La codificación de longitud de ejecución (RLE) de las últimas `N` ranuras completadas a partir de alguna ranura `M`, donde `N` es el número de ranuras que caben en un paquete de tamaño MTU.
 
-`Epoch Slots` in gossip are updated every time a validator receives a
-complete slot within the epoch. Completed slots are detected by blockstore
-and sent over a channel to RepairService. It is important to note that we
-know that by the time a slot `X` is complete, the epoch schedule must exist
-for the epoch that contains slot `X` because WindowService will reject
-shreds for unconfirmed epochs.
+`Epoch Slots` en gossip se actualizan cada vez que un validador recibe una ranura completa dentro de la época. Las ranuras completadas son detectadas por el almacén de bloques y enviadas por un canal al Servicio de Reparación. Es importante tener en cuenta que sabemos que en el momento en que una ranura `X` está completa, el calendario de épocas debe existir para la época que contiene la ranura `X` porque WindowService rechazará los fragmentos de épocas no confirmadas.
 
-Every `N/2` completed slots, the oldest `N/2` slots are moved from the
-`cache` into the `stash`. The base value `M` for the RLE should also
-be updated.
+Cada `N/2` ranuras completadas, las `N/2` ranuras más antiguas se mueven de la `cache` al `stash`. El valor base `M` para el RLE también debe ser actualizado.
 
-## Repair Request Protocols
+## Solicitud de Reparación de Protocolos
 
-The repair protocol makes best attempts to progress the forking structure of
-Blockstore.
+El protocolo de reparación hace los mejores intentos para progresar en la estructura de bifurcación de Blockstore.
 
-The different protocol strategies to address the above challenges:
+Las diferentes estrategias de protocolo para abordar los desafíos anteriores:
 
-1. Shred Repair \(Addresses Challenge \#1\): This is the most basic repair
-   protocol, with the purpose of detecting and filling "holes" in the ledger.
-   Blockstore tracks the latest root slot. RepairService will then periodically
-   iterate every fork in blockstore starting from the root slot, sending repair
-   requests to validators for any missing shreds. It will send at most some `N`
-   repair reqeusts per iteration. Shred repair should prioritize repairing
-   forks based on the leader's fork weight. Validators should only send repair
-   requests to validators who have marked that slot as completed in their
-   EpochSlots. Validators should prioritize repairing shreds in each slot
-   that they are responsible for retransmitting through turbine. Validators can
-   compute which shreds they are responsible for retransmitting because the
-   seed for turbine is based on leader id, slot, and shred index.
+1. Reparación de fragmentos \N(Dirige el desafío \N1): Es el protocolo de reparación más básico, con el objetivo de detectar y rellenar "agujeros" en el ledger. Blockstore rastrea la última ranura raíz. El Servicio de Reparación iterará periódicamente cada fork en el blockstore empezando por la ranura raíz, enviando solicitudes de reparación a los validadores para cualquier fragmento que falte. Enviará como máximo unas `N` solicitudes de reparación por iteración. La reparación de los fragmentos debe priorizar la reparación de los forks en función del peso del fork del líder. Los validadores sólo deben enviar solicitudes de reparación a los validadores que hayan marcado esa ranura como completada en sus ranuras de época. Los validadores deben priorizar la reparación de fragmentos en cada ranura que son responsables de retransmitir a través de la turbina. Los validadores pueden calcular qué fragmentos son responsables de retransmitirse porque la semilla de la turbina se basa en id de líder ranura e índice de fragmentación.
 
-   Note: Validators will only accept shreds within the current verifiable
-   epoch \(epoch the validator has a leader schedule for\).
+   Nota: Los validadores solo aceptarán fragmentos dentro de la época verificable actual (época en la que el validador tiene un programa líder para\).
 
-2. Preemptive Slot Repair \(Addresses Challenge \#2\): The goal of this
-   protocol is to discover the chaining relationship of "orphan" slots that do not
-   currently chain to any known fork. Shred repair should prioritize repairing
-   orphan slots based on the leader's fork weight.
+2. Reparación preventiva de ranuras \(Desafío de direcciones \#2/):: El objetivo de este protocolo es descubrir la relación de encadenamiento de las ranuras "huérfanas" que actualmente no se encadenan a ningún fork conocido. La reparación de los fragmentos debe priorizar la reparación de las ranuras huérfanas en función del peso del fork del líder.
 
-   - Blockstore will track the set of "orphan" slots in a separate column family.
-   - RepairService will periodically make `Orphan` requests for each of
-     the orphans in blockstore.
+   - Blockstore rastreará el conjunto de espacios "huérfanos" en una familia de columnas separada.
+   - El Servicio de Reparación realizará periódicamente solicitudes de `Huérfanos` para cada uno de los huérfanos del almacén de bloques.
 
-     `Orphan(orphan)` request - `orphan` is the orphan slot that the
-     requestor wants to know the parents of `Orphan(orphan)` response -
-     The highest shreds for each of the first `N` parents of the requested
-     `orphan`
+     `Orphan(orphan)` solicita - `orphan` es la ranura huérfana de la que el solicitante quiere conocer los padres de `Orphan(orphan)` respuesta - Los fragmentos más altos para cada uno de los primeros `N` padres del `orphan` solicitado
 
-     On receiving the responses `p`, where `p` is some shred in a parent slot,
-     validators will:
+     Al recibir las respuestas `p`, donde `p` es algún fragmento en una ranura padre, los validadores:
 
-     - Insert an empty `SlotMeta` in blockstore for `p.slot` if it doesn't
-       already exist.
-     - If `p.slot` does exist, update the parent of `p` based on `parents`
+     - Inserta un `SlotMeta` vacío en el almacén de bloques para `p.slot` si no existe ya.
+     - Si `p.slot` existe, actualiza el padre de `p` basándose en `parents`
 
-     Note: that once these empty slots are added to blockstore, the
-     `Shred Repair` protocol should attempt to fill those slots.
+     Nota: una vez que estas ranuras vacías se añaden al almacén de bloques, el protocolo `Shred Repair` debe intentar llenar esas ranuras.
 
-     Note: Validators will only accept responses containing shreds within the
-     current verifiable epoch \(epoch the validator has a leader schedule
-     for\).
+     Nota: Los validadores sólo aceptarán respuestas que contengan fragmentos dentro de la época actual verificable \ (época para la que el validador tiene un programa líder\).
 
-Validators should try to send orphan requests to validators who have marked that
-orphan as completed in their EpochSlots. If no such validators exist, then
-randomly select a validator in a stake-weighted fashion.
+Los validadores deben intentar enviar las solicitudes de huérfanos a los validadores que hayan marcado ese huérfano como completado en sus Ranuras de época. Si no existen dichos validadores, entonces seleccione aleatoriamente un validador de una manera ponderada por el stake.
 
-## Repair Response Protocol
+## Protocolo de respuesta a la reparación
 
-When a validator receives a request for a shred `S`, they respond with the
-shred if they have it.
+Cuando un validador recibe una solicitud de un fragmento `S`, responde con el fragmento si lo tiene.
 
-When a validator receives a shred through a repair response, they check
-`EpochSlots` to see if <= `1/3` of the network has marked this slot as
-completed. If so, they resubmit this shred through its associated turbine
-path, but only if this validator has not retransmitted this shred before.
+Cuando un validador recibe un fragmento a través de una respuesta de reparación, comprueba `EpochSlots` para ver si <= `1/3` de la red ha marcado esta ranura como completada. Si es así, vuelven a enviar este fragmento a través de su ruta de turbina asociada, pero sólo si este validador no ha retransmitido este fragmento antes.

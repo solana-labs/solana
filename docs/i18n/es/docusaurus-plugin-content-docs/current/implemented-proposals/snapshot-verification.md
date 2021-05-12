@@ -1,52 +1,44 @@
 ---
-title: Snapshot Verification
+title: Verificación de Snapshot
 ---
 
-## Problem
+## Problema
 
-When a validator boots up from a snapshot, it needs a way to verify the account set matches what the rest of the network sees quickly. A potential
-attacker could give the validator an incorrect state, and then try to convince it to accept a transaction that would otherwise be rejected.
+Cuando un validador arranca desde una snapshot, necesita una forma de verificar que el conjunto de cuentas coincide con lo que el resto de la red ve rápidamente. Un atacante potencial podría darle al validador un estado incorrecto, y luego tratar de convencerla de aceptar una transacción que de otro modo sería rechazada.
 
-## Solution
+## Solución
 
-Currently the bank hash is derived from hashing the delta state of the accounts in a slot which is then combined with the previous bank hash value.
-The problem with this is that the list of hashes will grow on the order of the number of slots processed by the chain and become a burden to both
-transmit and verify successfully.
+Actualmente el hash bancario es derivado del estado delta de las cuentas en una ranura que luego se combina con el valor hash bancario anterior. El problema con esto es que la lista de hash crecerá en el orden del número de ranuras procesadas por la cadena y se convertirá en una carga para ambos transmitir y verificar con éxito.
 
-Another naive method could be to create a merkle tree of the account state. This has the downside that with each account update, the merkle tree
-would have to be recomputed from the entire account state of all live accounts in the system.
+Otro método ingenuo podría ser crear un árbol merkle del estado de la cuenta. Esto tiene el inconveniente de que con cada actualización de cuenta, el árbol Merkle tendría que recalcularse del estado completo de la cuenta de todas las cuentas reales del sistema.
 
-To verify the snapshot, we do the following:
+Para verificar la instantánea, hacemos lo siguiente:
 
-On account store of non-zero lamport accounts, we hash the following data:
+En el almacén de cuentas de lamport no nulas, hacemos un hash de los siguientes datos:
 
-- Account owner
-- Account data
-- Account pubkey
-- Account lamports balance
-- Fork the account is stored on
+- Dueño de la cuenta
+- Datos de la cuenta
+- Cliente pubkey
+- Balance de lamports de la cuenta
+- Fork en el que se amacena la cuenta
 
-Use this resulting hash value as input to an expansion function which expands the hash value into an image value.
-The function will create a 440 byte block of data where the first 32 bytes are the hash value, and the next 440 - 32 bytes are
-generated from a Chacha RNG with the hash as the seed.
+Utilice este valor hash resultante como entrada a una función de expansión que expande el valor hash a un valor de imagen. La función creará un bloque de datos de 440 bytes donde los primeros 32 bytes son el valor de hash. y los siguientes 440 - 32 bytes son generados a partir de un RNG de Chacha con el hash como semilla.
 
-The account images are then combined with xor. The previous account value will be xored into the state and the new account value also xored into the state.
+Las imágenes de la cuenta se combinan con xor. El valor de la cuenta anterior se convertirá en el estado y el nuevo valor de la cuenta también se definirá en el estado.
 
-Voting and sysvar hash values occur with the hash of the resulting full image value.
+Los valores hash del voto y sysvar ocurren con el hash del valor resultante de la imagen completa.
 
-On validator boot, when it loads from a snapshot, it would verify the hash value with the accounts set. It would then
-use SPV to display the percentage of the network that voted for the hash value given.
+Al arrancar el validador, cuando carga desde una instantánea, verificaría el valor hash con las cuentas establecidas. Entonces usaría SPV para mostrar el porcentaje de la red que votó por el valor hash dado.
 
-The resulting value can be verified by a validator to be the result of xoring all current account states together.
+El valor resultante puede ser verificado por un validador para ser el resultado de xoring de todos los estados de cuenta corriente juntos.
 
-A snapshot must be purged of zero lamport accounts before creation and during verify since the zero lamport accounts do not affect the hash value but may cause
-a validator bank to read that an account is not present when it really should be.
+Una snapshot debe purgarse de cuentas de lamport cero antes de la creación y durante la verificación ya que las cuentas de lamport cero no afectan el valor del hash, pero puede hacer que un banco validador lea que una cuenta no está presente cuando realmente debería estarlo.
 
-An attack on the xor state could be made to influence its value:
+Se podría hacer un ataque al estado xor para influir en su valor:
 
-Thus the 440 byte image size comes from this paper, avoiding xor collision with 0 \(or thus any other given bit pattern\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
+Así el tamaño de imagen de 440 bytes proviene de este papel, evitando la colisión xor con 0 \(o por lo tanto cualquier otro patrón de bit dado\): \[[https://link. pringer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
 
-The math provides 128 bit security in this case:
+Las matemáticas proporcionan seguridad de 128 bits en este caso:
 
 ```text
 O(k * 2^(n/(1+lg(k)))

@@ -1,11 +1,11 @@
 ---
-title: Requirements to run a validator
+title: Требования для запуска валидатора
 ---
 
-## Hardware
+## Оборудование
 
-See [suggested hardware configuration here](../../running-validator/validator-reqs.md).
+Смотрите [предлагаемую аппаратную конфигурацию здесь](../../running-validator/validator-reqs.md).
 
-## Software
+## Программное обеспечение
 
-- We build and run on Ubuntu 20.04
+- Мы создаем и запускаем на Ubuntu 18.04. Некоторые пользователи испытывали проблемы при запуске на Ubuntu 16.04

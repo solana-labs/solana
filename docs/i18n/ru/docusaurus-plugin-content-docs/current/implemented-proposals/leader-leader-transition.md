@@ -1,55 +1,55 @@
 ---
-title: Leader-to-Leader Transition
+title: Смена лидера
 ---
 
-This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
+Тут описана реализациz передачи между лидерами права генерации PoH реестра, поскольку каждый лидер генерирует свой собственный слот.
 
-## Challenges
+## Вызовы
 
-Current leader and the next leader are both racing to generate the final tick for the current slot. The next leader may arrive at that slot while still processing the current leader's entries.
+Текущий и следующий лидер находятся в состоянии гонки, генерируя последний тик для текущего слота. Лидер может смениться и попасть на этот слот, продолжая обрабатывать записи, сделанные прошлым лидером.
 
-The ideal scenario would be that the next leader generated its own slot right after it was able to vote for the current leader. It is very likely that the next leader will arrive at their PoH slot height before the current leader finishes broadcasting the entire block.
+Если бы следующий лидер мог бы сформировать свой собственный слот сразу после того, как он проголосовал за текущего - это было бы идеальным сценарием. Весьма вероятно, что следующий лидер достигнет высоты своего слота PoH до того, как текущий лидер завершит трансляцию всего блока.
 
-The next leader has to make the decision of attaching its own block to the last completed block, or wait to finalize the pending block. It is possible that the next leader will produce a block that proposes that the current leader failed, even though the rest of the network observes that block succeeding.
+Следующий лидер должен принять решение: присоединить свой собственный блок к последнему завершенному блоку или дождаться завершения текущего блока. Возможно, что следующий лидер создаст блок, предполагающий, что текущий лидер потерпел неудачу, даже если остальная часть сети наблюдает, что этот блок был успешным.
 
-The current leader has incentives to start its slot as early as possible to capture economic rewards. Those incentives need to be balanced by the leader's need to attach its block to a block that has the most commitment from the rest of the network.
+У нынешнего лидера есть стимулы как можно раньше начать свой слот, чтобы получить экономические выгоды. Эти стимулы должны быть сбалансированы необходимостью лидера присоединить свой блок к блоку, который имеет наибольшую подтврежденность со стороны остальной сети.
 
-## Leader timeout
+## Таймаут лидера
 
-While a leader is actively receiving entries for the previous slot, the leader can delay broadcasting the start of its block in real time. The delay is locally configurable by each leader, and can be dynamically based on the previous leader's behavior. If the previous leader's block is confirmed by the leader's TVU before the timeout, the PoH is reset to the start of the slot and this leader produces its block immediately.
+Пока лидер принимает записи для предыдущего слота, он может отложить рассылку начала своего блока в реальном времени - сделать таймаут. Задержка настраивается локально каждым лидером и может динамически зависеть от поведения предыдущего лидера. Если блок предыдущего лидера подтверждается TVU(Transaction Validation Unit) лидера до тайм-аута, PoH сбрасывается до начала слота, и этот лидер немедленно создает свой собственный блок.
 
-The downsides:
+Минусы:
 
-- Leader delays its own slot, potentially allowing the next leader more time to
+- Лидер откладывает свой собственный слот, потенциально давая следующему лидеру больше времени,
 
-  catch up.
+  чтобы наверстать упущенное.
 
-The upsides compared to guards:
+Плюсы:
 
-- All the space in a block is used for entries.
-- The timeout is not fixed.
-- The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
-- This design doesn't require a ledger hard fork to update.
-- The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
-- The leader can speculatively generate the last tick from the last received entry.
-- The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
+- Все пространство в блоке используется для записей.
+- Таймаут не фиксирован.
+- Таймаут является локальным для лидера, поэтому может быть разумно сбалансированным. Лидер может принимать во внимание производительность передачи пакетов посредством Turbine.
+- Такая архитектура не требует форка реестра для обновления.
+- Предыдущий лидер может с избыточностью передать последнюю запись в блоке следующему лидеру, а следующий может предположительно решить довериться ему и сгенерировать этот блок без проверки предыдущего.
+- Лидер может спекулятивно сгенерировать последний тик из последней полученной записи.
+- Лидер может спекулятивно обрабатывать транзакции и угадать, какие из них не будут кодироваться предыдущим лидером. Это также можно считать вектором для атаки цензурой. Текущий лидер может удерживать получаемые от клиентов транзакции, чтобы включить их в свой собственный слот. После обработки записи можно быстро воспроизвести в PoH.
 
-## Alternative design options
+## Альтернативные варианты
 
-### Guard tick at the end of the slot
+### Защищенный тик в конце слота
 
-A leader does not produce entries in its block after the _penultimate tick_, which is the last tick before the first tick of the next slot. The network votes on the _last tick_, so the time difference between the _penultimate tick_ and the _last tick_ is the forced delay for the entire network, as well as the next leader before a new slot can be generated. The network can produce the _last tick_ from the _penultimate tick_.
+Лидер не производит записи в своем блоке после _предпоследнего тика_, который является последним тиком перед следующим слотом. Сеть голосует за _последний тик_, так что разница во времени между _предпоследним тиком_ и _последним_ является принудительным таймаутом для всей сети, также как и для следующего лидера перед тем, как новый слот можно будет создать. Сеть сможет произвести _последний тик_ на основе _предпоследнего_.
 
-If the next leader receives the _penultimate tick_ before it produces its own _first tick_, it will reset its PoH and produce the _first tick_ from the previous leader's _penultimate tick_. The rest of the network will also reset its PoH to produce the _last tick_ as the id to vote on.
+Если следующий лидер получает _предпоследний тик_ до того, как он создаст свой собственный _первый тик_ в слоте, он сбросит свой PoH и создаст _первый тик_ на основе _предпоследнего тика_ от предыдущего лидера. Остальные участники сети также сбросят свои PoH, чтобы произвести _последний тик_ в качестве id для голосования.
 
-The downsides:
+Минусы:
 
-- Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
-- Average case confirmation time for a transaction would be at least 50ms worse.
-- It is part of the ledger definition, so to change this behavior would require a hard fork.
-- Not all the available space is used for entries.
+- Каждое голосование, а следовательно и его подтверждение, откладываются на фиксированное время. На 1 тик, или приблизительно на 100ms.
+- Среднее время подтверждения транзакций будет минимум на 50ms больше.
+- Так как эта часть является образующей для реестра, потребуется хард-форк, чтобы изменить такое поведение.
+- Не всё пространство в блоке будет использовано для записей.
 
-The upsides compared to leader timeout:
+Плюсы в сравнении с индивидуальным таймаутом лидера:
 
-- The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
-- The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.
+- Следующий лидер получает все предыдущие записи, поэтому он может начать обработку транзакций, не записывая их в PoH.
+- Предыдущий лидер, может явно передать последнюю запись, содержащую _предпоследний тик_, следующему лидеру. Следующий лидер может спекулятивно сгенерировать _последний тик_ так скоро, как только получит _предпоследний тик_, даже перед его верификацией.

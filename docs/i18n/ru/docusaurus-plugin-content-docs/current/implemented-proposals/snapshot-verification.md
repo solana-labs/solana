@@ -1,56 +1,48 @@
 ---
-title: Snapshot Verification
+title: Проверка снапшота
 ---
 
-## Problem
+## Проблема
 
-When a validator boots up from a snapshot, it needs a way to verify the account set matches what the rest of the network sees quickly. A potential
-attacker could give the validator an incorrect state, and then try to convince it to accept a transaction that would otherwise be rejected.
+Когда валидатор загружается из снапшота, ему нужен способ быстро проверить, что набор аккаунтов соответствует тому, что видит остальная часть сети. Потенциальный злоумышленник может сообщить валидатору неправильное состояние, а затем попытаться убедить его принять транзакцию, которая в противном случае была бы отклонена.
 
-## Solution
+## Решение
 
-Currently the bank hash is derived from hashing the delta state of the accounts in a slot which is then combined with the previous bank hash value.
-The problem with this is that the list of hashes will grow on the order of the number of slots processed by the chain and become a burden to both
-transmit and verify successfully.
+В настоящее время хэш банка получается из хеширования дельта-состояния аккаунтов в слоте, которое затем комбинируется с предыдущим значением хэша банка. Проблема в том, что список хэшей будет расти в соответствии с количеством слотов, обрабатываемых цепочкой, и станет бременем как для успешной передачи, так и для успешной проверки.
 
-Another naive method could be to create a merkle tree of the account state. This has the downside that with each account update, the merkle tree
-would have to be recomputed from the entire account state of all live accounts in the system.
+Другим наивным методом может быть создание дерева Меркла состояния аккаунта. У этого есть обратная сторона, заключающаяся в том, что при каждом обновлении аккаунта дерево Меркла придется пересчитывать на основе всего состояния учетных записей всех текущих аккаунтов в системе.
 
-To verify the snapshot, we do the following:
+Для проверки снапшота мы делаем следующее:
 
-On account store of non-zero lamport accounts, we hash the following data:
+В хранилище аккаунтов ненулевых учетных записей lamport мы хешируем следующие данные:
 
-- Account owner
-- Account data
-- Account pubkey
-- Account lamports balance
-- Fork the account is stored on
+- Владелец аккаунта
+- Данные аккаунта
+- Открытый ключ pubkey аккаунта
+- Лэмпорт баланс аккаунта
+- Форк, на котором хранится аккаунт
 
-Use this resulting hash value as input to an expansion function which expands the hash value into an image value.
-The function will create a 440 byte block of data where the first 32 bytes are the hash value, and the next 440 - 32 bytes are
-generated from a Chacha RNG with the hash as the seed.
+Используйте это результирующее хэш-значение в качестве входных данных для функции расширения, которая расширяет хэш в значение образа. Функция создаст 440-байтовый блок данных, где первые 32 байта являются хэш-значением, а в следующем - 32 байта генерируются из Chacha RNG с хэшем в качестве начального числа.
 
-The account images are then combined with xor. The previous account value will be xored into the state and the new account value also xored into the state.
+Затем образы аккаунтов объединяются с помощью xor. Предыдущее значение аккаунта будет преобразовано в состояние с помощью xor, а новое значение аккаунта также будет преобразовано с помощью xor в состояние.
 
-Voting and sysvar hash values occur with the hash of the resulting full image value.
+Голосование и хэш-значения sysvar происходят с хэшем результирующего полного значения образа.
 
-On validator boot, when it loads from a snapshot, it would verify the hash value with the accounts set. It would then
-use SPV to display the percentage of the network that voted for the hash value given.
+При загрузке валидатора, когда он загружается из снапшота, он будет проверять хэш-значение с набором аккаунтов. Затем он будет использовать SPV для отображения процента сети, проголосовавшей за указанное хэш-значение.
 
-The resulting value can be verified by a validator to be the result of xoring all current account states together.
+Полученное значение может быть проверено валидатором как как результат xor всех состояний текущего счета вместе.
 
-A snapshot must be purged of zero lamport accounts before creation and during verify since the zero lamport accounts do not affect the hash value but may cause
-a validator bank to read that an account is not present when it really should be.
+Снапшот должен быть очищен от нулевых лэмпорт аккаунтов до создания и во время проверки, поскольку нулевые лэмпорт аккаунты не влияют на хэш-значение, но могут заставить банк- валидатор прочитать, что аккаунта нет, когда он действительно должен быть.
 
-An attack on the xor state could be made to influence its value:
+Может быть произведена атака на состояние xor, чтобы повлиять на его значение:
 
-Thus the 440 byte image size comes from this paper, avoiding xor collision with 0 \(or thus any other given bit pattern\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
+Таким образом, размер образа в 440 байт основывается на этой документации, избегая коллизий xor с 0 \(или с любым другим заданным битовым шаблоном): \[[https://link. pringer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
 
-The math provides 128 bit security in this case:
+В данном случае математика обеспечивает 128 битную безопасность:
 
 ```text
 O(k * 2^(n/(1+lg(k)))
-k=2^40 accounts
+k=2^40 аккаунтов
 n=440
 2^(40) * 2^(448 * 8 / 41) ~= O(2^(128))
 ```

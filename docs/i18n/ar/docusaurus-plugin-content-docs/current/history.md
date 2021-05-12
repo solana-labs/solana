@@ -1,60 +1,15 @@
 ---
-title: History
+title: التاريخ
 ---
 
-In November of 2017, Anatoly Yakovenko published a whitepaper describing Proof
-of History, a technique for keeping time between computers that do not trust
-one another. From Anatoly's previous experience designing distributed systems
-at Qualcomm, Mesosphere and Dropbox, he knew that a reliable clock makes
-network synchronization very simple. When synchronization is simple the
-resulting network can be blazing fast, bound only by network bandwidth.
+في نوفمبر/تشرين الثاني من عام 2017، نشر أناتولي ياكوفينكو ورقة بيضاء تصف دليل إثبات التاريخ، وهي تقنية للحفاظ على الزمن بين أجهزة الكمبيوتر التي لا يثق بعضها ببعض. من تجربة أناتولي السابقة في تصميم الأنظمة الموزعة في Qualcomm وMesosphere وDropbox، كان يعلم أن الساعة الموثوقة تجعل مزامنة الشبكة بسيطة جدًا. وعندما تكون المزامنة بسيطة تكون الشبكة فائقة السرعة، مرتبطة فقط بعرض النطاق الترددي للشبكة.
 
-Anatoly watched as blockchain systems without clocks, such as Bitcoin and
-Ethereum, struggled to scale beyond 15 transactions per second worldwide when
-centralized payment systems such as Visa required peaks of 65,000 tps. Without
-a clock, it was clear they'd never graduate to being the global payment system
-or global supercomputer most had dreamed them to be. When Anatoly solved the
-problem of getting computers that don’t trust each other to agree on time, he
-knew he had the key to bring 40 years of distributed systems research to the
-world of blockchain. The resulting cluster wouldn't be just 10 times faster, or
-a 100 times, or a 1,000 times, but 10,000 times faster, right out of the gate!
+كان أناتولي يراقب بينما تتصارع أنظمة البلوكتشين بدون ساعة مثل البتكوين والإيثيريوم لتصل إلى أبعد من 15 معاملة في الثانية عالميًا بينما كانت أنظم الدفع المركزية مثل شركة فيزا تتطلب قممًا تصل إلى 65,000 معاملة بالثانية. بدون ساعة، بدا واضحًا أنهم لن يكونوا نظام الدفع العالمي أو أجهزة الحاسوب العالمية الخارقة والتي حلم الكثير بها. عندما وجد أناتولي حلًا لمشكلة توافق أجهزة الحاسوب التي لا تثق ببعضها البعض بالاتفاق على مسألة الوقت، وقد عرف حينها أنه يمتلك المفتاح لبحث لم شمل 40 سنة من الأنظمة الموزعة إلى عالم البلوكتشين. ولن تكون المجموعة حينها أسرع 10 مرات أو 100 مرة أو 1000 مرة، بل 10,000 مرة دفعةً واحدة!
 
-Anatoly's implementation began in a private codebase and was implemented in the
-C programming language. Greg Fitzgerald, who had previously worked with Anatoly
-at semiconductor giant Qualcomm Incorporated, encouraged him to reimplement the
-project in the Rust programming language. Greg had worked on the LLVM compiler
-infrastructure, which underlies both the Clang C/C++ compiler as well as the
-Rust compiler. Greg claimed that the language's safety guarantees would improve
-software productivity and that its lack of a garbage collector would allow
-programs to perform as well as those written in C. Anatoly gave it a shot and
-just two weeks later, had migrated his entire codebase to Rust. Sold. With
-plans to weave all the world's transactions together on a single, scalable
-blockchain, Anatoly called the project Loom.
+بدأ تنفيذ أناتولي للفكرة في قاعدة برمجة خاصة باستخدام لغة البرمجة C. غير أن جريج فيتزجيرالد والذي كان قد عمل سابقًا مع أناتالي في أشباه الموصلات الضخمة لدى شركة Qualcomm Incorporated قام بتشجيعه على إعادة تنفيذ المشروع باستخدام لغة البرمجة Rust. كان جريج قد عمل على البنية التحتية للمحول البرمجي LLVM، والذي يتضمن المحول البرمجي Clang C/C++ وكذلك المحول البرمجي Rust. وقد ادعى جريج أن ضمان أمان الغة سيحسن من إنتاجية البرامج وأن حاجتها إلى جامع قمامة سيسمح للبرامج بنفس أداء تلك المكتوبة بلغة C. قام بعدها أناتولي بالمحاولة وبعد أسبوعين كان قد دمج قاعدته البرمجية في Rust. تم البيع. مع وجود خطط لربط كافة معاملات العالم معًا في بلوكتشين واحدة قابلة للتطوير، وأطلق أناتولي على المشروع اسم Loom.
 
-On February 13th of 2018, Greg began prototyping the first open source
-implementation of Anatoly's whitepaper. The project was published to GitHub
-under the name Silk in the loomprotocol organization. On February 28th, Greg
-made his first release, demonstrating 10 thousand signed transactions could be
-verified and processed in just over half a second. Shortly after, another
-former Qualcomm cohort, Stephen Akridge, demonstrated throughput could be
-massively improved by offloading signature verification to graphics processors.
-Anatoly recruited Greg, Stephen and three others to co-found a company, then
-called Loom.
+في 13 فبراير من عام 2018، بدأ جريج بنمذجة أول تنفيذ مفتوح المصدر للورقة البيضاء الخاصة بأناتولي. وقد تم نشر المشروع على GitHub تحت اسم Silk في منظمة loomprotocol. في 28 فبراير، قام جريج بأول تصريح له موضحًا إمكانية معالجة والتحقق من توقيع 10 آلاف معاملة في أكثر من نصف ثانية بقليل. بعد ذلك، أوضح ستيفن أكريدج، والذي كان أحد أعضاء Qualcomm السابقين، أنه من الممكن أن تتحسن الإنتاجية بشكل كبير من خلال تفريغ التحقق من التوقيع إلى معالِجات الرسومات. وقام أناتولي بتوظيف جريج وستيفن وثلاثة آخرين للتشارك في إنشاء شركة سميت فيما بعد بـ Loom.
 
-Around the same time, Ethereum-based project Loom Network sprung up and many
-people were confused about whether they were the same project. The Loom team
-decided it would rebrand. They chose the name Solana, a nod to a small beach
-town North of San Diego called Solana Beach, where Anatoly, Greg and Stephen
-lived and surfed for three years when they worked for Qualcomm. On March 28th,
-the team created the Solana Labs GitHub organization and renamed Greg's
-prototype Silk to Solana.
+وقد انتشر في ذات الوقت تقريبًا مشروع شبكة Loom المبني على الإيثيريوم ما أحدث إرباكًا لدى بعض الناس حول ما إذا كانا نفس المشروع. فقرر فريق Loom تغيير العلامة التجارية. واختاروا اسم Solana، إشارةً إلى اسم مدينة صغيرة تقع على شاطئ شمال سان دييغو اسمها سولانا بيتش حيث نشأ أناتولي وجريج وستيفن وركبوا الأمواج لثلاث سنوات عندما كانوا يعملون لصالح Qualcomm. في 28 مارس، أنشأ الفريق منظمة مختبرات سولانا GitHub وأعاد تسمية نموذج جريج Silk إلى Solana.
 
-In June of 2018, the team scaled up the technology to run on cloud-based
-networks and on July 19th, published a 50-node, permissioned, public testnet
-consistently supporting bursts of 250,000 transactions per second. In a later
-release in December, called v0.10 Pillbox, the team published a permissioned
-testnet running 150 nodes on a gigabit network and demonstrated soak tests
-processing an _average_ of 200 thousand transactions per second with bursts
-over 500 thousand. The project was also extended to support on-chain programs
-written in the C programming language and run concurrently in a safe execution
-environment called BPF.
+في يونيو/حزيران 2018، رفع الفريق مستوى التكنولوجيا لتشغيلها على شبكات سحابية، وفي 19 يوليو، تم نشر شبكة تجريبية عامة تمتلك كافة الصلاحيات وتدعم باستمرار دفعات مكونة من 250,000 معاملة في الثانية الواحدة. وفي نشرة بعدها في ديسمبر سميت v0.10 Pillbox، نشر الفريق شبكة تجريبية تقوم بتشغيل 150 عقدة على شبكة بحجم جيجابايت شملت اختبارات مشبعة تعالج _average_ ما معدله 200 ألف معاملة في الثانية بدفعات أعلى من 500 ألف. وقد تم توسيع المشروع أيضًا ليدعم برامج مكتوبة بلغة البرمجة C داخل السلسلة، ويتم تنفيذها في بيئة آمنية تسمى BPF في الوقت ذاته.

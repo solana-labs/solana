@@ -1,91 +1,91 @@
 ---
-title: Blockstore
+title: Хранилище блоков Blockstore
 ---
 
-After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../cluster/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.
+После того, как блок станет необратимым, все блоки от него и до блока генезиса образуют линейную цепочку с привычным названием - блокчейн. До этого момента валидатор должен поддерживать все потенциально допустимые цепочки, называемые _форки_. Процесс, при котором форки естественным образом образуются в результате ротации лидера, описан в [генерации форков](../cluster/fork-generation.md). Описанная здесь структура данных хранилища блоков _blockstore_ — это то, как валидатор управляет этими форками до тех пор, пока блоки не будут финализированы.
 
-The blockstore allows a validator to record every shred it observes on the network, in any order, as long as the shred is signed by the expected leader for a given slot.
+Хранилище блоков позволяет валидатору записывать каждый кусочек, который он наблюдает в сети, в любом порядке, пока этот кусочек подписан ожидаемым лидером для данного слота.
 
-Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred index` \(within the slot\). This permits the skip-list structure of the Solana protocol to be stored in its entirety, without a-priori choosing which fork to follow, which Entries to persist or when to persist them.
+Шреды перемещаются в пространство ключей -- кортеж значений `лидер слота` + `индекс шреда`(находящегося в слоте), где в дальнейшем может произойти форк. Это позволяет хранить структуру списка пропусков протокола Solana в полном объеме, без предварительного выбора за каким форком следовать, какие записи сохранять и когда их сохранять.
 
-Repair requests for recent shreds are served out of RAM or recent files and out of deeper storage for less recent shreds, as implemented by the store backing Blockstore.
+Запросы на исправление недавних кусочков выдаются из оперативной памяти или из более глубокого хранилища для менее свежих кусочков, как это реализовано хранилищем, поддерживающим хранилище блоков Blockstore.
 
-## Functionalities of Blockstore
+## Функциональные возможности Blockstore
 
-1. Persistence: the Blockstore lives in the front of the nodes verification
+1. Постоянство: Blockstore находится перед конвейером
 
-   pipeline, right behind network receive and signature verification. If the
+   проверки узлов, сразу за сетевым приемом и проверкой подписи. Если
 
-   shred received is consistent with the leader schedule \(i.e. was signed by the
+   полученный кусочек соответствует расписанию лидера \(например, был подписан
 
-   leader for the indicated slot\), it is immediately stored.
+   лидером для указанного слота\), он немедленно сохраняется.
 
-2. Repair: repair is the same as window repair above, but able to serve any
+2. Восстановление: ремонт такой же, как и ремонт окон, описанный выше, но может обслуживать
 
-   shred that's been received. Blockstore stores shreds with signatures,
+   любой полученный кусочек. Blockstore хранит кусочки с подписями,
 
-   preserving the chain of origination.
+   сохраняя цепочку происхождения.
 
-3. Forks: Blockstore supports random access of shreds, so can support a
+3. Форки: Blockstore поддерживает произвольный доступ к кусочкам, поэтому может поддерживать
 
-   validator's need to rollback and replay from a Bank checkpoint.
+   потребность валидатора в откате и воспроизведении с контрольной точки банка.
 
-4. Restart: with proper pruning/culling, the Blockstore can be replayed by
+4. Перезапуск: при правильной отсечке/отбраковке Blockstore может быть воспроизведено
 
-   ordered enumeration of entries from slot 0. The logic of the replay stage
+   упорядоченным перечислением записей из слота 0. Логика этапа повтора
 
-   \(i.e. dealing with forks\) will have to be used for the most recent entries in
+   \(т.е. в случае с форками\) должна быть использована для самых последних записей в
 
-   the Blockstore.
+   Blockstore.
 
-## Blockstore Design
+## Дизайн Blockstore
 
-1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
-2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
+1. Записи в Blockstore хранятся в виде пар ключ-значение, где ключом является составной индекс слотов и индекс кусочков записи, а значение - это данные ввода. Обратите внимание, что шред индексы отсчитываются от нуля для каждого слота \(т.е. они относятся к слоту\).
+2. Blockstore хранит метаданные для каждого слота в структуре `SlotMeta`, содержащей:
 
-   - `slot_index` - The index of this slot
-   - `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
-   - `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
-   - `received` - The highest received shred index for the slot
-   - `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+   - `slot_index` - индекс этого слота
+   - `num_blocks` - Количество блоков в слоте \(используется для привязки к предыдущему слоту\)
+   - `consumed` - Последний по высоте индекс шреда `n`, таким образом при условии `m < n`, в данном слоте всегда существует шред с индексом равным `n` \(или, наивысший последовательный индекс шреда\).
+   - `received` - наивысший полученный индекс шреда для конкретного слота
+   - `next_slot` - Список будущих слотов, к которым может присоединиться этот слот. Используется при перестройке
 
-     the ledger to find possible fork points.
+     реестра для поиска возможных точек форка.
 
-   - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
+   - `last_index` - Индекс шреда, отмеченный как последний шред для конкретного слота. Этот метка будет установлен на шреде лидером слота, когда будет передан последний шред слота.
+   - `is_rooted` - True, если каждый блок от 0...формирует целостную последовательность без дыр. Мы можем получить is_rooted для каждого слота по следующим правилам. Пусть slot\(n\) будет слот с индексом `n`, и slot\(n\).is_full\(\) истинно, если слот с индексом `n` имеет все тики, ожидаемые для этого слота. Пусть is_rooted\(n\) является утверждением "slot\(n\).is_rooted истинно". Тогда:
 
      is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
 
-3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
-4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
+3. Объединение в цепь - Когда приходит шред для нового слота `x`, мы проверяем число блоков \(`num_blocks`\) для текущего слота \(эта информация кодируется в шреде\). Затем мы знаем, что этот новый слот связан со слотом `х - num_blocks`.
+4. Подписка - Blockstore записывает набор слотов, на которые были "подписаны". Это означает, что записи, которые связаны с этими слотами, будут отправлены по каналу Blockstore для использования ReplayStage. Смотрите `Blockstore API` для подробностей.
+5. Уведомления об обновлениях - Blockstore уведомляет слушателей, когда slot\(n\).is_rooted переключается из false в true для любого `n`.
 
 ## Blockstore APIs
 
-The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
+Blockstore предлагает API на основе подписки, который ReplayStage использует для запроса интересующих его записей. Записи будут отправлены по каналу, указанному в Blockstore. Эти API подписки следующие: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Возвращает новые слоты, соединяющиеся с любым элементом списка `slot_indexes`.
 
-1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
+1. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Возвращает вектор входа для слота начиная с `entry_start_index`, до значения `max` если `max_entries == Some(max)`, в противном случае, ограничения на длинну возвращаемого вектора не накладываются.
 
-Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
+Примечание. В совокупности это означает, что этап воспроизведения теперь должен будет знать, когда слот закончен, и должен подписаться на следующий слот, в котором он заинтересован, чтобы получить следующий набор записей. Раньше бремя цепочки слотов ложилось на Blockstore.
 
-## Interfacing with Bank
+## Взаимодействие с банком
 
-The bank exposes to replay stage:
+Банк предлагает для стадии воспроизведения:
 
-1. `prev_hash`: which PoH chain it's working on as indicated by the hash of the last
+1. `prev_hash`: над какой цепочкой PoH он работает, как указано хешем последней
 
-   entry it processed
+   обработанной записи
 
-2. `tick_height`: the ticks in the PoH chain currently being verified by this
+2. `tick_height`: тики в цепочке PoH, которые в настоящее время проверяются этим
 
-   bank
+   банком
 
-3. `votes`: a stack of records that contain: 1. `prev_hashes`: what anything after this vote must chain to in PoH 2. `tick_height`: the tick height at which this vote was cast 3. `lockout period`: how long a chain must be observed to be in the ledger to
+3. `votes`: стек записей, содержащих: 1. `prev_hashes`: что-либо после этого голоса, что должно быть привязано к PoH 2. `tick_height`: высота тика, на котором был отдан конкретный голос 3. `lockout period`: как долго последовательсноть должна находиться в реестре, чтобы
 
-   be able to be chained below this vote
+   ее можно было связать под этим голосом
 
-Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
+Этап воспроизведения использует API-интерфейсы Blockstore, чтобы найти самую длинную последовательность записей, которая может зависеть от предыдущего голосования. Если эта последовательность записей не зависит от последнего голосования, этап воспроизведения откатывает банк до этого голоса и воспроизводит последовательность оттуда.
 
-## Pruning Blockstore
+## Очистка Blockstore
 
-Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.
+Когда записи в Blockstore становятся достаточно старыми, представление всех возможных форков становится менее полезным, возможно, даже проблематичным для повторного воспроизведения при перезапуске. Однако, как только количество голосов валидатора достигнет максимальной блокировки, любое содержимое Blockstore, которое не входит в цепочку PoH для этого голосования, может быть удалено.

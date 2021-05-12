@@ -1,48 +1,24 @@
 ---
-title: Mobile App Wallets
+title: محافظ تطبيق الهاتف
 ---
 
-Solana is supported by multiple third-party apps which should provide a familiar
-experience for most people who are new or experienced with using crypto wallets.
+تعد Solana مدعومة بتطبيقات متعددة من طرف ثالث والتي ينبغي أن توفر تجربة مألوفة لمعظم الناس الجدد أو ذوي الخبرة في استخدام محافظ العملات المشفرة.
 
-## Exodus
+## محفظة ترست (Trust Wallet)
+محفظة [Trust Wallet](https://trustwallet.com/) هي عبارة عن تطبيق متاح لأجهزة الآيفون والأندرويد ويمكن إستخدامه لإرسال وإستقبال رموز SOL.
 
-Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+*ملاحظة: محظفة ترست لا تدعم حسابات التَّحْصِيص أو عمليات التَّحْصِيص*
 
-Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+### أمان محفظة ترست (Trust Wallet Security)
 
-Exodus includes live charts, a built-in exchange, and 24/7 human support.
+تعتمد نسبة الأمان للرموز التي في المحفظة على نسبة أمان الجهاز الذي تم تثبيت التطبيق عليه. أي شخص قادر على فتح هاتفك أو جهازك اللوحي قد يكون قادرا على استخدام تطبيق (Trust Wallet) ونقل الرموز الخاصة بك. لتحسين الأمان، يمكنك إضافة رمز مرور إلى تطبيق محفظة ترست. لإضافة رمز مرور للمحفظة الاستئمانية، افتح التطبيق وانتقل إلى الإعدادات -> الأمان -> رمز المرور.
 
-## Trust Wallet
+إذا حصل شخص ما على حق الوصول إلى تطبيق (Trust Wallet) الخاص بك، فيمكنه الوصول إلى كلمات الاسترداد الخاصة بالمحفظة. وأي شخص لديه حق الوصول إلى كلمات الاسترداد الخاصة بمحفظتك سيكون قادرا على إعادة إنشاء مفاتيح محفظة ترست الخاصة بك على جهاز آخر. وبالتالي يمكنهم توقيع العمليات من ذلك الجهاز بدلًا من الجهاز الخاص بك. يتم عرض كلمات الاسترداد عند إنشاء محفظة جديدة ويمكن أيضا الاطلاع عليها في أي وقت لاحق في التطبيق باتباع هذه الخطوات:
 
-[Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
-and can be used to send and receive SOL tokens.
+- اذهب إلى الإعدادات -> المحافظ
+- اختر "عرض كلمات الاسترداد" من قائمة الخيارات المنسدلة لمحفظة معينة
 
-_Note: Trust Wallet does not support stake accounts or staking operations_
+## محفظة Coin98
+محفظة [Coin98](https://coin98.app/) هي عبارة عن تطبيق متاح لأجهزة الآيفون والأندرويد ويمكن إستخدامه لإرسال وإستقبال رموز SOL.
 
-### Trust Wallet Security
-
-Tokens held in Trust Wallet are only as secure as the device on which the app is
-installed. Anyone who is able to unlock your phone or tablet may be able to
-use the Trust Wallet app and transfer your tokens. To improve security,
-you can add a passcode to the Trust Wallet application.
-To add a Trust Wallet passcode, open the app and go to
-Settings -> Security -> Passcode.
-
-If someone gains access to your Trust Wallet application, they can access your
-recovery seed phrase.
-Anyone who has access to your seed phrase will be able to recreate
-your Trust Wallet keys on a different device. From there, they could
-sign transactions from that device rather than on your own phone or tablet.
-The seed phrase is displayed when a new wallet is created and it can also be
-viewed at any later time in the app by following these steps:
-
-- Go to Setting -> Wallets
-- Under the Options menu for a particular wallet tap "Show Recovery Phrase"
-
-## Coin98
-
-[Coin98](https://coin98.app/) is an app available for iOS and Android and can
-be used to send and receive SOL tokens.
-
-_Note: Coin98 does not support stake accounts or staking operations_
+*ملاحظة: محفظة Coin98 لا تدعم حسابات التَّحْصِيص أو عمليات التَّحْصِيص*

@@ -1,47 +1,42 @@
 ---
-title: Monitoring a Validator
+title: Мониторинг валидатора
 ---
 
-## Check Gossip
+## Проверка Gossip
 
-Confirm the IP address and **identity pubkey** of your validator is visible in
-the gossip network by running:
+Убедитесь, что IP-адрес и **идентификационный ключ** вашего валидатора видны в gossip, выполнив:
 
 ```bash
 solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
-## Check Your Balance
+## Проверка баланса
 
-Your account balance should decrease by the transaction fee amount as your
-validator submits votes, and increase after serving as the leader. Pass the
-`--lamports` are to observe in finer detail:
+Ваш баланс должен быть уменьшен на сумму комиссии, которую ваш валидатор тратит на голоса и увеличивается после того, как он будет выступать в качестве лидера. Выполните с `--lamports` для просмотра в более мелких деталях:
 
 ```bash
 solana balance --lamports
 ```
 
-## Check Vote Activity
+## Проверка Vote Activity
 
-The `solana vote-account` command displays the recent voting activity from
-your validator:
+Команда `solana vote-account` отображает недавнюю активность голосования вашего валидатора:
 
 ```bash
 solana vote-account ~/vote-account-keypair.json
 ```
 
-## Get Cluster Info
+## Получение информации о кластере
 
-There are several useful JSON-RPC endpoints for monitoring your validator on the
-cluster, as well as the health of the cluster:
+Есть несколько полезных JSON-RPC endpoints для мониторинга вашего валидатора в кластере, а также для просмотра состояния кластера:
 
 ```bash
-# Similar to solana-gossip, you should see your validator in the list of cluster nodes
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://devnet.solana.com
-# If your validator is properly voting, it should appear in the list of `current` vote accounts. If staked, `stake` should be > 0
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://devnet.solana.com
-# Returns the current leader schedule
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://devnet.solana.com
-# Returns info about the current epoch. slotIndex should progress on subsequent calls.
+# Похоже на solana-gossip, вы должны увидеть валидатор в списке кластерных узлов
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2. ","id":1, "метод":"getClusterNodes"}" http://devnet.solana.com
+# Если ваш валидатор правильно голосовал, он должен появиться в списке `current`. Если имеется `stake`, должно быть > 0
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}" http://devnet.solana. om
+# Возвращает текущий график лидеров
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2. ","id":1, "method":"getLeaderSchedule"}' http://devnet.solana.com
+# Возвращает информацию о текущем эпохе. slotIndex должен увеличиваться.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com
 ```

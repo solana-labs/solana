@@ -1,158 +1,125 @@
 ---
-title: Send and Receive Tokens
+title: Enviar y recibir tokens
 ---
 
-This page decribes how to receive and send SOL tokens using the command line
-tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
-a [file system wallet](../wallet-guide/file-system-wallet.md), or a
-[hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
-you have created a wallet and have access to its address (pubkey) and the
-signing keypair. Check out our
-[conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
+Esta página describe cómo recibir y enviar tokens SOL usando las herramientas de la línea de comandos con una cartera de línea de comandos como [cartera de papel](../wallet-guide/paper-wallet.md), una [cartera de sistema de archivos](../wallet-guide/file-system-wallet.md)o una [cartera hardware](../wallet-guide/hardware-wallets.md). Antes de empezar, asegúrate de haber creado un monedero y de tener acceso a su dirección (pubkey) y al keypair de ingreso. Echa un vistazo a nuestras [convenciones para introducir keypairs para diferentes tipos de monederos](../cli/conventions.md#keypair-conventions).
 
-## Testing your Wallet
+## Probando tu cartera
 
-Before sharing your public key with others, you may want to first ensure the
-key is valid and that you indeed hold the corresponding private key.
+Antes de compartir tu clave pública con otros, primero debería asegurarse de que la clave es válida y de que posee la clave privada correspondiente.
 
-In this example, we will create a second wallet in addition to your first wallet,
-and then transfer some tokens to it. This will confirm that you can send and
-receive tokens on your wallet type of choice.
+En este ejemplo, crearemos una segunda cartera además de tu primera cartera, y luego transferiremos algunos tokens a ella. Esto confirmará que puede enviar y recibir tokens en su tipo de monedero elegido.
 
-This test example uses our Developer Testnet, called devnet. Tokens issued
-on devnet have **no** value, so don't worry if you lose them.
+Este ejemplo de prueba utiliza nuestro desarrollador Testnet, llamado devnet. Las fichas emitidas en devnet **no** tienen valor, así que no te preocupes si las pierdes.
 
-#### Airdrop some tokens to get started
+#### Airdrop algunos tokens para comenzar
 
-First, _airdrop_ yourself some play tokens on the devnet.
+Primero, _airdrop_ a ti mismo algunos tokens de juego en el devnet.
 
 ```bash
-solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
-public key/wallet address.
+donde se sustituye el texto `<RECIPIENT_ACCOUNT_ADDRESS>` por su clave pública/dirección de cartera codificada en base58 clave pública/dirección del monedero.
 
-#### Check your balance
+#### Compruebe su saldo
 
-Confirm the airdrop was successful by checking the account's balance.
-It should output `1 SOL`:
+Confirme que el airdrop fue exitoso comprobando el saldo de la cuenta. Debería mostrar`10 SOL`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
+saldo de solana <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-#### Create a second wallet address
+#### Crear una segunda dirección de cartera
 
-We will need a new address to receive our tokens. Create a second
-keypair and record its pubkey:
+Necesitaremos una nueva dirección para recibir nuestros tokens. Crea un segundo keypair y graba su pubkey:
 
 ```bash
-solana-keygen new --no-passphrase --no-outfile
+nuevo keygen de solana --no-passphrase --no-outfile
 ```
 
-The output will contain the address after the text `pubkey:`. Copy the
-address. We will use it in the next step.
+La salida contendrá la dirección después del texto `pubkey:`. Copiar la dirección. Lo utilizaremos en el siguiente paso.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-You can also create a second (or more) wallet of any type:
-[paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses),
-[file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
+También puede crear un segundo (o más) monedero de cualquier tipo: [papel](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses), [sistema de archivos](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses), o [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 
-#### Transfer tokens from your first wallet to the second address
+#### Transferir tokens de su primera cartera a la segunda dirección
 
-Next, prove that you own the airdropped tokens by transferring them.
-The Solana cluster will only accept the transfer if you sign the transaction
-with the private keypair corresponding to the sender's public key in the
-transaction.
+Después, comprueba que eres dueño de los tokens recibidos del airdrop transfiriéndolos. El clúster de Solana solo aceptará la transferencia si firma la transacción con el keypair correspondiente a la clave pública del remitente en la transacción.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
-where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
-and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the address of your second
-wallet.
+donde reemplaza `<KEYPAIR>` con la ruta de acceso a un keypair en su primera cartera, y sustituye `<RECIPIENT_ACCOUNT_ADDRESS>` con la dirección de tu segunda cartera.
 
-Confirm the updated balances with `solana balance`:
+Confirma el saldo actualizado con `saldo solana`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
+saldo de solana <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
-where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
-recipient's public key.
+donde `<ACCOUNT_ADDRESS>` es la clave pública de su keypair o la clave pública del destinatario.
 
-#### Full example of test transfer
+#### Ejemplo completo de la transferencia de prueba
 
 ```bash
-$ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
-Generating a new keypair
-For added security, enter a passphrase (empty for no passphrase):
-Wrote new keypair to my_solana_wallet.json
+$ solana-keygen new --outfile my_solana_wallet.json # Creando mi primer monedero, un monedero de sistema de archivos
+Generando un nuevo Keypair
+Para mayor seguridad, introduzca una frase de contraseña (vacía para no tener frase de contraseña):
+Escribir el nuevo keypair en my_solana_wallet.json
 ==========================================================================
-pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # Here is the address of the first wallet
+pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK # Aquí está la dirección del primer monedero
 ==========================================================================
-Save this seed phrase to recover your new keypair:
-width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
+Guarda esta frase semilla para recuperar tu nuevo keypair:
+width enhance concert vacant ketchup eternal spy craft spy guard tag punch # ¡Si esto fuera un monedero real, nunca compartiría estas palabras en internet de esta manera!
 ==========================================================================
 
-$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
-Requesting airdrop of 1 SOL from 35.233.193.70:9900
-1 SOL
+$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Airdropping 10 SOL a la dirección/pubkey de mi cartera
+Solicitando airdrop de 10 SOL desde 35.233.193.70:9900
+10 SOL
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
-1 SOL
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Comprobar el saldo de la dirección
+10 SOL
 
-$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
-Generating a new keypair
-For added security, enter a passphrase (empty for no passphrase):
+$ solana-keygen new --no-outfile # Crear una segunda cartera, una cartera de papel
+Generar un nuevo keypair
+Para mayor seguridad, introduzca una frase de contraseña (vacía para no tener frase de contraseña):
 ====================================================================
-pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # Here is the address of the second, paper, wallet.
+pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAKv # Aquí está la dirección del segundo monedero de papel.
 ====================================================================
-Save this seed phrase to recover your new keypair:
-clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
+Guarde esta frase semilla para recuperar su nuevo keypair:
+clump panic cousin hurt coast charge engage eager urge win love # Si esto fuera una cartera real, ¡nunca compartas estas palabras en internet de esta manera!
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
-3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json # Transferir tokens a la dirección pública del monedero de papel
+3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z # Esta es la firma de la transacción
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
+4.999995 SOL # A la cuenta remitente le quedan algo menos de 5 SOL debido al pago de la tasa de transacción de 0,000005 SOL
 
-$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
+7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAKv --url https://devnet.solana.com
+5 SOL # El segundo monedero ha recibido la transferencia de 5 SOL del primer monedero
 
 ```
 
-## Receive Tokens
+## Recibir tokens
 
-To receive tokens, you will need an address for others to send tokens to. In
-Solana, the wallet address is the public key of a keypair. There are a variety
-of techniques for generating keypairs. The method you choose will depend on how
-you choose to store keypairs. Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallet-guide/cli.md).
-Once completed, you should have a public key
-for each keypair you generated. The public key is a long string of base58
-characters. Its length varies from 32 to 44 characters.
+Para recibir tokens, necesitarás una dirección para que otros envíen tokens. En Solana, la dirección del monedero es la clave pública de un keypair. Hay una variedadde técnicas para generar keypairs. El método que elija dependerá de cómo elija almacenar keypairs. Los keypairs se almacenan en carteras. Antes de recibir tokens, necesitará [crear una cartera](../wallet-guide/cli.md). Una vez completado, debería tener una clave pública para cada keypair que haya generado. La clave pública es una larga cadena de caracteres base58. Su longitud varía de 32 a 44 caracteres.
 
-## Send Tokens
+## Enviar Tokens
 
-If you already hold SOL and want to send tokens to someone, you will need
-a path to your keypair, their base58-encoded public key, and a number of
-tokens to transfer. Once you have that collected, you can transfer tokens
-with the `solana transfer` command:
+Si ya posee SOL y desea enviar tokens a alguien, necesitará una ruta a su keypair, su clave pública codificada en base58, y un número de tokens para transferir. Una vez recolectado, puedes transferir tokens con el comando `solana transfer`:
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>
 ```
 
-Confirm the updated balances with `solana balance`:
+Confirma el saldo actualizado con `saldo solana`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS>
+saldo de solana <ACCOUNT_ADDRESS>
 ```

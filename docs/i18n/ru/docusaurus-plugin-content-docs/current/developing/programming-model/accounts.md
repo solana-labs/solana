@@ -1,220 +1,91 @@
 ---
-title: "Accounts"
+title: "Аккаунты"
 ---
 
-## Storing State between Transactions
+## Сохранение состояния между транзакциями
 
-If the program needs to store state between transactions, it does so using
-_accounts_. Accounts are similar to files in operating systems such as Linux.
-Like a file, an account may hold arbitrary data and that data persists beyond
-the lifetime of a program. Also like a file, an account includes metadata that
-tells the runtime who is allowed to access the data and how.
+Если программе необходимо хранить состояние между транзакциями, она делает это с помощью _аккаунтов_. Аккаунты похожи на файлы в операционных системах, таких как Linux. Как и файл, аккаунт может содержать произвольные данные и что данные сохраняются сверх срока службы программы. Также как и файл, аккаунт включает в себя метаданные, которые говорит о том, кому разрешен доступ к данным и каким образом.
 
-Unlike a file, the account includes metadata for the lifetime of the file. That
-lifetime is expressed in "tokens", which is a number of fractional native
-tokens, called _lamports_. Accounts are held in validator memory and pay
-["rent"](#rent) to stay there. Each validator periodically scans all accounts
-and collects rent. Any account that drops to zero lamports is purged. Accounts
-can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
-number of lamports.
+В отличие от файла, аккаунт содержит метаданные за время жизни файла. Это время жизни выражается в "токенах", который является рядом дробных родных токенов, называемых _лэмпортами_. Аккаунты хранятся в памяти валидатора и платят ["аренду"](#rent), чтобы остаться там. Каждый валидатор периодически сканирует все аккаунты и собирает аренду. Любой аккаунт, который падает на нулевые лэмпорты, очищается.  Аккаунты также могут быть помечены [освобожденные от аренды](#rent-exemption), если они содержат достаточно количества лэмпортов.
 
-In the same way that a Linux user uses a path to look up a file, a Solana client
-uses an _address_ to look up an account. The address is a 256-bit public key.
+Так же как пользователь Linux использует путь для поиска файла, клиент Solana использует _адрес_ для поиска аккаунта. Адрес является 256-битным публичным ключом.
 
-## Signers
+## Подписанты
 
-Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. When a
-corresponding digital signature is present it signifies that the holder of the
-account's private key signed and thus "authorized" the transaction and the
-account is then referred to as a _signer_. Whether an account is a signer or not
-is communicated to the program as part of the account's metadata. Programs can
-then use that information to make authority decisions.
+Транзакции могут включать цифровые [подписи](terminology.md#signature) соответствующие публичным ключам аккаунтов, на которые ссылается транзакция. Когда соответствующая цифровая подпись присутствует, это означает, что владелец приватного ключа аккаунта подписал и таким образом "авторизовал" транзакцию, и в этом случае аккаунт аккаунт называется _подписантом_. Независимо от того, является ли аккаунт стороной или нет, передается программе в рамках метаданных аккаунта. Программы могут использовать эту информацию для принятия решений.
 
-## Read-only
+## Только для чтения
 
-Transactions can [indicate](transactions.md#message-header-format) that some of
-the accounts it references be treated as _read-only accounts_ in order to enable
-parallel account processing between transactions. The runtime permits read-only
-accounts to be read concurrently by multiple programs. If a program attempts to
-modify a read-only account, the transaction is rejected by the runtime.
+Транзакции могут [указывать](transactions.md#message-header-format) на то, что некоторые из аккаунтов, которые она ссылается, рассматриваются как _аккаунты только для чтения_ для того, чтобы включить параллельную обработку счетов между транзакциями. Среда выполнения разрешает только чтение аккаунта для одновременного чтения несколькими программами. Если программа пытается изменить аккаунт только для чтения, транзакция будет отклонена во время выполнения.
 
-## Executable
+## Исполняемые
 
-If an account is marked "executable" in its metadata then it is considered a
-program which can be executed by including the account's public key an
-instruction's [program id](transactions.md#program-id). Accounts are marked as
-executable during a successful program deployment process by the loader that
-owns the account. For example, during BPF program deployment, once the loader
-has determined that the BPF bytecode in the account's data is valid, the loader
-permanently marks the program account as executable. Once executable, the
-runtime enforces that the account's data (the program) is immutable.
+Если учетная запись помечена в метаданных как «исполняемая», она считается программой, которая может быть выполнена путем включения публичного ключа аккаунта инструкции [id программы ](transactions.md#program-id). Аккаунты отмечены как исполняемый файл во время успешного процесса развертывания программы загрузчиком, который владеет аккаунтом.  Например, во время внедрения программы BPF, после того, как определит, что байт-код BPF в данных аккаунта верен, загрузчик навсегда помечает аккаунт программы исполняемым.  После исполняемого файла среда выполнения обеспечивает неизменность данных аккаунта (программы).
 
-## Creating
+## Создание
 
-To create an account a client generates a _keypair_ and registers its public key
-using the `SystemProgram::CreateAccount` instruction with preallocated a fixed
-storage size in bytes. The current maximum size of an account's data is 10
-megabytes.
+Чтобы создать аккаунт клиент генерирует _ключевые пары_ и регистрирует свой публичный ключ с помощью инструкции `SystemProgram::CreateAccount` с предустановленным размер хранилища в байтах. Максимальный размер данных аккаунта составляет 10 мегабайт.
 
-An account address can be any arbitrary 256 bit value, and there are mechanisms
-for advanced users to create derived addresses
-(`SystemProgram::CreateAccountWithSeed`,
-[`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
+Адрес аккаунта может быть любым произвольным 256 битным значением, и существуют механизмы для создания опытными пользователями полученных адресов (`SystemProgram::CreateAccountWithSeed`, [`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
 
-Accounts that have never been created via the system program can also be passed
-to programs. When an instruction references an account that hasn't been
-previously created the program will be passed an account that is owned by the
-system program, has zero lamports, and zero data. But, the account will reflect
-whether it is a signer of the transaction or not and therefore can be used as an
-authority. Authorities in this context convey to the program that the holder of
-the private key associated with the account's public key signed the transaction.
-The account's public key may be known to the program or recorded in another
-account and signify some kind of ownership or authority over an asset or
-operation the program controls or performs.
+Аккаунты, которые никогда не были созданы через системную программу, также могут быть переданы программам. Когда инструкция ссылается на аккаунт, который не был ранее создан, программе будет передан аккаунт, принадлежащий системной программе нулевые лэмпарты и нулевые данные. Но аккаунт будет отражаться независимо от того, подписывает ли он транзакцию или нет и, следовательно, может использоваться в качестве полномочий. Авторы в этом контексте передают программе, что владелец приватного ключа, связанного с публичным ключом аккаунта, подписал транзакцию. Публичный ключ аккаунта может быть известен программе или записан в другой аккаунт и обозначать какое-либо право собственности на актив или операцию управления или выполнения программы.
 
-## Ownership and Assignment to Programs
+## Владение программами и их распределение
 
-A created account is initialized to be _owned_ by a built-in program called the
-System program and is called a _system account_ aptly. An account includes
-"owner" metadata. The owner is a program id. The runtime grants the program
-write access to the account if its id matches the owner. For the case of the
-System program, the runtime allows clients to transfer lamports and importantly
-_assign_ account ownership, meaning changing owner to different program id. If
-an account is not owned by a program, the program is only permitted to read its
-data and credit the account.
+Создаваемый аккаунт инициализирован для _владения_ встроенной программой под названием Системная программа и называется _системным аккаунтом_ соответственно. Аккаунт включает в себя метаданных "владельца". Владелец - это идентификатор программы. Время выполнения предоставляет программе доступ на запись аккаунта, если ее идентификатор соответствует владельцу. В случае системной программы среда выполнения позволяет клиентам передавать лэмпорты и, что важно, _назначать_ владельца аккаунта, что означает смену владельца на другой id программы. Если аккаунт не принадлежит программе, программе разрешено только читать ее данные и пополнить счет.
 
-## Verifying validity of unmodified, reference-only accounts
+## Аренда
 
-For security purposes, it is recommended that programs check the validity of any
-account it reads but does not modify.
+Поддержание аккаунтов в Solana требует затрат на хранение, называемых _арендной платой _, потому что кластер должен активно поддерживать данные для обработки любых будущих транзакций для него. Это отличается от Bitcoin и Ethereum, где хранение аккаунтов не влечет за собой никаких затрат.
 
-The security model enforces that an account's data can only be modified by the
-account's `Owner` program. Doing so allows the program to trust that the data
-passed to them via accounts they own will be in a known and valid state. The
-runtime enforces this by rejecting any transaction containing a program that
-attempts to write to an account it does not own. But, there are also cases
-where a program may merely read an account they think they own and assume the
-data has only been written by themselves and thus is valid. But anyone can
-issues instructions to a program, and the runtime does not know that those
-accounts are expected to be owned by the program. Therefore a malicious user
-could create accounts with arbitrary data and then pass these accounts to the
-program in the place of a valid account. The arbitrary data could be crafted in
-a way that leads to unexpected or harmful program behavior.
+Арендная плата списывается с баланса аккаунта средой выполнения при первом доступе (включая первоначальное создание аккаунта) в текущую эпоху по транзакций или один раз за эпоху, если транзакций нет. Комиссия составляет в настоящее время фиксированную ставку, измеряемую в bytes-times-epochs. Комиссия может измениться в будущем.
 
-To check an account's validity, the program should either check the account's
-address against a known value or check that the account is indeed owned
-correctly (usually owned by the program itself).
+Для упрощения расчета арендной платы арендная плата всегда взимается за одну полную эпоху. Арендная плата не рассчитывается пропорционально, что означает, что за отдельные эпохи не взимается ни сборов, ни возмещения. Это означает, что при создании аккаунта первая плата, собранная не за текущую частичную эпоху, а собирается заранее для следующей полной эпохи. Последующие сборы аренды относятся к будущим эпохам. С другой стороны, если баланс счета, на котором уже собрана аренда, упадет ниже другой арендной платы в середине эпохи, счет будет продолжать существовать в течение текущей эпохи и будет очищен немедленно в начале предстоящей эпохи.
 
-One example is when programs read a sysvar. Unless the program checks the
-address or owner, it's impossible to be sure whether it's a real and valid
-sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks
-the sysvar's validity during
-deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+Аккаунты могут освобождаться от уплаты аренды, если они сохраняют минимальный баланс. Это освобождение от арендной платы описано ниже.
 
-If the program always modifies the account in question, the address/owner check
-isn't required because modifying an unowned (could be the malicious account with
-the wrong owner) will be rejected by the runtime, and the containing transaction
-will be thrown out.
+### Расчёт аренды
 
-## Rent
+Примечание: Цена аренды может измениться в будущем.
 
-Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
-cluster must actively maintain the data to process any future transactions on
-it. This is different from Bitcoin and Ethereum, where storing accounts doesn't
-incur any costs.
+На момент написания фиксированная арендная плата составляла 19,055441478439427 лэмпорт за байт-эпоху в кластерах тестовой сети и бета-версии основной сети. [Эпоха](terminology.md#epoch) планируется на 2 дня (для devnet арендная плата составляет 0,3608183131797095 лэмпортов на байт-эпоху с продолжительностью 54 м 36 с).
 
-The rent is debited from an account's balance by the runtime upon the first
-access (including the initial account creation) in the current epoch by
-transactions or once per an epoch if there are no transactions. The fee is
-currently a fixed rate, measured in bytes-times-epochs. The fee may change in
-the future.
-
-For the sake of simple rent calculation, rent is always collected for a single,
-full epoch. Rent is not pro-rated, meaning there are neither fees nor refunds
-for partial epochs. This means that, on account creation, the first rent
-collected isn't for the current partial epoch, but collected up front for the
-next full epoch. Subsequent rent collections are for further future epochs. On
-the other end, if the balance of an already-rent-collected account drops below
-another rent fee mid-epoch, the account will continue to exist through the
-current epoch and be purged immediately at the start of the upcoming epoch.
-
-Accounts can be exempt from paying rent if they maintain a minimum balance. This
-rent-exemption is described below.
-
-### Calculation of rent
-
-Note: The rent rate can change in the future.
-
-As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch
-on the testnet and mainnet-beta clusters. An [epoch](terminology.md#epoch) is
-targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports
-per byte-epoch with its 54m36s-long epoch).
-
-This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching
-to 3.56 SOL per mebibyte-year):
+Это значение рассчитано для целевого 0,01 SOL на mebibyte-day (точно соответствует 3,56 SOL на mebibyte-year):
 
 ```text
 Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
 ```
 
-And rent calculation is done with the `f64` precision and the final result is
-truncated to `u64` in lamports.
+И расчет арендной платы производится с точностью `f64`, а конечный результат усекается `u64` в лэмпорте.
 
-The rent calculation includes account metadata (address, owner, lamports, etc)
-in the size of an account. Therefore the smallest an account can be for rent
-calculations is 128 bytes.
+Расчет арендной платы включает метаданные аккаунта (адрес, владелец, лэмпорты и т. д.) в размере аккаунта. Таким образом, минимальный размер аккаунта для расчетов аренды составляет 128 байтов.
 
-For example, an account is created with the initial transfer of 10,000 lamports
-and no additional data. Rent is immediately debited from it on creation,
-resulting in a balance of 7,561 lamports:
+Например, аккаунт создается с первоначальной передачей 10 000 лэмпорт и без дополнительных данных. С него сразу же списывается аренда при создании, в результате получается баланс в 7561 лэмпорт:
+
 
 ```text
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
 Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
 ```
 
-The account balance will be reduced to 5,122 lamports at the next epoch even if
-there is no activity:
+Баланс аккаунта будет уменьшен до 5122 лэмпортов в следующую эпоху, даже если нет активности:
 
 ```text
 Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fee for an epoch)
 ```
 
-Accordingly, a minimum-size account will be immediately removed after creation
-if the transferred lamports are less than or equal to 2,439.
+Соответственно, аккаунт минимального размера будет немедленно удален после создания, если количество перенесенных лэмпортов меньше или равно 2439.
 
-### Rent exemption
+### Освобождение от арендной платы
 
-Alternatively, an account can be made entirely exempt from rent collection by
-depositing at least 2 years-worth of rent. This is checked every time an
-account's balance is reduced and rent is immediately debited once the balance
-goes below the minimum amount.
+В качестве альтернативы аккаунт может быть полностью освобожден от взимания арендной платы путем внесение арендной платы не менее чем за 2 года. Это проверяется каждый раз, когда баланс счета уменьшается, и арендная плата немедленно списывается, как только баланс становится ниже минимальной суммы.
 
-Program executable accounts are required by the runtime to be rent-exempt to
-avoid being purged.
+Среда выполнения требует, чтобы аккаунты исполняемых программ не облагались арендой, чтобы избежать очистки.
 
-Note: Use the [`getMinimumBalanceForRentExemption` RPC
-endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the
-minimum balance for a particular account size. The following calculation is
-illustrative only.
+Примечание: Используйте [`getMinimumBalanceForRentExemption` RPC конечную точку](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) для вычисления минимального баланса для конкретного размера счета. Следующий расчет носит исключительно иллюстративный характер.
 
-For example, a program executable with the size of 15,000 bytes requires a
-balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
+Например, программа, размер которой составляет 15000 байт, требует баланса 105,290,880 лэмпорт(=~ 0.105 SOL), чтобы быть освобождённой от аренды:
 
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
-
-Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
-
-```text
-$ solana rent 15000
-Rent per byte-year: 0.00000348 SOL
-Rent per epoch: 0.000288276 SOL
-Rent-exempt minimum: 0.10529088 SOL
-```
-
-Note: Rest assured that, should the storage rent rate need to be increased at some
-point in the future, steps will be taken to ensure that accounts that are rent-exempt
-before the increase will remain rent-exempt afterwards

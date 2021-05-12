@@ -1,43 +1,37 @@
 ---
-title: Connecting to a Cluster
+title: الإتصال بالمجموعة
 ---
 
-See [Solana Clusters](../clusters.md) for general information about the
-available clusters.
+راجع مجموعات [Solana Clusters](../clusters.md) للحصول على معلومات عامة حول المجموعات (clusters) المُتاحة.
 
-## Configure the command-line tool
+## إعداد أداة أداة سطر الأوامر (command-line tools)
 
-You can check what cluster the Solana command-line tool (CLI) is currently targeting by
-running the following command:
+يُمكنك التحقق من المجموعة (cluster) في Solana التي تستهدفها أداة command-line (CLI) حاليا من خلال تشغيل الأمر التالي:
 
 ```bash
 solana config get
 ```
 
-Use `solana config set` command to target a particular cluster. After setting
-a cluster target, any future subcommands will send/receive information from that
-cluster.
+إستخدم الأمر `solana config set` لإستهداف مجموعة مُعينة. بعد إعداد المجموعة (cluster) الهدف، فإن أي أوامر فرعية مُستقبلية ستُرسل / تستقبل معلومات من تلك المجموعة (cluster).
 
-For example to target the Devnet cluster, run:
+على سبيل المثال لإستهداف مجموعة شبكة المُطوِّرين (Devnet)، قُم بتشغيل:
 
 ```bash
 solana config set --url https://devnet.solana.com
 ```
 
-## Ensure Versions Match
+## تأكد من أن الإصدارات مُتطابقة
 
-Though not strictly necessary, the CLI will generally work best when its version
-matches the software version running on the cluster. To get the locally-installed
-CLI version, run:
+على الرغم من أن ذلك ليس ضروريا، إلا أن أداة CLI ستعمل بشكل أفضل عندما تتطابق نُسختها مع إصدار البرنامج الذي يعمل على المجموعة (cluster). للحصول على ملف إصدار CLI المُنَصَّب محليا، شغِّل الأمر:
 
 ```bash
 solana --version
 ```
 
-To get the cluster version, run:
+للحصول على إصدار المجموعة، شغِّل الأمر:
 
 ```bash
 solana cluster-version
 ```
 
-Ensure the local CLI version is greater than or equal to the cluster version.
+تأكد من أن إصدار أداة CLI المحلي أكبر أو يُساوي إصدار المجموعة (cluster).

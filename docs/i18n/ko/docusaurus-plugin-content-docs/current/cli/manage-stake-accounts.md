@@ -1,20 +1,14 @@
 ---
-title: Manage Stake Accounts
+title: 스테이킹 계정 관리
 ---
 
-If you want to delegate stake to many different validators, you will need
-to create a separate stake account for each. If you follow the convention
-of creating the first stake account at seed "0", the second at "1", the
-third at "2", and so on, then the `solana-stake-accounts` tool will allow
-you to operate on all accounts with single invocations. You can use it to
-sum up the balances of all accounts, move accounts to a new wallet, or set
-new authorities.
+스테이킹를 여러 밸리데이터에게 위임하려면 각각에 대해 별도의 스테이킹 계정을 만들어야합니다. 첫 번째 지분 계정을 시드 "0"에, 두 번째는 "1"에, 세 번째는 "2"에 생성하는 규칙을 따르는 경우 `solana-stake-accounts` 도구로 한 번의 호출로 모든 계정에서 작업 할 수 있습니다. 이를 사용하여 모든 계정의 잔액을 합산하거나 계정을 새 지갑으로 이동하거나 새로운 권한을 설정할 수 있습니다.
 
-## Usage
+## 사용법
 
-### Create a stake account
+### 스테이킹 계정 생성
 
-Create and fund a derived stake account at the stake authority public key:
+스테이킹 권한 공개키에 파생 스테이킹 계정을 만들고 자금을 조달하기:
 
 ```bash
 solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
@@ -22,33 +16,34 @@ solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-### Count accounts
+### 계정수
 
-Count the number of derived accounts:
+파생 계정 수를 계산합니다.
 
 ```bash
 solana-stake-accounts count <BASE_PUBKEY>
+
 ```
 
-### Get stake account balances
+### 스테이킹 계정 잔액 합산
 
-Sum the balance of derived stake accounts:
+파생 된 스테이킹 계정의 잔액을 더합니다.
 
 ```bash
 solana-stake-accounts balance <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Get stake account addresses
+### 스테이킹 계정 주소 얻기
 
-List the address of each stake account derived from the given public key:
+주어진 공개키에서 파생 된 각 스테이킹 계정의 주소를 나열합니다.
 
 ```bash
 solana-stake-accounts addresses <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Set new authorities
+### 새로운 권한 설정
 
-Set new authorities on each derived stake account:
+파생된 각 스테이킹 계정에 새로운 권한을 설정합니다.
 
 ```bash
 solana-stake-accounts authorize <BASE_PUBKEY> \
@@ -57,9 +52,9 @@ solana-stake-accounts authorize <BASE_PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
-### Relocate stake accounts
+### 스테이킹 계정 재배치
 
-Relocate stake accounts:
+스테이킹 계정 재배치:
 
 ```bash
 solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
@@ -67,8 +62,7 @@ solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --fee-payer <KEYPAIR>
 ```
 
-To atomically rebase and authorize each stake account, use the 'move'
-command:
+소액 재조정 및 각 스테이킹 계정 권한 부여의 경우 'move' 명령을 사용합니다:
 
 ```bash
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \

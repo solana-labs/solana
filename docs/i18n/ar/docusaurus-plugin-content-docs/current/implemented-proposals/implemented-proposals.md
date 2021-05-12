@@ -1,9 +1,5 @@
 ---
-title: Implemented Design Proposals
+title: مُقترحات التصميم المُنفذة (Implemented Design Proposals)
 ---
 
-The following architectural proposals have been accepted and implemented
-by the Solana team. Any designs that may be subject to future change are noted
-in the specific proposal page.
-Design proposals that have been accepted but not yet implemented are found in
-[Accepted Proposals](../proposals/accepted-design-proposals.md).
+تم قبول المُقترحات المعمارية التالية وتنفيذها من قبل فريق Solana.  تتم الإشارة إلى أي تصميمات قد تخضع للتغيير في المُستقبل في صفحة الإقتراح المُحددة. تم العثور على مُقترحات التصميم التي تم قبولها ولكن لم يتم تنفيذها بعد في المُقترحات المقبولة [Accepted Proposals](../proposals/accepted-design-proposals.md).

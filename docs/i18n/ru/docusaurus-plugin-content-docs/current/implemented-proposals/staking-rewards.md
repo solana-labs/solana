@@ -1,57 +1,57 @@
 ---
-title: Staking Rewards
+title: Награды за стейкинг
 ---
 
-A Proof of Stake \(PoS\), \(i.e. using in-protocol asset, SOL, to provide secure consensus\) design is outlined here. Solana implements a proof of stake reward/security scheme for validator nodes in the cluster. The purpose is threefold:
+Здесь описан дизайн Доказательство доли владения \(Proof of Stake, PoS\), \(т.е. использование активов в протоколе, SOL, для обеспечения безопасного консенсуса\). Solana реализует схему вознаграждения/безопасности proof of stake для узлов валидатора в кластере. Цель тройная:
 
-- Align validator incentives with that of the greater cluster through
+- Согласовать стимулы валидатора в соответствие со стимулами большего кластера через
 
-  skin-in-the-game deposits at risk
+  skin-in-the-game риск депозита
 
-- Avoid 'nothing at stake' fork voting issues by implementing slashing rules
+- Избежать вопросов, связанных с голосованием в форке, где ничего не поставлено, за счет применения правил сокращения
 
-  aimed at promoting fork convergence
+  направленных на продвижение конвергенции форка
 
-- Provide an avenue for validator rewards provided as a function of validator
+- Обеспечить возможность вознаграждения валидатора, предоставляемых в зависимости
 
-  participation in the cluster.
+  от участия валидатора в кластере.
 
-While many of the details of the specific implementation are currently under consideration and are expected to come into focus through specific modeling studies and parameter exploration on the Solana testnet, we outline here our current thinking on the main components of the PoS system. Much of this thinking is based on the current status of Casper FFG, with optimizations and specific attributes to be modified as is allowed by Solana's Proof of History \(PoH\) blockchain data structure.
+Хотя многие детали конкретной реализации в настоящее время находятся на рассмотрении и, как ожидается, станут предметом особого внимания в ходе конкретных исследований моделирования и изучения параметров в тестовой сети Solana, мы вкратце излагаем наши текущие взгляды на основные компоненты системы PoS. Большая часть этого мышления основана на текущем статусе Casper FFG, с оптимизацией и конкретными атрибутами, которые должны быть изменены, как это разрешено структурой данных блокчейна Solana Proof of History \(PoH\).
 
-## General Overview
+## Общий обзор
 
-Solana's ledger validation design is based on a rotating, stake-weighted selected leader broadcasting transactions in a PoH data structure to validating nodes. These nodes, upon receiving the leader's broadcast, have the opportunity to vote on the current state and PoH height by signing a transaction into the PoH stream.
+Дизайн проверки реестра Solana основан на чередующемся, выбранном по размеру стейка лидере, транслирующем транзакции в структуре данных PoH для проверяющих узлов. Эти узлы после получения трансляции лидера имеют возможность проголосовать за текущее состояние и высоту PoH, подписав транзакцию в PoH потоке.
 
-To become a Solana validator, one must deposit/lock-up some amount of SOL in a contract. This SOL will not be accessible for a specific time period. The precise duration of the staking lockup period has not been determined. However we can consider three phases of this time for which specific parameters will be necessary:
+Чтобы стать валидатором Solana, необходимо зачислить или заблокировать определенную сумму SOL в контракте. Эти SOL не будут доступны в течение определенного периода времени. Точная продолжительность периода блокировки стейка не определена. Однако мы можем рассмотреть три фазы этого времени, для которых потребуются конкретные параметры:
 
-- _Warm-up period_: which SOL is deposited and inaccessible to the node,
+- _Период разогрева_: когда SOL внесены и недоступны узлу,
 
-  however PoH transaction validation has not begun. Most likely on the order of
+  однако проверка PoH транзакций еще не началась. Скорее всего продлится
 
-  days to weeks
+  от нескольких дней до недель
 
-- _Validation period_: a minimum duration for which the deposited SOL will be
+- _Период валидации_: минимальная продолжительность, в течение которой внесенные SOL будут
 
-  inaccessible, at risk of slashing \(see slashing rules below\) and earning
+  недоступны, подвержены риску снятия \(см. правила сокращения\) и получения
 
-  rewards for the validator participation. Likely duration of months to a
+  вознаграждений за участие валидатора. Вероятная продолжительность от нескольких месяцев
 
-  year.
+  до года.
 
-- _Cool-down period_: a duration of time following the submission of a
+- _Период охлаждения_: период времени после отправки транзакции
 
-  'withdrawal' transaction. During this period validation responsibilities have
+  на снятие средств. В течение этого периода обязанности по валидации
 
-  been removed and the funds continue to be inaccessible. Accumulated rewards
+  были сняты и средства по-прежнему недоступны. Накопленные вознаграждения
 
-  should be delivered at the end of this period, along with the return of the
+  должны быть доставлены в конце этого периода вместе с возвратом
 
-  initial deposit.
+  первоначального депозита.
 
-Solana's trustless sense of time and ordering provided by its PoH data structure, along with its [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast and transmission design, should provide sub-second transaction confirmation times that scale with the log of the number of nodes in the cluster. This means we shouldn't have to restrict the number of validating nodes with a prohibitive 'minimum deposits' and expect nodes to be able to become validators with nominal amounts of SOL staked. At the same time, Solana's focus on high-throughput should create incentive for validation clients to provide high-performant and reliable hardware. Combined with potential a minimum network speed threshold to join as a validation-client, we expect a healthy validation delegation market to emerge. To this end, Solana's testnet will lead into a "Tour de SOL" validation-client competition, focusing on throughput and uptime to rank and reward testnet validators.
+Недоверчивое чувство времени и упорядоченности Solana, обеспеченное ее структурой данных PoH, а также ее [turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) схема широковещательной передачи и передачи данных, должно обеспечивать субсекундное время подтверждения транзакций, которое масштабируется с логарифмом числа узлов в кластере. Это означает, что нам не нужно ограничивать количество валидирующих узлов запретительным "минимальным депозитом" и ожидать, что узлы смогут стать валидаторами с номинальными размерами ставок SOL. В то же время акцент Solana на высокой пропускной способности должен побудить клиентов валидации предоставлять высокопроизводительное и надежное оборудование. В сочетании с потенциальным минимальным порогом скорости сети для присоединения в качестве клиента валидации мы ожидаем появления здорового рынка делегирования валидации. С этой целью тестовая сеть Solana приведет к соревнованию валидаторов-клиентов "Tour de SOL", ориентируясь на пропускную способность и время безотказной работы для ранжирования и вознаграждения валидаторов тестовой сети.
 
-## Penalties
+## Штрафы
 
-As discussed in the [Economic Design](ed_overview/ed_overview.md) section, annual validator interest rates are to be specified as a function of total percentage of circulating supply that has been staked. The cluster rewards validators who are online and actively participating in the validation process throughout the entirety of their _validation period_. For validators that go offline/fail to validate transactions during this period, their annual reward is effectively reduced.
+Как обсуждалось в разделе [Экономический дизайн](ed_overview/ed_overview.md), годовые процентные ставки валидатора должны определяться как функция от общего процента циркулирующего предложения, которое было поставлено. Кластер вознаграждает валидаторов, которые находятся в сети и активно участвуют в процессе валидации на протяжении всего _периода валидации_. Для валидаторов, которые выходят в оффлайн и не могут проверять транзакции в течение этого периода, годовое вознаграждение эффективно уменьшается.
 
-Similarly, we may consider an algorithmic reduction in a validator's active amount staked amount in the case that they are offline. I.e. if a validator is inactive for some amount of time, either due to a partition or otherwise, the amount of their stake that is considered ‘active’ \(eligible to earn rewards\) may be reduced. This design would be structured to help long-lived partitions to eventually reach finality on their respective chains as the % of non-voting total stake is reduced over time until a supermajority can be achieved by the active validators in each partition. Similarly, upon re-engaging, the ‘active’ amount staked will come back online at some defined rate. Different rates of stake reduction may be considered depending on the size of the partition/active set.
+Аналогичным образом, мы можем рассмотреть алгоритмическое уменьшение активного количества стейка валидатора в случае отсутствия в сети. То есть если валидатор неактивен в течение некоторого времени, либо по причине раздела или в других случаях, сумма стейка, которая считается «активной» \(имеющей право на получение вознаграждения\) может быть уменьшена. Этот дизайн будет структурирован так, чтобы помочь долгоживущим разделам в конечном итоге достичь финализации в своих соответствующих цепочках, поскольку процент от общей доли без права голоса уменьшается с течением времени до тех пор, пока не будет достигнуто сверхбольшинство активных валидаторов в каждом разделе. Точно так же при повторном привлечении «активная» сумма стейка вернется в онлайн с определенной скоростью. В зависимости от размера раздела и активного набора могут рассматриваться различные ставки снижения стейка.

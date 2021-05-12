@@ -1,107 +1,61 @@
 ---
-title: Validator Timestamp Oracle
+title: Проверка метки времени Oracle
 ---
 
-Third-party users of Solana sometimes need to know the real-world time a block
-was produced, generally to meet compliance requirements for external auditors or
-law enforcement. This proposal describes a validator timestamp oracle that
-would allow a Solana cluster to satisfy this need.
+Сторонним пользователям Solana иногда необходимо знать реальное время создания блока, как правило, для соответствия требованиям внешних аудиторов или правоохранительных органов. Это предложение описывает валидаторную метку времени oracle, которая позволила бы кластеру Solana удовлетворить эту потребность.
 
-The general outline of the proposed implementation is as follows:
+Общая схема предлагаемой реализации выглядит следующим образом:
 
-- At regular intervals, each validator records its observed time for a known slot
-  on-chain (via a Timestamp added to a slot Vote)
-- A client can request a block time for a rooted block using the `getBlockTime`
-  RPC method. When a client requests a timestamp for block N:
+- Через регулярные промежутки времени каждый валидатор записывает свое наблюдаемое время для известного слота в цепочке (через метку времени, добавленную к голосованию слота)
+- Клиент может запросить время блока для root-блока, используя `getBlockTime` RPC метод. Когда клиент запрашивает метку времени для блока N:
 
-  1. A validator determines a "cluster" timestamp for a recent timestamped slot
-     before block N by observing all the timestamped Vote instructions recorded on
-     the ledger that reference that slot, and determining the stake-weighted mean
-     timestamp.
+  1. Валидатор определяет временную метку "кластера" для последнего слота с временной меткой перед блоком N, наблюдая за всеми инструкциями голосования с временной меткой, записанными в реестре, которые ссылаются на этот слот, и определяя среднюю временную метку, взвешенную по ставке.
 
-  2. This recent mean timestamp is then used to calculate the timestamp of
-     block N using the cluster's established slot duration
+  2. Эта недавняя средняя временная метка затем используется для вычисления временной метки блока N с использованием установленной длительности слота кластера
 
-Requirements:
+Требования:
 
-- Any validator replaying the ledger in the future must come up with the same
-  time for every block since genesis
-- Estimated block times should not drift more than an hour or so before resolving
-  to real-world (oracle) data
-- The block times are not controlled by a single centralized oracle, but
-  ideally based on a function that uses inputs from all validators
-- Each validator must maintain a timestamp oracle
+- Любой валидатор, воспроизводящий реестр в будущем, должен предлагать одно и то же время для каждого блока с момента генезиса
+- Расчетное время блока не должно дрейфовать более чем на час или около того, прежде чем переходить к реальным (oracle) данным
+- Время блока контролируются не одним централизованным оракулом, а в идеале на основе функции, использующей входные данные от всех валидаторов
+- Каждый валидатор должен поддерживать oracle с отметкой времени
 
-The same implementation can provide a timestamp estimate for a not-yet-rooted
-block. However, because the most recent timestamped slot may or may not be
-rooted yet, this timestamp would be unstable (potentially failing requirement
-1). Initial implementation will target rooted blocks, but if there is a use case
-for recent-block timestamping, it will be trivial to add the RPC apis in the
-future.
+Та же реализация может предоставить оценку временной метки для пока еще не корневого блока. Однако, поскольку последний интервал времени может быть или не может быть корневым, эта временная метка будет нестабильной (потенциально невыполнение требования 1). Первоначальная реализация будет нацелена на корневые блоки, но если есть вариант использования временной метки недавнего блока, то в будущем будет тривиально добавить API RPC.
 
-## Recording Time
+## Время записи
 
-At regular intervals as it is voting on a particular slot, each validator
-records its observed time by including a timestamp in its Vote instruction
-submission. The corresponding slot for the timestamp is the newest Slot in the
-Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
-identity keypair as a usual Vote. In order to enable this reporting, the Vote
-struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
+Через регулярные промежутки времени, когда он голосует на определенном слоте, каждый валидатор записывает свое наблюдаемое время, включая метку времени в свою отправку голосовой инструкции. Соответствующий слот для отметки времени является самым новым слотом в векторе голосования (`Vote::slots.iter().max()`). Он подписывается парой идентификационных ключей валидатора как обычное голосование. Чтобы включить эту отчетность, структуру голосования необходимо расширить, включив в нее поле отметки времени, `timestamp: Option<UnixTimestamp>`, которое будет установлено в `None` в большинстве голосов.
 
-As of https://github.com/solana-labs/solana/pull/10630, validators submit a
-timestamp every vote. This enables implementation of a block time caching
-service that allows nodes to calculate the estimated timestamp immediately after
-the block is rooted, and cache that value in Blockstore. This provides
-persistent data and quick queries, while still meeting requirement 1) above.
+Начиная с https://github.com/solana-labs/solana/pull/10630, валидаторы отправляют временную метку при каждом голосовании. Это позволяет реализовать службу кэширования времени блока, которая позволяет узлам вычислять расчетную метку времени сразу после укоренения блока и кэшировать это значение в Blockstore. Это обеспечивает постоянные данные и быстрые запросы, в то же время удовлетворяя требованию 1) выше.
 
-### Vote Accounts
+### Аккаунты голосования
 
-A validator's vote account will hold its most recent slot-timestamp in VoteState.
+Аккаунт для голосования валидатора будет содержать самую последнюю временную метку слота в VoteState.
 
-### Vote Program
+### Программа голосования
 
-The on-chain Vote program needs to be extended to process a timestamp sent with
-a Vote instruction from validators. In addition to its current process_vote
-functionality (including loading the correct Vote account and verifying that the
-transaction signer is the expected validator), this process needs to compare the
-timestamp and corresponding slot to the currently stored values to verify that
-they are both monotonically increasing, and store the new slot and timestamp in
-the account.
+Программа голосования в цепочке должна быть расширена для обработки временной метки, отправленной вместе с инструкцией по голосованию от валидаторов. В дополнение к текущей функциональности process_vote (включая загрузку правильного аккаунта голосования и проверку, что подписавший транзакцию является ожидаемым валидатором), этот процесс должен сравнить временную метку и соответствующий слот с текущими сохраненными значениями и убедиться, что они оба монотонно увеличиваются, и сохранить новый слот и временную метку в аккаунте.
 
-## Calculating Stake-Weighted Mean Timestamp
+## Расчет средневзвешенной по стейку отметки времени
 
-In order to calculate the estimated timestamp for a particular block, a
-validator first needs to identify the most recently timestamped slot:
+Чтобы вычислить расчетную метку времени для конкретного блока, валидатору сначала необходимо определить самый последний слот с меткой времени:
 
 ```text
 let timestamp_slot = floor(current_slot / timestamp_interval);
 ```
 
-Then the validator needs to gather all Vote WithTimestamp transactions from the
-ledger that reference that slot, using `Blockstore::get_slot_entries()`. As these
-transactions could have taken some time to reach and be processed by the leader,
-the validator needs to scan several completed blocks after the timestamp_slot to
-get a reasonable set of Timestamps. The exact number of slots will need to be
-tuned: More slots will enable greater cluster participation and more timestamp
-datapoints; fewer slots will speed how long timestamp filtering takes.
+Затем валидатору необходимо собрать все транзакции голосования с отметкой времени из реестра, которые ссылаются на этот слот, используя `Blockstore::get_slot_entries()`. Поскольку эти транзакции могли занять некоторое время, чтобы достичь и быть обработанными лидером, валидатору необходимо просканировать несколько завершенных блоков после timestamp_slot, чтобы получить разумный набор временных меток. Точное количество слотов должно быть настроено: Больше слотов обеспечит большее участие кластера и больше точек данных с отметками времени; меньшее количество слотов ускоряет фильтрацию временных меток.
 
-From this collection of transactions, the validator calculates the
-stake-weighted mean timestamp, cross-referencing the epoch stakes from
-`staking_utils::staked_nodes_at_epoch()`.
+Из этой коллекции транзакций валидатор вычисляет взвешенную по стейку среднюю временную метку, перекрестно ссылаясь на ставки эпохи из `staking_utils::staked_nodes_at_epoch()`.
 
-Any validator replaying the ledger should derive the same stake-weighted mean
-timestamp by processing the Timestamp transactions from the same number of
-slots.
+Любой валидатор, воспроизводящий реестр, должен получить одну и ту же среднюю временную метку, взвешенную по стейку, путем обработки транзакций временных меток из одного и того же числа слотов.
 
-## Calculating Estimated Time for a Particular Block
+## Считаем расчетное время для конкретного блока
 
-Once the mean timestamp for a known slot is calculated, it is trivial to
-calculate the estimated timestamp for subsequent block N:
+После вычисления средней отметки времени для известного слота, становится тривиальным вычислить расчетную временную метку для последующего блока N:
 
 ```text
 let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
-where `block_n_slot_offset` is the difference between the slot of block N and
-the timestamp_slot, and `slot_duration` is derived from the cluster's
-`slots_per_year` stored in each Bank
+где `block_n_slot_offset` - это разница между слотом блока N и timestamp_slot, и `slot_duration` выводится из `slots_per_year` кластера, хранящегося в каждом банке

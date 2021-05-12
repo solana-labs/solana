@@ -1,56 +1,33 @@
-# RiP Curl: low-latency, transaction-oriented RPC
+# زمن إنتقال مُنخفض، RPC مُوجه نحو المُعاملات أو RiP Curl: low-latency, transaction-oriented RPC
 
-## Problem
+## المُشكل
 
-Solana's initial RPC implementation was created for the purpose of allowing
-users to confirm transactions that had just recently been sent to the cluster.
-It was designed with memory usage in mind such that any validator should be
-able to support the API without concern of DoS attacks.
+تم إنشاء تطبيق RPC الأولي الخاص بـ Solana بغرض السماح للمُستخدمين بتأكيد المُعاملات التي تم إرسالها مؤخرًا إلى المجموعة (cluster). تم تصميمه مع وضع إستخدام الذاكرة في الإعتبار بحيث يكون أي مُدقّق (validator) قادرًا على دعم واجهة برمجة التطبيقات (API) دون القلق من هجمات DoS.
 
-Later down the line, it became desirable to use that same API to support the
-Solana explorer. The original design only supported minutes of history, so we
-changed it to instead store transaction statuses in a local RocksDB instance
-and offer days of history. We then extended that to 6 months via BigTable.
+في وقت لاحق، أصبح من المرغوب فيه إستخدام نفس واجهة برمجة التطبيقات (API) لدعم مُستكشف Solana. لم يدعم التصميم الأصلي سوى دقائق من السجل، لذلك قُمنا بتغييره إلى تخزين حالات المُعاملات بدلاً من ذلك في مثيل RocksDB محلي وعرض أيام من السجل. ثم قُمنا بتمديد ذلك إلى 6 أشهر عبر BigTable.
 
-With each modification, the API became more suitable for applications serving
-static content and less appealing for transaction processing. The clients poll
-for transaction status instead of being notified, giving the false impression
-of higher confirmation times. Furthermore, what clients can poll for is
-limited, preventing them from making reasonable real-time decisions, such as
-recognizing a transaction is confirmed as soon as particular, trusted
-validators vote on it.
+مع كل تعديل، أصبحت واجهة برمجة التطبيقات (API) أكثر مُلاءمة للتطبيقات التي تُقدم مُحتوى ثابتًا وأقل جاذبية لمُعالجة المُعاملات. يقوم العملاء بإستطلاع حالة المُعاملة بدلاً من إخطارهم، مما يعطي إنطباعًا خاطئًا عن أوقات تأكيد أعلى. علاوة على ذلك، ما يُمكن للعملاء الإقتراع من أجله محدود، مما يمنعهم من إتخاذ قرارات معقولة في الوقت الفعلي، مثل تأكيد الإعتراف بمُعاملة ما بمجرد تصويت المُدقّقين (validators) المُعتمدين عليها.
 
-## Proposed Solution
+## الحل المُقترح (Proposed Solution)
 
-A web-friendly, transaction-oriented, streaming API built around the
-validator's ReplayStage.
+واجهة برمجة تطبيقات متدفقة صديقة للويب ومُوجهة للمُعاملات ومبنية حول ReplayStage الخاص بالمُدقّق (validator).
 
-Improved client experience:
+تحسين تجربة العميل:
 
-- Support connections directly from WebAssembly apps.
-- Clients can be notified of confirmation progress in real-time, including votes
-  and voter stake weight.
-- Clients can be notified when the heaviest fork changes, if it affects the
-  transactions confirmation count.
+* دعم الإتصالات مُباشرة من تطبيقات WebAssembly.
+* يُمكن إخطار العملاء بتقدم التأكيد في الوقت الفعلي، بما في ذلك الأصوات ووزن حِصَّة الناخب (voter stake).
+* يُمكن إخطار العملاء عند حدوث تغيير كبير في الإنقسام، إذا كان ذلك يُؤثر على عدد تأكيد المُعاملات.
 
-Easier for validators to support:
+أسهل للدعم من قِبل المُدقّقين (validators):
 
-- Each validator supports some number of concurrent connections and otherwise
-  has no significant resource constraints.
-- Transaction status is never stored in memory and cannot be polled for.
-- Signatures are only stored in memory until the desired commitment level or
-  until the blockhash expires, which ever is later.
+* يدعم كل مُدقّق (validator) عددًا من الإتصالات المُتزامنة وليس له أي قيود مُهمة على الموارد.
+* لا يتم تخزين حالة المُعاملة مُطلقًا في الذاكرة ولا يُمكن الإستفتاء عنها.
+* يتم تخزين التوقيعات فقط في الذاكرة حتى مُستوى الإلتزام المطلوب أو حتى إنتهاء صلاحية تجزئة الكتلة (Blockhash)، وهو ما يحدث لاحقًا.
 
-How it works:
+كيف تعمل:
 
-1. The client connects to a validator using a reliable communication channel,
-   such as a web socket.
-2. The validator registers the signature with ReplayStage.
-3. The validator sends the transaction into the Gulf Stream and retries all
-   known forks until the blockhash expires (not until the transaction is
-   accepted on only the heaviest fork). If the blockhash expires, the
-   signature is unregistered, the client is notified, and connection is closed.
-4. As ReplayStage detects events affecting the transaction's status, it
-   notifies the client in real-time.
-5. After confirmation that the transaction is rooted (`CommitmentLevel::Max`),
-   the signature is unregistered and the server closes the upstream channel.
+1. يتصل العميل بالمُدقّق (validator) بإستخدام قناة إتصال موثوقة، مثل مِقبس الويب (web socket).
+2. يقوم المُدقّق (validator) بتسجيل التوقيع في مرحلة ReplayStage.
+3. يُرسل المُدقّق (validator) المُعاملة إلى Gulf Stream ويعيد مُحاولة جميع الإنقسامات أو الشوكات (forks) المعروفة حتى إنتهاء صلاحية تجزئة الكتلة (Blockhash) (ليس قبل أن يتم قبول المُعاملة على الإنقسام أو الشوكة الأثقل فقط). في حالة إنتهاء صلاحية تجزئة الكتلة (Blockhash)، يكون التوقيع غير مُسجل، ويتم إخطار العميل، ويتم إغلاق الإتصال.
+4. نظرًا لأن ReplayStage يكتشف الأحداث التي تُؤثر على حالة المُعاملة، فإنه يقوم بذلك بإخطار العميل في الوقت الفعلي.
+5. بعد التأكيد على أن المُعاملة مُتجذرة (` CommitmentLevel::Max `)، لا يتم تسجيل التوقيع ويغلق الخادم القناة الرئيسية.

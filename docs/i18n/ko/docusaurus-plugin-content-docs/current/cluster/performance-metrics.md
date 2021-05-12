@@ -1,25 +1,25 @@
 ---
-title: Performance Metrics
+title: 성능 지표
 ---
 
-Solana cluster performance is measured as average number of transactions per second that the network can sustain \(TPS\). And, how long it takes for a transaction to be confirmed by super majority of the cluster \(Confirmation Time\).
+솔라나 클러스터 성능은 네트워크가 \(TPS\) 를 유지할 수 있는 초당 평균 트랜잭션 수로 측정됩니다. 그리고 클러스터 \ (확인 시간\) 의 과반수에 의해 트랜잭션이 확인되는 데 걸리는 시간입니다.
 
-Each cluster node maintains various counters that are incremented on certain events. These counters are periodically uploaded to a cloud based database. Solana's metrics dashboard fetches these counters, and computes the performance metrics and displays it on the dashboard.
+각 클러스터 노드는 특정 이벤트에서 증가하는 다양한 수치를 유지합니다. 이러한 수치는 주기적으로 클라우드 기반 데이터베이스에 업로드됩니다. 솔라나의 메트릭 대시 보드는 이러한 수치를 가져와 성능 메트릭을 계산하여 대시보드에 표시합니다.
 
 ## TPS
 
-Each node's bank runtime maintains a count of transactions that it has processed. The dashboard first calculates the median count of transactions across all metrics enabled nodes in the cluster. The median cluster transaction count is then averaged over a 2 second period and displayed in the TPS time series graph. The dashboard also shows the Mean TPS, Max TPS and Total Transaction Count stats which are all calculated from the median transaction count.
+각 노드의 뱅크 런타임은 처리한 트랜잭션 수를 저장합니다. 대시보드는 먼저 클러스터에서 모든 메트릭이 활성화 된 노드에서 트랜잭션의 중간값을 계산합니다. 그런 다음 중간값 클러스터 트랜잭션 수는 2 초 동안 평균화되고 TPS 시계열 그래프에 표시됩니다. 대시보드에는 평균 트랜잭션 수에서 계산된 평균 TPS, 최대 TPS 및 총 트랜잭션 수 통계도 표시됩니다.
 
-## Confirmation Time
+## 확정 시간
 
-Each validator node maintains a list of active ledger forks that are visible to the node. A fork is considered to be frozen when the node has received and processed all entries corresponding to the fork. A fork is considered to be confirmed when it receives cumulative super majority vote, and when one of its children forks is frozen.
+각 밸리데이터 노드는 노드에 표시되는 활성 원장 포크 목록을 저장합니다. 노드가 포크에 해당하는 모든 항목을 수신하고 처리한 경우 포크는 고정된 것으로 간주됩니다. 포크는 누적 압도적 다수 투표를 받을 때와 하위 포크 중 하나가 동결될 때 확정 된 것으로 간주됩니다.
 
-The node assigns a timestamp to every new fork, and computes the time it took to confirm the fork. This time is reflected as validator confirmation time in performance metrics. The performance dashboard displays the average of each validator node's confirmation time as a time series graph.
+노드는 모든 새 포크에 타임스탬프를 할당하고 포크를 확인하는 데 걸린 시간을 계산합니다. 이 시간은 성능 메트릭에서 밸리데이터 확정 시간으로 반영됩니다. 성능 대시보드에는 각 밸리데이터 노드의 확정 시간 평균이 시계열 그래프로 표시됩니다.
 
-## Hardware setup
+## 하드웨어 설정
 
-The validator software is deployed to GCP n1-standard-16 instances with 1TB pd-ssd disk, and 2x Nvidia V100 GPUs. These are deployed in the us-west-1 region.
+밸리데이터 소프트웨어는 1TB pd-ssd 디스크와 2x Nvidia V100 GPU가있는 GCP n1-standard-16 인스턴스에 배포됩니다. 이는 us-west-1 지역에 배포됩니다.
 
-solana-bench-tps is started after the network converges from a client machine with n1-standard-16 CPU-only instance with the following arguments: `--tx\_count=50000 --thread-batch-sleep 1000`
+solana-bench-tps는 다음 인수를 사용하여 n1-standard-16 CPU 전용 인스턴스가있는 클라이언트 시스템에서 네트워크가 수렴 된 후 시작됩니다: `-tx \ _count = 50000 --thread-batch-sleep 1000 `
 
-TPS and confirmation metrics are captured from the dashboard numbers over a 5 minute average of when the bench-tps transfer stage begins.
+TPS 및 확정 지표는 벤치-TPS 전송 단계가 시작되는 평균 5분 동안의 대시보드 상 수치에서 캡처됩니다.

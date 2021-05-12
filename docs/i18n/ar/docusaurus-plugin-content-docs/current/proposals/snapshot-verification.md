@@ -1,11 +1,11 @@
 ---
-title: Snapshot Verification
+title: التحقق من اللقطة (Snapshot Verification)
 ---
 
-## Problem
+## المُشكل
 
-Snapshot verification of the account states is implemented, but the bank hash of the snapshot which is used to verify is falsifiable.
+تم تنفيذ التحقق من لقطة الحساب، ولكن تجزئة البنك (bank hash) للقطات التي يتم إستخدامها للتحقق قابلة للتزوير.
 
-## Solution
+## الحل
 
-While a validator is processing transactions to catch up to the cluster from the snapshot, use incoming vote transactions and the commitment calculator to confirm that the cluster is indeed building on the snapshotted bank hash. Once a threshold commitment level is reached, accept the snapshot as valid and start voting.
+أثناء قيام المُدقّق (validator) بمُعالجة المُعاملات للحاق بالمجموعة (cluster) من اللقطة، إستخدم مُاملات التصويت الواردة وآلة حاسبة الإلتزام (commitment calculator) لتأكيد أن المجموعة (cluster) مبنية بالفعل على تجزئة البنك (bank hash) التي تم إلتقاطها. بمجرد الوصول إلى مُستوى إلتزام الحد الأدنى، قُم بقبول اللقطة على أنها صالحة وإبدأ التصويت.

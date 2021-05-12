@@ -1,49 +1,53 @@
 ---
-title: Registration FAQ
+title: الأسئلة الشائعة حول التسجيل (Registration FAQ)
 ---
 
-The [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) should be considered the authoritative resource for any participation questions.
+يجب اعتبار شروط المُشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) المصدر المُعتمد لأية أسئلة تتعلق بالمُشاركة.
 
-## Is registration mandatory?
+## هل التسجيل إلزامي؟
 
-Yes. Registration is mandatory. Registration is rolling, we host month-long Tour de SOL stages on a monthly basis and new participants will need to wait until the start of the next stage to be on-boarded. [Registration information lives here](how-to-register.md).
+نعم. التسجيل إلزامي. التسجيل مُستمر، ونحن نستضيف مراحل Tour de SOL لمدة شهر على أساس شهري وسيحتاج المُشاركون الجدد إلى الانتظار حتى بداية المرحلة التالية للانضمام. معلومات التسجيل موجودة هنا [Registration information lives here](how-to-register.md).
 
-## Who’s eligible to participate?
+## من المُؤهل للمشاركة؟
 
-Please see section “1 Eligibility; KYC Requirements” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) for details.
+يُرجى مُراجعة القسم "1 الأهلية؛ مُتطلبات تعرف على عميلك (KYC) "من شروط المُشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) للحصول على التفاصيل.
 
-## Do I have to complete the KYC/AML process to participate?
+## هل يجب أن أكمل عملية KYC/AML للمُشاركة؟
 
-Yes. Completing the KYC/AML process is mandatory.
+نعم. إكمال عملية KYC/AML إلزامي. إذا لم تُكمل العملية قبل المرحلة 1 من Tour de SOL، لا يُمكنك المُشاركة في Tour de SOL.
 
-## What are my responsibilities as a Tour de Sol participant?
+لقد عقدنا شراكة مع منصة Coinlist لإدارة عملية Tour de Sol KYC/AML. يُمكنك إيجاد خطوات القيام بالعملية هنا [walk-through of the process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) وإكمال عمليتك هنا [complete your process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
 
-Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+## ما هي مسؤولياتي كمُشارك في جولة Tour de Sol؟
 
-## How is the “90% of the active Tour event time” responsibility calculated?
+يُرجى الإطلاع على قسم "تفاصيل 2c Tour de SOL" الخاص بشروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على التفاصيل.
 
-To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
+### كيف يتم حساب مسؤولية "50% من وقت حدث الجولة النشطة"؟
 
-## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
+لكي تكون مُؤهلاً للحصول على مُكافآت في مرحلة مُعينة، يجب على المُدقّق (validator) إرسال الأصوات في &gt;= 50% من فُتحات (slots) تلك المرحلة.
 
-No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+إذا كان المُدقّق (validator) غير قادر على إرسال &gt;= 50% من الأصوات لمرحلة ما ومازال يشعر بأنه يجب أن يحصل على جوائز لتلك المرحلة، فيُمكنه تقديم طلب إلتماس إلى Solana لإعادة النظر.
 
-## Can a validator be disqualified from the Tour de Sol?
+## هل هناك علاقة بين الرموز Tour de Sol في الشبكة التجريبية (testnet) و شبكة Solana التجريبية الرئيسية (Solana Mainnet Beta)؟
 
-Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
+لا. يُرجى الإطلاع على قسم "تفاصيل 2d Tour de SOL" من شروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على التفاصيل.
 
-Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
+## هل يُمكن استبعاد المُدقّق (validator) من Tour de Sol؟
 
-### More questions related to Prohibited Conduct:
+نعم. يتم إستبعاد المُدقّق (validator) من Tour de SOL إذا شارك في سلوك محظور و / أو فشل في توفير الحد الأدنى من مُستوى الخدمات المُوضح في السؤال \#4 أعلاه.
 
-#### As referenced in section “4 Prohibited Conduct”, what would be an example of providing Tour Services from a jurisdiction other than the jurisdiction of my residence? Does this mean my server has to reside in the jurisdiction of my residence?
+يُرجى أيضًا الإطلاع على القسم "4 السلوك المحظور" (Prohibited Conduct) من من بشروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على وصف أكثر تفصيلاً للسلوك المحظور.
 
-No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
+### مزيد من الأسئلة المُتعلقة بالسلوك المحظور (Prohibited Conduct):
 
-## How are rewards calculated?
+#### كما هو مُشار إليه في القسم "4 السلوك المحظور" (Prohibited Conduct)، ما الذي يُمكن أن يكون مثالًا على تقديم خدمات الـ Tour من مكان إقامة مُخالف لمكان إقامتي الأصلي؟ هل هذا يعني أن الخادم الخاص بي يجب أن يكون مُطابقا لمكان إقامتي؟
 
-Please see the [Rewards section](rewards.md) for details
+لا. يُمكن أن تكون الخوادم في أماكن إقامة أخرى تختلف عن مكان إقامة المُشارك. من خلال التوقيع على شروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)، يمتثل المُشارك إلى أنه يُقدم خدماته من الولايات المُتحدة إذا كانوا يقيمون هناك أو من خارج الولايات المُتحدة إذا لم يكونوا مُقيمين داخل الولايات المُتحدة.
 
-## How will we know what information we can and cannot share publicly?
+## كيف يتم حساب المكافآت؟
 
-Please see [Confidentiality](confidentiality.md).
+الرجاء مراجعة قسم المُكافآت [Rewards section](rewards.md) للحصول على التفاصيل
+
+## كيف سنعرف ما هي المعلومات التي يُمكننا وما لا يُمكننا مُشاركتها علنًا؟
+
+يُرجى مُراجعة الخُصوصية [Confidentiality](confidentiality.md).

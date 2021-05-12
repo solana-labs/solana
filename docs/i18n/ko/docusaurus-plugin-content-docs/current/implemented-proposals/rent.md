@@ -2,68 +2,68 @@
 title: Rent
 ---
 
-Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
+Solana의 계정은 계정 잔액 \ (`Account :: lamports` \)와는 별도로 소유자 제어 상태 \ (`Account :: data` \)를 가질 수 있습니다. 네트워크의 유효성 검사자는 메모리에이 상태의 작업 복사본을 유지해야하기 때문에 네트워크는 임대라고도하는이 리소스 소비에 대해 시간 및 공간 기반 요금을 부과합니다.
 
-## Two-tiered rent regime
+## 2 단계 임대 제도
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
+2 년 임대료에 해당하는 최소 잔액을 유지하는 계정은 면제됩니다. _2 년 _은 하드웨어 비용이 2 년마다 가격이 50 % 하락하고 그 결과 기하학적 계열이기 때문에 수렴된다는 사실에서 비롯됩니다. 잔액이이 임계 값 아래로 떨어지는 계정은 제네시스에 지정된 비율 (바이트-년당 램프 포트)로 임대료가 부과됩니다. 네트워크는 다음 세대에 대한 크레딧으로 세대별로 임대료를 부과하고`Account :: rent_epoch`는 계정에서 다음 번 임대료를 징수해야하는시기를 추적합니다.
 
-Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
+현재 임대료는 창세기에 고정되어 있습니다. 그러나 당시의 기본 하드웨어 스토리지 비용을 반영하여 동적 일 것으로 예상됩니다. 따라서 일반적으로 기술이 발전함에 따라 하드웨어 비용이 감소함에 따라 가격이 하락할 것으로 예상됩니다.
 
-## Timings of collecting rent
+## 임대료 징수
 
-There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
+시기 계좌에서 임대료를 징수하는시기는 두 가지가 있습니다 : 거래에서 참조 할 때 \ (1 \), 한 시대에 주기적으로 \ (2 \). \ (1 \)에는 새 계정을 만드는 트랜잭션이 포함되며,로드 단계의 일부로 은행이 정상적인 트랜잭션 처리 중에 발생합니다. \ (2 \)는 최근 시대에 전혀 언급되지 않은 오래된 계정에서 임대료를 징수하기 위해 존재합니다. \ (2 \)에는 전체 계정 스캔이 필요하며이 임대료 징수로 인한 부하 급증을 방지하기 위해 계정 주소 접두사를 기반으로 한 시대에 분산됩니다.
 
-On the contrary, rent collection isn't applied to accounts that are directly manipulated by any of protocol-level bookkeeping processes including:
+반대로 다음과 같은 프로토콜 수준의 부기 프로세스에 의해 직접 조작되는 계정에는 임대료 징수가 적용되지 않습니다
 
 - The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
 - The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
 - The distribution of transaction fee at the end of every slot
 
-Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
+.-임대료 징수 자체의 분배 (그렇지 않으면 반복적 인 임대료 징수 처리를 유발할 수 있음) -스테이킹 보상의 분배 매 시대 시작시 (새 시대 시작시 처리 스파이크를 줄이기 위해) -매 슬롯 종료시 거래 수수료 분배
 
-## Actual processing of collecting rent
+## 임대료 징수에 대한 실제 처리는
 
-Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
+해당 프로세스가 임대료 징수 범위를 벗어난 경우에도 조작 된 모든 계정은 결국 \ (2 \) 메커니즘에 의해 처리됩니다.
 
-If the account is in the exempt regime, `Account::rent_epoch` is simply updated to `current_epoch`.
+한 시대의 시간 동안 만기되며, 계정은 임대 제도에 따라`current_epoch`의`Account :: rent_epoch` 또는`current_epoch + 1`을 갖습니다.
 
-If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to `current_epoch + 1` (= next epoch). If the amount of rent due is less than one lamport, no changes are made to the account.
+계정이 면제되지 않은 경우 다음 세대와 'Account :: rent_epoch'간의 차이를 사용하여이 계정이 지불해야하는 임대료를 \ (`Rent :: due ()`\를 통해) 계산합니다. 계산의 분수 램프 포트는 잘립니다. 임대료는`Account :: lamports`에서 공제되고`Account :: rent_epoch`는`current_epoch + 1` (= 다음 Epoch)로 업데이트됩니다. 임대료가 한 램프보다 적 으면 계정이 변경되지 않습니다.
 
-Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
+잔액이 부족하여 임대료를 충족 할 수없는 계정은 단순히로드되지 않습니다.
 
-A percentage of the rent collected is destroyed. The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
+징수 된 임대료의 일부가 파괴됩니다. 나머지는 모든 슬롯의 끝에서 지분 가중치, 일품 거래 수수료에 따라 밸리데이터 계정에 배포됩니다.
 
-Finally, rent collection happens according to the protocol-level account updates like the rent distribution to validators, meaning there is no corresponding transaction for rent deductions. So, rent collection is rather invisible, only implicitly observable by a recent transaction or predetermined timing given its account address prefix.
+마지막으로 임대료 징수는 유효성 검사자에게 임대료 분배와 같은 프로토콜 수준의 계정 업데이트에 따라 발생하므로 임대료 공제에 해당하는 거래가 없습니다. 따라서 임대료 징수는 다소 보이지 않으며 최근 거래 또는 계정 주소 접두사를 고려한 미리 결정된 타이밍에 의해서만 암시 적으로 관찰 될 수 있습니다.
 
-## Design considerations
+## 디자인 고려 사항
 
-### Current design rationale
+### 현재 디자인 근거
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
+앞의 디자인 하에서, 잔존하고, 연락을받지 않으며, 임대료를 지불 할 필요가없는 계정을 갖는 것은 불가능합니다. 계정은 임대 면제, sysvar 및 실행 가능한 계정을 제외하고 항상 각 세대에 대해 정확히 한 번 임대료를 지불합니다.
 
-This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
+이것은 의도 된 디자인 선택입니다. 그렇지 않으면 임대료를 부당하게 수익을 올릴 수있는 사람 (당시 리더)의 'Noop'지시로 무단 임대료 징수를 촉발하거나 예상되는 임대료 변동을 감안하여 임대료를 절약 할 수 있습니다.
 
-As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
+이 선택의 또 다른 부작용으로,이 정기적 인 임대료 징수는 유효하게 유효하지 않은 계정을 냉장 보관에 저장하지 않도록하고 저장 비용을 절감합니다. 이는 계정 소유자에게 불리하며 거래가 더 오래 지연 될 수 있습니다. 반대로 이는 악의적 인 사용자가 상당한 양의 가비지 계정을 쌓아 유효성 검사자에게 부담을주는 것을 방지합니다.
 
-As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
+이 설계의 전반적인 결과로 모든 계정은 동일한 성능 특성을 가진 밸리데이터의 작업 세트로 동일하게 저장되며 균일 한 임대 가격 구조를 곧바로 반영합니다.
 
-### Ad-hoc collection
+### 임시 수금징수
 
-Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
+필요에 따라 임대료\ (즉, 계정이로드 / 액세스 될 때마다 \) 고려되었습니다. 이러한 접근 방식의 문제는 다음과 같습니다
 
-- accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
+- .-거래에 대해 "신용 전용"으로로드 된 계정은 임대료가있을 것으로 예상 할 수
 
-  but would not be writable during any such transaction
+  있지만 그러한 거래 중에 쓸 수는 없습니다
 
-- a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
+- .- "수풀을 이길 수있는"메커니즘 \ (예 : 임대료를 지불해야하는 계정 찾기 \)가 바람직합니다.
 
-  lest accounts that are loaded infrequently get a free ride
+  드물게로드되는 계정은 무임 승차를받을 수 있습니다.
 
-### System instruction for collecting rent
+### 임대료임대료를
 
-Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
+Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. 그러나 :
 
 - it would have adversely affected network throughput
-- it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
-- someone would have to issue the transactions
+- -네트워크 처리량에 부정적인 영향을 미쳤을 것입니다.-SystemProgram이 아닌 소유자가있는 계정이이 명령에 의해 차감 될 수 있으므로 런타임에 특수 케이스가 필요합니다.
+- 누군가가 트랜잭션을 발행해야합니다.

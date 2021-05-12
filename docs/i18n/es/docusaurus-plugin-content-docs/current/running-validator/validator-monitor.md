@@ -1,47 +1,42 @@
 ---
-title: Monitoring a Validator
+title: Monitoreando un Validador
 ---
 
-## Check Gossip
+## Comprobar Gossip
 
-Confirm the IP address and **identity pubkey** of your validator is visible in
-the gossip network by running:
+Confirma que la dirección IP y la **pubkey de identidad** de tu validador son visibles en la red Gossip ejecutando:
 
 ```bash
 solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
-## Check Your Balance
+## Compruebe su saldo
 
-Your account balance should decrease by the transaction fee amount as your
-validator submits votes, and increase after serving as the leader. Pass the
-`--lamports` are to observe in finer detail:
+El saldo de tu cuenta debe disminuir por el monto de las comisiones de transacción a medida que tu validador envíe votos, y aumentar después de servir como líder. Pasar el `--lamports` son para observar con más detalle:
 
 ```bash
-solana balance --lamports
+saldo de solana --lamports
 ```
 
-## Check Vote Activity
+## Comprobar actividad de voto
 
-The `solana vote-account` command displays the recent voting activity from
-your validator:
+El comando `solana vote-account` muestra la actividad de votación reciente de tu validador:
 
 ```bash
-solana vote-account ~/vote-account-keypair.json
+cuenta de voto ~/vote-account-keypair.json
 ```
 
-## Get Cluster Info
+## Obtener información de Cluster
 
-There are several useful JSON-RPC endpoints for monitoring your validator on the
-cluster, as well as the health of the cluster:
+Hay varios endpoints JSON-RPC útiles para monitorear su validador en el clúster, así como la salud del clúster:
 
 ```bash
 # Similar to solana-gossip, you should see your validator in the list of cluster nodes
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://devnet.solana.com
-# If your validator is properly voting, it should appear in the list of `current` vote accounts. If staked, `stake` should be > 0
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://devnet.solana.com
-# Returns the current leader schedule
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://devnet.solana.com
-# Returns info about the current epoch. slotIndex should progress on subsequent calls.
+# If your validator is properly voting, it should appear in the list of `current` vote accounts. Si se activa, `stake` debería ser > 0
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://devnet.solana. om
+# Devuelve el actual leader schedule
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2. ","id":1, "method":"getLeaderSchedule"}' http://devnet.solana.com
+# Devuelve información sobre la época actual. slotIndex debe progresar en llamadas posteriores.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com
 ```

@@ -1,54 +1,31 @@
 ---
-title: Rust Clients
+title: عملاء Rust أو Rust Clients
 ---
 
-## Problem
+## المُشكل (Problem)
 
-High-level tests, such as bench-tps, are written in terms of the `Client`
-trait. When we execute these tests as part of the test suite, we use the
-low-level `BankClient` implementation. When we need to run the same test
-against a cluster, we use the `ThinClient` implementation. The problem with
-that approach is that it means the trait will continually expand to include new
-utility functions and all implementations of it need to add the new
-functionality. By separating the user-facing object from the trait that abstracts
-the network interface, we can expand the user-facing object to include all sorts
-of useful functionality, such as the "spinner" from RpcClient, without concern
-for needing to extend the trait and its implementations.
+الإختبارات عالية المُستوى، مثل النقاط المرجعية المعيارية لعدد المُعاملات في الثانية الواحدة (bench-tps,)، مكتوبة من حيث سِمة `Client`. عندما نُنفذ هذه الإختبارات كجزء من مجموعة الإختبار، فإننا نستخدم التنفيذ المُنخفض المُستوى لعميل البنك `BankClient`. عندما نحتاج إلى إجراء نفس الإختبار على مجموعة (cluster)، فإننا نستخدم تطبيق `ThinClient`. تكمن مُشكلة هذا النهج في أنه يعني أن السِّمة (trait) ستتوسع بإستمرار لتشمل وظائف الأداة المُساعدة الجديدة وكل تطبيقاتها تحتاج إلى إضافة الوظيفة الجديدة. من خلال فصل الكائن الذي يُواجه المُستخدم عن السِّمة (trait) التي تُجرد واجهة الشبكة، يُمكننا توسيع الكائن الذي يُواجه المُستخدم ليشمل جميع أنواع الوظائف المُفيدة، مثل "spinner" من RpcClient، دون القلق من الحاجة إلى تمديد السِّمة و تطبيقاتها.
 
-## Proposed Solution
+## الحل المُقترح (Proposed Solution)
 
-Instead of implementing the `Client` trait, `ThinClient` should be constructed
-with an implementation of it. That way, all utility functions currently in the
-`Client` trait can move into `ThinClient`. `ThinClient` could then move into
-`solana-sdk` since all its network dependencies would be in the implementation
-of `Client`. We would then add a new implementation of `Client`, called
-`ClusterClient`, and that would live in the `solana-client` crate, where
-`ThinClient` currently resides.
+بدلاً من تنفيذ سِمة (trait) العميل `Client`، يجب إنشاء عميل رفيع `ThinClient` مع تنفيذها. بهذه الطريقة، يُمكن أن تنتقل جميع وظائف الأداة الموجودة حاليًا في سِمة العميل`Client` إلى العميل الرفيع `ThinClient`. يُمكن أن ينتقلالعميل الرفيع `ThinClient` بعد ذلك إلى `solana-sdk` نظرًا لأن جميع تبعيات الشبكة الخاصة به ستكون في تنفيذ العميل `Client`. سنُضيف بعد ذلك تطبيقًا جديدًا للعميل `Client`، يُسمى عميل المجموعة `ClusterClient`، والذي سيعيش في صندوق `solana-client`، حيث يُوجد العميل الرفيع `ThinClient` حاليًا.
 
-After this reorg, any code needing a client would be written in terms of
-`ThinClient`. In unit tests, the functionality would be invoked with
-`ThinClient<BankClient>`, whereas `main()` functions, benchmarks and
-integration tests would invoke it with `ThinClient<ClusterClient>`.
+بعد إعادة الترتيب هذه، سيتم كتابة أي كود يحتاج إلى عميل (client) من حيث العميل الرفيع `ThinClient`. في إختبارات الوحدة، سيتم إستدعاء الوظيفة بالعميل الرفيع `ThinClient<BankClient>`، في حين أن الوظيفة الأساسية `main()` ومعايير وإختبارات التكامل ستستدعيها بالعميل الرفيع `ThinClient<ClusterClient>`.
 
-If higher-level components require more functionality than what could be
-implemented by `BankClient`, it should be implemented by a second object
-that implements a second trait, following the same pattern described here.
+إذا كانت المُكونات ذات المستوى الأعلى تتطلب وظائف أكثر مما يُمكن تنفيذه بواسطة عميل البنك `BankClient`، فيجب تنفيذها بواسطة كائن ثانٍ يقوم بتنفيذ سِمة (trait) ثانية، بإتباع نفس النمط المُوضح هنا.
 
-### Error Handling
+### مُعالجة الأخطاء (Error Handling)
 
-The `Client` should use the existing `TransportError` enum for errors, except
-that the `Custom(String)` field should be changed to `Custom(Box<dyn Error>)`.
+يجب أن يستخدم العميل `Client` تعداد الخطأ أثناء النقل `TransportError` الحالي للأخطاء، بإستثناء أنه يجب تغيير الحقل `Custom(String)` إلى `Custom(Box<dyn Error>)`.
 
-### Implementation Strategy
+### إستراتيجية التنفيذ (Implementation Strategy)
 
-1. Add new object to `solana-sdk`, `RpcClientTng`, where the `Tng` suffix is
-   temporary and stands for "The Next Generation"
-2. Initialize `RpcClientTng` with a `SyncClient` implementation.
-3. Add new object to `solana-sdk`, `ThinClientTng`; initialize it with
-   `RpcClientTng` and an `AsyncClient` implementation
-4. Move all unit-tests from `BankClient` to `ThinClientTng<BankClient>`
-5. Add `ClusterClient`
-6. Move `ThinClient` users to `ThinClientTng<ClusterClient>`
-7. Delete `ThinClient` and rename `ThinClientTng` to `ThinClient`
-8. Move `RpcClient` users to new `ThinClient<ClusterClient>`
-9. Delete `RpcClient` and rename `RpcClientTng` to `RpcClient`
+1. أضف كائنًا جديدًا إلى `solana-sdk` ، `RpcClientTng`، حيث تكون اللاحقة `RpcClientTng` مُؤقتة وتدل على "الجيل التالي" اللاحق
+2. قم بتهيئة `RpcClientTng` بتنفيذ `SyncClient`.
+3. قُم بإضافة كائن جديد إلى `solana-sdk`، `ThinClientTng`؛ قُم بتهيئته مع تنفيذ `RpcClientTng` و `AsyncClient`
+4. أُنقل جميع إختبارات الوحدة من عميل البنك `BankClient` إلى `ThinClientTng<BankClient>`
+5. قُم بإضافة عميل المجموعة `ClusterClient`
+6. قُم بنقل مُستخدميُ العميل الرفيع `ThinClient` إلى `ThinClientTng<ClusterClient>`
+7. قُم بحذف العميل الرفيع `ThinClient` وأعد تسمية `ThinClientTng` إلى عميل رفيع `ThinClient`
+8. قُم بنقل مُستخدميُ `RpcClient` إلى `ThinClient<ClusterClient>` جديد
+9. قُم بحذف `RpcClient` وأعد تسمية `RpcClientTng` إلى `RpcClient`

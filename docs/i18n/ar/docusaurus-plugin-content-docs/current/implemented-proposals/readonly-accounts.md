@@ -1,25 +1,25 @@
 ---
-title: Read-Only Accounts
+title: حسابات القراءة فقط (Read-Only Accounts)
 ---
 
-This design covers the handling of readonly and writable accounts in the [runtime](../validator/runtime.md). Multiple transactions that modify the same account must be processed serially so that they are always replayed in the same order. Otherwise, this could introduce non-determinism to the ledger. Some transactions, however, only need to read, and not modify, the data in particular accounts. Multiple transactions that only read the same account can be processed in parallel, since replay order does not matter, providing a performance benefit.
+يُغطي هذا التصميم التعامل مع الحسابات للقراءة فقط (readonly) والقابلة للكتابة في وقت التشغيل [runtime](../validator/runtime.md). يجب مُعالجة المُعاملات المُتعددة التي تقوم بتعديل نفس الحساب بشكل تسلسلي بحيث يتم إعادتها دائمًا بنفس الترتيب. خلاف ذلك، قد يُؤدي هذا إلى عدم الحتمية في دفتر الأستاذ (ledger). مع ذلك، فإن بعض المُعاملات تحتاج فقط إلى قراءة البيانات في حسابات مُعينة وليس تعديلها. يُمكن مُعالجة المُعاملات المُتعددة التي تقرأ نفس الحساب فقط بشكل مُتوازٍ، نظرًا لأن أمر الإعادة لا يهم، مما يوفر ميزة الأداء.
 
-In order to identify readonly accounts, the transaction MessageHeader structure contains `num_readonly_signed_accounts` and `num_readonly_unsigned_accounts`. Instruction `program_ids` are included in the account vector as readonly, unsigned accounts, since executable accounts likewise cannot be modified during instruction processing.
+من أجل تحديد حسابات القراءة فقط (readonly accounts)، تحتوي بنية عنوان الرسالة (MessageHeader) على `num_readonly_signed_accounts` و `num_readonly_unsigned_accounts`. يتم تضمين تعليمات مُعرف البرنامج `program_ids` في ناقل الحساب كحسابات غير مُوقعة للقراءة فقط، حيث لا يُمكن تعديل الحسابات القابلة للتنفيذ بالمثل أثناء مُعالجة التعليمات.
 
-## Runtime handling
+## مُعالجة وقت التشغيل (Runtime handling)
 
-Runtime transaction processing rules need to be updated slightly. Programs still can't write or spend accounts that they do not own. But new runtime rules ensure that readonly accounts cannot be modified, even by the programs that own them.
+تحتاج قواعد مُعالجة المُعاملات في وقت التشغيل إلى تحديث طفيف. لا تزال البرامج غير قادرة على كتابة أو إنفاق حسابات لا تمتلكها. لكن قواعد وقت التشغيل الجديدة تضمن عدم إمكانية تعديل الحسابات للقراءة فقط، حتى من خلال البرامج التي تمتلكها.
 
-Readonly accounts have the following property:
+تمتلك حسابات القراءة فقط الخاصية التالية:
 
-- Read-only access to all account fields, including lamports (cannot be credited or debited), and account data
+- وصول للقراءة فقط إلى جميع حقول الحساب، بما في ذلك الـ lamports (لا يمكن إضافتها أو خصمها) وبيانات الحساب
 
-Instructions that credit, debit, or modify the readonly account will fail.
+ستفشل التعليمات الخاصة بالإيداع في حساب القراءة فقط أو الخصم منه أو تعديله.
 
-## Account Lock Optimizations
+## تحسينات قفل الحساب (Account Lock Optimizations)
 
-The Accounts module keeps track of current locked accounts in the runtime, which separates readonly accounts from the writable accounts. The default account lock gives an account the "writable" designation, and can only be accessed by one processing thread at one time. Readonly accounts are locked by a separate mechanism, allowing for parallel reads.
+تتعقب وحدة الحسابات الحسابات المُقفلة الحالية في وقت التشغيل، والتي تفصل حسابات القراءة فقط (readonly accounts) عن الحسابات القابلة للكتابة (writable accounts). يمنح قفل الحساب الإفتراضي حساب ما تعيين "قابلية الكتابة" ، ولا يُمكن الوصول إليه إلا من خلال عملية جزئية (thread) مُعالجة واحدة في في كل مرة. يتم قفل الحسابات للقراءة فقط بواسطة آلية مُنفصلة، مما يسمح بالقراءة المُتوازية.
 
-Although not yet implemented, readonly accounts could be cached in memory and shared between all the threads executing transactions. An ideal design would hold this cache while a readonly account is referenced by any transaction moving through the runtime, and release the cache when the last transaction exits the runtime.
+على الرغم من عدم تنفيذها بعد، يُمكن تخزين حسابات القراءة فقط مُؤقتًا في الذاكرة ومُشاركتها بين جميع العمليات الجزئية (thread) التي تُنفذ المُعاملات. سيحتفظ التصميم المثالي بذاكرة التخزين المُؤقت هذه بينما تتم الإشارة إلى حساب القراءة فقط من خلال أي مُعاملة تتحرك خلال وقت التشغيل، وتحرير ذاكرة التخزين المُؤقت عندما تنتهي المُعاملة الأخيرة من وقت التشغيل.
 
-Readonly accounts could also be passed into the processor as references, saving an extra copy.
+يُمكن أيضًا تمرير حسابات القراءة فقط إلى المُعالج كمراجع، مع توفير نسخة إضافية.

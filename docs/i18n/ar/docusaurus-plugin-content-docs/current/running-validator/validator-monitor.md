@@ -1,39 +1,34 @@
 ---
-title: Monitoring a Validator
+title: مراقبة المُدقّق (Monitoring a Validator)
 ---
 
-## Check Gossip
+## التحقق من القيل والقال (Check Gossip)
 
-Confirm the IP address and **identity pubkey** of your validator is visible in
-the gossip network by running:
+تأكد من أن عنوان IP و مفتاح الهوية **identity pubkey** من المُدقّق (validator) الخاص بك مرئي في شبكة القيل والقال (gossip) عن طريق تشغيل الأمر البرمجي:
 
 ```bash
 solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
-## Check Your Balance
+## التحقق من رصيدك (Check Your Balance)
 
-Your account balance should decrease by the transaction fee amount as your
-validator submits votes, and increase after serving as the leader. Pass the
-`--lamports` are to observe in finer detail:
+يجب أن ينخفض رصيد حسابك بمقدار رسوم المُعاملة حيث يقوم المُدقّق (validator) الخاص بك بتقديم الأصوات، ويزيد بعد العمل كقائد (leader). تمرير الـ `--lamports` يجب أن تُراقب بتفصيل أدق:
 
 ```bash
 solana balance --lamports
 ```
 
-## Check Vote Activity
+## تحقق من نشاط التصويت (Check Vote Activity)
 
-The `solana vote-account` command displays the recent voting activity from
-your validator:
+يعرض الأمر `solana vote-account` نشاط التصويت الأخير من المُدقّق (validator) الخاص بك:
 
 ```bash
 solana vote-account ~/vote-account-keypair.json
 ```
 
-## Get Cluster Info
+## الحصول على معلومات المجموعة (Get Cluster Info)
 
-There are several useful JSON-RPC endpoints for monitoring your validator on the
-cluster, as well as the health of the cluster:
+تُوجد عدة نقاط نهاية (endpoints) مُفيدة لـ JSON-RPC لمُراقبة المُدقّق (validator) الخاص بك في المجموعة (cluster)، بالإضافة إلى صحة المجموعة (cluster):
 
 ```bash
 # Similar to solana-gossip, you should see your validator in the list of cluster nodes

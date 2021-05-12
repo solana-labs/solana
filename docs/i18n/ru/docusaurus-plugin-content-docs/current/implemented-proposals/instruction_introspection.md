@@ -1,28 +1,22 @@
 ---
-title: instruction introspection
+title: анализ инструкций
 ---
 
-## Problem
+## Проблематика
 
-Some smart contract programs may want to verify that another Instruction is present in a
-given Message since that Instruction could be be performing a verification of certain data,
-in a precompiled function. (See secp256k1_instruction for an example).
+Некоторым программам смарт-контрактов может понадобиться убелиться, что другая Инструкция присутствует в полученом Сообщении, поскольку эта Инструкция может выполнять проверку определенных данных в предварительно скомпилированной функции. (Пример см. secp256k1\_instruction).
 
-## Solution
+## Решение
 
-Add a new sysvar Sysvar1nstructions1111111111111111111111111 that a program can reference
-and received the Message's instruction data inside, and also the index of the current instruction.
+Используйте системную переменную Sysvar1nstructions1111111111111111111111111 на которую может сослаться программа, чтобы получить данные инструкции внутри сообщения вместе с индексом текущей инструкции.
 
-Two helper functions to extract this data can be used:
+Для извлечения этих данных можно использовать две вспомогательные функции:
 
 ```
 fn load_current_index(instruction_data: &[u8]) -> u16;
 fn load_instruction_at(instruction_index: usize, instruction_data: &[u8]) -> Result<Instruction>;
 ```
 
-The runtime will recognize this special instruction, serialize the Message instruction data
-for it and also write the current instruction index and then the bpf program can extract the
-necessary information from there.
+Среда выполнения распознает эту специальную инструкцию, сериализует для нее данные инструкции внутри Сообщения, а также запишет текущий индекс инструкции, и уже затем программа bpf сможет извлечь оттуда необходимую информацию.
 
-Note: custom serialization of instructions is used because bincode is about 10x slower
-in native code and exceeds current BPF instruction limits.
+Примечание: поскольку двоичный код примерно в 10 раз медленнее в машинном коде и превышает текущие ограничения инструкций BPF, используется кастомная сериализация инструкций.

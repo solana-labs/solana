@@ -1,161 +1,96 @@
 ---
-title: Solana ABI management process
+title: Proceso de gestión de Solana ABI
 ---
 
-This document proposes the Solana ABI management process. The ABI management
-process is an engineering practice and a supporting technical framework to avoid
-introducing unintended incompatible ABI changes.
+Este documento propone el proceso de gestión de Solana ABI. El proceso de gestión de ABI es una práctica de ingeniería y un marco técnico de apoyo para evitar introducir cambios no deseados incompatibles con ABI.
 
-# Problem
+# Problemas
 
-The Solana ABI (binary interface to the cluster) is currently only defined
-implicitly by the implementation and requires a very careful eye to notice
-breaking changes. This makes it extremely difficult to upgrade the software
-on an existing cluster without rebooting the ledger.
+La Solana ABI (interfaz binaria para el clúster) actualmente sólo está definida implícitamente por la implementación y requiere una atención muy cuidadosa para notar cambios de ruptura. Esto hace extremadamente difícil actualizar el software en un clúster existente sin reiniciar el ledger.
 
-# Requirements and objectives
+# Requerimientos y objetivos
 
-- Unintended ABI changes can be detected as CI failures mechanically.
-- Newer implementation must be able to process the oldest data (since genesis)
-  once we go mainnet.
-- The objective of this proposal is to protect the ABI while sustaining rather
-  rapid development by opting for a mechanical process rather than a very long
-  human-driven auditing process.
-- Once signed cryptographically, data blob must be identical, so no
-  in-place data format update is possible regardless of inbound and outbound of
-  the online system. Also, considering the sheer volume of transactions we're
-  aiming to handle, retrospective in-place update is undesirable at best.
+- Los cambios no intencionados de ABI pueden detectarse como fallos mecánicos de CI.
+- Una implementación más reciente debe ser capaz de procesar los datos más antiguos (desde genesis) una vez que vamos mainnet.
+- El objetivo de esta propuesta es proteger el ABI al mismo tiempo que sostiene un desarrollo rápido optando por un proceso mecánico en lugar de un muy largo proceso de auditoría impulsado por el hombre.
+- Una vez firmado criptográficamente, el blob de datos debe ser idéntico, por lo que no es posible actualizar el formato de datos en el lugar sin importar la entrada y salida de el sistema en línea. Además, teniendo en cuenta el gran volumen de transacciones que estamos tratando de manejar, la actualización retrospectiva en el lugar no es deseable en el mejor de los casos.
 
-# Solution
+# Solución
 
-Instead of natural human's eye due-diligence, which should be assumed to fail
-regularly, we need a systematic assurance of not breaking the cluster when
-changing the source code.
+En lugar de la diligencia debida del ojo del hombre natural, se debe asumir que falla regularmente, necesitamos una garantía sistemática de no romper el clúster cuando cambia el código fuente.
 
-For that purpose, we introduce a mechanism of marking every ABI-related things
-in source code (`struct`s, `enum`s) with the new `#[frozen_abi]` attribute. This
-takes hard-coded digest value derived from types of its fields via
-`ser::Serialize`. And the attribute automatically generates a unit test to try
-to detect any unsanctioned changes to the marked ABI-related things.
+Para ese fin, introducimos un mecanismo para marcar todas las cosas relacionadas con ABI en el código fuente (`struct`s, `enum`s) con el nuevo atributo `#[frozen_abi]`. Este toma un valor digest de código duro derivado de tipos de sus campos a través de `ser::Serialize`. Y el atributo genera automáticamente una prueba unitaria para intentar detectar cualquier cambio no autorizado en las cosas marcadas relacionadas con el ABI.
 
-However, the detection cannot be complete; no matter how hard we statically
-analyze the source code, it's still possible to break ABI. For example, this
-includes not-`derive`d hand-written `ser::Serialize`, underlying library's
-implementation changes (for example `bincode`), CPU architecture differences.
-The detection of these possible ABI incompatibilities is out-of-scope for this
-ABI management.
+Sin embargo, la detección no puede completarse; no importa lo difícil que analicemos estáticamente el código fuente, todavía es posible romper la ABI. Por ejemplo, esto incluye no-`derive`d escrito a mano `ser::Serialize`, la implementación de la biblioteca subyacente cambia (por ejemplo `bincode`), diferencias de arquitectura del CPU. La detección de estas posibles incompatibilidades ABI está fuera de alcance para esta gestión de ABI.
 
-# Definitions
+# Definiciones
 
-ABI item/type: various types to be used for serialization, which collectively
-comprises the whole ABI for any system components. For example, those types
-include `struct`s and `enum`s.
+Artículo/tipo ABI: varios tipos que se utilizarán para la serialización, que colectivamente incluye el ABI completo para cualquier componente del sistema. Por ejemplo, esos tipos incluyen `struct`s y `enum`s.
 
-ABI item digest: Some fixed hash derived from type information of ABI item's
-fields.
+Resumen del elemento ABI: Algún hash fijo derivado de la información del tipo de los campos del elemento ABI.
 
-# Example
+# Ejemplos
 
 ```patch
 +#[frozen_abi(digest="eXSMM7b89VY72V...")]
  #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
  pub struct Vote {
-     /// A stack of votes starting with the oldest vote
+     /// Una pila de votos que comienza con el voto más antiguo.
      pub slots: Vec<Slot>,
-     /// signature of the bank's state at the last slot
+     ///firma del estado del banco en la última ranura
      pub hash: Hash,
  }
 ```
 
-# Developer's workflow
+# Flujo de trabajo del desarrollador
 
-To know the digest for new ABI items, developers can add `frozen_abi` with a
-random digest value and run the unit tests and replace it with the correct
-digest from the assertion test error message.
+Conocer el resumen de nuevos objetos ABI, los desarrolladores pueden añadir `frozen_abi` con un valor de resumen aleatorio y ejecutar las pruebas unitarias y reemplazarlo con el resumen correcto del mensaje de error de la prueba de afirmación.
 
-In general, once we add `frozen_abi` and its change is published in the stable
-release channel, its digest should never change. If such a change is needed, we
-should opt for defining a new `struct` like `FooV1`. And special release flow
-like hard forks should be approached.
+En general, una vez que agregamos `frozen_abi` y su cambio se publica en el canal de lanzamiento estable, su resumen nunca debería cambiar. Si ese cambio es necesario, optaremos por definir una nueva estructura `` como `FooV1`. Y flujo de liberación especial como bifurcaciones duras.
 
-# Implementation remarks
+# Comentarios de la implementación
 
-We use some degree of macro machinery to automatically generate unit tests
-and calculate a digest from ABI items. This is doable by clever use of
-`serde::Serialize` (`[1]`) and `any::type_name` (`[2]`). For a precedent for similar
-implementation, `ink` from the Parity Technologies `[3]` could be informational.
+Usamos cierto grado de maquinaria macro para generar automáticamente pruebas unitarias. y calcular un resumen de los elementos ABI. Esto se puede hacer mediante el uso inteligente de `serde::Serialize` (`[1]`) y `any::type_name` (`[2]`). Para un precedente similar de implementación, `ink` de las tecnologías de Parity `[3]` podría ser informativa.
 
-# Implementation details
+# Detalles de implementación
 
-The implementation's goal is to detect unintended ABI changes automatically as
-much as possible. To that end, the digest of structural ABI information is
-calculated with best-effort accuracy and stability.
+El objetivo de la implementación es detectar los cambios no deseados en ABI automáticamente como sea posible. Para ese fin, el digest de información estructural de ABI se calcula con la mejor precisión y estabilidad del esfuerzo.
 
-When the ABI digest check is run, it dynamically computes an ABI digest by
-recursively digesting the ABI of fields of the ABI item, by re-using the
-`serde`'s serialization functionality, proc macro and generic specialization.
-And then, the check `assert!`s that its finalized digest value is identical as
-what is specified in the `frozen_abi` attribute.
+Cuando se ejecuta la comprobación de resumen de ABI, calcula dinámicamente un resumen de ABI digeriendo recursivamente el ABI de los campos del artículo ABI, al reutilizar la funcionalidad de serialización de `serde`, macro proc y especialización genérica. ¡Y entonces, la comprobación `assert!`s que su valor digest finalizado es idéntico como lo que se especifica en el atributo `frozen_abi`.
 
-To realize that, it creates an example instance of the type and a custom
-`Serializer` instance for `serde` to recursively traverse its fields as if
-serializing the example for real. This traversing must be done via `serde` to
-really capture what kinds of data actually would be serialized by `serde`, even
-considering custom non-`derive`d `Serialize` trait implementations.
+Para darse cuenta de eso, crea una instancia de ejemplo del tipo y un personalizado ` Serializer ` instancia para ` serde ` para recorrer recursivamente sus campos como si serializando el ejemplo de verdad. Este recorrido debe realizarse a través de `serde` para capturar realmente qué tipo de datos realmente serían serializados por `serde`, incluso considerando no personalizado-`derivive`d `Serialize` implementaciones de características.
 
-# The ABI digesting process
+# El proceso de digestión de ABI
 
-This part is a bit complex. There is three inter-depending parts: `AbiExample`,
-`AbiDigester` and `AbiEnumVisitor`.
+Esta parte es un poco compleja. Hay tres partes interdependientes: `AbiExample`, `AbiDigester` y `AbiEnumVisitor`.
 
-First, the generated test creates an example instance of the digested type with
-a trait called `AbiExample`, which should be implemented for all of digested
-types like the `Serialize` and return `Self` like the `Default` trait. Usually,
-it's provided via generic trait specialization for most of common types. Also
-it is possible to `derive` for `struct` and `enum` and can be hand-written if
-needed.
+Primero, la prueba generada crea una instancia de ejemplo del tipo digerido con un rasgo llamado `AbiExample`, que debe implementarse para todos los tipos digeridos como el `Serialize` y devolver `Self` como el `default` rasgo. Generalmente, se proporciona mediante especialización genérica de rasgos para la mayoría de los tipos comunes. También es posible `derive` para `struct` y `enum` y puede ser escrito a mano si es necesario.
 
-The custom `Serializer` is called `AbiDigester`. And when it's called by `serde`
-to serialize some data, it recursively collects ABI information as much as
-possible. `AbiDigester`'s internal state for the ABI digest is updated
-differentially depending on the type of data. This logic is specifically
-redirected via with a trait called `AbiEnumVisitor` for each `enum` type. As the
-name suggests, there is no need to implement `AbiEnumVisitor` for other types.
+El `Serializer` personalizado se llama `AbiDigester`. Y cuando es llamado por `serde` para serializar algunos datos, recolecta recursivamente información ABI tanto como sea posible. `AbiDigester` El estado interno para el resumen ABI se actualiza de forma diferente dependiendo del tipo de datos. Esta lógica es específicamente redirigida a través de un trait llamado `AbiEnumVisitor` por cada tipo `enum`. Como sugiere el nombre de, no hay necesidad de implementar `AbiEnumVisitor` para otros tipos.
 
-To summarize this interplay, `serde` handles the recursive serialization control
-flow in tandem with `AbiDigester`. The initial entry point in tests and child
-`AbiDigester`s use `AbiExample` recursively to create an example object
-hierarchal graph. And `AbiDigester` uses `AbiEnumVisitor` to inquiry the actual
-ABI information using the constructed sample.
+Para resumir esta interacción, `serde` gestiona el flujo del control de serialización recursivo junto con `AbiDigester`. El punto de entrada inicial en pruebas e hijo `AbiDigester`s utilizan `AbiExample` recursivamente para crear un gráfico jerárquico objeto de ejemplo. Y `AbiDigester` usa `AbiEnumVisitor` para consultar la información real ABI usando la muestra construida.
 
-`Default` isn't enough for `AbiExample`. Various collection's `::default()` is
-empty, yet, we want to digest them with actual items. And, ABI digesting can't
-be realized only with `AbiEnumVisitor`. `AbiExample` is required because an
-actual instance of type is needed to actually traverse the data via `serde`.
+`Default` no es suficiente para `AbiExample`. La colección variada `::default()` está vacía, sin embargo, queremos digerirlos con elementos reales. Y, la digestión de ABI no puede realizarse solo con `AbiEnumVisitor`. `AbiExample` es requerido porque se necesita una instancia real de tipo para recorrer realmente los datos a través de `serde`.
 
-On the other hand, ABI digesting can't be done only with `AbiExample`, either.
-`AbiEnumVisitor` is required because all variants of an `enum` cannot be
-traversed just with a single variant of it as a ABI example.
+Por otro lado, la digerción ABI no puede hacerse solo con `AbiEjemplo`, tampoco. `AbiEnumVisitor` es requerido porque todas las variantes de un `enum` no pueden ser atravesadas solo con una sola variante como ejemplo de ABI.
 
-Digestable information:
+Información digestible:
 
-- rust's type name
-- `serde`'s data type name
-- all fields in `struct`
-- all variants in `enum`
-- `struct`: normal(`struct {...}`) and tuple-style (`struct(...)`)
-- `enum`: normal variants and `struct`- and `tuple`- styles.
-- attributes: `serde(serialize_with=...)` and `serde(skip)`
+- nombre del tipo de oxidación
+- Nombre del tipo de datos de ` serde `
+- todos los campos en `struct`
+- todas las variantes en `enum`
+- `struct`: normal(`struct {...}`) y estilo tuple (`struct(...)`)
+- `enum`: variantes normales y `struct`- y `tupla`- estilos.
+- atributos: `serde(serialize_with=...)` y `serde(skip)`
 
-Not digestable information:
+Información no digerible:
 
-- Any custom serialize code path not touched by the sample provided by
-  `AbiExample`. (technically not possible)
-- generics (must be a concrete type; use `frozen_abi` on concrete type
-  aliases)
+- Cualquier ruta de serialización personalizada no tocada por la muestra proporcionada por `AbiExample`. (técnicamente no es posible)
+- genéricos (debe ser un tipo de hormigón; use `frozen_abi` en alias del tipo de hormigón)
 
-# References
+# Referencias
 
-1. [(De)Serialization with type info · Issue #1095 · serde-rs/serde](https://github.com/serde-rs/serde/issues/1095#issuecomment-345483479)
+1. [(De)Serialización con información de tipo · Problema #1095 · serde-rs/serde](https://github.com/serde-rs/serde/issues/1095#issuecomment-345483479)
 2. [`std::any::type_name` - Rust](https://doc.rust-lang.org/std/any/fn.type_name.html)
-3. [Parity's ink to write smart contracts](https://github.com/paritytech/ink)
+3. [La tinta de Paridad para escribir contratos inteligentes](https://github.com/paritytech/ink)

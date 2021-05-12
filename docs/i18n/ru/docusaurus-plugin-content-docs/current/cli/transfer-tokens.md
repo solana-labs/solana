@@ -1,157 +1,124 @@
 ---
-title: Send and Receive Tokens
+title: Отправка и получение токенов
 ---
 
-This page decribes how to receive and send SOL tokens using the command line
-tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
-a [file system wallet](../wallet-guide/file-system-wallet.md), or a
-[hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
-you have created a wallet and have access to its address (pubkey) and the
-signing keypair. Check out our
-[conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
+Эта страница расширяет способ получения и отправки SOL токенов с помощью инструментов командной строки с кошельком командной строки, таких как [бумажный кошелёк](../wallet-guide/paper-wallet.md), файловый кошелёк [](../wallet-guide/file-system-wallet.md), или [аппаратный кошелёк](../wallet-guide/hardware-wallets.md). Прежде чем начать, убедитесь что Вы создали кошелёк и имеете доступ к его адресу (pubkey) и ключу подписи. Ознакомьтесь с нашими [соглашениями о вводе ключей для различных типов кошельков](../cli/conventions.md#keypair-conventions).
 
-## Testing your Wallet
+## Проверка Вашего кошелька
 
-Before sharing your public key with others, you may want to first ensure the
-key is valid and that you indeed hold the corresponding private key.
+Перед тем, как поделиться Вашим открытым ключом с другими, Вы можете сначала убедиться, что ключ действителен и у Вас действительно есть соответствующий приватный ключ.
 
-In this example, we will create a second wallet in addition to your first wallet,
-and then transfer some tokens to it. This will confirm that you can send and
-receive tokens on your wallet type of choice.
+В этом примере мы создадим второй кошелёк в дополнение к первому кошельку, и затем передадим несколько токенов на него. Это подтвердит, что вы можете отправлять и получать токены на Ваш выбранный типа кошелька.
 
-This test example uses our Developer Testnet, called devnet. Tokens issued
-on devnet have **no** value, so don't worry if you lose them.
+В этом тестовом примере используется наш тестовый Testnet, называемый devnet. Выпущенные токенов в devnet не имеют значения ** no **, поэтому не беспокойтесь, если Вы их потеряете.
 
-#### Airdrop some tokens to get started
+#### Возьмите некоторые токены для начала
 
-First, _airdrop_ yourself some play tokens on the devnet.
+Во-первых, _airdrop_ вы немного играете на devnet.
 
 ```bash
-solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
-public key/wallet address.
+, где Вы замените текст `<RECIPIENT_ACCOUNT_ADDRESS>` на Ваш base58-закодированный публичный ключ/адрес кошелька.
 
-#### Check your balance
+#### Проверьте свой баланс
 
-Confirm the airdrop was successful by checking the account's balance.
-It should output `1 SOL`:
+Подтвердите, что airdrop был успешно зачислен на баланс аккаунта. Он должен вывести `10 SOL`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-#### Create a second wallet address
+#### Создать второй адрес кошелька
 
-We will need a new address to receive our tokens. Create a second
-keypair and record its pubkey:
+Нам понадобится новый адрес для получения токенов. Создайте вторую клавишу и запишите свой pubkey:
 
 ```bash
 solana-keygen new --no-passphrase --no-outfile
 ```
 
-The output will contain the address after the text `pubkey:`. Copy the
-address. We will use it in the next step.
+Вывод будет содержать адрес после текста `pubkey:`. Скопируйте адрес. Мы будем использовать его на следующем этапе.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-You can also create a second (or more) wallet of any type:
-[paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses),
-[file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
+Вы также можете создать второй (или более) кошелек любого типа: [бумага](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses), [файловая система](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses), или [оборудование](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 
-#### Transfer tokens from your first wallet to the second address
+#### Передача токенов из Вашего первого кошелька на второй
 
-Next, prove that you own the airdropped tokens by transferring them.
-The Solana cluster will only accept the transfer if you sign the transaction
-with the private keypair corresponding to the sender's public key in the
-transaction.
+Далее докажите, что Вы владеете токенами, передавая их. Кластер Solana принимает перевод только в том случае, если Вы подпишете транзакцию с приватным ключом, соответствующим публичному ключу отправителя в транзакции.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
-where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
-and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the address of your second
-wallet.
+где вы заменили `<KEYPAIR>` на путь к клавиатуре в Вашем первом кошельке, и замените `<RECIPIENT_ACCOUNT_ADDRESS>` адресом Вашего второго кошелька.
 
-Confirm the updated balances with `solana balance`:
+Подтвердите обновленные балансы на `solana балансе`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
+solana airdrop <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
-where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
-recipient's public key.
+где `<ACCOUNT_ADDRESS>` является либо публичным ключом, либо публичным ключом получателя.
 
-#### Full example of test transfer
+#### Полный пример тестовой передачи
 
 ```bash
-$ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
-Generating a new keypair
-For added security, enter a passphrase (empty for no passphrase):
-Wrote new keypair to my_solana_wallet.json
+$ solana-keygen new --outfile my_solana_wallet.json # Создание моего первого кошелька, кошелька с файловой системой
+Создание новой пары ключей
+Для дополнительной безопасности введите парольную фразу (пусто, если парольная фраза отсутствует):
+Записал новую пару ключей в my_solana_wallet.json
+================================================== ========================
+pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK # Вот адрес первого кошелька
+================================================== ========================
+Сохраните эту исходную фразу, чтобы восстановить новую пару ключей:
+width enhance concert vacant ketchup eternal spy craft spy guard tag punch # Если бы это был настоящий кошелек, никогда не делитесь этими словами в Интернете вот так!
+============================================================================
+
+$ solana airdrop 10 DYw8jCTfwHNRJhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Airdropping 10 SOL на адрес моего кошелька / pubkey
+Запрос airdrop 10 SOL из 35.233.193. 0:9900
+10 SOL
+
+$ $ solana balance ДИw8jCTfwHNRJhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Проверьте баланс адреса
+10 SOL
+
+$ solana-keygen new --no-outfile # Создание второго кошелька, бумажный кошелёк
+Создание новой клавиатуры
+для дополнительной безопасности, введите парольную фразу (пустая без парольной фразы):
+==========================================================
+pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv # Здесь адрес второй, бумага, кошелёк.
+============================================================================
+Сохрани эту исходную фразу, чтобы восстановить Ваш новый тип:
+clump panic cousin hurt coast charge engage fall eager urge win love   # # Если бы это был настоящий кошелёк, никогда не делитесь этими словами в Интернете так!
 ==========================================================================
-pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # Here is the address of the first wallet
-==========================================================================
-Save this seed phrase to recover your new keypair:
-width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
-==========================================================================
 
-$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
-Requesting airdrop of 1 SOL from 35.233.193.70:9900
-1 SOL
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet. son # Передача токенов на публичный адрес бумажного кошелька
+3gmXvykAd1nCQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z # Это подпись транзакции
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
-1 SOL
-
-$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
-Generating a new keypair
-For added security, enter a passphrase (empty for no passphrase):
-====================================================================
-pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # Here is the address of the second, paper, wallet.
-====================================================================
-Save this seed phrase to recover your new keypair:
-clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
-====================================================================
-
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
-3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
-
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
+$ solana balance DYw8jCTfwHNRJhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+4.999995 SOL # Отправляющий счёт имеет несколько меньше 5 SOL из-за 0.00005 Оплаченной комиссии SOL
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
+5 SOL # Второй кошелёк теперь получил перевод 5 SOL с первого кошелька
 
 ```
 
-## Receive Tokens
+## Получить токены
 
-To receive tokens, you will need an address for others to send tokens to. In
-Solana, the wallet address is the public key of a keypair. There are a variety
-of techniques for generating keypairs. The method you choose will depend on how
-you choose to store keypairs. Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallet-guide/cli.md).
-Once completed, you should have a public key
-for each keypair you generated. The public key is a long string of base58
-characters. Its length varies from 32 to 44 characters.
+Чтобы получать токены, вам понадобится адрес для отправки токенов другим. В Solana, адрес кошелька является публичным ключом клавиатуры. Существует множество методов генерации клавиш. Выбранный вами метод будет зависеть от того, как вы выбираете хранить пары ключей. Пары ключей хранятся в кошельках. Перед получением токенов вам нужно [создать кошелёк](../wallet-guide/cli.md). После завершения у вас должен быть открытый ключ для каждого генерируемой вами пары. Публичный ключ является длинной строкой из символов base58. Его длина составляет от 32 до 44 символов.
 
-## Send Tokens
+## Отправить токены
 
-If you already hold SOL and want to send tokens to someone, you will need
-a path to your keypair, their base58-encoded public key, and a number of
-tokens to transfer. Once you have that collected, you can transfer tokens
-with the `solana transfer` command:
+Если вы уже удерживаете SOL и хотите отправлять токены кому-то, вам понадобится путь к вашему ключевому слову, свой открытый ключ base58-кодированный и ряд токенов для передачи. После того, как вы собрали, вы можете передать токены с помощью команды `Solana transfer`:
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>
 ```
 
-Confirm the updated balances with `solana balance`:
+Проверить обновленное состояние баланса можно с помощью команды `solana balance`:
 
 ```bash
 solana balance <ACCOUNT_ADDRESS>

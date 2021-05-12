@@ -8,7 +8,7 @@ title: 文件系统钱包
 
 ## 准备工作
 
-确保您 [已安装 Solana 命令行工具](../cli/install-solana-cli-tools.md)
+确保您 [已安装Solana命令行工具](../cli/install-solana-cli-tools.md)
 
 ## 生成文件系统钱包密钥对
 

@@ -1,49 +1,53 @@
 ---
-title: Registration FAQ
+title: FAQ по регистрации
 ---
 
-The [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) should be considered the authoritative resource for any participation questions.
+[УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) должны рассматриваться как авторитетный источник для любых вопросов об участии.
 
-## Is registration mandatory?
+## Регистрация обязательна?
 
-Yes. Registration is mandatory. Registration is rolling, we host month-long Tour de SOL stages on a monthly basis and new participants will need to wait until the start of the next stage to be on-boarded. [Registration information lives here](how-to-register.md).
+Да. Регистрация является обязательной. Регистрация идет, мы проводим ежемесячный этап Tour de SOL и новым участникам необходимо будет подождать до начала следующего этапа, чтобы присоединиться. [Информация по регистрации находится здесь](how-to-register.md).
 
-## Who’s eligible to participate?
+## Кто имеет право принять участие?
 
-Please see section “1 Eligibility; KYC Requirements” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing) for details.
+Подробнее см. в разделе "1 Право на участие; требования KYC для [УЧАСТНИКОВ TOUR DE SOL](https://drive.google.com/a/solana.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view?usp=sharing).
 
-## Do I have to complete the KYC/AML process to participate?
+## Должен ли я пройти процедуру KYC/AML для участия?
 
-Yes. Completing the KYC/AML process is mandatory.
+Да. Прохождение KYC/AML является обязательным. Если вы не прошли процедуру до 1 этапа Tour de SOL, вы не можете принять участие в Tour de SOL.
 
-## What are my responsibilities as a Tour de Sol participant?
+Мы сотрудничаем с Coinlist для управления процедурой KYC/AML для Tour de Sol. Вы можете найти [инструкцию по прохождению процедуры здесь](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) и [завершить процесс здесь](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
 
-Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+## Каковы мои обязанности в качестве участника Tour de Sol?
 
-## How is the “90% of the active Tour event time” responsibility calculated?
+Подробнее см. в разделе "2c Tour de SOL Детали" [УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view).
 
-To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
+### Как рассчитывается ответственность «50% активности в Tour de SOL»?
 
-## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
+Чтобы иметь право на получение награды в данном этапе, валидатор подать голоса в &gt;= 50% слотов текущего этапа.
 
-No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
+Если валидатор не может подать &gt;= 50% голосов за этап и все равно считает, что должен получить награды за этот этап, то он может обратиться в Solana с просьбой о повторном рассмотрении.
 
-## Can a validator be disqualified from the Tour de Sol?
+## Существует ли взаимосвязь между токенами тестовой сети Tour de Sol и основной сети Solana?
 
-Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
+Нет. Подробнее см. в разделе "2d Tour de SOL Детали" [УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view).
 
-Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
+## Может ли валидатор быть дисквалифицирован из Tour de Sol?
 
-### More questions related to Prohibited Conduct:
+Да. Валидатор будет дисквалифицирован из Tour de SOL, если он занимается запрещенной деятельностью и/или не может обеспечить минимальный уровень услуг, описанных в вопросе \#4 выше.
 
-#### As referenced in section “4 Prohibited Conduct”, what would be an example of providing Tour Services from a jurisdiction other than the jurisdiction of my residence? Does this mean my server has to reside in the jurisdiction of my residence?
+Более подробное описание запрещенных действий см. в разделе "4 Запрещенное поведение" в документе [УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view).
 
-No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
+### Другие вопросы, связанные с запрещенным поведением:
 
-## How are rewards calculated?
+#### Как отмечается в разделе "4 Запрещенное поведение", что было бы примером предоставления услуг Tour de SOL в другой юрисдикции отличное от юрисдикции моего проживания? Означает ли это что мой сервер должен находиться в юрисдикции моего проживания?
 
-Please see the [Rewards section](rewards.md) for details
+Нет. Серверы могут находиться в других юрисдикциях, отличающихся от места жительства участника. Подписав [УСЛОВИЯ УЧАСТИЯ В TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view), участники подтверждают, что они предоставляет свои услуги из США, если они проживают там или за пределами США, если они не проживают в США.
 
-## How will we know what information we can and cannot share publicly?
+## Как рассчитываются награды?
 
-Please see [Confidentiality](confidentiality.md).
+Пожалуйста, посмотрите [раздел про награды](rewards.md) за подробностями
+
+## Как мы узнаем, какую информацию мы можем и не можем распространять публично?
+
+Пожалуйста, смотрите раздел [Конфиденциальность](confidentiality.md).

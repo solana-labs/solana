@@ -1,89 +1,35 @@
 ---
-title: Optimistic Confirmation and Slashing
+title: التأكيد المُتفائل والإقتطاع (Optimistic Confirmation and Slashing)
 ---
 
-Progress on optimistic confirmation can be tracked here
+يُمكن تتبع التقدم المُحرز في التأكيد المُتفائل هنا
 
 https://github.com/solana-labs/solana/projects/52
 
-At the end of May, the mainnet-beta is moving to 1.1, and testnet is
-moving to 1.2. With 1.2, testnet will behave as if it has optimistic
-finality as long as at least no more than 4.66% of the validators are
-acting maliciously. Applications can assume that 2/3+ votes observed in
-gossip confirm a block or that at least 4.66% of the network is violating
-the protocol.
+في نهاية شهر مايو، تنتقل الشبكة التجريبية الرئيسية (Mainnet Beta) إلى الإصدار 1.1، و تنتقل الشبكة التجريبية (testnet) إلى الإصدار 1.2. مع الإصدار 1.2، سوف تتصرف الشبكة التجريبية (testnet) كما لو كان لها وقت إثبات مُعاملة (Finality) مُتفائل طالما أن نسبة المُدقّقين (validators) الذين يتصرفون بشكل ضار لا تتجاوز 4.66 ٪. يمكن للتطبيقات أن تفترض أن 2/3 + الأصوات التي لوحظت في القيل والقال (gossip) تُؤكد وجود كتلة (block) أو أن 4.66 ٪ على الأقل من الشبكة تنتهك البروتوكول.
 
-## How does it work?
+## كيف يعمل هذا الأمر؟
 
-The general idea is that validators must continue voting following their
-last fork, unless the validator can construct a proof that their current
-fork may not reach finality. The way validators construct this proof is
-by collecting votes for all the forks excluding their own. If the set
-of valid votes represents over 1/3+X of the epoch stake weight, there
-may not be a way for the validators current fork to reach 2/3+ finality.
-The validator hashes the proof (creates a witness) and submits it with
-their vote for the alternative fork. But if 2/3+ votes for the same
-block, it is impossible for any of the validators to construct this proof,
-and therefore no validator is able to switch forks and this block will
-be eventually finalized.
+الفكرة العامة هي أن المُدقّقين (validators) يجب أن يستمروا في التصويت بعد آخر إنقسام أو شوكة (fork)، ما لم يتمكن المُدقّق من بناء دليل على أن الإنقسام أو الشوكة الحالية قد لا تصل إلى نهايتها. الطريقة التي يبني بها المُدقّقون (validators) هذا الدليل هي من خلال جمع الأصوات لجميع الإنقسامات أو الشوكات (forks) بإستثناء الخاصة بهم. إذا كانت مجموعة الأصوات الصالحة تمثل أكثر من 1/3+X من وزن حِصَّة (stake) الفترة (epoch)، فقد لا تكون هناك طريقة لوصول الإنقسام أو الشوكة (fork) الحالية للمُدقّقين (validators) إلى 2/3+ من وقت إثبات المُعاملة (Finality). يقوم المُدقّق (validator) بتجزئة (hashes) الإثبات (ينشئ شاهدًا) ويُقدمه مع تصويته للإنقسام أو الشوكة (fork) البديلة. لكن إذا صوت 2/3+ لنفس الكتلة (block)، فمن المُستحيل لأي من المُدقّقين (validators) إنشاء هذا الإثبات، وبالتالي لا يُمكن لأي مُدقّق تبديل الإنقسامات أو الشوكات (forks) وسيتم الإنتهاء من هذه الكتلة (block) في النهاية.
 
-## Tradeoffs
+## المُفاضلات (Tradeoffs)
 
-The safety margin is 1/3+X, where X represents the minimum amount of stake
-that will be slashed in case the protocol is violated. The tradeoff is
-that liveness is now reduced by 2X in the worst case. If more than 1/3 -
-2X of the network is unavailable, the network may stall and will only
-resume finalizing blocks after the network recovers below 1/3 - 2X of
-failing nodes. So far, we haven’t observed a large unavailability hit
-on our mainnet, cosmos, or tezos. For our network, which is primarily
-composed of high availability systems, this seems unlikely. Currently,
-we have set the threshold percentage to 4.66%, which means that if 23.68%
-have failed the network may stop finalizing blocks. For our network,
-which is primarily composed of high availability systems a 23.68% drop
-in availabilty seems unlinkely. 1:10^12 odds assuming five 4.7% staked
-nodes with 0.995 of uptime.
+هامش الأمان هو 1/3+X، حيث يُمثل X الحد الأدنى من الحِصَّة (stake) الذي سيتم تخفيضها في حالة إنتهاك البروتوكول. والمُقايضة هي أن الحيوية تنخفض الآن بمقدار الضعفين (2X) في أسوأ الحالات. إذا كان أكثر من 1/3 - 2X من الشبكة غير مُتوفر، فقد تتوقف الشبكة وستستأنف إنهاء الكتل (blocks) فقط بعد أن تسترد الشبكة أقل من 1/3 - 2X من العُقد (nodes) الفاشلة. حتى الآن، لم نلاحظ حدوث عدم توافر (unavailability) كبير على شبكتنا الرئيسية، أو cosmos، أو tezos. بالنسبة لشبكتنا، التي تتكون أساسًا من أنظمة توافر (availability) عالية، يبدو هذا غير مرجح. قُمنا حاليًا بتعيين نسبة الحد الأدنى إلى 4.66٪، مما يعني أنه في حالة فشل 23.68٪، فقد تتوقف الشبكة عن إنهاء الكتل (blocks). بالنسبة لشبكتنا، التي تتكون أساسًا من أنظمة عالية التوافر (availability)، يبدو أن الإنخفاض في التوافر بنسبة 23.68٪ غير مُرتبط. إحتمالات 1:10^12 بإفتراض وجود خمس عُقد تحْصِيص (staked nodes) بنسبة 4.7٪ مع 0.995 وقت تشغيل.
 
-## Security
+## الأمن (Security)
 
-Long term average votes per slot has been 670,000,000 votes / 12,000,000
-slots, or 55 out of 64 voting validators. This includes missed blocks due
-to block producer failures. When a client sees 55/64, or ~86% confirming
-a block, it can expect that ~24% or `(86 - 66.666.. + 4.666..)%` of
-the network must be slashed for this block to fail full finalization.
+كان مُتوسط الأصوات على المدى الطويل لكل خانة 670.000.000 صوت / 12.000.000 فُتحة (Slot)، أو 55 من أصل 64 مُدقّقي تصويت (voting validators). يتضمن ذلك الكتل التي تم تفويتها (blocks) بسبب فشل المُنتج. عندما يرى العميل 55/64، أو 86٪ تقريبًا يُؤكد الكتلة (block)، يُمكنه توقع 24٪ تقريبًا أو `(86 - 66.666.. + 4.666..)٪ ` من الشبكة يجب أن يتم خفضه حتى تفشل هذه الكتلة (block) في الوصول إلى الصيغه النهائيه.
 
-## Why Solana?
+## لماذا Solana؟
 
-This approach can be built on other networks, but the implementation
-complexity is significantly reduced on Solana because our votes
-have provable VDF-based timeouts. It’s not clear if switching proofs
-can be easily constructed in networks with weak assumptions about
-time.
+يُمكن بناء هذا النهج على شبكات أخرى، ولكن يتم تقليل تعقيد التنفيذ بشكل كبير على Solana لأن أصواتنا لها مُهلات تستند إلى VDF يُمكن إثباتها. ليس من الواضح ما إذا كان تبديل الإثباتات يُمكن بناؤه بسهولة في شبكات ذات إفتراضات ضعيفة حول الوقت.
 
-## Slashing roadmap
+## خريطة طريق الإقتطاع (Slashing roadmap)
 
-Slashing is a hard problem, and it becomes harder when the goal of
-the network is to have the lowest possible latency. The tradeoffs are
-especially apparent when optimizing for latency. For example, ideally
-validators should cast and propagate their votes before the
-memory has been synced to disk, which means that the risk of local state
-corruption is much higher.
+يُعد الإقتطاع (slashing) مُشكلة صعبة، ويُصبح الأمر أكثر صعوبة عندما يكون هدف الشبكة هو الحصول على أقل زمن إنتقال مُمكن. تظهر المُفاضلات (tradeoffs) بشكل خاص عند تحسين زمن الوصول. على سبيل المثال، بشكل مثالي يجب على المُدقّقين (validators) الإدلاء بأصواتهم ونشرها قبل مُزامنة الذاكرة مع القرص، مما يعني أن مخاطر فساد الحالة المحلية أعلى بكثير.
 
-Fundamentally, our goal for slashing is to slash 100% in cases where
-the node is maliciously trying to violate safety rules and 0% during
-routine operation. How we aim to achieve that is to first implement
-slashing proofs without any automatic slashing whatsoever.
+بشكل أساسي، هدفنا هو القطع بنسبة 100٪ مع الحالات التي تُحاول فيها العُقدة (node) بشكل ضار إنتهاك قواعد الأمان و 0٪ أثناء التشغيل الروتيني. كيف نهدف إلى تحقيق ذلك هو تنفيذ أدلة الإقتطاع (slashing) أولاً دون أي إقتطاع تلقائي على الإطلاق.
 
-Right now, for regular consensus, after a safety violation, the
-network will halt. We can analyze the data and figure out who was
-responsible and propose that the stake should be slashed after
-restart. A similar approach will be used with a optimistic conf.
-An optimistic conf safety violation is easily observable, but under
-normal circumstances, an optimistic confirmation safety violation
-may not halt the network. Once the violation has been observed, the
-validators will freeze the affected stake in the next epoch and
-will decide on the next upgrade if the violation requires slashing.
+في الوقت الحالي، للحصول على إجماع (consensus) منتظم، بعد إنتهاك السلامة، فإن الشبكة ستتوقف. يُمكننا تحليل البيانات ومعرفة من المسؤول وإقتراح خفض الحِصَّة (stake) بعد إعادة التشغيل. سيتم إستخدام نهج مُماثل مع إعدادات (conf) مُتفائلة. يمكن مُلاحظة إنتهاك سلامة الإعدادات (conf) المُتفائلة بسهولة، ولكن في ظل الظروف العادية، قد لا يُؤدي إنتهاك تأكيد الأمان المُتفائل إلى إيقاف الشبكة. بمجرد مُلاحظة الإنتهاك، سيقوم المُدقّقون (validators) بتجميد الحِصَّة (stake) المُتأثرة في الفترة (epoch) التالية وسيُقررون الترقية التالية إذا تطلب الإنتهاك الإقتطاع (slashing).
 
-In the long term, transactions should be able to recover a portion
-of the slashing collateral if the optimistic safety violation is
-proven. In that scenario, each block is effectively insured by the
-network.
+على المدى الطويل، يجب أن تكون المُعاملات قادرة على إسترداد جزء من ضمان الإقتطاع (slashing) إذا ثبت إنتهاك السلامة المُتفائل. في هذا السيناريو، يتم تأمين كل كتلة (block) بشكل فعال بواسطة الشبكة.

@@ -1,102 +1,80 @@
 ---
-title: Staking
+title: Стейкинг
 ---
 
-**By default your validator will have no stake.** This means it will be
-ineligible to become leader.
+**По умолчанию у вашего валидатора нет стейка.** Это означает, что он не имеет права стать лидером.
 
-## Monitoring Catch Up
+## Мониторинг Catch Up
 
-To delegate stake, first make sure your validator is running and has caught up
-to the cluster. It may take some time to catch up after your validator boots.
-Use the `catchup` command to monitor your validator through this process:
+Для делегирования необходимо сначала убедиться, что ваш валидатор запущен и синхронизирован с кластером. Это может занять некоторое время после загрузки валидатора. Используйте команду `catchup`, чтобы отслеживать синхронизацию:
 
 ```bash
 solana catchup ~/validator-keypair.json
 ```
 
-Until your validator has caught up, it will not be able to vote successfully and
-stake cannot be delegated to it.
+До тех пор, пока ваш валидатор не синхронизируется, он не сможет голосовать и стейк не может быть ему делегирован.
 
-Also if you find the cluster's slot advancing faster than yours, you will likely
-never catch up. This typically implies some kind of networking issue between
-your validator and the rest of the cluster.
+Также если вы обнаружите, что слот кластера двигается быстрее, чем ваш, вы, скорее всего, никогда не сможете синхронизироваться с блокчейном. Обычно это подразумевает какие-либо проблемы между вашим валидатором и остальным кластером.
 
-## Create Stake Keypair
+## Создание Stake аккаунта
 
-If you haven’t already done so, create a staking keypair. If you have completed
-this step, you should see the “validator-stake-keypair.json” in your Solana
-runtime directory.
+Если вы еще не сделали этого, создайте staking keypair. Если вы завершили этот шаг, вы должны увидеть «validator-stake-keypair.json» в рабочей папке Solana.
 
 ```bash
 solana-keygen new -o ~/validator-stake-keypair.json
 ```
 
-## Delegate Stake
+## Делегирование стейка
 
-Now delegate 1 SOL to your validator by first creating your stake account:
+Теперь делегируйте 1 SOL вашему валидатору, создав сначала учетную запись для вашей ставки:
 
 ```bash
 solana create-stake-account ~/validator-stake-keypair.json 1
 ```
 
-and then delegating that stake to your validator:
+а затем делегируйте этой стейк вашему валидатору:
 
 ```bash
 solana delegate-stake ~/validator-stake-keypair.json ~/vote-account-keypair.json
 ```
 
-> Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
+> Не делегируйте все оставшиеся SOL, так как ваш валидатор будет использовать их для голосования.
 
-Stakes can be re-delegated to another node at any time with the same command,
-but only one re-delegation is permitted per epoch:
+Стейки могут быть переделегированы на другой узел в любое время той же командой, но для каждой эпохи разрешено только одно повторное делегирование:
 
 ```bash
 solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-keypair.json
 ```
 
-Assuming the node is voting, now you're up and running and generating validator
-rewards. Rewards are paid automatically on epoch boundaries.
+Если ваша стейк делегирован, то теперь вы генерируете награды. Награды выплачиваются автоматически на границе эпохи.
 
-The rewards lamports earned are split between your stake account and the vote
-account according to the commission rate set in the vote account. Rewards can
-only be earned while the validator is up and running. Further, once staked, the
-validator becomes an important part of the network. In order to safely remove a
-validator from the network, first deactivate its stake.
+Заработанные lamports разделяются на ваш стейк и vote аккаунт в соответствии с комиссией, установленной на vote аккаунте. Награды могут быть получены только во время работы валидатора. Далее валидатор, после того как он запущен, становится важной частью сети. Чтобы безопасно остановить валидатора, сначала деактивируйте его стейк.
 
-At the end of each slot, a validator is expected to send a vote transaction.
-These vote transactions are paid for by lamports from a validator's identity
-account.
+В конце каждого слота ожидается, что валидатор отправит vote транзакцию. Vote транзакции оплачивается lamports из учетной записи валидатора.
 
-This is a normal transaction so the standard transaction fee will apply. The
-transaction fee range is defined by the genesis block. The actual fee will
-fluctuate based on transaction load. You can determine the current fee via the
-[RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash)
-before submitting a transaction.
+Это обычная транзакция, поэтому будет взиматься стандартная комиссия за транзакцию. Диапазон транзакционных комиссий определяется блоком генезиса. Фактическая комиссия будет колебаться в зависимости от загрузки сети. Вы можете определить текущую комиссию через [RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash) перед отправкой транзакции.
 
-Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).
+Подробнее о [трансакционных сборах можно узнать здесь](../implemented-proposals/transaction-fees.md).
 
-## Validator Stake Warm-up
+## Разогрев стейка
 
-To combat various attacks on consensus, new stake delegations are subject to
-a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
-period.
+Для борьбы с различными атаками на консенсус, новые делегации должны быть "разогреты" [](/staking/stake-accounts#delegation-warmup-and-cooldown).
 
-Monitor a validator's stake during warmup by:
+Отслеживать разогрев стейка можно следующим образом:
 
-- View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
-- View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
-- `solana validators` displays the current active stake of all validators, including yours
-- `solana stake-history` shows the history of stake warming up and cooling down over recent epochs
-- Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
-- Once your stake is warmed up, you will see a stake balance listed for your validator by running `solana validators`
+- Просмотр vote аккаунта: `solana vote-account ~/vote-account-keypair.json` Это отображает текущее состояние всех голосов, переданных валидатором в сеть.
+- Просмотр stake аккаунта, делегации и детали вашего стейка: `solana stake-account ~/validator-stake-keypair.json`
+- `solana валидаторы` отображает текущий активный стейк всех валидаторов, включая вас
+- `соляная история` показывает историю стейкинга, который разогревался и охлаждался в прошлых эпохах
+- Ищите сообщения журнала на вашем валидаторе с указанием вашего следующего лидера слота: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
+- Как только ваша ставка разогреется, вы увидите баланс, указанный для вашего валидатора, запустив `solana validators`
 
-## Monitor Your Staked Validator
+## Мониторинг валидатора с вашим стейком
 
-Confirm your validator becomes a [leader](../terminology.md#leader)
+Подтвердите, что ваш валидатор становится [лидером](../terminology.md#leader)
 
-- After your validator is caught up, use the `solana balance` command to monitor the earnings as your validator is selected as leader and collects transaction fees
-- Solana nodes offer a number of useful JSON-RPC methods to return information about the network and your validator's participation. Make a request by using curl \(or another http client of your choosing\), specifying the desired method in JSON-RPC-formatted data. For example:
+- После того, как ваш валидатор синхронизирован, используйте команду `solana balance` для мониторинга заработок по мере того, как ваш валидатор выбирается в качестве лидера и собирает транзакционные комиссии
+- Узлы Solana предлагают ряд полезных методов JSON-RPC для возврата информации о сети и участии вашего валидатора. Сделайте запрос с помощью curl \(или другого клиента http по вашему выбору\), указав нужный метод в данных, отформатированных в JSON-RPC. Например:
 
 ```bash
   // Request
@@ -106,27 +84,20 @@ Confirm your validator becomes a [leader](../terminology.md#leader)
   {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
 ```
 
-Helpful JSON-RPC methods:
+Полезные методы JSON-RPC:
 
-- `getEpochInfo`[An epoch](../terminology.md#epoch) is the time, i.e. number of [slots](../terminology.md#slot), for which a [leader schedule](../terminology.md#leader-schedule) is valid. This will tell you what the current epoch is and how far into it the cluster is.
-- `getVoteAccounts` This will tell you how much active stake your validator currently has. A % of the validator's stake is activated on an epoch boundary. You can learn more about staking on Solana [here](../cluster/stake-delegation-and-rewards.md).
-- `getLeaderSchedule` At any given moment, the network expects only one validator to produce ledger entries. The [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation) is called the “leader”. This will return the complete leader schedule \(on a slot-by-slot basis\) for currently activated stake, the identity pubkey will show up 1 or more times here.
+- `getEpochInfo`[ Эпоха](../terminology.md#epoch) это время, т.е. количество [слотов](../terminology.md#slot), для которых [leader schedule](../terminology.md#leader-schedule) является действительным. Это покажет, какая сейчас текущая эпоха и насколько далеко она находится в кластере.
+- `getVoteAccounts` Это значение отобразит, насколько активна ваша ставка в настоящее время. На границе эпохи активируется % от ставки валидатора. Вы можете узнать больше о стейкинге Solana [здесь](../cluster/stake-delegation-and-rewards.md).
+- `getLeaderSchedule` В любой конкретный момент времени сеть ожидает, что только один валидатор будет производить запись в блокчейне. Валидатор, [ который в настоящее время выбран для создания записей в блокчейне](../cluster/leader-rotation.md#leader-rotation) называется «лидер». Это значение отобразит весь график лидера\(на основе слота\) для текущего активного стейка, идентификационный ключ будет отображаться здесь 1 или более раз.
 
-## Deactivating Stake
+## Деактивация стейка
 
-Before detaching your validator from the cluster, you should deactivate the
-stake that was previously delegated by running:
+Перед тем как вывести валидатора из кластера, вы должны деактивировать стейк, который ранее была делегирован следующим образом:
 
 ```bash
 solana deactivate-stake ~/validator-stake-keypair.json
 ```
 
-Stake is not deactivated immediately and instead cools down in a similar fashion
-as stake warm up. Your validator should remain attached to the cluster while
-the stake is cooling down. While cooling down, your stake will continue to earn
-rewards. Only after stake cooldown is it safe to turn off your validator or
-withdraw it from the network. Cooldown may take several epochs to complete,
-depending on active stake and the size of your stake.
+Деактивация стейка не происходит немедленно и охлаждается также, как и разогревается. Ваш валидатор должен подключенным и синхронизированным с кластером, в то время как стейк охлаждается. Остывая, ваша ставка будет продолжать получать вознаграждение. Только после полного остывания ставки можно безопасно отключить валидатор или вывести его из сети. Остывание может занять несколько эпох, в зависимости от активного стейка сети и размера вашего стейка.
 
-Note that a stake account may only be used once, so after deactivation, use the
-cli's `withdraw-stake` command to recover the previously staked lamports.
+Обратите внимание, что стейк аккаунт может использоваться только один раз, поэтому после деактивации используйте команду вывода `withdraw-stake`.

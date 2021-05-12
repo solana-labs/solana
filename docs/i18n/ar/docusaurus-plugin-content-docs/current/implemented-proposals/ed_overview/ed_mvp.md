@@ -1,24 +1,14 @@
 ---
-title: Economic Design MVP
+title: الحد الأدنى من المُنتجات القابلة للتطبيق للتصميم الإقتصادي (Economic Design MVP)
 ---
 
-**Subject to change.**
+**قابل للتغيير.**
 
-The preceding sections, outlined in the
-[Economic Design Overview](ed_overview.md),
-describe a long-term vision of a sustainable Solana economy.
-Of course, we don't expect the final implementation to perfectly match what has
-been described above. We intend to fully engage with network stakeholders
-throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\)
-to ensure the system supports, and is representative of, the various network
-participants' interests. The first step toward this goal, however, is outlining
-a some desired MVP economic features to be available for early pre-testnet and
-testnet participants. Below is a rough sketch outlining basic economic
-functionality from which a more complete and functional system can be developed.
+تصف الأقسام السابقة، المُوضحة في النظرة عامة على التصميم الإقتصادي [Economic Design Overview](ed_overview.md)، رؤية طويلة المدى لإقتصاد Solana المُستدام. بالطبع، لا نتوقع أن يتطابق التنفيذ النهائي تمامًا مع ما تم وصفه أعلاه. نعتزم المُشاركة الكاملة مع أصحاب المصلحة في الشبكة طوال مراحل التنفيذ \ (على سبيل المثال، الشبكة ما قبل التجريبية pre-testnet، الشبكة التجريبية testnet، والشبكة الرئيسية mainnet\) لضمان أن النظام يدعم ويمثل إهتمامات المُشاركين في الشبكة المُختلفة. مع ذلك، فإن الخطوة الأولى نحو هذا الهدف هي تحديد بعض الحد الأدنى من المُنتجات القابلة للتطبيق (MVP) للميزات الإقتصادية المرغوبة لتكون مُتاحة للمُشاركين الأوائل في مرحلة ما قبل الشبكة التجريبية pre-testnet والشبكة التجريبية testnet. يوجد أدناه رسم تقريبي يوضح الوظائف الإقتصادية الأساسية التي يمكن من خلالها تطوير نظام أكثر إكتمالاً ووظيفية.
 
-## MVP Economic Features
+## ميزات الحد الأدنى من المُنتجات القابلة للتطبيق الإقتصادية (MVP Economic Features)
 
-- Faucet to deliver testnet SOLs to validators for staking and application development.
-- Mechanism by which validators are rewarded via network inflation.
-- Ability to delegate tokens to validator nodes
-- Validator set commission fees on interest from delegated tokens.
+- صنبور (faucet) لتسليم عملات SOL الخاصة بالشبكة التجريبية (testnet) إلى المُدققين (validators) من أجل إثبات الحِصَّة أو التَّحْصِيص (staking) وتطوير التطبيقات.
+- آلية يتم من خلالها مُكافأة المُدققين (validators) عبر التضخم في الشبكة.
+- القدرة على تفويض الرموز لعُقد التدقيق (validator nodes)
+- يُحدد المُدقق (validator) رسوم العمولة على الفائدة من الرموز المُفوضة.

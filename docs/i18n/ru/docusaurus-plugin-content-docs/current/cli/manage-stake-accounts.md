@@ -1,20 +1,14 @@
 ---
-title: Manage Stake Accounts
+title: Управление stake-аккаунтами
 ---
 
-If you want to delegate stake to many different validators, you will need
-to create a separate stake account for each. If you follow the convention
-of creating the first stake account at seed "0", the second at "1", the
-third at "2", and so on, then the `solana-stake-accounts` tool will allow
-you to operate on all accounts with single invocations. You can use it to
-sum up the balances of all accounts, move accounts to a new wallet, or set
-new authorities.
+Если вы хотите делегировать стейк нескольким различным валидаторам, то для каждого из них необходимо создать отдельный stake-аккаунт. Если создать stake-аккаунты так, чтобы первый из них начинался с seed-числа "0", второй - с "1", третий - с "2" и так далее, то утилита `solana-stake-accounts` сможет работать со всеми аккаунтами сразу. Это может пригодиться для подсчета балансов всех аккаунтов, перемещения аккаунтов в новый кошелек или для привязки новых ключей авторизации.
 
-## Usage
+## Использование
 
-### Create a stake account
+### Создание stake-аккаунта
 
-Create and fund a derived stake account at the stake authority public key:
+Для создания и пополнения нового stake-аккаунта выполните следующую команду, используя публичный ключ владельца стейка:
 
 ```bash
 solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
@@ -22,33 +16,33 @@ solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-### Count accounts
+### Подсчет количества аккаунтов
 
-Count the number of derived accounts:
+Для подсчета количества созданных аккаунтов выполните следующую команду:
 
 ```bash
 solana-stake-accounts count <BASE_PUBKEY>
 ```
 
-### Get stake account balances
+### Получение балансов stake-аккаунтов
 
-Sum the balance of derived stake accounts:
+Для подсчета баланса всех созданных stake-аккаунтов выполните следующую команду:
 
 ```bash
 solana-stake-accounts balance <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Get stake account addresses
+### Получение адресов stake-аккаунтов
 
-List the address of each stake account derived from the given public key:
+Для получения списка адресов всех stake-аккаунтов, созданных для указанного публичного ключа выполните следующую команду:
 
 ```bash
 solana-stake-accounts addresses <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Set new authorities
+### Привязка новых ключей
 
-Set new authorities on each derived stake account:
+Для привязки новых ключей ко всем созданным stake-аккаунтам выполните следующую команду:
 
 ```bash
 solana-stake-accounts authorize <BASE_PUBKEY> \
@@ -57,9 +51,9 @@ solana-stake-accounts authorize <BASE_PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
-### Relocate stake accounts
+### Перемещение stake-аккаунтов
 
-Relocate stake accounts:
+Для перемещения stake-аккаунтов выполните следующую команду:
 
 ```bash
 solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
@@ -67,8 +61,7 @@ solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --fee-payer <KEYPAIR>
 ```
 
-To atomically rebase and authorize each stake account, use the 'move'
-command:
+Для перемещения и авторизации каждого stake-аккаунта по отдельности используйте команду 'move':
 
 ```bash
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \

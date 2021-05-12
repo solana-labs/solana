@@ -1,11 +1,11 @@
 ---
-title: Requirements to run a validator
+title: مُتطلبات تشغيل مُدقّق (Requirements to run a validator)
 ---
 
-## Hardware
+## الأجهزة (Hardware)
 
-See [suggested hardware configuration here](../../running-validator/validator-reqs.md).
+راجع إعدادات الأجهزة التالية [suggested hardware configuration here](../../running-validator/validator-reqs.md).
 
-## Software
+## البرمجيات (Software)
 
-- We build and run on Ubuntu 20.04
+- نحن نبني وونطور على نظام التشغيل Ubuntu 18.04. واجه بعض المُستخدمين مُشكلة عند التشغيل على نظام التشغيل Ubuntu 16.04

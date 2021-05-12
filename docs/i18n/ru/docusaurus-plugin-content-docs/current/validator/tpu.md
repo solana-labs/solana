@@ -2,4 +2,4 @@
 title: TPU
 ---
 
-![TPU Block Diagram](/img/tpu.svg)
+![Диаграмма блока TPU](/img/tpu.svg)

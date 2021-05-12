@@ -1,331 +1,325 @@
 ---
-title: Ledger Replication
+title: 원장 복제
 ---
 
-Note: this ledger replication solution was partially implemented, but not
-completed. The partial implementation was removed by
-https://github.com/solana-labs/solana/pull/9992 in order to prevent the security
-risk of unused code. The first part of this design document reflects the
-once-implemented parts of ledger replication. The
-[second part of this document](#ledger-replication-not-implemented) describes the
-parts of the solution never implemented.
+참고 :이 원장 복제 솔루션은 부분적으로 구현되었지만 완료되지 않았습니다. 사용하지 않는 코드의 보안 위험을 방지하기 위해 https://github.com/solana-labs/solana/pull/9992에서 부분 구현을 제거했습니다. 이 설계 문서의 첫 번째 부분은 원장 복제의 한 번 구현 된 부분을 반영합니다. \[이 문서의 두 번째 부분\] (# ledger-replication-not-implemented)에서는 구현되지 않은 솔루션 부분에 대해 설명합니다.
 
-## Proof of Replication
+## 복제 증명
 
-At full capacity on a 1gbps network solana will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
+1gbps 네트워크에서 최대 용량으로 solana는 연간 4 페타 바이트의 데이터를 생성합니다. 네트워크가 전체 데이터 세트를 저장해야하는 밸리데이터 중심으로 중앙 집중화하는 것을 방지하기 위해이 프로토콜은 마이닝 노드가 데이터 조각에 대한 저장 용량을 제공하는 방법을 제안합니다.
 
-The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as it's hashed. The simple solution is to periodically regenerate the hash based on a signed PoH value. This ensures that all the data is present during the generation of the proof and it also requires validators to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `number_of_proofs * data_size`
+복제 증명의 기본 아이디어는 CBC 암호화를 사용하여 공개 대칭 키로 데이터 세트를 암호화 한 다음 암호화 된 데이터 세트를 해시하는 것입니다. 순진한 접근 방식의 주요 문제는 부정직 한 스토리지 노드가 암호화를 스트리밍하고 해시 된 데이터를 삭제할 수 있다는 것입니다. 간단한 해결책은 서명 된 역사증명 값을 기반으로 해시를 주기적으로 재생성하는 것입니다. 이를 통해 증명을 생성하는 동안 모든 데이터가 존재하고 모든 신원의 모든 증명을 검증하기 위해 유효성 검사자가 암호화 된 데이터 전체를 보유해야합니다. 따라서 검증에 필요한 공간은`number_of_proofs * data_size`입니다.
 
-## Optimization with PoH
+## 역사증명 최적화이
 
-Our improvement on this approach is to randomly sample the encrypted segments faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the segments stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. The total space required for verification is `1_ledger_segment + 2_cbc_blocks * number_of_identities` with core count equal to `number_of_identities`. We use a 64-byte chacha CBC block size.
+접근 방식에 대한 개선 사항은 암호화 된 세그먼트를 암호화하는 데 걸리는 것보다 빠르게 무작위로 샘플링하고 해당 샘플의 해시를 역사증명 원장에 기록하는 것입니다. 따라서 세그먼트는 모든 PoRep에 대해 똑같은 순서로 유지되고 검증은 데이터를 스트리밍하고 단일 배치에서 모든 증명을 검증 할 수 있습니다. 이런 식으로 우리는 각각 자체 CUDA 코어에서 여러 증명을 동시에 확인할 수 있습니다. 검증에 필요한 총 공간은`1_ledger_segment + 2_cbc_blocks * number_of_identities`이며 코어 수가`number_of_identities`와 같습니다. 64 바이트 chacha CBC 블록 크기를 사용합니다.
 
-## Network
+## 네트워크
 
-Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
+PoRep 용유효성 검사기는 거래를 확인하는 것과 동일한 유효성 검사기입니다. 아카이버가 밸리데이터가 가짜 PoRep을 확인했음을 증명할 수있는 경우 밸리데이터는 해당 스토리지 시대에 대한 보상을받지 못합니다.
 
-Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
+아카이버는 전문 _ 가벼운 클라이언트 _입니다. 그들은 원장 \ (일명 세그먼트 \)의 일부를 다운로드하여 저장하고 원장 저장에 대한 PoReps를 제공합니다. 검증 된 각 PoRep 아카이버에 대해 마이닝 풀에서 솔 보상을받습니다.
 
-## Constraints
+## 제약
 
-We have the following constraints:
+우리는 다음과 같은 제약이 있습니다 :
 
-- Verification requires generating the CBC blocks. That requires space of 2
+- -검증은 CBC 블록을 생성해야합니다. 이를 위해서는2 개공간과
 
-  blocks per identity, and 1 CUDA core per identity for the same dataset. So as
+  동일한 데이터 세트에 대해 ID 당블록의ID 당 1 개의 CUDA 코어가 필요합니다. 따라서
 
-  many identities at once should be batched with as many proofs for those
+  한 번에 많은 ID를대한 많은 증명과 함께 일괄 처리해야합니다
 
-  identities verified concurrently for the same dataset.
+  동일한 데이터 세트에 대해 동시에 확인 된 ID에.
 
-- Validators will randomly sample the set of storage proofs to the set that
+- -밸리데이터은있는 저장소 증명 세트를 무작위로 샘플링하고
 
-  they can handle, and only the creators of those chosen proofs will be
+  자신이 처리 할 수, 선택한 증명의 작성자에게만
 
-  rewarded. The validator can run a benchmark whenever its hardware configuration
+  보상을 제공합니다. 밸리데이터는 하드웨어 구성이될 때마다 벤치 마크를 실행하여
 
-  changes to determine what rate it can validate storage proofs.
+  원장 저장에 대한 인센티브로.경우에만 증명의 유효성을 검사 할 수 있습니다
 
-## Validation and Replication Protocol
+## 검증 및 복제 프로토콜
 
-### Constants
+### 상수
 
-1. SLOTS_PER_SEGMENT: Number of slots in a segment of ledger data. The
+1. SLOTS_PER_SEGMENT : 원장 데이터 세그먼트의 슬롯 수.장치. The
 
-   unit of storage for an archiver.
+   아카이버의 저장
 
-2. NUM_KEY_ROTATION_SEGMENTS: Number of segments after which archivers
+2. NUM_KEY_ROTATION_SEGMENTS : 아카이버세그먼트 수입니다
 
-   regenerate their encryption keys and select a new dataset to store.
+   가 암호화 키를 재생성하고 저장할 새 데이터 세트를 선택하는.
 
-3. NUM_STORAGE_PROOFS: Number of storage proofs required for a storage proof
+3. NUM_STORAGE_PROOFS : 스토리지 증명되기 위해 필요한 스토리지 증명의 수입니다
 
-   claim to be successfully rewarded.
+   클레임이 성공적으로 보상.
 
-4. RATIO_OF_FAKE_PROOFS: Ratio of fake proofs to real proofs that a storage
+4. RATIO_OF_FAKE_PROOFS :스토리지실제 증명에 대한 가짜 증명의 비율
 
-   mining proof claim has to contain to be valid for a reward.
+   보상을 위해 유효하기 위해마이닝 증명 클레임에 포함되어야하는.
 
-5. NUM_STORAGE_SAMPLES: Number of samples required for a storage mining
+5. NUM_STORAGE_SAMPLES : 스토리지 마이닝필요한 샘플 수
 
-   proof.
+   증명에.
 
-6. NUM_CHACHA_ROUNDS: Number of encryption rounds performed to generate
+6. NUM_CHACHA_ROUNDS :를 생성하기 위해 수행암호화 라운드 수
 
-   encrypted state.
+   암호화 된 상태된.
 
-7. NUM_SLOTS_PER_TURN: Number of slots that define a single storage epoch or
+7. NUM_SLOTS_PER_TURN : 단일 스토리지 시대 또는을 정의하는 슬롯 수
 
-   a "turn" of the PoRep game.
+   PoRep 게임의 "턴".
 
-### Validator behavior
+### Validator 동작
 
-1. Validators join the network and begin looking for archiver accounts at each
+1. Validator는 네트워크에 가입하고 각에서 아카이버 계정을 찾기 시작합니다
 
-   storage epoch/turn boundary.
+   스토리지 epoch / turn 경계.
 
-2. Every turn, Validators sign the PoH value at the boundary and use that signature
+2. 매 턴마다 Validator는 경계에서 역사증명 값에 서명해당 서명사용
 
-   to randomly pick proofs to verify from each storage account found in the turn boundary.
+   하고을하여 차례 경계에서 찾은 각 스토리지 계정에서 검증 할 증명을 무작위로 선택합니다.
 
-   This signed value is also submitted to the validator's storage account and will be used by
+   이 서명 된 값은 유효성 검사기의 저장소 계정에도 제출되며데 사용됩니다
 
-   archivers at a later stage to cross-verify.
+   이후 단계에서 아카이버가 교차 검증하는.
 
-3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
+3. 모든`NUM_SLOTS_PER_TURN` 슬롯에서 밸리데이터는 역사증명 값을 알립니다. 이 값
 
-   is also served to Archivers via RPC interfaces.
+   은 RPC 인터페이스를 통해 아카이버에게도 제공됩니다.
 
-4. For a given turn N, all validations get locked out until turn N+3 \(a gap of 2 turn/epoch\).
+4. 주어진 턴 N 동안, 모든 검증은 턴 N + 3 \ (2 턴 / 에포크의 간격 \)까지 잠 깁니다.
 
-   At which point all validations during that turn are available for reward collection.
+   이 시점에서 해당 턴 동안의 모든 유효성 검사를 보상 수집에 사용할 수 있습니다.
 
-5. Any incorrect validations will be marked during the turn in between.
+5. 잘못된 유효성 검사는 그 사이에 제출하는 동안 표시됩니다.
 
-### Archiver behavior
+### 아카이버 동작
 
-1. Since an archiver is somewhat of a light client and not downloading all the
+1. 아카이버는 가벼운 클라이언트이고 모든다운로드하지 않기
 
-   ledger data, they have to rely on other validators and archivers for information.
+   원장 데이터를때문에 정보를 얻기 위해 다른 밸리데이터 및 아카이버에 의존해야합니다.
 
-   Any given validator may or may not be malicious and give incorrect information, although
+   없지만 주어진 유효성 검사자는 악의적이거나 잘못된 정보를 제공
 
-   there are not any obvious attack vectors that this could accomplish besides having the
+   수행하도록하는 것 외에 이것이 달성 할 수있는 명백한 공격 벡터는할 수
 
-   archiver do extra wasted work. For many of the operations there are a number of options
+   아카이버가 추가로 낭비되는 작업을있습니다. 많은 작업여러 옵션이 있습니다
 
-   depending on how paranoid an archiver is:
+   에 대해 아카이버가 얼마나 편집증인지에 따라
 
-   - \(a\) archiver can ask a validator
-   - \(b\) archiver can ask multiple validators
+   - -밸리데이터이 가짜 증명을 승인하면 아카이버는쉽게 확인할 수 있습니다
+   - .-\ (a \) 아카이버가 밸리데이터에게 요청할 수 있음 -\ (b \) 아카이버가 여러 밸리데이터에게 요청할 수 있음 -\ (c \) 아카이버가 요청할 수 있음 다른 아카이버 -\ (d \) 아카이버는 전체 트랜잭션 스트림을 구독생성
    - \(c\) archiver can ask other archivers
    - \(d\) archiver can subscribe to the full transaction stream and generate
 
-     the information itself \(assuming the slot is recent enough\)
+     하여 정보 자체생성 할 수 있습니다. \ (슬롯이 충분히 최신이라고 가정)
 
-   - \(e\) archiver can subscribe to an abbreviated transaction stream to
+   - -\ (e \) 아카이버는 약식 트랜잭션 스트림을 구독를
 
      generate the information itself \(assuming the slot is recent enough\)
 
-2. An archiver obtains the PoH hash corresponding to the last turn with its slot.
-3. The archiver signs the PoH hash with its keypair. That signature is the
+2. 아카이버는 자신의 슬롯이있는 마지막 턴에 해당하는 역사증명 해시를 얻습니다.
+3. 아카이버는 키 쌍으로 역사증명 해시에 서명합니다. 이 서명은
 
-   seed used to pick the segment to replicate and also the encryption key. The
+   복제 할 세그먼트와 암호화 키를 선택하는 데 사용되는 시드입니다. The
 
-   archiver mods the signature with the slot to get which segment to
+   아카이버모드 족은 슬롯에 서명을할 세그먼트를 얻을 수
 
-   replicate.
+   복제있습니다.
 
-4. The archiver retrives the ledger by asking peer validators and
+4. 증명 도전 단계를 정당성과 증거 마스크를 제출 \ (가짜 교정을 위해 \ 2 회전 전에 제출):등록 아카이브 -
 
-   archivers. See 6.5.
+   아카이버합니다. 6.5를 참조하십시오.
 
-5. The archiver then encrypts that segment with the key with chacha algorithm
+5. 그런 다음 아카이버는 암호화사용chacha 알고리즘이있는 키로 해당 세그먼트
 
-   in CBC mode with `NUM_CHACHA_ROUNDS` of encryption.
+   'NUM_CHACHA_ROUNDS'를하여 CBC 모드에서를 암호화합니다.
 
-6. The archiver initializes a chacha rng with the a signed recent PoH value as
+6. 아카이버는 서명 된 최근 역사증명 값을로 사용chacha rng를 초기화합니다
 
-   the seed.
+   시드하여.
 
-7. The archiver generates `NUM_STORAGE_SAMPLES` samples in the range of the
+7. 아카이버는범위에서`NUM_STORAGE_SAMPLES` 샘플을 생성
 
-   entry size and samples the encrypted segment with sha256 for 32-bytes at each
+   항목 크기하고 각에서 32 바이트에 대해 sha256을 사용하여 암호화 된 세그먼트를 샘플링합니다
 
-   offset value. Sampling the state should be faster than generating the encrypted
+   오프셋 값. 상태 샘플링은 암호화 된생성하는 것보다 빠릅니다
 
-   segment.
+   세그먼트를.
 
-8. The archiver sends a PoRep proof transaction which contains its sha state
+8. 아카이버는sha 상태을 포함하는 PoRep 증명 트랜잭션을보내고
 
-   at the end of the sampling operation, its seed and the samples it used to the
+   샘플링 작업이 끝날 때의, 시드 및 사용 된 샘플
 
-   current leader and it is put onto the ledger.
+   현재 리더에원장에 넣습니다.
 
-9. During a given turn the archiver should submit many proofs for the same segment
+9. 주어진 턴 동안 아카이버는 동일한 세그먼트에 대해 많은 증명을 제출해야
 
-   and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
+   하며`RATIO_OF_FAKE_PROOFS`를 기반으로 이러한 증명 중 일부는 가짜 여야합니다.
 
-10. As the PoRep game enters the next turn, the archiver must submit a
+10. PoRep 게임이 다음 턴에 들어가면 아카이버는제출해야합니다
 
-    transaction with the mask of which proofs were fake during the last turn. This
+    마지막 턴 동안 증명이 가짜 인 마스크로 트랜잭션을. 이
 
-    transaction will define the rewards for both archivers and validators.
+    거래는 아카이버와 밸리데이터 모두에 대한 보상을 정의합니다.
 
-11. Finally for a turn N, as the PoRep game enters turn N + 3, archiver's proofs for
+11. 마지막으로 턴 N 동안, PoRep 게임이 턴 N + 3에 진입하면,대한 아카이버의 증명
 
-    turn N will be counted towards their rewards.
+    턴 N에이 보상에 포함됩니다.
 
-### The PoRep Game
+### PoRep 게임
 
-The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep games can be in progress but each in a different stage.
+Proof of Replication 게임에는 4 개의 기본 단계가 있습니다. 각 "턴"마다 여러 PoRep 게임이 진행될 수 있지만 각각 다른 단계에 있습니다.
 
-The 4 stages of the PoRep Game are as follows:
+PoRep 게임의 4 단계는 다음과 같습니다.
 
 1. Proof submission stage
-   - Archivers: submit as many proofs as possible during this stage
+   - 증명 제출 단계 -아카이버 :이 단계에서 가능한 한 많은 증명을 제출 -밸리데이터 : No-op
    - Validators: No-op
 2. Proof verification stage
    - Archivers: No-op
-   - Validators: Select archivers and verify their proofs from the previous turn
+   - 증명 검증 단계 -Archivers : No-op- 밸리데이터 : 아카이버 선택이전 회전에서자신의 증거를 확인
 3. Proof challenge stage
-   - Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
+   - -그런 다음 유효한 증명과 가짜 증명의 마스크를 만들어에게 보냅니다
    - Validators: No-op
-4. Reward collection stage
-   - Archivers: Collect rewards for 3 turns ago
+4. 보상 수집 단계
+   - 등록 아카이브 : 수집 보상에 대한을 3 턴 전 : 3 턴 전 보상 수집
    - Validators: Collect rewards for 3 turns ago
 
-For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
+-ValidatorsPoRep 게임의 각 턴에 대해 Validator와 Archiver는 각 단계를 평가합니다. 스테이지는 스토리지 프로그램에서 별도의 트랜잭션으로 실행됩니다.
 
-### Finding who has a given block of ledger
+### 주어진 원장 블록을 가진 사람 찾기
 
-1. Validators monitor the turns in the PoRep game and look at the rooted bank
+1. NUM_KEY_ROTATION_TICKS마다로부터받은 샘플의 유효성도 검사합니다
 
-   at turn boundaries for any proofs.
+   턴 경계에서을 확인하여 증거를.
 
-2. Validators maintain a map of ledger segments and corresponding archiver public keys.
+2. NUM_SECONDS_STORAGE_LOCKOUT 초의 잠금 기간이 지나면
 
-   The map is updated when a Validator processes an archiver's proofs for a segment.
+   밸리데이터은 스토리지 증명 클레임 트랜잭션을 제출 한 다음 검증에
 
-   The validator provides an RPC interface to access the this map. Using this API, clients
+   유효성 검사기는이 맵에 액세스 할 수있는 RPC 인터페이스를 제공합니다. 이 API를 사용하여 클라이언트
 
-   can map a segment to an archiver's network address \(correlating it via cluster_info table\).
+   검증하고 밸리데이터과 아카이버 당사자에게 증명을 제공합니다.
 
-   The clients can then send repair requests to the archiver to retrieve segments.
+   그런 다음 클라이언트는 아카이버에 복구 요청을 보내 세그먼트를 검색 할 수 있습니다.
 
-3. Validators would need to invalidate this list every N turns.
+3. 밸리데이터은 N 턴마다이 목록을 무효화해야합니다.
 
-## Sybil attacks
+## Sybil 공격
 
-For any random seed, we force everyone to use a signature that is derived from a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
+임의의 시드에 대해 우리는 모든 사람이 턴 경계에서 역사증명 해시에서 파생 된 서명을 사용하도록합니다. 모든 사람이 동일한 개수를 사용하므로 모든 참가자가 동일한 역사증명 해시에 서명합니다. 그런 다음 서명은 각각 암호화 방식으로 키 쌍에 연결되어 리더가 둘 이상의 ID에 대한 결과 값을 파악하는 것을 방지합니다.
 
-Since there are many more client identities then encryption identities, we need to split the reward for multiple clients, and prevent Sybil attacks from generating many clients to acquire the same block of data. To remain BFT we want to avoid a single human entity from storing all the replications of a single chunk of the ledger.
+암호화 ID보다 더 많은 클라이언트 ID가 있기 때문에 여러 클라이언트에 대한 보상을 분할하고 Sybil 공격이 동일한 데이터 블록을 획득하기 위해 많은 클라이언트를 생성하는 것을 방지해야합니다. BFT를 유지하기 위해 우리는 단일 인간 엔티티가 원장의 단일 청크의 모든 복제를 저장하는 것을 피하고 싶습니다.
 
-Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
+이에 대한 우리의 해결책은 클라이언트가 동일한 ID를 계속 사용하도록하는 것입니다. 첫 번째 라운드가 많은 클라이언트 ID에 대해 동일한 블록을 획득하는 데 사용되는 경우, 동일한 클라이언트 ID에 대한 두 번째 라운드는 서명을 강제로 재배포하므로 PoRep ID 및 블록이 강제로 배포됩니다. 따라서 아카이버에 대한 보상을 얻으려면 첫 번째 블록을 무료로 저장해야하며 네트워크는 새로운 것보다 오래 살았던 클라이언트 ID를 보상 할 수 있습니다.
 
-## Validator attacks
+## 밸리데이터 공격
 
-- If a validator approves fake proofs, archiver can easily out them by
+- 하여 잘못된 sha 상태증명을.제공하여 가짜임을 입증 할 수
 
   showing the initial state for the hash.
 
-- If a validator marks real proofs as fake, no on-chain computation can be done
+- -밸리데이터가 실제 증명을 가짜로 표시하면체인 계산을 수행 할 수 없습니다
 
-  to distinguish who is correct. Rewards would have to rely on the results from
+  누가 올바른지 구별하기 위해 온. 보상은자의 결과에 의존하여
 
-  multiple validators to catch bad actors and archivers from being denied rewards.
+  여러 검증악의적 인 행위자와 아카이브가 보상을 거부 당하지 않도록해야합니다.
 
 - Validator stealing mining proof results for itself. The proofs are derived
 
-  from a signature from an archiver, since the validator does not know the
+  검증알지 못하기 때문에 아카이버의 서명에서되어
 
-  private key used to generate the encryption key, it cannot be the generator of
+  자는 암호화 키를 생성하는 데 사용 된 개인 키를생성자가 될 수 없습니다
 
-  the proof.
+  는 가짜임을 증명할 수있는찾습니다.
 
-## Reward incentives
+## 보상 인센티브
 
-Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by archivers may require a higher fee than a normal transaction to represent the computational cost required by validators.
+가짜 증명은 생성하기 쉽지만 검증하기는 어렵습니다. 이러한 이유로 아카이버에 의해 생성 된 PoRep 증명 트랜잭션은 밸리데이터가 요구하는 계산 비용을 나타 내기 위해 일반 트랜잭션보다 더 높은 수수료가 필요할 수 있습니다.
 
-Some percentage of fake proofs are also necessary to receive a reward from storage mining.
+변경스토리지 증명을 검증 할 수있는 비율을 결정할 수 있습니다.
 
-## Notes
+## 참고
 
-- We can reduce the costs of verification of PoRep by using PoH, and actually
+- -역사증명를 사용하여 PoRep 검증 비용을 절감 할 수 있으며 실제로
 
-  make it feasible to verify a large number of proofs for a global dataset.
+  글로벌 데이터 세트에 대한 많은 수의 증명을 검증 할 수 있습니다.
 
-- We can eliminate grinding by forcing everyone to sign the same PoH hash and
+- -모든 사람이 동일한 역사증명 해시하도록 강요함으로써 분쇄를 제거 할 수 있습니다.-
 
-  use the signatures as the seed
+  에 서명하고 서명을 시드로 사용
 
-- The game between validators and archivers is over random blocks and random
+- 유효성 검사기와 아카이버 간의 게임은 무작위 블록과 무작위
 
-  encryption identities and random data samples. The goal of randomization is
+  암호화 ID 및 무작위 데이터 샘플을 통해 이루어집니다. 무작위 화의 목표는하는 것입니다
 
-  to prevent colluding groups from having overlap on data or validation.
+  충돌 그룹이 데이터 또는 유효성 검사에서 겹치는 것을 방지.
 
-- Archiver clients fish for lazy validators by submitting fake proofs that
+- -아카이버 클라이언트가짜 증명을 제출하여 게으른 밸리데이터을
 
   they can prove are fake.
 
-- To defend against Sybil client identities that try to store the same block we
+- -동일한 블록을 저장하려는 Sybil 클라이언트 신원을 방어하기 위해 우리
 
-  force the clients to store for multiple rounds before receiving a reward.
+  는 클라이언트가 보상을 받기 전에 여러 라운드 동안 저장하도록 강제합니다.
 
-- Validators should also get rewarded for validating submitted storage proofs
+- -밸리데이터은 또한제출 된 저장 증명을 검증 한 것에 대한 보상을 받아야합니다
 
   as incentive for storing the ledger. They can only validate proofs if they
 
-  are storing that slice of the ledger.
+  원장의 해당 조각을 저장하는.
 
-# Ledger Replication Not Implemented
+# 원장 복제가 구현되지 않음구현
 
-Replication behavior yet to be implemented.
+복제 동작이 아직되지 않았습니다.
 
 ## Storage epoch
 
-The storage epoch should be the number of slots which results in around 100GB-1TB of ledger to be generated for archivers to store. Archivers will start storing ledger when a given fork has a high probability of not being rolled back.
+스토리지 epoch는 아카이버가 저장할 수 있도록 약 100GB-1TB의 원장이 생성되는 슬롯 수 여야합니다. Archiver는 지정된 포크가 롤백되지 않을 가능성이 높을 때 원장 저장을 시작합니다.
 
-## Validator behavior
+## 유효성 검사기 동작
 
-1. Every NUM_KEY_ROTATION_TICKS it also validates samples received from
+1. 아카이버는 다른 오프셋 세트를 생성로 가짜제출합니다
 
-   archivers. It signs the PoH hash at that point and uses the following
+   아카이버. 해당 시점에서 역사증명 해시에사용하여 다음사용합니다
 
-   algorithm with the signature as the input:
+   해시 결과에 대한 시드를있습니다.
 
-   - The low 5 bits of the first byte of the signature creates an index into
+   - .-서명의 첫 번째 바이트의 하위 5 비트는 서명의대한 인덱스를 만듭니다
 
-     another starting byte of the signature.
+     다른 시작 바이트에.
 
-   - The validator then looks at the set of storage proofs where the byte of
+   - -검증저장소 증명 세트를 조사
 
-     the proof's sha state vector starting from the low byte matches exactly
+     자는 낮은 바이트에서 시작하는 증명의 sha 상태 벡터의와 정확히 일치하는
 
-     with the chosen byte\(s\) of the signature.
+     바이트가 서명의 선택된 바이트합니다.
 
-   - If the set of proofs is larger than the validator can handle, then it
+   - -증명 세트가 유효성 검사기가 처리 할 수있는 것보다 크면
 
-     increases to matching 2 bytes in the signature.
+     서명에서 일치하는 2 바이트로 증가합니다.
 
-   - Validator continues to increase the number of matching bytes until a
+   - -Validator는 작업때까지 일치하는 바이트 수를 계속 늘
 
-     workable set is found.
+     가능한 집합을 찾을립니다.
 
    - It then creates a mask of valid proofs and fake proofs and sends it to
 
-     the leader. This is a storage proof confirmation transaction.
+     리더. 이것은 보관 증명 확인 거래입니다.
 
 2. After a lockout period of NUM_SECONDS_STORAGE_LOCKOUT seconds, the
 
-   validator then submits a storage proof claim transaction which then causes the
+   트랜잭션 (transaction)는 발리 잘못 가짜 저장 증거를 검증 증명한다.
 
-   distribution of the storage reward if no challenges were seen for the proof to
+   대한 문제가되지 않은 경우 스토리지 보상을 배포
 
-   the validators and archivers party to the proofs.
+   밸리데이터는 원장 세그먼트 및 해당 아카이버 공개 키의 맵을 유지합니다.
 
-## Archiver behavior
+## 아카이버 동작
 
 1. The archiver then generates another set of offsets which it submits a fake
 
@@ -333,65 +327,66 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    seed for the hash result.
 
-   - A fake proof should consist of an archiver hash of a signature of a PoH
+   - -가짜 증명은 역사증명서명의 아카이버 해시로 구성되어야
 
-     value. That way when the archiver reveals the fake proof, it can be
+     값합니다. 이렇게하면 아카이버가 가짜 증명을 공개 할 때수 있습니다
 
-     verified on chain.
+     체인에서 확인할.
 
-2. The archiver monitors the ledger, if it sees a fake proof integrated, it
+2. 아카이버는 원장을 모니터링하고 통합 된 가짜 증명을 발견
 
-   creates a challenge transaction and submits it to the current leader. The
+   하면 챌린지 트랜잭션을 생성하여 현재 리더에게 제출합니다. The
 
-   transacation proves the validator incorrectly validated a fake storage proof.
+   -Validator는 자체적으로 채굴 증명 결과를 훔칩니다.파생증명
 
-   The archiver is rewarded and the validator's staking balance is slashed or
+   아카이버는 보상을 받고 밸리데이터의 스테이킹 잔액은 삭감되거나
 
    frozen.
 
-## Storage proof contract logic
+## 저장소 증명 컨트랙트 논리
 
-Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similiar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
+각 아카이버 및 유효성 검사기에는 자체 저장소 계정이 있습니다. 밸리데이터의 계정은 투표 계정과 유사한 가십 ID와 분리됩니다. 이들은 유효성 검사기를 키 서명자로 처리하는 프로그램과 아카이버를위한 프로그램으로 구현되어야합니다. 이러한 방식으로 프로그램이 다른 계정을 참조 할 때 프로그램 ID를 확인하여 참조하는 유효성 검사기 또는 아카이버 계정인지 확인할 수 있습니다.
 
-### SubmitMiningProof
+### SubmitMiningProof``텍스트 SubmitMiningProof
 
 ```text
-SubmitMiningProof {
-    slot: u64,
-    sha_state: Hash,
-    signature: Signature,
-};
-keys = [archiver_keypair]
+{슬롯: U64, sha_state : 해시 서명 : 서명}; keys = [archiver_keypair] ```
 ```
 
-Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
+아카이버는 특정 해시 값에 대해 저장된 원장 데이터를 채굴 한 후 생성합니다. 슬롯은 저장중인 원장 세그먼트의 끝 슬롯이며 sha_state는 암호화 된 원장 세그먼트를 샘플링하기 위해 해시 함수를 사용하는 아카이버의 결과입니다. 서명은 현재 스토리지 시대에 대한 역사증명 값에 서명 할 때 생성 된 서명입니다. 현재 스토리지 시대의 증명 목록을 계정 상태에 저장 한 다음 시대가 지나면 이전 시대의 증명 목록으로 전송해야합니다. 지정된 스토리지 시대에서 지정된 아카이버는 한 세그먼트에 대한 증명 만 제출해야합니다.
 
-The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS_PER_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
+프로그램에는 유효한 스토리지 마이닝 슬롯 인 슬롯 목록이 있어야합니다. 이 목록은 네트워크의 상당 부분이 높은 잠금 값 (아마도 32 표 이전)으로 투표 한 루팅 된 슬롯 인 슬롯을 추적하여 유지 관리해야합니다. 모든 SLOTS_PER_SEGMENT 슬롯 수가이 세트에 추가됩니다. 프로그램은 슬롯이이 세트에 있는지 확인해야합니다. 세트는 AdvertiseStorageRecentBlockHash를 수신하고 뱅크 / 타워 BFT 상태를 확인하여 유지 관리 할 수 ​​있습니다.
 
-The program should do a signature verify check on the signature, public key from the transaction submitter and the message of the previous storage epoch PoH value.
+프로그램은 서명, 트랜잭션 제출자의 공개 키 및 이전 스토리지 epoch 역사증명 값의 메시지에 대한 서명 확인 검사를 수행해야합니다.
 
 ### ProofValidation
 
 ```text
-ProofValidation {
-   proof_mask: Vec<ProofStatus>,
-}
-keys = [validator_keypair, archiver_keypair(s) (unsigned)]
+ChallengeProofValidation<code>텍스트
+ChallengeProofValidation
+    {proof_index: U64,
+    hash_seed_value : VEC
+<U8>}
+키 = [archiver_keypair,
+validator_keypair]는</code>이
 ```
 
-A validator will submit this transaction to indicate that a set of proofs for a given segment are valid/not-valid or skipped where the validator did not look at it. The keypairs for the archivers that it looked at should be referenced in the keys so the program logic can go to those accounts and see that the proofs are generated in the previous epoch. The sampling of the storage proofs should be verified ensuring that the correct proofs are skipped by the validator according to the logic outlined in the validator behavior of sampling.
+데이터를 표시하기 위해 트랜잭션을 제출할 것이다 소정 대한 교정 세트 세그먼트가 유효 / 유효하지 않거나 유효성 검사기가 보지 않은 곳에서 건너 뜁니다. 살펴본 아카이버에 대한 키 쌍은 키에서 참조되어야 프로그램 논리가 해당 계정으로 이동하여 이전 세대에서 증명이 생성되었는지 확인할 수 있습니다. 저장소 증명의 샘플링은 유효성 검사기의 샘플링 동작에 설명 된 논리에 따라 유효성 검사자가 올바른 증명을 건너 뛰는 지 확인해야합니다.
 
-The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
+발리
 
 ### ClaimStorageReward
 
 ```text
-ClaimStorageReward {
-}
-keys = [validator_keypair or archiver_keypair, validator/archiver_keypairs (unsigned)]
+ProofValidation<code>텍스트
+ProofValidation
+   {proof_mask: VEC
+<ProofStatus>}
+키 = validator_keypair, archiver_keypair (들)
+(서명)]</code>발리
 ```
 
-Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for an archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
+아카이브 및 유효성 검사기는 SubmitStorageProof, ProofValidation 및 ChallengeProofValidations는 프로그램 상태에서 지불 토큰을 얻기 위해이 트랜잭션을 사용합니다 증명이 제출되고 검증되었으며 해당 증명을 참조하는 ChallengeProofValidations가없는 상태. 밸리데이터의 경우 관련 시대에서 증명을 검증 한 아카이버 키 쌍을 참조해야합니다. 그리고 아카이버의 경우 유효성을 확인하고 보상을 받고자하는 유효성 검사기 키 쌍을 참조해야합니다.
 
 ### ChallengeProofValidation
 
@@ -403,9 +398,9 @@ ChallengeProofValidation {
 keys = [archiver_keypair, validator_keypair]
 ```
 
-This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash_seed_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
+거래의 유효성을 검사 교정에 일을하지 않는 게으른 검증을 잡기위한 것입니다. 아카이버는 밸리데이터가 가짜 SubmitMiningProof 트랜잭션을 승인 한 것을 확인하면이 트랜잭션을 제출합니다. 아카이버는 전체 체인을 보지 않는 라이트 클라이언트이므로 이전 스토리지 시대의 특정 세그먼트에 대한 모든 ProofValidation을 얻기 위해 RPC 호출을 통해이 정보에 대해 유효성 검사자 또는 일부 유효성 검사자 집합을 요청해야합니다. 프로그램은 밸리데이터 계정 상태에서 ProofValidation이 이전 스토리지 시대에 제출되었는지 확인하고 hash_seed_value를 해시하고 해시가 SubmitMiningProof 트랜잭션과 일치하고 밸리데이터가 유효하다고 표시했는지 확인합니다. 그렇다면 해당 상태에있는 챌린지 목록에 챌린지를 저장합니다.
 
-### AdvertiseStorageRecentBlockhash
+### AdvertiseStorageRecentBlockhash```텍스트 AdvertiseStorageRecentBlockhash
 
 ```text
 AdvertiseStorageRecentBlockhash {
@@ -414,4 +409,4 @@ AdvertiseStorageRecentBlockhash {
 }
 ```
 
-Validators and archivers will submit this to indicate that a new storage epoch has passed and that the storage proofs which are current proofs should now be for the previous epoch. Other transactions should check to see that the epoch that they are referencing is accurate according to current chain state.
+및 등록 아카이브는이 새로운 스토리지 시대를 통과 한 것을 나타 내기 위해서 제출 것이다 지금해야 현재의 증거입니다 저장 증명 이전 시대. 다른 트랜잭션은 현재 체인 상태에 따라 참조하는 시대가 정확한지 확인해야합니다.

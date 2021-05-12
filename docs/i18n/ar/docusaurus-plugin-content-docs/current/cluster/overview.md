@@ -1,42 +1,42 @@
 ---
-title: A Solana Cluster
+title: المجموعة (Cluster) الخاصة بـ Solana
 ---
 
-A Solana cluster is a set of validators working together to serve client transactions and maintain the integrity of the ledger. Many clusters may coexist. When two clusters share a common genesis block, they attempt to converge. Otherwise, they simply ignore the existence of the other. Transactions sent to the wrong one are quietly rejected. In this section, we'll discuss how a cluster is created, how nodes join the cluster, how they share the ledger, how they ensure the ledger is replicated, and how they cope with buggy and malicious nodes.
+المجموعة (Cluster) الخاصة بـ Solana هي مجموعة من المُدقّقين (validators) الذين يعملون معا لخدمة مُعاملات العملاء والحفاظ على سلامة دفتر الأستاذ (ledger). يُمكن للمجموعات (clusters) أن تتعايش بعضها البعض. عندما تشترك مجموعتان (clusters) في كتلة مرحلة تكوين (genesis block) مُشتركة، فإنهما يُحاولان التقارب بينهما. وإلا فإنها تتجاهل ببساطة وجود الآخر. المُعاملات المُرسلة إلى الشخص الخطأ تُرفض بهدوء. في هذا القسم، سنناقش كيف في يتم إنشاء مجموعة (cluster)، وكيف تنضم العُقَد (nodes) إلى المجموعة (cluster)، وكيف تُشارك في دفتر الأستاذ (ledger)، كيف يضمنون إعادة نسخ دفتر الأستاذ (ledger) وكيف يتعاملون مع الشوائب والعُقَد (nodes) الخبيثة.
 
-## Creating a Cluster
+## إنشاء مجموعة (Creating a Cluster)
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_. Additional validators then register with any registered member of the cluster.
+قبل بدء تشغيل أية مُدقّقين (validators)، ستحتاج أولا إلى إنشاء إعدادات مرحلة التكوين _genesis config_. تُشير إعدادات مرحلة التكوين (config references) إلى عدد 2 مفتاحين عموميين (public keys) للسك أو الطباعة (public keys)، _mint_ ومُدقّق تمهيدي _bootstrap validator_. المُدقّق (validator) الذي يمتلك المفتاح الخاص (private key) بالمُدقّق التمهيدي (validator bootstrap) مسؤول عن إلحاق المُدخلات (entries) الأولى إلى دفتر الأستاذ (ledger). يقوم بتهيئة حالته الداخلية في حساب السك أو الطباعة (mint). هذا الحساب سيحتفظ بعدد الرموز الأصلية المُحددة بواسطة إعدادات مرحلة التكوين (genesis config). يقوم المُدقّق الثاني بالإتصال بالمُدقّق التمهيدي (validator bootstrap) للتسجيل كمُدقّق _validator_. ثم يقوم المُدقّقون (validators) الإضافيون بالتسجيل لدى أي عضو مُسجل في المجموعة (cluster).
 
-A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries. Once the validator observes a sufficient number of copies exist, it deletes its copy.
+يستلم المُدقّق (validator) جميع المُدخلات (entries) من القائد (leader) ويُقدم أصواتا تُؤكد صحة تلك المُدخلات (entries). بعد التصويت، من المُتوقع أن يقوم المُدقّق (validator) بتخزين تلك المُدخلات (entries). بمُجرد أن يلاحظ المُدقّق (validator) وجود عدد كاف من النُسخ، فإنه يحذف نُسخه.
 
-## Joining a Cluster
+## الإنضمام إلى مجموعة (Joining a Cluster)
 
-Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+المُدقّقون (Validators) يدخلون المجموعة (cluster) عن طريق رسائل التسجيل المُرسلة إلى لوحة التحكم _control plane_ الخاصة بهم. يتم تنفيذ لوحة التحكم (control plane) بإستخدام بروتوكول القيل والقال _gossip_، مما يعني أنه يُمكن للعُقدة (node) أن تُسجل مع أي عُقدة (node) قائمة، ونتوقع تسجيلها إلى جميع العُقَد (nodes) في المجموعة (cluster). الوقت الذي تستغرقه جميع العُقَد (nodes) للمُزامنة يتناسب مع الجذر التربيعي لعدد العُقَد (nodes) المُشاركة في المجموعة (cluster). يعتبر ذلك بطيئ جدا خوارزميا، لكن مُقابل ذلك الوقت، العُقدة (node) مُطمئنة إلى أن لديها في نهاية المطاف نفس المعلومات التي تمتلكها كل عُقدة (node) أخرى، وأنه لا يُمكن فرض رقابة على تلك المعلومات من قبل أي عُقدة (node) أخرى.
 
-## Sending Transactions to a Cluster
+## إرسال المُعاملات إلى المجموعة (Cluster)
 
-Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes, effectively appending them to the ledger.
+العملاء يُرسلون المُعاملات إلى أي وحدة مُعالجة المُعاملات بالمُدقّ بالمَنفَذ \(TPU\). إذا كانت العُقدة (node) تلعب دور المُدقّق (validator)، فإنها تُحيل المُعاملة إلى القائد (leader) المُحَدَّد. إذا كانت في الدور القيادي (leader role)، فإن العُقدة (node) تحزم المُعاملات الواردة وتختمهم زمنيا (Timestamps) لإنشاء مُدخل _entry_، ودفعهم إلى مُستوى سطح بيانات _data plane_ المجموعة (cluster). بمجرد الوصول إلى مُستوى سطح البيانات (data plane)، يتم التحقق من صحة المُعاملات بواسطة عُقَد التدقيق (validator nodes)، وتوصيلها على نحو فعال إلى دفتر الأستاذ (ledger).
 
-## Confirming Transactions
+## تأكيد المُعاملات (Confirming Transactions)
 
-A Solana cluster is capable of subsecond _confirmation_ for up to 150 nodes with plans to scale up to hundreds of thousands of nodes. Once fully implemented, confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
+المجموعة (Cluster) الخاصة بـ Solana قادرة على إثبات أو تأكيد _confirmation_ لما يصل إلى 150 عُقدة (nodes) مع خُطط لرفع المُستوى إلى ما يصل إلى مئات الآلاف من العُقَد (nodes). بمُجرد التنفيذ الكامل، لا يُتوقع أن تزداد أوقات التأكيد أو الإثبات إلا بlogarithm عدد المُدقّقين (validators)، حيث قاعدة الlogarithm عالية جدا. إذا كانت القاعدة ألف على سبيل المثال، فذلك يعني أنه بالنسبة للألف عُقدة (nodes) الأولى, سيكون التأكيد أو التثبت هو مدة ثلاث قفزات للشبكة (three network hops) بالإضافة إلى الوقت الذي يستغرقه أبطأ مُدقّق في الأغلبية العُظمى (supermajority) للتصويت. بالنسبة للمليون عُقدة (nodes) القادمة، يزداد التأكيد أو التثبت بقفزة (network hop) شبكة واحدة فقط.
 
-Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
+تُعرِّف Solana التأكيد أو التثبت بأنه الفترة الزمنية التي يبدأ فيها القائد (leader) بالختم الزمني (Timestamp) لمُدخل (entry) جديد إلى اللحظة التي يُعتَرف فيها بالأغلبية العُظمى (supermajority) من أصوات دفتر الأستاذ (ledger).
 
-A gossip network is much too slow to achieve subsecond confirmation once the network grows beyond a certain size. The time it takes to send messages to all nodes is proportional to the square of the number of nodes. If a blockchain wants to achieve low confirmation and attempts to do it using a gossip network, it will be forced to centralize to just a handful of nodes.
+تتسم شبكة القيل والقال (gossip network) بالبطء الشديد بحيث لا يُمكن تحقيق تأكيد في أقل من ثانية واحدة بمُجرد أن تتجاوز الشبكة حجما مُعينا. الوقت الذي يستغرقه إرسال الرسائل إلى جميع العُقَد (nodes) يتناسب مع الجذر التربيعي لعدد العُقَد (nodes). إذا كان بلوكشاين ما يُريد الحصول على تأكيد أو تثبت مُنخفض ومُحاولة القيام بذلك بإستخدام شبكة شبكة القيل والقال (gossip network)، سيتم إجبارها على التمركز في عدد قليل من العُقَد (nodes).
 
-Scalable confirmation can be achieved using the follow combination of techniques:
+يُمكن تحقيق التأكيد أو التثبت القابل للتوسع بإستخدام مجموعة الأساليب التالية:
 
-1. Timestamp transactions with a VDF sample and sign the timestamp.
-2. Split the transactions into batches, send each to separate nodes and have
+1. الختم الزمني (Timestamp) للمُعاملات مع عينة VDF وتوقيع الطابع الزمني (Timestamp).
+2. تقسيم المُعاملات إلى دُفعات، إرسال كل منها إلى عُقَد (nodes) مُنفصلة وجعل
 
-   each node share its batch with its peers.
+   كل عُقدة (node) تتقاسم حزمتها مع أقرانها.
 
-3. Repeat the previous step recursively until all nodes have all batches.
+3. ككرِّر الخُطوة السابقة بشكل مُتكرر حتى يكون لكل العُقَد (nodes) كل الحِزمات.
 
-Solana rotates leaders at fixed intervals, called _slots_. Each leader may only produce entries during its allotted slot. The leader therefore timestamps transactions so that validators may lookup the public key of the designated leader. The leader then signs the timestamp so that a validator may verify the signature, proving the signer is owner of the designated leader's public key.
+تدور Solana بين القادة (leaders) على فترات ثابتة، تُسمى فُتحات _slots_. يجوز لكل قائد (leader) أن يُقدم مُدخلات (entries) فقط خلال الفترة (slot) المُخصصة له. بالتالي، فإن القائد (leader) يقوم بالختم الزمني (Timestamp) للمُعاملات بحيث يُمكن لأصحاب المُدقّقين (validators) البحث عن المفتاح العمومي (public key) للقائد (leader) المُحَدَّد. ثم يُوَقِّع القائد (leader) على الختم الزمني (Timestamp) حتى يتمكن المُدقّق (valdiator) من التحقق من التوقيع، على إفتراض أن المُوَقِّع (signer) هو مالك المفتاح العمومي (pub key) للقائد (leader) المُحَدَّد.
 
-Next, transactions are broken into batches so that a node can send transactions to multiple parties without making multiple copies. If, for example, the leader needed to send 60 transactions to 6 nodes, it would break that collection of 60 into batches of 10 transactions and send one to each node. This allows the leader to put 60 transactions on the wire, not 60 transactions for each node. Each node then shares its batch with its peers. Once the node has collected all 6 batches, it reconstructs the original set of 60 transactions.
+بعد ذلك، يتم تقسيم المُعاملات إلى دفعات أو حزم بحيث تتمكن العُقدة (node) من إرسال المُعاملات إلى أطراف مُتعددة دون القيام بنسخ مُتعددة. إذا إضطر القائد (leader)، على سبيل المثال، إلى إرسال 60 مُعاملة إلى 6 عُقَد (nodes)؛ سيقوم بتقطيع هذه المجموعة أو الحزم من 60 إلى دفعات من 10 مُعاملات وستُرسل واحدة لكل عُقدة (node). هذا يسمح للقائد (leader) بوضع 60 مُعاملة على السلك، وليس 60 مُعاملة لكل عُقدة (node). كل عُقدة (node) تتقاسم مجموعاتها أو حزمتها مع أقرانها. بمجرد أن تقوم العُقدة (node) بجمع كل الدفعات أو الحزم ال6، تقوم بإعادة تشكيل المجموعة الأصلية المُكونة من 60 مُعاملة.
 
-A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing, the approach is scaling well up to about 150 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).
+لا يمكن تقسيم مجموعة من المُعاملات إلا مرات عديدة قبل أن تصبح صغيرة جدا بحيث تصبح المعلومات الرئيسية هي المُستهلك الأساسي لعرض النطاق الترددي للشبكة (network bandwidth). في وقت كتابة هذا التقرير، أخذ النهج يتوسع ليصل إلى نحو 150 مُدقّق (validators). لرفع المُستوى إلى ما يصل إلى مئات الآلاف من المُدقّقين (validators)، يُمكن لكل عُقدة (node) أن تُطبق نفس التقنية التي تُطبقها العُقدة القائد (leader node) على مجموعة أخرى من العُقَد (nodes) ذات الحجم المُتساوي. نُسمي هذه التقنية تُوربين إنتشار الكتل [_Turbine Block Propogation_](turbine-block-propagation.md).

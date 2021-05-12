@@ -1,62 +1,63 @@
 ---
-title: Inflation Schedule
+title: جدول التضخم (Inflation Schedule)
 ---
 
-**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
+**قابل للتغيير. تابع أحدث المُناقشات الإقتصادية في مُنتديات Solana من الرابط التالي: https://forums.solana.com**
 
-Validator-clients have two functional roles in the Solana network:
+لدى عُملاء المُصادقة (validation-clients) دورين وظيفيين في شبكة Solana:
 
-- Validate \(vote\) the current global state of their observed PoH.
-- Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and incorporating them into their observed PoH, thus updating the global state of the network and providing chain continuity.
+- التدقيق (Validate) من صحة \ (صوت \) الحالة العامة الحالية لـ PoH التي تمت مُلاحظتها.
+- أن يتم إنتخابهم "كقائد" (leader) على جدول زمني مُرجح بالحصص (stake-weighted round-robin schedule) على مدار الساعة خلال الوقت الذي يكونون فيه مسؤولين عن جمع المُعاملات المُعلقة ودمجها في PoH المرصودة، وبالتالي تحديث الحالة العامة للشبكة وتوفير إستمرارية الشبكة.
 
-Validator-client rewards for these services are to be distributed at the end of each Solana epoch. As previously discussed, compensation for validator-clients is provided via a commission charged on the protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator-node \(see below\) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each transaction fee, less a protocol-specified amount that is destroyed \(see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\).
+يتم توزيع مكافآت عُملاء المُصادقة (validation-clients) لهذه الخدمات في نهاية كل فترة (epoch) في Solana. كما تمت مناقشته سابقًا، يتم تقديم تعويضات لعُملاء المُصادقة (validator-clients) من خلال عمولة يتم تحصيلها على مُعدل التضخم السنوي القائم على البروتوكول المُوزع بما يتناسب مع وزن الحِصَّة (stake) لكل عُقدة التدقيق (validator node) \ (أنظر أدناه \) جنبًا إلى جنب مع رسوم المُعاملات التي يُطالب بها القائد (leader) المُتاحة خلال كل دورة قائد (leader rotation). بمعنى آخر. خلال الوقت الذي يتم فيه إنتخاب عميل مُصادقة (validatior-client) مُعين كقائد (leader)، تكون لديه الفرصة للإحتفاظ بجزء من رسوم كل مُعاملة، ناقصًا المبلغ المُحدد بالبروتوكول الذي يتم إتلافه \ (راجع [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\).
 
-The effective protocol-based annual staking yield \(%\) per epoch received by validation-clients is to be a function of:
+يجب أن تكون عائد التخزين السنوي الفعال المستند إلى البروتوكول \ (٪ \) لكل فترة (epoch) يتلقاها عُملاء المُصادقة (validatior-clients) أن تكون دالة لـ:
 
-- the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
-- the fraction of staked SOLs out of the current total circulating supply,
-- the commission charged by the validation service,
-- the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
+- مُعدل التضخم العام الحالي، المُشتق من جدول الإصدار المُضخم المُحدد مسبقًا \ (أُنظر [Validation-client Economics](ed_vce_overview.md)\)
+- جزء من SOL المُحَصَّص (staked) من إجمالي العرض المُتداول الحالي،
+- العمولة التي تتولاها خدمة التدقيق (validation)،
+- وقت التشغيل / المشاركة \ [٪ من الفُتحات (Slots) المُتاحة التي أتيحت للمُدقق فرصة التصويت عليها \] لمُدقق مُعين خلال الفترة (epoch) السابقة.
 
-The first factor is a function of protocol parameters only \(i.e. independent of validator behavior in a given epoch\) and results in an inflation schedule designed to incentivize early participation, provide clear monetary stability and provide optimal security in the network.
+العامل الأول هو وظيفة مُعلمات البروتوكول فقط \ (أي بغض النظر عن سلوك المُدقّق (validator) في فترة (epoch) مُعينة \) وينتج عنه جدول تضخم مُصمم لتحفيز المشاركة المُبكرة، وتوفيرإاستقرار نقدي واضح وتوفير الأمان الأمثل في الشبكة.
 
-As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
+كخطوة أولى لفهم تأثير *Inflation Schedule* على إقتصاد Solana، قمنا بمحاكاة النطاقين العلوي والسفلي لما قد يبدو عليه إصدار الرمز بمرور الوقت في النطاقات الحالية لمُعلمات جدول التضخم قيد الدراسة.
 
-Specifically:
+تحديدا:
 
-- _Initial Inflation Rate_: 7-9%
-- _Dis-inflation Rate_: -14-16%
-- _Long-term Inflation Rate_: 1-2%
+- مُعدل التضخم الأولي *Initial Inflation Rate*: 7-9%
+- مُعدل تخفيض التضخم *Dis-inflation Rate*: -14-16%
+- مُعدل التضخم الطويل المدى *Long-term Inflation Rate*: 1-2%
 
-Using these ranges to simulate a number of possible Inflation Schedules, we can explore inflation over time:
+بإستخدام هذه النطاقات لمُحاكاة عدد من جداول التضخم المُحتملة، يُمكننا إستكشاف التضخم بمرور الوقت:
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-In the above graph, the average values of the range are identified to illustrate the contribution of each parameter.
-From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
+في الرسم البياني الوارد أعلاه، تُحدد القيم المُتوسطة للنطاق لتوضيح مُساهمة كل مُعلِّمة (parameter). من هذه المحاكاة *Inflation Schedules*، يُمكننا أيضًا توقع نطاقات لإصدار الرمز بمرور الوقت.
 
 ![](/img/p_total_supply_ranges.png)
 
-Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
+أخيرًا يمكننا تقدير العائد *Staked Yield* على عملات SOL التي يتم تحْصِيصها أو المُحَصَّصة (staked)، إذا قدمنا مُعلمة (parameter) إضافية، تمت مُناقشتها مُسبقًا، *% of Staked SOL*:
 
-%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 
-In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. For the below example, we’ve chosen the middle of the parameter ranges explored above:
+%~\tنص{SOL Staked} = \frac{\tنص{Total SOL Staked}}{\tنص{Total Current Supply}}
 
-- _Initial Inflation Rate_: 8%
-- _Dis-inflation Rate_: -15%
-- _Long-term Inflation Rate_: 1.5%
 
-The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
+في هذه الحالة، نظرًا لأن *% of Staked SOL* عبارة عن مُعلمة (parameter) يجب تقديرها (على عكس مُعلمات *Inflation Schedule*) ، فمن الأسهل إستخدام مُعلمات جدول التضخم *Inflation Schedule* وإستكشاف نطاق *% of Staked SOL*. على سبيل المثال أدناه، إخترنا مُنتصف نطاقات المُعلمة (parameter) المُستكشفة أعلاه:
+
+- مُعدل التضخم الأولي *Initial Inflation Rate*: 8%
+- مُعدل تخفيض التضخم *Dis-inflation Rate*: -15%
+- مُعدل التضخم الطويل المدى *Long-term Inflation Rate*: 1.5%
+
+تتراوح قيم *% of Staked SOL* من 60٪ إلى 90٪، والتي نشعر أنها تغطي النطاق المُحتمل الذي نتوقع مُراقبته، بناءً على التعليقات الواردة من مُجتمعات المُستثمرين والمُدققين (validators) بالإضافة إلى ما يتم مُلاحظته في بروتوكولات إثبات الحِصَّة (Proof-of-Stake) المُماثلة.
 
 ![](/img/p_ex_staked_yields.png)
 
-Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
+مرة أخرى، يوضح ما سبق مثال عائد إثبات الحِصَّة أو التحصيص *Staked Yield* قد يتوقعه صاحب الحساب بمرور الوقت على شبكة Solana مع جدول التضخم *Inflation Schedule* كما هو مُحدد. يُعد إثبات الحِصَّة أو التحصيص هذا *Staked Yield* مثاليًا لأنه يتجاهل تأثير وقت تشغيل المُدقق (validator) على المُكافآت وعمولات المُدقق والإختناق المُحتمل للعائد (yield throttling) وحوادث الإقتطاع (slashing) المُحتملة. كما أنه يتجاهل أن *% of Staked SOL* ديناميكي حسب التصميم - الحوافز الإقتصادية التي تم إعدادها بواسطة *Inflation Schedule*.
 
-### Adjusted Staking Yield
+### عائد إثبات الحِصَّة أو التحصيص المُعدّل (Adjusted Staking Yield)
 
-A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. I.e. the positive dilutive effects of inflation.
+يجب أن يأخذ التقييم الكامل للربح المُحتمل من الرموز في الحسبان تخفيف الرمز *Token Dilution* وتأثيره على حصيلة عائد إثبات الحِصَّة أو التحصيص (Staking Yield). لهذا ، نحدد عائد إثبات الحِصَّة أو التحصيص المُعدّل *adjusted staking yield* كتغيير في ملكية العرض الجزئي للرموز بسبب توزيع إصدار التضخم. بمعنى آخر. • الآثار المُخففة الإيجابية للتضخم.
 
-We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. We can see this plotted for various staking fractions here:
+يمكننا فحص عائد إثبات الحِصَّة أو التحصيص *adjusted staking yield* كدالة لمُعدل التضخم والنسبة المئوية للرموز المُجمعة على الشبكة. يُمكننا أن نرى هذا المُخطط لكسور إثبات حِصَّة أو تحصيص (staking) مُختلفة هنا:
 
 ![](/img/p_ex_staked_dilution.png)

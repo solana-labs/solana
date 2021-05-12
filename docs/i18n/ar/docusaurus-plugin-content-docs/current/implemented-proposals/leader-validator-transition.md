@@ -1,52 +1,52 @@
 ---
-title: Leader-to-Validator Transition
+title: الإنتقال من القائد إلى المُدقّق (Leader-to-Validator Transition)
 ---
 
-A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
+عادةً ما يقضي المُدقّق (validator) وقته في التحقق من صحة الكتل (blocks). مع ذلك، إذا قام صاحب الحساب بتفويض حِصّته (stake) إلى مُدقّق (validator) ما، فسيتم تحديده أحيانًا على أنه _slot leader_. بصفته قائد فُتحة (Slot)، يكون المُدقّق (validator) مسؤولاً عن إنتاج الكتل (blocks) خلال فُتحة _slot_. مُعينة. الفترة الزمنية لها عدد مُعين من العلامات _ticks_ المُعدلة مُسبقًا (preconfigured). يتم تقدير مُدة هذه العلامات (ticks) بـ _PoH Recorder_ موصوفة لاحقًا في هذا المُستند.
 
-## BankFork
+## إنقسام أو شوكة البنك (BankFork)
 
-BankFork tracks changes to the bank state over a specific slot. Once the final tick has been registered the state is frozen. Any attempts to write to are rejected.
+يتتبع إنقسام أو شوكة البنك (BankFork) التغييرات في حالة البنك عبر فُتحة (Slot) مُعينة. بمجرد تسجيل العلامة (tick) النهائية، يتم تجميد الحالة. أي مُحاولات للكتابة مرفوضة.
 
-## Validator
+## المُدقّق (validator)
 
-A validator operates on many different concurrent forks of the bank state until it generates a PoH hash with a height within its leader slot.
+يعمل المُدقّق (validator) على العديد من الإنقسامات أو الشوكات (forks) المُتزامنة المُختلفة لحالة البنك حتى يقوم بإنشاء تجزئة PoH بارتفاع داخل الفُتحة (Slot) الرئيسية الخاصة به.
 
-## Slot Leader
+## قائد الفُتحة (Slot Leader)
 
-A slot leader builds blocks on top of only one fork, the one it last voted on.
+يبني قائد الفُتحة (Slot Leader) الكتل (blocks) فوق إنقسام أو شوكة (fork) واحدة فقط، التي صوّت عليها آخر مرة.
 
-## PoH Recorder
+## مُسجل PoH أو PoH Recorder
 
-Slot leaders and validators use a PoH Recorder for both estimating slot height and for recording transactions.
+يستخدم قادة الفُتحات (Slot Leaders) والمُدقّقون (validators) مُسجل PoH لتقدير إرتفاع الفُتحة (Slot) ولتسجيل المُعاملات.
 
-### PoH Recorder when Validating
+### مُسجل PoH عند المُصادقة (validation)
 
-The PoH Recorder acts as a simple VDF when validating. It tells the validator when it needs to switch to the slot leader role. Every time the validator votes on a fork, it should use the fork's latest [blockhash](../terminology.md#blockhash) to re-seed the VDF. Re-seeding solves two problems. First, it synchronizes its VDF to the leader's, allowing it to more accurately determine when its leader slot begins. Second, if the previous leader goes down, all wallclock time is accounted for in the next leader's PoH stream. For example, if one block is missing when the leader starts, the block it produces should have a PoH duration of two blocks. The longer duration ensures the following leader isn't attempting to snip all the transactions from the previous leader's slot.
+يعمل مُسجل PoH بمثابة VDF بسيط عند التحقق من الصحة. يخبر المُدقّق (validator) عندما يحتاج للتبديل إلى دور قائد الفُتحة (slot leader). في كل مرة يصوت فيها المُدقّق (validator) على إنقسام أو شوكة (fork)، يجب أن يستخدم إنقسام أو شوكة (fork) أحدث تجزئة كُتلة [blockhash](../terminology.md#blockhash) لإعادة زرع VDF. إعادة البذر (Re-seeding) يحل مشكلتين. أولاً، يقوم بمُزامنة VDF الخاص به مع القائد، مما يسمح له بتحديد وقت بدء الفُتحة القائد (leader slot) بشكل أكثر دقة. ثانيًا، إذا تعطل القائد السابق، فسيتم إحتساب كل وقت ساعة الحائط في مجرى PoH للقائد التالي. على سبيل المثال، إذا كانت إحدى الكتل (block) مفقودة عند بدء القائد، فيجب أن يكون للكتلة التي تنتجها مُدة PoH من كتلتين. تضمن المُدة الأطول عدم مُحاولة القائد التالي قص جميع المُعاملات من فُتحة (Slot) القائد السابق.
 
-### PoH Recorder when Leading
+### مُسجل PoH عند القيادة (validation)
 
-A slot leader use the PoH Recorder to record transactions, locking their positions in time. The PoH hash must be derived from a previous leader's last block. If it isn't, its block will fail PoH verification and be rejected by the cluster.
+يستخدم قائد الفُتحة مُسجل PoH لتسجيل المُعاملات، ويغلق مواقعهم في الوقت المناسب. تجزئة PoH يجب أن تكون مُشتقة من آخر كتلة (block) لقائد سابق. إذا لم يكن كذلك، فستفشل الكتلة (block) في التحقق من PoH وستُرفض من قبل المجموعة (cluster).
 
-The PoH Recorder also serves to inform the slot leader when its slot is over. The leader needs to take care not to modify its bank if recording the transaction would generate a PoH height outside its designated slot. The leader, therefore, should not commit account changes until after it generates the entry's PoH hash. When the PoH height falls outside its slot any transactions in its pipeline may be dropped or forwarded to the next leader. Forwarding is preferred, as it would minimize network congestion, allowing the cluster to advertise higher TPS capacity.
+يعمل مُسجل PoH أيضًا على إعلام قائد الفُتحة (Slot Leader) عند إنتهاء الفُتحة (Slot) الخاصة به. يحتاج القائد إلى الحرص على عدم تعديل البنك الخاص به إذا كان تسجيل المُعاملة سيؤدي إلى إنشاء إرتفاع في PoH خارج الفُتحة (Slot) المُخصصة له. لذلك، لا ينبغي للقائد إجراء تغييرات في الحساب إلا بعد أن يقوم بإنشاء مُدخل (entry) تجزئة PoH. عندما يقع إرتفاع PoH خارج الفُتحة (Slot) الخاصة به، فقد يتم إسقاط أي مُعاملات في خط الأنابيب (pipeline) الخاص به أو إعادة توجيهها إلى القائد التالي. يُفضل إعادة التوجيه، لأنه سيُقلل من إزدحام الشبكة، مما يسمح للمجموعة (cluster) بالإعلان عن سعة مُعاملات في الثانية الواحدة (TPS) أعلى.
 
-## Validator Loop
+## حلقة المُدقّق (Validator Loop)
 
-The PoH Recorder manages the transition between modes. Once a ledger is replayed, the validator can run until the recorder indicates it should be the slot leader. As a slot leader, the node can then execute and record transactions.
+يُدير مُسجل PoH الإنتقال بين الأوضاع. بمجرد إعادة تشغيل دفتر الأستاذ (ledger)، يُمكن تشغيل المُدقّق (validator) حتى يُشير المُسجل إلى أنه يجب أن يكون قائد الفُتحة (slot leader). كقائد الفُتحة (slot leader)، يُمكن للعُقدة (node) بعد ذلك تنفيذ المُعاملات وتسجيلها.
 
-The loop is synchronized to PoH and does a synchronous start and stop of the slot leader functionality. After stopping, the validator's TVU should find itself in the same state as if a different leader had sent it the same block. The following is pseudocode for the loop:
+تتم مُزامنة الحلقة مع PoH وتقوم ببدء وإيقاف مُتزامن لوظيفة قائد الفُتحة (Slot Leader). بعد التوقف، يجب أن تجد TVU الخاصة بالمُدقّق (validator) نفسها في نفس الحالة كما لو أن قائدًا مختلفًا قد أرسلها لنفس الكتلة (block). ما يلي هو الترميز المستعار (pseudocode) للحلقة:
 
-1. Query the LeaderScheduler for the next assigned slot.
-2. Run the TVU over all the forks. 1. TVU will send votes to what it believes is the "best" fork. 2. After each vote, restart the PoH Recorder to run until the next assigned
+1. إستعلم عن جدولة القائد (LeaderScheduler) للفُتحة (Slot) المُخصصة التالية.
+2. قم بتشغيل TVU على جميع الإنقسامات أو الشوكات (forks). 1. سترسل TVU الأصوات إلى ما تعتقد أنه "أفضل" إنقسام أو شوكة (fork). 2. بعد كل تصويت، قُم بإعادة تشغيل مُسجل PoH للتشغيل حتى التعيين التالي
 
-   slot.
+   الفُتحة (Slot).
 
-3. When time to be a slot leader, start the TPU. Point it to the last fork the
+3. عندما يحين الوقت لتكون قائد الفُتحة (Slot Leader)، إبدأ تشغيل TPU. قُم بتوجيهه إلى آخر إنقسام أو شوكة (fork)
 
-   TVU voted on.
+   صوت TVU على.
 
-4. Produce entries until the end of the slot. 1. For the duration of the slot, the TVU must not vote on other forks. 2. After the slot ends, the TPU freezes its BankFork. After freezing,
+4. قم بإنتاج المُدخلات (entries) حتى نهاية الفُتحة (Slot). 1. طوال مدة الفُتحة (Slot)، يجب ألا تصوت TVU على إنقسامات أو شوكات (forks) أخرى. 2. بعد إنتهاء الفُتحة (Slot)، تجمد TPU الخاصة بها إنقسام أو شوكة البنك (BankFork). بعد التجميد،
 
-   the TVU may resume voting.
+   يجوز لـTVU إستئناف التصويت.
 
-5. Goto 1.
+5. إذهب إلى 1.

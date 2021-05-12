@@ -1,77 +1,37 @@
 ---
-title: Bank Timestamp Correction
+title: Коррекция временных штампов
 ---
 
-Each Bank has a timestamp that is stashed in the Clock sysvar and used to assess
-time-based stake account lockups. However, since genesis, this value has been
-based on a theoretical slots-per-second instead of reality, so it's quite
-inaccurate. This poses a problem for lockups, since the accounts will not
-register as lockup-free on (or anytime near) the date the lockup is set to
-expire.
+Каждый банк имеет временную метку, которая находится в системе Clock sysvar и используется для оценки блокировок аккаунтов, основанных на времени. Однако с самого начала это значение было основано на теоретической частоте слотов в секунду, а не на реальности, поэтому оно довольно неточно. Это создает проблему для блокировок, поскольку учетные записи не будут регистрироваться как свободные от блокировок в дату истечения срока блокировки (или в ближайшее время).
 
-Block times are already being estimated to cache in Blockstore and long-term
-storage using a [validator timestamp oracle](validator-timestamp-oracle.md);
-this data provides an opportunity to align the bank timestamp more closely with
-real-world time.
+Время блокировки уже оценивается для кеширования в Blockstore и долгосрочного хранения с помощью [ валидатора timestamp oracle ](validator-timestamp-oracle.md); эти данные дают возможность более точно согласовать метку времени банка с реальным временем.
 
-The general outline of the proposed implementation is as follows:
+Общая схема предлагаемой реализации выглядит следующим образом:
 
-- Correct each Bank timestamp using the validator-provided timestamp.
-- Update the validator-provided timestamp calculation to use a stake-weighted
-  median, rather than a stake-weighted mean.
-- Bound the timestamp correction so that it cannot deviate too far from the
-  expected theoretical estimate
+- Исправьте каждую метку времени банка, используя метку времени, предоставленную валидатором.
+- Обновите расчет временной метки, предоставленный валидатором, чтобы использовать взвешенное по ставкам медианное значение, а не среднее значение, взвешенное по ставкам.
+- Ограничьте коррекцию отметки времени так, чтобы она не могла слишком сильно отклоняться от ожидаемой теоретической оценки
 
-## Timestamp Correction
+## Коррекция временных штампов
 
-On every new Bank, the runtime calculates a realistic timestamp estimate using
-validator timestamp-oracle data. The Bank timestamp is corrected to this value
-if it is greater than or equal to the previous Bank's timestamp. That is, time
-should not ever go backward, so that locked up accounts may be released by the
-correction, but once released, accounts can never be relocked by a time
-correction.
+В каждом новом банке среда выполнения вычисляет реалистичную оценку временного штампа, используя данные валидатора timestamp-oracle. Отметка времени банка скорректирована на это значение если он больше или равен отметке времени предыдущего банка. То есть время никогда не должно идти назад, так что заблокированные аккаунты могут быть разблокированы путем исправления, но после разблокирования аккаунта никогда не могут быть повторно заблокированы с помощью корректировки времени.
 
-### Calculating Stake-Weighted Median Timestamp
+### Расчет временного штампа, взвешенной по ставкам, медианы
 
-In order to calculate the estimated timestamp for a particular Bank, the runtime
-first needs to get the most recent vote timestamps from the active validator
-set. The `Bank::vote_accounts()` method provides the vote accounts state, and
-these can be filtered to all accounts whose most recent timestamp was provided
-within the last epoch.
+Чтобы вычислить предполагаемый временной штамп для конкретного банка, среда выполнения сначала должна получить самые последние временные штампы голосования из активного набора средств проверки. Метод `Bank::vote_accounts()`обеспечивает состояние аккаунтов для голосования, и они могут быть отфильтрованы для всех аккаунтов, самый последний временной штамп который был предоставлен в пределах последней эпохи.
 
-From each vote timestamp, an estimate for the current Bank is calculated using
-the epoch's target ns_per_slot for any delta between the Bank slot and the
-timestamp slot. Each timestamp estimate is associated with the stake delegated
-to that vote account, and all the timestamps are collected to create a
-stake-weighted timestamp distribution.
+По каждому временному штампу голосования оценка текущего банка вычисляется с использованием целевого ns_per_slot эпохи для любой разницы между слотом банка и слотом временного штампа. Каждая оценка временного штампа связана со ставкой, делегированной этому аккаунту для голосования, и все временный штампы собираются для создания распределение временных штампов, взвешенных по ставкам.
 
-From this set, the stake-weighted median timestamp -- that is, the timestamp at
-which 50% of the stake estimates a greater-or-equal timestamp and 50% of the
-stake estimates a lesser-or-equal timestamp -- is selected as the potential
-corrected timestamp.
+Из этого набора выбирается медианная временного штампа, взвешенная по ставке, то есть временной штамп, при которой 50% ставки оценивает временной штамп больше или равным, а 50% ставки оценивает временной штамп меньшим или равным - как потенциальный исправленный временной штамп.
 
-This stake-weighted median timestamp is preferred over the stake-weighted mean
-because the multiplication of stake by proposed timestamp in the mean
-calculation allows a node with very small stake to still have a large effect on
-the resulting timestamp by proposing a timestamp that is very large or very
-small. For example, using the previous `calculate_stake_weighted_timestamp()`
-method, a node with 0.00003% of the stake proposing a timestamp of `i64::MAX`
-can shift the timestamp forward 97k years!
+Эта средневзвешенный по ставкам временной штамп предпочтительнее, чем взвешенный по ставкам средний, потому что умножение ставки на предложенный временной штамп при вычислении среднего позволяет узлу с очень маленькой ставкой по-прежнему оказывает большое влияние на итоговый временной штамп, предлагая очень большой временной штамп большой или очень маленький. Например, используя предыдущий `calculate_stake_weighted_timestamp()` метод, узел с 0,00003% ставки, предлагающий временной штамп ` i64:: MAX ` может сдвинуть временной штамп на 97 тыс. лет вперед!
 
-### Bounding Timestamps
+### Граничные временный штампы
 
-In addition to preventing time moving backward, we can prevent malicious
-activity by bounding the corrected timestamp to an acceptable level of deviation
-from the theoretical expected time.
+Помимо предотвращения движения времени назад, мы можем предотвратить вредоносную активность, ограничив исправленный временной штамп до приемлемого уровня отклонения от теоретического ожидаемого времени.
 
-This proposal suggests that each timestamp be allowed to deviate up to 25% from
-the expected time since the start of the epoch.
+Это предложение предлагает разрешить каждому временному штампу отклоняться до 25% от ожидаемого времени с начала эпохи.
 
-In order to calculate the timestamp deviation, each Bank needs to log the
-`epoch_start_timestamp` in the Clock sysvar. This value is set to the
-`Clock::unix_timestamp` on the first slot of each epoch.
+Чтобы вычислить отклонение временного штампа, каждый банк должен зарегистрировать ` epoch_start_timestamp ` в системной переменной Clock sysvar. Это значение устанавливается в ` Clock:: unix_timestamp ` в первом слоте каждой эпохи.
 
-Then, the runtime compares the expected elapsed time since the start of the
-epoch with the proposed elapsed time based on the corrected timestamp. If the
-corrected elapsed time is within +/- 25% of expected, the corrected timestamp is
-accepted. Otherwise, it is bounded to the acceptable deviation.
+Затем среда выполнения сравнивает ожидаемое время, прошедшее с начала эпохи, с предложенным истекшим временем на основе скорректированного временного штампа. Если исправленное время находится в пределах +/- 25% от ожидаемого, исправленный временной штамп принимается. В противном случае оно ограничено допустимым отклонением.

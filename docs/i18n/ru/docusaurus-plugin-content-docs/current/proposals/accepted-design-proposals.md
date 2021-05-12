@@ -1,11 +1,5 @@
 ---
-title: Accepted Design Proposals
+title: Принятые проектные предложения
 ---
 
-The following architectural proposals have been accepted by the Solana team,
-but are not yet fully implemented.
-The proposals may be implemented as described, implemented differently as
-issues in the designs become evident, or not implemented at all.
-If implemented, the proposal will be moved to
-[Implemented Proposals](../implemented-proposals/implemented-proposals.md)
-and the details will be added to relevant sections of the docs.
+Следующие архитектурные предложения были приняты Solana team, но еще не полностью реализованы. Предложения могут быть реализованы, как описано, реализованы по-разному, когда проблемы в проектах станут очевидными, или не реализованы вообще. В случае реализации предложение будет перемещено в [Implemented Proposals](../implemented-proposals/implemented-proposals.md) а подробности будут добавлены в соответствующие разделы документов.

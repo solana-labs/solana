@@ -1,201 +1,93 @@
 ---
-title: SolFlare Web Wallet
+title: Веб-кошелек SolFlare
 ---
 
-## Introduction
+## Введение
 
-[SolFlare.com](https://solflare.com/) is a community-created web wallet built
-specifically for Solana.
-SolFlare supports sending and receiving native SOL tokens as well as sending and
-receiving SPL Tokens (Solana's ERC-20 equivalent).
-SolFlare also supports staking of SOL tokens.
+[SolFlare.com](https://solflare.com/) - это созданный сообществом веб-кошелек специально для Solana. SolFlare поддерживает отправку и получение нативных SOL токенов, а также отправку и получение SPL токенов (эквивалент ERC-20 в Solana). SolFlare также поддерживает стейкинг токенов SOL.
 
-As a _non-custodial_ wallet, your private keys are not stored by the SolFlare
-site itself, but rather they are stored in an encrypted
-[Keystore File](#using-a-keystore-file) or on a
-[Ledger Nano S or X hardware wallet](#using-a-ledger-nano-hardware-wallet).
+В качестве _ не кастодиального кошелька_, ваши приватные ключи не хранятся самим сайтом SolFlare но скорее они хранятся в зашифрованном [Файле ключевого хранилища](#using-a-keystore-file) или на [Ledger Nano S или X аппаратном кошельке](#using-a-ledger-nano-hardware-wallet).
 
-This guide describes how to set up a wallet using SolFlare, how to send and
-receive SOL tokens, and how to create and manage a stake account.
+Это руководство описывает, как настроить кошелек с помощью SolFlare, как отправлять и получать токены SOL, а также как создавать и управлять аккаунтом.
 
-## Getting Started
+## Начало работы
 
-Go to https://www.solflare.com in a supported browser. Most popular web browsers
-should work when interacting with a Keystore File, but currently only
-Chrome and Brave are supported when interacting with a Ledger Nano.
+Перейдите на https://www.solflare.com в поддерживаемом браузере.  Большинство популярных веб-браузеров должны работать при взаимодействии с файлом ключей но в настоящее время только Chrome и Brave поддерживаются при взаимодействии с Ledger Nano.
 
-### Using a Keystore File
+### Использование файла ключей
 
-#### Create a new Keystore File
+#### Создать новый файл ключей
+Чтобы создать кошелек с файлом Keystore нажмите на кнопку «Создать кошелёк» и выберите «Использовать файл ключей.  Следуйте инструкциям для создания пароля, который будет использоваться для шифрования файла ключей, а затем скачайте созданный файл на ваш компьютер.  Вам будет предложено загрузить файл ключей обратно на сайт, чтобы убедиться, что загрузка была сохранена правильно.
 
-To create a wallet with a Keystore file, click on "Create a Wallet" and select
-"Using Keystore File". Follow the prompts to create a password which will be
-used to encrypt your Keystore file, and then to download the new file to your
-computer. You will be prompted to then upload the Keystore file back to the site
-to verify that the download was saved correctly.
+**ПРИМЕЧАНИЕ: Если вы потеряете свой файл ключей или пароль, используемый для шифрования, любые средства в этом кошельке будут потеряны навсегда.  Ни команда Solana, ни разработчики SolFlare не могут помочь вам восстановить утерянные ключи.**
 
-**NOTE: If you lose your Keystore file or the password used to encrypt it, any
-funds in that wallet will be lost permanently. Neither the Solana team nor the
-SolFlare developers can help you recover lost keys.**
+Вы можете решить сохранить бэкап копию файла ключей на внешний носитель и сохранить пароль от этого файла отдельно.
 
-You may want to consider saving a backup copy of your Keystore file on an
-external drive separate from your main computer, and storing your password in a
-separate location.
+#### Доступ к вашему кошельку с помощью файла ключей
+Чтобы использовать SolFlare с ранее созданным файлом ключей нажмите "Доступ к кошельку" и выберите "Использовать файл ключей".  Если вы только что создали новый файл ключей, то будете перенаправлены на страницу доступа напрямую. Вам будет предложено ввести пароль и загрузить файл ключей (Keystore), после чего вы будете переведены на главную страницу интерфейса кошелька.
 
-#### Access your wallet with a Keystore File
+### Использование аппаратного кошелька Ledger Nano
 
-To use SolFlare with a previously created Keystore file, click on
-"Access a Wallet" and select "Using Keystore File". If you just created a new
-Keystore file, you will be taken to the Access page directly.
-You will be prompted to enter the password and upload your Keystore file,
-then you will be taken to the wallet interface main page.
+*ПРИМЕЧАНИЕ: Пожалуйста, ознакомьтесь с [известными проблемами](ledger-live.md#known-issues) по любым текущим ограничениям в использовании Nano.*
 
-### Using a Ledger Nano hardware wallet
+#### Начальная настройка устройства
+Чтобы использовать Ledger Nano с SolFlare, сначала убедитесь, что [настроили ваш Nano](ledger-live.md) и [установил последнюю версию приложения Solana](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app) на вашем устройстве.
 
-_NOTE: Please see [known issues](ledger-live.md#known-issues) for any current
-limitations in using the Nano._
+#### Выберите адрес Ledger для доступа
+Подключите Nano и откройте приложение Solana, чтобы на экране устройства отображалось "Приложение готово".
 
-#### Initial Device Setup
+На домашней странице SolFlare нажмите кнопку "Доступ к Кошельку" и выберите "Используя Ledger Nano S | Ledger Nano X".  В разделе "Выберите путь наследования" выберите единственную опцию:
 
-To use a Ledger Nano with SolFlare, first ensure you have
-[set up your Nano](ledger-live.md) and have [installed the latest version of
-the Solana app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app)
-on your device.
+``Solana - 44`/501`/``
 
-#### Select a Ledger address to access
+Примечание: Ваш браузер может вас запросить, может ли SolFlare общаться с вашим устройством Ledger.  Нажмите, чтобы разрешить.
 
-Plug in your Nano and open the Solana app so the device screen displays
-"Application is Ready".
+Выберите адрес для взаимодействия с ним из нижнего выпадающего списка, затем нажмите кнопку "Access".
 
-From the SolFlare home page, click "Access a Wallet" then select "Using Ledger
-Nano S | Ledger Nano X". Under "Select derivation path", select the only option:
+Устройство Ledger может получить большое количество приватных ключей и связанных с ними публичных адресов. Это позволяет вам управлять произвольным количеством аккаунтов с одного и того же устройства.
 
-`` Solana - 44`/501`/ ``
+Если вы вносите средства на адрес, полученный от вашего Ledger устройства, убедитесь что выбрали этот же адрес при использовании SolFlare, чтобы иметь доступ к этим средствам.  Если вы подключились к неверному адресу, просто нажмите Выйти и снова подключитесь к правильному адресу.
 
-Note: Your browser may prompt you to ask if SolFlare may communicate with your
-Ledger device. Click to allow this.
+## Выбор сети
 
-Select an address to interact with from the lower drop down box then click "Access".
+Solana поддерживает [три различных сети](../clusters), каждая из которых имеет свое назначение в экосистемы Solana.  Mainnet Beta выбрана по умолчанию на SolFlare, так как это постоянная сеть, где развернуты биржи и другие производственные приложения.  Чтобы выбрать другую сеть, нажмите на имя выбранной сети в верхней части панели управления кошельком, либо Mainnet, Testnet или Devnet, затем нажмите на имя сети, которую вы хотите использовать.
 
-The Ledger device can derive a large number of private keys and associated
-public addresses. This allows you to manage and interact with an arbitrary
-number of different accounts from the same device.
+## Отправка и получение токенов SOL
 
-If you deposit funds to an address derived from your Ledger device,
-make sure to access the same address when using SolFlare to be able to access
-those funds. If you connect to the incorrect address,
-simply click Logout and re-connect with the correct address.
+### Получение
+Чтобы получать токены в ваш кошелек, кто-то должен перевести некоторые токены на адрес вашего кошелька.  Адрес отображается в верхнем левом углу экрана, и вы можете щелкнуть по иконке "Копировать", чтобы скопировать адрес и предоставить его всем, кто отправляет вам токены.  Если вы держите токены в другом кошельке или на бирже, вы также можете отозвать их на этот адрес.  После совершения перевода баланс, показанный на SolFlare, должен обновляться в течение нескольких секунд.
 
-## Select a Network
+### Отправка
+После того, как у вас есть несколько токенов на адресе кошелька, Вы можете отправить их на любой другой адрес кошелька или адрес для пополнения счета, нажав "Перевести SOL" в верхнем правом углу.  Введите адрес получателя и сумму SOL для перевода и нажмите кнопку "Отправить".  Вам будет предложено подтвердить детали транзакции перед использованием [ключа для подписания транзакции](#signing-a-transaction) и после этого она будет передана в сеть.
 
-Solana maintains [three distinct networks](../clusters), each of which has
-its own purpose in supporting the Solana ecosystem. Mainnet Beta is selected by
-default on SolFlare, as this is the permanent network where exchanges and other
-production apps are deployed. To select a different network, click on the name
-of the currently selected network at the top of the wallet dashboard, either
-Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
-using.
+## Стейкинг Токенов SOL
+SolFlare поддерживает создание и управление аккаунтами стейкинга и делегированием.  Чтобы узнать о том, как работает стейкинг на Solana в целом, посмотрите наше [Руководство по стейкингу](../staking).
 
-## Sending and Receiving SOL Tokens
+### Создать аккаунт стейкинга
+Вы можете использовать некоторые SOL токены в вашем кошельке для создания нового аккаунта стейкинга. На главной странице кошелька нажмите кнопку «Стейкинг» в верхней части страницы.  В верхнем углу - справа нажмите "Создать Аккаунт".  Введите сумму SOL, которую вы хотите использовать, чтобы пополнить свой новый аккаунт стейкинга.  Эта сумма будет снята с вашего кошелька и переведена на адрес аккаунта стекинга.  Не переводите весь баланс кошелька на аккаунт ставки, так как кошелек все еще используется для оплаты трансакционных сборов, связанных с вашим аккаунтом стейкинга.  Вы можете оставить хотя бы 1 SOL в аккаунте кошелька.
 
-### Receiving
+После того, как вы отправите и [подпишете транзакцию](#signing-a-transaction), вы увидите новый аккаунт в поле "Ваши аккаунты для стейкинга".
 
-To receive tokens into your wallet, someone must transfer some to your wallet's
-address. The address is displayed at the top-left on the screen, and you can
-click the Copy icon to copy the address and provide it to whoever is sending you
-tokens. If you hold tokens in a different wallet or on an exchange, you can
-withdraw to this address as well. Once the transfer is made, the balance shown
-on SolFlare should update within a few seconds.
+Аккаунты стейкинга, созданные на SolFlare, устанавливает адрес вашего кошелька как [уполномоченный для стейкинга и снятия токенов со стейкинга](../staking/stake-accounts#understanding-account-authorities) для вашего нового аккаунта, который предоставляет ключ вашего кошелька для подписи на любые транзакции, связанные с новым аккаунтом стейкинга.
 
-### Sending
+### Просмотр аккаунтов стейкинга
+На главной странице панели управления кошелька или на странице панели инструментов стейкинга, аккаунты стейкинга будут видны в окне "Ваши аккаунты стейкинга".  Аккаунты стейкинга существует на другом адресе, отличном от адреса вашего кошелька.
 
-Once you have some tokens at your wallet address, you can send them to any other
-wallet address or an exchange deposit address by clicking "Transfer SOL" in the
-upper-right corner. Enter the recipient address and the amount of SOL to
-transfer and click "Submit". You will be prompted to confirm the details of the
-transaction before you [use your key to sign the transaction](#signing-a-transaction)
-and then it will be submitted to the network.
+SolFlare будет находить и отображать любые аккаунты стейкинга в [выбранной сети](#select-a-network), для которой назначен адрес вашего кошелька в качестве [владельца стейкинга](../staking/stake-accounts#understanding-account-authorities). Аккаунты стейкинга, которые были созданы не в SolFlare, также буду показаны и управляемы до тех пор, пока кошелек в который вы вошли назначен в качестве уполномоченного для стейкинга.
 
-## Staking SOL Tokens
+### Делегирование токенов в аккаунте стейкинга
+После того, как вы [выбрали валидатора](../staking#select-a-validator), вы можете делегировать токены одного из ваших аккаунтов стейкинга.  На панели инструментов стейкинга нажмите «Делегировать» в правой части отображаемого аккаунта стейкинга. Выберите валидатора, которому вы хотите делегировать из выпадающего списка и нажмите Делегировать.
 
-SolFlare supports creating and managing stake accounts and delegations. To learn
-about how staking on Solana works in general, check out our
-[Staking Guide](../staking).
+Чтобы отменить делегирование токенов (деактивировать стейкинг), выполните подобные действия.  На странице Стейкинг справа от делегированного аккаунта стейкинга нажмите кнопку "Отменить делегирование" и следуйте инструкциям.
 
-### Create a Stake Account
+### Разделение Аккаунта Стейкинга
+Вы можете разделить существующий аккаунт стейкинга на два отдельных аккаунта.  Нажмите на адрес аккаунта стейкинга, управляемого вашим кошельком, и в строке Действия нажмите "Разделить".  Укажите количество SOL токенов, которые вы хотите разделить.  Это будет количество токенов на новом аккаунте стейкинга, а остаток на текущем аккаунте стейкинга будет уменьшен на ту же сумму.  Разделение вашего аккаунта стейкинга позволяет делегировать нескольким различным валидаторам разного количества токенов. Вы можете разделить аккаунт стейкинга столько раз, сколько захотите, для создания любого количества производных аккаунтов стейкинга.
 
-You can use some of the SOL tokens in your wallet to create a new stake account.
-From the wallet main page click "Staking" at the top of the page. In the upper-
-right, click "Create Account". Enter the amount of SOL you want to use to
-fund your new stake account. This amount will be withdrawn from your wallet
-and transfered to the stake account. Do not transfer your entire wallet balance
-to a stake account, as the wallet is still used to pay any transaction fees
-associated with your stake account. Consider leaving at least 1 SOL in your
-wallet account.
+## Подписание транзакции
+Каждый раз, когда вы отправляете транзакцию, такую как отправка токенов другому кошельку или делегирование стейка, для подписи транзакции необходимо использовать приватный ключ, чтобы она была принята сетью.
 
-After you submit and [sign the transaction](#signing-a-transaction) you will see
-your new stake account appear in the box labeled "Your Staking Accounts".
+### Использование файла ключей
+Если вы осуществляете доступ к кошельку с помощью файла ключей, то вам будет предложено ввести свой пароль каждый раз когда ключ необходим для подписания транзакции.
 
-Stake accounts created on SolFlare set your wallet address as the
-[staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities)
-for your new account, which gives your wallet's key the authority to sign
-for any transactions related to the new stake account.
-
-### View your Stake Accounts
-
-On the main Wallet dashboard page or on the Staking dashboard page, your stake
-accounts will be visible in the "Your Staking Accounts" box. Stake accounts
-exist at a different address from your wallet.
-
-SolFlare will locate any display all stake accounts on the
-[selected network](#select-a-network)
-for which your wallet address is assigned as the
-[stake authority](../staking/stake-accounts#understanding-account-authorities).
-Stake accounts that were created outside of SolFlare will also be displayed and
-can be managed as long as the wallet you logged in with is assigned as the stake
-authority.
-
-### Delegate tokens in a Stake Account
-
-Once you have [selected a validator](../staking#select-a-validator), you may
-delegate the tokens in one of your stake accounts to them. From the Staking
-dashboard, click "Delegate" at the right side of a displayed stake account.
-Select the validator you wish to delegate to from the drop down list and click
-Delegate.
-
-To un-delegate your staked tokens (also called deactivating your stake), the
-process is similar. On the Staking page, at the right side of a delegated stake
-account, click the "Undelegate" button and follow the prompts.
-
-### Split a Stake Account
-
-You may split an existing stake account into two stake accounts. Click on the
-address of a stake account controlled by your wallet, and under the Actions bar,
-click "Split". Specify the amount of SOL tokens you want to split. This will be
-the amount of tokens in your new stake account and your existing stake account
-balance will be reduced by the same amount. Splitting your stake account
-allows you to delegate to multiple different validators with different amounts
-of tokens. You may split a stake account as many times as you want, to create
-as many stake accounts as you want.
-
-## Signing a Transaction
-
-Any time you submit a transaction such as sending tokens to another wallet or
-delegating stake, you need to use your private key to sign the transaction so
-it will be accepted by the network.
-
-### Using a Keystore File
-
-If you accessed your wallet using a Keystore file, you will be prompted to enter
-your password any time the key is needed to sign a transaction.
-
-### Using a Ledger Nano
-
-If you accessed your wallet with a Ledger Nano, you will be prompted to
-confirm the pending transaction details on your device whenever the key is needed
-to sign. On the Nano, use the left and right buttons to view and confirm all of the
-transaction details. If everything looks correct, keep clicking the right button
-until the screen shows "Approve". Click both buttons to approve the transaction.
-If something looks incorrect, press the right button once more so the screen shows
-"Reject" and press both buttons to reject the transaction. After you approve
-or reject a transaction, you will see this reflected on the SolFlare page.
+### Использование Ledger Nano
+Если вы обратились к кошельку с Ledger Nano, вам будет предложено подтвердить ожидающие транзакции на вашем устройстве, каждый раз когда ключ нужен для подписи. На Nano, используйте левые и правые кнопки, чтобы просмотреть и подтвердить все детали транзакции.  Если все выглядит правильно, нажмите на правую кнопку до тех пор, пока экран не отобразит «Применить».  Нажмите на обе кнопки, чтобы подтвердить транзакцию. Если что-то выглядит неправильно, нажмите правую кнопку, чтобы экран показывал «Отклонить» и нажмите обе кнопки, чтобы отклонить транзакцию.  После того, как вы одобрите или отклоните транзакцию, вы увидите сообщение об этом на странице SolFlare.

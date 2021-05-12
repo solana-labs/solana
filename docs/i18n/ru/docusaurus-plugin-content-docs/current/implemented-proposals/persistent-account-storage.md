@@ -1,22 +1,23 @@
 ---
-title: Persistent Account Storage
+title: Постоянное хранилище аккаунтов
 ---
 
-## Persistent Account Storage
+## Постоянное хранилище аккаунтов
 
-The set of accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
+Набор аккаунтов представляет текущее вычисленное состояние всех транзакций, которые были обработаны валидатором. Каждый валидатор должен поддерживать весь этот набор. Каждый блок, предложенный сетью, представляет собой изменение этого набора, и поскольку каждый блок является потенциальной точкой отката, изменения должны быть обратимыми.
 
-Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
+Постоянные хранилища, такие как NVME, в 20-40 раз дешевле, чем DDR. Проблема с постоянным хранилищем заключается в том, что производительность записи и чтения намного ниже, чем у DDR, и необходимо внимательно следить за тем, как данные читаются или записываются. И чтение, и запись могут быть разделены между несколькими накопителями и запрашиваться параллельно. Этот дизайн предлагает структуру данных, которая допускает одновременное чтение и одновременную запись в хранилище. Операции записи оптимизируются с помощью структуры данных AppendVec, которая позволяет получать один доступ для записи, обеспечивая доступ множеству одновременных читателей. Индекс аккаунтов поддерживает указатель на точку, где аккаунт был добавлен в каждый форк, тем самым устраняя необходимость в явном чекпоинте состояния.
 
 ## AppendVec
 
-AppendVec is a data structure that allows for random reads concurrent with a single append-only writer. Growing or resizing the capacity of the AppendVec requires exclusive access. This is implemented with an atomic `offset`, which is updated at the end of a completed append.
+AppendVec - это структура данных, которая позволяет выполнять одновременное множественное чтение, с добавлением новых записей со стороны лишь одного процесса. Рост или изменение емкости AppendVec требует исключительного доступа. Это реализовано с помощью атомарного ` 
+смещения`, которое обновляется в конце завершенной опперации записи.
 
-The underlying memory for an AppendVec is a memory-mapped file. Memory-mapped files allow for fast random access and paging is handled by the OS.
+Основанная для AppendVec память - это файл, который отображен в памяти. Файлы с отображением в память обеспечивают быстрый произвольный доступ, а подкачка страниц обрабатывается ОС.
 
-## Account Index
+## Индексирование аккаунтов
 
-The account index is designed to support a single index for all the currently forked Accounts.
+Индекс аккаунта предназначен для поддержки единого индекса для всех текущих учетных записей находящихся в других форках.
 
 ```text
 type AppendVecId = usize;
@@ -28,7 +29,7 @@ struct AccountMap(Hashmap<Fork, (AppendVecId, u64)>);
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 ```
 
-The index is a map of account Pubkeys to a map of Forks and the location of the Account data in an AppendVec. To get the version of an account for a specific Fork:
+Индекс аккаунта соответствует значению его публичного ключа, конкретного форка и местоположения данных аккаунта в AppendVec. Для получения версии аккаунта для определенного Форка:
 
 ```text
 /// Load the account for the pubkey.
@@ -39,45 +40,57 @@ The index is a map of account Pubkeys to a map of Forks and the location of the 
 pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 ```
 
-The read is satisfied by pointing to a memory-mapped location in the `AppendVecId` at the stored offset. A reference can be returned without a copy.
+Чтение удовлетворяется указанием отображенного в память местоположения в ` AppendVecId` с сохраненным смещением. Ссылка может быть возвращена без копирования.
 
-### Root Forks
+### Корневые форки
 
-[Tower BFT](tower-bft.md) eventually selects a fork as a root fork and the fork is squashed. A squashed/root fork cannot be rolled back.
+[Tower BFT](tower-bft.md) в конечном итоге выбирает форк в качестве корневого форка и он сжимается. Нельзя откатиться обратно сжатый/корневой форк.
 
-When a fork is squashed, all accounts in its parents not already present in the fork are pulled up into the fork by updating the indexes. Accounts with zero balance in the squashed fork are removed from fork by updating the indexes.
+Когда форк сжимается, все аккаунты его предков, которые еще не присутствуют в форке, подтягиваются к форку путем обновления индексов. Аккаунты с нулевым балансом в жатом форке удаляются во время обновления индексов.
 
-An account can be _garbage-collected_ when squashing makes it unreachable.
+Аккаунт может быть подхвачен _сборщиком мусора_, если сжатие сделало его недоступным.
 
-Three possible options exist:
+Существуют три возможных варианта:
 
-- Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
-- Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
-- Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
+- Поддержка HashSet корневых форков. Ожидается, что один будет создаваться каждую секунду. Все дерево таких форков в дальнейшем может быть удалено сборщиком-мусора. В качестве альтернативы, если каждый форк хранит счетчик ссылок на аккаунты, сборка мусора может происходить в любое время при обновлении местоположения индекса.
+- Удаление из индекса всех обрезанных форков. Любые оставшиеся форки короче, чем кореневой, можно считать корневыми.
+- Перенос любого старого корневого форка в новый после сканирования индексов. Любые оставшиеся форки короче нового корневого форка могут быть удалены позже.
 
-## Garbage collection
+## Запись только с добавлением
 
-As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
+Все обновления в аккаунтах происходят только путем добавления новых записей. Новая версия для каждого обновления аккаунта хранится в AppendVec.
 
-To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
+Можно оптимизировать обновления в пределах одного форка, возвращая изменяемую ссылку на уже сохраненную учетную запись в форке. Bank уже отслеживает одновременный доступ к аккаунтам и гарантирует, что одновременная записи в конкретный аккаунт и чтение из него не произойдут в одном форке. Для поддержки этой операции AppendVec должен реализовать эту функцию:
 
-The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
+```text
+fn get_mut(&self, index: u64) -> &mut T;
+```
 
-## Index Recovery
+Это API позволяет одновременный смешанный доступ в регион пямяти по `индексу`. Оно полагается на Bank, чтобы гарантировать эксклюзивный доступ к данному индексу.
 
-Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
+## Сборка мусра
 
-To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
+Когда учетные записи обновляются, они перемещаются в конец AppendVec. Когда вместимость исчерпана, можно создать новый AppendVec и хранить в нем обновления. В конце концов ссылки на более старый AppendVec исчезнут, потому что все учетные записи были обновлены, а старый AppendVec могут быть удалены.
 
-## Snapshots
+Чтобы ускорить этот процесс, можно переместить Аккаунты, которые не обновлялись недавно, в начало нового AppendVec. Эта форма сборки мусора может выполняться без необходимости блокировки любой из структур данных, за исключением обновления индекса.
 
-To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
+Первоначальная реализация сборки мусора заключается в том, что после того, как все учетные записи в AppendVec становятся устаревшими версиями, он используется повторно. После добавления учетные записи не обновляются и не перемещаются.
 
-## Performance
+## Восстановление индекса
 
-- Append-only writes are fast. SSDs and NVMEs, as well as all the OS level kernel data structures, allow for appends to run as fast as PCI or NVMe bandwidth will allow \(2,700 MB/s\).
-- Each replay and banking thread writes concurrently to its own AppendVec.
-- Each AppendVec could potentially be hosted on a separate NVMe.
-- Each replay and banking thread has concurrent read access to all the AppendVecs without blocking writes.
-- Index requires an exclusive write lock for writes. Single-thread performance for HashMap updates is on the order of 10m per second.
-- Banking and Replay stages should use 32 threads per NVMe. NVMes have optimal performance with 32 concurrent readers or writers.
+Каждый поток Bank имеет эксклюзивный доступ к аккаунтам во время добавления, поскольку блокировки аккаунтов не могут быть сняты до тех пор, пока данные не будут зафиксированы. Но явного порядка для записи между отдельными файлами AppendVec не существует. Для создания порядка индекс поддерживает атомарный счетчик версий записи. Каждое дополнение к AppendVec записывает номер версии записи индекса для этого добавления в записи для Account в AppendVec.
+
+Для записи индексов, все файлы AppendVec могут читаться в любом порядке, и последняя записанная версия для каждого форка должна храниться в индексе.
+
+## Снепшоты
+
+Для создания снепшота основные файлы с отображением памяти в AppendVec должны быть сброшены на диск. Индекс также можно записать на диск.
+
+## Производительность
+
+- Запись только с добавлением является достаточно быстрой. SSD и NVME, а также все структуры данных ядра уровня ОС позволяют приложениям работать с такой скоростью, которую позволяет пропускная способность PCI или NVMe \(2,700 МБ/с\).
+- Каждый воспроизводящий и банковский поток записывают параллельно в свои собственные AppendVec файлы.
+- Каждый AppendVec потенциально может быть размещен на отдельных NVMe.
+- Каждый воспроизводящий и банковский поток имеют параллельный доступ ко всем AppendVecs файлам без блокировки возможности писать в них.
+- Индекс требует блокировки записи для добавления новой информации. Однопоточная производительность обновлений HashMap составляет порядка 10 млн в секунду.
+- Этапы Banking и Replay должны использовать 32 потока на каждый NVMe. NVM обладают оптимальной производительностью при одновременном чтении и записи 32 процессами.

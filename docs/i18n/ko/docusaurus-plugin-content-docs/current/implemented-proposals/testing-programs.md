@@ -1,53 +1,53 @@
 ---
-title: Testing Programs
+title: 테스트 프로그램
 ---
 
-Applications send transactions to a Solana cluster and query validators to confirm the transactions were processed and to check each transaction's result. When the cluster doesn't behave as anticipated, it could be for a number of reasons:
+애플리케이션은 트랜잭션을 Solana 클러스터로 보내고 유효성 검사기를 쿼리하여 트랜잭션이 처리되었는지 확인하고 각 트랜잭션의 결과를 확인합니다. 클러스터가 예상대로 작동하지 않는 경우 여러 가지 이유가있을 수 있습니다.
 
 - The program is buggy
-- The BPF loader rejected an unsafe program instruction
+- -BPF 로더가 안전하지 않은 프로그램 명령을 거부했습니다.
 - The transaction was too big
 - The transaction was invalid
-- The Runtime tried to execute the transaction when another one was accessing
+- -다른 트랜잭션이 액세스 중일 때 런타임이 트랜잭션을 실행하려고했습니다.
 
   the same account
 
-- The network dropped the transaction
+- -네트워크가 거래를 중단했습니다.
 - The cluster rolled back the ledger
-- A validator responded to queries maliciously
+- -밸리데이터이 악의적으로 질의에 응답
 
-## The AsyncClient and SyncClient Traits
+## AsyncClient 및 SyncClient 특성
 
-To troubleshoot, the application should retarget a lower-level component, where fewer errors are possible. Retargeting can be done with different implementations of the AsyncClient and SyncClient traits.
+문제를 해결하려면 응용 프로그램이 더 적은 오류가 발생할 수있는 하위 수준 구성 요소를 다시 대상으로 지정해야합니다. 대상 변경은 AsyncClient 및 SyncClient 특성의 다른 구현으로 수행 할 수 있습니다.
 
-Components implement the following primary methods:
+같은 계정
 
 ```text
 trait AsyncClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature>;
+    fn async_send_transaction (& self, transaction : Transaction)-> io :: Result <Signature>;
 }
 
 trait SyncClient {
-    fn get_signature_status(&self, signature: &Signature) -> Result<Option<transaction::Result<()>>>;
+    fn get_signature_status (& self, signature : & Signature)-> Result <Option <transaction :: Result <() >>>;
 }
 ```
 
-Users send transactions and asynchrounously and synchrounously await results.
+사용자는 트랜잭션을 전송하고 비동기식 및 동기식으로 결과를 기다립니다.
 
-### ThinClient for Clusters
+### 클러스터 용 ThinClient
 
-The highest level implementation, ThinClient, targets a Solana cluster, which may be a deployed testnet or a local cluster running on a development machine.
+가장 높은 수준의 구현 인 ThinClient는 배포 된 테스트 넷 또는 개발 머신에서 실행되는 로컬 클러스터 일 수있는 Solana 클러스터를 대상으로합니다.
 
-### TpuClient for the TPU
+### TPU 용 TpuClient
 
-The next level is the TPU implementation, which is not yet implemented. At the TPU level, the application sends transactions over Rust channels, where there can be no surprises from network queues or dropped packets. The TPU implements all "normal" transaction errors. It does signature verification, may report account-in-use errors, and otherwise results in the ledger, complete with proof of history hashes.
+다음 수준은 아직 구현되지 않은 TPU 구현입니다. TPU 수준에서 애플리케이션은 Rust 채널을 통해 트랜잭션을 전송합니다. 네트워크 대기열이나 패킷 손실로 인한 놀라움이 없습니다. TPU는 모든 '정상적인'트랜잭션 오류를 구현합니다. 서명 확인을 수행하고, 사용중인 계정 오류를보고 할 수 있으며, 그렇지 않으면 기록 해시 증명과 함께 원장이 생성됩니다.
 
-## Low-level testing
+## 저수준 테스트
 
-### BankClient for the Bank
+### 은행 용 BankClient
 
-Below the TPU level is the Bank. The Bank doesn't do signature verification or generate a ledger. The Bank is a convenient layer at which to test new on-chain programs. It allows developers to toggle between native program implementations and BPF-compiled variants. No need for the Transact trait here. The Bank's API is synchronous.
+TPU 수준 아래에는 은행이 있습니다. 은행은 서명 확인을하거나 원장을 생성하지 않습니다. The Bank는 새로운 온 체인 프로그램을 테스트 할 수있는 편리한 계층입니다. 이를 통해 개발자는 기본 프로그램 구현과 BPF로 컴파일 된 변형간에 전환 할 수 있습니다. 여기서 Transact 특성이 필요하지 않습니다. 은행의 API는 동기식입니다.
 
-## Unit-testing with the Runtime
+## 런타임을 사용한 단위 테스트
 
-Below the Bank is the Runtime. The Runtime is the ideal test environment for unit-testing. By statically linking the Runtime into a native program implementation, the developer gains the shortest possible edit-compile-run loop. Without any dynamic linking, stack traces include debug symbols and program errors are straightforward to troubleshoot.
+뱅크 아래에는 런타임이 있습니다. 런타임은 단위 테스트를위한 이상적인 테스트 환경입니다. 런타임을 기본 프로그램 구현에 정적으로 링크함으로써 개발자는 가능한 가장 짧은 편집-컴파일-실행 루프를 얻습니다. 동적 연결이 없으면 스택 추적에 디버그 기호가 포함되며 프로그램 오류는 문제 해결이 간단합니다.

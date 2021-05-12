@@ -1,60 +1,60 @@
 ---
-title: Reliable Vote Transmission
+title: إرسال التصويت الموثوق به (Reliable Vote Transmission)
 ---
 
-Validator votes are messages that have a critical function for consensus and continuous operation of the network. Therefore it is critical that they are reliably delivered and encoded into the ledger.
+أصوات المُدقّق (validator) هي الرسائل التي لها وظيفة حاسمة للإجماع (consensus) والتشغيل المُستمر للشبكة. لذلك، من الأهمية بمكان أن يتم تسليمها وترميزها في دفتر الأستاذ (ledger) بصورة موثوقة.
 
-## Challenges
+## التحديات (Challenges)
 
-1. Leader rotation is triggered by PoH, which is clock with high drift. So many nodes are likely to have an incorrect view if the next leader is active in realtime or not.
-2. The next leader may be easily be flooded. Thus a DDOS would not only prevent delivery of regular transactions, but also consensus messages.
-3. UDP is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger. Retransmittion could potentially cause an unintentional _thundering herd_ against the leader with a large number of validators. Worst case flood would be `(num_nodes * num_retransmits)`.
-4. Tracking if the vote has been transmitted or not via the ledger does not guarantee it will appear in a confirmed block. The current observed block may be unrolled. Validators would need to maintain state for each vote and fork.
+1. يتم تشغيل تبادل أدوار القائد (Leader) بواسطة PoH، وهي ساعة ذات إنجراف عالٍ. من المُحتمل أن يكون للعديد من العُقد (nodes) عرض غير صحيح إذا كان القائد التالي نشطًا في الوقت الفعلي أم لا.
+2. قد يكون من السهل إغراق القائد التالي. بالتالي فإن هجمات الشبكة المُوزعة (DDOS) لن يمنع فقط تسليم المُعاملات المُنتظمة، ولكن أيضًا رسائل الإجماع (consensus messages).
+3. الـ UDP غير موثوق به، ويتطلب بروتوكولنا غير المُتزامن إعادة إرسال أي رسالة يتم إرسالها حتى يتم مُلاحظتها في دفتر الأستاذ (ledger). يُمكن أن تتسبب إعادة الإرسال في حدوث _thundering herd_ غير مقصود ضد القائد الذي يحتوي على عدد كبير من المُدقّقين (validators). أسوأ حالة إغراق ستكون `(num_nodes * num_retransmits)`.
+4. لا يضمن تتبع ما إذا كان التصويت قد تم نقله أم لا عبر دفتر الأستاذ (ledger) أنه سيظهر في كتلة block مؤكدة. قد تكون الكتلة (block) المرصودة الحالية غير مُنضبطة. سيحتاج المُدقّقين (validators) إلى الحفاظ على الحالة لكل صوت وإنقسام أو شوكة (fork).
 
-## Design
+## التصميم (Design)
 
-1. Send votes as a push message through gossip. This ensures delivery of the vote to all the next leaders, not just the next future one.
-2. Leaders will read the Crds table for new votes and encode any new received votes into the blocks they propose. This allows for validator votes to be included in rollback forks by all the future leaders.
-3. Validators that receive votes in the ledger will add them to their local crds table, not as a push request, but simply add them to the table. This shortcuts the push message protocol, so the validation messages do not need to be retransmitted twice around the network.
-4. CrdsValue for vote should look like this `Votes(Vec<Transaction>)`
+1. إرسال الأصوات كرسالة دفع من خلال القيل والقال (gossip). هذا يضمن تسليم التصويت إلى جميع القادة (leaders) المُقبلين، وليس القادة المُستقبليين فقط.
+2. سيقرأ القادة جدول Crds للحصول على أصوات جديدة وترميز أي أصوات جديدة تم إستلامها في الكتل (blocks) التي يقترحونها. يسمح هذا بإدراج أصوات المُدقّقين (validators) في الإنقسامات أو الشوكات (forks) بالتراجع من قبل جميع قادة المستقبل.
+3. سيقوم لمُدقّقون (validators) الذين يتلقون الأصوات في دفتر الأستاذ (ledger) بإضافتهم إلى جدول المجموعات المحلي الخاص بهم، ليس كطلب دفع، ولكن ببساطة يُضيفهم إلى الجدول. يقوم هذا بإختصار بروتوكول رسائل الدفع، لذلك لا تحتاج رسائل المُصادقة (validation) إلى إعادة الإرسال مرتين حول الشبكة.
+4. يجب أن تبدو CrdsValue للتصويت هكذا `Votes(Vec<Transaction>)`
 
-Each vote transaction should maintain a `wallclock` in its data. The merge strategy for Votes will keep the last N set of votes as configured by the local client. For push/pull the vector is traversed recursively and each Transaction is treated as an individual CrdsValue with its own local wallclock and signature.
+يجب أن تحتفظ كل مُعاملة تصويت بساعة حائط `wallclock` في بياناتها. ستحتفظ إستراتيجية الدمج الخاصة بالأصوات بآخر N مجموعة من الأصوات كما تم تكوينها بواسطة العميل المحلي. بالنسبة للدفع / السحب، يتم إجتياز الناقل (vector) بشكل مُتكرر ويتم التعامل مع كل مُعاملة على أنها قيمة CrdsValue فردية مع ساعة الحائط (wallclock) والتوقيع المحلي الخاصين بها.
 
-Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transfered between any nodes.
+تم تصميم القيل والقال (gossip) لنشر كفاءة الحالة. يتم تجميع الرسائل التي يتم إرسالها من خلال دفع القيل والقال (gossip-push) ونشرها مع الحد الأدنى من الشجرة المُمتدة لبقية الشبكة. يتم إصلاح أي فشل جزئي في الشجرة بشكل فعال بإستخدام بروتوكول سحب القيل والقال (gossip-pull protocol) مع تقليل كمية البيانات المنقولة بين أي عُقد (nodes).
 
-## How this design solves the Challenges
+## كيف يحل هذا التصميم التحديات (How this design solves the Challenges)
 
-1. Because there is no easy way for validators to be in sync with leaders on the leader's "active" state, gossip allows for eventual delivery regardless of that state.
-2. Gossip will deliver the messages to all the subsequent leaders, so if the current leader is flooded the next leader would have already received these votes and is able to encode them.
-3. Gossip minimizes the number of requests through the network by maintaining an efficient spanning tree, and using bloom filters to repair state. So retransmit back-off is not necessary and messages are batched.
-4. Leaders that read the crds table for votes will encode all the new valid votes that appear in the table. Even if this leader's block is unrolled, the next leader will try to add the same votes without any additional work done by the validator. Thus ensuring not only eventual delivery, but eventual encoding into the ledger.
+1. نظرًا لعدم وجود طريقة سهلة للمُدقّقين (validators) ليكونوا مُتزامنين مع القادة (leader) في حالة القائد "النشط" ، فإن القيل والقال (gossip) يسمح بالتسليم النهائي بغض النظر عن تلك الحالة.
+2. سوف تقوم القيل والقال (gossip) بتسليم الرسائل إلى جميع القادة اللاحقين، لذلك إذا تم إغراق القائد الحالي، فسيكون الزعيم التالي قد حصل بالفعل على هذه الأصوات وسيكون قادرًا على تشفيرها.
+3. تقلل القيل والقال (gossip) عدد الطلبات عبر الشبكة عن طريق الحفاظ على شجرة مُمتدة فعالة، وإستخدام مُرشحات bloom لإصلاح الحالة. لذا فإن إعادة إرسال التراجع ليس ضروريًا ويتم تجميع الرسائل.
+4. سيقوم القادة الذين يقرؤون جدول crds للأصوات بترميز جميع الأصوات الصالحة الجديدة التي تظهر في الجدول. حتى إذا كانت كتلة (block) هذا القائد غير مُقيدة، سيحاول القائد التالي إضافة نفس الأصوات دون أي عمل إضافي يقوم به المُدقّق (validator). بالتالي ليس فقط ضمان التسليم في نهاية المطاف، ولكن في نهاية المطاف الترميز في دفتر الأستاذ (ledger).
 
-## Performance
+## الأداء (Performance)
 
-1. Worst case propagation time to the next leader is Log\(N\) hops with a base depending on the fanout. With our current default fanout of 6, it is about 6 hops to 20k nodes.
-2. The leader should receive 20k validation votes aggregated by gossip-push into MTU-sized shreds. Which would reduce the number of packets for 20k network to 80 shreds.
-3. Each validators votes is replicated across the entire network. To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes. `(20,000 nodes * 256 bytes * 5)`.
+1. أسوأ وقت لإنتشار الحالة للزعيم التالي هو قفزات سجل \ (N\) مع قاعدة إعتمادًا على التوزيع. مع إنتشارنا الإفتراضي الحالي المُكون من 6، فهو يتراوح بين 6 قفزات (hops) إلى 20 ألف عُقدة (nodes).
+2. يجب أن يتلقى القائد 20 ألفًا من أصوات المُصادقة (validation) المُجمعة عن طريق دفع القيل والقال (gossip-push) في أشلاء بحجم MTU. مما يُقلل عدد الحِزم (packets) لشبكة 20 ألفًا إلى 80 قطعة.
+3. يتم تكرار تصويت كل مُدقّق (validators) عبر الشبكة بالكامل. للحفاظ على قائمة إنتظار مُكونة من 5 أصوات سابقة، سيزداد جدول Crds بمقدار 25 megabytes. `(20,000 nodes * 256 bytes * 5)`.
 
-## Two step implementation rollout
+## طرح التنفيذ على خطوتين (Two step implementation rollout)
 
-Initially the network can perform reliably with just 1 vote transmitted and maintained through the network with the current Vote implementation. For small networks a fanout of 6 is sufficient. With small network the memory and push overhead is minor.
+يُمكن مبدئيًا للشبكة أن تعمل بشكل موثوق بمجرد نقل صوت واحد والحفاظ عليه من خلال الشبكة مع تنفيذ التصويت الحالي. بالنسبة للشبكات الصغيرة، يكفي عدد 6 توزيعات. مع الشبكة الصغيرة، تكون الذاكرة والدفع العلوي طفيفًا.
 
-### Sub 1k validator network
+### شبكة مُدقّق (validator) بعدد أقل من 1000
 
-1. Crds just maintains the validators latest vote.
-2. Votes are pushed and retransmitted regardless if they are appearing in the ledger.
-3. Fanout of 6.
-4. Worst case 256kb memory overhead per node.
-5. Worst case 4 hops to propagate to every node.
-6. Leader should receive the entire validator vote set in 4 push message shreds.
+1. تحتفظ الـ Crds بالتصويت الأخير فقط للمُدقّقين (validators).
+2. يتم دفع الأصوات وإعادة إرسالها بغض النظر عما إذا كانت تظهر في دفتر الأستاذ (ledger).
+3. توزيع (Fanout) من 6.
+4. أسوأ حالة سعة ذاكرة 256 كيلو بايت لكل عُقدة (node).
+5. أسوأ حالة عدد 4 قفزات (hops) للإنتشار إلى كل عُقدة (node).
+6. يجب أن يتلقى القائد مجموعة تصويت المُدقّق (validator) بالكامل في عدد 4 قطع من رسائل الدفع.
 
-### Sub 20k network
+### شبكة بعدد أقل من 20 ألف
 
-Everything above plus the following:
+كل ما ورد أعلاه بالإضافة إلى ما يلي:
 
-1. CRDS table maintains a vector of 5 latest validator votes.
-2. Votes encode a wallclock. CrdsValue::Votes is a type that recurses into the transaction vector for all the gossip protocols.
-3. Increase fanout to 20.
-4. Worst case 25mb memory overhead per node.
-5. Sub 4 hops worst case to deliver to the entire network.
-6. 80 shreds received by the leader for all the validator messages.
+1. يحتفظ جدول CRDS بناقلات من 5 أحدث أصوات المُصادقة.
+2. تقوم الأصوات بترميز ساعة حائط (wallclock). CrdsValue::Votes هو نوع يتكرر في ناقل المُعاملات لجميع بروتوكولات القيل والقال (gossip).
+3. زيادة التوزيع (Fanout) إلى 20.
+4. أسوأ حالة سعة ذاكرة 25mb لكل عُقدة (node).
+5. الأسوأ هي أقل من عدد 4 قفزات (hops) لتقديمها إلى الشبكة بالكامل.
+6. تلقى القائد 80 شظية لجميع رسائل المُدقّق (validator).

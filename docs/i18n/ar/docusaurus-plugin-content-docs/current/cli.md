@@ -1,22 +1,16 @@
 ---
-title: Command-line Guide
+title: دليل سطر الأوامر (Command-line Guide)
 ---
 
-In this section, we will describe how to use the Solana command-line tools to
-create a _wallet_, to send and receive SOL tokens, and to participate in
-the cluster by delegating stake.
+في هذا القسم، سنقوم بوصف كيفية استخدام أدوات سطر الأوامر في Solana لإنشاء محفظة __، لإرسال وتلقي رموز SOL ، وللمشاركة في المجموعة عن طريق تفويض حصة.
 
-To interact with a Solana cluster, we will use its command-line interface, also
-known as the CLI. We use the command-line because it is the first place the
-Solana core team deploys new functionality. The command-line interface is not
-necessarily the easiest to use, but it provides the most direct, flexible, and
-secure access to your Solana accounts.
+للتفاعل مع مجموعة Solana، سنقوم باستخدام واجهة سطر الأوامر، والمعروف أيضًا ب CLI. نحن نستخدم سطر الأوامر لأنه أول مكان يستخدم فيه فريق Soloana الأساسي وظائف جديدة. واجهة سطر الأوامر ليست بالضرورة أسهل استخداما، ولكنها توفر الوصول المباشر والمرونة و والوصول الآمن إلى حسابات Solana الخاصة بك.
 
-## Getting Started
+## لنبدأ
 
-To get started using the Solana Command Line (CLI) tools:
+للبدء باستخدام أدوات سطر أوامر Solana، (CLI):
 
-- [Install the Solana Tools](cli/install-solana-cli-tools.md)
-- [Choose a Cluster](cli/choose-a-cluster.md)
-- [Create a Wallet](wallet-guide/cli.md)
-- [Check out our CLI conventions](cli/conventions.md)
+- [تثبيت أدوات Solana](cli/install-solana-cli-tools.md)
+- [اختيار مجموعة](cli/choose-a-cluster.md)
+- [إنشاء محفظة](wallet-guide/cli.md)
+- [تحقق من اتفاقيات CLI الخاصة بنا](cli/conventions.md)

@@ -1,52 +1,52 @@
 ---
-title: Leader-to-Validator Transition
+title: Transición de líder a validador
 ---
 
-A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
+Un validador normalmente pasa su tiempo validando bloques. Sin embargo, si un staker delega su stake a un validador, de vez en cuando será seleccionado como un líder de _slot_. Como líder de una ranura, el validador es responsable de producir bloques durante una _ranura_ asignada. Una ranura tiene una duración de algún número de _ticks_ preconfigurados. La duración de esos ticks se calcula con una _Grabadora de PoH_ descrita más adelante en este documento.
 
 ## BankFork
 
-BankFork tracks changes to the bank state over a specific slot. Once the final tick has been registered the state is frozen. Any attempts to write to are rejected.
+BankFork rastrea los cambios en el estado del banco a través de una ranura específica. Una vez que el tick final ha sido registrado, el estado está congelado. Cualquier intento de escribir será rechazado.
 
-## Validator
+## Validador
 
-A validator operates on many different concurrent forks of the bank state until it generates a PoH hash with a height within its leader slot.
+Un validador opera en muchos forks concurrentes diferentes del estado del banco hasta que genera un hash PoH con una altura dentro de su ranura líder.
 
-## Slot Leader
+## Líder de la ranura
 
-A slot leader builds blocks on top of only one fork, the one it last voted on.
+Un líder de la ranura construye bloques en la parte superior de un fork, el que votó por última vez.
 
-## PoH Recorder
+## Grabador PoH
 
-Slot leaders and validators use a PoH Recorder for both estimating slot height and for recording transactions.
+Los líderes y validadores de las ranuras utilizan un Grabador PoH para estimar tanto la altura de la ranura como para grabar transacciones.
 
-### PoH Recorder when Validating
+### Grabadora PoH al validar
 
-The PoH Recorder acts as a simple VDF when validating. It tells the validator when it needs to switch to the slot leader role. Every time the validator votes on a fork, it should use the fork's latest [blockhash](../terminology.md#blockhash) to re-seed the VDF. Re-seeding solves two problems. First, it synchronizes its VDF to the leader's, allowing it to more accurately determine when its leader slot begins. Second, if the previous leader goes down, all wallclock time is accounted for in the next leader's PoH stream. For example, if one block is missing when the leader starts, the block it produces should have a PoH duration of two blocks. The longer duration ensures the following leader isn't attempting to snip all the transactions from the previous leader's slot.
+La Grabadora PoH actúa como un simple VDF al validar. Indica al validador cuándo debe cambiar al papel de líder de ranura. Cada vez que el validador vota en un fork, debe utilizar el último [blockhash](../terminology.md#blockhash) del fork para resembrar el VDF. La resiembra resuelve dos problemas. En primer lugar, sincroniza su VDF con el del líder, permitiéndole determinar con mayor precisión cuándo comienza su ranura de líder. En segundo lugar, si el líder anterior cae, todo el tiempo del reloj se tiene en cuenta en el flujo de PoH del siguiente líder. Por ejemplo, si falta un bloque cuando se inicia el líder, el bloque que produce debe tener una duración PoH de dos bloques. La duración más larga asegura que el siguiente líder no intente cortar todas las transacciones de la ranura del líder anterior.
 
-### PoH Recorder when Leading
+### Grabadora PoH al liderar
 
-A slot leader use the PoH Recorder to record transactions, locking their positions in time. The PoH hash must be derived from a previous leader's last block. If it isn't, its block will fail PoH verification and be rejected by the cluster.
+Un líder de la ranura utiliza la Grabadora de PoH para registrar transacciones, bloqueando sus posiciones a tiempo. El hash de PoH debe derivarse del último bloque de un líder anterior. Si no lo es, su bloque fallará la verificación PoH y será rechazado por el cluster.
 
-The PoH Recorder also serves to inform the slot leader when its slot is over. The leader needs to take care not to modify its bank if recording the transaction would generate a PoH height outside its designated slot. The leader, therefore, should not commit account changes until after it generates the entry's PoH hash. When the PoH height falls outside its slot any transactions in its pipeline may be dropped or forwarded to the next leader. Forwarding is preferred, as it would minimize network congestion, allowing the cluster to advertise higher TPS capacity.
+El grabador del PoH también sirve para informar al líder de la ranura cuando ésta ha terminado. El líder debe tener cuidado de no modificar su banco si el registro de la transacción genera una altura PoH fuera de su ranura designada. El líder, por lo tanto, no debe comprometer los cambios de cuenta hasta después de que genere el hash de la entrada. Cuando la altura del PoH cae fuera de su ranura cualquier transacción en su pipeline puede caer o ser enviada al siguiente líder. Se prefiere reenviar, ya que minimizaría la congestión de la red, permitiendo que el clúster anuncie una mayor capacidad de TPS.
 
-## Validator Loop
+## Bucle de validación
 
-The PoH Recorder manages the transition between modes. Once a ledger is replayed, the validator can run until the recorder indicates it should be the slot leader. As a slot leader, the node can then execute and record transactions.
+La Grabadora PoH gestiona la transición entre modos. Una vez que se repite un ledger, el validador puede correr hasta que la grabadora indique que debe ser el líder de la ranura. Como líder de una ranura, el nodo puede entonces ejecutar y registrar transacciones.
 
-The loop is synchronized to PoH and does a synchronous start and stop of the slot leader functionality. After stopping, the validator's TVU should find itself in the same state as if a different leader had sent it the same block. The following is pseudocode for the loop:
+El bucle se sincroniza con PoH y hace un inicio y una parada sincrónica de la funcionalidad de líder de la ranura. Después de parar, el TVU del validador debe encontrarse en el mismo estado que si un líder diferente lo había enviado el mismo bloque. Lo siguiente es el pseudocódigo para el bucle:
 
-1. Query the LeaderScheduler for the next assigned slot.
-2. Run the TVU over all the forks. 1. TVU will send votes to what it believes is the "best" fork. 2. After each vote, restart the PoH Recorder to run until the next assigned
+1. Consulta al Programador de Líderes para la siguiente ranura asignada.
+2. Ejecute el TVU sobre todos los forks. 1. TVU enviará votos a lo que cree que es el "mejor" fork. 2. Después de cada votación, reinicie el grabador PoH para que funcione hasta la siguiente ranura
 
-   slot.
+   asignada.
 
-3. When time to be a slot leader, start the TPU. Point it to the last fork the
+3. Cuando sea el momento de ser un líder de ranura, inicie el TPU. Apunta al ultimo fork
 
-   TVU voted on.
+   Que votó la TVU.
 
-4. Produce entries until the end of the slot. 1. For the duration of the slot, the TVU must not vote on other forks. 2. After the slot ends, the TPU freezes its BankFork. After freezing,
+4. Produce entradas hasta el final de la ranura. 1. Durante la duración del slot, el VTU no debe votar sobre otros forks. 2. Una vez finalizada la ranura, el TPU congela su BankFork. Después de congelar,
 
-   the TVU may resume voting.
+   el TVU puede reanudar la votación.
 
-5. Goto 1.
+5. Ir a 1.

@@ -1,70 +1,43 @@
 ---
-title: Tick Verification
+title: 진드기 확인
 ---
 
-This design the criteria and validation of ticks in a slot. It also describes
-error handling and slashing conditions encompassing how the system handles
-transmissions that do not meet these requirements.
+이것은 슬롯에서 틱의 기준과 검증을 설계합니다. 또한 시스템이 이러한 요구 사항을 충족하지 않는 전송을 처리하는 방법을 포함하는 오류 처리 및 슬래싱 조건에 대해서도 설명합니다.
 
-# Slot structure
+# 슬롯 구조
 
-Each slot must contain an expected `ticks_per_slot` number of ticks. The last
-shred in a slot must contain only the entirety of the last tick, and nothing
-else. The leader must also mark this shred containing the last tick with the
-`LAST_SHRED_IN_SLOT` flag. Between ticks, there must be `hashes_per_tick`
-number of hashes.
+각 슬롯에는 예상되는 'ticks_per_slot'틱 수가 포함되어야합니다. 슬롯의 마지막 조각에는 마지막 틱 전체 만 포함되어야하며 다른 것은 포함되지 않아야합니다. 리더는 'LAST_SHRED_IN_SLOT'플래그로 마지막 틱이 포함 된 파쇄를 표시해야합니다. 틱 사이에는`hashes_per_tick` 수의 해시가 있어야합니다.
 
-# Handling bad transmissions
+# 잘못된 전송 처리
 
-Malicious transmissions `T` are handled in two ways:
+악성 전송 'T'는 두 가지 방식으로 처리됩니다.
 
-1. If a leader can generate some erronenous transmission `T` and also some
-   alternate transmission `T'` for the same slot without violating any slashing
-   rules for duplicate transmissions (for instance if `T'` is a subset of `T`),
-   then the cluster must handle the possibility of both transmissions being live.
+1. 리더가 중복 전송에 대한 슬래싱 규칙을 위반하지 않고 동일한 슬롯에 대해 잘못된 전송 'T'와 대체 전송 'T'를 생성 할 수있는 경우 (예 : 'T'가 'T'의 하위 집합 인 경우) 이면 클러스터는 두 전송이 모두 활성화 될 가능성을 처리해야합니다.
 
-Thus this means we cannot mark the erronenous transmission `T` as dead because
-the cluster may have reached consensus on `T'`. These cases necessitate a
-slashing proof to punish this bad behavior.
+따라서 이는 클러스터가 'T'에 대한 합의에 도달했을 수 있기 때문에 잘못된 전송 'T'를 죽은 것으로 표시 할 수 없음을 의미합니다. 이러한 경우에는 이러한 나쁜 행동을 처벌하기 위해 획기적인 증거가 필요합니다.
 
-2. Otherwise, we can simply mark the slot as dead and not playable. A slashing
-   proof may or may not be necessary depending on feasibility.
+2. 그렇지 않으면 슬롯을 데드 상태로 표시하고 플레이 할 수 없음으로 표시 할 수 있습니다. 타당성에 따라 슬래싱 증명이 필요할 수도 있고 필요하지 않을 수도 있습니다.
 
-# Blockstore receiving shreds
+# 파쇄를받는 Blockstore
 
-When blockstore receives a new shred `s`, there are two cases:
+blockstore가 새로운 파쇄`s`를 받으면 두 가지 경우가 있습니다.
 
-1. `s` is marked as `LAST_SHRED_IN_SLOT`, then check if there exists a shred
-   `s'` in blockstore for that slot where `s'.index > s.index` If so, together `s`
-   and `s'` constitute a slashing proof.
+1. 실패 시나리오 :`LAST_SHRED_IN_SLOT` 플래그가있는 서명 된 파쇄를 틱으로 역 직렬화 할 수없는 경우 (비 직렬화에 실패하거나 항목으로 역 직렬화)이 슬롯을 사용 불능으로 표시합니다.
 
-2. Blockstore has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
-   with index `i`. If `s.index > i`, then together `s` and `s'`constitute a
-   slashing proof. In this case, blockstore will also not insert `s`.
+2. Blockstore는 인덱스`i`와 함께`LAST_SHRED_IN_SLOT`으로 표시된 파쇄`s`를 이미 수신했습니다. `s.index> i`이면`s`와`s'`가 함께 슬래싱 증명을 구성합니다. 이 경우 blockstore는`s`도 삽입하지 않습니다.
 
-3. Duplicate shreds for the same index are ignored. Non-duplicate shreds for
-   the same index are a slashable condition. Details for this case are covered
-   in the `Leader Duplicate Block Slashing` section.
+3. 동일한 인덱스에 대한 중복 파쇄는 무시됩니다. 동일한 인덱스에 대한 중복되지 않은 파쇄는 슬래시 가능한 조건입니다. 이 경우에 대한 자세한 내용은`Leader Duplicate Block Slashing` 섹션에서 다룹니다.
 
-# Replaying and validating ticks
+# 틱 재생 및 유효성 검사
 
-1. Replay stage replays entries from blockstore, keeping track of the number of
-   ticks it has seen per slot, and verifying there are `hashes_per_tick` number of
-   hashes between ticcks. After the tick from this last shred has been played,
-   replay stage then checks the total number of ticks.
+1. 재생 단계는 블록 저장소에서 항목을 재생하고 슬롯 당 확인한 틱 수를 추적하고 틱 사이에`hashes_per_tick '수의 해시가 있는지 확인합니다. 이 마지막 조각의 틱이 재생 된 후 재생 단계에서 총 틱 수를 확인합니다.
 
-Failure scenario 1: If ever there are two consecutive ticks between which the
-number of hashes is `!= hashes_per_tick`, mark this slot as dead.
+실패 시나리오 1 : 해시 수가`! = hashes_per_tick` 인 연속 틱이 두 번 있으면이 슬롯을 데드로 표시합니다.
 
-Failure scenario 2: If the number of ticks != `ticks_per_slot`, mark slot as
-dead.
+Failure scenario 2: If the number of ticks != `ticks_per_slot`, mark slot as dead.
 
-Failure scenario 3: If the number of ticks reaches `ticks_per_slot`, but we still
-haven't seen the `LAST_SHRED_IN_SLOT`, mark this slot as dead.
+실패 시나리오 2 : 틱 수가`ticks_per_slot`이면 슬롯을 데드로 표시합니다.
 
-2. When ReplayStage reaches a shred marked as the last shred, it checks if this
-   last shred is a tick.
+2. ReplayStage는 마지막 파쇄로 표시된 파쇄에 도달하면이 마지막 파쇄가 틱인지 확인합니다.
 
-Failure scenario: If the signed shred with the `LAST_SHRED_IN_SLOT` flag cannot
-be deserialized into a tick (either fails to deserialize or deserializes into
-an entry), mark this slot as dead.
+실패 시나리오 3 : 틱 수가`ticks_per_slot`에 도달했지만 여전히`LAST_SHRED_IN_SLOT`을 보지 못한 경우이 슬롯을 데드로 표시하십시오.

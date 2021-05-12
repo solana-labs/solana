@@ -1,113 +1,92 @@
 ---
-title: Install the Solana Tool Suite
+title: Instalar el paquete de herramientas de Solana
 ---
 
-There are multiple ways to install the Solana tools on your computer
-depending on your preferred workflow:
+Hay varias maneras de instalar las herramientas Solana en tu ordenador dependiendo de tu flujo de trabajo preferido:
 
-- [Use Solana's Install Tool (Simplest option)](#use-solanas-install-tool)
-- [Download Prebuilt Binaries](#download-prebuilt-binaries)
-- [Build from Source](#build-from-source)
+- [Usar la herramienta de instalación de Solana (opción más simple)](#use-solanas-install-tool)
+- [Descargar Binarios Preconstruidos](#download-prebuilt-binaries)
+- [Construir desde el origen](#build-from-source)
 
-## Use Solana's Install Tool
+## Usar la herramienta de instalación de Solana
 
 ### MacOS & Linux
 
-- Open your favorite Terminal application
+- Abra su aplicación de terminal favorita
 
-- Install the Solana release
-  [LATEST_SOLANA_RELEASE_VERSION](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION) on your
-  machine by running:
+- Instale la versión Solana [LATEST_SOLANA_RELEASE_VERSION](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION) en su máquina ejecutando:
 
 ```bash
 sh -c "$(curl -sSfL https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/install)"
 ```
 
-- You can replace `LATEST_SOLANA_RELEASE_VERSION` with the release tag matching
-  the software version of your desired release, or use one of the three symbolic
-  channel names: `stable`, `beta`, or `edge`.
+- Puede reemplazar `LATEST_SOLANA_RELEASE_VERSION` con la etiqueta de lanzamiento que coincida con la versión de software de su versión deseada, o utilice uno de los tres nombres simbólicos de canales: `estable`, `beta`, o `borde`.
 
-- The following output indicates a successful update:
+- La siguiente salida indica una actualización exitosa:
 
 ```text
-downloading LATEST_SOLANA_RELEASE_VERSION installer
-Configuration: /home/solana/.config/solana/install/config.yml
+descargando el instalador LATEST_SOLANA_RELEASE_VERSION
+Configuración: /home/solana/.config/solana/install/config.yml
 Active release directory: /home/solana/.local/share/solana/install/active_release
 * Release version: LATEST_SOLANA_RELEASE_VERSION
 * Release URL: https://github.com/solana-labs/solana/releases/download/LATEST_SOLANA_RELEASE_VERSION/solana-release-x86_64-unknown-linux-gnu.tar.bz2
-Update successful
+Actualización correcta
 ```
 
-- Depending on your system, the end of the installer messaging may prompt you
-  to
+- Dependiendo de su sistema, el final de la mensajería del instalador puede pedirle que
 
 ```bash
-Please update your PATH environment variable to include the solana programs:
+Actualice su variable de entorno PATH para incluir los programas solana:
 ```
 
-- If you get the above message, copy and paste the recommended command below
-  it to update `PATH`
-- Confirm you have the desired version of `solana` installed by running:
+- Si obtienes el mensaje anterior, copia y pega el comando recomendado a continuación para actualizar `PATH`
+- Confirma que tienes la versión deseada de `solana` instalada ejecutando:
 
 ```bash
 solana --version
 ```
 
-- After a successful install, `solana-install update` may be used to easily
-  update the Solana software to a newer version at any time.
+- Después de una instalación exitosa, `la actualización de solana-install` puede utilizarse para fácilmente actualizar el software de Solana a una versión más reciente en cualquier momento.
 
 ---
 
 ### Windows
 
-- Open a Command Prompt (`cmd.exe`) as an Administrator
+- Abrir un formulario de comando (`cmd.exe`) como administrador
 
-  - Search for Command Prompt in the Windows search bar. When the Command
-    Prompt app appears, right-click and select “Open as Administrator”.
-    If you are prompted by a pop-up window asking “Do you want to allow this app to
-    make changes to your device?”, click Yes.
+  - Buscar Comandos en la barra de búsqueda de Windows. Cuando aparezca el comando, haga clic con el botón derecho del ratón y seleccione “Abrir como administrador”. Si aparece una ventana emergente que pregunta "¿Quieres permitir que esta aplicación haga cambios en tu dispositivo?", haz clic en Sí.
 
-- Copy and paste the following command, then press Enter to download the Solana
-  installer into a temporary directory:
+- Copia y pega el siguiente comando, luego presiona Enter para descargar el instalador de Solana en un directorio temporal:
 
 ```bash
 curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
 ```
 
-- Copy and paste the following command, then press Enter to install the latest
-  version of Solana. If you see a security pop-up by your system, please select
-  to allow the program to run.
+- Copia y pega el siguiente comando, luego presiona Enter para instalar la última versión de Solana. Si ve una ventana emergente de seguridad por su sistema, seleccione permitir que el programa se ejecute.
 
 ```bash
 C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSION
 ```
 
-- When the installer is finished, press Enter.
+- Cuando haya terminado el instalador, presione Enter.
 
-- Close the command prompt window and re-open a new command prompt window as a
-  normal user
-  - Search for "Command Prompt" in the search bar, then left click on the
-    Command Prompt app icon, no need to run as Administrator)
-- Confirm you have the desired version of `solana` installed by entering:
+- Cierra la ventana del símbolo de espera de comandos y vuelve a abrir una nueva ventana del indicador de comandos como un usuario normal
+  - Busca "Comando Prompt" en la barra de búsqueda, luego haz clic con el botón izquierdo en el icono de la aplicación de Comando, sin necesidad de ejecutar como Administrador)
+- Confirma que tienes la versión deseada de `solana` instalada introduciendo:
 
 ```bash
 solana --version
 ```
 
-- After a successful install, `solana-install update` may be used to easily
-  update the Solana software to a newer version at any time.
+- Después de una instalación exitosa, `la actualización de solana-install` puede utilizarse para fácilmente actualizar el software de Solana a una versión más reciente en cualquier momento.
 
-## Download Prebuilt Binaries
+## Descargar Binarios Preconstruidos
 
-If you would rather not use `solana-install` to manage the install, you can
-manually download and install the binaries.
+Si prefiere no utilizar `solana-install` para gestionar la instalación, puede descargar e instalar manualmente los binarios.
 
 ### Linux
 
-Download the binaries by navigating to
-[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-download **solana-release-x86_64-unknown-linux-msvc.tar.bz2**, then extract the
-archive:
+Descarga los binarios navegando a [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), descarga **solana-release-x86_64-unknown-linux-msvc.tar.bz2**, luego extrae el archivo:
 
 ```bash
 tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
@@ -117,10 +96,7 @@ export PATH=$PWD/bin:$PATH
 
 ### MacOS
 
-Download the binaries by navigating to
-[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-download **solana-release-x86_64-apple-darwin.tar.bz2**, then extract the
-archive:
+Descarga los binarios navegando a [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), descarga **solana-release-x86_64-apple-darwin.tar.bz2**, luego extrae el archivo:
 
 ```bash
 tar jxf solana-release-x86_64-apple-darwin.tar.bz2
@@ -130,35 +106,26 @@ export PATH=$PWD/bin:$PATH
 
 ### Windows
 
-- Download the binaries by navigating to
-  [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-  download **solana-release-x86_64-pc-windows-msvc.tar.bz2**, then extract the
-  archive using WinZip or similar.
+- Descarga los binarios navegando a [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), descarga **solana-release-x86_64-pc-windows-msvc. ar.bz2**, luego extraiga el archivomusando WinZip o similar.
 
-- Open a Command Prompt and navigate to the directory into which you extracted
-  the binaries and run:
+- Abra un comando Prompt y vaya al directorio en el que extrajiste los binarios y ejecuta:
 
 ```bash
 cd solana-release/
 set PATH=%cd%/bin;%PATH%
 ```
 
-## Build From Source
+## Construir desde la fuente
 
-If you are unable to use the prebuilt binaries or prefer to build it yourself
-from source, navigate to
-[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-and download the **Source Code** archive. Extract the code and build the
-binaries with:
+Si no puedes usar los binarios preconstruidos o prefieres construirlo tú mismo desde el código fuente, navega a [https://github. om/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), y descarga el archivo **Código fuente**. Extrae el código y construye los binarios con:
 
 ```bash
 ./scripts/cargo-install-all.sh .
 export PATH=$PWD/bin:$PATH
 ```
 
-You can then run the following command to obtain the same result as with
-prebuilt binaries:
+Luego puede ejecutar el siguiente comando para obtener el mismo resultado que con binarios preconstruidos:
 
 ```bash
-solana-install init
+init solana-install
 ```

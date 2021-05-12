@@ -1,22 +1,17 @@
 ---
-title: Offline Transaction Signing
+title: Совершение оффлайн-транзакций
 ---
 
-Some security models require keeping signing keys, and thus the signing
-process, separated from transaction creation and network broadcast. Examples
-include:
+По некоторые соображениям безопасности, хранение приватных ключей, и следовательно произведения процесса подписи, может осуществляться отдельно от создания транзакции и отправки её в сеть. Например:
 
-- Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
-  signing device
+- Сбор подписей от сторон, которые географически удалены друг от друга, как в случае с [мультиподписью](cli/usage.md#multiple-witnesses)
+- Подписание транзакций с помощью устройства с [физической изоляцией от сетей](https://en.wikipedia.org/wiki/Air_gap_(networking))
 
-This document describes using Solana's CLI to separately sign and submit a
-transaction.
+В этом документе описывается использование интерфейса командной строки (CLI) Solana для раздельного осуществления подписи и отправки транзакции.
 
-## Commands Supporting Offline Signing
+## Команды поддерживающие оффлайн-подпись
 
-At present, the following commands support offline signing:
+В настоящее время следующие команды поддерживают оффлайн-подпись:
 
 - [`create-stake-account`](cli/usage.md#solana-create-stake-account)
 - [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
@@ -27,30 +22,23 @@ At present, the following commands support offline signing:
 - [`transfer`](cli/usage.md#solana-transfer)
 - [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
 
-## Signing Transactions Offline
+## Подпись транзакций оффлайн
 
-To sign a transaction offline, pass the following arguments on the command line
+Чтобы подписать транзакцию в оффлайн режиме, передайте следующие аргументы в командной строке
 
-1. `--sign-only`, prevents the client from submitting the signed transaction
-   to the network. Instead, the pubkey/signature pairs are printed to stdout.
-2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to
-   fill the transaction's `recent_blockhash` field. This serves a number of
-   purposes, namely:
-   _ Eliminates the need to connect to the network and query a recent blockhash
-   via RPC
-   _ Enables the signers to coordinate the blockhash in a multiple-signature
-   scheme
+1. `--sign-only`, предотвращает отправку клиентом подписанной транзакции в сеть. Вместо этого пары pubkey/signature выводятся в стандартный поток вывода.
+2. `--blockhash BASE58_HASH`, позволяет вызывающей стороне указать значение, используемое для заполнения поля `blockhash` в теле транзакции. Это служит нескольким целям, а именно: _ устраняет необходимость подключаться к сети и запрашивать хэш блока через RPC _ позволяет подписывающим сторонам координировать хеширование блоков в схеме с несколькими подписями
 
-### Example: Offline Signing a Payment
+### Пример: подписание оффлайн-платежа
 
-Command
+Команда
 
 ```bash
 solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     recipient-keypair.json 1
 ```
 
-Output
+Результат
 
 ```text
 
@@ -61,19 +49,16 @@ Signers (Pubkey=Signature):
 {"blockhash":"5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF","signers":["FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN"]}'
 ```
 
-## Submitting Offline Signed Transactions to the Network
+## Отправка подписанных оффлайн-транзакций в сеть
 
-To submit a transaction that has been signed offline to the network, pass the
-following arguments on the command line
+Чтобы отправить транзакцию, которая была подписана оффлайн, передайте следующие аргументы в командной строке
 
-1. `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
-2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
-   includes the pubkey/signature pairs directly in the transaction rather than
-   signing it with any local keypair(s)
+1. `--blockhash BASE58_HASH`, значение должно быть тем же, что использовалось для подписи
+2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, по одному для каждого оффлайн подписчика. Это включает пары pubkey / signature непосредственно в транзакцию, а не подписывает ее с помощью какой-либо локальной пары ключей
 
-### Example: Submitting an Offline Signed Payment
+### Пример: отправка оффлайн-платежа
 
-Command
+Команда
 
 ```bash
 solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
@@ -81,22 +66,19 @@ solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomS
     recipient-keypair.json 1
 ```
 
-Output
+Результат
 
 ```text
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
 ```
 
-## Offline Signing Over Multiple Sessions
+## Оффлайн-подпись в течении нескольких сессий
 
-Offline signing can also take place over multiple sessions. In this scenario,
-pass the absent signer's public key for each role. All pubkeys that were specified,
-but no signature was generated for will be listed as absent in the offline signing
-output
+Создание оффлайн-подписи так же может осуществляться в течении нескольких сессий. В этом сценарии передайте открытый ключ отсутствующей стороны, полученный в паре pubkey/signature, для каждой роли. Все ключи pubkeys, которые были указаны, но для которых не была сгенерирована подпись, будут указаны как отсутствующие в выходных данных оффлайн-подписи
 
-### Example: Transfer with Two Offline Signing Sessions
+### Пример: Перевод с двумя оффлайн-подписями
 
-Command (Offline Session #1)
+Команда (Сессия #1)
 
 ```text
 solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -106,7 +88,7 @@ solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --from 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Output (Offline Session #1)
+Результат (Сессия #1)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -116,7 +98,7 @@ Absent Signers (Pubkey):
   674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Command (Offline Session #2)
+Команда (Сессия #2)
 
 ```text
 solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -126,7 +108,7 @@ solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --fee-payer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Output (Offline Session #2)
+Результат (Сессия #2)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -136,7 +118,7 @@ Absent Signers (Pubkey):
   3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Command (Online Submission)
+Команда (Отправка онлайн, тот же пример)
 
 ```text
 solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -147,16 +129,12 @@ solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --signer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy=ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-Output (Online Submission)
+Результат (Отправка онлайн)
 
 ```text
 ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-## Buying More Time to Sign
+## Увеличение времени для подписи
 
-Typically a Solana transaction must be signed and accepted by the network within
-a number of slots from the blockhash in its `recent_blockhash` field (~2min at
-the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
-need.
+Как правило, транзакция Solana должна быть подписана и принята сетью в пределах определенного количества слотов, в соответствии с блокхэшем в поле `recent_blockhash` (~2 минуты на момент написания). Если создание подписи у вас заняло больше времени, то [транзакции с использованием Durable Nonce](offline-signing/durable-nonce.md) помогут решить эту проблему.

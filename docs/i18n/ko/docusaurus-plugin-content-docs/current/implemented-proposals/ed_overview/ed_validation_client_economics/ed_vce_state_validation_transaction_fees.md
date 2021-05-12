@@ -1,20 +1,20 @@
 ---
-title: State-validation Transaction Fees
+title: 주정부 검증 거래 수수료
 ---
 
 **Subject to change.**
 
-Each transaction sent through the network, to be processed by the current leader validation-client and confirmed as a global state transaction, must contain a transaction fee. Transaction fees offer many benefits in the Solana economic design, for example they:
+네트워크를 통해 전송 된 각 트랜잭션은 현재 리더 검증 클라이언트에 의해 처리되고 글로벌 상태 트랜잭션으로 확인되기 위해 트랜잭션 수수료가 포함되어야합니다. 거래 수수료는 Solana 경제 설계에 많은 이점을 제공합니다. 예를 들면 다음과 같습니다.
 
-- provide unit compensation to the validator network for the CPU/GPU resources necessary to process the state transaction,
-- reduce network spam by introducing real cost to transactions,
+- -상태 트랜잭션을 처리하는 데 필요한 CPU / GPU 리소스에 대해 유효성 검사기 네트워크에 단위 보상을 제공합니다.
+- -거래에 실제 비용을 도입하여 네트워크 스팸을 줄입니다.
 - open avenues for a transaction market to incentivize validation-client to collect and process submitted transactions in their function as leader,
-- and provide potential long-term economic stability of the network through a protocol-captured minimum fee amount per transaction, as described below.
+- -검증 클라이언트가 리더로서의 기능에 따라 제출 된 거래를 수집하고 처리하도록 인센티브를 부여하는 거래 시장의 열린 길, -아래에 설명 된대로 프로토콜로 캡처 한 트랜잭션 당 최소 수수료 금액을 통해 네트워크의 잠재적 인 장기적인 경제적 안정성을 제공합니다.
 
-Many current blockchain economies \(e.g. Bitcoin, Ethereum\), rely on protocol-based rewards to support the economy in the short term, with the assumption that the revenue generated through transaction fees will support the economy in the long term, when the protocol derived rewards expire. In an attempt to create a sustainable economy through protocol-based rewards and transaction fees, a fixed portion of each transaction fee is destroyed, with the remaining fee going to the current leader processing the transaction. A scheduled global inflation rate provides a source for rewards distributed to validation-clients, through the process described above.
+현재 많은 블록체인 경제 (예 : 비트 코인, 이더 리움)는 프로토콜 기반 보상에 의존하여 단기적으로 경제를 지원하며, 거래 수수료를 통해 생성 된 수익이 장기적으로 경제를 지원할 것이라는 가정하에 프로토콜이 파생 된 보상이 만료됩니다. 프로토콜 기반 보상과 거래 수수료를 통해 지속 가능한 경제를 창출하기 위해 각 거래 수수료의 고정 부분이 파괴되고 나머지 수수료는 거래를 처리하는 현재 리더에게 전달됩니다. 예정된 글로벌 인플레이션 율은 위에서 설명한 프로세스를 통해 검증 클라이언트에게 분배되는 보상의 출처를 제공합니다.
 
-Transaction fees are set by the network cluster based on recent historical throughput, see [Congestion Driven Fees](../../transaction-fees.md#congestion-driven-fees). This minimum portion of each transaction fee can be dynamically adjusted depending on historical gas usage. In this way, the protocol can use the minimum fee to target a desired hardware utilization. By monitoring a protocol specified gas usage with respect to a desired, target usage amount, the minimum fee can be raised/lowered which should, in turn, lower/raise the actual gas usage per block until it reaches the target amount. This adjustment process can be thought of as similar to the difficulty adjustment algorithm in the Bitcoin protocol, however in this case it is adjusting the minimum transaction fee to guide the transaction processing hardware usage to a desired level.
+거래 수수료는 최근 기록 처리량을 기반으로 네트워크 클러스터에 의해 설정됩니다. \[혼잡 주도 수수료\] (../../ transaction-fees.md # congestion-driven-fees)를 참조하십시오. 각 거래 수수료의 최소 부분은 과거 가스 사용량에 따라 동적으로 조정될 수 있습니다. 이러한 방식으로 프로토콜은 최소 요금을 사용하여 원하는 하드웨어 사용률을 목표로 할 수 있습니다. 원하는 목표 사용량과 관련하여 프로토콜에 지정된 가스 사용량을 모니터링함으로써 최소 요금을 높이거나 낮출 수 있으며, 이는 차례로 목표 금액에 도달 할 때까지 블록 당 실제 가스 사용량을 낮추거나 높여야합니다. 이 조정 프로세스는 비트 코인 프로토콜의 난이도 조정 알고리즘과 유사하다고 생각할 수 있지만이 경우 최소 트랜잭션 수수료를 조정하여 트랜잭션 처리 하드웨어 사용을 원하는 수준으로 안내합니다.
 
-As mentioned, a fixed-proportion of each transaction fee is to be destroyed. The intent of this design is to retain leader incentive to include as many transactions as possible within the leader-slot time, while providing an inflation limiting mechanism that protects against "tax evasion" attacks \(i.e. side-channel fee payments\)[1](../ed_references.md).
+앞서 언급했듯이 각 거래 수수료의 고정 비율은 파기됩니다. 이 설계의 목적은 리더 슬롯 시간 내에 최대한 많은 거래를 포함하도록 리더 인센티브를 유지하는 동시에 "탈세"공격으로부터 보호하는 인플레이션 제한 메커니즘을 제공하는 것입니다 \ (예 : 부 채널 수수료 지불 \) \[1 \] (../ ed_references.md).
 
-Additionally, the burnt fees can be a consideration in fork selection. In the case of a PoH fork with a malicious, censoring leader, we would expect the total fees destroyed to be less than a comparable honest fork, due to the fees lost from censoring. If the censoring leader is to compensate for these lost protocol fees, they would have to replace the burnt fees on their fork themselves, thus potentially reducing the incentive to censor in the first place.
+또한, 소각 된 수수료는 포크 선택시 고려 사항이 될 수 있습니다. 악의적 인 검열 리더가있는 역사증명 포크의 경우 검열로 인해 손실 된 요금으로 인해 파괴 된 총 요금이 정직한 포크보다 적을 것으로 예상됩니다. 검열 리더가 이러한 손실 된 프로토콜 수수료를 보상하려면 포크 자체에서 소각 된 수수료를 교체해야하므로 처음에 검열에 대한 인센티브를 잠재적으로 줄일 수 있습니다.

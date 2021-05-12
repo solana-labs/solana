@@ -1,77 +1,37 @@
 ---
-title: Bank Timestamp Correction
+title: Corrección de la marca de tiempo del banco
 ---
 
-Each Bank has a timestamp that is stashed in the Clock sysvar and used to assess
-time-based stake account lockups. However, since genesis, this value has been
-based on a theoretical slots-per-second instead of reality, so it's quite
-inaccurate. This poses a problem for lockups, since the accounts will not
-register as lockup-free on (or anytime near) the date the lockup is set to
-expire.
+Cada banco tiene una marca de tiempo que se almacena en el reloj sysvar y se utiliza para evaluar bloqueos de cuenta de acciones basados en el tiempo. Sin embargo, como el génesis, este valor ha estado basado en una ranura teórica-por-segundo en lugar de la realidad, así que es bastante inpreciso. Esto plantea un problema para los bloqueos, ya que las cuentas no se registrarán como sin bloqueo en (o en cualquier momento cercano) la fecha en la que el bloqueo se establece en expirar.
 
-Block times are already being estimated to cache in Blockstore and long-term
-storage using a [validator timestamp oracle](validator-timestamp-oracle.md);
-this data provides an opportunity to align the bank timestamp more closely with
-real-world time.
+Los tiempos de bloque ya se están calculando para almacenar caché en Blockstore y almacenamiento a largo plazo usando un [oráculo de fecha del validador](validator-timestamp-oracle.md); estos datos proporcionan una oportunidad para alinear la marca de tiempo del banco más estrechamente con tiempo del mundo real.
 
-The general outline of the proposed implementation is as follows:
+El esquema general de la aplicación propuesta es el siguiente:
 
-- Correct each Bank timestamp using the validator-provided timestamp.
-- Update the validator-provided timestamp calculation to use a stake-weighted
-  median, rather than a stake-weighted mean.
-- Bound the timestamp correction so that it cannot deviate too far from the
-  expected theoretical estimate
+- Corregir cada marca de tiempo del Banco usando la marca de tiempo proporcionada por el validador.
+- Actualizar el cálculo de la marca de tiempo proporcionada por el validador para usar una mediana ponderada por la apuesta, en lugar de una media ponderada por la apuesta.
+- Se ha vinculado la corrección de la marca de tiempo para que no pueda desviarse demasiado lejos de la estimación teórica esperada
 
-## Timestamp Correction
+## Corrección de marca de tiempo
 
-On every new Bank, the runtime calculates a realistic timestamp estimate using
-validator timestamp-oracle data. The Bank timestamp is corrected to this value
-if it is greater than or equal to the previous Bank's timestamp. That is, time
-should not ever go backward, so that locked up accounts may be released by the
-correction, but once released, accounts can never be relocked by a time
-correction.
+En cada nuevo Banco, el tiempo de ejecución calcula una estimación realista de la marca de tiempo usando datos de timestamp-oracle del validador. La marca de tiempo del Banco se corrige a este valor si es mayor o igual a la marca de tiempo anterior del Banco. Es decir, el tiempo no debería volver atrás, para que las cuentas bloqueadas puedan ser liberadas por la corrección, pero una vez liberadas, las cuentas nunca pueden ser rebloqueadas por un tiempo de corrección.
 
-### Calculating Stake-Weighted Median Timestamp
+### Cálculo de la marca de tiempo mediana ponderada por participación
 
-In order to calculate the estimated timestamp for a particular Bank, the runtime
-first needs to get the most recent vote timestamps from the active validator
-set. The `Bank::vote_accounts()` method provides the vote accounts state, and
-these can be filtered to all accounts whose most recent timestamp was provided
-within the last epoch.
+Para calcular la fecha estimada de un banco en particular, el tiempo de ejecución primero necesita obtener las marcas de tiempo de votación más recientes del validador activo. El método `Bank::vote_accounts()` proporciona el estado de las cuentas de voto, y estos pueden ser filtrados a todas las cuentas cuyo timestamp más reciente fue proporcionado dentro del último epoch.
 
-From each vote timestamp, an estimate for the current Bank is calculated using
-the epoch's target ns_per_slot for any delta between the Bank slot and the
-timestamp slot. Each timestamp estimate is associated with the stake delegated
-to that vote account, and all the timestamps are collected to create a
-stake-weighted timestamp distribution.
+Desde cada marca de tiempo de voto, una estimación para el Banco actual se calcula usando el objetivo ns_per_slot del epoch para cualquier delta entre la ranura del Banco y la ranura de la marca de tiempo. Cada estimación de marca de tiempo está asociada con la participación delegada a esa cuenta de voto, y todas las marcas de tiempo se recopilan para crear una distribución de la marca de tiempo ponderada por participación.
 
-From this set, the stake-weighted median timestamp -- that is, the timestamp at
-which 50% of the stake estimates a greater-or-equal timestamp and 50% of the
-stake estimates a lesser-or-equal timestamp -- is selected as the potential
-corrected timestamp.
+A partir de este conjunto, la marca de tiempo mediana ponderada por participación, es decir, la marca de tiempo en cuyo 50% de la participación estima una marca de tiempo mayor o igual y el 50% de la la participación estima una marca de tiempo menor o igual: se selecciona como el potencial marca de tiempo corregida.
 
-This stake-weighted median timestamp is preferred over the stake-weighted mean
-because the multiplication of stake by proposed timestamp in the mean
-calculation allows a node with very small stake to still have a large effect on
-the resulting timestamp by proposing a timestamp that is very large or very
-small. For example, using the previous `calculate_stake_weighted_timestamp()`
-method, a node with 0.00003% of the stake proposing a timestamp of `i64::MAX`
-can shift the timestamp forward 97k years!
+Esta marca de tiempo mediana ponderada por la apuesta, es preferible sobre la media ponderada por la apuesta, porque la multiplicación de la participación por marca de tiempo propuesta en el cálculo del promedio permite que un nodo con una apuesta muy pequeña siga teniendo un efecto grande en la marca de tiempo resultante proponiendo una marca de tiempo muy grande o muy pequeña. Por ejemplo, utilizando el método anterior `calculate_stake_weighted_timestamp()`, un nodo con 0. ¡0003% de la apuesta proponiendo una marca de tiempo de `i64::MAX` puede desplazar la marca de tiempo hacia adelante 97k años!
 
-### Bounding Timestamps
+### Marcas de tiempo delimitadas
 
-In addition to preventing time moving backward, we can prevent malicious
-activity by bounding the corrected timestamp to an acceptable level of deviation
-from the theoretical expected time.
+Además de prevenir el movimiento del tiempo hacia atrás, podemos prevenir la actividad maliciosa limitando la marca de tiempo corregida a un nivel aceptable de desviación del tiempo esperado teóricamente.
 
-This proposal suggests that each timestamp be allowed to deviate up to 25% from
-the expected time since the start of the epoch.
+Esta propuesta sugiere que se permita que cada marca de tiempo se desvíe hasta un 25% de el tiempo esperado desde el inicio de la época.
 
-In order to calculate the timestamp deviation, each Bank needs to log the
-`epoch_start_timestamp` in the Clock sysvar. This value is set to the
-`Clock::unix_timestamp` on the first slot of each epoch.
+Para calcular la desviación de la marca de tiempo, cada banco necesita registrar la `epoch_start_timestamp` en el sysvar de Reloj. Este valor está establecido en `Clock::unix_timestamp` en la primera ranura de cada epoch.
 
-Then, the runtime compares the expected elapsed time since the start of the
-epoch with the proposed elapsed time based on the corrected timestamp. If the
-corrected elapsed time is within +/- 25% of expected, the corrected timestamp is
-accepted. Otherwise, it is bounded to the acceptable deviation.
+Luego, el tiempo de ejecución compara el tiempo esperado transcurrido desde el inicio del epoch con el tiempo de ejecución propuesto basado en la marca de tiempo corregida. Si el tiempo corregido está dentro de +/- 25% del esperado, la marca de tiempo corregida es aceptada. De lo contrario, se limita a la desviación aceptable.

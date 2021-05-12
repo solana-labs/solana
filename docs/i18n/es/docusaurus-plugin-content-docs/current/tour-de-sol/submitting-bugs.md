@@ -1,7 +1,7 @@
 ---
-title: Submitting Bugs
+title: Enviando bugs
 ---
 
-Please submit all bugs and feedback as [issues in this Github repo](https://github.com/solana-labs/solana/issues).
+Por favor, envíe todos los errores y comentarios como [problemas en este repositorio de Github](https://github.com/solana-labs/solana/issues).
 
-Given the fast pace of communication in the [Discord channels](useful-links.md), it’s likely issues reported in them may be lost in the information flow. Filing the issues in the Github repo is the only way to ensure the issues get logged and addressed.
+Dado el rápido ritmo de comunicación en los [canales de Discord](useful-links.md), es probable que los problemas reportados en ellos se pierdan en el flujo de información. La única forma de asegurarse de que los problemas se loguean y se resuelvan es archivar los problemas en el repositorio de Github.

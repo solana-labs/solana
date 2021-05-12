@@ -1,8 +1,25 @@
 ---
-title: How To Register
+title: كيفية التسجيل
 ---
 
-For registration, KYC, and the participation agreement, please visit the
-validator registration page on the Solana.com website:
+#### (1) إستمارة التسجيل
 
-https://solana.com/validator-registration
+[أرسل إستمارة التسجيل هنا](https://forms.gle/gQYLozj5u7yKU3HG6)
+
+#### 2) تعرف على عميلك أو ما يعرف إختصارا بـ KYC ومُكافحة غسيل الأموال أو ما يعرف إختصارا بـ AML (عبر منصة Coinlist)
+
+[سجل في KYC / AML + للحصول على إتفاقية المُشاركة هنا](https://tsm.coinlist.co/solana-staking)
+
+_إذا كنت قد أكملت KYC / AML سابقًا لـ SLP أو TdS مع نفس الكيان / الفرد، فلن تحتاج إلى مُتابعة هذا مرة أخرى. لا نقبل المواطني القاطنين في الولايات المتحدة. الكيانات أو الأفراد (entities or individuals)._
+
+#### 3) إنضم إلى قناتنا في الـ Discord
+
+مطلوب **Required** لجميع مُدقّقي Tour de SOL، لأن هذه هي قناة الإتصال الأساسية لدينا: https://discord.gg/N3mqAfa
+
+### الخطوات التالية
+
+- تحقق من وثائقنا لبدء التعرف على كيفية تشغيل مُدقّق [Run a Validator](../../running-validator.md)
+
+- بعد الانتهاء من التسجيل وتعرف على عميلك (KYC)، ستتلقى رسالة بريد إلكتروني تحتوي على تعليمات لإنهاء عملية التسجيل.
+
+- نراكم على قناة Discord الخاصة بنا!

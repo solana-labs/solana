@@ -1,22 +1,22 @@
 ---
-title: Persistent Account Storage
+title: Almacenamiento de cuenta persistente
 ---
 
-## Persistent Account Storage
+## Almacenamiento de cuenta persistente
 
-The set of accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
+El conjunto de cuentas representa el estado computado actual de todas las transacciones que han sido procesadas por un validador. Cada validador necesita mantener este conjunto completo. Cada bloque propuesto por la red representa un cambio en este conjunto, y dado que cada bloque es un punto de cancelación potencial, los cambios deben ser reversibles.
 
-Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
+Almacenamiento persistente como NVMEs son entre 20 y 40 veces más baratas que DDR. El problema con el almacenamiento persistente es que el rendimiento de escritura y lectura es mucho más lento que el DDR y hay que tener cuidado en cómo se lee o escribe los datos. Tanto las lecturas como las escrituras se pueden dividir entre múltiples unidades de almacenamiento y acceder en paralelo. Este diseño propone una estructura de datos que permite lecturas simultáneas y escrituras simultáneas de almacenamiento. Las escrituras están optimizadas usando una estructura de datos AppendVec, que permite a un solo escritor añadir mientras permite el acceso a muchos lectores simultáneos. El índice de cuentas mantiene un puntero a un lugar donde la cuenta fue añadida a cada bifurcación, eliminando así la necesidad de un control explícito del estado.
 
 ## AppendVec
 
-AppendVec is a data structure that allows for random reads concurrent with a single append-only writer. Growing or resizing the capacity of the AppendVec requires exclusive access. This is implemented with an atomic `offset`, which is updated at the end of a completed append.
+AppendVec es una estructura de datos que permite lecturas aleatorias simultáneas con un solo escritor de anexo. Crecer o redimensionar la capacidad del AppendVec requiere acceso exclusivo. Esto se implementa con un ` offset ` atómico, que se actualiza al final de un anexo completo.
 
-The underlying memory for an AppendVec is a memory-mapped file. Memory-mapped files allow for fast random access and paging is handled by the OS.
+La memoria subyacente de un AppendVec es un archivo mapeado en memoria. Los archivos mapeados por memoria permiten un acceso rápido al azar y la paginación es manejada por el sistema operativo.
 
-## Account Index
+## Índice de cuenta
 
-The account index is designed to support a single index for all the currently forked Accounts.
+El índice de cuenta está diseñado para soportar un solo índice para todas las cuentas actualmente bifurcadas.
 
 ```text
 type AppendVecId = usize;
@@ -28,56 +28,68 @@ struct AccountMap(Hashmap<Fork, (AppendVecId, u64)>);
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 ```
 
-The index is a map of account Pubkeys to a map of Forks and the location of the Account data in an AppendVec. To get the version of an account for a specific Fork:
+El índice es un mapa de cuenta Pubkeys a un mapa de bifurcaciones y la ubicación de los datos de la cuenta en un AppendVec. Para obtener la versión de una cuenta de una bifurcacion en específico:
 
 ```text
-/// Load the account for the pubkey.
-/// This function will load the account from the specified fork, falling back to the fork's parents
-/// * fork - a virtual Accounts instance, keyed by Fork.  Accounts keep track of their parents with Forks,
-///       the persistent store
-/// * pubkey - The Account's public key.
-pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
+/// Carga la cuenta para el pubkey.
+/// Esta función cargará la cuenta desde la bifurcación especificada, volviendo a los padres de la bifurcación
+/// * fork: una instancia de cuentas virtuales, con clave de Fork.  Las cuentas mantienen un seguimiento de sus padres con bifurcaciones,
+/// la tienda persistente
+/// * pubkey - La clave pública de la cuenta.
+pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Opción<&Cuenta>
 ```
 
-The read is satisfied by pointing to a memory-mapped location in the `AppendVecId` at the stored offset. A reference can be returned without a copy.
+La lectura está satisfecha al apuntar a una ubicación mapeada en la memoria en el `AppendVecId` en el desplazamiento almacenado. Una referencia puede ser devuelta sin una copia.
 
-### Root Forks
+### Bifurcaciones de root
 
-[Tower BFT](tower-bft.md) eventually selects a fork as a root fork and the fork is squashed. A squashed/root fork cannot be rolled back.
+[Tower BFT](tower-bft.md) eventualmente selecciona una bifurcación como bifurcación raíz y la bifurcación es aplastada. Una bifurcación aplastada / raíz no se puede deshacer.
 
-When a fork is squashed, all accounts in its parents not already present in the fork are pulled up into the fork by updating the indexes. Accounts with zero balance in the squashed fork are removed from fork by updating the indexes.
+Cuando una bifurcación es aplastada, todas las cuentas en sus padres que aún no están presentes en la bifurcación son arrastradas a la bifurcación actualizando los índices. Las cuentas con saldo cero en la bifurcación aplastada se eliminan de la bifurcación actualizando los índices.
 
-An account can be _garbage-collected_ when squashing makes it unreachable.
+Una cuenta puede ser _garbage-collected_ cuando el aplastamiento la hace inaccesible.
 
-Three possible options exist:
+Existen tres opciones posibles:
 
-- Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
-- Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
-- Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
+- Mantener un HashSet de bifurcaciones de root. Se espera que se cree una cada segundo. Todo el árbol puede ser recolectado más tarde. Alternativamente, si cada bifurcación mantiene un recuento de cuentas de referencia, la recolección de basura podría ocurrir cada vez que se actualice una ubicación de índice.
+- Retire las bifurcaciones podadas del índice. Cualquier bifurcación restante menor en número que la raíz se puede considerar root.
+- Escanea el índice, migra cualquier raíz antigua a la nueva. Cualquier bifurcación restante inferior a la nueva raíz se puede eliminar más tarde.
 
-## Garbage collection
+## Escrituras solo para anexar
 
-As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
+Todas las actualizaciones a los clientes ocurren como actualizaciones de sólo agregar. Para cada actualización de cuenta, se almacena una nueva versión en el AppendVec.
 
-To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
+Es posible optimizar las actualizaciones dentro de una sola bifurcación devolviendo una referencia mutable a una cuenta ya almacenada en una bifurcación. El Banco ya rastrea el acceso concurrente de cuentas y garantiza que una escritura en una bifurcación de cuenta específica no será simultánea con una lectura en una cuenta en esa bifurcación. Para apoyar esta operación, AppendVec debe implementar esta función:
 
-The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
+```text
+fn get_mut(&self index: u64) -> &mut T;
+```
 
-## Index Recovery
+Esta API permite el acceso mutable concurrente a una región de memoria en `index`. Depende del Banco para garantizar el acceso exclusivo a ese índice.
 
-Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
+## Recolección de basura
 
-To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
+A medida que se actualizan las cuentas, se mueven al final del AppendVec. Una vez que se haya agotado la capacidad, se puede crear un nuevo AppendVec y almacenar las actualizaciones allí. Eventualmente las referencias a un AppendVec anterior desaparecerán porque todas las cuentas han sido actualizadas, y el AppendVec antiguo puede ser eliminado.
 
-## Snapshots
+Para acelerar este proceso, es posible mover cuentas que no han sido actualizadas recientemente al frente de un nuevo AppendVec. Esta forma de recolección de basura se puede hacer sin necesidad de bloqueos exclusivos para ninguna de las estructuras de datos excepto para la actualización del índice.
 
-To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
+La implementación inicial para la recolección de basura es que una vez que todas las cuentas de un AppendVec se convierten en versiones obsoletas, se reutiliza. Las cuentas no se actualizan o se mueven una vez adjuntadas.
 
-## Performance
+## Recuperación de índices
 
-- Append-only writes are fast. SSDs and NVMEs, as well as all the OS level kernel data structures, allow for appends to run as fast as PCI or NVMe bandwidth will allow \(2,700 MB/s\).
-- Each replay and banking thread writes concurrently to its own AppendVec.
-- Each AppendVec could potentially be hosted on a separate NVMe.
-- Each replay and banking thread has concurrent read access to all the AppendVecs without blocking writes.
-- Index requires an exclusive write lock for writes. Single-thread performance for HashMap updates is on the order of 10m per second.
-- Banking and Replay stages should use 32 threads per NVMe. NVMes have optimal performance with 32 concurrent readers or writers.
+Cada hilo bancario tiene acceso exclusivo a las cuentas durante el anexo, ya que las cuentas bloqueadas no pueden ser liberadas hasta que los datos sean confirmados. Pero no hay un orden explícito de escrituras entre los archivos AppendVec separados. Para crear una orden, el índice mantiene un contador atómico de versiones de escritura. Cada anexo al AppendVec registra el número de versión de escritura del índice para ese anexo en la entrada de la Cuenta en el AppendVec.
+
+Para recuperar el índice, todos los archivos AppendVec pueden ser leídos en cualquier orden, y la última versión de escritura para cada bifurcación debe ser almacenada en el índice.
+
+## Instantáneas
+
+Para hacer una instantánea, los archivos mapeados en memoria del AppendVec deben ser volcados al disco. El índice también se puede escribir en el disco.
+
+## Rendimiento
+
+- Las escrituras sólo de anexos son rápidas. SSDs y NVMEs, así como todas las estructuras de datos del núcleo a nivel del sistema operativo, permitir que los anexos se ejecuten tan rápido como PCI o NVMe de ancho de banda permitirá \(2,700 MB/s\).
+- Cada repetición y hilo bancario escribe simultáneamente en su propio AppendVec.
+- Cada AppendVec podría alojarse en una NVMe separada.
+- Cada hilo de repetición y banca tiene acceso de lectura simultáneo a todos los AppendVecs sin bloquear escrituras.
+- El índice requiere un bloqueo de escritura exclusivo para escrituras. El rendimiento de un hilo para las actualizaciones de HashMap es de 10m por segundo.
+- Las etapas de Banca y Replay deben usar 32 hilos por NVMe. NVMes tiene un rendimiento óptimo con 32 lectores o escritores simultáneos.

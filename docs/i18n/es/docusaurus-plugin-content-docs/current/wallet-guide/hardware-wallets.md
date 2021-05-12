@@ -1,53 +1,35 @@
 ---
-title: Using Hardware Wallets on the Solana CLI
+title: Utilizar carteras de hardware en el Solana CLI
 ---
 
-Signing a transaction requires a private key, but storing a private
-key on your personal computer or phone leaves it subject to theft.
-Adding a password to your key adds security, but many people prefer
-to take it a step further and move their private keys to a separate
-physical device called a _hardware wallet_. A hardware wallet is a
-small handheld device that stores private keys and provides some
-interface for signing transactions.
+Firmar una transacción requiere una clave privada, pero almacenar una clave privada en su computadora personal o teléfono la deja sujeta a robo. Añadir una contraseña a la clave añade seguridad, pero mucha gente prefiere ir un paso más allá y mover sus claves privadas a un dispositivo físico separado llamado _monedero de hardware_. Una cartera de hardware es un pequeño dispositivo portátil que almacena claves privadas y proporciona cierta interfaz para firmar transacciones.
 
-The Solana CLI has first class support for hardware wallets. Anywhere
-you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
-can pass a _keypair URL_ that uniquely identifies a keypair in a
-hardware wallet.
+La Solana CLI tiene soporte de primera clase para carteras de hardware. En cualquier lugar se utiliza una ruta de archivo keypair (denotada como `<KEYPAIR>` en la documentación de uso), puede pasar una _URL del par de claves_ que identifica de forma única un keypair en una cartera de hardware.
 
-## Supported Hardware Wallets
+## Carteras Hardware soportadas
 
-The Solana CLI supports the following hardware wallets:
+El CLI de Solana soporta las siguientes carteras hardware:
 
-- [Ledger Nano S and Ledger Nano X](hardware-wallets/ledger.md)
+- [Ledger Nano S y Ledger Nano X](hardware-wallets/ledger.md)
 
-## Specify a Keypair URL
+## Especifique una URL de keyypair
 
-Solana defines a keypair URL format to uniquely locate any Solana keypair on a
-hardware wallet connected to your computer.
+Solana define un formato URL de keypair para localizar de forma única cualquier keypair de Solana en una cartera de hardware conectada a su ordenador.
 
-The keypair URL has the following form, where square brackets denote optional
-fields:
+La URL keypair tiene la siguiente forma, donde los corchetes denotan campos opcionales:
 
 ```text
 usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 ```
 
-`WALLET_ID` is a globally unique key used to disambiguate multiple devices.
+`WALLET_ID` es una clave única a nivel global usada para desambiguar múltiples dispositivos.
 
-`DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
-The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
-are positive integers.
+`DERVIATION_PATH` se utiliza para navegar a las claves Solana dentro de su cartera de hardware. La ruta tiene la forma `<ACCOUNT>[/<CHANGE>]`, donde cada `CUENTA` y `CAMBIO` son enteros positivos.
 
-For example, a fully qualified URL for a Ledger device might be:
+Por ejemplo, una URL completa para un dispositivo Ledger podría ser:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501). The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
+Todas las rutas de derivación incluyen implícitamente el prefijo `44'/501'`, que indica que la ruta sigue las especificaciones de [BIP44](https://github.com/bitcoin/bips/blob/master/bip0044.mediawiki) y que cualquier clave derivada es una clave de Solana (tipo Coin 501). La comilla simple indica una derivación "reforzada". Dado que Solana utiliza keypairs Ed25519, todas las derivaciones están reforzadas y, por tanto, añadir la comilla es opcional e innecesario.

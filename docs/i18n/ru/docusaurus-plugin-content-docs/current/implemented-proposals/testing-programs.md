@@ -1,26 +1,26 @@
 ---
-title: Testing Programs
+title: Программа тестирования
 ---
 
-Applications send transactions to a Solana cluster and query validators to confirm the transactions were processed and to check each transaction's result. When the cluster doesn't behave as anticipated, it could be for a number of reasons:
+Приложения отправляют транзакции в кластер Solana и запрашивают валидаторы, чтобы подтвердить, что транзакции были обработаны, и проверить результат каждой транзакции. Когда кластер ведет себя не так, как ожидалось, это может быть по ряду причин:
 
-- The program is buggy
-- The BPF loader rejected an unsafe program instruction
-- The transaction was too big
-- The transaction was invalid
-- The Runtime tried to execute the transaction when another one was accessing
+- Программа имеет ошибку
+- Загрузчик BPF отклонил небезопасную программную инструкцию
+- Транзакция была слишком большая
+- Транзакция была недействительной
+- Среда выполнения пыталась выполнить транзакцию, когда другая выполняла доступ
 
-  the same account
+  к тому же аккаунту
 
-- The network dropped the transaction
-- The cluster rolled back the ledger
-- A validator responded to queries maliciously
+- Сеть сбросила транзакцию
+- Кластер откатил реестр
+- Валидатор злонамеренно ответил на запросы
 
-## The AsyncClient and SyncClient Traits
+## AsyncClient и SyncClient признаки
 
-To troubleshoot, the application should retarget a lower-level component, where fewer errors are possible. Retargeting can be done with different implementations of the AsyncClient and SyncClient traits.
+Для устранения неполадок приложение должно перенацелить компонент нижнего уровня, где возможно меньше ошибок. Смена целей может быть выполнена с помощью различных реализаций признаков AsyncClient и SyncClient.
 
-Components implement the following primary methods:
+Компоненты реализуют следующие основные методы:
 
 ```text
 trait AsyncClient {
@@ -32,22 +32,22 @@ trait SyncClient {
 }
 ```
 
-Users send transactions and asynchrounously and synchrounously await results.
+Пользователи отправляют транзакции и асинхронно и синхронно ожидают результатов.
 
-### ThinClient for Clusters
+### ThinClient для кластеров
 
-The highest level implementation, ThinClient, targets a Solana cluster, which may be a deployed testnet or a local cluster running on a development machine.
+Реализация самого высокого уровня, ThinClient, нацелена на кластер Solana, который может быть развернутой тестовой сетью или локальным кластером, работающим на машине разработки.
 
-### TpuClient for the TPU
+### TpuClient для TPU
 
-The next level is the TPU implementation, which is not yet implemented. At the TPU level, the application sends transactions over Rust channels, where there can be no surprises from network queues or dropped packets. The TPU implements all "normal" transaction errors. It does signature verification, may report account-in-use errors, and otherwise results in the ledger, complete with proof of history hashes.
+Следующим этапом является реализация TPU, которая еще не реализована. На уровне TPU приложение отправляет транзакции по каналам Rust, где не может быть сюрпризов от сетевых очередей или отброшенных пакетов. TPU реализует все «нормальные» ошибки транзакций. Он выполняет проверку подписи, может сообщать об ошибках в использовании аккаунта и, в противном случае, приводит к созданию реестра с подтверждением хэшей истории.
 
-## Low-level testing
+## Low-level тестирование
 
-### BankClient for the Bank
+### BankClient для банка
 
-Below the TPU level is the Bank. The Bank doesn't do signature verification or generate a ledger. The Bank is a convenient layer at which to test new on-chain programs. It allows developers to toggle between native program implementations and BPF-compiled variants. No need for the Transact trait here. The Bank's API is synchronous.
+Ниже уровня TPU находится банк. Банк не выполняет проверку подписи и не создает реестр. Банк - это удобный уровень для тестирования новых сетевых программ. Это позволяет разработчикам переключаться между реализациями собственных программ и вариантами, скомпилированными в формате BPF. Здесь нет необходимости в признаках Transact. API банка синхронное.
 
-## Unit-testing with the Runtime
+## Тестирование модулей с Runtime
 
-Below the Bank is the Runtime. The Runtime is the ideal test environment for unit-testing. By statically linking the Runtime into a native program implementation, the developer gains the shortest possible edit-compile-run loop. Without any dynamic linking, stack traces include debug symbols and program errors are straightforward to troubleshoot.
+Ниже банка находится среда выполнения. Runtime - идеальная тестовая среда для модульного тестирования. Статически связывая среду выполнения с собственной реализацией программы, разработчик получает самый короткий цикл редактирования-компиляции-выполнения. Без какой-либо динамической компоновки трассировки стека включают символы отладки, а программные ошибки легко устранять.

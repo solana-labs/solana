@@ -1,107 +1,92 @@
 ---
-title: Durable Transaction Nonces
+title: عدم وجود مُعاملات دائمة (Durable Transaction Nonces)
 ---
 
-Durable transaction nonces are a mechanism for getting around the typical
-short lifetime of a transaction's [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash).
-They are implemented as a Solana Program, the mechanics of which can be read
-about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
+تُعد الأرقام الخاصة (nonces) المُستدامه للمُعاملة آلية للإلتفاف حول العمر القصير النموذجي لتجزئة الكتلة الحديثة للمُعاملة [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash). يتم تنفيذها كبرنامج Solana، ويُمكن قراءة آلياته في المُقترح [proposal](../implemented-proposals/durable-tx-nonces.md).
 
-## Usage Examples
+## أمثلة الإستخدام (Usage Examples)
 
-Full usage details for durable nonce CLI commands can be found in the
-[CLI reference](../cli/usage.md).
+يُمكن العثور على تفاصيل الإستخدام الكاملة لأوامر الأرقام الخاصة (nounces) المُستدامه لـ CLI في المرجع [CLI reference](../cli/usage.md).
 
-### Nonce Authority
+### سلطة الأرقام الخاصة المُستدامة (Nonce Authority)
 
-Authority over a nonce account can optionally be assigned to another account. In
-doing so the new authority inherits full control over the nonce account from the
-previous authority, including the account creator. This feature enables the
-creation of more complex account ownership arrangements and derived account
-addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
-argument is used to specify this account and is supported by the following
-commands
+يُمكن تعيين السلطة على حساب الأرقام الخاصة المُستدامة (nonce account) إختياريًا إلى حساب آخر. بذلك، ترث السلطة الجديدة السيطرة الكاملة على حساب الأرقام الخاصة المُستدامة (nonce account) من السلطة السابقة، بما في ذلك مُنشئ الحساب. تُتيح هذه الميزة إنشاء ترتيبات ملكية الحساب الأكثر تعقيدًا وعناوين الحسابات المُشتقة غير المُرتبطة بزوج المفاتيح (keypair). يتم إستخدام الوسيطة `--nonce-authority <AUTHORITY_KEYPAIR>` لتحديد هذا الحساب وتدعمها الأوامر التالية
 
 - `create-nonce-account`
 - `new-nonce`
 - `withdraw-from-nonce-account`
 - `authorize-nonce-account`
 
-### Nonce Account Creation
+### إنشاء حساب الأرقام الخاصة المُستدامة (Nonce Account Creation)
 
-The durable transaction nonce feature uses an account to store the next nonce
-value. Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
-so need to carry the minimum balance to achieve this.
+تستخدم ميزة الرقم الخاص المُستدامه للمُعاملة (durable transaction nonce) حسابًا لتخزين القيمة nonce التالية. يجب أن تكون حسابات الأرقام الخاصة المُستدامة (nonce accounts) مُعفاة من الإيجار [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime)، لذلك يجب أن تحمل الحد الأدنى من الرصيد لتحقيق ذلك.
 
-A nonce account is created by first generating a new keypair, then create the account on chain
+يتم إنشاء حساب أرقام خاصة مُستدامة (nonce account) عن طريق إنشاء زوج مفاتيح (keypair) جديد أولاً، ثم إنشاء الحساب على الشبكة
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana-keygen new -o nonce-keypair.json
 solana create-nonce-account nonce-keypair.json 1
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
 ```
 
-> To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
+> للإحتفاظ بزوج المفاتيح (keypair) بلا إتصال بالأنترنات تمامًا، إستخدم تعليمات [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) إنشاء أزواج المفاتيح (keypair) في المحفظة الورقية [Paper Wallet](wallet-guide/paper-wallet.md) بدلاً من ذلك
 
-> [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-create-nonce-account)
 
-### Querying the Stored Nonce Value
+### الإستعلام عن قيمة الرقم الخاص المُستدام المُخزن (Querying the Stored Nonce Value)
 
-Creating a durable nonce transaction requires passing the stored nonce value as
-the value to the `--blockhash` argument upon signing and submission. Obtain the
-presently stored nonce value with
+يتطلب إنشاء مُعاملة بالرقم الخاص المُستدام (durable nonce transaction) تمرير القيمة nonce المُخزنة كقيمة لتجزئة الكتلة `--blockhash` عند التوقيع والإرسال. أُحصل على قيمة الرقم الخاص المُستدام (nonce) المُخزن حاليًا مع
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana nonce nonce-keypair.json
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-get-nonce)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-get-nonce)
 
-### Advancing the Stored Nonce Value
+### الإستعلام عن قيمة الرقم الخاص المُستدام المُخزن (Querying the Stored Nonce Value)
 
-While not typically needed outside a more useful transaction, the stored nonce
-value can be advanced by
+بينما لا تكون هناك حاجة عادةً خارج مُعاملة أكثر فائدة، مكن تقديم قيمة الرقم الخاص المُستدام (nonce) المُخزن بواسطة
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana new-nonce nonce-keypair.json
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-new-nonce)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-new-nonce)
 
-### Display Nonce Account
+### حساب الرقم الخاص المُستدام (Display Nonce Account)
 
-Inspect a nonce account in a more human friendly format with
+فحص حساب الرقم الخاص المُستدام (nonce account) بتنسيق أكثر مُلاءمة للإنسان بإستخدام
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana nonce-account nonce-keypair.json
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 balance: 0.5 SOL
@@ -109,68 +94,66 @@ minimum balance required: 0.00136416 SOL
 nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-nonce-account)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-nonce-account)
 
-### Withdraw Funds from a Nonce Account
+### سحب الأموال من حساب الرقم الخاص المُستدام (Withdraw Funds from a Nonce Account)
 
-Withdraw funds from a nonce account with
+سحب الأموال من حساب الرقم الخاص المُستدام (nonce account) بـ
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0.5
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 3foNy1SBqwXSsfSfTdmYKDuhnVheRnKXpoPySiUDBVeDEs6iMVokgqm7AqfTjbk7QBE8mqomvMUMNQhtdMvFLide
 ```
 
-> Close a nonce account by withdrawing the full balance
+> إغلاق حساب حساب الرقم الخاص المُستدام (nonce account) بسحب الرصيد الكامل
 
-> [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-withdraw-from-nonce-account)
 
-### Assign a New Authority to a Nonce Account
+### تعيين سلطة جديدة إلى حساب الرقم الخاص المُستدام (Assign a New Authority to a Nonce Account)
 
-Reassign the authority of a nonce account after creation with
+إعادة تعيين سلطة حساب الرقم الخاص المُستدام (nonce account) بعد الإنشاء بـ
 
-- Command
+- الأمر البرمجي (Command)
 
 ```bash
 solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 ```
 
-- Output
+- المُخرج (output)
 
 ```text
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
 ```
 
-> [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
+> [وثائق الإستخدام الكاملة (Full usage documentation)](../cli/usage.md#solana-authorize-nonce-account)
 
-## Other Commands Supporting Durable Nonces
+## أوامر أخرى داعمة للأرقام الخاصة المُستدامة (Other Commands Supporting Durable Nonces)
 
-To make use of durable nonces with other CLI subcommands, two arguments must be
-supported.
+للإستفادة من الأرقام الخاصة المُستدامة (nonces) مع أوامر CLI الفرعية الأخرى، يجب دعم وسيطين.
 
-- `--nonce`, specifies the account storing the nonce value
-- `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
+- يُحدد `--nonce` الحساب الذي يُخزن قيمة الرقم الخاص المُستدام (nonce)
+- `--nonce-authority` ، يُحدد [nonce authority](#nonce-authority) إختياري
 
-The following subcommands have received this treatment so far
+تلقت الأوامر الفرعية التالية هذا العلاج حتى الآن
 
 - [`pay`](../cli/usage.md#solana-pay)
 - [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
 - [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 
-### Example Pay Using Durable Nonce
+### مثال دفع بإستخدام الرقم الخاص المُستدام (Example Pay Using Durable Nonce)
 
-Here we demonstrate Alice paying Bob 1 SOL using a durable nonce. The procedure
-is the same for all subcommands supporting durable nonces
+نوضح هنا كيف أن أليس تدفع عدد 1 SOL لـ Bob بإستخدام رقم خاص مُستدام (nonce). الإجراء هو نفسه لجميع الأوامر الفرعية التي تدعم الأرقام الخاصة المُستدامة (nonces)
 
-#### - Create accounts
+#### - إنشاء حسابات (Create accounts)
 
-First we need some accounts for Alice, Alice's nonce and Bob
+نحتاج أولاً إلى بعض الحسابات الخاصة بـ Alice والرقم الخاص المُستدام (nonce) لـ Alice و Bob
 
 ```bash
 $ solana-keygen new -o alice.json
@@ -178,70 +161,66 @@ $ solana-keygen new -o nonce.json
 $ solana-keygen new -o bob.json
 ```
 
-#### - Fund Alice's account
+#### - تمويل حساب أليس (Fund Alice's account)
 
-Alice will need some funds to create a nonce account and send to Bob. Airdrop
-her some SOL
+ستحتاج Alice إلى بعض الأموال لإنشاء حساب الرقم الخاص المُستدام (nonce account) وإرساله إلى Bob. قُم بإرسال بعض عملات SOL بالتوزيع الحر (AiDrop)
 
 ```bash
-$ solana airdrop -k alice.json 1
-1 SOL
+$ solana airdrop -k alice.json 10
+10 SOL
 ```
 
-#### - Create Alice's nonce account
+#### - إنشاء حساب الرقم الخاص المُستدام الخاص بـأليس (Create Alice's nonce account)
 
-Now Alice needs a nonce account. Create one
+تحتاج Alice الآن إلى حساب الرقم الخاص المُستدام (nonce account). إنشاء واحد
 
-> Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
+> لا يتم هنا إستخدام [nonce authority](#nonce-authority) مُنفصل، لذلك يتمتع `alice.json` بالسلطة الكاملة على حساب الرقم الخاص المُستدام (nonce account)
 
 ```bash
-$ solana create-nonce-account -k alice.json nonce.json 0.1
+$ solana create-nonce-account -k alice.json nonce.json 1
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
 ```
 
-#### - A failed first attempt to pay Bob
+#### - فشل أول مُحاولة للدفع لـ "بوب" (A failed first attempt to pay Bob)
 
-Alice attempts to pay Bob, but takes too long to sign. The specified blockhash
-expires and the transaction fails
+تحاول Alice الدفع لـ Bob، ولكنها تستغرق وقتاً طويلاً جداً للتوقيع. تنتهي صلاحية تجزئة الكتلة (Blockhash) المُحددة وتفشل الةعاملة
 
 ```bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
 [2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 ```
 
-#### - Nonce to the rescue!
+#### - الرقم الخاص المُستدام اللإنقاذ! (Nonce to the rescue)!
 
-Alice retries the transaction, this time specifying her nonce account and the
-blockhash stored there
+تُعيد Alice مُحاولة إرسال المُعاملة، ولكن هذه المرة تُحدد حسابها حساب الرقم الخاص المُستدام (nonce account) وتجزئة الكتلة (Blockhash) المُخزنة هناك
 
-> Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
+> تذكر، `alice.json` هو [nonce authority](#nonce-authority) في هذا المثال
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 0.1 SOL
+balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
-#### - Success!
+#### - نجاح (Success)!
 
-The transaction succeeds! Bob receives 0.01 SOL from Alice and Alice's stored
-nonce advances to a new value
+نجاح المُعاملة! يتلقى Bob عدد 1 SOL من Alice والرقم الخاص المُستدام (nonce) المُخزن الخاص بـAlice يتقدم إلى قيمة جديدة
 
 ```bash
 $ solana balance -k bob.json
-0.01 SOL
+1 SOL
 ```
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 0.1 SOL
+balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
 ```

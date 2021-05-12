@@ -1,314 +1,303 @@
 ---
-title: Terminology
+title: Terminología
 ---
 
-The following terms are used throughout the documentation.
+Los siguientes términos se utilizan a lo largo de la documentación.
 
-## account
+## cuenta
 
-A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
+Un archivo persistente dirigido por [clave pública](terminology.md#public-key) y con [lamports](terminology.md#lamport) de seguimiento de su vida.
 
 ## app
 
-A front-end application that interacts with a Solana cluster.
+Una aplicación de front-end que interactúa con un clúster Solana.
 
-## bank state
+## estado bancario
 
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+El resultado de interpretar todos los programas en el ledger a una altura de marca [](terminology.md#tick-height) determinada. Incluye al menos el conjunto de todas las [cuentas](terminology.md#account) que poseen [tokens nativos](terminology.md#native-tokens).
 
-## block
+## bloque
 
-A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
+Un conjunto contiguo de [entradas](terminology.md#entry) en el ledger cubierto por un [voto](terminology.md#ledger-vote). Un [líder](terminology.md#leader) produce como máximo un bloque por cada [espacio](terminology.md#slot).
 
-## blockhash
+## hash bloque
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+Un hash [resistente a la preimagen](terminology.md#hash) del ledger [](terminology.md#ledger) a una determinada [altura del bloque](terminology.md#block-height). Tomada desde la última [entrada id](terminology.md#entry-id) en la ranura
 
-## block height
+## altura del bloque
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
+El número de [bloques](terminology.md#block) debajo del bloque actual. El primer bloque después de que el bloque [génesis](terminology.md#genesis-block) tenga una altura de uno.
 
-## bootstrap validator
+## validador bootstrap
 
-The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
+El primer [validador](terminology.md#validator) en producir un bloque [](terminology.md#block).
 
-## CBC block
+## Bloque CBC
 
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+El trozo cifrado más pequeño del ledger, un segmento de ledger cifrado estaría hecho de muchos bloques CBC. `ledger_segment_size / cbc_block_size` para ser exacto.
 
-## client
+## cliente
 
-A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
+Un nodo [](terminology.md#node) que utiliza el clúster [](terminology.md#cluster).
 
-## cluster
+## clúster
 
-A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
+Un conjunto de validadores [](terminology.md#validator) que mantienen un solo [ledger](terminology.md#ledger).
 
-## confirmation time
+## tiempo de confirmación
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and creating a [confirmed block](terminology.md#confirmed-block).
+La duración del reloj de pantalla entre un líder [](terminology.md#leader) creando una entrada de tick [](terminology.md#tick) y creando un [bloque confirmado](terminology.md#confirmed-block).
 
-## confirmed block
+## bloque confirmado
 
-A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+Un bloque [](terminology.md#block) que ha recibido una [súper mayoría](terminology.md#supermajority) de [votos mayores](terminology.md#ledger-vote) con una interpretación del ledger que coincide con la del líder.
 
-## control plane
+## plano de control
 
-A gossip network connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
+Una red gossip que conecta todos los [nodos](terminology.md#node) de un clúster [](terminology.md#cluster).
 
-## cooldown period
+## período de enfriamiento
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+Algún número de [epochs](terminology.md#epoch) después de [stake](terminology.md#stake) se ha desactivado mientras está disponible progresivamente para su retiro. Durante este período, el stake se considera "desactivandose". Más información sobre: [warmup y enfriamiento](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
-## credit
+## crédito
 
-See [vote credit](terminology.md#vote-credit).
+Ver [crédito de voto](terminology.md#vote-credit).
 
-## data plane
+## plano de datos
 
-A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
+Una red multicast utilizada para validar eficientemente [entradas](terminology.md#entry) y obtener consenso.
 
 ## drone
 
-An off-chain service that acts as a custodian for a user's private key. It typically serves to validate and sign transactions.
+Un servicio off-chain que actúa como un custodio para la clave privada de un usuario. Por lo general, sirve para validar y firmar transacciones.
 
-## entry
+## entrada
 
-An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#tick) or a [transactions entry](terminology.md#transactions-entry).
+Una entrada en el [ledger](terminology.md#ledger) o un [tick](terminology.md#tick) o una [entrada de transacciones](terminology.md#transactions-entry).
 
-## entry id
+## id de entrada
 
-A preimage resistant [hash](terminology.md#hash) over the final contents of an entry, which acts as the [entry's](terminology.md#entry) globally unique identifier. The hash serves as evidence of:
+Una preimagen resistente [hash](terminology.md#hash) sobre el contenido final de una entrada, que actúa como el [identificador único global de la entrada](terminology.md#entry). El hash sirve como prueba de:
 
-- The entry being generated after a duration of time
-- The specified [transactions](terminology.md#transaction) are those included in the entry
-- The entry's position with respect to other entries in [ledger](terminology.md#ledger)
+- La entrada que se está generando después de una duración del tiempo
+- Las [transacciones](terminology.md#transaction) especificadas son las incluidas en la entrada
+- La posición de la entrada con respecto a otras entradas en [ledger](terminology.md#ledger)
 
-See [Proof of History](terminology.md#proof-of-history).
+Ver [Prueba de Historia](terminology.md#proof-of-history).
 
-## epoch
+## época
 
-The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
+El tiempo, es decir, el número de [espacios](terminology.md#slot), para los cuales un [programa de líder](terminology.md#leader-schedule) es válido.
 
-## fee account
+## cuenta de comisión
 
-The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
+La cuenta de comisión en la transacción es la cuenta que paga el costo de incluir la transacción en el ledger. Esta es la primera cuenta en la transacción. Esta cuenta debe declararse como Lead-Write (escribible) en la transacción ya que el pago de la transacción reduce el saldo de la cuenta.
 
-## finality
+## finalidad
 
-When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common [root](terminology.md#root).
+Cuando los nodos que representan 2/3 del [stake](terminology.md#stake) tienen un [raíz común](terminology.md#root).
 
 ## fork
 
-A [ledger](terminology.md#ledger) derived from common entries but then diverged.
+Un [ledger](terminology.md#ledger) derivado de entradas comunes pero luego divergente.
 
-## genesis block
+## bloque génesis
 
-The first [block](terminology.md#block) in the chain.
+El primer bloque [](terminology.md#block) de la cadena.
 
-## genesis config
+## configuración genesis
 
-The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
+El archivo de configuración que prepara el [ledger](terminology.md#ledger) para el [bloque génesis](terminology.md#genesis-block).
 
 ## hash
 
-A digital fingerprint of a sequence of bytes.
+Una huella digital de una secuencia de bytes.
 
-## inflation
+## inflación
 
-An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
+Un aumento de la oferta de tokens con el tiempo utilizado para financiar recompensas para la validación y para financiar el desarrollo continuo de Solana.
 
-## instruction
+## instrucción
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
+La unidad más pequeña de un [programa](terminology.md#program) que un [cliente](terminology.md#client) puede incluir en una [transacción](terminology.md#transaction).
 
 ## keypair
 
-A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key).
+Una [clave pública](terminology.md#public-key) y la correspondiente [clave privada](terminology.md#private-key).
 
 ## lamport
 
-A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
+Un [token nativo ](terminology.md#native-token) fraccional con el valor de 0.000000001 [sol](terminology.md#sol).
 
-## leader
+## líder
 
-The role of a [validator](terminology.md#validator) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+El rol de un [validador](terminology.md#validator) cuando está adjuntando [entradas](terminology.md#entry) al [ledger](terminology.md#ledger).
 
-## leader schedule
+## programación de líder
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+Una secuencia de [validador](terminology.md#validator) [claves públicas](terminology.md#public-key). El clúster utiliza el programa de líder para determinar qué validador es el [líder](terminology.md#leader) en cualquier momento.
 
 ## ledger
 
-A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+Una lista de [entradas](terminology.md#entry) que contienen [transacciones](terminology.md#transaction) firmadas por [clientes](terminology.md#client). Conceptualmente, esto puede rastrearse hasta el bloque [génesis](terminology.md#genesis-block), pero el valor agregado real de [validadores](terminology.md#validator)sólo puede tener [bloques más nuevos](terminology.md#block) para ahorrar uso de almacenamiento como los antiguos no necesarios para validar bloques futuros por diseño.
 
-## ledger vote
+## voto del ledger
 
-A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a [validator's](terminology.md#validator) affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+Un hash [](terminology.md#hash) del estado del validador [](terminology.md#bank-state) a una altura de [tick](terminology.md#tick-height) dada. Contiene la afirmación del [validador](terminology.md#validator) de que se ha verificado un bloque [](terminology.md#block) que ha recibido, así como una promesa de no votar por un bloque [en conflicto](terminology.md#block) \(i.. [bifurcar](terminology.md#fork)\) por una cantidad específica de tiempo, el [bloqueo](terminology.md#lockout) período.
 
-## light client
+## cliente ligero
 
-A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [validator](terminology.md#validator).
+Un tipo de [cliente](terminology.md#client) que puede verificar que apunta a un clúster [válido](terminology.md#cluster). Realiza más verificación de ledge que un [cliente delgado](terminology.md#thin-client) y menor que un [validador](terminology.md#validator).
 
-## loader
+## cargador
 
-A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
+Un programa [](terminology.md#program) con la capacidad de interpretar la codificación binaria de otros programas en cadena.
 
-## lockout
+## bloqueo
 
-The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+La duración del tiempo durante la cual un validador [](terminology.md#validator) no puede [votar](terminology.md#ledger-vote) en otro [fork](terminology.md#fork).
 
-## native token
+## token nativo
 
-The [token](terminology.md#token) used to track work done by [nodes](terminology.md#node) in a cluster.
+El [token](terminology.md#token) usado para rastrear el trabajo realizado por [nodos](terminology.md#node) en un clúster.
 
-## node
+## nodo
 
-A computer participating in a [cluster](terminology.md#cluster).
+Una computadora que participa en un clúster [](terminology.md#cluster).
 
-## node count
+## número de nodos
 
-The number of [validators](terminology.md#validator) participating in a [cluster](terminology.md#cluster).
+El número de validadores [](terminology.md#validator) participando en un clúster [](terminology.md#cluster).
 
 ## PoH
 
-See [Proof of History](terminology.md#proof-of-history).
+Ver [Prueba de Historia](terminology.md#proof-of-history).
 
-## point
+## punto
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the [validator](terminology.md#validator) [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a [stake](terminology.md#stake) during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+Un [crédito ponderado](terminology.md#credit) en un régimen de recompensas. En el [validador](terminology.md#validator) [régimen de recompensas](cluster/stake-delegation-and-rewards.md), el número de puntos adeudados a una[stake](terminology.md#stake) durante el canje es el producto de los [créditos de voto](terminology.md#vote-credit) ganados y el número de lamports en stake.
 
-## private key
+## clave privada
 
-The private key of a [keypair](terminology.md#keypair).
+La clave privada de un keypair [](terminology.md#keypair).
 
-## program
+## programa
 
-The code that interprets [instructions](terminology.md#instruction).
+El código que interpreta [instrucciones](terminology.md#instruction).
 
-## program id
+## id del programa
 
-The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
+La clave pública de la cuenta [](terminology.md#account) que contiene un programa [](terminology.md#program).
 
-## Proof of History
+## Prueba de historia
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+Un montón de pruebas, cada uno de los cuales demuestra que existían algunos datos antes de que se creara la prueba y que una duración exacta del tiempo pasado antes de la prueba anterior. Al igual que [VDF](terminology.md#verifiable-delay-function), una prueba de historia puede ser verificada en menos tiempo del que tomó producir.
 
-## public key
+## clave pública
 
-The public key of a [keypair](terminology.md#keypair).
+La clave pública de un keypair [](terminology.md#keypair).
 
 ## root
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a [validator](terminology.md#validator). The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+Un bloque [](terminology.md#block) o un espacio [](terminology.md#slot) que ha alcanzado el máximo [bloqueo](terminology.md#lockout) en un [validador](terminology.md#validator). El root es el bloque más alto que es un ancestro de todos los forks activos de un validador. Todos los bloques ancestrales del root son también transitoriamente un root. Los bloques que no son antepasados y no descendientes de un root están excluidos de la consideración de consenso y pueden ser descartados.
 
-## runtime
+## tiempo de ejecución
 
-The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
+El componente de un [validador](terminology.md#validator) responsable de la ejecución del [programa](terminology.md#program).
 
-## shred
+## trozo
 
-A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
+Una fracción de un bloque [](terminology.md#block), la unidad más pequeña enviada entre [validadores](terminology.md#validator).
 
-## signature
+## firma
 
-A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
+Una firma ed25519 de 64 bytes de R (32-bytes) y S (32-bytes). Con el requisito de que R es un punto Edwards empaquetado no de orden pequeño y S es un escalar en el rango de 0 <= S < L. Este requisito asegura que no haya maleabilidad de la firma. Cada transacción debe tener al menos una firma para [cuenta de comisión](terminology#fee-account). Por lo tanto, la primera firma en la transacción puede ser tratada como [Id de transactón](terminology.md#transaction-id)
 
-## skipped slot
+## ranura
 
-A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+El periodo de tiempo durante el cual un líder [](terminology.md#leader) ingiere transacciones y produce un [bloque](terminology.md#block).
 
-Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+## contrato inteligente
 
-## slot
-
-The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
-
-Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
-
-## smart contract
-
-A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
+Un conjunto de restricciones que una vez satisfechas, indican a un programa que algunas actualizaciones de cuenta predefinidas están permitidas.
 
 ## sol
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+El [token nativo](terminology.md#native-token) rastreado por un [cluster](terminology.md#cluster) reconocido por la empresa Solana.
 
 ## stake
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
+Las fichas pierden al clúster [](terminology.md#cluster) si el comportamiento del validador [malicioso](terminology.md#validator) del validador puede ser probado.
 
-## supermajority
+## supermayoría
 
-2/3 of a [cluster](terminology.md#cluster).
+2/3 de un clúster [](terminology.md#cluster).
 
 ## sysvar
 
-A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
+Una cuenta [sintética](terminology.md#account) proporcionada por el tiempo de ejecución para permitir a los programas acceder al estado de red como la altura actual de tick, recompensas [puntos](terminology.md#point) valores, etc.
 
-## thin client
+## cliente delgado
 
-A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
+Un tipo de [cliente](terminology.md#client) que confía en él se comunica con un clúster [válido](terminology.md#cluster).
 
 ## tick
 
-A ledger [entry](terminology.md#entry) that estimates wallclock duration.
+Un ledger [](terminology.md#entry) que calcula la duración del reloj de pantalla.
 
-## tick height
+## altura del tick
 
-The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
+El Nth [tick](terminology.md#tick) en el ledger [](terminology.md#ledger).
 
 ## token
 
-A scarce, fungible member of a set of tokens.
+Un miembro escaso y fungible de un conjunto de fichas.
 
 ## tps
 
-[Transactions](terminology.md#transaction) per second.
+[Transacciones](terminology.md#transaction) por segundo.
 
-## transaction
+## transacción
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
+Una o más [instrucciones](terminology.md#instruction) firmadas por el cliente [](terminology.md#client) usando uno o más [keypairs](terminology.md#keypair) y ejecutadas atómicamente con solo dos resultados posibles: éxito o fallo.
 
-## transaction id
+## id de transacción
 
-The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
+La primera [firma](terminology.md#signature) en una [transacción](terminology.md#transaction), el cual puede ser usado para identificar la transacción de forma única a través de la completa [mayúscula](terminology.md#ledger).
 
-## transaction confirmations
+## confirmaciones de transacción
 
-The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
+El número de [bloques confirmados](terminology.md#confirmed-block) desde que la transacción fue aceptada en el [ledger](terminology.md#ledger). Una transacción es finalizada cuando su bloque se convierte en un [root](terminology.md#root).
 
-## transactions entry
+## entrada de transacciones
 
-A set of [transactions](terminology.md#transaction) that may be executed in parallel.
+Un conjunto de [transacciones](terminology.md#transaction) que pueden ejecutarse en paralelo.
 
-## validator
+## validador
 
-A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
+Un participante completo en el clúster [](terminology.md#cluster) responsable de validar el [ledger](terminology.md#ledger) y producir nuevos [bloques](terminology.md#block).
 
 ## VDF
 
-See [verifiable delay function](terminology.md#verifiable-delay-function).
+Vea [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## verifiable delay function
+## función de retraso verificable
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+Una función que toma una cantidad fija de tiempo para ejecutar que produce una prueba de que corrió, que luego se puede verificar en menos tiempo del que se tardó en producir.
 
-## vote
+## voto
 
-See [ledger vote](terminology.md#ledger-vote).
+Ver [ledger vote](terminology.md#ledger-vote).
 
-## vote credit
+## voto de crédito
 
-A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+Una recompensa para [validadores](terminology.md#validator). Un crédito de voto se otorga a un validador en su cuenta de voto cuando el validador alcanza un [root](terminology.md#root).
 
-## wallet
+## billetera
 
-A collection of [keypairs](terminology.md#keypair).
+Una colección de [keypairs](terminology.md#keypair).
 
-## warmup period
+## período warmup
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Algún número de [epochs](terminology.md#epoch) after [stake](terminology.md#stake) ha sido delegada mientras se vuelve progresivamente efectiva. Durante este período, el stake se considera "activandose". Más información sobre: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

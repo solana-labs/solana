@@ -1,33 +1,33 @@
 ---
-title: Cluster Software Installation and Updates
+title: تثبيت برامج الكتلة والتحديثات (Cluster Software Installation and Updates)
 ---
 
-Currently users are required to build the solana cluster software themselves from the git repository and manually update it, which is error prone and inconvenient.
+يُطلب من المُستخدمين حاليًا إنشاء برنامج مجموعة solana بأنفسهم من مُستودع git وتحديثه يدويًا، وهو عرضة للخطأ وغير مريح.
 
-This document proposes an easy to use software install and updater that can be used to deploy pre-built binaries for supported platforms. Users may elect to use binaries supplied by Solana or any other party they trust. Deployment of updates is managed using an on-chain update manifest program.
+يقترح هذا المُستند وسيلة سهلة لتثبيت البرامج ومُحدِّثها (updater) والتي يمكن إستخدامها لنشر ثنائيات (binaries) المُضمنة مُسبقا (pre-built) للأنظمة الأساسية المدعومة. يجوز للمستخدمين اختيار إستخدام الثنائيات التي توفرها Solana أو أي طرف آخر يثقون فيه. تتم إدارة نشر التحديثات بإستخدام برنامج بيان التحديث على على الشبكة (on-chain.
 
-## Motivating Examples
+## أمثلة مُحفزة (Motivating Examples)
 
-### Fetch and run a pre-built installer using a bootstrap curl/shell script
+### قم بإحضار وتشغيل برنامج التثبيت المبني مُسبقًا بإستخدام النصيسكريبت أو البرنامج النصي bootstrap curl / shell
 
-The easiest install method for supported platforms:
+أسهل طريقة تثبيت للمنصات المدعومة:
 
 ```bash
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh
 ```
 
-This script will check github for the latest tagged release and download and run the `solana-install-init` binary from there.
+سيقوم هذا السكريبت أو البرنامج النصي بفحص github للحصول على أحدث إصدار ذو علامات وتنزيل وتشغيل `solana-install-init` الـ binary من هناك.
 
-If additional arguments need to be specified during the installation, the following shell syntax is used:
+إذا كان من الضروري تحديد وسيطات إضافية أثناء التثبيت، فسيتم إستخدام بناء جملة shell التالية:
 
 ```bash
 $ init_args=.... # arguments for `solana-install-init ...`
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
-### Fetch and run a pre-built installer from a Github release
+### قم بإحضار وتشغيل برنامج التثبيت المُضمن مُسبقا (pre-built) من إصدار Github
 
-With a well-known release URL, a pre-built binary can be obtained for supported platforms:
+بإستخدام عنوان الـ URL للإصدار المعروف، يمكن الحصول على binary مُضمن مُسبقا (pre-built) للأنظمة الأساسية المدعومة:
 
 ```bash
 $ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin
@@ -35,9 +35,9 @@ $ chmod +x ./solana-install-init
 $ ./solana-install-init --help
 ```
 
-### Build and run the installer from source
+### بناء وتشغيل المُثبت (installer) من المصدر
 
-If a pre-built binary is not available for a given platform, building the installer from source is always an option:
+إذا لم يكن برنامج الـ binary المُضمن مُسبقا (pre-built) مُتاحًا لمنصة ممُعينة، فإن إنشاء المُثبت (installer) من المصدر يكون دائمًا خيارًا جيدا متاحا:
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
@@ -45,16 +45,16 @@ $ cd solana/install
 $ cargo run -- --help
 ```
 
-### Deploy a new update to a cluster
+### نشر تحديث جديد إلى نظام مجموعة (Deploy a new update to a cluster)
 
-Given a solana release tarball \(as created by `ci/publish-tarball.sh`\) that has already been uploaded to a publicly accessible URL, the following commands will deploy the update:
+بالنظر إلى إصدار tarball الخاص بـ solana \ (كما تم إنشاؤه بواسطة `ci/publish-tarball.sh`\) والذي تم تحميله بالفعل إلى عنوان URL مُتاح للجميع، ستنشر الأوامر التالية التحديث:
 
 ```bash
 $ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
 $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
 ```
 
-### Run a validator node that auto updates itself
+### قم بتشغيل عُقدة مُدقّق (validator node) تقوم بتحديث نفسها تلقائيًا
 
 ```bash
 $ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
@@ -63,11 +63,11 @@ $ solana-keygen ...  # <-- runs the latest solana-keygen
 $ solana-install run solana-validator ...  # <-- runs a validator, restarting it as necesary when an update is applied
 ```
 
-## On-chain Update Manifest
+## بيان التحديث على على الشبكة (On-chain Update Manifest)
 
-An update manifest is used to advertise the deployment of new release tarballs on a solana cluster. The update manifest is stored using the `config` program, and each update manifest account describes a logical update channel for a given target triple \(eg, `x86_64-apple-darwin`\). The account public key is well-known between the entity deploying new updates and users consuming those updates.
+يتم إستخدام بيان التحديث للإعلان عن نشر tarballs الإصدار الجديد على مجموعة solana. يتم تخزين بيان التحديث بإستخدام برنامج `config`، ويصف كل حساب بيان تحديث قناة تحديث منطقية لثلاثية الهدف المُحددة \ (على سبيل المثال، `x86_64-apple-darwin`\). المفتاح العمومي (public key) للحساب معروف جيدًا بين الكيان الذي ينشر تحديثات جديدة والمُستخدمين الذين يستهلكون هذه التحديثات.
 
-The update tarball itself is hosted elsewhere, off-chain and can be fetched from the specified `download_url`.
+تتم إستضافة تحديث الـ tarball نفسها في مكان آخر، خارج الشبكة (off-chain) ويمكن جلبها من الرقم `download_url`. المُحدد.
 
 ```text
 use solana_sdk::signature::Signature;
@@ -87,39 +87,39 @@ pub struct SignedUpdateManifest {
 }
 ```
 
-Note that the `manifest` field itself contains a corresponding signature \(`manifest_signature`\) to guard against man-in-the-middle attacks between the `solana-install` tool and the solana cluster RPC API.
+لاحظ أن الحقل `manifest` نفسه يحتوي على توقيع مُطابق \ (`manifest_signature`\) للحماية من هجمات الرجل في الوسط (man-in-the-middle) بين أداة `solana-install` وواجهة برمجة تطبيقات (API) الـ RPC لمجموعة solana.
 
-To guard against rollback attacks, `solana-install` will refuse to install an update with an older `timestamp_secs` than what is currently installed.
+للحماية من هجمات التراجع (rollback attacks)، سيرفض `solana-install` تثبيت تحديث أقدم `timestamp_secs` مما هو مثبت حاليًا.
 
-## Release Archive Contents
+## إصدار مُحتويات الأرشيف (Release Archive Contents)
 
-A release archive is expected to be a tar file compressed with bzip2 with the following internal structure:
+من المُتوقع أن يكون أرشيف الإصدارات عبارة عن ملف tar مضغوط بواسطة bzip2 بالهيكل الداخلي التالي:
 
-- `/version.yml` - a simple YAML file containing the field `"target"` - the
+- `/version.yml` - ملف YAML بسيط يحتوي على الحقل الهدف `"target"` -
 
-  target tuple. Any additional fields are ignored.
+  المجموعة الهدف. يتم تجاهل أي حقول إضافية.
 
-- `/bin/` -- directory containing available programs in the release.
+- `/bin/` -- دليل يحتوي على البرامج المُتاحة في الإصدار.
 
-  `solana-install` will symlink this directory to
+  سيربط `solana-install` هذا الدليل إلى
 
-  `~/.local/share/solana-install/bin` for use by the `PATH` environment
+  `~/.local/share/solana-install/bin` للإستخدام بواسطة بيئة `PATH`
 
-  variable.
+  المُتغير.
 
-- `...` -- any additional files and directories are permitted
+- `... ` - يُسمح بأي ملفات وأدلة إضافية
 
-## solana-install Tool
+## أداة تثبيت solana
 
-The `solana-install` tool is used by the user to install and update their cluster software.
+يتم إستخدام أداة التثبيت `solana-install` بواسطة المُستخدم لتثبيت برنامج المجموعة (cluster) الخاص به وتحديثه.
 
-It manages the following files and directories in the user's home directory:
+يُدير الملفات والأدلة التالية في الدليل الرئيسي للمُستخدم:
 
-- `~/.config/solana/install/config.yml` - user configuration and information about currently installed software version
-- `~/.local/share/solana/install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-- `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
+- `~/.config/solana/install/config.yml` - تكوين المُستخدم ومعلومات حول إصدار البرنامج المُثبت حاليًا
+- `~/.local/share/solana/install/bin` - رابط للإصدار الحالي. على سبيل المثال، `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
+- `~/.local/share/solana/install/releases/<download_sha256>/` - مُحتويات الإصدار
 
-### Command-line Interface
+### واجهة سطر الأوامر (Command-line Interface)
 
 ```text
 solana-install 0.16.0
@@ -161,7 +161,7 @@ OPTIONS:
 ```
 
 ```text
-solana-install info
+info solana-install
 displays information about the current installation
 
 USAGE:
@@ -175,7 +175,6 @@ FLAGS:
 ```text
 solana-install deploy
 deploys a new update
-
 USAGE:
     solana-install deploy <download_url> <update_manifest_keypair>
 
@@ -188,7 +187,7 @@ ARGS:
 ```
 
 ```text
-solana-install update
+update solana-install
 checks for an update, and if available downloads and applies it
 
 USAGE:

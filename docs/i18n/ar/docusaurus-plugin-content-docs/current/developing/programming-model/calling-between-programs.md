@@ -1,16 +1,12 @@
 ---
-title: Calling Between Programs
+title: الإتصال بين البرامج (Calling Between Programs)
 ---
 
-## Cross-Program Invocations
+## الإستدعاءات عبر البرامج (Cross-Program Invocations)
 
-The Solana runtime allows programs to call each other via a mechanism called
-cross-program invocation. Calling between programs is achieved by one program
-invoking an instruction of the other. The invoking program is halted until the
-invoked program finishes processing the instruction.
+يسمح وقت تشغيل Solana للبرامج بالإتصال ببعضها البعض عن طريق آلية تسمى الإستدعاءات عبر البرامج.  يتم إجراء الإتصال بين البرامج من خلال أحد البرامج الذي يستدعي تعليمات من البرنامج الآخر.  يتم إيقاف برنامج الإستدعاء حتى ينتهي البرنامج الذي تم إستدعاؤه من معالجة التعليمات.
 
-For example, a client could create a transaction that modifies two accounts,
-each owned by separate on-chain programs:
+على سبيل المثال، يمكن للعميل إنشاء معاملة تُعدل حسابين، يمتلك كل منهما برامج مُنفصلة على على الشبكة (on-chain):
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -20,8 +16,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-A client may to instead allow the `acme` program to conveniently invoke `token`
-instructions on the client's behalf:
+يجوز للعميل بدلاً من ذلك السماح لبرنامج `acme` بإستدعاء تعليمات `token` نيابة عن العميل:
 
 ```rust,ignore
 let message = Message::new(vec![
@@ -30,10 +25,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-Given two on-chain programs `token` and `acme`, each implementing instructions
-`pay()` and `launch_missiles()` respectively, acme can be implemented with a
-call to a function defined in the `token` module by issuing a cross-program
-invocation:
+بالنظر إلى برنامجين على الشبكة `token` و `acme`، كل منهما يقوم بتنفيذ التعليمات `pay()` و `launch_missiles()` على التوالي ،يمكن تنفيذ acme باستدعاء وظيفة محددة في الوحدة `token` عن طريق إصدار استدعاء عبر البرامج:
 
 ```rust,ignore
 mod acme {
@@ -52,53 +44,23 @@ mod acme {
     }
 ```
 
-`invoke()` is built into Solana's runtime and is responsible for routing the
-given instruction to the `token` program via the instruction's `program_id`
-field.
+تم تضمين `invoke()` في وقت تشغيل Solana وهو مسؤول عن توجيه التعليمات المقدمة إلى برنامج `token` عبر حقل التعليمات `program_id`.
 
-Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked. This means that both the executable account (the
-ones that matches the instruction's program id) and the accounts passed to the
-instruction procesor.
+لاحظ أن `invoke` يتطلب من المُتصل تمرير جميع الحسابات المطلوبة من خلال التعليمات التي يتم إستدعاءها.  هذا يعني أنه تم تمرير كل من الحساب القابل للتنفيذ (الحسابات التي تتطابق مع مُعرف برنامج التعليمات) والحسابات إلى مُعالج التعليمات.
 
-Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
-accounts owned by `token`. It does this by applying the runtime's policy to the
-current state of the accounts at the time `acme` calls `invoke` vs. the initial
-state of the accounts at the beginning of the `acme`'s instruction. After
-`pay()` completes, the runtime must again ensure that `token` didn't modify any
-accounts owned by `acme` by again applying the runtime's policy, but this time
-with the `token` program ID. Lastly, after `pay_and_launch_missiles()`
-completes, the runtime must apply the runtime policy one more time, where it
-normally would, but using all updated `pre_*` variables. If executing
-`pay_and_launch_missiles()` up to `pay()` made no invalid account changes,
-`pay()` made no invalid changes, and executing from `pay()` until
-`pay_and_launch_missiles()` returns made no invalid changes, then the runtime
-can transitively assume `pay_and_launch_missiles()` as whole made no invalid
-account changes, and therefore commit all these account modifications.
+قبل إستدعاء `pay() ` ، يجب أن يضمن وقت التشغيل أن `acme` لم يُعدل أي حسابات مملوكة لـ `token`. يقوم بذلك عن طريق تطبيق سياسة وقت التشغيل على الحالة الحالية للحسابات في الوقت الذي يستدعي `acme` فيه `invoke` مُقابل الحالة الأولية للحسابات في بداية تعليمات `acme`. بعد إكتمال `pay()`، يجب أن يضمن وقت التشغيل مرة أخرى أن `token` لم يُعدل أي حسابات مملوكة لـ `acme` من خلال تطبيق سياسة وقت التشغيل مرة أخرى، ولكن هذه المرة بـ `token` مُعرف البرنامج. أخيرًا، بعد إكتمال `pay_and_launch_missiles()`، يجب أن يُطبق وقت التشغيل سياسة وقت التشغيل مرة أخرى، حيث يكون عادةً، ولكن بإستخدام جميع المتغيرات `pre_*` المحدثة. إذا لم يجر تنفيذ `pay_and_launch_missiles()` حتى `pay()` أي تغييرات غير صالحة في الحساب، ولم يجرِ `pay()` أي تغييرات غير صالحة، والتنفيذ من `pay()` حتى `pay_and_launch_missiles()` لم يُنتج عنه أي تغييرات غير صالحة، عندئذٍ يمكن لوقت التشغيل أن يفترض بشكل إنتقالي أن `pay_and_launch_missiles()` ككل لم يجر أي تغييرات غير صالحة في الحساب، وبالتالي الإلتزام بكل تعديلات هذه الحساب.
 
-### Instructions that require privileges
+### التعليمات التي تتطلب إمتيازات
 
-The runtime uses the privileges granted to the caller program to determine what
-privileges can be extended to the callee. Privileges in this context refer to
-signers and writable accounts. For example, if the instruction the caller is
-processing contains a signer or writable account, then the caller can invoke an
-instruction that also contains that signer and/or writable account.
+يستخدم وقت التشغيل الإمتيازات الممنوحة لبرنامج المُتَّصِل (caller) لتحديد الإمتيازات التي يمكن توسيعها للمُتَّصَل به (callee). الإمتيازات في هذا السياق يُشير إلى مُوقِّعين (signers) وحسابات قابلة للكتابة. على سبيل المثال، إذا كانت التعليمات التي يقوم المُتَّصِل (caller) بمعالجتها تحتوي على موقع أو حساب قابل للكتابة، فيمكن للمُتَّصِل (caller) إستدعاء تعليمات تحتوي أيضًا على ذلك المُوقِّع (signer) و / أو الحساب القابل للكتابة.
 
-This privilege extension relies on the fact that programs are immutable. In the
-case of the `acme` program, the runtime can safely treat the transaction's
-signature as a signature of a `token` instruction. When the runtime sees the
-`token` instruction references `alice_pubkey`, it looks up the key in the `acme`
-instruction to see if that key corresponds to a signed account. In this case, it
-does and thereby authorizes the `token` program to modify Alice's account.
+يعتمد هذا الإمتياز على حقيقة أن البرامج ثابتة. في حالة برنامج `acme`، يمكن لوقت التشغيل التعامل بأمان مع توقيع المُعاملة بإعتباره توقيعًا لتعليمات `token`. عندما يرى وقت التشغيل `token` تُشير التعليمات إلى `alice_pubkey`، فإنه يبحث عن المفتاح في تعليمات `acme` لمعرفة ما إذا كان هذا المفتاح يتوافق مع حساب مُوقَّع. في هذه الحالة، يقوم بذلك وبالتالي يصرح لبرنامج `token` بتعديل حساب Alice.
 
-### Program signed accounts
+### برنامج الحسابات المُوقَّعة (Program signed accounts)
 
-Programs can issue instructions that contain signed accounts that were not
-signed in the original transaction by using [Program derived
-addresses](#program-derived-addresses).
+يُمكن للبرامج إصدار إرشادات تحتوي على حسابات مُوقَّعة لم يتم تسجيلها في المُعاملة الأصلية بإستخدام [Program derived addresses](#program-derived-addresses).
 
-To sign an account with program derived addresses, a program may
-`invoke_signed()`.
+للتوقيع على حساب بعناوين مُستمدة من البرنامج، يجوز للبرنامج `invoke_signed()`.
 
 ```rust,ignore
         invoke_signed(
@@ -106,88 +68,55 @@ To sign an account with program derived addresses, a program may
             accounts,
             &[&["First addresses seed"],
               &["Second addresses first seed", "Second addresses second seed"]],
-        )?;
+        )؟;
 ```
 
-### Call Depth
+### عمق الإتصال (Call Depth)
 
-Cross-program invocations allow programs to invoke other programs directly but
-the depth is constrained currently to 4.
+تسمح الإستدعاءات عبر البرامج (Cross-program invocations) للبرامج بإستدعاء برامج أخرى مُباشرة ولكن العمق مقيد حاليًا بـ 4.
 
-### Reentrancy
+### إعادة الحيازة (Reentrancy)
 
-Reentrancy is currently limited to direct self recursion capped at a fixed
-depth. This restriction prevents situations where a program might invoke another
-from an intermediary state without the knowledge that it might later be called
-back into. Direct recursion gives the program full control of its state at the
-point that it gets called back.
+تقتصر إعادة الحيازة (Reentrancy) حاليًا على التكرار الذاتي المُباشر المحدد بعمق ثابت. يمنع هذا التقييد المواقف التي قد يستدعي فيها برنامج آخر من حالة وسيطة دون معرفة أنه قد يتم إستدعاؤه مرة أخرى لاحقًا. يمنح التكرار المباشر البرنامج التحكم الكامل في حالته عند النقطة التي يتم إستدعاؤه مرة أخرى.
 
-## Program Derived Addresses
+## عناوين البرنامج المُشتقِّة (Program Derived Addresses)
 
-Program derived addresses allow programmaticly generated signature to be used
-when [calling between programs](#cross-program-invocations).
+تسمح العناوين المُشتقِّة من البرنامج بإستخدام التوقيع المُنشأ برمجيًا عند الإتصال بين البرامج [calling between programs](#cross-program-invocations).
 
-Using a program derived address, a program may be given the authority over an
-account and later transfer that authority to another. This is possible because
-the program can act as the signer in the transaction that gives authority.
+بإستخدام عنوان مُشتقِّ من البرنامج، قد يُمنح البرنامج السلطة على حساب ما ثم ينقل هذه الصلاحية لاحقًا إلى حساب آخر. هذا ممكن لأن البرنامج يمكن أن يعمل كمُوَقِّع (signer) في المُعاملة التي تمنح السلطة.
 
-For example, if two users want to make a wager on the outcome of a game in
-Solana, they must each transfer their wager's assets to some intermediary that
-will honor their agreement. Currently, there is no way to implement this
-intermediary as a program in Solana because the intermediary program cannot
-transfer the assets to the winner.
+على سبيل المثال، إذا أراد مُستخدمان المُراهنة على نتيجة لعبة في Solana، فيجب على كل منهما نقل أصول الرهان إلى وسيط يحترم إتفاقهما. لا توجد حاليًا طريقة لتنفيذ هذا الوسيط كبرنامج في Solana لأن البرنامج الوسيط لا يمكنه نقل الأصول إلى الفائز.
 
-This capability is necessary for many DeFi applications since they require
-assets to be transferred to an escrow agent until some event occurs that
-determines the new owner.
+هذه الإمكانية ضرورية للعديد من تطبيقات الـ DeFi لأنها تتطلب نقل الأصول إلى وكيل ضمان حتى وقوع حدث ما يُحدد المالك الجديد.
 
-- Decentralized Exchanges that transfer assets between matching bid and ask
-  orders.
+- منصات التداول اللامركزية التي تنقل الأصول بين طلبات البيع والشراء المطابقة.
 
-- Auctions that transfer assets to the winner.
+- المزادات التي تنقل الأصول إلى الفائز.
 
-- Games or prediction markets that collect and redistribute prizes to the
-  winners.
+- الألعاب أو أسواق التنبؤ التي تجمع الجوائز وتُعيد توزيعها على الفائزين.
 
-Program derived address:
+عنوان البرنامج المُشتقِّ (Program derived address):
 
-1. Allow programs to control specific addresses, called program addresses, in
-   such a way that no external user can generate valid transactions with
-   signatures for those addresses.
+1. السماح للبرامج بالتحكم في عناوين مُحددة، تُسمى عناوين البرامج، بحيث لا يمكن لأي مُستخدم خارجي إنشاء مُعاملات صالحة بتوقيعات تلك العناوين.
 
-2. Allow programs to programmatically sign for program addresses that are
-   present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
+2. السماح للبرامج بالتوقيع برمجيًا لعناوين البرامج الموجودة في الإرشادات التي يتم إستدعاؤها عبر الدعوات عبر البرامج [Cross-Program Invocations](#cross-program-invocations).
 
-Given the two conditions, users can securely transfer or assign the authority of
-on-chain assets to program addresses and the program can then assign that
-authority elsewhere at its discretion.
+بالنظر إلى الشرطين، يمكن للمُستخدمين نقل أو تعيين سلطة الأصول على الشبكة (on-chain) بشكل آمن لعناوين البرامج ويمكن للبرنامج بعد ذلك تعيين هذه السلطة في مكان آخر وفقًا لتقديره.
 
-### Private keys for program addresses
+### مفاتيح خاصة (Private keys) لعناوين البرامج (program addresses)
 
-A Program address does not lie on the ed25519 curve and therefore has no valid
-private key associated with it, and thus generating a signature for it is
-impossible. While it has no private key of its own, it can be used by a program
-to issue an instruction that includes the Program address as a signer.
+لا يقع عنوان البرنامج على منحنى ed25519 وبالتالي لا يحتوي على مفتاح خاص (private key) صالح مُرتبط به، وبالتالي فإن إنشاء توقيع له أمر مستحيل.  في حين أنه لا يحتوي على مفتاح خاص (private key) خاص به، إلا أنه يُمكن إستخدامه بواسطة برنامج لإصدار تعليمات تتضمن عنوان البرنامج كمُوَقِّع (signer).
 
-### Hash-based generated program addresses
+### عناوين البرامج التي تم إنشاؤها على أساس التجزئة (Hash-based generated program addresses)
 
-Program addresses are deterministically derived from a collection of seeds and a
-program id using a 256-bit pre-image resistant hash function. Program address
-must not lie on the ed25519 curve to ensure there is no associated private key.
-During generation an error will be returned if the address is found to lie on
-the curve. There is about a 50/50 chance of this happening for a given
-collection of seeds and program id. If this occurs a different set of seeds or
-a seed bump (additional 8 bit seed) can be used to find a valid program address
-off the curve.
+يتم إشتقاق عناوين البرنامج بشكل حاسم من مجموعة البذور (seeds) ومُعرف البرنامج (program id) بإستخدام وظيفة تجزئة 256-bit مُقاومة للصور المُسبقًة (256-bit pre-image resistant hash function).  يجب ألا يقع عنوان البرنامج على منحنى ed25519 لضمان عدم وجود مفتاح خاص (private key) مُرتبط به. أثناء التوليد، سيتم إرجاع خطأ إذا تم العثور على العنوان على المُنحنى.  يحدث تغيير بنسبة 50/50 لمجموعة مُعينة من البذور (seeds) ومُعرف البرنامج (program id).  في حالة حدوث ذلك، يُمكن إستخدام مجموعة مُختلفة من البذور (seeds) أو نتوء البذور (بذرة 8 bit إضافية) للعثور على عنوان برنامج صالح خارج المُنحنى.
 
-Deterministic program addresses for programs follow a similar derivation path as
-Accounts created with `SystemInstruction::CreateAccountWithSeed` which is
-implemented with `Pubkey::create_with_seed`.
+تتبع عناوين البرامج الحتمية للبرامج مسار إشتقاق مُشابهًا للحسابات التي تم إنشاؤها بإستخدام `SystemInstruction::CreateAccountWithSeed` والتي يتم تنفيذها بـ `system_instruction::create_address_with_seed`.
 
-For reference that implementation is as follows:
+للإشارة فإن التنفيذ يتم على النحو التالي:
 
 ```rust,ignore
-pub fn create_with_seed(
+pub fn create_address_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -202,10 +131,9 @@ pub fn create_with_seed(
 }
 ```
 
-Programs can deterministically derive any number of addresses by using seeds.
-These seeds can symbolically identify how the addresses are used.
+يُمكن للبرامج أن تشتق بشكل حاسم أي عدد من العناوين بإستخدام البذور (seeds). يمكن لهذه البذور (seeds) أن تحدد رمزياً كيفية إستخدام العناوين.
 
-From `Pubkey`::
+من المفتاح العمومي `Pubkey`::
 
 ```rust,ignore
 /// Generate a derived program address
@@ -217,10 +145,9 @@ pub fn create_program_address(
 ) -> Result<Pubkey, PubkeyError>
 ```
 
-### Using program addresses
+### إستخدام عناوين البرنامج (Using program addresses)
 
-Clients can use the `create_program_address` function to generate a destination
-address.
+يمكن للعملاء إستخدام الدالة إنشاء عنوان البرنامج `create_program_address` لإنشاء عنوان وجهة.
 
 ```rust,ignore
 // deterministically derive the escrow key
@@ -235,15 +162,14 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair], &message);
 ```
 
-Programs can use the same function to generate the same address. In the function
-below the program issues a `token_instruction::transfer` from a program address
-as if it had the private key to sign the transaction.
+يمكن للبرامج أن تستخدم نفس الوظيفة لتوليد نفس العنوان. في الدالة أدناه البرنامج يطرح `token_instruction::transfer` من عنوان البرنامج كما لو كان لديه المفتاح الخاص (private key) لتوقيع المُعاملة.
 
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
+    keyed_accounts: &[KeyedAccount]
+) -> Result<()> {
+
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -257,24 +183,16 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction, accounts, &[&["escrow"]])
+    invoke_signed(&instruction,  &[&["escrow"]])؟
 }
 ```
 
-### Instructions that require signers
+### التعليمات التي تتطلب مُوقِّعين (Instructions that require signers)
 
-The addresses generated with `create_program_address` are indistinguishable from
-any other public key. The only way for the runtime to verify that the address
-belongs to a program is for the program to supply the seeds used to generate the
-address.
+لا يمكن تمييز العناوين التي تم إنشاؤها بإستخدام إنشاء عنوان البرنامج `create_program_address` عن أي مفتاح عمومي (public key) آخر. الطريقة الوحيدة لوقت التشغيل للتحقق من أن العنوان ينتمي إلى البرنامج هي أن يقوم البرنامج بتزويد البذور (seeds) المُستخدمة لإنشاء العنوان.
 
-The runtime will internally call `create_program_address`, and compare the
-result against the addresses supplied in the instruction.
+سيستدعي وقت التشغيل دالة إنشاء عنوان البرنامج `create_program_address` داخليًا، ويُقارن النتيجة بالعناوين المتوفرة في التعليمات.
 
-## Examples
+## أمثلة
 
-Refer to [Developing with
-Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)
-and [Developing with
-C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples)
-for examples of how to use cross-program invocation.
+يُرجى الرجوع إلى [Developing with Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) و [Developing with C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) للحصول على أمثلة لكيفية إستخدام الإستدعاءات عبر البرامج (Cross-Program Invocations).

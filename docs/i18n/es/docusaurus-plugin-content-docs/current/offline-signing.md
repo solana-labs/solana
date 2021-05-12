@@ -1,56 +1,44 @@
 ---
-title: Offline Transaction Signing
+title: Firmar Transacción sin conexión
 ---
 
-Some security models require keeping signing keys, and thus the signing
-process, separated from transaction creation and network broadcast. Examples
-include:
+Algunos modelos de seguridad requieren mantener las claves firmadas, y por lo tanto el proceso de firma, separado de la creación de transacciones y la transmisión de red. Los ejemplos incluyen:
 
-- Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
-  signing device
+- Recopilando firmas de firmas geográficamente separadas en un [esquema de firmas múltiples](cli/usage.md#multiple-witnesses)
+- Firmar transacciones utilizando un [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking)) dispositivo de firma
 
-This document describes using Solana's CLI to separately sign and submit a
-transaction.
+Este documento describe el uso de la CLI de Solana para firmar por separado y enviar una transacción.
 
-## Commands Supporting Offline Signing
+## Comandos que apoyan la firma sin conexión
 
-At present, the following commands support offline signing:
+Actualmente, los siguientes comandos soportan la firma sin conexión:
 
-- [`create-stake-account`](cli/usage.md#solana-create-stake-account)
-- [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
-- [`delegate-stake`](cli/usage.md#solana-delegate-stake)
-- [`split-stake`](cli/usage.md#solana-split-stake)
-- [`stake-authorize`](cli/usage.md#solana-stake-authorize)
-- [`stake-set-lockup`](cli/usage.md#solana-stake-set-lockup)
-- [`transfer`](cli/usage.md#solana-transfer)
-- [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
+- [`crear-cuenta-Stake`](cli/usage.md#solana-create-stake-account)
+- [`desactivar-stake`](cli/usage.md#solana-deactivate-stake)
+- [`delegar-Stake`](cli/usage.md#solana-delegate-stake)
+- [`dividir-stake`](cli/usage.md#solana-split-stake)
+- [`autorizar-stake`](cli/usage.md#solana-stake-authorize)
+- [`bloqueo-stake`](cli/usage.md#solana-stake-set-lockup)
+- [`transferir`](cli/usage.md#solana-transfer)
+- [`retirar-stake`](cli/usage.md#solana-withdraw-stake)
 
-## Signing Transactions Offline
+## Firmar transacciones fuera de línea
 
-To sign a transaction offline, pass the following arguments on the command line
+Para firmar una transacción sin conexión, pase los siguientes argumentos en la línea de comandos
 
-1. `--sign-only`, prevents the client from submitting the signed transaction
-   to the network. Instead, the pubkey/signature pairs are printed to stdout.
-2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to
-   fill the transaction's `recent_blockhash` field. This serves a number of
-   purposes, namely:
-   _ Eliminates the need to connect to the network and query a recent blockhash
-   via RPC
-   _ Enables the signers to coordinate the blockhash in a multiple-signature
-   scheme
+1. `--sign-only`, evita que el cliente envíe la transacción firmada a la red. En su lugar, los pares pubkey/signature se imprimen en stdout.
+2. `--blockhash BASE58_HASH`, permite al llamante especificar el valor usado para rellenar el campo `recent_blockhash` de la transacción. Esto sirve a un número de propósitos, cómo: _ Elimina la necesidad de conectarse a la red y consulta un blockhash reciente vía RPC _ Permite a los firmantes coordinar el blockhash en un esquema de múltiples firmas
 
-### Example: Offline Signing a Payment
+### Ejemplo: Firmar un Pago sin conexión
 
-Command
+Comando
 
 ```bash
-solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
-    recipient-keypair.json 1
+solana@offline$ pago solana --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
+    destinatario-keypair.json 1
 ```
 
-Output
+Salida
 
 ```text
 
@@ -61,19 +49,16 @@ Signers (Pubkey=Signature):
 {"blockhash":"5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF","signers":["FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN"]}'
 ```
 
-## Submitting Offline Signed Transactions to the Network
+## Enviando transacciones firmadas sin conexión a la red
 
-To submit a transaction that has been signed offline to the network, pass the
-following arguments on the command line
+Para enviar una transacción que ha sido firmada sin conexión a la red, pase los siguientes argumentos en la línea de comandos
 
-1. `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
-2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
-   includes the pubkey/signature pairs directly in the transaction rather than
-   signing it with any local keypair(s)
+1. `--blockhash BASE58_HASH`, debe ser el mismo blockhash que fue usado para firmar
+2. `--signner BASE58_PUBKEY=BASE58_SIGNATURE`, uno para cada firmante offline. Esto incluye los pares de pubkey/signature directamente en la transacción en lugar de firmarlo con cualquier keypair local(es)
 
-### Example: Submitting an Offline Signed Payment
+### Ejemplo: Enviar un pago firmado sin conexión
 
-Command
+Comando
 
 ```bash
 solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
@@ -81,22 +66,19 @@ solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomS
     recipient-keypair.json 1
 ```
 
-Output
+Salida
 
 ```text
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
 ```
 
-## Offline Signing Over Multiple Sessions
+## Sesiones múltiples sin conexión
 
-Offline signing can also take place over multiple sessions. In this scenario,
-pass the absent signer's public key for each role. All pubkeys that were specified,
-but no signature was generated for will be listed as absent in the offline signing
-output
+La firma sin conexión también puede tener lugar en varias sesiones. En este escenario, pase la clave pública del firmante ausente para cada rol. Todas las pubkeys que fueron especificadas, pero para las que no se generó ninguna firma se listarán como ausentes en la salida de firma sin conexión
 
-### Example: Transfer with Two Offline Signing Sessions
+### Ejemplo: Transferir con dos Sesiones sin conexión
 
-Command (Offline Session #1)
+Comando (Sesión sin conexión #1)
 
 ```text
 solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -106,7 +88,7 @@ solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --from 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Output (Offline Session #1)
+Salida (Sesión sin conexión #1)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -116,7 +98,7 @@ Absent Signers (Pubkey):
   674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL
 ```
 
-Command (Offline Session #2)
+Comando (Sesión sin conexión #2)
 
 ```text
 solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -126,7 +108,7 @@ solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10
     --fee-payer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Output (Offline Session #2)
+Salida (Sesión sin conexión #2)
 
 ```text
 Blockhash: 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
@@ -136,7 +118,7 @@ Absent Signers (Pubkey):
   3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy
 ```
 
-Command (Online Submission)
+Comando (Envío en línea)
 
 ```text
 solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
@@ -147,16 +129,12 @@ solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --signer 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy=ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-Output (Online Submission)
+Salida (Envío en línea)
 
 ```text
 ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-## Buying More Time to Sign
+## Comprando más tiempo para firmar
 
-Typically a Solana transaction must be signed and accepted by the network within
-a number of slots from the blockhash in its `recent_blockhash` field (~2min at
-the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
-need.
+Normalmente, una transacción Solana debe ser firmada y aceptada por la red dentro de un número de ranuras desde el blockhash en su campo `recent_blockhash` (~2min en en el momento de escribir este artículo). Si tu procedimiento de firma tarda más de esto, una [Durable Transacción Nonce](offline-signing/durable-nonce.md) puede darte el tiempo adicional que necesitas.

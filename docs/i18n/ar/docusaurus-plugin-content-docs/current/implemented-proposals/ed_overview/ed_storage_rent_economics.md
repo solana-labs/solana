@@ -1,17 +1,17 @@
 ---
-title: Storage Rent Economics
+title: إقتصاديات إيجار التخزين (Storage Rent Economics)
 ---
 
-Each transaction that is submitted to the Solana ledger imposes costs. Transaction fees paid by the submitter, and collected by a validator, in theory, account for the acute, transactional, costs of validating and adding that data to the ledger. Unaccounted in this process is the mid-term storage of active ledger state, necessarily maintained by the rotating validator set. This type of storage imposes costs not only to validators but also to the broader network as active state grows so does data transmission and validation overhead. To account for these costs, we describe here our preliminary design and implementation of storage rent.
+كل مُعاملة يتم تقديمها إلى دفتر الأستاذ (ledger) في شبكة بلوكشاين Solana تفرض تكاليف. رسوم المُعاملات التي يدفعها المُرسل (submitter)، والتي يجمعها المُدقّق (validator)، من الناحية النظرية، تُمثل التكاليف الحادة، المُعاملات والتكاليف للتحقق من صحة تلك البيانات وإضافتها إلى دفتر الأستاذ (ledger). الغير محسوب في هذه العملية هو التخزين على المدى المُتوسط لحالة دفتر الأستاذ (ledger) النشط، والذي يتم الحفاظ عليه بالضرورة من خلال مجموعة المُدقّق (validator) المتناوب. يفرض هذا النوع من التخزين تكاليف ليس فقط على المُدقّقين (validators) ولكن أيضًا على الشبكة الأوسع مع نمو الحالة النشطة وكذلك نقل البيانات والتكاليف الغير مُباشرة للمُصادقة (validation). لحساب هذه التكاليف، نصف هنا تصميمنا الأولي وتنفيذ إيجار التخزين.
 
-Storage rent can be paid via one of two methods:
+يمكن دفع إيجار التخزين بإحدى الطريقتين:
 
-Method 1: Set it and forget it
+الطريقة الأولى: أُضبطه وإنساه
 
-With this approach, accounts with two-years worth of rent deposits secured are exempt from network rent charges. By maintaining this minimum-balance, the broader network benefits from reduced liquidity and the account holder can trust that their `Account::data` will be retained for continual access/usage.
+مع هذا النهج، يتم إعفاء الحسابات التي تحتوي على ودائع إيجارية مُؤمنة لمُدة عامين من رسوم إيجار الشبكة. من خلال الحفاظ على هذا الحد الأدنى من الرصيد، تستفيد الشبكة الأوسع من السيولة المُنخفضة ويمكن لصاحب الحساب أن يثق في أنه سيتم الإحتفاظ بمعلومات الحساب `Account::data` من أجل الوصول / الإستخدام المستمر.
 
-Method 2: Pay per byte
+الطريقة 2: الدفع لكل byte
 
-If an account has less than two-years worth of deposited rent the network charges rent on a per-epoch basis, in credit for the next epoch. This rent is deducted at a rate specified in genesis, in lamports per kilobyte-year.
+إذا كان لدى الحساب أقل من عامين من الإيجار المُودع، فإن رسوم إيجار الشبكة تكون على أساس كل فترة (epoch)، كإئتمان للفترة (epoch) التالية. يتم خصم هذا الإيجار بمُعدل مُحدد في مرحلة التكوين (Genesis)، بوحدة الـ lamports لكل kilobyte في السنة.
 
-For information on the technical implementation details of this design, see the [Rent](../rent.md) section.
+للحصول على معلومات حول تفاصيل التنفيذ الفني لهذا التصميم، راجع قسم الإيجار [Rent](../rent.md).

@@ -1,70 +1,43 @@
 ---
-title: Tick Verification
+title: Verificación de Tick
 ---
 
-This design the criteria and validation of ticks in a slot. It also describes
-error handling and slashing conditions encompassing how the system handles
-transmissions that do not meet these requirements.
+Este diseño los criterios y la validación de ticks en una ranura. También describe las condiciones de manejo de errores y slashing que rodean cómo el sistema gestiona transmisiones que no cumplen estos requisitos.
 
-# Slot structure
+# Estructura de la ranura
 
-Each slot must contain an expected `ticks_per_slot` number of ticks. The last
-shred in a slot must contain only the entirety of the last tick, and nothing
-else. The leader must also mark this shred containing the last tick with the
-`LAST_SHRED_IN_SLOT` flag. Between ticks, there must be `hashes_per_tick`
-number of hashes.
+Cada ranura debe contener un número esperado de `ticks_per_slot` ticks. El último fragmento en una ranura debe contener sólo la totalidad del último tick, y nada más. El líder también debe marcar este fragmento que contiene el último tick con la bandera `LAST_SHRED_IN_SLOT`. Entre ticks, debe haber `hashes_per_tick` número de hashes.
 
-# Handling bad transmissions
+# Manejar las malas transmisiones
 
-Malicious transmissions `T` are handled in two ways:
+Las transmisiones maliciosas `T` se gestionan de dos maneras:
 
-1. If a leader can generate some erronenous transmission `T` and also some
-   alternate transmission `T'` for the same slot without violating any slashing
-   rules for duplicate transmissions (for instance if `T'` is a subset of `T`),
-   then the cluster must handle the possibility of both transmissions being live.
+1. Si un líder puede generar alguna transmisión errónea `T` y también alguna transmisión alternativa `T'` para la misma ranura sin violar ninguna regla de slashing para transmisiones duplicadas (por ejemplo si `T'` es un subconjunto de `T`), entonces el cluster debe manejar la posibilidad de que ambas transmisiones sean en vivo.
 
-Thus this means we cannot mark the erronenous transmission `T` as dead because
-the cluster may have reached consensus on `T'`. These cases necessitate a
-slashing proof to punish this bad behavior.
+Esto significa que no podemos marcar la transmisión errónea `T` como muerta porque el grupo puede haber alcanzado un consenso sobre `T'`. Estos casos necesitan una prueba de slashing para castigar este mal comportamiento.
 
-2. Otherwise, we can simply mark the slot as dead and not playable. A slashing
-   proof may or may not be necessary depending on feasibility.
+2. De lo contrario, podemos simplemente marcar la ranura como muerta y no jugable. Una prueba de slashing puede o no ser necesaria dependiendo de la factibilidad.
 
-# Blockstore receiving shreds
+# Blockstore recibiendo fragmentos
 
-When blockstore receives a new shred `s`, there are two cases:
+Cuando la blockstore recibe un nuevo fragmento `s`, hay dos casos:
 
-1. `s` is marked as `LAST_SHRED_IN_SLOT`, then check if there exists a shred
-   `s'` in blockstore for that slot where `s'.index > s.index` If so, together `s`
-   and `s'` constitute a slashing proof.
+1. `s` está marcada como `Última_Red_EN_SLOT`, entonces comprueba si existe un shred `s'` en el almacén de bloques para esa ranura donde `s'.index > s.index` Si es así, juntos `s` y `s'` constituyen una prueba de slashing.
 
-2. Blockstore has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
-   with index `i`. If `s.index > i`, then together `s` and `s'`constitute a
-   slashing proof. In this case, blockstore will also not insert `s`.
+2. Blockstore ya ha recibido un `'s` marcado como `LAST_SHRED_IN_SLOT` con índice `i`. Si `s.index > i`, juntas `s` y ``constituyen una prueba de slashing. En este caso, blockstore tampoco insertará `s`.
 
-3. Duplicate shreds for the same index are ignored. Non-duplicate shreds for
-   the same index are a slashable condition. Details for this case are covered
-   in the `Leader Duplicate Block Slashing` section.
+3. Se ignoran los fragmentos duplicados del mismo índice. Los fragmentos no duplicados para el mismo índice son una condición de slash. Los detalles para este caso están cubiertos en la sección `Bloque Duplicado Líder Slashing`.
 
-# Replaying and validating ticks
+# Reproduciendo y validando ticks
 
-1. Replay stage replays entries from blockstore, keeping track of the number of
-   ticks it has seen per slot, and verifying there are `hashes_per_tick` number of
-   hashes between ticcks. After the tick from this last shred has been played,
-   replay stage then checks the total number of ticks.
+1. La repetición de la etapa reproduce entradas desde el blockstore, manteniendo un seguimiento del número de ticks que ha visto por ranura, y verificando que hay un `hashes_per_tick` número de hash entre ticcks. Una vez que se ha reproducido el tick de este último fragmento, la etapa de repetición comprueba el número total de ticks.
 
-Failure scenario 1: If ever there are two consecutive ticks between which the
-number of hashes is `!= hashes_per_tick`, mark this slot as dead.
+Fallo del escenario 1: ¡Si alguna vez hay dos ticks consecutivos entre los cuales el número de hash es `! hashes_per_tick`, marque esta ranura como muerta.
 
-Failure scenario 2: If the number of ticks != `ticks_per_slot`, mark slot as
-dead.
+Fallo escenario 2: Si el número de ticks != `ticks_per_slot`, marque la ranura como muerta.
 
-Failure scenario 3: If the number of ticks reaches `ticks_per_slot`, but we still
-haven't seen the `LAST_SHRED_IN_SLOT`, mark this slot as dead.
+Fallo del escenario 3: Si el número de ticks alcanza `ticks_per_slot`, pero todavía no hemos visto el `LAST_SHRED_IN_SLOT`, marque esta ranura como muerta.
 
-2. When ReplayStage reaches a shred marked as the last shred, it checks if this
-   last shred is a tick.
+2. Cuando ReplayStage alcanza un fragmento marcado como el último fragmento, comprueba si este último fragmento es un tick.
 
-Failure scenario: If the signed shred with the `LAST_SHRED_IN_SLOT` flag cannot
-be deserialized into a tick (either fails to deserialize or deserializes into
-an entry), mark this slot as dead.
+Escenario de fallo: Si el fragmento firmado con la bandera `LAST_SHRED_IN_SLOT` no puede ser deserializado en un tick (o bien falla en la deserialización o se deserializa en una entrada), marca este slot como muerto.

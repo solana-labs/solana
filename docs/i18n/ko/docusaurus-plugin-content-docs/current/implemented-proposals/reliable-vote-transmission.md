@@ -1,60 +1,60 @@
 ---
-title: Reliable Vote Transmission
+title: 신뢰할 수있는 투표 전송
 ---
 
-Validator votes are messages that have a critical function for consensus and continuous operation of the network. Therefore it is critical that they are reliably delivered and encoded into the ledger.
+밸리데이터 투표는 네트워크의 지속적인 운영과 합의에 중요한 기능을하는 메시지입니다. 따라서 원장에 안정적으로 전달되고 인코딩되는 것이 중요합니다.
 
-## Challenges
+## 과제
 
-1. Leader rotation is triggered by PoH, which is clock with high drift. So many nodes are likely to have an incorrect view if the next leader is active in realtime or not.
-2. The next leader may be easily be flooded. Thus a DDOS would not only prevent delivery of regular transactions, but also consensus messages.
-3. UDP is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger. Retransmittion could potentially cause an unintentional _thundering herd_ against the leader with a large number of validators. Worst case flood would be `(num_nodes * num_retransmits)`.
-4. Tracking if the vote has been transmitted or not via the ledger does not guarantee it will appear in a confirmed block. The current observed block may be unrolled. Validators would need to maintain state for each vote and fork.
+1. 리더 회전은 높은 드리프트가있는 시계 인 역사증명에 의해 트리거됩니다. 다음 리더가 실시간으로 활성화되어 있는지 여부에 따라 너무 많은 노드가 잘못된보기를 가질 수 있습니다.
+2. 다음 리더는 쉽게 침수 될 수 있습니다. 따라서 DDOS는 일반 트랜잭션의 전달을 막을뿐만 아니라 합의 메시지도 차단합니다.
+3. UDP는 신뢰할 수 없으며 비동기 프로토콜은 전송되는 모든 메시지가 원장에서 관찰 될 때까지 재전송되도록 요구합니다. 재전송은 잠재적으로 많은 수의 밸리데이터이있는 리더에 대해 의도하지 않은 _ 천둥 무리 _를 유발할 수 있습니다. 최악의 경우 플러드는`(num_nodes * num_retransmits)`입니다.
+4. 원장을 통해 투표가 전송되었는지 여부를 추적한다고해서 확인 된 블록에 표시된다는 보장은 없습니다. 현재 관찰 된 블록이 풀릴 수 있습니다. 밸리데이터은 각 투표 및 포크에 대한 상태를 유지해야합니다.
 
-## Design
+## 디자인
 
-1. Send votes as a push message through gossip. This ensures delivery of the vote to all the next leaders, not just the next future one.
-2. Leaders will read the Crds table for new votes and encode any new received votes into the blocks they propose. This allows for validator votes to be included in rollback forks by all the future leaders.
-3. Validators that receive votes in the ledger will add them to their local crds table, not as a push request, but simply add them to the table. This shortcuts the push message protocol, so the validation messages do not need to be retransmitted twice around the network.
-4. CrdsValue for vote should look like this `Votes(Vec<Transaction>)`
+1. 가십을 통해 투표를 푸시 메시지로 보냅니다. 이를 통해 다음 리더뿐만 아니라 모든 다음 리더에게 투표를 전달할 수 있습니다.
+2. 리더는 새로운 투표를 위해 Crds 테이블을 읽고 새로받은 투표를 그들이 제안한 블록으로 인코딩합니다. 이를 통해 모든 미래 리더의 롤백 포크에 밸리데이터 투표를 포함 할 수 있습니다.
+3. 원장에서 투표를받은 유효성 검사기는 푸시 요청이 아닌 로컬 crds 테이블에 투표를 추가하지만 단순히 테이블에 추가합니다. 이렇게하면 푸시 메시지 프로토콜이 단축되므로 유효성 검사 메시지를 네트워크를 통해 두 번 재전송 할 필요가 없습니다.
+4. 투표를위한 CrdsValue는`Votes (Vec <Transaction>)`와
 
-Each vote transaction should maintain a `wallclock` in its data. The merge strategy for Votes will keep the last N set of votes as configured by the local client. For push/pull the vector is traversed recursively and each Transaction is treated as an individual CrdsValue with its own local wallclock and signature.
+각 투표 트랜잭션은 데이터에`wallclock`을 유지해야합니다. 투표에 대한 병합 전략은 로컬 클라이언트가 구성한대로 마지막 N 개의 투표 세트를 유지합니다. 푸시 / 풀의 경우 벡터는 재귀 적으로 순회되고 각 트랜잭션은 자체 로컬 wallclock 및 서명이있는 개별 CrdsValue로 처리됩니다.
 
-Gossip is designed for efficient propagation of state. Messages that are sent through gossip-push are batched and propagated with a minimum spanning tree to the rest of the network. Any partial failures in the tree are actively repaired with the gossip-pull protocol while minimizing the amount of data transfered between any nodes.
+Gossip은 효율적인 상태 전파를 위해 설계되었습니다. gossip-push를 통해 전송 된 메시지는 배치되고 최소 스패닝 트리를 사용하여 나머지 네트워크로 전파됩니다. 트리의 모든 부분적 오류는 노드간에 전송되는 데이터의 양을 최소화하면서 gossip-pull 프로토콜을 통해 능동적으로 복구됩니다.
 
-## How this design solves the Challenges
+## 이 디자인이 과제를 해결하는 방법
 
-1. Because there is no easy way for validators to be in sync with leaders on the leader's "active" state, gossip allows for eventual delivery regardless of that state.
-2. Gossip will deliver the messages to all the subsequent leaders, so if the current leader is flooded the next leader would have already received these votes and is able to encode them.
-3. Gossip minimizes the number of requests through the network by maintaining an efficient spanning tree, and using bloom filters to repair state. So retransmit back-off is not necessary and messages are batched.
-4. Leaders that read the crds table for votes will encode all the new valid votes that appear in the table. Even if this leader's block is unrolled, the next leader will try to add the same votes without any additional work done by the validator. Thus ensuring not only eventual delivery, but eventual encoding into the ledger.
+1. 밸리데이터이 리더의 "활성"상태에있는 리더와 쉽게 동기화 할 수있는 방법이 없기 때문에 가십은 해당 상태에 관계없이 최종 전달을 허용합니다.
+2. Gossip은 모든 후속 리더에게 메시지를 전달하므로 현재 리더가 넘치면 다음 리더는 이미 이러한 투표를 받았을 것이며이를 인코딩 할 수 있습니다.
+3. Gossip은 효율적인 스패닝 트리를 유지하고 블룸 필터를 사용하여 상태를 복구함으로써 네트워크를 통한 요청 수를 최소화합니다. 따라서 재전송 백 오프가 필요하지 않으며 메시지가 일괄 처리됩니다.
+4. 투표를 위해 crds 테이블을 읽는 리더는 테이블에 나타나는 모든 새 유효한 투표를 인코딩합니다. 이 리더의 블록이 풀리더라도 다음 리더는 밸리데이터이 수행 한 추가 작업없이 동일한 투표를 추가하려고합니다. 따라서 최종 전달뿐만 아니라 원장에 대한 최종 인코딩을 보장합니다.
 
-## Performance
+## 성능
 
-1. Worst case propagation time to the next leader is Log\(N\) hops with a base depending on the fanout. With our current default fanout of 6, it is about 6 hops to 20k nodes.
-2. The leader should receive 20k validation votes aggregated by gossip-push into MTU-sized shreds. Which would reduce the number of packets for 20k network to 80 shreds.
-3. Each validators votes is replicated across the entire network. To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes. `(20,000 nodes * 256 bytes * 5)`.
+1. 다음 리더로의 최악의 전파 시간은 팬 아웃에 따라 기본이있는 Log \ (N \) 홉입니다. 현재 기본 팬 아웃이 6 인 경우 약 6 홉에서 2 만 노드까지입니다.
+2. 리더는 가십 푸시를 통해 MTU 크기의 조각으로 집계 된 2 만 개의 검증 투표를 받아야합니다. 이는 20k 네트워크의 패킷 수를 80 개로 줄입니다.
+3. 각 밸리데이터 투표는 전체 네트워크에 복제됩니다. 이전 5 표의 대기열을 유지하기 위해 Crds 테이블은 25MB 씩 증가합니다. `(20,000 노드 * 256 바이트 * 5)`.
 
-## Two step implementation rollout
+## 2 단계 구현 롤아웃
 
-Initially the network can perform reliably with just 1 vote transmitted and maintained through the network with the current Vote implementation. For small networks a fanout of 6 is sufficient. With small network the memory and push overhead is minor.
+처음에 네트워크는 현재의 투표 구현으로 네트워크를 통해 전송되고 유지되는 단 1 개의 투표만으로 안정적으로 수행 할 수 있습니다. 소규모 네트워크의 경우 6 개의 팬 아웃이면 충분합니다. 소규모 네트워크에서는 메모리 및 푸시 오버 헤드가 적습니다.
 
-### Sub 1k validator network
+### Sub 1k 밸리데이터 네트워크
 
-1. Crds just maintains the validators latest vote.
-2. Votes are pushed and retransmitted regardless if they are appearing in the ledger.
-3. Fanout of 6.
-4. Worst case 256kb memory overhead per node.
-5. Worst case 4 hops to propagate to every node.
-6. Leader should receive the entire validator vote set in 4 push message shreds.
+1. Crds는 밸리데이터의 최신 투표 만 유지합니다.
+2. 투표는 원장에 표시되는지 여부에 관계없이 푸시되고 재전송됩니다.
+3. 6 개의 팬 아웃
+4. 최악의 경우 노드 당 256kb 메모리 오버 헤드.
+5. 최악의 경우 4 홉이 모든 노드로 전파됩니다.
+6. 리더는 4 개의 푸시 메시지 조각으로 설정된 전체 밸리데이터 투표를 받아야합니다.
 
-### Sub 20k network
+### 하위 20k 네트워크
 
-Everything above plus the following:
+위의 모든 것 및 다음 사항 :
 
-1. CRDS table maintains a vector of 5 latest validator votes.
-2. Votes encode a wallclock. CrdsValue::Votes is a type that recurses into the transaction vector for all the gossip protocols.
-3. Increase fanout to 20.
-4. Worst case 25mb memory overhead per node.
-5. Sub 4 hops worst case to deliver to the entire network.
+1. CRDS 테이블은 5 개의 최신 유효성 검사기 투표의 벡터를 유지합니다.
+2. 투표는 벽시계를 인코딩합니다. CrdsValue :: Votes는 모든 가십 프로토콜에 대해 트랜잭션 벡터로 반복되는 유형입니다.
+3. 팬 아웃을 20으로 늘.
+4. 최악의 경우 노드 당 25MB 메모리 오버 헤드.
+5. 모든 유효성 검사기 메시지에 대해 리더가받은 80 개의 조각.
 6. 80 shreds received by the leader for all the validator messages.

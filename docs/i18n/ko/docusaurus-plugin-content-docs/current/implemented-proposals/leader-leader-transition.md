@@ -1,55 +1,55 @@
 ---
-title: Leader-to-Leader Transition
+title: 리더에서 리더로 전환
 ---
 
-This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
+이 설계는 각 리더가 자체 슬롯을 생성 할 때 리더가 서로 역사증명 원장의 생산을 전환하는 방법을 설명합니다.
 
-## Challenges
+## 도전
 
-Current leader and the next leader are both racing to generate the final tick for the current slot. The next leader may arrive at that slot while still processing the current leader's entries.
+현재 리더와 다음 리더는 모두 현재 슬롯에 ​​대한 최종 틱을 생성하기 위해 경주하고 있습니다. 다음 리더는 현재 리더의 항목을 처리하는 동안 해당 슬롯에 도착할 수 있습니다.
 
-The ideal scenario would be that the next leader generated its own slot right after it was able to vote for the current leader. It is very likely that the next leader will arrive at their PoH slot height before the current leader finishes broadcasting the entire block.
+이상적인 시나리오는 다음 리더가 현재 리더에게 투표 할 수있게 된 직후 자체 슬롯을 생성하는 것입니다. 현재 리더가 전체 블록의 방송을 마치기 전에 다음 리더가 역사증명 슬롯 높이에 도달 할 가능성이 매우 높습니다.
 
-The next leader has to make the decision of attaching its own block to the last completed block, or wait to finalize the pending block. It is possible that the next leader will produce a block that proposes that the current leader failed, even though the rest of the network observes that block succeeding.
+다음 리더는 자신의 블록을 마지막 완료된 블록에 연결하기로 결정하거나 보류중인 블록을 완료 할 때까지 기다려야합니다. 나머지 네트워크가 해당 블록이 성공하는 것을 관찰하더라도 다음 리더는 현재 리더가 실패했음을 제안하는 블록을 생성 할 수 있습니다.
 
-The current leader has incentives to start its slot as early as possible to capture economic rewards. Those incentives need to be balanced by the leader's need to attach its block to a block that has the most commitment from the rest of the network.
+현재 리더는 경제적 보상을 얻기 위해 가능한 한 빨리 슬롯을 시작할 인센티브가 있습니다. 이러한 인센티브는 나머지 네트워크에서 가장 많은 노력을 기울이는 블록에 블록을 연결해야하는 리더의 필요성과 균형을 이루어야합니다.
 
-## Leader timeout
+## 리더 타임 아웃
 
-While a leader is actively receiving entries for the previous slot, the leader can delay broadcasting the start of its block in real time. The delay is locally configurable by each leader, and can be dynamically based on the previous leader's behavior. If the previous leader's block is confirmed by the leader's TVU before the timeout, the PoH is reset to the start of the slot and this leader produces its block immediately.
+리더가 이전 슬롯에 대한 항목을 적극적으로 수신하는 동안 리더는 실시간으로 블록의 시작 방송을 지연시킬 수 있습니다. 지연은 각 리더가 로컬로 구성 할 수 있으며 이전 리더의 동작을 기반으로 동적으로 지정할 수 있습니다. 타임 아웃 전에 리더의 TVU에 의해 이전 리더의 블록이 확인되면 역사증명는 슬롯의 시작으로 재설정되고이 리더는 즉시 블록을 생성합니다.
 
-The downsides:
+단점 :
 
 - Leader delays its own slot, potentially allowing the next leader more time to
 
-  catch up.
+  따라 잡으세요.
 
-The upsides compared to guards:
+-리더는 자신의 슬롯을 지연시켜 잠재적으로 다음 리더가
 
 - All the space in a block is used for entries.
 - The timeout is not fixed.
-- The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
+- The timeout is local to the leader, and therefore can be clever. 리더의 휴리스틱은 터빈 성능을 고려할 수 있습니다.
 - This design doesn't require a ledger hard fork to update.
-- The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
+- -이전 리더는 블록의 마지막 항목을 다음 리더에게 중복 전송할 수 있으며, 다음 리더는 이전 블록의 검증없이 블록 생성을 신뢰하기로 추측 할 수 있습니다.
 - The leader can speculatively generate the last tick from the last received entry.
-- The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
+- -리더는 거래를 투기 적으로 처리하고 이전 리더가 암호화하지 않을 거래를 추측 할 수 있습니다. 이것은 또한 검열 공격 벡터입니다. 현재 리더는 클라이언트로부터받은 트랜잭션을 보류하여 자체 슬롯으로 인코딩 할 수 있습니다. 처리가 완료되면 항목을 역사증명로 빠르게 재생할 수 있습니다.
 
-## Alternative design options
+## 대체 설계 옵션
 
-### Guard tick at the end of the slot
+### 슬롯 끝의 가드 틱
 
-A leader does not produce entries in its block after the _penultimate tick_, which is the last tick before the first tick of the next slot. The network votes on the _last tick_, so the time difference between the _penultimate tick_ and the _last tick_ is the forced delay for the entire network, as well as the next leader before a new slot can be generated. The network can produce the _last tick_ from the _penultimate tick_.
+리더는 다음 슬롯의 첫 번째 틱 이전의 마지막 틱인 _penultimate tick_ 이후 블록에 항목을 생성하지 않습니다. 네트워크는 _last tick_에 투표하므로 _penultimate tick_과 _last tick_ 사이의 시간 차이는 새 슬롯이 생성되기 전 다음 리더뿐만 아니라 전체 네트워크에 대한 강제 지연입니다. 네트워크는 _penultimate tick_에서 _last tick_을 생성 할 수 있습니다.
 
-If the next leader receives the _penultimate tick_ before it produces its own _first tick_, it will reset its PoH and produce the _first tick_ from the previous leader's _penultimate tick_. The rest of the network will also reset its PoH to produce the _last tick_ as the id to vote on.
+다음 리더가 자체 _first tick_을 생성하기 전에 _penultimate tick_을 받으면 역사증명를 재설정하고 이전 리더의 _penultimate tick_에서 _first tick_을 생성합니다. 나머지 네트워크도 역사증명를 재설정하여 투표 할 ID로 _last tick_을 생성합니다.
 
-The downsides:
+단점 :
 
-- Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
-- Average case confirmation time for a transaction would be at least 50ms worse.
+- -모든 투표 및 이에 따른 확인은 고정 된 시간 초과로 지연됩니다. 1 틱 또는 약 100ms.
+- -거래에 대한 평균 케이스 확인 시간은 적어도 50ms 더 나빠질 것입니다.
 - It is part of the ledger definition, so to change this behavior would require a hard fork.
 - Not all the available space is used for entries.
 
-The upsides compared to leader timeout:
+리더 타임 아웃과 비교 한 장점 :
 
-- The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
-- The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.
+- -다음 리더는 이전 항목을 모두 수신 했으므로 역사증명에 기록하지 않고 트랜잭션 처리를 시작할 수 있습니다.
+- -이전 리더는 _ 두 번째 틱 _이 포함 된 마지막 항목을 다음 리더에게 중복 전송할 수 있습니다. 다음 리더는 _ 두 번째 틱 _을 수신하는 즉시 _ 마지막 틱 _을 검증하기 전에도 추측 적으로 생성 할 수 있습니다.

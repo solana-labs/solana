@@ -1,192 +1,97 @@
 ---
-title: Vote Account Management
+title: إدارة حساب التصويت (Vote Account Management)
 ---
 
-This page describes how to set up an on-chain _vote account_. Creating a vote
-account is needed if you plan to run a validator node on Solana.
+تصف هذه الصفحة كيفية إعداد حساب التصويت _vote account_. على الشبكة (On-Chain).  يلزم إنشاء حساب تصويت إذا كنت تُخطط لتشغيل عُقدة تدقيق (valdiator node) على Solana.
 
-## Create a Vote Account
+## إنشاء حساب تصويت (Create Vote Account)
+يُمكن إنشاء حساب تصويت بإستخدام الأمر إنشاء حساب التصويت [create-vote-account](../cli/usage.md#solana-create-vote-account). يُمكن تكوين حساب التصويت عند إنشائه لأول مرة أو بعد تشغيل المُدقّق (validator).  يُمكن تغيير جميع جوانب حساب التصويت بإستثناء [vote account address](#vote-account-address)، والذي تم إصلاحه طوال عمر الحساب.
 
-A vote account can be created with the
-[create-vote-account](../cli/usage.md#solana-create-vote-account) command.
-The vote account can be configured when first created or after the validator is
-running. All aspects of the vote account can be changed except for the
-[vote account address](#vote-account-address), which is fixed for the lifetime
-of the account.
+### إعدادات حساب التصويت الحالي (Configure an Existing Vote Account)
+ - لتغيير هوية المُدقّق [validator identity](#validator-identity)، إستخدم [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
+ - لتغيير سلطة التصويت [vote authority](#vote-authority)، إستخدم [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
+ - لتغيير سلطة السحب [withdraw authority](#withdraw-authority)، إستخدم [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
+ - لتغيير العمولة [commission](#commission)، إستخدم [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-### Configure an Existing Vote Account
+## هيكل حساب التصويت (Vote Account Structure)
 
-- To change the [validator identity](#validator-identity), use
-  [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
-- To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
-- To change the [withdraw authority](#withdraw-authority), use
-  [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
-- To change the [commission](#commission), use
-  [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
+### عنوان حساب التصويت (Vote Account Structure)
+يتم إنشاء حساب تصويت على عنوان يكون إما المفتاح العمومي (public key) لملف زوج المفاتيح (keypair)، أو في عنوان مُشتق بناءً على المفتاح العمومي (public key) لملف زوج المفاتيح (keypair) والسلسلة الأولية (seed string).
 
-## Vote Account Structure
+لا يلزم أبدًا عنوان حساب التصويت للتوقيع على أي مُعاملات، ولكنه يُستخدم فقط للبحث عن معلومات الحساب.
 
-### Vote Account Address
+عندما يرغب شخص ما في تفويض الرموز في حساب حِصَّة [delegate tokens in a stake account](../staking.md)، يتم توجيه أمر التفويض إلى عنوان حساب التصويت الخاص المُدقّق (validator) الذي يريد حامل الرمز (token-holder) تفويضه.
 
-A vote account is created at an address that is either the public key of a
-keypair file, or at a derived address based on a keypair file's public key and
-a seed string.
+### هوية المُدقّق (Validator Identity)
 
-The address of a vote account is never needed to sign any transactions,
-but is just used to look up the account information.
+هوية المُدقّق _validator identity_ هي حساب نظام يتم إستخدامه لدفع جميع رسوم مُعاملات التصويت المُقدمة إلى حساب التصويت. نظرًا لأنه من المُتوقع أن يقوم المُدقّق (validator) بالتصويت على مُعظم الكتل (blocks) الصالحة التي يتلقاها، فإن حساب هوية المُدقّق (validator identity account) غالبًا (من المُحتمل عدة مرات في الثانية) يُوقع المُعاملات ويدفع الرسوم.  لهذا السبب، يجب تخزين زوج مفاتيح هوية المُدقّق (validator identity keypair) كـ "محفظة ساخنة" (hot wallet) في ملف زوج مفاتيح على نفس النظام الذي تعمل فيه عملية التدقيق.
 
-When someone wants to [delegate tokens in a stake account](../staking.md),
-the delegation command is pointed at the vote account address of the validator
-to whom the token-holder wants to delegate.
+نظرًا لأن المحفظة الساخنة (hot wallet) أقل أمانًا بشكل عام من المحفظة غير المُتصلة بالأنترنات أو "المحفظة الباردة" (cold wallet)، فقد يختار عامل المُدقّق (validator) تخزين ما يكفي فقط من عملات SOL على حساب الهوية (identity account) لتغطية رسوم التصويت لفترة زمنية محدودة، مثل بضعة أسابيع أو أشهر.  يُمكن أن يتم تفريغ حساب هوية المُدقّق (validator identity account) بشكل دوري من محفظة أكثر أمانًا.
 
-### Validator Identity
+يُمكن أن تُقلل هذه الممارسة من مخاطر فقدان الأموال إذا تعرض قُرص عُقدة التدقيق (validator node) أو نظام الملفات للخطر أو التلف.
 
-The _validator identity_ is a system account that is used to pay for all the
-vote transaction fees submitted to the vote account.
-Because the validator is expected to vote on most valid blocks it receives,
-the validator identity account is frequently
-(potentially multiple times per second) signing transactions and
-paying fees. For this reason the validator identity keypair must be
-stored as a "hot wallet" in a keypair file on the same system the validator
-process is running.
+يجب توفير هوية المُدقّق (validator identity) عند إنشاء حساب تصويت. يُمكن أيضًا تغيير هوية المُدقّق (validator identity) بعد إنشاء حساب بإستخدام الأمر [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 
-Because a hot wallet is generally less secure than an offline or "cold" wallet,
-the validator operator may choose to store only enough SOL on the identity
-account to cover voting fees for a limited amount of time, such as a few weeks
-or months. The validator identity account could be periodically topped off
-from a more secure wallet.
+### سلطة التصويت (Vote Authority)
 
-This practice can reduce the risk of loss of funds if the validator node's
-disk or file system becomes compromised or corrupted.
+يتم إستخدام زوج مفاتيح سلطة التصويت _vote authority_ للتوقيع على كل مُعاملة تصويت تريد عُقدة التدقيق (validator node) إرسالها إلى المجموعة (cluster).  ليس بالضرورة أن يكون هذا فريدًا من هوية المُدقّق (validator)، كما سترى لاحقًا في هذا المُستند.  نظرًا لأن سلطة التصويت، مثل هوية المُدقّق (validator identity)، تقوم بتوقيع المُعاملات بشكل مُتكرر، يجب أن يكون هذا أيضًا زوج مفاتيح ساخنة (hot keypair) على نفس نظام الملفات مثل عملية المُدقّق (validator).
 
-The validator identity is required to be provided when a vote account is created.
-The validator identity can also be changed after an account is created by using
-the [vote-update-validator](../cli/usage.md#solana-vote-update-validator) command.
+يُمكن تعيين سلطة التصويت على نفس العنوان مثل هوية المُدقّق (validator identity). إذا كانت هوية المُدقّق (validator identity) هي أيضًا سلطة التصويت، فستكون هناك حاجة إلى توقيع واحد فقط لكل مُعاملة تصويت من أجل التوقيع على التصويت ودفع رسوم المُعاملة.  نظرًا لأن رسوم المُعاملات على Solana يتم تقييمها لكل توقيع، فإن وجود مُوَقِّع (signer) واحد بدلاً من إثنين سيُؤدي إلى دفع نصف رسوم المُعاملة مُقارنة بتعيين سلطة التصويت وهوية المُدقّق (validator identity) في حسابين مُختلفين.
 
-### Vote Authority
+يُمكن تعيين سلطة التصويت عند إنشاء حساب التصويت.  إذا لم يتم توفيره، فسيكون السلوك الإفتراضي هو تعيينه بنفس هوية المُدقّق (validator identity). يُمكن تغيير سلطة التصويت لاحقًا بإستخدام الأمر [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
 
-The _vote authority_ keypair is used to sign each vote transaction the validator
-node wants to submit to the cluster. This doesn't necessarily have to be unique
-from the validator identity, as you will see later in this document. Because
-the vote authority, like the validator identity, is signing transactions
-frequently, this also must be a hot keypair on the same file system as the
-validator process.
+يُمكن تغيير سلطة التصويت مرة واحدة على الأكثر في كل فترة (epoch).  إذا تم تغيير السلطة بـ [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter)، فلن يُصبح هذا ساري المفعول حتى بداية الفترة (epoch) التالية. لدعم الإنتقال السلس لتوقيع التصويت، يسمح `solana-validator` بتحديد الوسيطة `--authorized-voter` عدة مرات.  يسمح هذا لعملية المُدقّق (validator) بمُواصلة التصويت بنجاح عندما تصل الشبكة إلى حد الفترة (epoch) التي يتغير فيها حساب سلطة التصويت للمُدقّق (validator).
 
-The vote authority can be set to the same address as the validator identity.
-If the validator identity is also the vote authority, only one
-signature per vote transaction is needed in order to both sign the vote and pay
-the transaction fee. Because transaction fees on Solana are assessed
-per-signature, having one signer instead of two will result in half the transaction
-fee paid compared to setting the vote authority and validator identity to two
-different accounts.
+### سلطة سحب الأموال (Withdraw Authority)
 
-The vote authority can be set when the vote account is created. If it is not
-provided, the default behavior is to assign it the same as the validator identity.
-The vote authority can be changed later with the
-[vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter) command.
+يتم إستخدام زوج مفاتيح سلطة سحب الأموال _withdraw authority_ من حساب التصويت بإستخدام الأمر سحب الأموال من حساب التصويت [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account).  يتم إيداع أي مُكافآت في الشبكة يكسبها المُدقّق (validator) في حساب التصويت ولا يُمكن إستردادها إلا من خلال التوقيع مع زوج مفاتيح سلطة السحب (withdraw authority keypair).
 
-The vote authority can be changed at most once per epoch. If the authority is
-changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
-this will not take effect until the beginning of the next epoch.
-To support a smooth transition of the vote signing,
-`solana-validator` allows the `--authorized-voter` argument to be specified
-multiple times. This allows the validator process to keep voting successfully
-when the network reaches an epoch boundary at which the validator's vote
-authority account changes.
+سلطة سحب الأموال مطلوبة أيضًا للتوقيع على أي مُعاملة لتغيير عمولة [commission](#commission) حساب تصويت، ولتغيير هوية المُدقّق (validator identity) على حساب التصويت.
 
-### Withdraw Authority
+نظرًا لأن حساب التصويت يُمكن أن يُراكم رصيدًا كبيرًا، ففكر في الإحتفاظ بزوج مفاتيح سلطة سحب الأموال (withdraw authority keypair) في محفظة غير مُتصلة بالأنترنات / باردة، حيث لا يلزم توقيع مُعاملات متكررة.
 
-The _withdraw authority_ keypair is used to withdraw funds from a vote account
-using the [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
-command. Any network rewards a validator earns are deposited into the vote
-account and are only retrievable by signing with the withdraw authority keypair.
+يُمكن تعيين سلطة السحب عند إنشاء حساب التصويت بخيار الساحب المُصرَّح به `--authorized-withdrawer`.  إذا لم يتم توفير ذلك، فسيتم تعيين هوية المُدقّق (validator identity) كسلطة سحب أموال بشكل إفتراضي.
 
-The withdraw authority is also required to sign any transaction to change
-a vote account's [commission](#commission), and to change the validator
-identity on a vote account.
+يُمكن تغيير سلطة السحب لاحقًا بإستخدام الأمر التصويت بالتصريح للساحب [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
 
-Because the vote account could accrue a significant balance, consider keeping
-the withdraw authority keypair in an offline/cold wallet, as it is
-not needed to sign frequent transactions.
+### العمولة (Commission)
 
-The withdraw authority can be set at vote account creation with the
-`--authorized-withdrawer` option. If this is not provided, the validator
-identity will be set as the withdraw authority by default.
+العمولة _Commission_ هي النسبة المئوية لمُكافآت الشبكة التي يربحها المُدقّق (validator) والتي يتم إيداعها في حساب تصويت المُدقّق.  يتم توزيع ما تبقى من المُكافآت على جميع حسابات الأسهم المُفوضة لحساب التصويت هذا، بما يتناسب مع وزن الحِصَّة (stake) النشطة لكل حساب حِصَّة.
 
-The withdraw authority can be changed later with the
-[vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
-command.
+على سبيل المثال، إذا كان حساب التصويت به عمولة بنسبة 10٪، بالنسبة لجميع المُكافآت التي حصل عليها هذا المُدقّق (validator) في فترة مُعينة، فسيتم إيداع 10٪ من هذه المُكافآت في حساب التصويت في الكتلة الأولى من الفترة (epoch) التالية. سيتم إيداع الـ 90٪ المُتبقية في حسابات حِصَص (stakes) مُفوضة كحِصَة (stake) نشطة على الفور.
 
-### Commission
+قد يختار المُدقّق (validator) تعيين عمولة مُنخفضة لمحاولة جذب المزيد من تفويضات الحِصَّة (stake) حيث ينتج عن العمولة الأقل نسبة أكبر من المُكافآت التي يتم تمريرها إلى المُفوِّض (delegator).  نظرًا لوجود تكاليف مُرتبطة بإعداد وتشغيل عُقدة التدقيق (validator node) من الصحة، فإن المُدقّق (validator) سيُحدد بشكل مثالي عمولة عالية بما يكفي لتغطية نفقاتهم على الأقل.
 
-_Commission_ is the percent of network rewards earned by a validator that are
-deposited into the validator's vote account. The remainder of the rewards
-are distributed to all of the stake accounts delegated to that vote account,
-proportional to the active stake weight of each stake account.
+يُمكن تعيين العمولة عند إنشاء حساب التصويت بخيار العمولة `--commission`. إذا لم يتم توفيره، فسيتم تعيينه إفتراضيًا إلى 100٪، مما سيُؤدي إلى إيداع جميع المُكافآت في حساب التصويت، ولن يتم تمرير أي منها إلى أي حسابات حسابات تحْصِيص مُفوضة (delegated stake accounts).
 
-For example, if a vote account has a commission of 10%, for all rewards earned
-by that validator in a given epoch, 10% of these rewards will be deposited into
-the vote account in the first block of the following epoch. The remaining 90%
-will be deposited into delegated stake accounts as immediately active stake.
+يُمكن أيضًا تغيير العمولة لاحقًا بإستخدام الأمر عمولة تحديث التصويت [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-A validator may choose to set a low commission to try to attract more stake
-delegations as a lower commission results in a larger percentage of rewards
-passed along to the delegator. As there are costs associated with setting up
-and operating a validator node, a validator would ideally set a high enough
-commission to at least cover their expenses.
+عند تعيين العمولة، يتم قبول قِيم الأعداد الصحيحة (integer values) فقط في المجموعة [0-100]. يُمثل العدد الصحيح (integer) عدد النقاط المئوية للعمولة، لذا فإن إنشاء حساب بإستخدام `--commission 10` سيُحدد عمولة بنسبة 10٪.
 
-Commission can be set upon vote account creation with the `--commission` option.
-If it is not provided, it will default to 100%, which will result in all
-rewards deposited in the vote account, and none passed on to any delegated
-stake accounts.
+## تناوب المفتاح (Key Rotation)
+يتطلب تناوب مفاتيح سلطة حساب التصويت مُعالجة خاصة عند التعامل مع مُدقّق (validator) شغال.
 
-Commission can also be changed later with the
-[vote-update-commission](../cli/usage.md#solana-vote-update-commission) command.
+### التصويت على حساب هوية المُدقّق (Vote Account Validator Identity)
 
-When setting the commission, only integer values in the set [0-100] are accepted.
-The integer represents the number of percentage points for the commission, so
-creating an account with `--commission 10` will set a 10% commission.
+ستحتاج إلى الوصول إلى زوج مفاتيح سلطة سحب الأموال _withdraw authority_ لحساب التصويت لتغيير هوية المُدقّق (validator).  تفترض خطوات المُتابعة أن `~/withdraw-authority.json` هو زوج المفاتيح (keypair) هذا.
 
-## Key Rotation
+1. قُم بإنشاء زوج مفاتيح هوية المُدقّق (validator identity keypair) الجديد، `solana-keygen new -o ~/new-validator-keypair.json`.
+2. تأكد من أن حساب الهوية الجديد قد تم تمويله، `solana transfer ~/new-validator-keypair.json 500`.
+3. قُم بتشغيل `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json` لتعديل هوية المُدقّق (validator identity) في حساب التصويت الخاص بك
+4. أعد تشغيل المُدقّق (validator) بإستخدام زوج مفاتيح الهوية الجديد للوسيطة `--identity`
 
-Rotating the vote account authority keys require special handling when dealing
-with a live validator.
+### الناخب المُفوض لحساب التصويت (Vote Account Authorized Voter)
+لا يُمكن تغيير زوج المفاتيح _vote authority_ إلا عند حدود الفترة (epoch) ويتطلب بعض الوسيطات الإضافية لـ `solana-validator` لترحيل سلس.
 
-### Vote Account Validator Identity
+1. قُم بتشغيل `solana epoch-info`.  إذا لم يكن هناك الكثير من الوقت المُتبقي في الفترة (epoch) الحالية، ففكر في إنتظار الفترة (epoch) التالية للسماح للمُدقّق (validator) الخاص بك بوقت كافٍ لإعادة التشغيل واللحاق بالركب.
+2. إنشاء زوج مفاتيح السلطة (authority keypair) التصويت الجديد `solana-keygen new -o ~/new-vote-authority.json`.
+3. تحديد زوج مفاتيح سلطة التصويت _vote authority_ الحالي بتشغيل `solana
+vote-account ~/vote-account-keypair.json`.  قد يكون حساب هوية المُدقّق (validator) (الإفتراضي) أو بعض أزواج المفاتيح (keypair) الأخرى.  تفترض الخطوات التالية أن `~/validator-keypair.json` هو زوج المفاتيح (keypair) هذا.
+4. قُم بتشغيل `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. من المُقرر أن تُصبح سلطة التصويت الجديدة نشطة إعتبارًا من الفترة (epoch) التالية.
+5. يحتاج `solana-validator` الآن إلى إعادة التشغيل بإستخدام زوج مفاتيح سلطة التصويت (vote authority keypairs) القديمة والجديدة، حتى يتمكن من الإنتقال بسلاسة في الفترة (epoch) التالية. قُم بإضافة الوسيطتين عند إعادة التشغيل: `--authorized-voter ~/validator-keypair.json
+--authorized-voter ~/new-vote-authority.json`
+6. بعد وصول المجموعة إلى المرحلة التالية، قُم بإزالة الوسيطة `--authorized-voter ~/validator-keypair.json` وأعد تشغيل `solana-validator`، حيث لم يعد زوج مفاتيح سلطة التصويت (vote authority keypairs) القديم مطلوبًا.
 
-You will need access to the _withdraw authority_ keypair for the vote account to
-change the validator identity. The follow steps assume that
-`~/withdraw-authority.json` is that keypair.
 
-1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
-2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
-3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
-   to modify the validator identity in your vote account
-4. Restart your validator with the new identity keypair for the `--identity` argument
-
-### Vote Account Authorized Voter
-
-The _vote authority_ keypair may only be changed at epoch boundaries and
-requires some additional arguments to `solana-validator` for a seamless
-migration.
-
-1. Run `solana epoch-info`. If there is not much time remaining time in the
-   current epoch, consider waiting for the next epoch to allow your validator
-   plenty of time to restart and catch up.
-2. Create the new vote authority keypair, `solana-keygen new -o ~/new-vote-authority.json`.
-3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. It may be validator's
-   identity account (the default) or some other keypair. The following steps
-   assume that `~/validator-keypair.json` is that keypair.
-4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
-   The new vote authority is scheduled to become active starting at the next epoch.
-5. `solana-validator` now needs to be restarted with the old and new vote
-   authority keypairs, so that it can smoothly transition at the next epoch. Add
-   the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
-6. After the cluster reaches the next epoch, remove the
-   `--authorized-voter ~/validator-keypair.json` argument and restart
-   `solana-validator`, as the old vote authority keypair is no longer required.
-
-### Vote Account Authorized Withdrawer
-
-No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.
+### ساحب حساب التصويت المُصرح (Vote Account Authorized Withdrawer)
+لا يتطلب مُعالجة خاصة.  إستخدم الأمر `solana vote-authorize-withdrawer` حسب الحاجة.

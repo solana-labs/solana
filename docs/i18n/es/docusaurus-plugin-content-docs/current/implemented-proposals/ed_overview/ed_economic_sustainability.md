@@ -1,9 +1,9 @@
 ---
-title: Economic Sustainability
+title: Sostenibilidad económica
 ---
 
-**Subject to change.**
+**Sujeto a cambios.**
 
-Long term economic sustainability is one of the guiding principles of Solana’s economic design. While it is impossible to predict how decentralized economies will develop over time, especially economies with flexible decentralized governances, we can arrange economic components such that, under certain conditions, a sustainable economy may take shape in the long term. In the case of Solana’s network, these components take the form of token issuance \(via inflation\) and token burning.
+La sostenibilidad económica a largo plazo es uno de los principios rectores del diseño económico de Solana. Si bien es imposible predecir cómo se desarrollarán las economías descentralizadas con el tiempo, especialmente las economías con gobiernos descentralizados flexibles. podemos organizar componentes económicos de tal forma que, en determinadas condiciones, una economía sostenible pueda cobrar forma a largo plazo. En el caso de la red Solana, estos componentes adoptan la forma de emisión de tokens \(vía inflación\) y de quemado de token.
 
-The dominant remittances from the Solana mining pool are validator rewards. The disinflationary mechanism is a flat, protocol-specified and adjusted, % of each transaction fee.
+Las remesas dominantes de la piscina minera de Solana son recompensas de validadores. El mecanismo desinflacionario es un plano, protocolo especificado y ajustado, % de cada tasa de transacción.

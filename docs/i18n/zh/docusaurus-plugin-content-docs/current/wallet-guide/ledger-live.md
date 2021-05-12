@@ -13,7 +13,7 @@ title: Ledger Nano S 和 Nano X
 - 安装 [Ledger Live 桌面软件](https://www.ledger.com/ledger-live/)
   - 如果您已经安装了 Ledger Live，请更新到最新版本，该步骤将启用最新的固件和应用更新。
 - 将您的 Nano 连接到电脑并按照屏幕的指示。
-- 更新您的新 Nano 设备 固件。 该步骤确保您安装了最新版本的 Solana 应用。
+- 更新您的新 Nano设备 固件。  该步骤确保您安装了最新版本的 Solana 应用。
   - [更新 Nano S 固件](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [更新 Nano X 固件](https://support.ledger.com/hc/en-us/articles/360013349800)
 
@@ -23,18 +23,18 @@ title: Ledger Nano S 和 Nano X
 - 点击应用程序左边窗口的“管理”，在应用目录中搜索"Solana"，然后点击"安装"。
   - 请确保您的设备已通过 USB 接入并且通过 PIN 解锁。
 - 您可以在 Nano 上看到确认安装 Solana App 的提示
-- 在 Ledger Live Manager 中，"Solana" 现在应该显示为“已安装”
+- 在Ledger Live Manager 中，"Solana" 现在应该显示为“已安装”
 
 ## 升级到最新版本的 Solana App
 
 为了确保您能够使用最新功能，如果您使用的是旧版本 Solana App，请按照以下步骤升级到 `v1.0.1`。
 
 - 确保您的 Ledger Live 是 2.10.0 或更高版本。
-  - 要检查您的 Ledger Live 版本，请单击右上角的“设置”按钮，然后单击“关于”。 如果有较新版本的 Ledger Live，那么当您首次打开 Ledger Live 时，应该会看到一个提示您进行升级的弹窗。
+  - 要检查您的 Ledger Live 版本，请单击右上角的“设置”按钮，然后单击“关于”。  如果有较新版本的 Ledger Live，那么当您首次打开 Ledger Live 时，应该会看到一个提示您进行升级的弹窗。
 - 在您的 Nano 更新固件
   - [更新 Nano S 固件](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [更新 Nano X 固件](https://support.ledger.com/hc/en-us/articles/360013349800)
-- 成功更新固件后，Solana 应用会自动重新安装最新版本的应用程序。
+-  成功更新固件后，Solana 应用会自动重新安装最新版本的应用程序。
 
 ## 与 Solana 网络交互
 
@@ -42,7 +42,7 @@ title: Ledger Nano S 和 Nano X
 
 - [SolFlare.com](https://solflare.com/) 一款是专门为 Solana 打造的非托管网络钱包，它支持使用 Ledger 设备进行的基本转账和质押操作。 请查阅 [结合 Nano 与 SolFlare 使用](solflare.md) 的指南。
 
-- 开发者和高级用户可以 [结合使用 Nano 与 Solana 命令行工具](hardware-wallets/ledger.md)。 在第三方钱包支持之前，本地命令行工具几乎总能够支持最新的钱包功能。
+- 开发者和高级用户可以 [结合使用 Nano与 Solana 命令行工具](hardware-wallets/ledger.md)。 在第三方钱包支持之前，本地命令行工具几乎总能够支持最新的钱包功能。
 
 ## 已知的问题
 

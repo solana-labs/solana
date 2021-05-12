@@ -1,36 +1,36 @@
 ---
-title: Managing Forks
+title: 포크 관리
 ---
 
-The ledger is permitted to fork at slot boundaries. The resulting data structure forms a tree called a _blockstore_. When the validator interprets the blockstore, it must maintain state for each fork in the chain. We call each instance an _active fork_. It is the responsibility of a validator to weigh those forks, such that it may eventually select a fork.
+원장은 슬롯 경계에서 포크를 생성할 수 있습니다. 결과 데이터 구조는_blockstore_라는 트리를 형성합니다. 밸리데이터가 블록 스토어를 해석 할 때 체인의 각 포크에 대한 상태를 유지해야합니다. 각 인스턴스를 _활성 포크_라고합니다. 포크를 선택할 수 있도록 포크의 비중을 알리는 것은 밸리데이터의 책임입니다.
 
-A validator selects a fork by submiting a vote to a slot leader on that fork. The vote commits the validator for a duration of time called a _lockout period_. The validator is not permitted to vote on a different fork until that lockout period expires. Each subsequent vote on the same fork doubles the length of the lockout period. After some cluster-configured number of votes \(currently 32\), the length of the lockout period reaches what's called _max lockout_. Until the max lockout is reached, the validator has the option to wait until the lockout period is over and then vote on another fork. When it votes on another fork, it performs an operation called _rollback_, whereby the state rolls back in time to a shared checkpoint and then jumps forward to the tip of the fork that it just voted on. The maximum distance that a fork may roll back is called the _rollback depth_. Rollback depth is the number of votes required to achieve max lockout. Whenever a validator votes, any checkpoints beyond the rollback depth become unreachable. That is, there is no scenario in which the validator will need to roll back beyond rollback depth. It therefore may safely _prune_ unreachable forks and _squash_ all checkpoints beyond rollback depth into the root checkpoint.
+밸리데이터는 해당 포크의 슬롯 리더에게 투표를 제출하여 포크를 선택합니다. 투표는 _락업 기간_이라고하는 기간 동안 밸리데이터에게 커밋됩니다. 밸리데이터는 락업 기간이 만료될 때 까지 다른 포크에 투표할 수 없습니다. 동일한 포크에 대한 각 후속 투표는 락업 기간의 길이를 두 배로 늘립니다. 클러스터 구성 투표 수 \(현재 32 \) 이후 잠금 기간은 _최대 잠금_에 도달합니다. 최대 락업에 도달할 때까지 밸리데이터는 락업 기간이 끝날 때까지 기다린 다음 다른 포크에 투표할 수 있는 옵션이 있습니다. 다른 포크에 투표할 때 _롤백_이라는 작업을 수행합니다. 그러면 상태가 공유 체크 포인트로 적시에 롤백 된 다음 해당 포크의 끝으로 이동합니다. 포크가 롤백 할 수있는 최대 거리를 _롤백 깊이_라고합니다. 롤백 깊이는 최대 락업을 달성하는 데 필요한 투표 수입니다. 밸리데이터가 투표할 때마다 롤백 깊이를 초과하는 체크 포인트엔 도달 할 수 없게됩니다. 즉, 밸리데이터가 롤백 깊이 이상으로 롤백해야하는 시나리오는 발생할 수 없습니다. 따라서 도달 할 수없는 포크를 안전하게 _정리_하고 롤백 깊이를 넘어 루트 체크 포인트로 모든 체크 포인트를 _스쿼시_ 할 수 있습니다.
 
-## Active Forks
+## 활성화 포크
 
-An active fork is as a sequence of checkpoints that has a length at least one longer than the rollback depth. The shortest fork will have a length exactly one longer than the rollback depth. For example:
+활성 포크는 롤백 깊이보다 길이가 하나 이상 긴 일련의 체크 포인트입니다. 가장 짧은 포크의 길이는 롤백 깊이보다 정확히 1개 더 길 것입니다. 예제:
 
-![Forks](/img/forks.svg)
+![포크](/img/forks.svg)
 
-The following sequences are _active forks_:
+다음 시퀀스는_액티브 포크_ 입니다.
 
 - {4, 2, 1}
 - {5, 2, 1}
 - {6, 3, 1}
 - {7, 3, 1}
 
-## Pruning and Squashing
+## Pruning 및 스쿼싱
 
-A validator may vote on any checkpoint in the tree. In the diagram above, that's every node except the leaves of the tree. After voting, the validator prunes nodes that fork from a distance farther than the rollback depth and then takes the opportunity to minimize its memory usage by squashing any nodes it can into the root.
+밸리데이터는 트리의 아무 체크 포인트에 투표 할 수 있습니다. 위의 다이어그램에서 이는 트리의 리프를 제외한 모든 노드입니다. 투표 후 밸리데이터는 롤백 깊이보다 먼 거리에서 분기하는 노드를 잘라낸 다음 가능한 모든 노드를 루트로 스쿼시하여 이를 메모리 사용량을 최소화 하게 됩니다.
 
-Starting from the example above, with a rollback depth of 2, consider a vote on 5 versus a vote on 6. First, a vote on 5:
+롤백 깊이가 2인 위의 예시에서 시작하여 5에 대한 투표와 6에 대한 투표를 보고자 합니다. 우선 5에 대한 투표입니다.
 
-![Forks after pruning](/img/forks-pruned.svg)
+![정리 후 포크](/img/forks-pruned.svg)
 
-The new root is 2, and any active forks that are not descendants from 2 are pruned.
+새로운 루트는 2이고, 2에서부터 생겨나지 않는 모든 활성 포크들은 정리됩니다.
 
-Alternatively, a vote on 6:
+반대로 6에 대한 투표입니다:
 
-![Forks](/img/forks-pruned2.svg)
+![포크](/img/forks-pruned2.svg)
 
-The tree remains with a root of 1, since the active fork starting at 6 is only 2 checkpoints from the root.
+6에서 시작하는 활성 포크는 루트에서 2개의 체크 포인트에 불과하기 때문에 트리는 루트 1로 유지됩니다.

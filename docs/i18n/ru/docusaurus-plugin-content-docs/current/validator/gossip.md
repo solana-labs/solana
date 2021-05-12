@@ -1,94 +1,92 @@
 ---
-title: Gossip Service
+title: Служба Gossip
 ---
 
-The Gossip Service acts as a gateway to nodes in the control plane. Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a gossip protocol.
+Служба Gossip работает как шлюз к узлам в плоскости управления. Валидаторы используют сервис для обеспечения доступности информации для всех других узлов кластера. Сервис транслирует информацию, используя протокол Gossip.
 
-## Gossip Overview
+## Обзор Gossip
 
-Nodes continuously share signed data objects among themselves in order to manage a cluster. For example, they share their contact information, ledger height, and votes.
+Узлы постоянно обмениваются между собой подписанными объектами данных для управления кластером. Например, они обмениваются контактной информацией, высотой реестра и голосами.
 
-Every tenth of a second, each node sends a "push" message and/or a "pull" message. Push and pull messages may elicit responses, and push messages may be forwarded on to others in the cluster.
+Каждую десятую секунды каждый узел посылает сообщение "push" и/или сообщение "pull". Push и pull сообщения могут вызывать ответы, а push-сообщения могут быть направлены другим в кластере.
 
-Gossip runs on a well-known UDP/IP port or a port in a well-known range. Once a cluster is bootstrapped, nodes advertise to each other where to find their gossip endpoint \(a socket address\).
+Gossip работает на хорошо известном UDP/IP порту или порту в известном диапазоне. После начальной загрузки кластера узлы сообщают друг другу, где найти их конечную точку Gossip \(адрес сокета\).
 
-## Gossip Records
+## Записи Gossip
 
-Records shared over gossip are arbitrary, but signed and versioned \(with a timestamp\) as needed to make sense to the node receiving them. If a node receives two records from the same source, it updates its own copy with the record with the most recent timestamp.
+Записи, передаваемые через gossip, являются произвольными, но подписываются и версируются \(с отметкой времени\), что необходимо, чтобы иметь смысл для узла, принимающего их. Если узел получает две записи из одного и того же источника, он обновляет свою собственную копию записью с самой последней меткой времени.
 
-## Gossip Service Interface
+## Интерфейс службы Gossip
 
-### Push Message
+### Push-сообщение
 
-A node sends a push message to tells the cluster it has information to share. Nodes send push messages to `PUSH_FANOUT` push peers.
+Узел отправляет push-сообщение для того, чтобы сообщить кластеру, что у него есть информация для распространения. Узлы отправляют push-сообщения `PUSH_FANOUT` push-пирам.
 
-Upon receiving a push message, a node examines the message for:
+После получения push-сообщения узел проверяет сообщение:
 
-1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
-2. New data: if the message is new to the node
+1. Дублирование: если сообщение было просмотрено ранее, узел отбрасывает сообщение и может ответить `PushMessagePrune`, если перенаправлено с узла с низким стейком
+2. Новые данные: если сообщение является новым для узла
 
-   - Stores the new information with an updated version in its cluster info and
+   - Сохраняет новую информацию с обновленной версией в информации о кластере и
 
-     purges any previous older value
+     очищает все предыдущие значения
 
-   - Stores the message in `pushed_once` \(used for detecting duplicates,
+   - Сохраняет сообщение в `pushed_once` \(используется для обнаружения дубликатов,
 
-     purged after `PUSH_MSG_TIMEOUT * 5` ms\)
+     очищается после `PUSH_MSG_TIMEOUT * 5` мс\)
 
-   - Retransmits the messages to its own push peers
+   - Перенаправляет сообщения своим пирам push
 
-3. Expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
+3. Истечение срока действия: узлы отбрасывают push-сообщения старше `PUSH_MSG_TIMEOUT`
 
-### Push Peers, Prune Message
+### Push-пиры, Prune сообщение
 
-A nodes selects its push peers at random from the active set of known peers. The node keeps this selection for a relatively long time. When a prune message is received, the node drops the push peer that sent the prune. Prune is an indication that there is another, higher stake weighted path to that node than direct push.
+Узлы случайным образом выбирают своих push-пиров из активного набора известных пиров. Узел сохраняет этот выбор в течение относительно долгого времени. Когда получено сообщение об удалении, узел удаляет push-пир, который отправил prune. Prune - это указание на то, что существует другой путь к этому узлу с более высоким стейком, чем прямой push.
 
-The set of push peers is kept fresh by rotating a new node into the set every `PUSH_MSG_TIMEOUT/2` milliseconds.
+Набор push-пиров постоянно обновляется за счет смены на новый узел в набор каждые `PUSH_MSG_TIMEOUT/2` миллисекунд.
 
-### Pull Message
+### Pull-сообщение
 
-A node sends a pull message to ask the cluster if there is any new information. A pull message is sent to a single peer at random and comprises a Bloom filter that represents things it already has. A node receiving a pull message iterates over its values and constructs a pull response of things that miss the filter and would fit in a message.
+Узел посылает сообщение pull, чтобы спросить кластер, есть ли какая-нибудь новая информация. Сообщение pull отправляется случайным образом одному пиру и содержит фильтр Блума. Узел, получающий pull-сообщение, перебирает свои значения и формирует pull-ответ из того, что пропускает фильтр и помещается в сообщении.
 
-A node constructs the pull Bloom filter by iterating over current values and recently purged values.
+Узел создает фильтр Блума pull, перебирая текущие значения и недавно очищенные значения.
 
-A node handles items in a pull response the same way it handles new data in a push message.
+Узел обрабатывает элементы в ответе pull так же, как он обрабатывает новые данные в push-сообщении.
 
 ## Purging
 
-Nodes retain prior versions of values \(those updated by a pull or push\) and expired values \(those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) in `purged_values` \(things I recently had\). Nodes purge `purged_values` that are older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+Узлы сохраняют предыдущие версии значений \(обновленные pull или push\) и просроченные значения \(которые старше `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) в `purged_values` \(чем у меня были недавно\). Узлы очищают `purged_values`, которые старше, чем `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
 
-## Eclipse Attacks
+## Атаки затмения
 
-An eclipse attack is an attempt to take over the set of node connections with adversarial endpoints.
+Атака затмения - это попытка захватить контроль над набором соединений узла.
 
-This is relevant to our implementation in the following ways.
+Это имеет отношение к нашей реализации следующим образом.
 
-- Pull messages select a random node from the network. An eclipse attack on _pull_ would require an attacker to influence the random selection in such a way that only adversarial nodes are selected for pull.
-- Push messages maintain an active set of nodes and select a random fanout for every push message. An eclipse attack on _push_ would influence the active set selection, or the random fanout selection.
+- Pull-сообщения выбирают случайный узел в сети. Атака затмения на _pull_ потребует от злоумышленника повлиять на случайный выбор таким образом, чтобы для pull выбирались только враждебные узлы.
+- Push-сообщения поддерживают активный набор узлов и выбирают случайное разветвление для каждого push-сообщения. Атака затмения на _push_ повлияет на выбор активного набора или случайный выбор разветвления.
 
-### Time and Stake based weights
+### Веса на основе времени и стейка
 
-Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
+Вес рассчитывается на основе `времени с момента последнего выбора` и `натурального логарифма` от `веса стейка`.
 
-Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes. This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a few multiples of ln\(`stake`\) seconds before it gets picked.
+Взятие `ln` от веса стейка, дает всем узлам более справедливые шансы на покрытие сети в разумные сроки. Это помогает нормализовать большие возможные различия в `весе стейка` между узлами. Таким образом узел с низким `весом стейка` по сравнению с узлом с большим `весом стейка` должен будет ждать только несколько значений, кратных ln\(`стейка`\) секунд, прежде чем он будет выбран.
 
-There is no way for an adversary to influence these parameters.
+У злоумышленника нет возможности повлиять на эти параметры.
 
-### Pull Message
+### Pull-сообщение
 
-A node is selected as a pull target based on the weights described above.
+Узел выбирается в качестве pull-цели на основе весов, описанных выше.
 
-### Push Message
+### Push-сообщение
 
-A prune message can only remove an adversary from a potential connection.
+Сообщение об удалении может только удалить злоумышленника из потенциального соединения.
 
-Just like _pull message_, nodes are selected into the active set based on weights.
+Точно так же как в _pull-сообщениях_, узлы выбираются в активный набор на основе весов.
 
-## Notable differences from PlumTree
+## Заметные отличия от PlumTree
 
-The active push protocol described here is based on
-[Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf).
-The main differences are:
+Активный push-протокол, описанный здесь, основан на [Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf). Основные различия заключаются в следующем:
 
-- Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
-- Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.
+- У push-сообщений есть часы, подписанные отправителем. По истечении срока действия часов сообщение сбрасывается. Ограничение переходов трудно реализовать в настройках злоумышленника.
+- Lazy Push не реализован, потому что не очевидно, как предотвратить подделку отпечатка сообщения злоумышленником. Наивный подход позволил бы противнику получить приоритет для pull на основе его действий.

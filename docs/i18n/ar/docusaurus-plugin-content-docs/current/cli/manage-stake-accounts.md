@@ -1,20 +1,14 @@
 ---
-title: Manage Stake Accounts
+title: إدارة حِسابات إثبات الحِصَّة أو التَّحْصِيص (Manage Stake Accounts)
 ---
 
-If you want to delegate stake to many different validators, you will need
-to create a separate stake account for each. If you follow the convention
-of creating the first stake account at seed "0", the second at "1", the
-third at "2", and so on, then the `solana-stake-accounts` tool will allow
-you to operate on all accounts with single invocations. You can use it to
-sum up the balances of all accounts, move accounts to a new wallet, or set
-new authorities.
+إذا كنت ترغب في تفويض الحِصَّة إلى إلى أكثر من مُدقّق (validator)، فستحتاج إلى إنشاء حساب إثبات حِصَّة أو تَّحْصِيص مُنفصلة لكل منها. إذا إتبعت الإتفاقية لإنشاء حساب إثبات حِصَّة أو تَّحْصِيص (stake account) أول على أساس "0" ، والثاني عند "1"، و الثالث عند "2"، وهكذا، سيُتيح لك الأداة `solana-stake-accounts` العمل على جميع الحسابات بإستدعاءات واحدة. يُمكنك إستخدامه لتعداد أرصدة جميع الحسابات أو نقل الحسابات إلى محفظة جديدة أو تعيين صلاحيات جديدة.
 
-## Usage
+## طريقة الإستخدام
 
-### Create a stake account
+### إنشاء حِساب إثبات الحِصَّة أو التَّحْصِيص (Create a stake account)
 
-Create and fund a derived stake account at the stake authority public key:
+إنشاء وتمويل حِساب إثبات حِصَّة أو تحْصِيص (stake account) مُشتق من المفتاح العمومي لسُلطة إثبات الحِصَّة أو التَّحْصِيص (Stake authority public key):
 
 ```bash
 solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
@@ -22,33 +16,33 @@ solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-### Count accounts
+### عد الحسابات
 
-Count the number of derived accounts:
+عد عدد الحسابات المُشتقة:
 
 ```bash
 solana-stake-accounts count <BASE_PUBKEY>
 ```
 
-### Get stake account balances
+### الحصول على أرصدة حِساب إثبات الحِصَّة أو التَّحْصِيص (Get stake account balances)
 
-Sum the balance of derived stake accounts:
+مجموع رصيد حِسابات إثبات الحِصَّة أو التَّحْصِيص (Stake accounts) المُشتقة:
 
 ```bash
 solana-stake-accounts balance <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Get stake account addresses
+### الحصول على عناوين حِساب إثبات الحِصَّة أو التَّحْصِيص (Get stake account addresses)
 
-List the address of each stake account derived from the given public key:
+قائمة عنوان كل حِساب إثبات حِصَّة أو تحْصِيص مُشتق من المفتاح العمومي (public key) المُعين:
 
 ```bash
 solana-stake-accounts addresses <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Set new authorities
+### تعيين صلاحيات جديدة (Set new authorities)
 
-Set new authorities on each derived stake account:
+تعيين صلاحيات جديدة على كل حساب من حِسابات إثبات الحِصَّة أو التَّحْصِيص (Stake accounts) المُشتقة:
 
 ```bash
 solana-stake-accounts authorize <BASE_PUBKEY> \
@@ -57,9 +51,9 @@ solana-stake-accounts authorize <BASE_PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
-### Relocate stake accounts
+### نقل حِسابات إثبات الحِصَّة أو التَّحْصِيص (Relocate stake accounts)
 
-Relocate stake accounts:
+نقل حِسابات إثبات الحِصَّة أو التَّحْصِيص (Stake accounts):
 
 ```bash
 solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
@@ -67,8 +61,7 @@ solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --fee-payer <KEYPAIR>
 ```
 
-To atomically rebase and authorize each stake account, use the 'move'
-command:
+لتغيير العنوان ذريا وإعطاء الإذن لكل حساب حِساب إثبات حِصَّة أو تحْصِيص، إستخدم أمر 'move':
 
 ```bash
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \

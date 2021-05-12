@@ -1,48 +1,38 @@
 ---
-title: Durable Transaction Nonces
+title: Nonces de transacción duradera
 ---
 
-## Problem
+## Problema
 
-To prevent replay, Solana transactions contain a nonce field populated with a
-"recent" blockhash value. A transaction containing a blockhash that is too old
-(~2min as of this writing) is rejected by the network as invalid. Unfortunately
-certain use cases, such as custodial services, require more time to produce a
-signature for the transaction. A mechanism is needed to enable these potentially
-offline network participants.
+Para evitar repetir, las transacciones de Solana contienen un campo nonce poblado con un valor de bloque. Una transacción que contiene un blockhash demasiado antiguo (~2min a partir de esta escritura) es rechazada por la red como inválida. Lamentablemente, ciertos casos de uso, como los servicios custodiales, requieren más tiempo para producir una firma para la transacción. Se necesita un mecanismo para habilitar estos participantes potenciales en la red sin conexión.
 
-## Requirements
+## Requisitos
 
-1. The transaction's signature needs to cover the nonce value
-2. The nonce must not be reusable, even in the case of signing key disclosure
+1. La firma de la transacción necesita cubrir el valor de nonce
+2. El nonce no debe ser reutilizable, ni siquiera en el caso de firmar la revelación de clave
 
-## A Contract-based Solution
+## Una solución basada en contrato
 
-Here we describe a contract-based solution to the problem, whereby a client can
-"stash" a nonce value for future use in a transaction's `recent_blockhash`
-field. This approach is akin to the Compare and Swap atomic instruction,
-implemented by some CPU ISAs.
+Aquí describimos una solución al problema basada en el contrato mediante el cual un cliente puede "almacenar" un valor nonce para uso futuro en el campo `recent_blockhash` de una transacción. Este enfoque es similar a la instrucción atómica Compare and Swap, implementada por algunos ISAs de CPU.
 
-When making use of a durable nonce, the client must first query its value from
-account data. A transaction is now constructed in the normal way, but with the
-following additional requirements:
+Cuando se utiliza un nonce duradero, el cliente debe consultar primero su valor a partir de los datos de la cuenta. Una transacción se construye ahora de la manera normal, pero con los siguientes requisitos adicionales:
 
-1. The durable nonce value is used in the `recent_blockhash` field
-2. An `AdvanceNonceAccount` instruction is the first issued in the transaction
+1. El valor de nonce durable se utiliza en el campo `recent_blockhash`
+2. Una instrucción de `AdvanceNonceAccount` es la primera emitida en la transacción
 
-### Contract Mechanics
+### Mecánicas de contrato
 
-TODO: svgbob this into a flowchart
+TODO: svgbob esto en un diagrama de flujo
 
 ```text
-Start
-Create Account
-  state = Uninitialized
-NonceInstruction
+Iniciar
+Crear cuenta
+  estado = no inicializado
+InstrucciónNoCe
   if state == Uninitialized
     if account.balance < rent_exempt
       error InsufficientFunds
-    state = Initialized
+    state = Inicializado
   elif state != Initialized
     error BadState
   if sysvar.recent_blockhashes.is_empty()
@@ -50,8 +40,8 @@ NonceInstruction
   if !sysvar.recent_blockhashes.contains(stored_nonce)
     error NotReady
   stored_hash = sysvar.recent_blockhashes[0]
-  success
-WithdrawInstruction(to, lamports)
+  éxito
+RetirarInstrucción(to, lamports)
   if state == Uninitialized
     if !signers.contains(owner)
       error MissingRequiredSignatures
@@ -62,70 +52,33 @@ WithdrawInstruction(to, lamports)
       error InsufficientFunds
   account.balance -= lamports
   to.balance += lamports
-  success
+  éxito
 ```
 
-A client wishing to use this feature starts by creating a nonce account under
-the system program. This account will be in the `Uninitialized` state with no
-stored hash, and thus unusable.
+Un cliente que desee utilizar esta característica comienza por crear una cuenta de nonce en el programa del sistema. Esta cuenta estará en el estado `` no inicializado sin hash almacenado, y por lo tanto inutilizable.
 
-To initialize a newly created account, an `InitializeNonceAccount` instruction must be
-issued. This instruction takes one parameter, the `Pubkey` of the account's
-[authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
-must be [rent-exempt](rent.md#two-tiered-rent-regime) to meet the data-persistence
-requirements of the feature, and as such, require that sufficient lamports be
-deposited before they can be initialized. Upon successful initialization, the
-cluster's most recent blockhash is stored along with specified nonce authority
-`Pubkey`.
+Para inicializar una cuenta recién creada, una instrucción de `InitializeNonceAccount` debe ser emitida. Esta instrucción toma un parámetro, el `Pubkey` de la cuenta [autoridad](../offline-signing/durable-nonce.md#nonce-authority). Las cuentas de Nonce deben ser [rent-exempt](rent.md#two-tiered-rent-regime) para cumplir con los requisitos de persistencia de datos de la característica, y como tal, requieren que suficientes lamports sean depositadas antes de que puedan ser inicializadas. Tras la inicialización exitosa, el blockhash más reciente del clúster se almacena junto con la autoridad nonce especificada `Pubkey`.
 
-The `AdvanceNonceAccount` instruction is used to manage the account's stored nonce
-value. It stores the cluster's most recent blockhash in the account's state data,
-failing if that matches the value already stored there. This check prevents
-replaying transactions within the same block.
+La instrucción `AdvanceNonceAccount` se utiliza para gestionar el valor nonce almacenado de la cuenta. Almacena el bloque más reciente del clúster en los datos de estado de la cuenta, fallando si coincide con el valor ya almacenado allí. Esta comprobación evita la repetición de transacciones dentro del mismo bloque.
 
-Due to nonce accounts' [rent-exempt](rent.md#two-tiered-rent-regime) requirement,
-a custom withdraw instruction is used to move funds out of the account.
-The `WithdrawNonceAccount` instruction takes a single argument, lamports to withdraw,
-and enforces rent-exemption by preventing the account's balance from falling
-below the rent-exempt minimum. An exception to this check is if the final balance
-would be zero lamports, which makes the account eligible for deletion. This
-account closure detail has an additional requirement that the stored nonce value
-must not match the cluster's most recent blockhash, as per `AdvanceNonceAccount`.
+Debido al requisito de [exención de renta](rent.md#two-tiered-rent-regime) de las cuentas nonce, se utiliza una instrucción de retiro personalizada para mover los fondos de la cuenta. La instrucción `WithdrawNonceAccount` toma un solo argumento, las lamports para retirar, e impone la exención de rentas evitando que el saldo de la cuenta caiga por debajo del mínimo de alquiler. Una excepción a esta comprobación es si el saldo final sería cero lamports, lo que hace que la cuenta sea elegible para su eliminación. Este detalle de cierre de cuenta tiene el requisito adicional de que el valor nonce almacenado no debe coincidir con el blockhash más reciente del cluster, según `AdvanceNonceAccount`.
 
-The account's [nonce authority](../offline-signing/durable-nonce.md#nonce-authority)
-can be changed using the `AuthorizeNonceAccount` instruction. It takes one parameter,
-the `Pubkey` of the new authority. Executing this instruction grants full
-control over the account and its balance to the new authority.
+La [autoridad nonce](../offline-signing/durable-nonce.md#nonce-authority) de la cuenta puede cambiarse usando la instrucción `AuthorizeNonceAccount`. Toma un parámetro, la `Pubkey` de la nueva autoridad. La ejecución de esta instrucción otorga el control total de la cuenta y su saldo a la nueva autoridad.
 
-> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
+> `AdvanceNonceAccount`, `WithdrawNonceAccount` y `AuthorizeNonceAccount` todos requieren la actual [autoridad de nonce](../offline-signing/durable-nonce.md#nonce-authority) para que la cuenta firme la transacción.
 
-### Runtime Support
+### Soporte de Ejecución
 
-The contract alone is not sufficient for implementing this feature. To enforce
-an extant `recent_blockhash` on the transaction and prevent fee theft via
-failed transaction replay, runtime modifications are necessary.
+El contrato por sí solo no es suficiente para aplicar esta función. Para imponer un `recent_blockhash` existente en la transacción y evitar el robo de tarifas a través de la repetición de transacciones fallidas, son necesarias modificaciones en el tiempo de ejecución.
 
-Any transaction failing the usual `check_hash_age` validation will be tested
-for a Durable Transaction Nonce. This is signaled by including a `AdvanceNonceAccount`
-instruction as the first instruction in the transaction.
+Cualquier transacción que falle la validación habitual de `check_hash_age` será probada para una Transacción Durable Nonce. Esto se indica incluyendo una instrucción `AdvanceNonceAccount` como la primera instrucción en la transacción.
 
-If the runtime determines that a Durable Transaction Nonce is in use, it will
-take the following additional actions to validate the transaction:
+Si el tiempo de ejecución determina que se está utilizando un Nonce de Transacción Duradera, tomará las siguientes acciones adicionales para validar la transacción:
 
-1. The `NonceAccount` specified in the `Nonce` instruction is loaded.
-2. The `NonceState` is deserialized from the `NonceAccount`'s data field and
-   confirmed to be in the `Initialized` state.
-3. The nonce value stored in the `NonceAccount` is tested to match against the
-   one specified in the transaction's `recent_blockhash` field.
+1. La `NonceAccount` especificada en la instrucción `Nonce` está cargada.
+2. El `NonceState` es deserializado del campo de datos de `NonceAccount`y confirmado que está en el estado `Inicializado`.
+3. El valor nonce almacenado en el `NonceAccount` es probado para que coincida con el especificado en el campo `recent_blockhash` de la transacción.
 
-If all three of the above checks succeed, the transaction is allowed to continue
-validation.
+Si las tres comprobaciones anteriores tienen éxito, la transacción puede continuar con validación.
 
-Since transactions that fail with an `InstructionError` are charged a fee and
-changes to their state rolled back, there is an opportunity for fee theft if an
-`AdvanceNonceAccount` instruction is reverted. A malicious validator could replay the
-failed transaction until the stored nonce is successfully advanced. Runtime
-changes prevent this behavior. When a durable nonce transaction fails with an
-`InstructionError` aside from the `AdvanceNonceAccount` instruction, the nonce account
-is rolled back to its pre-execution state as usual. Then the runtime advances
-its nonce value and the advanced nonce account stored as if it succeeded.
+Dado que a las transacciones que fallan con un `InstructionError` se les cobra una tarifa y se revierten los cambios en su estado, existe una oportunidad de robo de tarifas si se revierte una instrucción `AdvanceNonceAccount`. Un validador malicioso podría repetir la transacción fallida hasta que la nonce almacenada se avance con éxito. Los cambios en el tiempo de ejecución evitan este comportamiento. Cuando una transacción duradera de nonce falla con un `InstructionError` aparte de la instrucción `AdvanceNonceAccount`, la cuenta de nonce se devuelve a su estado previo a la ejecución como es habitual. A continuación, el tiempo de ejecución avanza su valor nonce y la cuenta nonce avanzada se almacena como si tuviera éxito.

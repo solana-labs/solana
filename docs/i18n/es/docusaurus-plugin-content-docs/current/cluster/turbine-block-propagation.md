@@ -1,101 +1,88 @@
 ---
-title: Turbine Block Propagation
+title: Propagación del bloque turbina
 ---
 
-A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for sharing any data it receives with the other nodes in its neighborhood, as well as propagating the data on to a small set of nodes in other neighborhoods. This way each node only has to communicate with a small number of nodes.
+Un clúster Solana utiliza un mecanismo de propagación de bloques de varias capas llamado _Turbina_ para transmitir las transacciones a todos los nodos con una cantidad mínima de mensajes duplicados. El clúster se divide en pequeñas colecciones de nodos, llamadas _vecindades_. Cada nodo es responsable de compartir los datos que recibe con los demás nodos de su vecindario, así como de propagar los datos a un pequeño conjunto de nodos de otros vecindarios. De esta manera, cada nodo sólo tiene que comunicarse con un pequeño número de nodos.
 
-During its slot, the leader node distributes shreds between the validator nodes in the first neighborhood \(layer 0\). Each validator shares its data within its neighborhood, but also retransmits the shreds to one node in some neighborhoods in the next layer \(layer 1\). The layer-1 nodes each share their data with their neighborhood peers, and retransmit to nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
+Durante su ranura, el nodo líder distribuye fragmentos entre los nodos validadores en el primer vecindario \\(capa 0\\). Cada validador comparte sus datos dentro de su vecindad, pero también retransmite los fragmentos a un nodo en algunas vecindades en la siguiente capa \ (capa 1\). Cada uno de los nodos de la capa 1 comparte sus datos con sus pares de la vecindad, y retransmite a los nodos de la siguiente capa, etc., hasta que todos los nodos del clúster hayan recibido todos los fragmentos.
 
-## Neighborhood Assignment - Weighted Selection
+## Asignación de vecindarios - Selección ponderada
 
-In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
+Para que el fanout del plano de datos funcione, todo el cluster debe estar de acuerdo en cómo se divide el cluster en vecindades. Para ello, todos los nodos validadores reconocidos (los pares de la TVU) se ordenan por stake y se almacenan en una lista. A continuación, esta lista se indexa de diferentes maneras para averiguar los límites del vecindario y retransmitir a su compañeros. Por ejemplo, el líder simplemente seleccionará los primeros nodos que componen la capa 0. Estos serán automáticamente los poseedores del mayor stake, permitiendo que los votos más pesados regresen primero al líder. Los nodos de capa 0 y capa inferiores utilizan la misma lógica para encontrar a sus vecinos y a sus pares de capa siguiente.
 
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
+Para reducir la posibilidad de los vectores de ataque, cada raya se transmite sobre un árbol aleatorio de vecinos. Cada nodo usa el mismo conjunto de nodos que representan el cluster. Se genera un árbol aleatorio a partir del conjunto para cada fragmento utilizando una semilla derivada de la identificación del líder, la ranura y el índice del fragmento.
 
-## Layer and Neighborhood Structure
+## Estructura de las capas y las vecindades
 
-The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
+El líder actual realiza sus difusiones iniciales a un máximo de nodos `DATA_PLANE_FANOUT`. Si esta capa 0 es menor que el número de nodos del clúster, el mecanismo de fanout del plano de datos añade capas por debajo debajo. Las capas subsiguientes siguen estas restricciones para determinar la capacidad de las capas: Cada vecindario contiene nodos `DATA_PLANE_FANOUT`. La capa 0 comienza con 1 vecindad con nodos de fanout. El número de nodos en cada capa adicional crece por un factor de fanout.
 
-As mentioned above, each node in a layer only has to broadcast its shreds to its neighbors and to exactly 1 node in some next-layer neighborhoods, instead of to every TVU peer in the cluster. A good way to think about this is, layer 0 starts with 1 neighborhood with fanout nodes, layer 1 adds fanout neighborhoods, each with fanout nodes and layer 2 will have `fanout * number of nodes in layer 1` and so on.
+Como se ha mencionado anteriormente, cada nodo de una capa sólo tiene que difundir sus fragmentos a sus vecinos y a exactamente 1 nodo en algunos vecindarios de la siguiente capa, en lugar de a todos los compañeros de la TVU en el clúster. Una buena manera de pensar en esto es, la capa 0 comienza con 1 vecindario con nodos fanout, la capa 1 añade vecindarios fanout, cada uno con nodos fanout y la capa 2 tendrá `fanout * número de nodos en la capa 1` y así sucesivamente.
 
-This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes.
+De esta manera, cada nodo sólo tiene que comunicarse con un máximo de `2 * DATA_PLANE_FANOUT - 1` nodos.
 
-The following diagram shows how the Leader sends shreds with a fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
+El siguiente diagrama muestra cómo el Líder envía fragmentos con un fanout de 2 al vecindario 0 en la Capa 0 y cómo los nodos en el vecindario 0 comparten sus datos entre sí.
 
-![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
+![El líder envía fragmentos al vecindario 0 en la capa 0](/img/data-plane-seeding.svg)
 
-The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
+El siguiente diagrama muestra cómo el vecindario 0 se abre a los vecindarios 1 y 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
+![Vecindario 0 Fanout a Vecindario 1 y 2](/img/data-plane-fanout.svg)
 
-Finally, the following diagram shows a two layer cluster with a fanout of 2.
+Finalmente, el siguiente diagrama muestra un clúster de dos capas con un fanout de 2.
 
-![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
+![Clúster de dos capas con un Fanout de 2](/img/data-plane.svg)
 
-### Configuration Values
+### Valores de Configuración
 
-`DATA_PLANE_FANOUT` - Determines the size of layer 0. Subsequent layers grow by a factor of `DATA_PLANE_FANOUT`. The number of nodes in a neighborhood is equal to the fanout value. Neighborhoods will fill to capacity before new ones are added, i.e if a neighborhood isn't full, it _must_ be the last one.
+`DATA_PLANE_FANOUT` - Determina el tamaño de la capa 0. Las capas posteriores crecen en un factor de `DATA_PLANE_FANOUT`. El número de nodos en un vecindario es igual al valor de fanout. Los vecindarios se llenarán hasta su capacidad antes de que se añadan otros nuevos, es decir, si un vecindario no está lleno, _debe_ ser el último.
 
-Currently, configuration is set when the cluster is launched. In the future, these parameters may be hosted on-chain, allowing modification on the fly as the cluster sizes change.
+Actualmente, la configuración se establece cuando se lanza el clúster. En el futuro, estos parámetros podrán alojarse en la cadena, lo que permitirá modificarlos sobre la marcha cuando cambie el tamaño del cluster.
 
-## Calculating the required FEC rate
+## Cálculo de la tasa FEC necesaria
 
-Turbine relies on retransmission of packets between validators. Due to
-retransmission, any network wide packet loss is compounded, and the
-probability of the packet failing to reach its destination increases
-on each hop. The FEC rate needs to take into account the network wide
-packet loss, and the propagation depth.
+La turbina depende de la retransmisión de paquetes entre validadores. Debido a la retransmisión, cualquier pérdida de paquetes en la red se agrava, y la probabilidad de que el paquete no llegue a su destino aumenta en cada salto. La tasa FEC debe tener en cuenta la pérdida de paquetes en toda la red y la profundidad de propagación.
 
-A shred group is the set of data and coding packets that can be used
-to reconstruct each other. Each shred group has a chance of failure,
-based on the likelyhood of the number of packets failing that exceeds
-the FEC rate. If a validator fails to reconstruct the shred group,
-then the block cannot be reconstructed, and the validator has to rely
-on repair to fixup the blocks.
+Un grupo shred es el conjunto de paquetes de datos y codificación que pueden utilizarse para reconstruirse mutuamente. Cada grupo shred tiene una probabilidad de fallo, basada en la probabilidad de que el número de paquetes que fallen supere la tasa FEC. Si un validador falla al reconstruir el grupo shred, entonces el bloque no puede ser reconstruido, y el validador tiene que depender de la reparación para arreglar los bloques.
 
-The probability of the shred group failing can be computed using the
-binomial distribution. If the FEC rate is `16:4`, then the group size
-is 20, and at least 4 of the shreds must fail for the group to fail.
-Which is equal to the sum of the probability of 4 or more trails failing
-out of 20.
+La probabilidad de que el grupo shred falle puede calcularse usando la distribución binomial. Si la tasa de FEC es `16:4`, entonces el tamaño del grupo es 20, y al menos 4 de los fragmentos deben fallar para que el grupo falle. Que es igual a la suma de la probabilidad de que fallen 4 o más pistas de 20.
 
-Probability of a block succeeding in turbine:
+Probabilidad de que un bloque tenga éxito en la turbina:
 
-- Probability of packet failure: `P = 1 - (1 - network_packet_loss_rate)^2`
-- FEC rate: `K:M`
-- Number of trials: `N = K + M`
-- Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P, trials = N, failures = i)`
-- Shreds per block: `G`
-- Block success rate: `B = (1 - S) ^ (G / N)`
-- Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
+- Probabilidad del fallo del paquete: `P = 1 - (1 - network_packet_loss_rate)^2`
+- Tasa de FEC: `K:M`
+- Número de pruebas: `N = K + M`
+- Tasa de fallo del grupo Shred: `S = SUM de i=0 -> M para binomio (prob_failure = P, pruebas = N, fallas = i)`
+- Fragmentos por bloque: `G`
+- Tasa de éxito del bloque: `B = (1 - S) ^ (G / N)`
+- La distribución binomial para resultados exactamente `i` con probabilidad de P en N ensayos se define como `(N elige i) * P^i * (1 - P)^(N-i)`
 
-For example:
+Por ejemplo:
 
-- Network packet loss rate is 15%.
-- 50k tps network generates 6400 shreds per second.
-- FEC rate increases the total shreds per block by the FEC ratio.
+- La tasa de pérdida de paquetes de red es del 15%.
+- La red de 50k tps genera 6400 shreds por segundo.
+- La tasa del FEC aumenta el total de fragmentos por bloque por la proporción del FEC.
 
-With a FEC rate: `16:4`
+Con una tasa de FEC: `16:4`
 
 - `G = 8000`
 - `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
-- `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775, trials = 20, failures = i) = 0.689414`
+- `S = SUM de i=0 -> 4 para binomio (prob_failure = 0.2775, pruebas = 20, fallas = i) = 0.689414`
 - `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
 
-With FEC rate of `16:16`
+Con una tasa de FEC: `16:16`
 
 - `G = 12800`
-- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.002132`
+- `S = SUM de i=0 -> 32 para binomio (prob_failure = 0.2775, pruebas = 64, fallas = i) = 0.002132`
 - `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
 
-With FEC rate of `32:32`
+Con una tasa de FEC: `32:32`
 
 - `G = 12800`
-- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
+- `S = SUM de i=0 -> 32 para binomio (prob_failure = 0.2775, pruebas = 64, fallas = i) = 0.000048`
 - `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
 
-## Neighborhoods
+## Vecindarios
 
-The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
+El siguiente diagrama muestra cómo interactúan dos vecindarios en diferentes capas. Para entorpecer un vecindario, suficientes nodos \\(códigos de borrado +1\\) del vecindario anterior necesitan fallar. Dado que cada vecindario recibe fragmentos de varios nodos de un vecindario de la capa superior, necesitaríamos un gran fallo de la red en las capas superiores para acabar con datos incompletos.
 
-![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)
+![El funcionamiento interno de un vecindario](/img/data-plane-neighborhood.svg)

@@ -1,31 +1,29 @@
 ---
-title: Compensation
+title: المُكافآت (Rewards)
 ---
 
-## Compensation Calculation
+## طريقة حساب المُكافأة <a id="how-are-rewards-calculated"></a>
 
-Compensation will be calculated according to the compensation design described in [this forum post](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132).
+سيتم إحتساب المُكافآت وفقًا لتصميم التعويض المُوضح في المُداخلة في المقال في هذا المنتدى [this forum post](https://forums.solana.com/t/tour-de-sol-stage-1-preliminary-compensation-design/79) وجدول البيانات هذا [this spreadsheet](https://docs.google.com/spreadsheets/d/11puBSw2THdO4wU-uyDEic-D03jg4ZAooVpcZU0w_4gI/edit#gid=218406032).
 
-Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for additional compensation details.
+يرجى أيضًا الإطلاع على القسم "2\(f\) تفاصيل Tour de Sol" من شروط المُشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على تفاصيل المُكافآت الإضافية.
 
-## Requirements to Receive Rewards
+## مُتطلبات الحصول على المكافآت <a id="what-are-the-requirements-to-receive-rewards"></a>
 
-Participants must have signed the Tour de SOL participation agreement,
-passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form
-\(depending on your residency\) prior to participating in the Tour.
+يجب أن يكون المُشاركون قد وقعوا إتفاقية المُشاركة في Tour de SOL، وإجتازوا KYC / AML كفرد عبر منصة CoinList، وكذلك ملؤوا نموذج W-8 BEN أو W-9 الضريبي \ (إعتمادًا على إقامتك\) قبل المُشاركة في الجولة. يجوز للمُشارك المُشاركة في أي وجميع المراحل التي تبدأ بعد إكمال التسجيل. سيتم الإعلان عن مواعيد التسجيل النهائية علنًا على أساس كل مرحلة على حدة.
 
-A participant may participate in any and all stages that begin after they
-complete registration. The final registrations dates will be announced
-publicly on a stage-by-stage basis.
+أخيرًا ، يجب على المُشاركين التوقيع على معيار Solana لإتفاقية الرمز [Token Agreement](https://drive.google.com/open?id=1O4cEUZzeSNoVcncbHcEegAqPgjT-7hcy). سيتم توفير إتفاقية الرمز (Token Agreement) من قبل Solana قبل تاريخ إصدار المُكافآت.
 
-## Tax Implications
+يُرجى أيضًا الإطلاع على الأقسام “2\(i\) & 2\(j\) لتفاصيل Tour de Sol" من شروط المشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على تفاصيل إضافية تتعلق بتلقي المُكافآت.
 
-Participants are entering into a service agreement with Solana with discretionary compensation associated with the services. They are not considered to be a full-time employee of the company and therefore Solana is collecting W-9 and W-8 BEN forms in order to support tax reporting obligations, if applicable. Solana recommends participants consult with a tax accountant to understand any potential tax implications.
+## الآثار المُتَرَتِّبة على الضرائب (Tax Implications) <a id="what-are-the-tax-implications-of-the-rewards"></a>
 
-Also, as stated in Sections 2i, 2k and 10c of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view):
+يدخل المُشاركون في إتفاقية خدمة مع Solana مُقابل تعويض تقديري مُرتبط بالخدمات. لا يُعتبرون مُوظفين بدوام كامل في الشركة، وبالتالي فإن Solana تجمع نماذج W-9 و W-8 BEN من أجل دعم إلتزامات إعداد التقارير الضريبية، إن وجدت. تُوصي Solana المُشاركين بالتشاور مع مُحاسب ضرائب لفهم أي آثار ضريبية مُحتملة.
 
-> 2i - To receive any SOL Reward, a Finalist must sign the Company’s standard form of SOL Reward Agreement which will include the terms and conditions governing the ownership and use of the SOL that are issued as the SOL Reward, including but not limited to applicable lockups required by securities laws, blackout dates and tax reporting information.
+كما هو مذكور أيضًا في الأقسام 2i و 2k و 10c من شروط المُشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view):
 
-> 2k - To receive any SOL Reward, a Finalist must sign the Company’s standard form of SOL Reward Agreement which will include the terms and conditions governing the ownership and use of the SOL that are issued as the SOL Reward, including but not limited to applicable lockups required by securities laws, blackout dates and tax reporting information.
+> 2i - لتلقي أي مُكافأة من عملة SOL، يجب على المُتأهل للتصفيات النهائية التوقيع على النموذج القياسي للشركة لإتفاقية المُكافأة (SOL Reward Agreement) التي ستتضمن الشروط والأحكام التي تحكم ملكية وإستخدام عملة SOL التي يتم إصدارها على أنها مُكافأة SOL، بما في ذلك على سبيل المثال لا الحصر عمليات الإقفال المعمول بها التي تتطلبها قوانين الأوراق المالية وتواريخ الحظر ومعلومات إعداد التقارير الضريبية.
 
-> 10c - You are responsible for complying with all laws and regulations applicable to your transactions on any Protocol, including, but not limited to, the Commodity Exchange Act and the regulations promulgated thereunder by the U.S. Commodity Futures Trading Commission \(“CFTC”\), the federal securities laws and the regulations promulgated thereunder by the U.S. Securities and Exchange Commission \(“SEC”\), and the tax laws applicable to any remuneration received by you from Company.
+> 2k - لتلقي أي مُكافأة من عملة SOL، يجب على المُتأهل للتصفيات النهائية التوقيع على النموذج القياسي للشركة لإتفاقية المُكافأة (SOL Reward Agreement) والذي سيتضمن الشروط والأحكام التي تحكم ملكية وإستخدام عملة SOL التي يتم إصدارها كمُكافأة SOL، بما في ذلك على سبيل المثال لا الحصر عمليات الإقفال المعمول بها التي تتطلبها قوانين الأوراق المالية وتواريخ الحظر ومعلومات إعداد التقارير الضريبية.
+
+> 10c - أنت مسؤول عن الإمتثال لجميع القوانين واللوائح السارية على مُعاملاتك على أي بروتوكول، بما في ذلك، على سبيل المثال لا الحصر، قانون تبادل السلع واللوائح الصادرة بمُوجبه من قبل الولايات المتحدة. لجنة تداول السلع الآجلة \(“CFTC”\)، وقوانين الأوراق المالية الفيدرالية واللوائح الصادرة بمُوجبه من قبل الولايات المتحدة. لجنة الأوراق المالية والبورصات \(“SEC”\)، وقوانين الضرائب السارية على أي أجر تتلقاه من الشركة.

@@ -1,32 +1,32 @@
 ---
-title: Deterministic Transaction Fees
+title: Tasas de transacción determinadas
 ---
 
-Transactions currently include a fee field that indicates the maximum fee field a slot leader is permitted to charge to process a transaction. The cluster, on the other hand, agrees on a minimum fee. If the network is congested, the slot leader may prioritize the transactions offering higher fees. That means the client won't know how much was collected until the transaction is confirmed by the cluster and the remaining balance is checked. It smells of exactly what we dislike about Ethereum's "gas", non-determinism.
+En la actualidad, las transacciones incluyen un campo de comisión que indica el campo de comisión máximo que un jefe de slot puede cobrar por procesar una transacción. El cluster, por otra parte, está de acuerdo en una tasa mínima. Si la red está congestionada, el líder del slot podrá priorizar las transacciones que ofrezcan tarifas más altas. Esto significa que el cliente no sabrá cuánto se ha recogido hasta que la transacción sea confirmada por el clúster y el saldo restante sea comprobado. Esto seria exactamente como lo que no nos gusta del "gas" de Ethereum, el no determinismo.
 
-## Congestion-driven fees
+## Tasas por congestión
 
-Each validator uses _signatures per slot_ \(SPS\) to estimate network congestion and _SPS target_ to estimate the desired processing capacity of the cluster. The validator learns the SPS target from the genesis config, whereas it calculates SPS from recently processed transactions. The genesis config also defines a target `lamports_per_signature`, which is the fee to charge per signature when the cluster is operating at _SPS target_.
+Cada validador utiliza _firmas por slot_ \(SPS\) para estimar la congestión de red y _el objetivo SPS_ para estimar la capacidad de procesamiento deseada del clúster. El validador aprende el objetivo SPS de la configuración génesis, mientras que calcula el SPS de las transacciones procesadas recientemente. La configuración genesis también define un objetivo `lamports_per_signature`, que es la cuota de cargar por firma cuando el clúster está operando en el _destino SPS_.
 
-## Calculating fees
+## Calculando tarifas
 
-The client uses the JSON RPC API to query the cluster for the current fee parameters. Those parameters are tagged with a blockhash and remain valid until that blockhash is old enough to be rejected by the slot leader.
+El cliente utiliza la JSON RPC API para consultar el clúster para los parámetros de tarifa actuales. Estos parámetros son etiquetados con un blockhash y permanecen válidos hasta que el blockhash sea lo suficientemente viejo como para ser rechazado por el líder del slot.
 
-Before sending a transaction to the cluster, a client may submit the transaction and fee account data to an SDK module called the _fee calculator_. So long as the client's SDK version matches the slot leader's version, the client is assured that its account will be changed exactly the same number of lamports as returned by the fee calculator.
+Antes de enviar una transacción al clúster, un cliente puede enviar la transacción y los datos de la cuenta de comisión a un módulo SDK llamado la _fee calculator_. Mientras la versión SDK del cliente coincida con la versión de la ranura, el cliente está seguro de que su cuenta será cambiada exactamente el mismo número de lamports devueltas por la calculadora de tasas.
 
-## Fee Parameters
+## Parámetros de comisiones
 
-In the first implementation of this design, the only fee parameter is `lamports_per_signature`. The more signatures the cluster needs to verify, the higher the fee. The exact number of lamports is determined by the ratio of SPS to the SPS target. At the end of each slot, the cluster lowers `lamports_per_signature` when SPS is below the target and raises it when above the target. The minimum value for `lamports_per_signature` is 50% of the target `lamports_per_signature` and the maximum value is 10x the target \`lamports_per_signature'
+En la primera implementación de este diseño, el único parámetro de tarifa es `lamports_per_signature`. Cuantas más firmas tenga el cluster para verificar, mayor será la cuota. El número exacto de lamports se determina por la proporción de SPS con respecto al destino SPS. Al final de cada ranura, el clúster reduce `lamports_per_signature` cuando SPS está por debajo del objetivo y lo levanta cuando está por encima del objetivo. El valor mínimo para `lamports_per_signature` es el 50% del objetivo `lamports_per_signature` y el valor máximo es 10 x el objetivo \`lamports_per_signature'
 
-Future parameters might include:
+Los parámetros futuros podrían incluir:
 
-- `lamports_per_pubkey` - cost to load an account
-- `lamports_per_slot_distance` - higher cost to load very old accounts
-- `lamports_per_byte` - cost per size of account loaded
-- `lamports_per_bpf_instruction` - cost to run a program
+- `lamports_per_pubkey` - coste para cargar una cuenta
+- `lamports_per_slot_distance` - mayor coste para cargar cuentas muy antiguas
+- `lamports_per_byte` - costo por tamaño de la cuenta cargada
+- `lamports_per_bpf_instruction` - costo para ejecutar un programa
 
-## Attacks
+## Ataques
 
-### Hijacking the SPS Target
+### Golpeando al objetivo SPS
 
-A group of validators can centralize the cluster if they can convince it to raise the SPS Target above a point where the rest of the validators can keep up. Raising the target will cause fees to drop, presumably creating more demand and therefore higher TPS. If the validator doesn't have hardware that can process that many transactions that fast, its confirmation votes will eventually get so long that the cluster will be forced to boot it.
+Un grupo de validadores puede centralizar el cluster si pueden convencerlo de que levante el objetivo SPS sobre un punto donde el resto de validadores pueden mantenerse. Aumentar el objetivo hará que caigan las tasas, generando presumiblemente más demanda y, por lo tanto, un mayor TPS. Si el validador no tiene hardware que pueda procesar tantas transacciones tan rápido, sus votos de confirmación finalmente serán tan largos que el clúster se verá obligado a arrancarlo.

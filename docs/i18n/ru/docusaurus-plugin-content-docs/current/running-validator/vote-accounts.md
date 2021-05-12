@@ -1,192 +1,97 @@
 ---
-title: Vote Account Management
+title: Управление Vote аккаунтом
 ---
 
-This page describes how to set up an on-chain _vote account_. Creating a vote
-account is needed if you plan to run a validator node on Solana.
+Эта страница описывает, как настроить _vote account_.  Создание vote аккаунта необходимо, если вы планируете запустить узел валидатора на Solana.
 
-## Create a Vote Account
+## Создание Vote аккаунта
+Vote аккаунт может быть создан с помощью команды [create-vote-account](../cli/usage.md#solana-create-vote-account). Он может быть настроен при первом создании или после запуска валидатора.  Все аспекты Vote аккаунта могут быть изменены, за исключением [vote account address](#vote-account-address), который фиксируется на срок его действия.
 
-A vote account can be created with the
-[create-vote-account](../cli/usage.md#solana-create-vote-account) command.
-The vote account can be configured when first created or after the validator is
-running. All aspects of the vote account can be changed except for the
-[vote account address](#vote-account-address), which is fixed for the lifetime
-of the account.
+### Настройка существующего Vote аккаунта
+ - Чтобы изменить [validator-identity](#validator-identity), используйте [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
+ - Чтобы изменить [vote authority](#vote-authority), используйте [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
+ - Чтобы изменить [vwithdraw authority](#withdraw-authority), используйте [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-withdrawer).
+ - Чтобы сменить [commission](#commission), используйте [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-### Configure an Existing Vote Account
+## Структура Vote аккаунта
 
-- To change the [validator identity](#validator-identity), use
-  [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
-- To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
-- To change the [withdraw authority](#withdraw-authority), use
-  [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
-- To change the [commission](#commission), use
-  [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
+### Адрес Vote аккаунта
+Vote аккаунт создается по адресу, который является либо публичным ключом keypair файла, либо на производном адресе, основанном на публичном ключе файла с использованием пароля и seed фразы.
 
-## Vote Account Structure
+Адрес Vote аккаунта никогда не требуется для подписания каких-либо транзакций, он используется только для поиска информации об учетной записи.
 
-### Vote Account Address
-
-A vote account is created at an address that is either the public key of a
-keypair file, or at a derived address based on a keypair file's public key and
-a seed string.
-
-The address of a vote account is never needed to sign any transactions,
-but is just used to look up the account information.
-
-When someone wants to [delegate tokens in a stake account](../staking.md),
-the delegation command is pointed at the vote account address of the validator
-to whom the token-holder wants to delegate.
+Когда кто-то хочет [делегировать токены на счет участника](../staking.md), команда делегирования указывается на адрес учетной записи Vote аккаунта, которому происходит делегация.
 
 ### Validator Identity
 
-The _validator identity_ is a system account that is used to pay for all the
-vote transaction fees submitted to the vote account.
-Because the validator is expected to vote on most valid blocks it receives,
-the validator identity account is frequently
-(potentially multiple times per second) signing transactions and
-paying fees. For this reason the validator identity keypair must be
-stored as a "hot wallet" in a keypair file on the same system the validator
-process is running.
+Validator Identity _валидатора_ — это системный аккаунт, который используется для оплаты всех комиссий vote транзакций, подтверждённых vote аккаунтом. Поскольку валидатор должен голосовать по большинству действительных блоков, то Validator Identity валидатора часто генерирует (потенциально несколько раз в секунду) транзакции подписания и платит комиссии за них.  По этой причине validator identity keypair должен храниться как «горячий кошелек» в файле ключей в той же системе, где запущен валидатор.
 
-Because a hot wallet is generally less secure than an offline or "cold" wallet,
-the validator operator may choose to store only enough SOL on the identity
-account to cover voting fees for a limited amount of time, such as a few weeks
-or months. The validator identity account could be periodically topped off
-from a more secure wallet.
+Поскольку горячий кошелек, как правило, менее безопасен, чем оффлайн или холодный кошелек, оператор валидатора может хранить там только необходимое количество SOL для покрытия комиссий за голосование в течение ограниченного количества времени, например, несколько недель или месяцев.  Validator identity может периодически пополняться с более безопасного кошелька.
 
-This practice can reduce the risk of loss of funds if the validator node's
-disk or file system becomes compromised or corrupted.
+Эта практика может уменьшить риск потери средств, если диск или файловая система узла валидатора будет взломана или повредиться.
 
-The validator identity is required to be provided when a vote account is created.
-The validator identity can also be changed after an account is created by using
-the [vote-update-validator](../cli/usage.md#solana-vote-update-validator) command.
+Validator identity должен быть указан при создании Vote аккаунта. Validator identity также можно изменить после создания учетной записи с помощью команды [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 
 ### Vote Authority
 
-The _vote authority_ keypair is used to sign each vote transaction the validator
-node wants to submit to the cluster. This doesn't necessarily have to be unique
-from the validator identity, as you will see later in this document. Because
-the vote authority, like the validator identity, is signing transactions
-frequently, this also must be a hot keypair on the same file system as the
-validator process.
+_Vote authority_ используются для подписания каждой транзакции голосования, которую валидатор хочет отправить кластеру.  Это не обязательно должно быть уникальным из validator identity, это будет видно в этом документе позже.  Поскольку vote authority, как и validator identity, часто подписывает транзакции, он тоже должен быть горячим ключом в той же файловой системе, что и validator identity.
 
-The vote authority can be set to the same address as the validator identity.
-If the validator identity is also the vote authority, only one
-signature per vote transaction is needed in order to both sign the vote and pay
-the transaction fee. Because transaction fees on Solana are assessed
-per-signature, having one signer instead of two will result in half the transaction
-fee paid compared to setting the vote authority and validator identity to two
-different accounts.
+Vote authority может быть установлен на тот же адрес, что и validator identity. Если validator identity также является vote authority, только одна подпись для одной транзакции голосования необходима, чтобы подписать голос и заплатить комиссию за транзакцию.  Поскольку плата за транзакцию в Solana начисляется за каждую подпись, наличие одного подписывающего лица вместо двух приведет к тому, что будет оплачена половина комиссии за транзакцию по сравнению с тем, если vote authority и validator identity будут сделаны на два разных аккаунта.
 
-The vote authority can be set when the vote account is created. If it is not
-provided, the default behavior is to assign it the same as the validator identity.
-The vote authority can be changed later with the
-[vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter) command.
+Vote authority быть установлен при создании vote аккаунта.  Если он не указан, по умолчанию это назначение будет ровняться validator identity. Vote authority может быть изменен позже с помощью команды [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
 
-The vote authority can be changed at most once per epoch. If the authority is
-changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
-this will not take effect until the beginning of the next epoch.
-To support a smooth transition of the vote signing,
-`solana-validator` allows the `--authorized-voter` argument to be specified
-multiple times. This allows the validator process to keep voting successfully
-when the network reaches an epoch boundary at which the validator's vote
-authority account changes.
+Vote authority может быть изменен один раз за эпоху.  Если он изменен с помощью [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter), то изменения вступят в силу только в начале следующей эпохи. Чтобы обеспечить плавный переход права подписи, `solana-validator` позволяет многократно указывать аргумент `--authorized-voter`.  Это позволяет валидатору успешно продолжать голосование когда сеть достигает границ эпохи, при которой валидатор меняет vote authority.
 
 ### Withdraw Authority
 
-The _withdraw authority_ keypair is used to withdraw funds from a vote account
-using the [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
-command. Any network rewards a validator earns are deposited into the vote
-account and are only retrievable by signing with the withdraw authority keypair.
+_Withdraw authority_ используется для снятия средств с vote аккаунта, то делается с помощью команды [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account).  Любая награда, которую получает валидатор, зачисляется на vote аккаунт и может быть получена только с подписью withdraw authority.
 
-The withdraw authority is also required to sign any transaction to change
-a vote account's [commission](#commission), and to change the validator
-identity on a vote account.
+Withdraw authority также требуется для подписания любой транзакции, для изменения комиссии [vote аккаунта](#commission), а также для изменения validator identity для vote аккаунта.
 
-Because the vote account could accrue a significant balance, consider keeping
-the withdraw authority keypair in an offline/cold wallet, as it is
-not needed to sign frequent transactions.
+Поскольку на vote аккаунт может зачисляться значительный баланс, подумайте о том, чтобы сохранить ключ withdraw authority на офлайн/холодном кошельке, так как он не требуется для подписания частых транзакций.
 
-The withdraw authority can be set at vote account creation with the
-`--authorized-withdrawer` option. If this is not provided, the validator
-identity will be set as the withdraw authority by default.
+Withdraw authority средств может быть установлен при создании vote аккаунта с использованием параметра `--authorized-withdrawer`.  Если он не указан, по умолчанию будет установлен validator identity в качестве withdraw authority.
 
-The withdraw authority can be changed later with the
-[vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
-command.
+Withdraw authority может быть изменен позже с помощью команды [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-withdrawer).
 
-### Commission
+### Комиссия
 
-_Commission_ is the percent of network rewards earned by a validator that are
-deposited into the validator's vote account. The remainder of the rewards
-are distributed to all of the stake accounts delegated to that vote account,
-proportional to the active stake weight of each stake account.
+_Комиссия_ - процент сетевых вознаграждений, заработанных валидатором и зачисленных на его vote аккаунт.  Оставшиеся вознаграждения распределяются по всем аккаунтам, делегированным на этот vote аккаунт, пропорционально весу активной доли каждого stake аккаунта.
 
-For example, if a vote account has a commission of 10%, for all rewards earned
-by that validator in a given epoch, 10% of these rewards will be deposited into
-the vote account in the first block of the following epoch. The remaining 90%
-will be deposited into delegated stake accounts as immediately active stake.
+Например, если vote аккаунт имеет комиссию 10% за все награды, заработанные валидатором в данной эпохе, то 10% из этих наград будут внесены на vote аккаунт в первом блоке следующей эпохи. Остальные 90% будут депонированы на делегированные stake аккаунты в качестве немедленно активного стейка.
 
-A validator may choose to set a low commission to try to attract more stake
-delegations as a lower commission results in a larger percentage of rewards
-passed along to the delegator. As there are costs associated with setting up
-and operating a validator node, a validator would ideally set a high enough
-commission to at least cover their expenses.
+Валидатор может выбрать низкую комиссию, чтобы попытаться привлечь больше делегаций, соответственно, чем меньше комиссия, тем больше процент вознаграждений будет передан делегирующему.  Поскольку существуют расходы, связанные с настройкой и управлением узлом валидатора, валидатор в идеале установит достаточно высокую комиссию для того, чтобы по крайней мере покрыть их расходы.
 
-Commission can be set upon vote account creation with the `--commission` option.
-If it is not provided, it will default to 100%, which will result in all
-rewards deposited in the vote account, and none passed on to any delegated
-stake accounts.
+Комиссия может быть установлена при создании vote аккаунта с параметром `--commission`. Если это значение не установлено, то по умолчанию оно будет 100%, что приведет к тому, что все награды будут зачислены на vote аккаунт валидатора.
 
-Commission can also be changed later with the
-[vote-update-commission](../cli/usage.md#solana-vote-update-commission) command.
+Комиссия также может быть изменена позже командой [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-When setting the commission, only integer values in the set [0-100] are accepted.
-The integer represents the number of percentage points for the commission, so
-creating an account with `--commission 10` will set a 10% commission.
+При установке комиссии принимаются только целые значения в наборе [0-100]. Целое число показывает количество процентов, так что если создать аккаунт с `--commission 10`, то будет установлена комиссия 10%.
 
-## Key Rotation
-
-Rotating the vote account authority keys require special handling when dealing
-with a live validator.
+## Ротация ключей
+Ротация ключей для vote authority аккаунта требует специальных действий при работе с с он-лайн валидатором.
 
 ### Vote Account Validator Identity
 
-You will need access to the _withdraw authority_ keypair for the vote account to
-change the validator identity. The follow steps assume that
-`~/withdraw-authority.json` is that keypair.
+Вам понадобится доступ к _withdraw authority_ ключу для vote аккаунта, чтобы изменить validator identity.  Следующие шаги предполагают, что `~/withdraw-authority.json` - это тот самый необходимый ключ.
 
-1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
-2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
-3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
-   to modify the validator identity in your vote account
-4. Restart your validator with the new identity keypair for the `--identity` argument
+1. Создайте новый validator identity ключ `solana-keygen new -o ~/new-validator-keypair.json`.
+2. Убедитесь, что новый аккаунт необходимым количеством монет `solana transfer ~/new-validator-keypair.json 500`.
+3. Запустите `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json` чтобы изменить validator identity для vote account
+4. Перезапустите ваш валидатор с новым identity ключом `--identity`
 
 ### Vote Account Authorized Voter
+_Vote authority_ ключ может быть изменен только на границе эпохи и для этого требуются дополнительные аргументы `solana-validator` (для бесшовного перехода).
 
-The _vote authority_ keypair may only be changed at epoch boundaries and
-requires some additional arguments to `solana-validator` for a seamless
-migration.
+1. Выполните `solana epoch-info`.  Если в текущей эпохе осталось не много времени, подумайте об ожидании следующей эпохи, чтобы предоставить вашему валидатору достаточно времени для перезагрузки и синхронизации с блокчейном.
+2. Создайте новый vote authority ключ `solana-keygen new -o ~/new-vote-authority.json`.
+3. Определите текущий _vote authority_ ключ, запустив `solana
+vote-account ~/vote-account-keypair.json`.  Это может быть validator identity валидатора (по умолчанию) или какой-либо другой ключ.  Следующие шаги предполагают, что `~/validator-keypair.json` - это тот самый необходимый ключ.
+4. Выполните `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. Новый vote authority станет активным начиная со следующей эпохи.
+5. `solana-validator` должен быть перезапущен со старыми и новыми vote authority ключами, чтобы он мог плавно переходить на следующую эпоху. Добавьте два аргумента при перезапуске: `--authorized-voter ~/validator-keypair.json
+--authorized-voter ~/new-vote-authority.json`
+6. После того, как кластер достигнет следующей эпохи, удалите `--authorized-voter ~/validator-keypair. son` аргумент и перезапустите `solana-validator`, так как старый vote authority ключ больше не требуется.
 
-1. Run `solana epoch-info`. If there is not much time remaining time in the
-   current epoch, consider waiting for the next epoch to allow your validator
-   plenty of time to restart and catch up.
-2. Create the new vote authority keypair, `solana-keygen new -o ~/new-vote-authority.json`.
-3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. It may be validator's
-   identity account (the default) or some other keypair. The following steps
-   assume that `~/validator-keypair.json` is that keypair.
-4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
-   The new vote authority is scheduled to become active starting at the next epoch.
-5. `solana-validator` now needs to be restarted with the old and new vote
-   authority keypairs, so that it can smoothly transition at the next epoch. Add
-   the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
-6. After the cluster reaches the next epoch, remove the
-   `--authorized-voter ~/validator-keypair.json` argument and restart
-   `solana-validator`, as the old vote authority keypair is no longer required.
 
 ### Vote Account Authorized Withdrawer
-
-No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.
+Специальных команд не требуется.  При необходимости используйте команду `solana vote-authorize-withdrawer`.

@@ -1,130 +1,58 @@
 ---
-title: Staking on Solana
+title: Ставка в Solana
 ---
 
-_Note before reading: All references to increases in values are in absolute
-terms with regards to balance of SOL.
-This document makes no suggestion as to the monetary value of SOL at any time._
+*Примечание перед чтением: все ссылки на увеличение значений даны в абсолютном выражении в отношении баланса SOL. В этом документе не содержится никаких предложений относительно денежной стоимости SOL.*
 
-Staking your SOL tokens on Solana is the best way you can help secure the world's
-highest-performing blockchain network, and
-[earn rewards](implemented-proposals/staking-rewards.md) for doing so!
+Ставка токенов SOL на Solana - это лучший способ защитить наивысший уровень работы блокчейна в мире, и [заработайте награды](implemented-proposals/staking-rewards.md) за это! Инфляция и сетевые вознаграждения *НЕ* включены в настоящее время в Solana Beta сети Mainnet, но могут быть включены в будущем.
 
-Solana is a Proof-of-Stake (PoS) network with delegations, which means that
-anyone who holds SOL tokens can choose to delegate some of their SOL to one or
-more validators, who process transactions and run the network.
+Solana - это сеть Proof-of-Stake (PoS) с делегированием, что означает, что любой, у кого есть токены SOL, может делегировать часть своих SOL одному или больше валидаторов, которые обрабатывают транзакции и управляют сетью.
 
-Delegating stake is a shared-risk shared-reward financial model that may provide
-returns to holders of tokens delegated for a long period.
-This is achieved by aligning the financial incentives of the token-holders
-(delegators) and the validators to whom they delegate.
+Делегирование доли представляет собой финансовую модель общего риска, которая может предоставить возвратов держателям делегированных токенов на длительный период. Это достигается путем согласования финансовых стимулов токен-держателей (делегатов) и валидаторов, с которыми они делегированы.
 
-The more stake a validator has delegated to them, the more often this validator
-is chosen to write new transactions to the ledger. The more transactions
-the validator writes, the more rewards they and their delegators earn.
-Validators who configure their systems to be able to process more transactions
-at a time not only earn proportionally more rewards for doing so, they also
-keep the network running as fast and as smoothly as possible.
+Чем больше ставок валидатор делегировал им, тем чаще этот валидатор выбирается для записи новых транзакций в реестр.  Чем больше транзакций валидатор подпишет, тем больше вознаграждений получают они и их делегаты. Валидаторы, которые настраивают свои системы, смогут обрабатывать больше транзакций в то время не только зарабатывают за это пропорционально больше вознаграждений. также поддерживает работу сети как можно быстрее и как можно более плавно.
 
-Validators incur costs by running and maintaining their systems, and this is
-passed on to delegators in the form of a fee collected as a percentage of
-rewards earned. This fee is known as a _commission_. As validators earn more
-rewards the more stake is delegated to them, they may compete with one another
-to offer the lowest commission for their services, in order to attract more
-delegated stake.
+Валидаторам оплачивают за счет использования и поддержания их систем, и это передается делегатам в виде комиссии, собранной в процентах от заработанных вознаграждений.  Эта комиссия известна как *комиссия*. Поскольку валидаторы зарабатывают больше вознаграждений, чем больше ставок делегируется им, они могут соревноваться друг с другом предлагать самую низкую комиссию за свои услуги, чтобы привлечь больше делегированных ставок.
 
-There is a risk of loss of tokens when staking, through a process known as
-_slashing_. Slashing involves the removal and destruction of a portion of a
-validator's delegated stake in response to intentional malicious behavior,
-such as creating invalid transactions or censoring certain types of transactions
-or network participants.
+Существует риск потери токенов во время разбивки через процесс, известный как *слэширование*.  Слэширование *НЕ* включено в настоящее время на сети Mainnet Solana, но может быть включено в будущем.  Слэшинг сопряжен с автоматическим удалением и уничтожением части делегированной ставки валидатора в ответ на преднамеренное злонамеренное поведение, например, создание некорректных транзакций или цензуры определенных типов транзакций или участников сети. Если к валидатору будет применен слэшинг, все держатели токенов, делегированные этому валидатору, потеряют часть своей делегации.  В то время как это означает немедленную потерю для владельца токена, это также потеря будущих вознаграждений за валидатор в связи с сокращением их общей делегации.
 
-If a validator is slashed, all token holders who have delegated stake to that
-validator will lose a portion of their delegation. While this means an immediate
-loss for the token holder, it also is a loss of future rewards for the validator
-due to their reduced total delegation. More details on the slashing roadmap can
-be found
-[here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
+Это цель сетевых вознаграждений и сокращения для выравнивания обоих валидаторов. и финансовые стимулы для держателей токенов, которые, в свою очередь, помогают поддерживать сеть безопасной, надежной и эффективной.
 
-It is the goal of the network rewards and slashing to align both validators'
-and token holders' financial incentives, which in turn help keeps the network
-secure, robust and performing at its best.
+*Примечание: Сетевые вознаграждения для участников ставок и валидаторов в настоящее время не включены в Бета-версия основной сети.*
 
-## How do I stake my SOL tokens?
+*Примечание: В настоящее время слэширование не включено на Mainnet Beta.*
 
-In order to stake tokens on Solana, you first will need to transfer some SOL
-into a wallet that supports staking, then follow the steps or instructions
-provided by the wallet to create a stake account and delegate your stake.
-Different wallets will vary slightly in their process for this but the general
-description is below.
 
-#### Supported Wallets
+## Как сделать стейк моих токенов SOL?
+Чтобы сделать стейк токенов на Solana, необходимо сначала перенести SOL в кошелек, поддерживающий ставку, затем выполните шаги или инструкцию, предоставленные кошельком для создания учетной записи и делегирования вашей ставки. Различные кошельки могут немного отличаться по своему процессу, но в целом описание ниже аналогично.
 
-Staking operations are supported by the following wallet solutions:
+#### Поддерживаемые кошельки
+Процедура ставки поддерживается следующими решениями кошельков:
 
-- SolFlare.com in conjunction with a keystore file or a Ledger Nano.
-  Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
+ - SolFlare.com совместно с файлом хранилища ключа или Ledger Nano. Посмотрите наше руководство [по использованию SolFlare](wallet-guide/solflare.md) для информации.
 
-- Solana command line tools can perform all stake operations in conjunction
-  with a CLI-generated keypair file wallet, a paper wallet, or with a connected
-  Ledger Nano.
-  [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
+ - С помощью командной строки Solana могут выполнять все операции по ставке в сочетании с с кошельком, сгенерированным CLI файлом пары ключей, бумажный кошелек, или с подключенным Ledger Nano. [Ставка с помощью инструментов командной строки Solana](cli/delegate-stake.md).
 
-- [Exodus](https://www.exodus.com/) wallet. They make the process very simple,
-  but you cannot choose a validator: they assign you to their partner validator.
-  See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq)
-  for details.
+#### Создание аккаунта для ставки
+Аккаунт для ставки - это другой тип учетной записи, чем адрес кошелька. который используется для простой отправки и получения токенов SOL на другие адреса. Если вы получили SOL на адрес кошелька под вашим контролем, вы можете использовать некоторые из этих токенов для создания и пополнения нового аккаунта для ставок, который будет иметь другой адрес, чем кошелёк, который вы использовали для его создания. В зависимости от того, какой кошелек вы используете для создания аккаунта для ставки может несколько отличаться.  Не все кошельки поддерживают аккаунты, см. [Поддерживаемые кошельки](#supported-wallets).
 
-- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges.
-  Note that you cannot choose a validator with these services: they assign you
-  to their partner validator.
+#### Выбор валидатора
+После того, как аккаунт для ставки будет создан, вы, скорее всего, захотите делегировать SOL на узел валидатора.  Ниже приведены несколько мест, где вы можете получить информацию о валидаторах, которые в настоящее время участвуют в работе сети. Solana Labs team и Solana Foundation не рекомендуют ни одного конкретного валидатора.
 
-#### Create a Stake Account
+Валидаторы бета-версии Mainnet представляют себя и свои услуги на форуме Solana:
+ - https://forums.solana.com/t/validator-information-thread
 
-A stake account is a different type of account from a wallet address
-that is used to simply send and receive SOL tokens to other addresses. If you
-have received SOL in a wallet address you control, you can use some of
-these tokens to create and fund a new stake account, which will have a different
-address than the wallet you used to create it.
-Depending on which wallet you are using the steps to create a stake account
-may vary slightly. Not all wallets support stake accounts, see
-[Supported Wallets](#supported-wallets).
+Сайт solanabeach.io создан и поддерживается одним из наших валидаторов, услуги по размещению ставок.  Он предоставляет некоторую графическую информацию высокого уровня о сети в целом, а также список каждого валидатора и некоторых недавних статистик производительности по каждому.
+ - https://solanabeach.io
 
-#### Select a Validator
+Для просмотра статистики производства блоков, используйте инструменты командной строки Solana:
+ - `solana validators`
+ - `solana block-production`
 
-After a stake account is created, you will likely want to delegate the SOL
-to a validator node. Below are a few places where you can get information about
-the validators who are currently participating in running the network.
-The Solana Labs team and the Solana Foundation do not recommend any particular
-validator.
+Команда Соланы не дает рекомендаций о том, как интерпретировать эту информацию.  Потенциальные делегаты должны проявить должную осмотрительность.
 
-The Mainnet Beta validators introduce themselves and their services on this
-Solana Forum thread:
+#### Делегирование стейка
+Как только вы решите, какому валидатору или валидаторам вы делегируете, используйте поддерживаемый кошелек для делегирования вашего аккаунта для ставок на голосование по адресу учетной записи.
 
-- https://forums.solana.com/t/validator-information-thread
-
-The site solanabeach.io is built and maintained by one of our validators,
-Staking Facilities. It provides a some high-level graphical information about
-the network as a whole, as well as a list of each validator and some recent
-performance statistics about each one.
-
-- https://solanabeach.io
-
-To view block production statistics, use the Solana command-line tools:
-
-- `solana validators`
-- `solana block-production`
-
-The Solana team does not make recommendations on how to interpret this
-information. Potential delegators should do their own due diligence.
-
-#### Delegate your Stake
-
-Once you have decided to which validator or validators you will delegate, use
-a supported wallet to delegate your stake account to the validator's vote
-account address.
-
-## Stake Account Details
-
-For more information about the operations and permissions associated with a
-stake account, please see [Stake Accounts](staking/stake-accounts.md)
+## Детали стейк аккаунта
+Для получения дополнительной информации об операциях и разрешениях, связанных с аккаунтом для стейка, обратитесь к [аккаунту для ставок](staking/stake-accounts.md)

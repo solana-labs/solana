@@ -1,27 +1,11 @@
 ---
-title: Stake Programming
+title: برمجة إثبات الحِصَّة أو التَّحْصِيص (Stake Programming)
 ---
 
-To maximize stake distribution, decentralization, and censorship resistance on
-the Solana network, staking can be performed programmatically. The team
-and community have developed several on-chain and off-chain programs to make
-stakes easier to manage.
+لتعظيم توزيع الحِصَّة (stake) واللامركزية ومُقاومة الرقابة على شبكة Solana، يُمكن تنفيذ إثبات الحِصَّة أو التَّحْصِيص (staking) برمجيًا. طور الفريق والمُجتمع عدة برامج على الشبكة (On-Chain) وخارجها لتسهيل إدارة المخاطر.
 
-#### Stake-o-matic aka Auto-delegation Bots
+#### Stake-o-matic ويُعرف أيضًا بإسم روبوتات التفويض التلقائي (Auto-delegation Bots)
+يُدير هذا البرنامج خارج الشبكة (Off-Chain) عدد كبير من المُدقّقين (validators) تُحَصِّصُهُم بسلطة مركزية. تستخدم مُؤسسة Solana Foundation روبوت التفويض التلقائي لتفويض حِصَّتها (stake) بإنتظام إلى المُدقّقين (validators) "غير المنحرفين " (non-delinquent) الذين يستوفون مُتطلبات الأداء المُحَدَّدة. يُمكن العثور على مزيد من المعلومات على [official announcement](https://forums.solana.com/t/stake-o-matic-delegation-matching-program/790).
 
-This off-chain program manages a large population of validators staked by a
-central authority. The Solana Foundation uses an auto-delegation bot to regularly delegate its
-stake to "non-delinquent" validators that meet specified performance requirements. More information can be found on the
-[official announcement](https://forums.solana.com/t/stake-o-matic-delegation-matching-program/790).
-
-#### Stake Pools
-
-This on-chain program pools together SOL to be staked by a manager, allowing SOL
-holders to stake and earn rewards without managing stakes.
-Users deposit SOL in exchange for SPL tokens (staking derivatives) that represent their ownership in the stake pool. The pool
-manager stakes deposited SOL according to their strategy, perhaps using a variant
-of an auto-delegation bot as described above. As stakes earn rewards, the pool and pool tokens
-grow proportionally in value. Finally, pool token holders can send SPL tokens
-back to the stake pool to redeem SOL, thereby participating in decentralization with much
-less work required. More information can be found at the
-[SPL stake pool documentation](https://spl.solana.com/stake-pool).
+#### مُجمَّعات إثبات الحِصَّة أو التَّحْصِيص (Stake Pools)
+يُجمِّع البرنامج على الشبكة (On-Chain) عملة SOL معًا ليتم تَحْصِيصها بواسطة مُدير، مما يسمح لأصحاب عملة SOL بالمُشاركة وكسب المُكافآت دون إدارة حِصَصهم (stakes). يقوم المُستخدمون بإيداع عملةSOL مُقابل رموز بصيغة SPL (مُشتقات Staking) التي تُمثل ملكيتهم في مُجَمَّع التَحْصِيص (stake pool). قام مدير المُجَمَّع (pool) بإيداع حِصَص عملة SOL وفقًا لإستراتيجيته، ربما بإستخدام مُتغير من روبوت التفويض التلقائي كما هو مُوضح أعلاه. نظرًا لأن الحِصَص (stakes) تكسب المُكافآت، فإن المُجَمَّع (pool) ورموز المُجَمَّع تنمو بشكل مُتناسب من حيث القيمة. أخيرًا، يُمكن لحاملي رموز المُجَمَّع (pool token holders) إرسال رموز بصيغة SPL مرة أخرى إلى مُجَمَّع التَحْصِيص (stake pool) لإسترداد عملة SOL، وبالتالي المُشاركة في اللامركزية مع عمل أقل بكثير المطلوب. يُمكن العثور على مزيد من المعلومات على مُجَمَّع التَحْصِيص للرمز بصيغة SPL في هذا المُستند [SPL stake pool documentation](https://spl.solana.com/stake-pool).

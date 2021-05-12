@@ -1,24 +1,14 @@
 ---
-title: Economic Design MVP
+title: Diseño Económico MVP
 ---
 
-**Subject to change.**
+**Sujeto a cambios.**
 
-The preceding sections, outlined in the
-[Economic Design Overview](ed_overview.md),
-describe a long-term vision of a sustainable Solana economy.
-Of course, we don't expect the final implementation to perfectly match what has
-been described above. We intend to fully engage with network stakeholders
-throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\)
-to ensure the system supports, and is representative of, the various network
-participants' interests. The first step toward this goal, however, is outlining
-a some desired MVP economic features to be available for early pre-testnet and
-testnet participants. Below is a rough sketch outlining basic economic
-functionality from which a more complete and functional system can be developed.
+Las secciones precedentes, esbozadas en el [Visión general del diseño económico](ed_overview.md), describen una visión a largo plazo de una economía Solana sostenible. Por supuesto, no esperamos que la implementación final coincida perfectamente con lo que se ha descrito anteriormente. Tenemos la intención de colaborar plenamente con las partes interesadas de la red a lo largo de las fases de implementación (es decir, antes de la red de pruebas, la red de pruebas y la red principal) para garantizar que el sistema apoye y sea representativo de los intereses de los distintos participantes en la red. El primer paso hacia este objetivo, sin embargo, es esbozar algunas características económicas deseadas del MVP que deben estar disponibles para los primeros participantes en la red de pruebas y en la red de pruebas. A continuación se muestra un esbozo que describe la funcionalidad económica básica desde la cual se puede desarrollar un sistema más completo y funcional.
 
-## MVP Economic Features
+## Características económicas MVP
 
-- Faucet to deliver testnet SOLs to validators for staking and application development.
-- Mechanism by which validators are rewarded via network inflation.
-- Ability to delegate tokens to validator nodes
-- Validator set commission fees on interest from delegated tokens.
+- Faucet para entregar SOLs de testnet a validadores para staking y desarrollo de aplicaciones.
+- Mecanismo por el cual los validadores son recompensados a través de la inflación de la red.
+- Posibilidad de delegar tokens a nodos validadores
+- El validador establece comisiones por intereses de los tokens delegados.

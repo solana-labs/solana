@@ -1,26 +1,26 @@
 ---
-title: Cluster Test Framework
+title: Marco de pruebas de cluster
 ---
 
-This document proposes the Cluster Test Framework \(CTF\). CTF is a test harness that allows tests to execute against a local, in-process cluster or a deployed cluster.
+Este documento propone el Marco de Pruebas de Clúster \(CTF\). CTF es un arnés de prueba que permite ejecutar pruebas en un clúster local o un clúster desplegado.
 
-## Motivation
+## Motivación
 
-The goal of CTF is to provide a framework for writing tests independent of where and how the cluster is deployed. Regressions can be captured in these tests and the tests can be run against deployed clusters to verify the deployment. The focus of these tests should be on cluster stability, consensus, fault tolerance, API stability.
+El objetivo de CTF es proporcionar un marco para la escritura de pruebas independientes de dónde y cómo se despliegue el cluster. Las regresiones pueden ser capturadas en estas pruebas y las pruebas pueden ser ejecutadas contra los clusters desplegados para verificar el despliegue. Estas pruebas deben centrarse en la estabilidad del clúster, el consenso, la tolerancia a los fallos y la estabilidad de la API.
 
-Tests should verify a single bug or scenario, and should be written with the least amount of internal plumbing exposed to the test.
+Las pruebas deben verificar un solo error o escenario, y deben ser escritas con la menor cantidad de tuberías internas expuestas a la prueba.
 
-## Design Overview
+## Vista general del diseño
 
-Tests are provided an entry point, which is a `contact_info::ContactInfo` structure, and a keypair that has already been funded.
+A las pruebas se les proporciona un punto de entrada, que es una estructura `contact_info::ContactInfo`, y un par de claves que ya ha sido financiado.
 
-Each node in the cluster is configured with a `validator::ValidatorConfig` at boot time. At boot time this configuration specifies any extra cluster configuration required for the test. The cluster should boot with the configuration when it is run in-process or in a data center.
+Cada nodo del clúster se configura con un `validator::ValidatorConfig` en el momento del arranque. En el momento del arranque, esta configuración especifica cualquier configuración adicional del clúster necesaria para la prueba. El clúster debe arrancar con la configuración cuando se ejecuta en proceso o en un centro de datos.
 
-Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via validator RPC.
+Una vez arrancada, la prueba descubrirá el clúster a través de un punto de entrada gossip y configurará cualquier comportamiento en tiempo de ejecución a través de RPC de validador.
 
-## Test Interface
+## Probar interfaz
 
-Each CTF test starts with an opaque entry point and a funded keypair. The test should not depend on how the cluster is deployed, and should be able to exercise all the cluster functionality through the publicly available interfaces.
+Cada prueba CTF comienza con un punto de entrada opaco y un par de claves financiado. La prueba no debe depender de cómo se despliega el clúster, y debe ser capaz de ejercitar toda la funcionalidad del clúster a través de las interfaces disponibles públicamente.
 
 ```text
 use crate::contact_info::ContactInfo;
@@ -28,29 +28,30 @@ use solana_sdk::signature::{Keypair, Signer};
 pub fn test_this_behavior(
     entry_point_info: &ContactInfo,
     funding_keypair: &Keypair,
-    num_nodes: usize,
+    num_nodes: usizar,
 )
 ```
 
-## Cluster Discovery
+## Descubrir cluster
 
-At test start, the cluster has already been established and is fully connected. The test can discover most of the available nodes over a few second.
+Al iniciar la prueba, el clúster ya ha sido establecido y está completamente conectado. La prueba puede descubrir la mayoría de los nodos disponibles en un par de segundos.
 
 ```text
 use crate::gossip_service::discover_nodes;
 
-// Discover the cluster over a few seconds.
+// Descubre el clúster durante unos segundos.
 let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 ```
 
-## Cluster Configuration
+## Configuración del Cluster
 
-To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `validator::ValidatorConfig`.
+Para habilitar escenarios específicos, el clúster necesita ser arrancado con configuraciones especiales. Estas configuraciones pueden ser capturadas en `validator::ValidatorConfig`.
 
-For example:
+Por ejemplo:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
+validator_config.rpc_config.enable_validator_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
@@ -59,11 +60,11 @@ let local = LocalCluster::new_with_config(
                 );
 ```
 
-## How to design a new test
+## Cómo diseñar una nueva prueba
 
-For example, there is a bug that shows that the cluster fails when it is flooded with invalid advertised gossip nodes. Our gossip library and protocol may change, but the cluster still needs to stay resilient to floods of invalid advertised gossip nodes.
+Por ejemplo, hay un error que muestra que el clúster falla cuando se llena de nodos publicitarios no válidos. Nuestra biblioteca y protocolo gossip pueden cambiar, pero el clúster todavía necesita ser resistente a las inundaciones de nodos publicitarios no válidos.
 
-Configure the RPC service:
+Configurar el servicio RPC:
 
 ```text
 let mut validator_config = ValidatorConfig::default();
@@ -71,7 +72,7 @@ validator_config.rpc_config.enable_rpc_gossip_push = true;
 validator_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
 ```
 
-Wire the RPCs and write a new test:
+Envía los RPCs y escribe una nueva prueba:
 
 ```text
 pub fn test_large_invalid_gossip_nodes(
@@ -97,6 +98,6 @@ pub fn test_large_invalid_gossip_nodes(
     }
 
     // Verify that spends still work.
-    verify_spends(&cluster);
+    verify_spends(&clúster);
 }
 ```

@@ -2,51 +2,37 @@
 title: Ledger Nano
 ---
 
-This page describes how to use a Ledger Nano S or Nano X to interact with Solana
-using the command line tools. To see other solutions to interact with Solana with
-your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
+На этой странице описано, как использовать Ledger Nano S или Nano X для работы с Solana в командной строке.  О других способах работы с кошельком Nano в Solana можно узнать [здесь](../ledger-live.md#interact-with-the-solana-network).
 
-## Before You Begin
+## Прежде чем начать
 
-- [Set up a Nano with the Solana App](../ledger-live.md)
-- [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
+- [Настройте Nano на работу с приложением Solana](../ledger-live.md)
+- [Установите утилиты командной строки Solana](../../cli/install-solana-cli-tools.md)
 
-## Use Ledger Nano with Solana CLI
+## Использование Ledger Nano в командной строке Solana
 
-1. Ensure the Ledger Live application is closed
-2. Plug your Nano into your computer's USB port
-3. Enter your pin and start the Solana app on the Nano
-4. Ensure the screen reads "Application is ready"
+1. Убедитесь, что приложение Ledger Live закрыто
+2. Вставьте ваше устройство Nano в USB-порт компьютера
+3. Введите Pin-код и запустите приложение Solana на устройстве Nano
+4. Дождитесь появления на экране надписи "Application is ready"
 
-### View your Wallet ID
+### Просмотр идентификатора Wallet ID
 
-On your computer, run:
+Выполните на компьютере следующую команду:
 
 ```bash
 solana-keygen pubkey usb://ledger
 ```
 
-This confirms your Ledger device is connected properly and in the correct state
-to interact with the Solana CLI. The command returns your Ledger's unique
-_wallet ID_. When you have multiple Nano devices connected to the same
-computer, you can use your wallet ID to specify which Ledger hardware wallet
-you want to use. If you only plan to use a single Nano on your computer
-at a time, you don't need to include the wallet ID. For information on
-using the wallet ID to use a specific Ledger, see
-[Manage Multiple Hardware Wallets](#manage-multiple-hardware-wallets).
+Этим вы проверяете правильность подключения и готовность устройства Ledger к взаимодействию с интерфейсом командной строки Solana. Команда должна отобразить значение _wallet ID_ - уникальный идентификатор вашего устройства Ledger. Если у вас есть несколько устройств Nano, подключенных к одному компьютеру, вы можете использовать идентификатор Walled ID, чтобы указать, какой аппаратный кошелек Ledger вы хотите использовать. Если к вашему компьютеру подключено только одно устройство Nano, использовать идентификатор Wallet ID нет необходимости. Для получения информации о том, как использовать идентификатор Wallet ID для выбора устройства Ledger, обратитесь к разделу [Управление несколькими аппаратными кошельками](#manage-multiple-hardware-wallets).
 
-### View your Wallet Addresses
+### Просмотр адресов кошельков
 
-Your Nano supports an arbitrary number of valid wallet addresses and signers.
-To view any address, use the `solana-keygen pubkey` command, as shown below,
-followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
+Ваш Nano поддерживает произвольное число допустимых адресов кошельков и ключей для подписания. Для просмотра любого адреса используйте команду `solana-keygen pub`, как показано ниже, дополнив ее корректным [URL-адресом пары ключей](../hardware-wallets.md#specify-a-keypair-url).
 
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes, or use different keypairs on the
-device as signing authorities for a stake account, for example.
+Адреса нескольких кошельков могут оказаться полезны, если вы хотите переводить токены между своими счетами или использовать различные пары ключей на устройстве, например, в качестве уполномоченных подписей для stake-аккаунта.
 
-All of the following commands will display different addresses, associated with
-the keypair path given. Try them out!
+Все перечисленные ниже команды отобразят разные адреса кошельков, связанные с разными адресами пар ключей. Попробуйте выполнить их!
 
 ```bash
 solana-keygen pubkey usb://ledger
@@ -55,78 +41,47 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
-- NOTE: keypair url parameters are ignored in **zsh**
-  &nbsp;[see troubleshooting for more info](#troubleshooting)
+* ПРИМЕЧАНИЕ: URL-пути игнорируются при использовании командной оболочки **zsh**. Дополнительная информация содержится в [разделе по решению проблем](#troubleshooting)
 
-You can use other values for the number after `key=` as well.
-Any of the addresses displayed by these commands are valid Solana wallet
-addresses. The private portion associated with each address is stored securely
-on the Nano, and is used to sign transactions from this address.
-Just make a note of which keypair URL you used to derive any address you will be
-using to receive tokens.
+Вы также можете использовать другие значения параметра `ключ=`. Любой из адресов, отображаемых этими командами, является действительным адресом кошелька Solana. Закрытая часть кода, связанная с каждым адресом кошелька, безопасно хранится в устройстве Nano и используется для подписания транзакций с этого кошелька. Обратите внимание на то, какую URL пары ключей вы использовали для получения адреса кошелька, который вы хотите использовать для получения токенов.
 
-If you are only planning to use a single address/keypair on your device, a good
-easy-to-remember path might be to use the address at `key=0`. View this address
-with:
+Если вы планируете хранить только один адрес кошелька /пару ключей на вашем устройстве, то проще всего для запоминания использовать адрес `key=0`. Этот адрес можно узнать, выполнив следующую команду:
 
 ```bash
 solana-keygen pubkey usb://ledger?key=0
 ```
 
-Now you have a wallet address (or multiple addresses), you can share any of
-these addresses publicly to act as a receiving address, and you can use the
-associated keypair URL as the signer for transactions from that address.
+Теперь у вас есть адрес (или несколько адресов) кошелька, и вы можете публично делиться любым из них для получения токенов, а также использовать соответствующий URL-адрес пары ключей для подписания транзакций с этого кошелька.
 
-### View your Balance
+### Просмотр баланса
 
-To view the balance of any account, regardless of which wallet it uses, use the
-`solana balance` command:
+Чтобы просмотреть баланс любого аккаунта вне зависимости от того, какой кошелек он использует, выполните команду `solana balance`:
 
 ```bash
 solana balance SOME_WALLET_ADDRESS
 ```
 
-For example, if your address is `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`,
-then enter the following command to view the balance:
+Например, для просмотра баланса кошелька `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri` выполните следующую команду:
 
 ```bash
 solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 ```
 
-You can also view the balance of any account address on the Accounts tab in the
-[Explorer](https://explorer.solana.com/accounts)
-and paste the address in the box to view the balance in you web browser.
+Вы также можете просмотреть баланс любого кошелька в [эксплоре Solana](https://explorer.solana.com/accounts). Для этого перейдите на вкладку Accounts и вставьте адрес кошелька в поле поиска.
 
-Note: Any address with a balance of 0 SOL, such as a newly created one on your
-Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existent
-accounts are treated the same in Solana. This will change when your account
-address has some SOL in it.
+Примечание: любой кошелек с нулевым балансом (например, новый адрес с балансом 0 SOL, созданный вами на устройстве Ledger) будет отсутствовать в эксплорере (вы увидите сообщение "Not Found"). Solana не делает различий между пустыми и несуществующими аккаунтами. Все изменится, когда в кошельке аккаунта появятся несколько SOL.
 
-### Send SOL from a Nano
+### Отправка токенов SOL из Nano
 
-To send some tokens from an address controlled by your Nano, you will
-need to use the device to sign a transaction, using the same keypair URL you
-used to derive the address. To do this, make sure your Nano is plugged in,
-unlocked with the PIN, Ledger Live is not running, and the Solana App is open
-on the device, showing "Application is Ready".
+Для отправки токенов с кошелька, хранящегося в вашем Nano, вам потребуется использовать устройство для подписания транзакции, указав тот же URL пары ключей, с помощью которого был сгенерирован кошелек. Для этого убедитесь, что устройство Nano подключено и разблокировано через PIN-код, приложение Ledger Live не запущено, а на устройстве запущено приложение Solana (вы видите надпись "Application is Ready").
 
-The `solana transfer` command is used to specify to which address to send tokens,
-how many tokens to send, and uses the `--keypair` argument to specify which
-keypair is sending the tokens, which will sign the transaction, and the balance
-from the associated address will decrease.
+Команда `solana transfer` указывает получателя и количество отправляемых токенов, а также с помощью аргумента `--keypair` определяет, какая пара ключей будет использоваться для подписи транзакции, и из какого кошелька будут отправлены токены.
 
 ```bash
 solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 ```
 
-Below is a full example. First, an address is viewed at a certain keypair URL.
-Second, the balance of tht address is checked. Lastly, a transfer transaction
-is entered to send `1` SOL to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
-When you hit Enter for a transfer command, you will be prompted to approve the
-transaction details on your Ledger device. On the device, use the right and
-left buttons to review the transaction details. If they look correct, click
-both buttons on the "Approve" screen, otherwise push both buttons on the "Reject"
-screen.
+Ниже приведен полный пример операции. Сначала получим адрес кошелька для определенной пары ключей. Далее, проверим баланс этого кошелька. Наконец, выполним транзакцию по переводу `1` SOL на адрес кошелька получателя `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`. Когда вы нажмете клавишу Enter для выполнения команды по переводу токенов, вы получите запрос для подтверждения операции на устройстве Ledger. Используйте правую и левую кнопки на устройстве для просмотра деталей транзакции. Если все данные указаны правильно, нажмите одновременно обе кнопке на экране "Approve" для подтверждения, в противном случае нажмите обе кнопки на экране "Reject".
 
 ```bash
 ~$ solana-keygen pubkey usb://ledger?key=42
@@ -142,78 +97,54 @@ Waiting for your approval on Ledger hardware wallet usb://ledger/2JT2Xvy6T8hSmT8
 Signature: kemu9jDEuPirKNRKiHan7ycybYsZp7pFefAdvWZRq5VRHCLgXTXaFVw3pfh87MQcWX4kQY4TjSBmESrwMApom1V
 ```
 
-After approving the transaction on your device, the program will display the
-transaction signature, and wait for the maximum number of confirmations (32)
-before returning. This only takes a few seconds, and then the transaction is
-finalized on the Solana network. You can view details of this or any other
-transaction by going to the Transaction tab in the
-[Explorer](https://explorer.solana.com/transactions)
-and paste in the transaction signature.
+После подтверждения транзакции на вашем устройстве программа отобразит подпись транзакции и будет ожидать максимального количества подтверждений (32) перед тем как завершиться. Это занимает несколько секунд, после чего транзакция финализируется в сети Solana. Детали этой и других транзакций вы можете посмотреть на вкладке Transaction в [эксплорере Solana](https://explorer.solana.com/transactions), вставив транзакцию в поле поиска.
 
-## Advanced Operations
+## Расширенные операции
 
-### Manage Multiple Hardware Wallets
+### Управление несколькими аппаратными кошельками
 
-It is sometimes useful to sign a transaction with keys from multiple hardware
-wallets. Signing with multiple wallets requires _fully qualified keypair URLs_.
-When the URL is not fully qualified, the Solana CLI will prompt you with
-the fully qualified URLs of all connected hardware wallets, and ask you to
-choose which wallet to use for each signature.
+Иногда полезно подписывать транзакции ключами из нескольких аппаратных кошельков. Подписание с использованием нескольких кошельков требует указания _полных FQDN-адресов пар ключей_. Если не указать полный URL, то командная строка Solana попросит сделать это для всех подключенных аппаратных кошельков, а также спросит, какой из кошельков следует использовать для каждой процедуры подписи.
 
-Instead of using the interactive prompts, you can generate fully qualified
-URLs using the Solana CLI `resolve-signer` command. For example, try
-connecting a Nano to USB, unlock it with your pin, and running the
-following command:
+Вместо использования интерактивных подсказок вы можете сгенерировать FQDN-адреса с помощью утилиты командной строки `resolve-signer`. Попробуйте для примера подключить устройство Nano к USB-порту, разблокировать его с помощью PIN-кода и запустить следующую команду:
 
 ```text
 solana resolve-signer usb://ledger?key=0/0
 ```
 
-You will see output similar to:
+Вы получите примерно следующее сообщение:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
+где `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` - это идентификатор `WALLET_ID` вашего кошелька.
 
-With your fully qualified URL, you can connect multiple hardware wallets to
-the same computer and uniquely identify a keypair from any of them.
-Use the output from the `resolve-signer` command anywhere a `solana` command
-expects a `<KEYPAIR>` entry to use that resolved path as the signer for that
-part of the given transaction.
+Полные URL-адреса позволяют подключить несколько аппаратных кошельков к одному компьютеру и уникальным образом идентифицировать пары ключей любого из кошельков. Используйте вывод команды `resolve-signer` везде, где команда `solana` ожидает ввода значения `<KEYPAIR>`.
 
-## Troubleshooting
+## Решение проблем
 
-### Keypair URL parameters are ignored in zsh
+### В командной оболочке zsh игнорируются параметры URL-адреса пары ключей
 
-The question mark character is a special character in zsh. If that's not a
-feature you use, add the following line to your `~/.zshrc` to treat it as a
-normal character:
+Символ вопросительного знака является спецсимволом в командной оболочке zsh. Если вы не используете вопросительный знак в этих целях, просто добавьте в файл `~/.zshrc` следующую строку, чтобы система считала его обычным символом:
 
 ```bash
 unsetopt nomatch
 ```
 
-Then either restart your shell window or run `~/.zshrc`:
+После этого перезапустите окно командной оболочки или запустите `~/.zshrc` следующим образом:
 
 ```bash
 source ~/.zshrc
 ```
 
-If you would prefer not to disable zsh's special handling of the question mark
-character, you can disable it explictly with a backslash in your keypair URLs.
-For example:
+Если вы не хотите отключать специальную функцию символа "?", вы можете экранировать его с помощью обратной косой черты в URL-адресе. Например:
 
 ```bash
 solana-keygen pubkey usb://ledger\?key=0
 ```
 
-## Support
+## Поддержка
 
-Check out our [Wallet Support Page](../support.md)
-for ways to get help.
+Для получения дополнительной помощи посетите страницу [Wallet Support Page](../support.md).
 
-Read more about [sending and receiving tokens](../../cli/transfer-tokens.md) and
-[delegating stake](../../cli/delegate-stake.md). You can use your Ledger keypair URL
-anywhere you see an option or argument that accepts a `<KEYPAIR>`.
+Узнайте больше о [получении и отправке токенов](../../cli/transfer-tokens.md) и [делегировании стейка](../../cli/delegate-stake.md). Вы всегда можете использовать URL-адрес пары ключей Ledger там, где в качестве аргумента принимается `<KEYPAIR>`.

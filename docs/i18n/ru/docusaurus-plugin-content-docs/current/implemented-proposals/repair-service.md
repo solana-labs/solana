@@ -1,108 +1,58 @@
 ---
-title: Repair Service
+title: Сервис ремонта
 ---
 
-## Repair Service
+## Сервис ремонта
 
-The RepairService is in charge of retrieving missing shreds that failed to be
-delivered by primary communication protocols like Turbine. It is in charge of
-managing the protocols described below in the `Repair Protocols` section below.
+RepairService отвечает за извлечение недостающих фрагментов, которые не удалось доставить с помощью основных протоколов связи, таких как Turbine. Он отвечает за управление протоколами, описанными ниже в разделе `Протокол ремонта`.
 
-## Challenges:
+## Проблемы:
 
-1\) Validators can fail to receive particular shreds due to network failures
+1\) Валидаторы могут не получить определенные фрагменты из-за сбоев в сети
 
-2\) Consider a scenario where blockstore contains the set of slots {1, 3, 5}.
-Then Blockstore receives shreds for some slot 7, where for each of the shreds
-b, b.parent == 6, so then the parent-child relation 6 -&gt; 7 is stored in
-blockstore. However, there is no way to chain these slots to any of the
-existing banks in Blockstore, and thus the `Shred Repair` protocol will not
-repair these slots. If these slots happen to be part of the main chain, this
-will halt replay progress on this node.
+2\) Рассмотрим сценарий, где blockstore содержит набор слотов {1, 3, 5}. Затем Blockstore получает фрагменты для некоторого слота 7, где для каждого из фрагментов b, b.parent == 6, поэтому отношение родитель-потомок 6 -&gt; 7 сохраняется в Blockstore. Однако невозможно связать эти слоты ни с одним из существующих банков в Blockstore, и поэтому протокол `Shred Repair` не будет восстанавливать эти слоты. Если эти слоты окажутся частью основной цепочки, это остановит прогресс воспроизведения на этом узле.
 
-## Repair-related primitives
+## Примитивы, связанные с ремонтом
 
-Epoch Slots:
-Each validator advertises separately on gossip the various parts of an
-`Epoch Slots`:
+Слоты эпохи: каждый валидатор отдельно рекламирует в gossip различные части `Epoch Slots`:
 
-- The `stash`: An epoch-long compressed set of all completed slots.
-- The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
-  slots starting from some some slot `M`, where `N` is the number of slots
-  that will fit in an MTU-sized packet.
+- `stash`: Сжатый на всю эпоху набор всех завершенных слотов.
+- `cache`: Кодирование длин серий (RLE) последних `N` завершенных слотов, начиная с некоторого слота `M`, где `N` - количество слотов, в которых поместится в пакет размером с MTU.
 
-`Epoch Slots` in gossip are updated every time a validator receives a
-complete slot within the epoch. Completed slots are detected by blockstore
-and sent over a channel to RepairService. It is important to note that we
-know that by the time a slot `X` is complete, the epoch schedule must exist
-for the epoch that contains slot `X` because WindowService will reject
-shreds for unconfirmed epochs.
+`Epoch Slots` в gossip обновляются каждый раз, когда валидатор получает завершенный слот в пределах эпохи. Завершенные слоты обнаруживаются хранилищем блоков blockstore и отправляются по каналу в RepairService. Важно отметить, что мы знаем, что к тому времени, когда слот `X` завершится, расписание эпох должно существовать для эпохи, содержащей слот `X`, потому что WindowService будет отклонять фрагменты для неподтвержденных эпох.
 
-Every `N/2` completed slots, the oldest `N/2` slots are moved from the
-`cache` into the `stash`. The base value `M` for the RLE should also
-be updated.
+Каждые `N/2` завершенных слотов, старые слоты `N/2` перемещаются из `cache` в `stash`. Базовое значение `M` для RLE также должно быть обновлено.
 
-## Repair Request Protocols
+## Протоколы запроса на ремонт
 
-The repair protocol makes best attempts to progress the forking structure of
-Blockstore.
+Протокол ремонта делает все возможное, чтобы улучшить структуру разветвления Blockstore.
 
-The different protocol strategies to address the above challenges:
+Различные стратегии протокола для решения вышеуказанных проблем:
 
-1. Shred Repair \(Addresses Challenge \#1\): This is the most basic repair
-   protocol, with the purpose of detecting and filling "holes" in the ledger.
-   Blockstore tracks the latest root slot. RepairService will then periodically
-   iterate every fork in blockstore starting from the root slot, sending repair
-   requests to validators for any missing shreds. It will send at most some `N`
-   repair reqeusts per iteration. Shred repair should prioritize repairing
-   forks based on the leader's fork weight. Validators should only send repair
-   requests to validators who have marked that slot as completed in their
-   EpochSlots. Validators should prioritize repairing shreds in each slot
-   that they are responsible for retransmitting through turbine. Validators can
-   compute which shreds they are responsible for retransmitting because the
-   seed for turbine is based on leader id, slot, and shred index.
+1. Shred Repair \(см проблему \#1\): это самый простой протокол восстановления, предназначенный для обнаружения и заполнения «дыр» в реестре. Blockstore отслеживает последний корневой слот. RepairService будет периодически перебирать каждый форк в хранилище блоков, начиная с корневого слота, отправляя запросы на восстановление валидаторам для любых недостающих фрагментов. Он отправит максимум `N` запросов на восстановление за итерацию. Ремонт шредов должен отдавать приоритет ремонту форков в зависимости от размера форка лидера. Валидаторы должны отправлять запросы на восстановление только тем валидаторам, которые отметили этот слот как завершенный в своих EpochSlots. Валидаторы должны уделять приоритетное внимание ремонту шредов в каждом слоте, за который они отвечают на ретрансляцию через turbine. Валидаторы могут вычислить, за какие фрагменты они отвечают для ретрансляции, потому что сиды turbine основаны на id лидера, слоте и шред индексе.
 
-   Note: Validators will only accept shreds within the current verifiable
-   epoch \(epoch the validator has a leader schedule for\).
+   Примечание: Валидаторы будут принимать фрагменты только в пределах текущей проверяемой эпохи \(эпохи, для которой у валидатора есть расписание лидеров\).
 
-2. Preemptive Slot Repair \(Addresses Challenge \#2\): The goal of this
-   protocol is to discover the chaining relationship of "orphan" slots that do not
-   currently chain to any known fork. Shred repair should prioritize repairing
-   orphan slots based on the leader's fork weight.
+2. Превентивный ремонт слота \(см. проблему \#2\): Целью этого протокола является обнаружение взаимосвязи цепочки «сиротских» слотов, которые в настоящее время не связаны ни с одним известным форком. Ремонт шредов должен отдавать приоритет восстановлению сиротских слотов в зависимости от размера форка лидера.
 
-   - Blockstore will track the set of "orphan" slots in a separate column family.
-   - RepairService will periodically make `Orphan` requests for each of
-     the orphans in blockstore.
+   - Blockstore будет отслеживать набор "сиротских" слотов в отдельном семействе столбцов.
+   - RepairService будет периодически делать запросы `Orphan` для каждого из сирот в blockstore.
 
-     `Orphan(orphan)` request - `orphan` is the orphan slot that the
-     requestor wants to know the parents of `Orphan(orphan)` response -
-     The highest shreds for each of the first `N` parents of the requested
-     `orphan`
+     `Orphan(orphan)` запрос - `orphan` - это сиротский слот, который просит узнать родителей в `Orphan(orphan)` ответе - Наивысшие фрагменты для каждого из первых `N` родителей запрошенного `orphan`
 
-     On receiving the responses `p`, where `p` is some shred in a parent slot,
-     validators will:
+     После получения ответов `p`, где `p` это какой-то шред-фрагмент в родительском слоте, валидаторы:
 
-     - Insert an empty `SlotMeta` in blockstore for `p.slot` if it doesn't
-       already exist.
-     - If `p.slot` does exist, update the parent of `p` based on `parents`
+     - Вставят пустой `SlotMeta` в blockstore для `p.slot`, если он не существует.
+     - Если `p.slot` существует, обновят родителя `p` на основе `parents`
 
-     Note: that once these empty slots are added to blockstore, the
-     `Shred Repair` protocol should attempt to fill those slots.
+     Примечание: как только эти пустые слоты будут добавлены в blockstore, протокол `Shred Repair` должен попытаться заполнить эти слоты.
 
-     Note: Validators will only accept responses containing shreds within the
-     current verifiable epoch \(epoch the validator has a leader schedule
-     for\).
+     Примечание: Валидаторы будут принимать фрагменты только в пределах текущей проверяемой эпохи \(эпохи, для которой у валидатора есть расписание лидеров\).
 
-Validators should try to send orphan requests to validators who have marked that
-orphan as completed in their EpochSlots. If no such validators exist, then
-randomly select a validator in a stake-weighted fashion.
+Валидаторы должны попытаться отправить orphan запросы валидаторам, которые отметили этот сиротский слот как завершенный в своих EpochSlots. Если таких валидаторов не существует, то случайным образом выбирается валидатор, отобранный по стейку.
 
-## Repair Response Protocol
+## Протокол ответа на ремонт
 
-When a validator receives a request for a shred `S`, they respond with the
-shred if they have it.
+Когда валидатор получает запрос на шред `S`, он отвечает шредом, если он у него есть.
 
-When a validator receives a shred through a repair response, they check
-`EpochSlots` to see if <= `1/3` of the network has marked this slot as
-completed. If so, they resubmit this shred through its associated turbine
-path, but only if this validator has not retransmitted this shred before.
+Когда валидатор получает шред через ответ на ремонт, то проверяет `EpochSlots`, чтобы посмотреть, пометили ли в <= `1/3` сети этот слот как завершенный. Если это так, они повторно отправляют этот клочок через связанный с ним путь turbine, но только в том случае, если этот валидатор не ретранслировал этот шред раньше.

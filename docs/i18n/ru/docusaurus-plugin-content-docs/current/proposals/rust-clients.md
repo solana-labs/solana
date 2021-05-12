@@ -1,54 +1,31 @@
 ---
-title: Rust Clients
+title: Клиенты Rust
 ---
 
-## Problem
+## Проблематика
 
-High-level tests, such as bench-tps, are written in terms of the `Client`
-trait. When we execute these tests as part of the test suite, we use the
-low-level `BankClient` implementation. When we need to run the same test
-against a cluster, we use the `ThinClient` implementation. The problem with
-that approach is that it means the trait will continually expand to include new
-utility functions and all implementations of it need to add the new
-functionality. By separating the user-facing object from the trait that abstracts
-the network interface, we can expand the user-facing object to include all sorts
-of useful functionality, such as the "spinner" from RpcClient, without concern
-for needing to extend the trait and its implementations.
+Тесты высокого уровня, такие как стендовые тесты, написаны с использованием свойства ` Client `. Когда мы выполняем эти тесты как часть набора тестов, мы используем низкоуровневую реализацию ` BankClient `. Когда нам нужно запустить тот же тест с кластером, мы используем реализацию `ThinClient`. Проблема с этим подходом заключается в том, что он означает, что свойство будет постоянно расширяться, чтобы включать новые служебные функции, и все его реализации должны добавлять новые функции. Отделяя объект, обращенный к пользователю, от признака, который абстрагирует сетевой интерфейс, мы можем расширить объект, обращенный к пользователю, чтобы включить в него всевозможные полезные функции, такие как «счетчик» из RpcClient, не беспокоясь о необходимости расширения признака и его реализации.
 
-## Proposed Solution
+## Предлагаемое решение
 
-Instead of implementing the `Client` trait, `ThinClient` should be constructed
-with an implementation of it. That way, all utility functions currently in the
-`Client` trait can move into `ThinClient`. `ThinClient` could then move into
-`solana-sdk` since all its network dependencies would be in the implementation
-of `Client`. We would then add a new implementation of `Client`, called
-`ClusterClient`, and that would live in the `solana-client` crate, where
-`ThinClient` currently resides.
+Вместо реализации черты `Client`, `ThinClient` должен быть сконструирован с его реализацией. Таким образом, все служебные функции, которые в данный момент присутствуют в черте `Client`, могут переместиться в `ThinClient`. Затем `ThinClient` может перейти в `solana-sdk`, поскольку все его сетевые зависимости будут в реализации `Client`. Затем мы добавили бы новую реализацию `Client`, названную `ClusterClient`, и которая будет жить в коробке `solana-client`, где `ThinClient` в настоящее время проживает.
 
-After this reorg, any code needing a client would be written in terms of
-`ThinClient`. In unit tests, the functionality would be invoked with
-`ThinClient<BankClient>`, whereas `main()` functions, benchmarks and
-integration tests would invoke it with `ThinClient<ClusterClient>`.
+После этой реорганизации любой код, требующий клиента, будет написан на языке `ThinClient`. В модульных тестах функциональность вызывается с помощью `ThinClient<BankClient>`, тогда как функции `main()`, тесты производительности и интеграционные тесты вызывают ее с помощью `ThinClient<ClusterClient>`.
 
-If higher-level components require more functionality than what could be
-implemented by `BankClient`, it should be implemented by a second object
-that implements a second trait, following the same pattern described here.
+Если компоненты более высокого уровня требуют большей функциональности, чем то, что может быть реализовано с помощью `BankClient`, это должно быть реализовано вторым объектом, который реализует вторую характеристику, следуя тому же шаблону, описанному здесь.
 
-### Error Handling
+### Если компоненты более высокого уровня требуют большей функциональности, чем то, что может быть реализовано с помощью BankClient, это должно быть реализовано вторым объектом, который реализует вторую характеристику, следуя тому же шаблону, описанному здесь
 
-The `Client` should use the existing `TransportError` enum for errors, except
-that the `Custom(String)` field should be changed to `Custom(Box<dyn Error>)`.
+`Client` должен использовать существующее перечисление `TransportError` для ошибок, за исключением того, что поле `Custom (String)` следует изменить на `Custom(Box<dyn Error>)`.
 
-### Implementation Strategy
+### Стратегия реализации
 
-1. Add new object to `solana-sdk`, `RpcClientTng`, where the `Tng` suffix is
-   temporary and stands for "The Next Generation"
-2. Initialize `RpcClientTng` with a `SyncClient` implementation.
-3. Add new object to `solana-sdk`, `ThinClientTng`; initialize it with
-   `RpcClientTng` and an `AsyncClient` implementation
-4. Move all unit-tests from `BankClient` to `ThinClientTng<BankClient>`
-5. Add `ClusterClient`
-6. Move `ThinClient` users to `ThinClientTng<ClusterClient>`
-7. Delete `ThinClient` and rename `ThinClientTng` to `ThinClient`
-8. Move `RpcClient` users to new `ThinClient<ClusterClient>`
-9. Delete `RpcClient` and rename `RpcClientTng` to `RpcClient`
+1. Добавить новый объект в `solana-sdk`, `RpcClientTng`, где суффикс `Tng` является временным и обозначает "следующее поколение"
+2. Инициализация `RpcClientTng` с реализацией `SyncClient`.
+3. Добавить новый объект в `solana-sdk`, `ThinClientTng`; инициализировать его с `RpcClientTng` и реализацией `AsyncClient`
+4. Переместите все модульные тесты из `BankClient`в`ThinClientTng<BankClient>`
+5. Добавить `ClusterClient`
+6. Переместить `RpcClient` пользователей в новый `ThinClient<ClusterClient>`
+7. Удалить `RpcClient` и переименовать `RpcClientTng` в `RpcClient`
+8. Переместить `RpcClient` пользователей в новый `ThinClient<ClusterClient>`
+9. Удалить `RpcClient` и переименовать `RpcClientTng` в `RpcClient`

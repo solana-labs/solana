@@ -1,25 +1,25 @@
 ---
-title: Performance Metrics
+title: Показатели эффективности
 ---
 
-Solana cluster performance is measured as average number of transactions per second that the network can sustain \(TPS\). And, how long it takes for a transaction to be confirmed by super majority of the cluster \(Confirmation Time\).
+Производительность кластера Solana измеряется как среднее количество транзакций в секунду, которое сеть может поддерживать \(TPS\). И, как долго транзакция будет подтверждена супер большинством кластера \(Confirmation Time\).
 
-Each cluster node maintains various counters that are incremented on certain events. These counters are periodically uploaded to a cloud based database. Solana's metrics dashboard fetches these counters, and computes the performance metrics and displays it on the dashboard.
+Каждый узел поддерживает различные счетчики, которые увеличиваются при определенных событиях. Эти счетчики периодически загружаются в базу данных на основе облака. Solana's metrics dashboard извлекает эти счетчики и вычисляет показатели эффективности и отображает их на панели управления.
 
 ## TPS
 
-Each node's bank runtime maintains a count of transactions that it has processed. The dashboard first calculates the median count of transactions across all metrics enabled nodes in the cluster. The median cluster transaction count is then averaged over a 2 second period and displayed in the TPS time series graph. The dashboard also shows the Mean TPS, Max TPS and Total Transaction Count stats which are all calculated from the median transaction count.
+В банке каждого узла хранится количество обрабатываемых транзакций. Первая панель инструментов вычисляет среднее количество транзакций по всем метрикам с включенными узлами в кластере. Медиана по количеству кластерных транзакций затем усредняется за 2 секунды и отображается в графике TPS времени. На информационной панели также показана средняя статистика TPS, Макс. TPS и суммарная статистика транзакций, рассчитанная по количеству медианы.
 
-## Confirmation Time
+## Время подтверждения
 
-Each validator node maintains a list of active ledger forks that are visible to the node. A fork is considered to be frozen when the node has received and processed all entries corresponding to the fork. A fork is considered to be confirmed when it receives cumulative super majority vote, and when one of its children forks is frozen.
+Каждый узел валидатора сохраняет список активных форков книги, которые видны узлу. Форк считается замороженным, когда узел получил и обрабатывает все записи, соответствующие форку. Форк считается подтвержденным, когда он получает суммарное супер большинство голосов, и когда один из его детей заморожен.
 
-The node assigns a timestamp to every new fork, and computes the time it took to confirm the fork. This time is reflected as validator confirmation time in performance metrics. The performance dashboard displays the average of each validator node's confirmation time as a time series graph.
+Узел присваивает метку времени каждому новому форку и вычисляет время, необходимое для подтверждения форка. На этот раз отражается время подтверждения работы в метриках производительности. Панель производительности отображает среднее время подтверждения каждого узла валидатора в виде графика временных рядов.
 
-## Hardware setup
+## Настройка оборудования
 
-The validator software is deployed to GCP n1-standard-16 instances with 1TB pd-ssd disk, and 2x Nvidia V100 GPUs. These are deployed in the us-west-1 region.
+Программное обеспечение для валидаторов внедрено в GCP n1-standard-16 экземпляров с 1TB pd-ssd диском и 2x Nvidia V100 GPU. Они развернуты в регионе us-west-1.
 
-solana-bench-tps is started after the network converges from a client machine with n1-standard-16 CPU-only instance with the following arguments: `--tx\_count=50000 --thread-batch-sleep 1000`
+solana-bench-tps запускается после того, как сеть преобразуется с клиентской машины с n1-standard-16 только для процессора со следующими аргументами: `--tx\_count=50000 --thread-batch-sleep 1000`
 
-TPS and confirmation metrics are captured from the dashboard numbers over a 5 minute average of when the bench-tps transfer stage begins.
+Показатели TPS и подтверждения фиксируются из цифр приборной панели в течение 5 минут среднего уровня, когда начинается этап передачи бензинов.

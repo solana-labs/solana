@@ -1,63 +1,27 @@
 ---
-title: Solana Wallet Guide
+title: دليل محفظة Solana
 ---
 
-This document describes the different wallet options that are available to users
-of Solana who want to be able to send, receive and interact with
-SOL tokens on the Solana blockchain.
+تصف هذه الوثيقة خيارات المحافظ المُختلفة المُتاحة لمُستخدمي Solana الذين يريدون أن يكونوا قادرين على إرسال وإستلام والتفاعل مع رموز SOL على بلوكشاين Solana.
 
-## What is a Wallet?
+## ماذا تعني محفظة؟
 
-A crypto wallet is a device or application that stores a collection of keys and
-can be used to send, receive,
-and track ownership of cryptocurrencies. Wallets can take many forms.
-A wallet might be a directory or file in your computer's file system,
-a piece of paper, or a specialized device called a _hardware wallet_.
-There are also various smartphone apps and computer programs
-that provide a user-friendly way to create and manage wallets.
+محفظة العملات المُشفرة هي جهاز أو تطبيق يُخزن مجموعة من المفاتيح ويُمكن إستخدامه لإرسال وإستلام وتتبع ملكية العملات المُشفرة. يُمكن أن تتخذ المحافظ أشكالًا عديدة. المحفظة يُمكن أن تكون دليلًا أو ملفًا في نظام ملفات الكمبيوتر الخاص بك، أو ورقة، أو جهازًا مُتخصصًا يسَمَّى المحفظة الخارجية _hardware wallet_. هناك أيضًا العديد من تطبيقات الهواتف الذكية وبرامج الكمبيوتر التي تُوفر طريقة سهلة الإستخدام لإنشاء المحافظ وإدارتها.
 
-A _keypair_ is a securely generated _private key_ and its
-cryptographically-derived _public key_. A private key and its corresponding
-public key are together known as a _keypair_.
-A wallet contains a collection of one or more keypairs and provides some means
-to interact with them.
+زوج المفاتيح _keypair_ هو مفتاح خاص _private key_ يتم إنشاؤه بشكل آمن ومفتاحه العمومي_public key_ المُشتقِّ من التشفير. يُعرف المفتاح الخاص والمفتاح العام المقابل له معًا باسم زوج المفاتيح _keypair_. تحتوي المحفظة على مجموعة من واحد أو أكثر من أزواج المفاتيح وتوفر بعض الطرق للتفاعل معهم.
 
-The _public key_ (commonly shortened to _pubkey_) is known as the wallet's
-_receiving address_ or simply its _address_. The wallet address **may be shared
-and displayed freely**. When another party is going to send some amount of
-cryptocurrency to a wallet, they need to know the wallet's receiving address.
-Depending on a blockchain's implementation, the address can also be used to view
-certain information about a wallet, such as viewing the balance,
-but has no ability to change anything about the wallet or withdraw any tokens.
+يُعرف المفتاح العام _public key_ (الذي يُختصر عادةً بـ _pubkey_) بعنوان المُستَلِم _receiving address_ أو ببساطة عنوان _address_. يُمكن مُشاركة عنوان المحفظة وعرضه بحرية **may be shared and displayed freely**. عندما يقوم طرف آخر بإرسال مبلغ مُعين من العملة المُشفرة إلى المحفظة، فإنهم بحاجة إلى معرفة عنوان إستلام المحفظة. إعتمادًا على تنفيذ البلوكشاين، يُمكن أيضًا إستخدام العنوان لعرض معلومات مُعينة حول المحفظة، مثل عرض الرصيد، ولكن ليس لديه القدرة على تغيير أي شيء بخصوص المحفظة أو سحب أي الرموز.
 
-The _private key_ is required to digitally sign any transactions to send
-cryptocurrencies to another address or to make any changes to the wallet.
-The private key **must never be shared**. If someone gains access to the
-private key to a wallet, they can withdraw all the tokens it contains.
-If the private key for a wallet is lost, any tokens that have been sent
-to that wallet's address are **permanently lost**.
+المفتاح الخاص _private key_ مطلوب للتوقيع رقميًا على أي معاملات لإرسال العملات المشفرة إلى عنوان آخر أو لإجراء أي تغييرات على المحفظة. يجب عدم مُشاركة المفتاح الخاص (private key) أبدًا **must never be shared**. إذا تمكن شخص ما من الوصول إلى المفتاح الخاص (private key) للمحفظة، فيُمكنه سحب جميع الرموز التي تحتوي عليها. في حالة فقد المفتاح الخاص (private key) للمحفظة، يتم فقدان أي رموز تم إرسالها إلى عنوان هذه المحفظة بشكل دائم **permanently lost**.
 
-Different wallet solutions offer different approaches to keypair security and
-interacting with the keypair and sign transactions to use/spend the tokens.
-Some are easier to use than others.
-Some store and back up private keys more securely.
-Solana supports multiple types of wallets so you can choose the right balance
-of security and convenience.
+تقدم حلول المحفظة المُختلفة طرقًا مُختلفة لأمان زوج المفاتيح (keypair) والتفاعل مع زوج المفاتيح وتوقيع المُعاملات لإستخدام / إنفاق الرموز. بعضها أسهل في الإستخدام من البعض الآخر. يقوم البعض بتخزين المفاتيح الخاصة ونسخها إحتياطيًا بشكل أكثر أمانًا. تدعم Solana أنواعًا مُتعددة من المحافظ حتى تتمكن من إختيار التوازن الصحيح للأمان والراحة.
 
-**If you want to be able to receive SOL tokens on the Solana blockchain,
-you first will need to create a wallet.**
+**إذا كنت تريد أن تكون قادرًا على تلقي رموز SOL على بلوكشاين Solana، فستحتاج أولاً إلى إنشاء محفظة.**
 
-## Supported Wallets
+## المحافظ المدعومة
 
-Solana supports several types of wallets in the Solana native
-command-line app as well as wallets from third-parties.
+تدعم Solana عدة أنواع من المحافظ في تطبيق سطر الأوامر الأصلي Solana بالإضافة إلى محافظ الجهات الخارجية.
 
-For the majority of users, we recommend using one of the
-[app wallets](wallet-guide/apps.md) or a browser-based
-[web wallet](wallet-guide/web-wallets.md), which will provide a more familiar
-user experience rather than needing to learn command line tools.
+بالنسبة لأغلبية المُستخدمين، نوصي بإستخدام واحدة من محافظ التطبيقات [app wallets](wallet-guide/apps.md) أو القائمة على المُتصفح [web wallet](wallet-guide/web-wallets.md)، والذي سيوفر تجربة مُستخدم أكثر شيوعاً بدلاً من الحاجة إلى تعلم أدوات سطر الأوامر.
 
-For advanced users or developers, the [command-line wallets](wallet-guide/cli.md)
-may be more appropriate, as new features on the Solana blockchain will always be
-supported on the command line first before being integrated into third-party
-solutions.
+بالنسبة للمُستخدمين المُتقدمين أو المُطوِّرين ، قد تكون محافظ سطر الأوامر [command-line wallets](wallet-guide/cli.md) مُلائمة أكثر حيث سيتم دائمًا دعم الميزات الجديدة في بلوكشاين Solana في سطر الأوامر أولاً قبل إضافتها إلى حلول مُقدمة من طرف ثالث.

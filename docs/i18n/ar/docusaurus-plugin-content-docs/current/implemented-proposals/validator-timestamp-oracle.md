@@ -1,107 +1,61 @@
 ---
-title: Validator Timestamp Oracle
+title: أوراكل الختم الزمني للمُدقّق (Validator Timestamp Oracle)
 ---
 
-Third-party users of Solana sometimes need to know the real-world time a block
-was produced, generally to meet compliance requirements for external auditors or
-law enforcement. This proposal describes a validator timestamp oracle that
-would allow a Solana cluster to satisfy this need.
+يحتاج مُستخدمو Solana من الجهات الخارجية أحيانًا إلى معرفة الوقت الفعلي الذي تم فيه إنتاج كتلة (block)، بشكل عام لتلبية مُتطلبات الإمتثال للمُدقّقين (validators) الخارجيين أو تطبيق القانون. يصف هذا الإقتراح أوراكل الختم الزمني (Timestamp) للمُدقّق (validators) الذي من شأنه أن يسمح لمجموعة Solana بتلبية هذه الحاجة.
 
-The general outline of the proposed implementation is as follows:
+المُخطط العام للتنفيذ المُقترح كما يلي:
 
-- At regular intervals, each validator records its observed time for a known slot
-  on-chain (via a Timestamp added to a slot Vote)
-- A client can request a block time for a rooted block using the `getBlockTime`
-  RPC method. When a client requests a timestamp for block N:
+- يُسجل كل مُدقّق (validator) على فترات مُنتظمة وقته الملحوظ لفُتحة (slot) معروفة على على الشبكة (On-Chain) (عبر ختم زمني مُضاف إلى فُتحة تصويت)
+- يُمكن للعميل طلب وقت الكتلة (block time) لكتلة جذر بإستخدام طريقة RPC بالأمر البرمجي `getBlockTime` للحصول على وقت الكتلة. عندما يطلب العميل ختما زمنيا (Timestamp) للكتلة N:
 
-  1. A validator determines a "cluster" timestamp for a recent timestamped slot
-     before block N by observing all the timestamped Vote instructions recorded on
-     the ledger that reference that slot, and determining the stake-weighted mean
-     timestamp.
+  1. يُحدد المُدقّق (validator) ختما زمنيا (Timestamp) "للمجموعة" (cluster) لفُتحة (slot) ذات ختم زمني حديث قبل الكتلة N من خلال مُراقبة جميع تعليمات التصويت ذات الختم الزمني المُسجلة في دفتر الأستاذ (ledger) الذي يُشير إلى تلك الفُتحة (slot)، وتحديد مُتوسط الختم الزمني المُرجح بالحِصَّة (stake-weighted).
 
-  2. This recent mean timestamp is then used to calculate the timestamp of
-     block N using the cluster's established slot duration
+  2. ثم يتم إستخدام مُتوسط الختم الزمني (Timestamp) الأخير هذا لحساب الختم الزمني للكتلة N بإستخدام مُدة الفُتحة (slot) المُحددة للمجموعة (cluster)
 
-Requirements:
+المُتطلبات (Requirements):
 
-- Any validator replaying the ledger in the future must come up with the same
-  time for every block since genesis
-- Estimated block times should not drift more than an hour or so before resolving
-  to real-world (oracle) data
-- The block times are not controlled by a single centralized oracle, but
-  ideally based on a function that uses inputs from all validators
-- Each validator must maintain a timestamp oracle
+- يجب أن يأتي أي مُدقّق (validator) يعيد تشغيل دفتر الأستاذ (ledger) في المُستقبل في نفس الوقت لكل كتلة (block) منذ مرحلة التكوين (Genesis)
+- يجب ألا تنحرف أوقات الكتل (block times) المُقدرة أكثر من ساعة أو نحو ذلك قبل الإنتقال إلى بيانات (oracle) العالم الحقيقي
+- لا يتم التحكم في أوقات الكتل (block times) بواسطة أوراكل (oracle) مركزي واحد، ولكن يعتمد بشكل مثالي على وظيفة تستخدم مُدخلات (entries) من جميع المُدقّقين (validators)
+- يجب أن يحتفظ كل مُدقّق (validator) بأوراكل (oracle) ختم زمني (Timestamp)
 
-The same implementation can provide a timestamp estimate for a not-yet-rooted
-block. However, because the most recent timestamped slot may or may not be
-rooted yet, this timestamp would be unstable (potentially failing requirement
-1). Initial implementation will target rooted blocks, but if there is a use case
-for recent-block timestamping, it will be trivial to add the RPC apis in the
-future.
+يمكن أن يُوفر التطبيق نفسه تقدير ختم زمني (Timestamp) لكتلة (block) لم يتم تجذيرها بعد. مع ذلك، نظرًا لأن أحدث فُتحة (slot) ذات ختم زمني (Timestamp) قد يتم تجذيرها (rooted) أو عدم تجذيرها حتى الآن، فإن هذا الختم الزمني سيكون غير مُستقر (من المُحتمل أن يفشل في المُتطلبات 1). سيستهدف التنفيذ الأولي الكتل ذات الجذر (rooted blocks)، ولكن إذا كانت هناك حالة إستخدام للختم الزمني (Timestamp) للكتلة الحديثة (recent-block)، فسيكون من التافه إضافة RPC apis في المُستقبل.
 
-## Recording Time
+## وقت التسجيل (Recording Time)
 
-At regular intervals as it is voting on a particular slot, each validator
-records its observed time by including a timestamp in its Vote instruction
-submission. The corresponding slot for the timestamp is the newest Slot in the
-Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
-identity keypair as a usual Vote. In order to enable this reporting, the Vote
-struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
+على فترات مُنتظمة أثناء التصويت على فُتحة (slot) مُعينة، يُسجل كل مُدقّق (validator) وقته الملحوظ من خلال تضمين ختم زمني (Timestamp) في تقديم تعليمات التصويت. الفُتحة (slot) المُقابلة للختم الزمني (Timestamp) هي أحدث فُتحة (Slot) في ناقل التصويت (`Vote::slots.iter().max()`). يتم توقيعه من قبل زوج مفاتيح (keypair) هوية المُدقّقين (validators) كالتصويت المُعتاد. من أجل تمكين هذا التقرير، يجب توسيع هيكل التصويت ليشمل حقل الختم الزمني، `timestamp: Option<UnixTimestamp>`، والذي سيتم تعيينه إلى `None` في مُعظم الأصوات.
 
-As of https://github.com/solana-labs/solana/pull/10630, validators submit a
-timestamp every vote. This enables implementation of a block time caching
-service that allows nodes to calculate the estimated timestamp immediately after
-the block is rooted, and cache that value in Blockstore. This provides
-persistent data and quick queries, while still meeting requirement 1) above.
+إعتبارًا من https://github.com/solana-labs/solana/pull/10630 ، يُقدم المدقّقون (validators) ختما زمنيا (Timestamp) لكل تصويت. يتيح ذلك تنفيذ خدمة التخزين المُؤقت لوقت الكتلة (block time) التي تسمح للعُقد (nodes) بحساب الختم الزمني (Timestamp) المُقدر فورًا بعد تجذير الكتلة (block)، وتخزين هذه القيمة مُؤقتًا في مخزن الكتلة (blockstore). يُوفر هذا بيانات ثابتة وإستعلامات سريعة، مع إستمرار تلبية المُتطلبات 1) أعلاه.
 
-### Vote Accounts
+### حسابات التصويت (Vote Accounts)
 
-A validator's vote account will hold its most recent slot-timestamp in VoteState.
+سيحتفظ حساب تصويت المُدقّق (validator) بآخر ختم زمني (Timestamp) للفُتحة (slot) في VoteState.
 
-### Vote Program
+### برنامج التصويت (Vote Program)
 
-The on-chain Vote program needs to be extended to process a timestamp sent with
-a Vote instruction from validators. In addition to its current process_vote
-functionality (including loading the correct Vote account and verifying that the
-transaction signer is the expected validator), this process needs to compare the
-timestamp and corresponding slot to the currently stored values to verify that
-they are both monotonically increasing, and store the new slot and timestamp in
-the account.
+يحتاج برنامج التصويت على الشبكة (on-chain) إلى أن يتم تمديده لمُعالجة الختم الزمني (Timestamp) المُرسل مع تعليمات التصويت من المُدقّقين (validators). بالإضافة إلى وظيفة process_vote الحالية (بما في ذلك تحميل حساب التصويت الصحيح والتحقق من أن المُوقّع أو signer على المُعاملة هو المُدقّق المُتوقع)، تحتاج هذه العملية إلى مُقارنة الختم الزمني (Timestamp) والفُتحة (slot) المُقابلة للقيم المُخزنة حاليًا للتحقق من أن كلاهما يتزايد بشكل رتي ، وتخزين الفُتحة والختم الزمني الجديد في الحساب.
 
-## Calculating Stake-Weighted Mean Timestamp
+## حساب مُتوسط الختم الزمني المُرجح بالحِصَّة (Calculating Stake-Weighted Median Timestamp)
 
-In order to calculate the estimated timestamp for a particular block, a
-validator first needs to identify the most recently timestamped slot:
+لحساب الختم الزمني (Timestamp) المُقدر لكتلة (block) مُعينة، يحتاج المُدقّق (validator) أولاً إلى تحديد أحدث فُتحة (slot) مختومة زمنيا (timestamped):
 
 ```text
 let timestamp_slot = floor(current_slot / timestamp_interval);
 ```
 
-Then the validator needs to gather all Vote WithTimestamp transactions from the
-ledger that reference that slot, using `Blockstore::get_slot_entries()`. As these
-transactions could have taken some time to reach and be processed by the leader,
-the validator needs to scan several completed blocks after the timestamp_slot to
-get a reasonable set of Timestamps. The exact number of slots will need to be
-tuned: More slots will enable greater cluster participation and more timestamp
-datapoints; fewer slots will speed how long timestamp filtering takes.
+ثم يحتاج المُدقّق (validator) إلى جمع جميع مُعاملات الأصوات ذات الختم الزمني (Vote WithTimestamp) من دفتر الأستاذ (ledger) الذي يُشير إلى تلك الفُتحة (slot)، بإستخدام `Blockstore::get_slot_entries()`. نظرًا لأن هذه المُعاملات قد تستغرق بعض الوقت للوصول إلى القائد (leader) ومُعالجتها، يحتاج المُدقّق (validator) إلى فحص العديد من الكتل (blocks) المُكتملة بعد الختم الزمني للفُتحة (timestamp_slot) للحصول على مجموعة معقولة من الأختام الزمنية (Timestamps). يجب ضبط العدد الدقيق للفُتحات (Slots): ستُتيح المزيد من الفُتحات مُشاركة أكبر للمجموعة (cluster) والمزيد من نقاط بيانات الختم الزمني (Timestamp)؛ يُؤدي عدد أقل من الفُتحات (Slots) إلى تسريع المُدة التي تستغرقها تصفية الأختام الزمنية.
 
-From this collection of transactions, the validator calculates the
-stake-weighted mean timestamp, cross-referencing the epoch stakes from
-`staking_utils::staked_nodes_at_epoch()`.
+من هذه المجموعة من المُعاملات، يقوم المُدقّق (validator) بحساب مُتوسط الختم الزمني (Timestamp) المُرجح بالحِصَّة (stake-weighted)، والإحالة المرجعية إلى حِصص الفترة من `staking_utils::staked_nodes_at_epoch()`.
 
-Any validator replaying the ledger should derive the same stake-weighted mean
-timestamp by processing the Timestamp transactions from the same number of
-slots.
+يجب على أي مُدقّق (validator) يُعيد تشغيل دفتر الأستاذ (ledger) أن يشتق نفس مُتوسط الختم الزمني (Timestamp) المُرجح بالحِصَّة (stake-weighted) من خلال مُعالجة مُعاملات الختم الزمني من نفس عدد الفُتحات (Slots).
 
-## Calculating Estimated Time for a Particular Block
+## حساب الوقت المُقدر لكتلة مُعينة (Calculating Estimated Time for a Particular Block)
 
-Once the mean timestamp for a known slot is calculated, it is trivial to
-calculate the estimated timestamp for subsequent block N:
+بمجرد حساب مُتوسط الختم الزمني (Timestamp) لفترة زمنية معروفة، من السهل حساب الختم الزمني المُقدر للكتلة (block) اللاحقة N:
 
 ```text
 let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
-where `block_n_slot_offset` is the difference between the slot of block N and
-the timestamp_slot, and `slot_duration` is derived from the cluster's
-`slots_per_year` stored in each Bank
+حيث `block_n_slot_offset` هو الفرق بين فُتحة (Slot) الكتلة N و timestamp_slot، و `slot_duration` مُشتق من `slots_per_year` للمجموعة المُخزنة في كل بنك

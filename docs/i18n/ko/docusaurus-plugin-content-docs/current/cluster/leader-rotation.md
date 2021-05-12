@@ -1,88 +1,88 @@
 ---
-title: Leader Rotation
+title: 리더 로테이션
 ---
 
-At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
+주어진 순간에 클러스터는 원장 항목을 생성하기 위해 오직 하나의 밸리데이터만 필요합니다. 한번에 하나의 리더만 보유함으로써 모든 밸리데이터는 원장의 동일한 사본을 재생성 할 수 있습니다. 그러나 한번에 단 한 명의 리더로서 오는 단점은 악의적인 리더가 투표와 거래를 검열할 수 있다는 것입니다. 검열은 네트워크 드롭 패킷 수준에서 구별될 수 없기에 단순히 클러스터가 단일 노드에 리더 역할을 무기한 부여할 순 없습니다. 대신 클러스터는 어떤 노드가 선두를 차지하는지 순환하여 악의적인 리더의 영향을 최소화합니다.
 
-Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that an entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
+각 밸리데이터는 아래에 설명된 동일한 알고리즘을 사용하여 예비 리더를 선택합니다. 밸리데이터가 서명 된 새 원장 항목을 받으면 예상 리더가 항목을 생성했음을 확인할 수 있습니다. 각 리더에게 슬롯이 할당 된 슬롯의 순서를 _리더 스케쥴_이라고합니다.
 
-## Leader Schedule Rotation
+## 리더 스케쥴 순환
 
-A validator rejects blocks that are not signed by the _slot leader_. The list of identities of all slot leaders is called a _leader schedule_. The leader schedule is recomputed locally and periodically. It assigns slot leaders for a duration of time called an _epoch_. The schedule must be computed far in advance of the slots it assigns, such that the ledger state it uses to compute the schedule is finalized. That duration is called the _leader schedule offset_. Solana sets the offset to the duration of slots until the next epoch. That is, the leader schedule for an epoch is calculated from the ledger state at the start of the previous epoch. The offset of one epoch is fairly arbitrary and assumed to be sufficiently long such that all validators will have finalized their ledger state before the next schedule is generated. A cluster may choose to shorten the offset to reduce the time between stake changes and leader schedule updates.
+밸리데이터는 _슬롯 리더_가 서명하지 않은 블록은 거부합니다. 모든 슬롯 리더의 신원 목록을 _리더 스케쥴_이라고합니다. 리더 스케쥴은 로컬 및 주기적으로 재산출됩니다. 스케쥴은 _에폭_이라고하는 기간 동안 슬롯 리더를 할당합니다. 스케쥴은 할당된 슬롯보다 훨씬 앞서 계산되어야하므로 스케쥴을 계산하는 데 사용하는 원장 상태가 완료됩니다. 이 기간을 _리더 스케쥴 오프셋_이라고합니다. 솔라나는 오프셋을 다음 에폭까지 슬롯 기간으로 설정합니다. 즉, 에폭의 리더 일정은 이전 에폭 시작 상태의 원장에서 계산됩니다. 한 에폭의 오프셋은 상당히 임의적이며 모든 밸리데이터가 다음 스케쥴이 생성되기 전에 원장 상태를 완료 할만큼 충분히 길다고 가정합니다. 클러스터는 스테이킹 변경과 리더 스케쥴 업데이트 사이의 시간을 줄이기 위해 오프셋을 단축하도록 선택할 수 있습니다.
 
-While operating without partitions lasting longer than an epoch, the schedule only needs to be generated when the root fork crosses the epoch boundary. Since the schedule is for the next epoch, any new stakes committed to the root fork will not be active until the next epoch. The block used for generating the leader schedule is the first block to cross the epoch boundary.
+에폭보다 오래 지속되는 파티션없이 작동하는 경우, 루트 포크가 에폭 경계를 넘을 때만 스케줄을 생성하면됩니다. 일정은 다음 에폭을 위한 것이므로 루트 포크에 커밋된 새로운 스테이킹은 다음 에폭까지 활성화되지 않습니다. 리더 스케쥴을 생성하는 데 사용되는 블록은 에폭 경계를 통과하는 첫번째 블록입니다.
 
-Without a partition lasting longer than an epoch, the cluster will work as follows:
+에폭을 보다 오래 지속되는 파티션이 없으면 클러스터는 다음과 같이 작동합니다.
 
-1. A validator continuously updates its own root fork as it votes.
-2. The validator updates its leader schedule each time the slot height crosses an epoch boundary.
+1. 밸리데이터는 투표할 때 자체 루트 포크를 지속적으로 업데이트합니다.
+2. 밸리데이터는 슬롯 높이가 에폭 경계를 넘을 때마다 리더 스케쥴을 업데이트합니다.
 
-For example:
+예제
 
-The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100, 101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
+에폭 기간은 100개의 슬롯으로 구성되어 있습니다. 루트 포크는 슬롯 높이 99에서 계산된 포크에서 슬롯 높이 102에서 계산된 포크로 업데이트됩니다. 높이가 100, 101인 슬롯이있는 포크는 실패된 것이기 때문에 건너 뛰었습니다. 새 리더 일정은 슬롯 높이 102에서 포크를 사용하여 계산됩니다. 에폭은 200 슬롯까지이며 이후 업데이트 됩니다.
 
-No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
+클러스터에 투표하는 모든 밸리데이터가 루트가 102를 통과 할 때 100과 101을 건너 뛰었으므로 불일치가 존재할 수 없습니다. 투표 패턴에 관계없이 모든 밸리데이터는 102 또는 102의 하위 루트에 커밋됩니다.
 
-### Leader Schedule Rotation with Epoch Sized Partitions.
+### 에폭 크기 파티션을 사용한 리더 스케쥴 순환.
 
-The duration of the leader schedule offset has a direct relationship to the likelihood of a cluster having an inconsistent view of the correct leader schedule.
+리더 스케쥴 오프셋의 기간은 클러스터가 올바른 리더 일정에 대해 일관되지 않은 관점을 가질 가능성과 직접적인 관계가 있습니다.
 
-Consider the following scenario:
+다음 시나리오를 생각해 볼 수 있습니다:
 
-Two partitions that are generating half of the blocks each. Neither is coming to a definitive supermajority fork. Both will cross epoch 100 and 200 without actually committing to a root and therefore a cluster-wide commitment to a new leader schedule.
+각각 절반의 블록을 생성하는 두 개의 파티션이 있습니다. 어느 쪽도 결정적인 압도적 다수 포크에 도달하지 못했습니다. 둘 다 실제로 루트에 커밋하지 않고 에폭 100과 200에 엇갈리므로 새로운 리더 스케쥴에 대한 클러스터 전체 커밋이 발생합니다.
 
-In this unstable scenario, multiple valid leader schedules exist.
+이 불안정한 시나리오에서는 유효한 리더 스케쥴은 여러개가 존재합니다.
 
-- A leader schedule is generated for every fork whose direct parent is in the previous epoch.
-- The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
+- 모든 포크에서 리더 스케쥴이 이전 에폭의 직계 상위로부터 생성됩니다.
+- 리더 스케쥴은 업데이트 될 때까지 하위 포크에 대한 다음 세대가 시작될 때 까지 유효합니다.
 
-Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much much larger then slot time and the expected length for a fork to be committed to root.
+각 파티션의 일정은 파티션이 한 세대 이상 지속 된 후에 전환됩니다. 이러한 이유로, 에폭 기간은 슬롯 시간과 포크가 루트에 커밋 될 것으로 예상되는 길이보다 훨씬 더 넓게 선택되어야합니다.
 
-After observing the cluster for a sufficient amount of time, the leader schedule offset can be selected based on the median partition duration and its standard deviation. For example, an offset longer then the median partition duration plus six standard deviations would reduce the likelihood of an inconsistent ledger schedule in the cluster to 1 in 1 million.
+충분한 시간 동안 클러스터를 관찰 한 후 중앙 분할 기간 및 표준 편차를 기반으로 리더 스케줄 오프셋을 선택할 수 있습니다. 예를 들어 중간 분할 기간에 6개의 표준 편차를 더한 것보다 더 긴 오프셋은 클러스터에서 일관되지 않은 원장 일정의 가능성을 1백만 분의 1로 줄일 수 있습니다.
 
-## Leader Schedule Generation at Genesis
+## 제네시스의 리더 일정 생성
 
-The genesis config declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis config as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
+제네시스 구성은 첫 번째 에폭의 첫 번째 리더를 선언합니다. 리더 스케쥴은 다음 에폭의 슬롯 0에서도 생성되기 때문에 해당 리더는 처음 에폭 스케쥴에 예약됩니다. 처음 두 에폭의 길이는 제네시스 구성에서도 지정할 수 있습니다. 첫 번째 에폭의 최소 길이는 [타워 BFT](../implemented-proposals/tower-bft.md)에 정의된 최대 롤백 깊이보다 크거나 같아야 합니다.
 
-## Leader Schedule Generation Algorithm
+## 리더 스케쥴 생성 알고리즘
 
-Leader schedule is generated using a predefined seed. The process is as follows:
+리더 스케쥴은 미리 정의된 시드를 사용하여 생성됩니다. 과정은 다음과 같습니다:
 
-1. Periodically use the PoH tick height \(a monotonically increasing counter\) to seed a stable pseudo-random algorithm.
-2. At that height, sample the bank for all the staked accounts with leader identities that have voted within a cluster-configured number of ticks. The sample is called the _active set_.
-3. Sort the active set by stake weight.
-4. Use the random seed to select nodes weighted by stake to create a stake-weighted ordering.
-5. This ordering becomes valid after a cluster-configured number of ticks.
+1. 주기적으로 역사증명 틱 높이 \(일정하게 증가하는 카운터\) 를 사용하여 안정적인 의사 랜덤 알고리즘을 시드합니다.
+2. 해당 높이에서 클러스터 구성 틱 수 내에서 투표 한 리더 ID가있는 모든 스테이킹 계정에 대해 샘플링합니다. 이 샘플을 _활성 세트_라고합니다.
+3. 스테이킹 가중치에 따라 활성 세트를 정렬합니다.
+4. 랜덤 시드를 사용하여 스테이킹 가중치가 적용된 노드를 선택하여 지분 가중치 순서를 만듭니다.
+5. 이 순서는 클러스터에서 구성된 틱 만큼의 수 후에 유효합니다.
 
-## Schedule Attack Vectors
+## 스케쥴 공격 벡터
 
 ### Seed
 
-The seed that is selected is predictable but unbiasable. There is no grinding attack to influence its outcome.
+선택된 시드는 예측 가능하지만 편향성이 없습니다. 결과에 영향을 미치는 그라인딩 공격은 존재하지 않습니다.
 
 ### Active Set
 
-A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
+리더는 밸리데이터 투표를 검열하여 활성 세트를 편향시킬 수 있습니다. 리더가 활성 세트를 검열하는 데엔 두 가지 방법이 있습니다.
 
-- Ignore votes from validators
-- Refuse to vote for blocks with votes from validators
+- 밸리데이터의 투표 무시
+- 블록에 대한 밸리데이터의 투표 거부
 
-To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
+검열 가능성을 줄이기 위해 활성 세트는 _활성 세트 샘플링 기간_동안 리더 일정 오프셋 경계에서 계산됩니다. 활성 세트 샘플링 기간은 여러 리더가 투표를 수집할 만큼 충분히 지속됩니다.
 
-### Staking
+### 스테이킹
 
-Leaders can censor new staking transactions or refuse to validate blocks with new stakes. This attack is similar to censorship of validator votes.
+리더는 새로운 스테이킹 거래를 검열하거나 새로운 스테이킹의 블록 검증을 거부 할 수 있습니다. 이 공격은 밸리데이터 투표 검열과 유사합니다.
 
-### Validator operational key loss
+### 밸리데이터 운영키 손실
 
-Leaders and validators are expected to use ephemeral keys for operation, and stake owners authorize the validators to do work with their stake via delegation.
+리더와 밸리데이터는 운영을 위해 임시키를 사용해야하며 스테이킹 소유자는 밸리데이터 위임을 통해 자신의 스테이킹을 활용할 수 있도록 권한을 부여합니다.
 
-The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly by co-signing a validator vote even though the stake is currently delegated to a validator.
+클러스터는 모든 노드가 공유하는 공통 소프트웨어 취약성을 통해 발생할 수있는 리더 및 밸리데이터의 모든 임시 키의 손실로부터 복구할 수 있어야 합니다. 스테이킹 소유자는 현재 스테이킹이 밸리데이터에게 위임 되더라도 밸리데이터 투표에 공동 서명하여 직접 투표 할 수 있어야 합니다.
 
-## Appending Entries
+## 항목 추가
 
-The lifetime of a leader schedule is called an _epoch_. The epoch is split into _slots_, where each slot has a duration of `T` PoH ticks.
+리더 일정의 수명을 _에폭_이라고합니다. 에폭은 _슬롯_으로 분할되며 각 슬롯의 지속 시간은 `T` 역사증명 틱입니다.
 
-A leader transmits entries during its slot. After `T` ticks, all the validators switch to the next scheduled leader. Validators must ignore entries sent outside a leader's assigned slot.
+리더는 슬롯 지속기간 동안 항목을 전송합니다. `T` 틱 후에 모든 밸리데이터는 다음 예정된 리더로 전환합니다. 밸리데이터는 리더의 할당된 슬롯 외부로 전송 된 항목을 무시해야합니다.
 
-All `T` ticks must be observed by the next leader for it to build its own entries on. If entries are not observed \(leader is down\) or entries are invalid \(leader is buggy or malicious\), the next leader must produce ticks to fill the previous leader's slot. Note that the next leader should do repair requests in parallel, and postpone sending ticks until it is confident other validators also failed to observe the previous leader's entries. If a leader incorrectly builds on its own ticks, the leader following it must replace all its ticks.
+모든 `T` 틱은 다음 리더가 자체 항목을 작성하기 위해 주목되어야 합니다. 항목이 관찰되지 않거나 \(리더가 다운 되거나\) 또는 항목이 유효하지 않은 경우 \(리더가 버그, 또는 악의적으로 변하거나\), 다음 리더는 이전 리더의 슬롯을 채우기 위해 틱을 생성해야합니다. 다음 리더는 회복 요청을 병렬로 수행해야하며 다른 밸리데이터도 이전 리더의 항목을 관찰하지 못했음이 확실시 될 때 까지 틱 전송을 연기해야합니다. 리더가 자신의 틱으로 잘못 빌드하는 경우, 뒤 따르는 리더가 모든 틱을 대체해야합니다.

@@ -1,78 +1,71 @@
 ---
-title: Manage Stake Accounts
+title: Administrar Cuentas de Stake
 ---
 
-If you want to delegate stake to many different validators, you will need
-to create a separate stake account for each. If you follow the convention
-of creating the first stake account at seed "0", the second at "1", the
-third at "2", and so on, then the `solana-stake-accounts` tool will allow
-you to operate on all accounts with single invocations. You can use it to
-sum up the balances of all accounts, move accounts to a new wallet, or set
-new authorities.
+Si quieres delegar stake a muchos validadores diferentes, necesitarás crear una cuenta de stake diferente para cada uno de ellos. Si sigue la convención de crear la primera cuenta de stake en la semilla "0", la segunda en la "1", la tercera en la "2", y así sucesivamente, entonces la herramienta `solana-stake-accounts` le permitirá operar en todas las cuentas con una sola invocación. Puedes usarlo para sumar los balances de todas las cuentas, mover cuentas a una nueva billetera o establecer nuevas autoridades.
 
-## Usage
+## Usos
 
-### Create a stake account
+### Crear una cuenta Stake
 
-Create and fund a derived stake account at the stake authority public key:
+Crear y financiar una cuenta de stake derivada en la clave pública de la autoridad de la participación:
 
 ```bash
-solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
-    --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> \
+solana-stake-accounts nueva <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
+    --stake-authority <PUBKEY> --withdrawal -authority <PUBKEY> \
     --fee-payer <KEYPAIR>
 ```
 
-### Count accounts
+### Cuentas de cuenta
 
-Count the number of derived accounts:
+Cuenta el número de cuentas derivadas:
 
 ```bash
-solana-stake-accounts count <BASE_PUBKEY>
+recuento de cuentas de solana-stake- <BASE_PUBKEY>
 ```
 
-### Get stake account balances
+### Obtener saldos de cuentas de stake
 
-Sum the balance of derived stake accounts:
+Suma el saldo de las cuentas de stake derivadas:
 
 ```bash
-solana-stake-accounts balance <BASE_PUBKEY> --num-accounts <NUMBER>
+saldo de solana-stake-accounts <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Get stake account addresses
+### Obtener direcciones de cuentas del stake
 
-List the address of each stake account derived from the given public key:
+Listar la dirección de cada cuenta de stake derivada de la clave pública dada:
 
 ```bash
-solana-stake-accounts addresses <BASE_PUBKEY> --num-accounts <NUMBER>
+direcciones de solana-stake-accounts <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Set new authorities
+### Establecer nuevas autoridades
 
-Set new authorities on each derived stake account:
+Establecer nuevas autoridades en cada cuenta de stake derivado:
 
 ```bash
-solana-stake-accounts authorize <BASE_PUBKEY> \
-    --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> \
-    --new-stake-authority <PUBKEY> --new-withdraw-authority <PUBKEY> \
+las cuentas solana-stake autorizan <BASE_PUBKEY> \
+    --stake-authority <KEYPAIR> --withdrawal -authority <KEYPAIR> \
+    --new-stake-authority <PUBKEY> --new-withdrawal -authority <PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
-### Relocate stake accounts
+### Reubicar las cuentas de stake
 
-Relocate stake accounts:
+Reubicar las cuentas de stake:
 
 ```bash
 solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --stake-authority <KEYPAIR> --num-accounts <NUMBER> \
-    --fee-payer <KEYPAIR>
+    --come-payer <KEYPAIR>
 ```
 
-To atomically rebase and authorize each stake account, use the 'move'
-command:
+Para volver a basar y autorizar atómicamente cada cuenta de stake, utilice el comando "move":
 
 ```bash
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
-    --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> \
-    --new-stake-authority <PUBKEY> --new-withdraw-authority <PUBKEY> \
+    --stake-authority <KEYPAIR> --withdrawal -authority <KEYPAIR> \
+    --new-stake-authority <PUBKEY> --new-withdrawal -authority <PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
