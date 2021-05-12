@@ -37,7 +37,7 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 For example, a vote stack with the following state:
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    4 |         4 |       2 |                    6 |
 |    3 |         3 |       4 |                    7 |
 |    2 |         2 |       8 |                   10 |
@@ -46,24 +46,24 @@ For example, a vote stack with the following state:
 예를 들어 다음 상태의 투표 스택 :
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    5 |         9 |       2 |                   11 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-_ 투표 6_은 시간 10입니다.
+* 투표 6*은 시간 10입니다.
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    6 |        10 |       2 |                   12 |
 |    5 |         9 |       4 |                   13 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-10시에 새로운 투표가 이전 투표를 따라 잡았습니다. 그러나 _vote 2_는 10시에 만료되므로 11시에 _vote 7_이 적용되면 _vote 2_ 이상을 포함한 투표가 팝됩니다.
+10시에 새로운 투표가 이전 투표를 따라 잡았습니다. 그러나 *vote 2*는 10시에 만료되므로 11시에 *vote 7*이 적용되면 _vote 2_ 이상을 포함한 투표가 팝됩니다.
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    7 |        11 |       2 |                   13 |
 |    1 |         1 |      16 |                   17 |
 
@@ -77,7 +77,7 @@ Validator는 나머지 클러스터가 가능한 한 자주 선택한 포크를 
 
 Cost of rollback of _fork A_ is defined as the cost in terms of lockout time to the validator to confirm any other fork that does not include _fork A_ as an ancestor.
 
-비용 _fork A_비용은 _fork A_를 조상으로 포함하지 않는 다른 모든 포크를 확인하기 위해 밸리데이터에게 잠금 시간 측면에서 비용으로 정의됩니다.
+비용 *fork A*비용은 *fork A*를 조상으로 포함하지 않는 다른 모든 포크를 확인하기 위해 밸리데이터에게 잠금 시간 측면에서 비용으로 정의됩니다.
 
 ### 임계 값
 

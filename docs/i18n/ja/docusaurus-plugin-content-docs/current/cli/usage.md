@@ -2,7 +2,7 @@
 title: CLIの利用参照
 ---
 
-["solana-cli crate](https://crates.io/crates/solana-cli)は、Solanaのコマンドラインインターフェースツールを提供します。
+["solana-cli crate](https://crates.io/crates/solana-cli)は、Solana のコマンドラインインターフェースツールを提供します。
 
 ## 例:
 
@@ -16,7 +16,7 @@ $ solana-keygen pubkey
 <PUBKEY>
 ```
 
-### ランポートでのSOLのエアドロップ
+### ランポートでの SOL のエアドロップ
 
 ```bash
 // Command
@@ -57,8 +57,9 @@ $ solana deploy <PATH>
 ```
 
 ## 使用法
+
 ###
+
 ```text
 
 ```
-

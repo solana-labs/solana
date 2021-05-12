@@ -2,25 +2,25 @@
 title: トークンを送受信しよう
 ---
 
-このページでは、[ペーパーウォレット](../wallet-guide/paper-wallet.md)、[ファイルシステムウォレット](../wallet-guide/file-system-wallet.md)、[ハードウェアウォレット](../wallet-guide/hardware-wallets.md)などのコマンドラインウォレットを使って、コマンドラインツールでSOLトークンを送受信する方法を説明します。 始める前に、ウォレットを作成し、そのアドレス(pubkey) と署名キーペアへのアクセス権を持っていることを確認してください。 異なるウォレットタイプのキーペアを入力するための [](../cli/conventions.md#keypair-conventions) の規則をチェックしてください。
+このページでは、[ペーパーウォレット](../wallet-guide/paper-wallet.md)、[ファイルシステムウォレット](../wallet-guide/file-system-wallet.md)、[ハードウェアウォレット](../wallet-guide/hardware-wallets.md)などのコマンドラインウォレットを使って、コマンドラインツールで SOL トークンを送受信する方法を説明します。 始める前に、ウォレットを作成し、そのアドレス(pubkey) と署名キーペアへのアクセス権を持っていることを確認してください。 異なるウォレットタイプのキーペアを入力するための [](../cli/conventions.md#keypair-conventions) の規則をチェックしてください。
 
 ## ウォレットを試そう
 
 公開キーを他の人と共有する前に まず、キーが有効で、対応する秘密キーを保持していることを確認してください。
 
-この例では、最初のウォレットに加えて2番目のウォレットを作成します。 そしてトークンをそこに転送します。 これにより、選択したウォレットタイプのトークンを送金できることが確認されます。
+この例では、最初のウォレットに加えて 2 番目のウォレットを作成します。 そしてトークンをそこに転送します。 これにより、選択したウォレットタイプのトークンを送金できることが確認されます。
 
-このテスト例では、開発者用の Testnet を使用します。 Devnetで発行されたトークンには **** の値がないので、それらを失っても心配しないでください。
+このテスト例では、開発者用の Testnet を使用します。 Devnet で発行されたトークンには \*\*\*\* の値がないので、それらを失っても心配しないでください。
 
 #### 開始するにはトークンをいくつかドロップしてください
 
-まず、 _airdrop_ 自身が devnetでトークンをプレイします。
+まず、 _airdrop_ 自身が devnet でトークンをプレイします。
 
 ```bash
 solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-テキスト `<RECIPIENT_ACCOUNT_ADDRESS>` をベース58でエンコードされた公開キー/ウォレットアドレスに置き換えます。
+テキスト `<RECIPIENT_ACCOUNT_ADDRESS>` をベース 58 でエンコードされた公開キー/ウォレットアドレスに置き換えます。
 
 #### 残高を確認しよう
 
@@ -30,9 +30,9 @@ solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-#### 2番目のウォレットアドレスを作成しよう
+#### 2 番目のウォレットアドレスを作成しよう
 
-トークンを受け取るには新しいアドレスが必要です。 2番目のキーペアを作成し、その公開キーを記録します:
+トークンを受け取るには新しいアドレスが必要です。 2 番目のキーペアを作成し、その公開キーを記録します:
 
 ```bash
 solana-keygen new --no-passphrase -no-outfile
@@ -44,17 +44,17 @@ solana-keygen new --no-passphrase -no-outfile
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-また、[ペーパー](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses)、[ファイルシステム](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses)、[ハードウェア](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet)のいずれかによる任意の2つ目(またはそれ以上)のウォレットを作成することができます。
+また、[ペーパー](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses)、[ファイルシステム](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses)、[ハードウェア](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet)のいずれかによる任意の 2 つ目(またはそれ以上)のウォレットを作成することができます。
 
-#### 最初のウォレットから2番目のアドレスにトークンを転送します
+#### 最初のウォレットから 2 番目のアドレスにトークンを転送します
 
-次に、それらを転送することによってエアドロップされたトークンを所有していることを証明します。 Solanaクラスターは、トランザクション内の送信者の公開鍵に対応する秘密鍵ペアを使用してトランザクションに署名した場合にのみ、転送を受け付けます。
+次に、それらを転送することによってエアドロップされたトークンを所有していることを証明します。 Solana クラスターは、トランザクション内の送信者の公開鍵に対応する秘密鍵ペアを使用してトランザクションに署名した場合にのみ、転送を受け付けます。
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 -url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
-ここで、<`<KEYPAIR>`を1つ目のウォレットのキーペアへのパスに置き換え、`<RECIPIENT_ACCOUNT_ADDRESS>`を2つ目のウォレットのアドレスに置き換えます。
+ここで、<`<KEYPAIR>`を 1 つ目のウォレットのキーペアへのパスに置き換え、`<RECIPIENT_ACCOUNT_ADDRESS>`を 2 つ目のウォレットのアドレスに置き換えます。
 
 アップデートされた残高を `solana balance`で確認します。
 
@@ -107,11 +107,11 @@ $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devn
 
 ## トークンの受信しよう
 
-トークンを受け取るには、トークンを送信するためのアドレスが必要になります。 Solanaでは、ウォレットアドレスはキーペアの公開キーとなります。 キーペアを生成するためのさまざまな技術があります。 選択方法は、キーペアを保存する方法によって異なります。 キーペアはウォレットに保存されます。 トークンを受け取る前に[ウォレットを](../wallet-guide/cli.md)作成する必要があります。 完了後に、生成した各キーペアに公開キーが必要です。 公開キーは base58であり、長い文字列です。 長さは32字から44字まで異なります。
+トークンを受け取るには、トークンを送信するためのアドレスが必要になります。 Solana では、ウォレットアドレスはキーペアの公開キーとなります。 キーペアを生成するためのさまざまな技術があります。 選択方法は、キーペアを保存する方法によって異なります。 キーペアはウォレットに保存されます。 トークンを受け取る前に[ウォレットを](../wallet-guide/cli.md)作成する必要があります。 完了後に、生成した各キーペアに公開キーが必要です。 公開キーは base58 であり、長い文字列です。 長さは 32 字から 44 字まで異なります。
 
 ## トークンを送信しよう。
 
-すでにSOLを保有していて、誰かにトークンを送りたい場合は、自分のキーペアへのパス、相手のbase58でエンコードされた公開キー、そして転送するトークンの数が必要になります。 収集後にトークンを `solana transfer` コマンドで転送できます。
+すでに SOL を保有していて、誰かにトークンを送りたい場合は、自分のキーペアへのパス、相手の base58 でエンコードされた公開キー、そして転送するトークンの数が必要になります。 収集後にトークンを `solana transfer` コマンドで転送できます。
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>

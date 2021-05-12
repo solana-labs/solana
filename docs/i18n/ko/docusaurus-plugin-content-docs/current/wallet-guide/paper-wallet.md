@@ -26,10 +26,10 @@ Solana 명령은 키 쌍을 컴퓨터의 디스크에 저장하지 않고도 실
 
 -\[Solana 명령 줄 도구 설치\] (../ cli / install-solana-cli-tools.md)
 
-```bash
+````bash
 ```bash는
 솔라 - Keygen은
-```
+````
 
 ## 지원
 
@@ -43,10 +43,10 @@ keygen` 도구를 만들기,그것은뿐만 아니라 기존의 종자 구문과
 
 --version```##은`솔라사용하여종이 지갑
 
-```bash
+````bash
 :```bash는
 솔라나 - Keygen은
-```
+````
 
 > 보안을 강화하기 위해내용은`--word-count`인수를사용하여 종자 구문 단어 수를 증가
 
@@ -64,9 +64,7 @@ pubkey :
 
 > 네트워크로 연결된 컴퓨터에서 쉽게 사용할 수 있도록 파생 된 주소를 USB 스틱에 복사합니다.
 
-생략하면`bash는
-솔라-keygen은 새로운
---no-OUTFILE은`>,
+생략하면`bash는 솔라-keygen은 새로운 --no-OUTFILE은`>,
 
 ```bash
 :<code>bash는
@@ -78,11 +76,11 @@ pubkey :
 
 공개 키를 수 사용하기로 선택한 경우 시드 문구와 암호에서 파생됩니다. 이는 오프라인에서 생성 된 시드 문구를 사용하여 유효한 공개 키를 파생하는 데 유용합니다. `solana-keygen pubkey` 명령은 시드 구문과 암호를 사용하기로 선택한 경우 입력하는 과정을 안내합니다.
 
-```bash
+````bash
 .` ``bash는
 솔라 - Keygen은 pubkey
 --help```##
-```
+````
 
 > 잠재적으로 같은 종자 문구에 대해 서로 다른 암호 문구를 사용할 수 있습니다. 각각의 고유 한 암호는 다른 키 쌍을 생성합니다.
 
@@ -94,7 +92,7 @@ pubkey :
 --skip`ASK</code>솔라
 ```
 
-나 - Keygen은 pubkey ASK` 콘솔로 씨 구문을 입력 한 후 기본-58 문자의 문자열을 표시합니다. 이것은 귀하의 시드 문구와 관련된 _ 지갑 주소 _입니다.
+나 - Keygen은 pubkey ASK` 콘솔로 씨 구문을 입력 한 후 기본-58 문자의 문자열을 표시합니다. 이것은 귀하의 시드 문구와 관련된 * 지갑 주소 *입니다.
 
 > Copy the derived address to a USB stick for easy usage on networked computers
 
@@ -128,9 +126,7 @@ solana config set --url <CLUSTER URL> # (ie https :
 //api.mainnet-beta.solana.com)</code>마지막으로,
 ```
 
-`bash는
-솔라 - Keygen은 pubkey
-ASK`>은
+`bash는 솔라 - Keygen은 pubkey ASK`>은
 
 ```bash
 solana balance <PUBKEY>

@@ -122,7 +122,7 @@ Yêu cầu có thể được gửi theo lô bằng cách gửi một mảng cá
 
 ## Định cấu hình cam kết của nhà nước
 
-Để kiểm tra trước khi đi và xử lý giao dịch, các node Solana chọn trạng thái ngân hàng để truy vấn dựa trên yêu cầu cam kết do khách hàng đặt ra. Cam kết mô tả cách hoàn thành một khối tại thời điểm đó.  Khi truy vấn trạng thái sổ cái, bạn nên sử dụng mức độ cam kết thấp hơn để báo cáo tiến độ và mức độ cao hơn để đảm bảo trạng thái sẽ không bị lùi lại.
+Để kiểm tra trước khi đi và xử lý giao dịch, các node Solana chọn trạng thái ngân hàng để truy vấn dựa trên yêu cầu cam kết do khách hàng đặt ra. Cam kết mô tả cách hoàn thành một khối tại thời điểm đó. Khi truy vấn trạng thái sổ cái, bạn nên sử dụng mức độ cam kết thấp hơn để báo cáo tiến độ và mức độ cao hơn để đảm bảo trạng thái sẽ không bị lùi lại.
 
 Theo thứ tự cam kết giảm dần (được hoàn thiện nhiều nhất đến ít được hoàn thiện nhất), khách hàng có thể chỉ định:
 
@@ -132,7 +132,7 @@ Theo thứ tự cam kết giảm dần (được hoàn thiện nhiều nhất đ
   - Nó kết hợp các phiếu bầu từ gossip và phát lại.
   - Nó không tính phiếu bầu cho con cháu của một khối, chỉ những phiếu bầu trực tiếp trên khối đó.
   - Mức xác nhận này cũng duy trì các đảm bảo "xác nhận lạc quan" trong phiên bản 1.3 trở đi.
-- `"recent"` - node sẽ truy vấn khối gần đây nhất của nó.  Lưu ý rằng khối có thể không hoàn chỉnh.
+- `"recent"` - node sẽ truy vấn khối gần đây nhất của nó. Lưu ý rằng khối có thể không hoàn chỉnh.
 
 Để xử lý nhiều giao dịch phụ thuộc vào chuỗi, bạn nên sử dụng cam kết `"singleGossip"`, điều này cân bằng giữa tốc độ với độ an toàn khi hoàn trả. Để đảm bảo an toàn tổng thể, bạn nên sử dụng, bạn nên sử dụng cam kết `"max"`.
 
@@ -187,7 +187,7 @@ Trả về tất cả thông tin được liên kết với tài khoản của P
 - `<string>` - Pubkey của tài khoản để truy vấn, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64+zstd", hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64 + zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi `data` trường được nhập `<string>`.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64+zstd", hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64 + zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi `data` trường được nhập `<string>`.
   - (tùy chọn) `dataSlice: <object>` - giới hạn dữ liệu tài khoản trả về bằng cách sử dụng các trường `offset: <usize>` và `length: <usize>`; chỉ khả dụng cho các mã hóa "base58", "base64" hoặc "base64 + zstd".
 
 #### Kết quả:
@@ -205,6 +205,7 @@ Kết quả sẽ là một đối tượng JSON RpcResponse có giá trị `valu
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -220,7 +221,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 Phản ứng:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -244,7 +247,9 @@ Phản ứng:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -260,7 +265,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 Phản ứng:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -306,6 +313,7 @@ Trả về số dư của tài khoản của Pubkey đã cung cấp
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -313,8 +321,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "context": { "slot": 1 }, "value": 0 },
+  "id": 1
+}
 ```
 
 ### getBlockCommitment
@@ -337,6 +350,7 @@ Trường kết quả sẽ là một đối tượng JSON chứa:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
@@ -344,14 +358,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],
+  "jsonrpc": "2.0",
+  "result": {
+    "commitment": [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 10, 32
+    ],
     "totalStake": 42
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -369,12 +387,13 @@ Các node đang khởi động từ ảnh chụp nhanh hoặc giới hạn kích
 
 #### Kết quả:
 
-* `<i64>` - thời gian sản xuất ước tính, dưới dạng dấu thời gian Unix (giây kể từ kỷ nguyên Unix)
-* `<null>` - dấu thời gian không có sẵn cho khối này
+- `<i64>` - thời gian sản xuất ước tính, dưới dạng dấu thời gian Unix (giây kể từ kỷ nguyên Unix)
+- `<null>` - dấu thời gian không có sẵn cho khối này
 
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}
@@ -382,8 +401,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":1574721591,"id":1}
+{ "jsonrpc": "2.0", "result": 1574721591, "id": 1 }
 ```
 
 ### getClusterNodes
@@ -407,6 +427,7 @@ Trường kết quả sẽ là một mảng các đối tượng JSON, mỗi đ�
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}
@@ -414,6 +435,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -437,7 +459,7 @@ Trả về thông tin nhận dạng và giao dịch về một khối được x
 #### Thông số:
 
 - `<u64>` - slot, dưới dạng số nguyên u64
-- `<string>` - mã hóa cho mỗi Giao dịch được trả về, hoặc là "json", "jsonParsed", "base58" (*chậm*), "base64". Nếu tham số không được cung cấp, mã hóa mặc định là "json". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp hướng dẫn của chương trình cụ thể để trả về dữ liệu rõ ràng và dễ đọc hơn trong danh sách `transaction.message.instructions`. Nếu "jsonParsed" được yêu cầu nhưng một phân tích cú pháp không thể được tìm thấy, các hướng dẫn rơi trở lại để mã hóa JSON thường xuyên (`accounts`, `data`, và `programIdIndex`).
+- `<string>` - mã hóa cho mỗi Giao dịch được trả về, hoặc là "json", "jsonParsed", "base58" (_chậm_), "base64". Nếu tham số không được cung cấp, mã hóa mặc định là "json". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp hướng dẫn của chương trình cụ thể để trả về dữ liệu rõ ràng và dễ đọc hơn trong danh sách `transaction.message.instructions`. Nếu "jsonParsed" được yêu cầu nhưng một phân tích cú pháp không thể được tìm thấy, các hướng dẫn rơi trở lại để mã hóa JSON thường xuyên (`accounts`, `data`, và `programIdIndex`).
 
 #### Kết quả:
 
@@ -470,6 +492,7 @@ Trường kết quả sẽ là một đối tượng với các trường sau:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
@@ -477,6 +500,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -493,20 +517,8 @@ Kết quả:
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -527,12 +539,7 @@ Kết quả:
             },
             "instructions": [
               {
-                "accounts": [
-                  1,
-                  2,
-                  3,
-                  0
-                ],
+                "accounts": [1, 2, 3, 0],
                 "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
                 "programIdIndex": 4
               }
@@ -551,7 +558,9 @@ Kết quả:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
@@ -559,6 +568,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -575,20 +585,8 @@ Kết quả:
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -641,17 +639,17 @@ Trả về danh sách các khối được xác nhận giữa hai slot
 
 #### Thông số:
 
-- ` & lt; u64 & gt; ` - start_slot, dưới dạng số nguyên u64
+- `& lt; u64 & gt;` - start_slot, dưới dạng số nguyên u64
 - `<u64>` - (tùy chọn) end_slot, dưới dạng số nguyên u64
 
 #### Kết quả:
 
-Kết quả sẽ là một mảng các số nguyên u64 liệt kê các khối đã được xác nhận giữa `start_slot` và `end_slot`, nếu được cung cấp, hoặc khối được xác nhận mới nhất, bao gồm.  Phạm vi tối đa cho phép là 500,000 slot.
-
+Kết quả sẽ là một mảng các số nguyên u64 liệt kê các khối đã được xác nhận giữa `start_slot` và `end_slot`, nếu được cung cấp, hoặc khối được xác nhận mới nhất, bao gồm. Phạm vi tối đa cho phép là 500,000 slot.
 
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
@@ -659,8 +657,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
 ```
 
 ### getConfirmedBlocksWithLimit
@@ -679,6 +678,7 @@ Trường kết quả sẽ là một mảng các số nguyên u64 liệt kê cá
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
@@ -686,8 +686,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
 ```
 
 ### getConfirmedSignaturesForAddress
@@ -713,6 +714,7 @@ Các chữ ký sẽ được sắp xếp dựa trên Slot mà chúng đã đư�
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -729,6 +731,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -746,22 +749,27 @@ Kết quả:
 Trả lại chữ ký đã xác nhận cho các giao dịch liên quan đến một địa chỉ ngược thời gian từ chữ ký được cung cấp hoặc khối được xác nhận gần đây nhất
 
 #### Thông số:
-* `<string>` - địa chỉ tài khoản dưới dạng chuỗi được mã hóa base-58
-* `<object>` (tùy chọn) Đối tượng cấu hình chứa trường sau:
-  * `limit: <number>` - (tùy chọn) chữ ký giao dịch tối đa để trả về (từ 1 đến 1,000, mặc định: 1,000).
-  * `before: <string>` - (tùy chọn) bắt đầu tìm kiếm ngược từ chữ ký giao dịch này. Nếu không được cung cấp, tìm kiếm sẽ bắt đầu từ đầu của khối được xác nhận tối đa cao nhất.
-  * `until: <string>` - (tùy chọn) tìm kiếm cho đến khi có được chữ ký cho giao dịch này, nếu được tìm thấy trước khi đạt đến giới hạn.
+
+- `<string>` - địa chỉ tài khoản dưới dạng chuỗi được mã hóa base-58
+- `<object>` (tùy chọn) Đối tượng cấu hình chứa trường sau:
+  - `limit: <number>` - (tùy chọn) chữ ký giao dịch tối đa để trả về (từ 1 đến 1,000, mặc định: 1,000).
+  - `before: <string>` - (tùy chọn) bắt đầu tìm kiếm ngược từ chữ ký giao dịch này. Nếu không được cung cấp, tìm kiếm sẽ bắt đầu từ đầu của khối được xác nhận tối đa cao nhất.
+  - `until: <string>` - (tùy chọn) tìm kiếm cho đến khi có được chữ ký cho giao dịch này, nếu được tìm thấy trước khi đạt đến giới hạn.
 
 #### Kết quả:
+
 Trường kết quả sẽ là một mảng thông tin chữ ký giao dịch, được sắp xếp theo thứ tự từ giao dịch mới nhất đến cũ nhất:
-* `<object>`
-  * `signature: <string>` - chữ ký giao dịch dưới dạng chuỗi được mã hóa base-58
-  * `slot: <u64>` - Slot chứa khối với giao dịch
-  * `err: <object | null>` - Error nếu giao dịch không thành công, null nếu giao dịch thành công. [Định nghĩa của TransactionError](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-  * `memo: <string |null>` - Bản ghi nhớ được liên kết với giao dịch, null nếu không có bản ghi nhớ nào
+
+- `<object>`
+  - `signature: <string>` - chữ ký giao dịch dưới dạng chuỗi được mã hóa base-58
+  - `slot: <u64>` - Slot chứa khối với giao dịch
+  - `err: <object | null>` - Error nếu giao dịch không thành công, null nếu giao dịch thành công. [Định nghĩa của TransactionError](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `memo: <string |null>` - Bản ghi nhớ được liên kết với giao dịch, null nếu không có bản ghi nhớ nào
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -779,6 +787,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -801,7 +810,7 @@ Trả về chi tiết giao dịch cho một giao dịch đã xác nhận
 #### Thông số:
 
 - `<string>` - chữ ký giao dịch dưới dạng chuỗi được mã hóa base-58 N mã hóa cố gắng sử dụng trình phân tích cú pháp hướng dẫn của chương trình cụ thể để trả về dữ liệu rõ ràng và dễ đọc hơn trong danh sách `transaction.message.instructions`. Nếu "jsonParsed" được yêu cầu nhưng một phân tích cú pháp không thể được tìm thấy, hướng dẫn trở lại mã hóa JSON thông thường (`accounts`, `data`, và `programIdIndex` fields).
-- `<string>` - (tùy chọn) mã hóa cho Giao dịch được trả lại, "json", "jsonParsed", "base58" (*chậm*) hoặc "base64". Nếu thông số không được cung cấp, mã hóa mặc định là JSON.
+- `<string>` - (tùy chọn) mã hóa cho Giao dịch được trả lại, "json", "jsonParsed", "base58" (_chậm_) hoặc "base64". Nếu thông số không được cung cấp, mã hóa mặc định là JSON.
 
 #### Kết quả:
 
@@ -821,7 +830,9 @@ Trả về chi tiết giao dịch cho một giao dịch đã xác nhận
       - `"Err": <ERR>` - Giao dịch không thành công với TransactionError
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -837,6 +848,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -845,20 +857,8 @@ Kết quả:
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -880,12 +880,7 @@ Kết quả:
         },
         "instructions": [
           {
-            "accounts": [
-              1,
-              2,
-              3,
-              0
-            ],
+            "accounts": [1, 2, 3, 0],
             "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
             "programIdIndex": 4
           }
@@ -902,7 +897,9 @@ Kết quả:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -918,6 +915,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -926,20 +924,8 @@ Kết quả:
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -975,6 +961,7 @@ Trường kết quả sẽ là một đối tượng với các trường sau:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
@@ -982,6 +969,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1008,7 +996,7 @@ Không có
 
 Trường kết quả sẽ là một đối tượng với các trường sau:
 
-- ` slotPerEpoch: & lt; u64 & gt; `, số lượng slot tối đa trong mỗi kỷ nguyên
+- `slotPerEpoch: & lt; u64 & gt;`, số lượng slot tối đa trong mỗi kỷ nguyên
 - `leaderScheduleSlotOffset: <u64>`, số lượng slot trước khi bắt đầu một kỷ nguyên để tính toán lịch trình của leader cho kỷ nguyên đó
 - `warmup: <bool>`, liệu các kỷ nguyên bắt đầu ngắn và phát triển
 - `firstNormalEpoch: <u64>`, kỷ nguyên có độ dài-bình thường-đầu tiên, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
@@ -1017,6 +1005,7 @@ Trường kết quả sẽ là một đối tượng với các trường sau:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
@@ -1024,6 +1013,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1058,6 +1048,7 @@ Kết quả sẽ là một đối tượng RpcResponse JSON có giá trị `valu
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1072,6 +1063,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1110,6 +1102,7 @@ Trường `result` sẽ là một `object` với các trường sau:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
@@ -1117,6 +1110,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1157,6 +1151,7 @@ Kết quả sẽ là một đối tượng RpcResponse JSON với `value` đư�
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1164,6 +1159,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1198,6 +1194,7 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
@@ -1205,8 +1202,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":250000,"id":1}
+{ "jsonrpc": "2.0", "result": 250000, "id": 1 }
 ```
 
 ### getGenesisHash
@@ -1224,6 +1222,7 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
@@ -1231,15 +1230,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
+  "id": 1
+}
 ```
 
 ### getHealth
 
 Trả về tình trạng hiện tại của node.
 
-Nếu một hoặc nhiều đối số `--trusted-validator` được cung cấp cho `solana-validator`, "ok" được trả về khi node có trong các slot `HEALTH_CHECK_SLOT_DISTANCE` của validator đáng tin cậy cao nhất, nếu không sẽ trả về lỗi.  ok" luôn được trả về nếu không có các validator đáng tin cậy nào được cung cấp.
+Nếu một hoặc nhiều đối số `--trusted-validator` được cung cấp cho `solana-validator`, "ok" được trả về khi node có trong các slot `HEALTH_CHECK_SLOT_DISTANCE` của validator đáng tin cậy cao nhất, nếu không sẽ trả về lỗi. ok" luôn được trả về nếu không có các validator đáng tin cậy nào được cung cấp.
 
 #### Thông số:
 
@@ -1247,12 +1251,12 @@ Không có
 
 #### Kết quả:
 
-Nếu node healthy: "ok" Nếu node unhealthy, phản hồi lỗi JSON RPC sẽ được trả về.  Các chi tiết cụ thể của phản hồi lỗi là **UNSTABLE** và có thể thay đổi trong tương lai
-
+Nếu node healthy: "ok" Nếu node unhealthy, phản hồi lỗi JSON RPC sẽ được trả về. Các chi tiết cụ thể của phản hồi lỗi là **UNSTABLE** và có thể thay đổi trong tương lai
 
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getHealth"}
@@ -1260,11 +1264,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả Healthy:
+
 ```json
-{"jsonrpc":"2.0","result": "ok","id":1}
+{ "jsonrpc": "2.0", "result": "ok", "id": 1 }
 ```
 
 Kết quả Unhealthy (chung chung):
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1278,6 +1284,7 @@ Kết quả Unhealthy (chung chung):
 ```
 
 Kết quả Unhealthy (nếu có thêm thông tin)
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1309,6 +1316,7 @@ Trường kết quả sẽ là một đối tượng JSON với các trường s
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getIdentity"}
@@ -1316,8 +1324,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN" },
+  "id": 1
+}
 ```
 
 ### getInflationGovernor
@@ -1341,6 +1354,7 @@ Trường kết quả sẽ là một đối tượng JSON với các trường s
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
@@ -1348,6 +1362,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1382,6 +1397,7 @@ Trường kết quả sẽ là một đối tượng JSON với các trường s
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
@@ -1389,8 +1405,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "epoch": 100,
+    "foundation": 0.001,
+    "total": 0.149,
+    "validator": 0.148
+  },
+  "id": 1
+}
 ```
 
 ### getLargestAccounts
@@ -1409,11 +1435,12 @@ Kết quả sẽ là một đối tượng JSON RpcResponse với `value` bằng
 
 - `<object>` - nếu không, một đối tượng JSON chứa:
   - `address: <string>`, địa chỉ được mã hóa base-58 của tài khoản
-  - ` lamports: & lt; u64 & gt; `, số lượng lamport trong tài khoản, dưới dạng u64
+  - `lamports: & lt; u64 & gt;`, số lượng lamport trong tài khoản, dưới dạng u64
 
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
@@ -1421,6 +1448,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1524,6 +1552,7 @@ Trả về lịch trình của leader cho một epoch
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
@@ -1531,13 +1560,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -1557,6 +1592,7 @@ Trả về số dư tối thiểu cần thiết để miễn tiền thuê tài k
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}
@@ -1564,8 +1600,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ### getMultipleAccounts
@@ -1577,9 +1614,8 @@ Trả về thông tin tài khoản danh sách Pubkey
 - `<array>` - Một mảng Pubkey để truy vấn, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" ((*chậm*)), "base64", "base64 + zstd" hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64+zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi trường `data` là loại `<string>`.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" ((_chậm_)), "base64", "base64 + zstd" hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64+zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi trường `data` là loại `<string>`.
   - (tùy chọn) `dataSlice: <object>` - giới hạn dữ liệu tài khoản trả về bằng cách sử dụng `offset: <usize>` và `length: <usize>`; chỉ khả dụng cho các mã hóa "base58", "base64" hoặc "base64 + zstd".
-
 
 #### Kết quả:
 
@@ -1598,6 +1634,7 @@ Một mảng của:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1621,6 +1658,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1630,20 +1668,14 @@ Kết quả:
     },
     "value": [
       {
-        "data": [
-          "AAAAAAEAAAACtzNsyJrW0g==",
-          "base64"
-        ],
+        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base64"
-        ],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1656,7 +1688,9 @@ Kết quả:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1677,6 +1711,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1696,10 +1731,7 @@ Kết quả:
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base58"
-        ],
+        "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1720,12 +1752,14 @@ Trả về tất cả các tài khoản thuộc sở hữu của chương trình
 - `<string>` - Pubkey của chương trình, dưới dạng chuỗi mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64 + zstd" hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64+zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi trường `data` là loại `<string>`.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64 + zstd" hoặc "jsonParsed". "base58" được giới hạn đối với dữ liệu Tài khoản dưới 128 byte. "base64" sẽ trả về dữ liệu được mã hóa base64 cho dữ liệu Tài khoản ở bất kỳ kích thước nào. "base64+zstd" nén dữ liệu Tài khoản bằng cách sử dụng [Zstandard](https://facebook.github.io/zstd/) và base64 mã hóa kết quả. Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi trường `data` là loại `<string>`.
   - (tùy chọn) `dataSlice: <object>` - giới hạn dữ liệu tài khoản trả về bằng cách sử dụng `offset: <usize>` và `length: <usize>`; chỉ khả dụng cho các mã hóa "base58", "base64" hoặc "base64 + zstd".
   - (tùy chọn) `filters: <array>` - lọc kết quả bằng cách sử dụng [filter objects](jsonrpc-api.md#filters); tài khoản phải đáp ứng tất cả các tiêu chí lọc để được đưa vào kết quả
 
 ##### Bộ lọc:
+
 - `memcmp: <object>` - so sánh một loạt byte đã cung cấp với dữ liệu tài khoản chương trình tại một khoảng chênh lệch cụ thể. Trường:
+
   - `offset: <usize>` - bù vào dữ liệu tài khoản chương trình để bắt đầu so sánh
   - `bytes: <string>` - dữ liệu cần khớp, dưới dạng chuỗi được mã hóa base-58
 
@@ -1737,13 +1771,15 @@ Trường kết quả sẽ là một mảng các đối tượng JSON, sẽ ch�
 
 - `pubkey: <string>` - tài khoản Pubkey dưới dạng chuỗi mã hóa base-58
 - `account: <object>` - một đối tượng JSON, với các trường con sau:
-   - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
-   - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được chỉ định cho `data: <[string,encoding]|object>`, dữ liệu được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc định dạng JSON `{<program>: <state>}`, tùy thuộc vào thông số mã hóa
-   - `executable: <bool>`, boolean cho biết liệu tài khoản có chứa chương trình hay không \(và ở chế độ chỉ-đọc\)
-   - `rentEpoch: <u64>`, epoch mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
+  - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
+  - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được chỉ định cho `data: <[string,encoding]|object>`, dữ liệu được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc định dạng JSON `{<program>: <state>}`, tùy thuộc vào thông số mã hóa
+  - `executable: <bool>`, boolean cho biết liệu tài khoản có chứa chương trình hay không \(và ở chế độ chỉ-đọc\)
+  - `rentEpoch: <u64>`, epoch mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}
@@ -1751,6 +1787,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1771,7 +1808,9 @@ Kết quả:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1799,6 +1838,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1837,6 +1877,7 @@ Một RpcResponse chứa một đối tượng JSON bao gồm một chuỗi kh�
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
@@ -1844,6 +1885,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1867,6 +1909,7 @@ Kết quả:
 Trả về danh sách các mẫu hiệu suất gần đây, theo thứ tự slot ngược lại. Các mẫu hiệu suất được lấy sau mỗi 60 giây và bao gồm số lượng giao dịch và slot xảy ra trong một khoảng thời gian nhất định.
 
 #### Thông số:
+
 - `limit: <usize>` - (tùy chọn) số lượng mẫu để trả lại (tối đa 720)
 
 #### Kết quả:
@@ -1882,6 +1925,7 @@ Một mảng của:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 // Request
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1890,6 +1934,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1923,7 +1968,6 @@ Kết quả:
 }
 ```
 
-
 ### getSnapshotSlot
 
 Trả về slot cao nhất mà node có ảnh chụp nhanh
@@ -1939,6 +1983,7 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
@@ -1946,13 +1991,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":100,"id":1}
+{ "jsonrpc": "2.0", "result": 100, "id": 1 }
 ```
 
 Kết quả khi node không có ảnh chụp nhanh:
+
 ```json
-{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32008, "message": "No snapshot" },
+  "id": 1
+}
 ```
 
 ### getSignatureStatuses
@@ -1986,6 +2037,7 @@ Một mảng của:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2003,6 +2055,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2018,7 +2071,7 @@ Kết quả:
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "confirmed",
+        "confirmationStatus": "confirmed"
       },
       null
     ]
@@ -2028,7 +2081,9 @@ Kết quả:
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2048,6 +2103,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2063,7 +2119,7 @@ Kết quả:
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "finalized",
+        "confirmationStatus": "finalized"
       },
       null
     ]
@@ -2087,6 +2143,7 @@ Trả về slot hiện tại mà node đang xử lý
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlot"}
@@ -2094,8 +2151,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### getSlotLeader
@@ -2113,6 +2171,7 @@ Trả về slot leader hiện tại
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
@@ -2120,8 +2179,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS",
+  "id": 1
+}
 ```
 
 ### getStakeActivation
@@ -2130,21 +2194,23 @@ Trả về thông tin kích hoạt kỷ nguyên cho một tài khoản stake
 
 #### Thông số:
 
-* `<string>` - Pubkey của tài khoản cổ phần để truy vấn, dưới dạng chuỗi được mã hóa base-58
-* `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
-  * (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  * (tùy chọn) `epoch: <u64>` - kỷ nguyên để tính toán chi tiết kích hoạt. Nếu thông số không được cung cấp, mặc định là kỷ nguyên hiện tại.
+- `<string>` - Pubkey của tài khoản cổ phần để truy vấn, dưới dạng chuỗi được mã hóa base-58
+- `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
+  - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
+  - (tùy chọn) `epoch: <u64>` - kỷ nguyên để tính toán chi tiết kích hoạt. Nếu thông số không được cung cấp, mặc định là kỷ nguyên hiện tại.
 
 #### Kết quả:
 
 Kết quả sẽ là một đối tượng JSON với các trường sau:
 
-* `state: <string` - trạng thái kích hoạt của tài khoản stake, một trong số: `active`, `inactive`, `activating`, `deactivating`
-* `active: <u64>` - stake hoạt động trong kỷ nguyên
-* `inactive: <u64>` - stake không hoạt động trong kỷ nguyên
+- `state: <string` - trạng thái kích hoạt của tài khoản stake, một trong số: `active`, `inactive`, `activating`, `deactivating`
+- `active: <u64>` - stake hoạt động trong kỷ nguyên
+- `inactive: <u64>` - stake không hoạt động trong kỷ nguyên
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}
@@ -2152,12 +2218,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "active": 197717120, "inactive": 0, "state": "active" },
+  "id": 1
+}
 ```
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2175,6 +2248,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2207,6 +2281,7 @@ Kết quả sẽ là một đối tượng RpcResponse JSON với `value` bằng
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getSupply"}
@@ -2214,6 +2289,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2257,6 +2333,7 @@ Kết quả sẽ là một đối tượng RpcResponse JSON với `value` bằng
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}
@@ -2264,6 +2341,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2289,11 +2367,11 @@ Trả lại tất cả các tài khoản Mã thông báo SPL bởi Người đư
 
 - `<string>` - Pubkey của tài khoản ủy quyền để truy vấn, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - Hoặc:
-  * `mint: <string>` - Pubkey của mã thông báo Mint để giới hạn tài khoản, dưới dạng chuỗi mã hóa base-58; hoặc là
-  * `programId: <string>` - Pubkey của ID chương trình Mã thông báo người sở hữu tài khoản, dưới dạng chuỗi được mã hóa base-58
+  - `mint: <string>` - Pubkey của mã thông báo Mint để giới hạn tài khoản, dưới dạng chuỗi mã hóa base-58; hoặc là
+  - `programId: <string>` - Pubkey của ID chương trình Mã thông báo người sở hữu tài khoản, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không thể tìm thấy mã hợp lệ cho một tài khoản cụ thể, tài khoản đó sẽ bị lọc ra khỏi kết quả.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không thể tìm thấy mã hợp lệ cho một tài khoản cụ thể, tài khoản đó sẽ bị lọc ra khỏi kết quả.
   - (tùy chọn) `dataSlice: <object>` - giới hạn dữ liệu tài khoản được trả lại bằng cách sử dụng các trường `offset: <usize>` và `length: <usize>`; chỉ khả dụng cho các mã hóa "base58", "base64" hoặc "base64 + zstd".
 
 #### Kết quả:
@@ -2302,11 +2380,11 @@ Kết quả sẽ là một đối tượng JSON RpcResponse với `value` bằng
 
 - `pubkey: <string>` - tài khoản Pubkey dưới dạng chuỗi mã hóa base-58
 - `account: <object>` - một đối tượng JSON, với các trường con sau:
-   - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
-   - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được gán cho
-   - `data: <object>`, Dữ liệu trạng thái mã thông báo được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc ở định dạng JSON `{<program>: <state>}`
-   - `executable: <bool>`, boolean cho biết liệu tài khoản có chứa chương trình \(và hoàn toàn là chỉ-đọc\)
-   - `rentEpoch: <u64>`, kỷ nguyên mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
+  - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
+  - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được gán cho
+  - `data: <object>`, Dữ liệu trạng thái mã thông báo được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc ở định dạng JSON `{<program>: <state>}`
+  - `executable: <bool>`, boolean cho biết liệu tài khoản có chứa chương trình \(và hoàn toàn là chỉ-đọc\)
+  - `rentEpoch: <u64>`, kỷ nguyên mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
 
 #### Ví dụ:
 
@@ -2330,6 +2408,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2377,11 +2456,11 @@ Trả về tất cả tài khoản Mã thông báo SPL bởi chủ sở hữu m�
 
 - `<string>` - Pubkey của chủ tài khoản để truy vấn, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - Hoặc:
-  * `mint: <string>` - Pubkey của mã thông báo Mint để giới hạn tài khoản, dưới dạng chuỗi mã hóa base-58; hoặc là
-  * `programId: <string>` - Pubkey của ID chương trình Mã thông báo người sở hữu tài khoản, dưới dạng chuỗi được mã hóa base-58
+  - `mint: <string>` - Pubkey của mã thông báo Mint để giới hạn tài khoản, dưới dạng chuỗi mã hóa base-58; hoặc là
+  - `programId: <string>` - Pubkey của ID chương trình Mã thông báo người sở hữu tài khoản, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64+zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không thể tìm thấy mã hợp lệ cho một tài khoản cụ thể, tài khoản đó sẽ bị lọc ra khỏi kết quả.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64+zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không thể tìm thấy mã hợp lệ cho một tài khoản cụ thể, tài khoản đó sẽ bị lọc ra khỏi kết quả.
   - (tùy chọn) `dataSlice: <object>` - giới hạn dữ liệu tài khoản trả về bằng cách sử dụng các trường `offset: <usize>` và `length: <usize>`; chỉ khả dụng cho các mã hóa "base58", "base64" hoặc "base64 + zstd".
 
 #### Kết quả:
@@ -2390,11 +2469,11 @@ Kết quả sẽ là một đối tượng JSON RpcResponse với `value` bằng
 
 - `pubkey: <string>` - tài khoản Pubkey dưới dạng chuỗi mã hóa base-58
 - `account: <object>` - một đối tượng JSON, với các trường con sau:
-   - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
-   - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được gán cho
-   - `data: <object>`, Dữ liệu trạng thái mã thông báo được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc ở định dạng JSON `{<program>: <state>}`
-   - `executable: <bool>`, boolean cho biết tài khoản có chứa chương trình hay không \(và ở chế độ chỉ-đọc\)
-   - `rentEpoch: <u64>`, kỷ nguyên mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
+  - `lamports: <u64>`, số lượng lamport được chỉ định cho tài khoản này, dưới dạng u64
+  - `owner: <string>`, Pubkey được mã hóa base-58 của chương trình mà tài khoản này đã được gán cho
+  - `data: <object>`, Dữ liệu trạng thái mã thông báo được liên kết với tài khoản, dưới dạng dữ liệu nhị phân được mã hóa hoặc ở định dạng JSON `{<program>: <state>}`
+  - `executable: <bool>`, boolean cho biết tài khoản có chứa chương trình hay không \(và ở chế độ chỉ-đọc\)
+  - `rentEpoch: <u64>`, kỷ nguyên mà tài khoản này sẽ nợ tiền thuê tiếp theo, là u64
 
 #### Ví dụ:
 
@@ -2418,6 +2497,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2484,6 +2564,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2536,6 +2617,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2575,8 +2657,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":268,"id":1}
+{ "jsonrpc": "2.0", "result": 268, "id": 1 }
 ```
 
 ### getVersion
@@ -2597,6 +2680,7 @@ Trường kết quả sẽ là một đối tượng JSON với các trường s
 #### Ví dụ:
 
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVersion"}
@@ -2604,8 +2688,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.6.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -2629,7 +2714,9 @@ Trường kết quả sẽ là một đối tượng JSON của tài khoản `cu
 - `epochCredits: <array>` - Lịch sử về số tín chỉ kiếm được vào cuối mỗi kỷ nguyên, dưới dạng một mảng các mảng chứa: `[epoch, credits, previousCredits]`
 
 #### Ví dụ:
+
 Yêu cầu:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
@@ -2637,6 +2724,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2646,8 +2734,8 @@ Kết quả:
         "commission": 0,
         "epochVoteAccount": true,
         "epochCredits": [
-          [ 1, 64, 0 ],
-          [ 2, 192, 64 ]
+          [1, 64, 0],
+          [2, 192, 64]
         ],
         "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
         "lastVote": 147,
@@ -2693,8 +2781,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### requestAirdrop
@@ -2721,8 +2810,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+  "id": 1
+}
 ```
 
 ### sendTransaction
@@ -2750,7 +2844,7 @@ Chữ ký trả về là chữ ký đầu tiên trong giao dịch, được sử
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa trường sau:
   - `skipPreflight: <bool>` - nếu đúng, bỏ qua kiểm tra giao dịch trước khi khởi hành (mặc định: sai)
   - `preflightCommitment: <string>` - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment) cấp độ sử dụng trước khi khởi hành (mặc định: `"max"`).
-  - `encoding: <string>` - (tùy chọn) Mã hóa được sử dụng cho dữ liệu giao dịch. `"base58"` (*chậm*, **KHÔNG DÙNG**) hoặc `"base64"`. (mặc định: `"base58"`).
+  - `encoding: <string>` - (tùy chọn) Mã hóa được sử dụng cho dữ liệu giao dịch. `"base58"` (_chậm_, **KHÔNG DÙNG**) hoặc `"base64"`. (mặc định: `"base58"`).
 
 #### Kết quả:
 
@@ -2773,8 +2867,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb",
+  "id": 1
+}
 ```
 
 ### simulateTransaction
@@ -2787,7 +2886,7 @@ Mô phỏng gửi một giao dịch
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa trường sau:
   - `sigVerify: <bool>` - nếu đúng, chữ ký giao dịch sẽ được xác minh (mặc định: sai)
   - `commitment: <string>` - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment) mức mô phỏng giao dịch tại (mặc định: `"max"`).
-  - `encoding: <string>` - (tùy chọn) Mã hóa được sử dụng cho dữ liệu giao dịch. Hoặc `"base58"` (*chậm*, **KHÔNG DÙNG**), hoặc `"base64"`. (mặc định: `"base58"`).
+  - `encoding: <string>` - (tùy chọn) Mã hóa được sử dụng cho dữ liệu giao dịch. Hoặc `"base58"` (_chậm_, **KHÔNG DÙNG**), hoặc `"base64"`. (mặc định: `"base58"`).
 
 #### Kết quả:
 
@@ -2812,6 +2911,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2851,8 +2951,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":null,"id":1}
+{ "jsonrpc": "2.0", "result": null, "id": 1 }
 ```
 
 ### validatorExit
@@ -2877,8 +2978,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc":"2.0","result":true,"id":1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ## Đăng ký Websocket
@@ -2898,7 +3000,7 @@ Sau khi kết nối với websocket RPC PubSub tại `ws://<ADDRESS>/`:
 - `<string>` - tài khoản Pubkey, dưới dạng chuỗi được mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - `<object>` - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi `data` trường được nhập `<string>`.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa "base64", có thể phát hiện được khi `data` trường được nhập `<string>`.
 
 #### Kết quả:
 
@@ -2907,6 +3009,7 @@ Sau khi kết nối với websocket RPC PubSub tại `ws://<ADDRESS>/`:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2934,13 +3037,15 @@ Yêu cầu:
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 23784,"id": 1}
+{ "jsonrpc": "2.0", "result": 23784, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
 
 Mã hóa Base58:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2951,7 +3056,10 @@ Mã hóa Base58:
         "slot": 5199307
       },
       "value": {
-        "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+        "data": [
+          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+          "base58"
+        ],
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
@@ -2964,6 +3072,7 @@ Mã hóa Base58:
 ```
 
 Mã hóa JSON được phân tích cú pháp:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2975,17 +3084,17 @@ Mã hóa JSON được phân tích cú pháp:
       },
       "value": {
         "data": {
-           "program": "nonce",
-           "parsed": {
-              "type": "initialized",
-              "info": {
-                 "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-                 "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
-                 "feeCalculator": {
-                    "lamportsPerSignature": 5000
-                 }
+          "program": "nonce",
+          "parsed": {
+            "type": "initialized",
+            "info": {
+              "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+              "feeCalculator": {
+                "lamportsPerSignature": 5000
               }
-           }
+            }
+          }
         },
         "executable": false,
         "lamports": 33594,
@@ -3013,19 +3122,20 @@ Hủy đăng ký nhận thông báo thay đổi tài khoản
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "accountUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### logsSubscribe
 
-Đăng ký ghi nhật ký giao dịch.  **KHÔNG ỔN ĐỊNH**
+Đăng ký ghi nhật ký giao dịch. **KHÔNG ỔN ĐỊNH**
 
 #### Thông số:
 
@@ -3043,6 +3153,7 @@ Kết quả:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3066,13 +3177,15 @@ Yêu cầu:
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
 
 Mã hóa Base58:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3110,14 +3223,15 @@ Hủy đăng ký ghi nhật ký giao dịch
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "logsUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### programSubscribe
@@ -3129,7 +3243,7 @@ Kết quả:
 - `<string>` - program_id Pubkey, dưới dạng chuỗi mã hóa base-58
 - `<object>` - (tùy chọn) Đối tượng cấu hình chứa các trường tùy chọn sau:
   - (tùy chọn) [Cam kết](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (*chậm*), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa base64, có thể phát hiện được khi `data` trường được nhập `<string>`.
+  - `encoding: <string>` - mã hóa cho dữ liệu Tài khoản, "base58" (_chậm_), "base64", "base64 + zstd" hoặc "jsonParsed". Mã hóa "jsonParsed" cố gắng sử dụng trình phân tích cú pháp trạng thái của chương trình cụ thể để trả về dữ liệu trạng thái tài khoản rõ ràng và dễ đọc hơn. Nếu "jsonParsed" được yêu cầu nhưng không tìm thấy trình phân tích cú pháp, trường sẽ trở lại mã hóa base64, có thể phát hiện được khi `data` trường được nhập `<string>`.
   - (tùy chọn) `filters: <array>` - lọc kết quả bằng cách sử dụng [filter objects](jsonrpc-api.md#filters); tài khoản phải đáp ứng tất cả các tiêu chí lọc để được đưa vào kết quả
 
 #### Kết quả:
@@ -3139,6 +3253,7 @@ Kết quả:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3182,13 +3297,15 @@ Yêu cầu:
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
 
 Mã hóa Base58:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3201,12 +3318,15 @@ Mã hóa Base58:
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
-          "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+          "data": [
+            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+            "base58"
+          ],
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3215,6 +3335,7 @@ Mã hóa Base58:
 ```
 
 Mã hóa JSON được phân tích cú pháp:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3228,23 +3349,23 @@ Mã hóa JSON được phân tích cú pháp:
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
           "data": {
-             "program": "nonce",
-             "parsed": {
-                "type": "initialized",
-                "info": {
-                   "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-                   "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
-                   "feeCalculator": {
-                      "lamportsPerSignature": 5000
-                   }
+            "program": "nonce",
+            "parsed": {
+              "type": "initialized",
+              "info": {
+                "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                "feeCalculator": {
+                  "lamportsPerSignature": 5000
                 }
-             }
+              }
+            }
           },
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3267,14 +3388,15 @@ Hủy đăng ký nhận thông báo thay đổi tài khoản do chương trình 
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"programUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "programUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### signatureSubscribe
@@ -3293,6 +3415,7 @@ Kết quả:
 #### Ví dụ:
 
 Yêu cầu:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3317,11 +3440,13 @@ Yêu cầu:
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3355,14 +3480,15 @@ Hủy đăng ký nhận thông báo xác nhận chữ ký
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "signatureUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### slotSubscribe
@@ -3380,14 +3506,15 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
@@ -3422,14 +3549,15 @@ Hủy đăng ký nhận thông báo slot
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### rootSubscribe
@@ -3447,14 +3575,15 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootSubscribe" }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
@@ -3487,19 +3616,20 @@ Hủy đăng ký nhận thông báo root
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootUnsubscribe", "params": [0] }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### voteSubscribe - Không ổn định, bị tắt theo mặc định
 
-**Đăng ký này không ổn định và chỉ khả dụng nếu validator đã được bắt đầu với cờ `--rpc-pubsub-enable-vote-subscription`.  Định dạng của đăng ký này có thể thay đổi trong tương lai**
+**Đăng ký này không ổn định và chỉ khả dụng nếu validator đã được bắt đầu với cờ `--rpc-pubsub-enable-vote-subscription`. Định dạng của đăng ký này có thể thay đổi trong tương lai**
 
 Đăng ký để nhận thông báo bất cứ lúc nào một phiếu bầu mới được quan sát thấy trong gossip. Những phiếu bầu này được đồng thuận trước do đó không có gì đảm bảo những phiếu bầu này sẽ được đưa vào sổ cái.
 
@@ -3514,14 +3644,15 @@ Không có
 #### Ví dụ:
 
 Yêu cầu:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"voteSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "voteSubscribe" }
 ```
 
 Kết quả:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Định dạng Thông báo:
@@ -3558,11 +3689,13 @@ Hủy đăng ký nhận thông báo bỏ phiếu
 #### Ví dụ:
 
 Yêu cầu:
+
 ```json
-{"jsonrpc":"2.0", "id":1, "method":"voteUnsubscribe", "params":[0]}
+{ "jsonrpc": "2.0", "id": 1, "method": "voteUnsubscribe", "params": [0] }
 ```
 
 Phản ứng:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```

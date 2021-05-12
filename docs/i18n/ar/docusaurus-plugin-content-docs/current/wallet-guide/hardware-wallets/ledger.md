@@ -2,7 +2,7 @@
 title: محفظة ليدجر نانو (Ledger Nano)
 ---
 
-هذه الصفحة تعرض لك كيفية إستخدام محفظة ليدجر نانو (Ledger Nano S) أو نانو (Ledger Nano X) للتفاعل مع Solana بإستخدام أدوات سطر الأوامر (command line tools).  لمُشاهدة المزيد من الحلول للتفاعل مع Solana بواسطة النانو (Nano) الخاص بك اضغط [click here](../ledger-live.md#interact-with-the-solana-network).
+هذه الصفحة تعرض لك كيفية إستخدام محفظة ليدجر نانو (Ledger Nano S) أو نانو (Ledger Nano X) للتفاعل مع Solana بإستخدام أدوات سطر الأوامر (command line tools). لمُشاهدة المزيد من الحلول للتفاعل مع Solana بواسطة النانو (Nano) الخاص بك اضغط [click here](../ledger-live.md#interact-with-the-solana-network).
 
 ## قبل البدء
 
@@ -41,7 +41,7 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
-* مُلاحظة: يتم تجاهل مُعلمات (parameters) رابط إقتران المفاتيح في **zsh** &nbsp;[see troubleshooting for more info](#troubleshooting)
+- مُلاحظة: يتم تجاهل مُعلمات (parameters) رابط إقتران المفاتيح في **zsh** &nbsp;[see troubleshooting for more info](#troubleshooting)
 
 يمكنك إستخدام قيم أخرى للرقم بعد `key=` كذلك. أي من العناوين التي تعرضها هذه الأوامر هي عناوين فعالة لمحفظة Solana. يتم تخزين الجزء الخاص المُرتبط بكل عنوان بشكل آمن على محفظة النانو (Nano)، ويُستخدم لتوقيع المُعاملات من هذا العنوان. فقط قم بإعداد مُلاحظة عن عنوان الـ URL الخاص بزوج المفاتيح (keypair) الذي إستخدمته لإشتقاق أي عنوان ستقوم بإستخدامه لتلقي الرموز.
 

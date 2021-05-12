@@ -5,6 +5,7 @@ title: Delegate Stake
 After you have [received SOL](transfer-tokens.md), you might consider putting it to use by delegating _stake_ to a validator. Stake is what we call tokens in a _stake account_. Solana weights validator votes by the amount of stake delegated to them, which gives those validators more influence in determining then next valid block of transactions in the blockchain. Solana then generates new SOL periodically to reward stakers and validators. You earn more rewards the more stake you delegate.
 
 ## Create a Stake Account
+
 To delegate stake, you will need to transfer some tokens into a stake account. To create an account, you will need a keypair. Its public key will be used as the [stake account address](../staking/stake-accounts.md#account-address). No need for a password or encryption here; this keypair will be discarded right after creating the stake account.
 
 ```bash
@@ -47,6 +48,7 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Set Stake and Withdraw Authorities
+
 [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities) can be set when creating an account via the `--stake-authority` and `--withdraw-authority` options, or afterward with the `solana stake-authorize` command. For example, to set a new stake authority, run:
 
 ```bash

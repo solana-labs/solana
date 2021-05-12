@@ -15,6 +15,7 @@ Sau khi thời gian chạy thực hiện từng hướng dẫn của giao dịch
 Sau khi một chương trình đã xử lý một lệnh, thời gian chạy xác minh rằng chương trình chỉ thực hiện các hoạt động mà nó được phép và kết quả tuân thủ chính sách thời gian chạy.
 
 Chính sách như sau:
+
 - Chỉ chủ sở hữu của tài khoản mới có thể thay đổi chủ sở hữu.
   - Và chỉ khi tài khoản có thể ghi được.
   - Và chỉ khi tài khoản không thực thi được
@@ -30,9 +31,10 @@ Chính sách như sau:
 
 ## Tính toán ngân sách
 
-Để ngăn chương trình lạm dụng tài nguyên tính toán, mỗi lệnh trong giao dịch được cấp một ngân sách tính toán.  Các ngân sách bao gồm các đơn vị tính toán được sử dụng khi chương trình thực hiện các hoạt động khác nhau và giới hạn mà chương trình không được vượt quá.  Khi chương trình sử dụng toàn bộ ngân sách hoặc vượt quá giới hạn thì thời gian chạy sẽ tạm dừng chương trình và trả về lỗi.
+Để ngăn chương trình lạm dụng tài nguyên tính toán, mỗi lệnh trong giao dịch được cấp một ngân sách tính toán. Các ngân sách bao gồm các đơn vị tính toán được sử dụng khi chương trình thực hiện các hoạt động khác nhau và giới hạn mà chương trình không được vượt quá. Khi chương trình sử dụng toàn bộ ngân sách hoặc vượt quá giới hạn thì thời gian chạy sẽ tạm dừng chương trình và trả về lỗi.
 
 Các hoạt động sau đây phát sinh chi phí tính toán:
+
 - Thực thi hướng dẫn BPF
 - Gọi cuộc gọi hệ thống
   - khai thác gỗ
@@ -40,7 +42,7 @@ Các hoạt động sau đây phát sinh chi phí tính toán:
   - lời gọi chương trình chéo
   - ...
 
-Đối với các lời gọi chương trình chéo, các chương trình được gọi kế thừa ngân sách của chương trình cha mẹ của chúng.  Nếu một chương trình được gọi tiêu tốn ngân sách hoặc vượt quá giới hạn toàn bộ chuỗi lệnh gọi và chương trình cha mẹ sẽ bị tạm dừng.
+Đối với các lời gọi chương trình chéo, các chương trình được gọi kế thừa ngân sách của chương trình cha mẹ của chúng. Nếu một chương trình được gọi tiêu tốn ngân sách hoặc vượt quá giới hạn toàn bộ chuỗi lệnh gọi và chương trình cha mẹ sẽ bị tạm dừng.
 
 Bạn có thể tìm thấy [tính toán ngân sách](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L65) hiện tại trong Solana SDK.
 
@@ -59,6 +61,7 @@ log_pubkey_units: 100,
 ```
 
 Sau đó, chương trình
+
 - Có thể thực hiện 200,000 lệnh BPF nếu nó không làm gì khác
 - Có thể ghi lại 2,000 tin nhắn nhật ký
 - Không được vượt quá 4k mức sử dụng ngăn xếp
@@ -67,15 +70,15 @@ Sau đó, chương trình
 
 Vì ngân sách tính toán được tiêu thụ tăng dần khi chương trình thực hiện nên tổng mức tiêu thụ ngân sách sẽ là sự kết hợp của các chi phí khác nhau của các hoạt động mà chương trình thực hiện.
 
-Trong thời gian chạy, một chương trình có thể ghi lại số lượng ngân sách tính toán còn lại. Xem gỡ lỗi để biết thêm thông tin.  Xem [gỡ lỗi](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) để biết thêm thông tin.
+Trong thời gian chạy, một chương trình có thể ghi lại số lượng ngân sách tính toán còn lại. Xem gỡ lỗi để biết thêm thông tin. Xem [gỡ lỗi](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) để biết thêm thông tin.
 
-Giá trị ngân sách có điều kiện đối với việc kích hoạt tính năng, hãy xem chức năng [ mới của ngân sách tính toán ](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) để tìm hiểu cách ngân sách được xây dựng.  Cần có hiểu biết về cách hoạt động của các [tính năng](runtime.md#features) và những tính năng nào được bật trên cụm đang được sử dụng để xác định giá trị của ngân sách hiện tại.
+Giá trị ngân sách có điều kiện đối với việc kích hoạt tính năng, hãy xem chức năng [ mới của ngân sách tính toán ](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) để tìm hiểu cách ngân sách được xây dựng. Cần có hiểu biết về cách hoạt động của các [tính năng](runtime.md#features) và những tính năng nào được bật trên cụm đang được sử dụng để xác định giá trị của ngân sách hiện tại.
 
 ## Các tính năng mới
 
-Khi Solana phát triển, các tính năng hoặc bản vá mới có thể được giới thiệu để thay đổi hành vi của cụm và cách chương trình chạy.  Các thay đổi trong hành vi phải được phối hợp giữa các node khác nhau của cụm, nếu các node không phối hợp thì những thay đổi này có thể dẫn đến sự đồng thuận bị phá vỡ.  Solana hỗ trợ một cơ chế được gọi là các tính năng thời gian chạy để tạo điều kiện thuận lợi cho việc áp dụng các thay đổi một cách suôn sẻ.
+Khi Solana phát triển, các tính năng hoặc bản vá mới có thể được giới thiệu để thay đổi hành vi của cụm và cách chương trình chạy. Các thay đổi trong hành vi phải được phối hợp giữa các node khác nhau của cụm, nếu các node không phối hợp thì những thay đổi này có thể dẫn đến sự đồng thuận bị phá vỡ. Solana hỗ trợ một cơ chế được gọi là các tính năng thời gian chạy để tạo điều kiện thuận lợi cho việc áp dụng các thay đổi một cách suôn sẻ.
 
-Các tính năng thời gian chạy là các sự kiện được phối hợp theo thời gian trong đó một hoặc nhiều thay đổi hành vi đối với cụm sẽ xảy ra.  Những thay đổi mới đối với Solana sẽ thay đổi hành vi được bao bọc bằng cổng tính năng và bị vô hiệu hóa theo mặc định.  Các công cụ Solana sau đó được sử dụng để kích hoạt một tính năng, đánh dấu nó đang chờ xử lý, một khi được đánh dấu là đang chờ xử lý, tính năng đó sẽ được kích hoạt vào kỷ nguyên tiếp theo.
+Các tính năng thời gian chạy là các sự kiện được phối hợp theo thời gian trong đó một hoặc nhiều thay đổi hành vi đối với cụm sẽ xảy ra. Những thay đổi mới đối với Solana sẽ thay đổi hành vi được bao bọc bằng cổng tính năng và bị vô hiệu hóa theo mặc định. Các công cụ Solana sau đó được sử dụng để kích hoạt một tính năng, đánh dấu nó đang chờ xử lý, một khi được đánh dấu là đang chờ xử lý, tính năng đó sẽ được kích hoạt vào kỷ nguyên tiếp theo.
 
 Để xác định tính năng nào được kích hoạt, hãy sử dụng [Các công cụ dòng lệnh Solana](cli/install-solana-cli-tools.md):
 
@@ -83,4 +86,4 @@ Các tính năng thời gian chạy là các sự kiện được phối hợp t
 solana feature status
 ```
 
-Nếu bạn gặp sự cố, trước tiên hãy đảm bảo rằng phiên bản công cụ Solana bạn đang sử dụng khớp với phiên bản được trả về `solana cluster-version`.  Nếu chúng không khớp, hãy [cài đặt đúng bộ công cụ](cli/install-solana-cli-tools.md).
+Nếu bạn gặp sự cố, trước tiên hãy đảm bảo rằng phiên bản công cụ Solana bạn đang sử dụng khớp với phiên bản được trả về `solana cluster-version`. Nếu chúng không khớp, hãy [cài đặt đúng bộ công cụ](cli/install-solana-cli-tools.md).

@@ -4,7 +4,7 @@ title: Gọi giữa các chương trình
 
 ## Lời mời Chương trình-chéo
 
-Thời gian chạy Solana cho phép các chương trình gọi nhau thông qua một cơ chế gọi là lệnh gọi chương trình-chéo.  Việc gọi giữa các chương trình được thực hiện bằng cách một chương trình gọi một lệnh của chương trình kia.  Chương trình gọi được tạm dừng cho đến khi chương trình được gọi kết thúc quá trình xử lý lệnh.
+Thời gian chạy Solana cho phép các chương trình gọi nhau thông qua một cơ chế gọi là lệnh gọi chương trình-chéo. Việc gọi giữa các chương trình được thực hiện bằng cách một chương trình gọi một lệnh của chương trình kia. Chương trình gọi được tạm dừng cho đến khi chương trình được gọi kết thúc quá trình xử lý lệnh.
 
 Ví dụ, một khách hàng có thể tạo một giao dịch sửa đổi hai tài khoản, mỗi tài khoản được sở hữu bởi các chương trình trên chuỗi riêng biệt:
 
@@ -46,7 +46,7 @@ mod acme {
 
 ` invoke()` được tích hợp trong thời gian chạy của Solana và chịu trách nhiệm định tuyến lệnh đã cho đến chương trình `token` thông qua trường `program_id` của lệnh.
 
-Lưu ý rằng `invoke` yêu cầu người gọi phải vượt qua tất cả các tài khoản được yêu cầu bởi hướng dẫn đang được gọi.  Điều này có nghĩa là cả tài khoản thực thi (những tài khoản khớp với id chương trình của hướng dẫn) và các tài khoản được chuyển cho trình xử lý lệnh.
+Lưu ý rằng `invoke` yêu cầu người gọi phải vượt qua tất cả các tài khoản được yêu cầu bởi hướng dẫn đang được gọi. Điều này có nghĩa là cả tài khoản thực thi (những tài khoản khớp với id chương trình của hướng dẫn) và các tài khoản được chuyển cho trình xử lý lệnh.
 
 Trước khi gọi `pay()`, thời gian chạy phải đảm bảo rằng `acme` đã không sửa đổi bất kỳ tài khoản nào thuộc sở hữu của `token`. Nó thực hiện điều này bằng cách áp dụng chính sách của thời gian chạy cho trạng thái hiện tại của tài khoản tại thời điểm `acme` gọi `invoke` so với trạng thái ban đầu của tài khoản khi bắt đầu hướng dẫn `acme`. Sau khi `pay()` hoàn tất, thời gian chạy lại phải đảm bảo rằng `token` không sửa đổi bất kỳ tài khoản nào thuộc sở hữu của `acme` bằng cách áp dụng lại chính sách của thời gian chạy, nhưng lần này là với `token` ID chương trình. Cuối cùng, sau khi `pay_and_launch_missiles()` hoàn tất, thời gian chạy phải áp dụng chính sách thời gian chạy một lần nữa, nơi nó thường áp dụng, sử dụng tất cả các biến `pre_*` đã cập nhật. Nếu việc thực thi `pay_and_launch_missiles()` lên đến `pay()` không thực hiện thay đổi tài khoản không hợp lệ, thì `pay()` không thực hiện thay đổi không hợp lệ và thực hiện từ `pay()` cho đến khi `pay_and_launch_missiles()` trả về không có thay đổi không hợp lệ nào, khi đó thời gian chạy có thể tạm thời giả sử `pay_and_launch_missiles()` như toàn bộ không thực hiện thay đổi tài khoản không hợp lệ và do đó cam kết tất cả các sửa đổi tài khoản này.
 
@@ -105,11 +105,11 @@ Với hai điều kiện trên, người dùng có thể chuyển một cách an
 
 ### Private key cho địa chỉ chương trình
 
-Một địa chỉ Chương trình không nằm trên đường cong ed25519 và do đó không có private key hợp lệ nào được liên kết với nó, và do đó, việc tạo chữ ký cho nó là không thể.  Mặc dù nó không có private key, nhưng nó có thể được chương trình sử dụng để đưa ra chỉ thị bao gồm địa chỉ Chương trình làm người ký.
+Một địa chỉ Chương trình không nằm trên đường cong ed25519 và do đó không có private key hợp lệ nào được liên kết với nó, và do đó, việc tạo chữ ký cho nó là không thể. Mặc dù nó không có private key, nhưng nó có thể được chương trình sử dụng để đưa ra chỉ thị bao gồm địa chỉ Chương trình làm người ký.
 
 ### Địa chỉ chương trình được tạo dựa trên-hàm băm
 
-Địa chỉ chương trình có nguồn gốc xác định từ một tập hợp các hạt giống và một id chương trình bằng cách sử dụng một hàm băm có khả năng chống hình ảnh trước 256-bit.  Địa chỉ chương trình không được nằm trên đường cong ed25519 để đảm bảo không có private key liên quan. Trong quá trình tạo, một lỗi sẽ được trả về nếu địa chỉ được tìm thấy nằm trên đường cong.  Có khoảng 50/50 thay đổi về điều này xảy ra đối với một bộ sưu tập hạt giống và id chương trình nhất định.  Nếu điều này xảy ra, một tập hợp hạt giống khác hoặc một hạt giống (hạt giống 8 bit bổ sung) có thể được sử dụng để tìm địa chỉ chương trình hợp lệ ngoài đường cong.
+Địa chỉ chương trình có nguồn gốc xác định từ một tập hợp các hạt giống và một id chương trình bằng cách sử dụng một hàm băm có khả năng chống hình ảnh trước 256-bit. Địa chỉ chương trình không được nằm trên đường cong ed25519 để đảm bảo không có private key liên quan. Trong quá trình tạo, một lỗi sẽ được trả về nếu địa chỉ được tìm thấy nằm trên đường cong. Có khoảng 50/50 thay đổi về điều này xảy ra đối với một bộ sưu tập hạt giống và id chương trình nhất định. Nếu điều này xảy ra, một tập hợp hạt giống khác hoặc một hạt giống (hạt giống 8 bit bổ sung) có thể được sử dụng để tìm địa chỉ chương trình hợp lệ ngoài đường cong.
 
 Địa chỉ chương trình xác định cho các chương trình tuân theo một đường dẫn dẫn xuất tương tự như Tài khoản được tạo với `SystemInstruction::CreateAccountWithSeed` nó được triển khai với `system_instruction::create_address_with_seed`.
 

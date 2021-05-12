@@ -2,7 +2,7 @@
 title: 클러스터 벤치마킹
 ---
 
-솔라나 git repository에는 자체 로컬 테스트넷을 가동하는 데 필요한 모든 스크립트가 포함되어 있습니다. 달성하고자하는 것에 따라, 멀티 노드 테스트넷은 Rust 전용 단일 테스트 노드보다 설정하기가 훨씬 더 복잡하기 때문에 다른  유형의 노드를 실행하는게 좋을 수 있습니다. 스마트 컨트렉트 실험과 같은 기능을 개발하려는 경우 설정 이슈를 줄이기 위해 Rust 전용 단일 노드 데모를 사용해주세요. 트랜잭션 파이프라인의 성능 최적화를 작업하는 경우 단일 노드 데모를 추천합니다. 컨센선스 관련 작업을하고 있다면 Rust 전용 멀티 노드 데모가 필요합니다. TPS 메트릭을 작업하거나 재현하려면 다중 노드 데모를 실행해주세요.
+솔라나 git repository에는 자체 로컬 테스트넷을 가동하는 데 필요한 모든 스크립트가 포함되어 있습니다. 달성하고자하는 것에 따라, 멀티 노드 테스트넷은 Rust 전용 단일 테스트 노드보다 설정하기가 훨씬 더 복잡하기 때문에 다른 유형의 노드를 실행하는게 좋을 수 있습니다. 스마트 컨트렉트 실험과 같은 기능을 개발하려는 경우 설정 이슈를 줄이기 위해 Rust 전용 단일 노드 데모를 사용해주세요. 트랜잭션 파이프라인의 성능 최적화를 작업하는 경우 단일 노드 데모를 추천합니다. 컨센선스 관련 작업을하고 있다면 Rust 전용 멀티 노드 데모가 필요합니다. TPS 메트릭을 작업하거나 재현하려면 다중 노드 데모를 실행해주세요.
 
 네 가지 종류 모두 최신 Rust toolchain과 솔라나 소스 코드가 필요합니다.
 
@@ -95,18 +95,18 @@ NDEBUG=1 ./multinode-demo/bench-tps.sh # 기본적으로 localhost에서 실행�
 - 모든 곳에서 `info`를 활성화하고 solana :: banking_stage 모듈에서만 `debug`를 활성화하려면 :
 
   ```bash
-export RUST_LOG=solana=info,solana::banking_stage=debug
+  export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - BPF 프로그램 로깅을 활성화하려면 :
 
   ```bash
-export RUST_LOG=solana_bpf_loader=trace
+  export RUST_LOG=solana_bpf_loader=trace
   ```
 
 일반적으로 자주 사용하지 않는 디버그 메시지에는 `debug`를 사용하고, 자주 발생하는 메시지에는 `trace`를 사용하고 성능 관련 로깅에는 `info`를 사용합니다.
 
-GDB를 사용하여 실행중인 프로세스에 연결할 수도 있습니다. 리더의 프로세스 이름은 _solana-validator_입니다.
+GDB를 사용하여 실행중인 프로세스에 연결할 수도 있습니다. 리더의 프로세스 이름은 *solana-validator*입니다.
 
 ```bash
 sudo gdb

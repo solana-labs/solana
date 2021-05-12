@@ -24,7 +24,7 @@ git checkout $TAG
 
 ### Valores de Configuración
 
-Asegúrese de que se creen programas importantes, como el programa de votación, antes de que se inicien los nodos. Tenga en cuenta que estamos usando la versión de lanzamiento aquí para un buen rendimiento. Si desea la compilación de depuración, use solo ` cargo build ` y omita la parte ` NDEBUG = 1 ` del comando.
+Asegúrese de que se creen programas importantes, como el programa de votación, antes de que se inicien los nodos. Tenga en cuenta que estamos usando la versión de lanzamiento aquí para un buen rendimiento. Si desea la compilación de depuración, use solo `cargo build` y omita la parte `NDEBUG = 1` del comando.
 
 ```bash
 construcción de carga - liberación
@@ -95,16 +95,16 @@ Por ejemplo
 - Para habilitar `información` en todas partes y `depuración` sólo en el módulo solana::banking_stay:
 
   ```bash
-export RUST_LOG=solana=info,solana::banking_stage=debug
+  export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - Para habilitar el registro de programas BPF:
 
   ```bash
-export RUST_LOG=solana_bpf_loader=trace
+  export RUST_LOG=solana_bpf_loader=trace
   ```
 
-Generalmente usamos ` debug ` para mensajes de depuración poco frecuentes, ` trace ` para mensajes potencialmente frecuentes y ` info ` para registros relacionados con el rendimiento.
+Generalmente usamos `debug` para mensajes de depuración poco frecuentes, `trace` para mensajes potencialmente frecuentes y `info` para registros relacionados con el rendimiento.
 
 También puede adjuntar un proceso en ejecución con GDB. El proceso del líder se llama _ solana-validator _:
 

@@ -106,7 +106,7 @@ donde `<PUBKEY>` se reemplaza con la dirección del monedero y la palabra clave 
 
 ## Comprobando el saldo de una cuenta
 
-Todo lo que se necesita para comprobar el saldo de una cuenta es la clave pública de una cuenta. Para recuperar claves públicas de forma segura desde una cartera de papel, sigue las instrucciones de [Derivación de la clave pública](#public-key-derivation) en un [ordenador emparejado](https://en.wikipedia.org/wiki/Air_gap_(networking)). Las claves públicas pueden escribirse manualmente o transferirse a través de un dispositivo USB a una máquina conectada en red.
+Todo lo que se necesita para comprobar el saldo de una cuenta es la clave pública de una cuenta. Para recuperar claves públicas de forma segura desde una cartera de papel, sigue las instrucciones de [Derivación de la clave pública](#public-key-derivation) en un [ordenador emparejado](<https://en.wikipedia.org/wiki/Air_gap_(networking)>). Las claves públicas pueden escribirse manualmente o transferirse a través de un dispositivo USB a una máquina conectada en red.
 
 A continuación, configure la herramienta `solana` CLI para [conectarse a un clúster en particular](../cli/choose-a-cluster.md):
 

@@ -2,13 +2,13 @@
 title: クラスターソフトウェアのインストールと更新
 ---
 
-現在、ユーザーはgitリポジトリから自分でsolanaクラスタソフトウェアを構築し、手動でアップデートする必要がありますが、これはエラーが発生しやすく不便です。
+現在、ユーザーは git リポジトリから自分で solana クラスタソフトウェアを構築し、手動でアップデートする必要がありますが、これはエラーが発生しやすく不便です。
 
-このドキュメントでは、サポートされているプラットフォーム用に事前に構築されたバイナリを展開するために使用できる、使いやすいソフトウェアのインストールおよびアップデータを提案します。 ユーザーは、Solanaまたは信頼できる他のパーティが提供するバイナリを使用することを選択できます アップデートの展開は、オンチェーンアップデートマニフェストプログラムを使って管理されます。
+このドキュメントでは、サポートされているプラットフォーム用に事前に構築されたバイナリを展開するために使用できる、使いやすいソフトウェアのインストールおよびアップデータを提案します。 ユーザーは、Solana または信頼できる他のパーティが提供するバイナリを使用することを選択できます アップデートの展開は、オンチェーンアップデートマニフェストプログラムを使って管理されます。
 
 ## モチベーションの例
 
-### ブートストラップのcurl/shellスクリプトを使って、事前に作成されたインストーラを取得して実行します。
+### ブートストラップの curl/shell スクリプトを使って、事前に作成されたインストーラを取得して実行します。
 
 サポートされているプラットフォームでの最も簡単なインストール方法です。
 
@@ -16,16 +16,16 @@ title: クラスターソフトウェアのインストールと更新
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh
 ```
 
-このスクリプトは、githubで最新のタグ付きリリースをチェックし、そこから`solana-install-init`バイナリをダウンロードして実行します。
+このスクリプトは、github で最新のタグ付きリリースをチェックし、そこから`solana-install-init`バイナリをダウンロードして実行します。
 
-インストール時に追加の引数を指定する必要がある場合は、以下のShell構文を使用します。
+インストール時に追加の引数を指定する必要がある場合は、以下の Shell 構文を使用します。
 
 ```bash
 $ init_args=.... # arguments for `solana-install-init ...`
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
-### Githubのリリースからビルド済みインストーラを取得して実行します。
+### Github のリリースからビルド済みインストーラを取得して実行します。
 
 よく知られているリリースの URL を使用して、サポートされているプラットフォーム用のビルド済みバイナリを取得できます。
 
@@ -47,7 +47,7 @@ $ cargo run -- -help
 
 ### 新しいアップデートのクラスターへのデプロイ
 
-\(as created by `ci/publish-tarball.sh`\)で作成されたSolanaリリースtarballが公開URLにアップロードされている場合、以下のコマンドでアップデートをデプロイします。
+\(as created by `ci/publish-tarball.sh`\)で作成された Solana リリース tarball が公開 URL にアップロードされている場合、以下のコマンドでアップデートをデプロイします。
 
 ```bash
 $ solana-keygen new -o update-manifest.json # <-- 一度のみ生成され、公開キーはユーザーと共有されます
@@ -65,9 +65,9 @@ $ solana-install run solana-validator ...  # <-- runs a validator, restarting it
 
 ## On-chain Update Manifest
 
-アップデートマニフェストは、solanaクラスター上で新しいリリースのtarボールの展開を宣伝するために使用されます。 アップデートマニフェストは、`config` プログラムを使用して保存され、各アップデートマニフェストアカウントは、指定されたターゲットトリプル\ \(eg, `x86_64-apple-darwin`\) に対する論理的なアップデートチャネルを記述します。 アカウントの公開キーは、新しいアップデートをデプロイするエンティティと、そのアップデートを消費するユーザーの間でよく知られています。
+アップデートマニフェストは、solana クラスター上で新しいリリースの tar ボールの展開を宣伝するために使用されます。 アップデートマニフェストは、`config` プログラムを使用して保存され、各アップデートマニフェストアカウントは、指定されたターゲットトリプル\ \(eg, `x86_64-apple-darwin`\) に対する論理的なアップデートチャネルを記述します。 アカウントの公開キーは、新しいアップデートをデプロイするエンティティと、そのアップデートを消費するユーザーの間でよく知られています。
 
-アップデートのtarball自体は、オフチェーンの別の場所でホストされており、指定された`download_url`から取得できます。
+アップデートの tarball 自体は、オフチェーンの別の場所でホストされており、指定された`download_url`から取得できます。
 
 ```text
 use solana_sdk::signature::Signature;
@@ -93,9 +93,9 @@ pub struct SignedUpdateManifest {
 
 ## リリースアーカイブの内容
 
-リリースアーカイブは、bzip2で圧縮されたtarファイルで、以下のような内部構造になっています。
+リリースアーカイブは、bzip2 で圧縮された tar ファイルで、以下のような内部構造になっています。
 
-- `/version.yml` -シンプルなYAMLファイルで、`"target "`というフィールドを含んでいます。
+- `/version.yml` -シンプルな YAML ファイルで、`"target "`というフィールドを含んでいます。
 
   ターゲットタプル それ以外のフィールドは無視されます。
 
@@ -117,7 +117,7 @@ pub struct SignedUpdateManifest {
 
 - `~/.config/solana/install/config.yml` - 現在インストールされているソフトウェアバージョンに関するユーザ設定と情報
 - `~/.local/share/solana/install/bin` - 現在のリリースへのシンボリックリンク。 eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-- `~/.local/share/solana/install/releases/<download_sha256>/` - releaseの内容
+- `~/.local/share/solana/install/releases/<download_sha256>/` - release の内容
 
 ### コマンドラインインターフェース
 

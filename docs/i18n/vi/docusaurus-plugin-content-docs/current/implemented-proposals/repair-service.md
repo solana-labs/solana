@@ -8,7 +8,7 @@ RepairService chịu trách nhiệm truy xuất các shred bị thiếu không �
 
 ## Những thách thức:
 
-1) Các validator có thể không nhận được các shred cụ thể do lỗi mạng
+1. Các validator có thể không nhận được các shred cụ thể do lỗi mạng
 
 2\) Hãy xem xét một tình huống trong đó blockstore chứa tập hợp các slot {1, 3, 5}. Sau đó, Blockstore nhận được các shred cho slot 7, nơi cho mỗi shred b, b.parent == 6, do đó, quan hệ cha-con 6 -&gt; 7 được lưu trữ trong blockstore. Tuy nhiên, không có cách nào để liên kết các slot này với bất kỳ ngân hàng hiện có nào trong Blockstore và do đó giao thức `Shred Repair` sẽ không sửa chữa các slot này. Nếu các slot này tình cờ là một phần của chuỗi chính, điều này sẽ tạm dừng tiến trình phát lại trên node này.
 

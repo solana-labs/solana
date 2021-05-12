@@ -2,7 +2,7 @@
 
 ## Problem
 
-Currently, inspecting an on-chain transaction requires depending on a client-side, language-specific decoding library to parse the instruction.  If rpc methods could return decoded instruction details, these custom solutions would be unnecessary.
+Currently, inspecting an on-chain transaction requires depending on a client-side, language-specific decoding library to parse the instruction. If rpc methods could return decoded instruction details, these custom solutions would be unnecessary.
 
 We can deserialize instruction data using a program's Instruction enum, but decoding the account-key list into human-readable identifiers requires manual parsing. Our current Instruction enums have that account information, but only in variant docs.
 
@@ -46,6 +46,7 @@ pub enum TestInstruction {
 ```
 
 An example of the generated TestInstruction with docs:
+
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -75,6 +76,7 @@ pub enum TestInstruction {
 ```
 
 Generated constructors:
+
 ```rust,ignore
 /// Transfer lamports
 ///

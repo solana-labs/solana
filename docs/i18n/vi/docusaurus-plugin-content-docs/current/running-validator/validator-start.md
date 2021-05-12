@@ -40,10 +40,12 @@ Khi validator của bạn được khởi động, hãy tìm thông báo nhật 
 ## Điều chỉnh hệ thống
 
 ### Linux
+
 #### Tự động
+
 Kho lưu trữ solana bao gồm một daemon để điều chỉnh cài đặt hệ thống nhằm tối ưu hóa hiệu suất (cụ thể là bằng cách tăng bộ đệm UDP hệ điều hành và giới hạn ánh xạ tệp).
 
-Daemon (`solana-sys-tuner`) được bao gồm trong bản phát hành nhị phân solana. Khởi động lại nó, *trước khi* khởi động lại validator của bạn, sau mỗi lần nâng cấp phần mềm để đảm bảo rằng các cài đặt được đề xuất mới nhất được áp dụng.
+Daemon (`solana-sys-tuner`) được bao gồm trong bản phát hành nhị phân solana. Khởi động lại nó, _trước khi_ khởi động lại validator của bạn, sau mỗi lần nâng cấp phần mềm để đảm bảo rằng các cài đặt được đề xuất mới nhất được áp dụng.
 
 Để chạy nó:
 
@@ -52,9 +54,11 @@ sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Thủ công
+
 Nếu bạn muốn tự mình quản lý cài đặt hệ thống, bạn có thể làm như vậy với các lệnh sau.
 
 ##### **Tăng bộ đệm UDP**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
 # Increase UDP buffer size
@@ -64,38 +68,49 @@ net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```
 
 ##### **Tăng giới hạn tệp ánh xạ bộ nhớ**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 500000
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
+
 Thêm
+
 ```
 LimitNOFILE=500000
 ```
+
 vào phần `[Service]` của tệp dịch vụ systemd của bạn, nếu bạn sử dụng, nếu không, hãy thêm
+
 ```
 DefaultLimitNOFILE=500000
 ```
+
 vào phần `[Manager]` của `/etc/systemd/system.conf`.
+
 ```bash
 sudo systemctl daemon-reload
 ```
+
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
 * - nofile 500000
 EOF"
 ```
+
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
@@ -248,14 +263,17 @@ Nếu validator của bạn được kết nối, public key và địa chỉ IP
 Theo mặc định, validator sẽ tự động chọn các cổng mạng có sẵn trong phạm vi 8000-10000 và có thể bị ghi đè bằng `--dynamic-port-range`. Ví dụ, `solana-validator --dynamic-port-range 11000-11010 ...` sẽ hạn chế validator cho các cổng 11000-11010.
 
 ### Giới hạn kích thước sổ cái để tiết kiệm dung lượng ổ đĩa cứng
+
 Tham số `--limit-ledger-size` cho phép bạn chỉ định bao nhiêu sổ cái [shreds](../terminology.md#shred) node của bạn được giữ lại trên ổ đĩa cứng. Nếu bạn không bao gồm tham số này, validator sẽ giữ toàn bộ sổ cái cho đến khi hết dung lượng ổ đĩa cứng.
 
-Giá trị mặc định cố gắng duy trì mức sử dụng ổ đĩa cứng sổ cái dưới 500GB.  Có thể yêu cầu sử dụng ổ đĩa cứng nhiều hơn hoặc ít hơn bằng cách thêm đối số vào `--limit-ledger-size` nếu muốn. Kiểm tra `solana-validator --help` giá trị giới hạn mặc định được sử dụng bởi `--limit-ledger-size`.  Thông tin thêm về việc chọn giá trị giới hạn tùy chỉnh [có sẵn tại đây](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+Giá trị mặc định cố gắng duy trì mức sử dụng ổ đĩa cứng sổ cái dưới 500GB. Có thể yêu cầu sử dụng ổ đĩa cứng nhiều hơn hoặc ít hơn bằng cách thêm đối số vào `--limit-ledger-size` nếu muốn. Kiểm tra `solana-validator --help` giá trị giới hạn mặc định được sử dụng bởi `--limit-ledger-size`. Thông tin thêm về việc chọn giá trị giới hạn tùy chỉnh [có sẵn tại đây](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Đơn vị Systemd
+
 Chạy validator dưới dạng đơn vị systemd là một cách dễ dàng để quản lý việc chạy trong nền.
 
 Giả sử bạn có người dùng có tên được gọi bằng `sol` trên máy của mình, hãy tạo tệp `/etc/systemd/system/sol.service` bằng cách sau:
+
 ```
 [Unit]
 Description=Solana Validator
@@ -277,14 +295,16 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Bây giờ hãy tạo `/home/sol/bin/validator.sh` để bao gồm dòng lệnh `solana-validator` mong muốn.  Đảm bảo rằng việc chạy `/home/sol/bin/validator.sh` bằng cách thủ công sẽ khởi động validator như mong đợi. Đừng quên đánh dấu nó có thể thực thi bằng `chmod +x /home/sol/bin/validator.sh`
+Bây giờ hãy tạo `/home/sol/bin/validator.sh` để bao gồm dòng lệnh `solana-validator` mong muốn. Đảm bảo rằng việc chạy `/home/sol/bin/validator.sh` bằng cách thủ công sẽ khởi động validator như mong đợi. Đừng quên đánh dấu nó có thể thực thi bằng `chmod +x /home/sol/bin/validator.sh`
 
 Bắt đầu dịch vụ với:
+
 ```bash
 $ sudo systemctl enable --now sol
 ```
 
 ### Ghi nhật ký
+
 #### Điều chỉnh đầu ra nhật ký
 
 Các tin nhắn mà validator gửi tới nhật ký có thể được kiểm soát bởi `RUST_LOG` biến môi trường. Thông tin chi tiết có thể tìm thấy trong [tài liệu](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) về thùng Rust `env_logger`.
@@ -300,6 +320,7 @@ Trình xác thực sẽ mở lại khi nhận được tín hiệu `USR1`, đây
 #### Sử dụng logrotate
 
 Một ví dụ thiết lập cho `logrotate`, giả định rằng validator đang chạy dưới dạng dịch vụ systemd được gọi là `sol.service` và ghi tệp nhật ký tại /home/sol/solana-validator.log:
+
 ```bash
 # Setup log rotation
 
@@ -318,14 +339,17 @@ systemctl restart logrotate.service
 ```
 
 ### Tắt kiểm tra cổng để tăng tốc độ khởi động lại
+
 Khi validator của bạn đang hoạt động bình thường, bạn có thể giảm thời gian khởi động lại trình xác thực của bạn bằng cách thêm cờ `--no-port-check` vào dòng lệnh `solana-validator` của mình.
 
 ### Tắt tính năng nén ảnh chụp nhanh để giảm mức sử dụng CPU
+
 Nếu bạn không cung cấp ảnh chụp nhanh cho các validator khác, thì tính năng nén ảnh chụp nhanh có thể bị vô hiệu hóa để giảm tải CPU với chi phí sử dụng ổ đĩa cứng nhiều hơn một chút cho lưu trữ ảnh chụp nhanh cục bộ.
 
 Thêm đối số `--snapshot-compression none` vào các đối số `solana-validator` dòng lệnh của bạn và khởi động lại validator.
 
 ### Sử dụng ramdisk có spill-over trao đổi cho cơ sở dữ liệu tài khoản để giảm hao mòn SSD
+
 Nếu máy của bạn có nhiều RAM, ramdisk tmpfs ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) có thể được sử dụng để chứa cơ sở dữ liệu tài khoản
 
 Khi sử dụng tmpfs, bạn cũng cần định cấu hình hoán đổi trên máy của mình để tránh hết dung lượng tmpfs theo định kỳ.
@@ -333,12 +357,14 @@ Khi sử dụng tmpfs, bạn cũng cần định cấu hình hoán đổi trên 
 Nên sử dụng phân vùng tmpfs 300GB, với phân vùng hoán đổi 250GB đi kèm.
 
 Cấu hình ví dụ:
+
 1. `sudo mkdir /mnt/solana-accounts`
-2. Thêm parition 300GB tmpfs bằng cách thêm một dòng mới chứa `tmpfs
-/mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` vào `/etc/fstab` (giả sử validator của bạn đang chạy dưới tư cách người dùng "sol").  **CẨN THẬN: Nếu bạn chỉnh sửa sai /etc/fstab, máy của bạn có thể không khởi động được nữa**
+2. Thêm parition 300GB tmpfs bằng cách thêm một dòng mới chứa `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` vào `/etc/fstab` (giả sử validator của bạn đang chạy dưới tư cách người dùng "sol"). **CẨN THẬN: Nếu bạn chỉnh sửa sai /etc/fstab, máy của bạn có thể không khởi động được nữa**
 3. Tạo ít nhất 250GB không gian hoán đổi
-  - Chọn một thiết bị để sử dụng thay cho `SWAPDEV` cho phần còn lại của các hướng dẫn này. Lý tưởng nhất là chọn phân vùng ổ đĩa cứng trống có dung lượng 250GB trở lên trên ổ đĩa nhanh. Nếu không có sẵn, hãy tạo tệp hoán đổi với `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, đặt quyền của nó bằng `sudo chmod 0600 /swapfile` và sử dụng `/swapfile` làm `SWAPDEV` cho phần còn lại của những hướng dẫn này
-  - Định dạng thiết bị để sử dụng dưới dạng trao đổi với `sudo mkswap SWAPDEV`
+
+- Chọn một thiết bị để sử dụng thay cho `SWAPDEV` cho phần còn lại của các hướng dẫn này. Lý tưởng nhất là chọn phân vùng ổ đĩa cứng trống có dung lượng 250GB trở lên trên ổ đĩa nhanh. Nếu không có sẵn, hãy tạo tệp hoán đổi với `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, đặt quyền của nó bằng `sudo chmod 0600 /swapfile` và sử dụng `/swapfile` làm `SWAPDEV` cho phần còn lại của những hướng dẫn này
+- Định dạng thiết bị để sử dụng dưới dạng trao đổi với `sudo mkswap SWAPDEV`
+
 4. Thêm tệp hoán đổi vào `/etc/fstab` với một dòng mới chứa `SWAPDEV swap swap defaults 0 0`
 5. Bật tính năng hoán đổi với `sudo swapon -a` và gắn kết các tmpfs với `sudo mount /mnt/solana-accounts/`
 6. Xác nhận hoán đổi đang hoạt động với `free -g` và tmpfs được gắn với `mount`

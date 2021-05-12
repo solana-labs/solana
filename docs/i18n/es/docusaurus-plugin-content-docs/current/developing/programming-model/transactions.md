@@ -86,8 +86,7 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 El [identificador de programa](terminology.md#program-id) de la instrucción especifica qué programa procesará esta instrucción. El propietario de la cuenta del programa especifica qué cargador debe usarse para cargar y ejecutar el programa y los datos contienen información sobre cómo el tiempo de ejecución debe ejecutar el programa.
 
-En el caso de [programas desplegados](developing/deployed-programs/overview.md), el propietario es el cargador BPF y los datos de la cuenta guardan el bytecode BPF.  Las cuentas del programa son permanentemente marcadas como ejecutables por el cargador una vez que estén desplegadas correctamente. El tiempo de ejecución rechazará las transacciones que especifican programas que no son ejecutables.
-
+En el caso de [programas desplegados](developing/deployed-programs/overview.md), el propietario es el cargador BPF y los datos de la cuenta guardan el bytecode BPF. Las cuentas del programa son permanentemente marcadas como ejecutables por el cargador una vez que estén desplegadas correctamente. El tiempo de ejecución rechazará las transacciones que especifican programas que no son ejecutables.
 
 A diferencia de los programas desplegados, [las construcciones](developing/builtins/programs.md) son manejadas de forma diferente en que están construidas directamente en el tiempo de ejecución de Solana.
 
@@ -106,7 +105,6 @@ El programa [Solana Program Library's Token ](https://github.com/solana-labs/sol
 ## Firmas
 
 Cada transacción enumera explícitamente todas las claves públicas de la cuenta referenciadas por las instrucciones de la transacción. Un subconjunto de esas claves públicas van acompañadas por una firma de transacción. Esas firmas señalan a los programas en cadena que el titular de la cuenta ha autorizado la transacción. Normalmente, el programa utiliza la autorización para permitir debitar la cuenta o modificar sus datos. Puede conseguir mas información de cómo se comunica la autorización a un programa en [Cuentas](accounts.md#signers)
-
 
 ## Blockhash reciente
 

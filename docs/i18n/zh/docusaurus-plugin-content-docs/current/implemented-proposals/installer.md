@@ -2,13 +2,13 @@
 title: 集群软件安装和更新
 ---
 
-目前用户需要自己从git仓库中构建Solana集群软件，并手动更新，容易出错且不方便。
+目前用户需要自己从 git 仓库中构建 Solana 集群软件，并手动更新，容易出错且不方便。
 
-本文档提出了一个简单易用的软件安装和更新程序，可以用来为支持的平台部署预建的二进制文件。 用户可以选择使用由Solana或任何其他他们信任的方提供的二进制文件。 更新的部署是通过链上更新清单程序来管理的。
+本文档提出了一个简单易用的软件安装和更新程序，可以用来为支持的平台部署预建的二进制文件。 用户可以选择使用由 Solana 或任何其他他们信任的方提供的二进制文件。 更新的部署是通过链上更新清单程序来管理的。
 
 ## 激励的例子
 
-### 使用bootstrap curl/shell脚本获取并运行一个预构建的安装程序。
+### 使用 bootstrap curl/shell 脚本获取并运行一个预构建的安装程序。
 
 支持的平台上最简单的安装方法。
 
@@ -16,18 +16,18 @@ title: 集群软件安装和更新
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh
 ```
 
-这个脚本将检查github以获取最新的标签版本，并从那里下载并运行`Solana-install-init`二进制文件。
+这个脚本将检查 github 以获取最新的标签版本，并从那里下载并运行`Solana-install-init`二进制文件。
 
-如果在安装过程中需要指定额外的参数，可以使用下面的shell语法。
+如果在安装过程中需要指定额外的参数，可以使用下面的 shell 语法。
 
 ```bash
 $ init_args=.... # arguments for `solana-install-init ...`
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
-### 从Github发布的版本中获取并运行一个预构建的安装程序。
+### 从 Github 发布的版本中获取并运行一个预构建的安装程序。
 
-通过知名的发布URL，可以获得支持平台的预构建二进制文件。
+通过知名的发布 URL，可以获得支持平台的预构建二进制文件。
 
 ```bash
 $ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin
@@ -47,7 +47,7 @@ $ cargo run -- --help
 
 ### 向集群部署新的更新。
 
-如果Solana发布的tarball\(由`ci/publish-tarball.sh`创建\) 已经上传到一个可公开访问的URL中，以下命令将部署更新。
+如果 Solana 发布的 tarball\(由`ci/publish-tarball.sh`创建\) 已经上传到一个可公开访问的 URL 中，以下命令将部署更新。
 
 ```bash
 $ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
@@ -93,9 +93,9 @@ pub struct SignedUpdateManifest {
 
 ## 版本存档内容
 
-一个发行版的归档文件应该是一个用bzip2压缩的tar文件，其内部结构如下： /version. yml - 一个简单的YAML文件，包含"target"字段。
+一个发行版的归档文件应该是一个用 bzip2 压缩的 tar 文件，其内部结构如下： /version. yml - 一个简单的 YAML 文件，包含"target"字段。
 
-- `/version.yml` - 一个简单的YAML文件，包含 `"target"` -
+- `/version.yml` - 一个简单的 YAML 文件，包含 `"target"` -
 
   目标元组。 任何额外的字段将被忽略。
 

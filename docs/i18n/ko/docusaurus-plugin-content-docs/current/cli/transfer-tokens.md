@@ -14,7 +14,7 @@ title: 토큰 주고 받기
 
 #### 시작하려면 일부 토큰을 에어드랍하세요.
 
-먼저 devnet에서 테스트 토큰을 직접 _에어드랍_합니다.
+먼저 devnet에서 테스트 토큰을 직접 *에어드랍*합니다.
 
 ```bash
 solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -24,7 +24,7 @@ solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 
 #### 잔액 확인
 
-계정 잔액을 확인하여 에어드랍이 성공했는지 확인하십시오. ` 10 SOL `이 출력되어야 합니다.
+계정 잔액을 확인하여 에어드랍이 성공했는지 확인하십시오. `10 SOL`이 출력되어야 합니다.
 
 ```bash
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -39,7 +39,7 @@ solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 solana-keygen new --no-passphrase --no-outfile
 ```
 
-` pubkey : ` 텍스트 뒤에 주소가 출력됩니다. 주소를 복사하고 안전하게 보관해두세요. 다음 단계에서 새로운 주소를 활용합니다.
+`pubkey :` 텍스트 뒤에 주소가 출력됩니다. 주소를 복사하고 안전하게 보관해두세요. 다음 단계에서 새로운 주소를 활용합니다.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
@@ -108,7 +108,7 @@ $ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBM
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
 4.999995 SOL  # The sending account has slightly less than 5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
-$ solana balance 
+$ solana balance
 
 ```
 

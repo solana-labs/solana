@@ -14,9 +14,9 @@ solana --help
 solana <COMMAND> --help
 ```
 
-특정 명령어를 입력하는  `<COMMAND>`에 원하는 명령어를 입력하면 해당 명령어 사용법이 나타납니다.
+특정 명령어를 입력하는 `<COMMAND>`에 원하는 명령어를 입력하면 해당 명령어 사용법이 나타납니다.
 
-명령의 사용법 메시지에는 일반적으로 다음과 같은 단어가 포함됩니다. `<AMOUNT>`, `<ACCOUNT_ADDRESS>` 이나 `<KEYPAIR>`. 각 단어는 다음의 _ 유형 _에 대한 명령을 실행할 수있는 텍스트입니다. 예를 들어 `<AMOUNT>`는 ` 42 ` 또는 ` 100.42 `와 같은 숫자들로 대체 가능합니다. `<ACCOUNT_ADDRESS>`를 base58로 암호화된 여러분의 공개키로 대체할 수 있습니다. ` 9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww `와 같습니다.
+명령의 사용법 메시지에는 일반적으로 다음과 같은 단어가 포함됩니다. `<AMOUNT>`, `<ACCOUNT_ADDRESS>` 이나 `<KEYPAIR>`. 각 단어는 다음의 * 유형 *에 대한 명령을 실행할 수있는 텍스트입니다. 예를 들어 `<AMOUNT>`는 `42` 또는 `100.42`와 같은 숫자들로 대체 가능합니다. `<ACCOUNT_ADDRESS>`를 base58로 암호화된 여러분의 공개키로 대체할 수 있습니다. `9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`와 같습니다.
 
 ## 키 쌍 규칙
 
@@ -44,7 +44,7 @@ solana-keygen pubkey ASK
 
 파일 시스템 지갑을 사용하면 키 쌍이 컴퓨터의 파일에 저장됩니다. `<KEYPAIR>`를 키 쌍 파일을 향한 전체 파일 경로로 바꿉니다.
 
-예를 들어 파일 시스템 키 쌍 파일 위치가 ` /home/solana/my_wallet.json ` 이면, 다음과 같은 명령어를 실행해 주세요:
+예를 들어 파일 시스템 키 쌍 파일 위치가 `/home/solana/my_wallet.json` 이면, 다음과 같은 명령어를 실행해 주세요:
 
 ```bash
 solana-keygen pubkey /home/solana/my_wallet.json
@@ -52,7 +52,7 @@ solana-keygen pubkey /home/solana/my_wallet.json
 
 #### 하드웨어 지갑
 
-하드웨어 지갑을 선택한 경우 [keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key), 예: ` usb: // ledger? key = 0 `.
+하드웨어 지갑을 선택한 경우 [keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key), 예: `usb: // ledger? key = 0`.
 
 ```bash
 solana-keygen pubkey usb://ledger?key=0

@@ -37,7 +37,7 @@ Before a vote is pushed to the stack, all the votes leading up to vote with a lo
 For example, a vote stack with the following state:
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    4 |         4 |       2 |                    6 |
 |    3 |         3 |       4 |                    7 |
 |    2 |         2 |       8 |                   10 |
@@ -46,7 +46,7 @@ For example, a vote stack with the following state:
 _Vote 5_ is at time 9, and the resulting state is
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    5 |         9 |       2 |                   11 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
@@ -54,7 +54,7 @@ _Vote 5_ is at time 9, and the resulting state is
 _Vote 6_ is at time 10
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    6 |        10 |       2 |                   12 |
 |    5 |         9 |       4 |                   13 |
 |    2 |         2 |       8 |                   10 |
@@ -63,7 +63,7 @@ _Vote 6_ is at time 10
 At time 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at time 11 is applied the votes including and above _vote 2_ will be popped.
 
 | vote | vote time | lockout | lock expiration time |
-| ----:| ---------:| -------:| --------------------:|
+| ---: | --------: | ------: | -------------------: |
 |    7 |        11 |       2 |                   13 |
 |    1 |         1 |      16 |                   17 |
 

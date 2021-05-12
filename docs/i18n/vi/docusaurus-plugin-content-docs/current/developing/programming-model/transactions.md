@@ -86,8 +86,7 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 [id chương trình](terminology.md#program-id) của hướng dẫn chỉ định chương trình nào sẽ xử lý chỉ dẫn này. Chủ sở hữu tài khoản của chương trình chỉ định trình tải nào nên được sử dụng để tải và thực thi chương trình và dữ liệu chứa thông tin về cách thời gian chạy sẽ thực thi chương trình.
 
-Trong trường hợp [chương trình BPF đã triển khai](developing/deployed-programs/overview.md), chủ sở hữu là Bộ tải BPF và dữ liệu tài khoản giữ mã byte BPF.  Tài khoản chương trình được trình tải đánh dấu vĩnh viễn là có thể thực thi sau khi chúng được triển khai thành công. Thời gian chạy sẽ từ chối các giao dịch chỉ định các chương trình không thực thi được.
-
+Trong trường hợp [chương trình BPF đã triển khai](developing/deployed-programs/overview.md), chủ sở hữu là Bộ tải BPF và dữ liệu tài khoản giữ mã byte BPF. Tài khoản chương trình được trình tải đánh dấu vĩnh viễn là có thể thực thi sau khi chúng được triển khai thành công. Thời gian chạy sẽ từ chối các giao dịch chỉ định các chương trình không thực thi được.
 
 Không giống như các chương trình đã triển khai, các [builtins](developing/builtins/programs.md) được xử lý khác nhau ở chỗ chúng được xây dựng trực tiếp vào thời gian chạy Solana.
 
@@ -106,7 +105,6 @@ Các chương trình miễn phí chỉ định cách thông tin được mã hó
 ## Chữ ký
 
 Mỗi giao dịch liệt kê rõ ràng tất cả các public key của tài khoản được tham chiếu bởi hướng dẫn của giao dịch. Một tập hợp con của các public key đó đi kèm với một chữ ký giao dịch. Những chữ ký đó báo hiệu các chương trình trực tuyến rằng chủ tài khoản đã ủy quyền giao dịch. Thông thường, chương trình sử dụng ủy quyền để cho phép ghi nợ tài khoản hoặc sửa đổi dữ liệu của nó. Thông tin thêm về cách ủy quyền được truyền đạt đến một chương trình có thể được tìm thấy trong [Tài khoản](accounts.md#signers)
-
 
 ## Blockhash gần đây
 

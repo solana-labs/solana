@@ -42,13 +42,13 @@ solana validator-info get
 
 ## キーベース
 
-Keybaseのユーザー名を含めることで、クライアントアプリケーション\(Solana Network Explorer\など) は自動的にバリデータのパブリックプロファイルを取り込むことができます。 バリデータの公開キーを"Keybase"に接続するには以下のように実行してください。
+Keybase のユーザー名を含めることで、クライアントアプリケーション\(Solana Network Explorer\など) は自動的にバリデータのパブリックプロファイルを取り込むことができます。 バリデータの公開キーを"Keybase"に接続するには以下のように実行してください。
 
 1. [https://keybase.io/ ](https://keybase.io/)に参加して、バリデータのプロフィールを完成させてください。
 2. バリデータの**個別公開キー**を"Keybase"に追加します。
 
    - ローカルコンピュータに `validator-<PUBKEY>`という空のファイルを作成します。
-   - Keybaseの"Files"セクションに移動し、公開キーファイルを以下にアップロードします。
+   - Keybase の"Files"セクションに移動し、公開キーファイルを以下にアップロードします。
 
      a `solana` subdirectory in your public folder: `/keybase/public/<KEYBASE_USERNAME>/solana`
 

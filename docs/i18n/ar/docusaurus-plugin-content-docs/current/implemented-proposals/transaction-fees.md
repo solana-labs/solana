@@ -16,7 +16,7 @@ title: رسوم المُعاملات الحتمية (Deterministic Transaction F
 
 ## مُعلِّمات الرسوم (Fee Parameters)
 
-في أول تنفيذ لهذا التصميم، تكون مُعلِّمة (parameter) الرسوم الوحيدة هي ` lamports_per_signature `. كلما زاد عدد التوقيعات التي تحتاج المجموعة (cluster) للتحقق منها، زادت الرسوم. يتم تحديد العدد الدقيق للمنافذ عن طريق نسبة الـ SPS إلى هدف الـ SPS. في نهاية كل فُتحة (Slot)، تُخفض المجموعة `lamports_per_signature` عندما يكون SPS أقل من الهدف وترفعه عندما يكون فوق الهدف. الحد الأدنى لقيمة `lamports_per_signature` هو 50٪ من الهدف `lamports_per_signature` والقيمة القصوى هي 10x للهدف \ "lamports_per_signature"
+في أول تنفيذ لهذا التصميم، تكون مُعلِّمة (parameter) الرسوم الوحيدة هي `lamports_per_signature`. كلما زاد عدد التوقيعات التي تحتاج المجموعة (cluster) للتحقق منها، زادت الرسوم. يتم تحديد العدد الدقيق للمنافذ عن طريق نسبة الـ SPS إلى هدف الـ SPS. في نهاية كل فُتحة (Slot)، تُخفض المجموعة `lamports_per_signature` عندما يكون SPS أقل من الهدف وترفعه عندما يكون فوق الهدف. الحد الأدنى لقيمة `lamports_per_signature` هو 50٪ من الهدف `lamports_per_signature` والقيمة القصوى هي 10x للهدف \ "lamports_per_signature"
 
 قد تتضمن المُعلِّمات (parameters) المُستقبلية ما يلي:
 

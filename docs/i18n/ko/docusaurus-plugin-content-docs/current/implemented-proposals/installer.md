@@ -12,20 +12,16 @@ title: 클러스터 소프트웨어 설치 및 업데이트
 
 지원되는 플랫폼을위한 가장 쉬운 설치 방법 :
 
-```bash
+````bash
 $ curl -sSf https://raw.githubusercontent.com/solana- labs / solana / v1.0.0 / install / solana-install-init.sh |
 쉬```이
 
 스크립트는 최신 태그 버전 및 다운로드 github에를 확인하고 거기에서`솔라 설치-init` 바이너리를 실행합니다.
-```
+````
 
 잘 알려진 릴리스 URL을 사용하면 지원되는 플랫폼에 대해 사전 빌드 된 바이너리를 얻을 수 있습니다
 
-.`bash
-$ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin
-$ chmod + x ./solana-- 초기화를
-$ ./solana-install-init
---help`
+.`bash $ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin $ chmod + x ./solana-- 초기화를 $ ./solana-install-init --help`
 
 ```bash
 #`솔라 설치 - 초기화 HTTPS의인수
@@ -54,11 +50,7 @@ $ cargo run -- --help
 
 ### 배포 클러스터에 새 업데이트를
 
-:`bash는
-$ 자식 클론 https://github.com/solana-labs/solana.git
-$ CD를 솔라는 /설치
-$화물 실행-
---help`
+:`bash는 $ 자식 클론 https://github.com/solana-labs/solana.git $ CD를 솔라는 /설치 $화물 실행- --help`
 
 ```bash
 $ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
@@ -131,7 +123,7 @@ pub struct SignedUpdateManifest {
 
 ### Command-line Interface
 
-```text
+```````text
 solana-install 0.16.0
 solana 클러스터 소프트웨어 설치 프로그램
 
@@ -155,7 +147,7 @@ solana 클러스터 소프트웨어 설치 프로그램
 초기화과``````텍스트를
 solana-install-init
 는 새 설치를 초기화합니다.
-```
+```````
 
 ```text
 사용법 :
@@ -191,7 +183,7 @@ FLAGS :
     <update_manifest_keypair> 업데이트 매니페스트 용 키쌍 파일 (/path/to/keypair.json)
 ```
 
-```text
+```````text
 solana-install update업데이트를
 는확인하고 사용 가능한 경우 다운로드하여 적용합니다. USAGE :
     solana-install update
@@ -213,9 +205,9 @@ FLAGS :
 ARGS:
     <program_name> 실행할 프로그램
     <program_arguments> ...
-```
+```````
 
-```text
+```````text
 solana-install update업데이트를
 는확인하고 사용 가능한 경우 다운로드하여 적용합니다.
 
@@ -239,4 +231,4 @@ FLAGS :
 ARGS:
     <program_name> 실행할 프로그램
     <program_arguments> ...
-```
+```````

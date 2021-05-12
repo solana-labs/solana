@@ -6,7 +6,7 @@ title: "Accounts"
 
 If the program needs to store state between transactions, it does so using _accounts_. Accounts are similar to files in operating systems such as Linux. Like a file, an account may hold arbitrary data and that data persists beyond the lifetime of a program. Also like a file, an account includes metadata that tells the runtime who is allowed to access the data and how.
 
-Unlike a file, the account includes metadata for the lifetime of the file. That lifetime is expressed in "tokens", which is a number of fractional native tokens, called _lamports_. Accounts are held in validator memory and pay ["rent"](#rent) to stay there. Each validator periodically scans all accounts and collects rent. Any account that drops to zero lamports is purged.  Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficnet number of lamports.
+Unlike a file, the account includes metadata for the lifetime of the file. That lifetime is expressed in "tokens", which is a number of fractional native tokens, called _lamports_. Accounts are held in validator memory and pay ["rent"](#rent) to stay there. Each validator periodically scans all accounts and collects rent. Any account that drops to zero lamports is purged. Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficnet number of lamports.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client uses an _address_ to look up an account. The address is a 256-bit public key.
 
@@ -20,7 +20,7 @@ Transactions can [indicate](transactions.md#message-header-format) that some of 
 
 ## Executable
 
-If an account is marked "executable" in its metadata then it is considered a program which can be executed by including the account's public key an instruction's [program id](transactions.md#program-id). Accounts are marked as executable during a successful program deployment process by the loader that owns the account.  For example, during BPF program deployment, once the loader has determined that the BPF bytecode in the account's data is valid, the loader permanently marks the program account as executable.  Once executable, the runtime enforces that the account's data (the program) is immutable.
+If an account is marked "executable" in its metadata then it is considered a program which can be executed by including the account's public key an instruction's [program id](transactions.md#program-id). Accounts are marked as executable during a successful program deployment process by the loader that owns the account. For example, during BPF program deployment, once the loader has determined that the BPF bytecode in the account's data is valid, the loader permanently marks the program account as executable. Once executable, the runtime enforces that the account's data (the program) is immutable.
 
 ## Creating
 
@@ -61,7 +61,6 @@ And rent calculation is done with the `f64` precision and the final result is tr
 The rent calculation includes account metadata (address, owner, lamports, etc) in the size of an account. Therefore the smallest an account can be for rent calculations is 128 bytes.
 
 For example, an account is created with the initial transfer of 10,000 lamports and no additional data. Rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports:
-
 
 ```text
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)

@@ -13,7 +13,7 @@ title: Ledger Nano S 및 Nano X
 - Install [Ledger Live desktop software](https://www.ledger.com/ledger-live/)
   - -패키지에 포함 된 장치 설정 지침을 따르거나 \[Ledger 시작 페이지\] (https://www.ledger.com/start/)-[Ledger Live 데스크톱 소프트웨어] 설치 (https://www.ledger.com) / ledger-live /) -이미 Ledger Live가 설치되어있는 경우 최신 펌웨어 및 앱 업데이트를 사용할 수있는 최신 버전의 Ledger Live로 업데이트하십시오.
 - Connect your Nano to your computer and follow the on-screen instructions.
-- Update the firmware on your new Nano.  This is needed to ensure you are able to install the latest version of the Solana App.
+- Update the firmware on your new Nano. This is needed to ensure you are able to install the latest version of the Solana App.
   - [Update Nano S Firmware](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [Update Nano X Firmware](https://support.ledger.com/hc/en-us/articles/360013349800)
 
@@ -30,11 +30,11 @@ title: Ledger Nano S 및 Nano X
 To make sure you have the latest functionality, if you are using an older version of the Solana App, please upgrade to version `v1.0.1` by following these steps.
 
 - -Ledger Live 버전 2.10.0 이상이 있는지 확인하십시오.
-  - -Ledger Live의 버전을 확인하려면 오른쪽 상단의 설정 버튼을 클릭 한 다음 "정보"를 클릭하십시오.  최신 버전의 Ledger Live를 사용할 수있는 경우 Ledger Live를 처음 열 때 업그레이드하라는 배너가 표시되어야합니다.
+  - -Ledger Live의 버전을 확인하려면 오른쪽 상단의 설정 버튼을 클릭 한 다음 "정보"를 클릭하십시오. 최신 버전의 Ledger Live를 사용할 수있는 경우 Ledger Live를 처음 열 때 업그레이드하라는 배너가 표시되어야합니다.
 - Update the firmware on your Nano
   - [Update Nano S Firmware](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [Update Nano X Firmware](https://support.ledger.com/hc/en-us/articles/360013349800)
--  After a successful firmware update, the Solana app should automatically get re-installed with the latest version of the app.
+- After a successful firmware update, the Solana app should automatically get re-installed with the latest version of the app.
 
 ## 알려진 문제
 

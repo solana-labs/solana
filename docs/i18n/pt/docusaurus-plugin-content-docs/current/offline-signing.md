@@ -5,7 +5,7 @@ title: Offline Transaction Signing
 Some security models require keeping signing keys, and thus the signing process, separated from transaction creation and network broadcast. Examples include:
 
 - Collecting signatures from geographically disparate signers in a [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking)) signing device
+- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>) signing device
 
 This document describes using Solana's CLI to separately sign and submit a transaction.
 

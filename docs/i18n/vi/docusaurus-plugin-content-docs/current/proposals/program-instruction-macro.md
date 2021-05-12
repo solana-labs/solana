@@ -2,7 +2,7 @@
 
 ## Sự cố
 
-Hiện tại, việc yêu cầu kiểm tra giao dịch trên chuỗi tùy thuộc vào thư viện giải mã ngôn ngữ cụ thể phía máy-khách để phân tích cú pháp hướng dẫn.  Nếu các phương thức rpc có thể trả về các chi tiết hướng dẫn đã được giải mã, thì các giải pháp tùy chỉnh này sẽ không cần thiết.
+Hiện tại, việc yêu cầu kiểm tra giao dịch trên chuỗi tùy thuộc vào thư viện giải mã ngôn ngữ cụ thể phía máy-khách để phân tích cú pháp hướng dẫn. Nếu các phương thức rpc có thể trả về các chi tiết hướng dẫn đã được giải mã, thì các giải pháp tùy chỉnh này sẽ không cần thiết.
 
 Chúng ta có thể giải mã dữ liệu hướng dẫn bằng cách sử dụng enum Hướng dẫn của chương trình, nhưng việc giải mã danh sách khóa tài khoản thành số nhận dạng có thể đọc được của con người yêu cầu phân tích cú pháp thủ công. Các enum Hướng dẫn hiện tại của chúng tôi có thông tin tài khoản đó, nhưng chỉ trong các tài liệu biến thể.
 
@@ -46,6 +46,7 @@ pub enum TestInstruction {
 ```
 
 Một ví dụ về TestInstruction được tạo bằng các tài liệu:
+
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -75,6 +76,7 @@ pub enum TestInstruction {
 ```
 
 Các hàm tạo đã tạo:
+
 ```rust,ignore
 /// Transfer lamports
 ///

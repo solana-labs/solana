@@ -23,9 +23,11 @@ title: مجموعات Solana
   - وعادة ما تقوم شبكة المطورين بتشغيل إصدار برنامج أحدث من الشبكة التجريبية الرئيسية
 - نقطة دخول القيل والقال لشبكة المطورين: `entrypoint.devnet.solana.com:8001`
 - متغير بيئة القياسات لشبكة المطورين:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - رابط عنوان RPC لشبكة المطورين: `https://devnet.solana.com`
 
 ##### مثال تأكيد سطر أوامر `solana`
@@ -63,9 +65,11 @@ $ solana-validator \
 - وعادة ما تقوم الشبكة التجريبية بتشغيل إصدار برنامج أحدث شبكة المطورين والشبكة التجريبية الرئيسية
 - نقطة دخول القيل والقال لشبكة المطورين: `entrypoint.testnet.solana.com:8001`
 - متغير بيئة القياسات للشبكة التجريبية:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - رابط عنوان RPC للشبكة التجريبية: `https://testnet.solana.com`
 
 ##### مثال تأكيد سطر أوامر `solana`
@@ -110,9 +114,11 @@ $ solana-validator \
   - ملاحظة: إذا كنت تستخدم محفظة لا تحتوي على سطر أوامر مثل [Solflare](wallet-guide/solflare.md)، فستكون المحفظة متصلة دائمًا بالشبكة الرئيسية التجريبية.
 - نقطة دخول القيل والقال للشبكة الرئيسية التجريبية: `entrypoint.mainnet-beta.solana.com:8001`
 - متغير بيئة القياسات للشبكة الرئيسية التجريبية:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - رابط عنوان RPC للشبكة الرئيسية التجريبية: `https://api.mainnet-beta.solana.com`
 
 ##### مثال تأكيد سطر أوامر `solana`

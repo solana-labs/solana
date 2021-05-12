@@ -5,6 +5,7 @@ title: Ủy quyền Stake
 Sau khi bạn đã [nhận được SOL](transfer-tokens.md), bạn có thể cân nhắc đưa nó vào sử dụng bằng cách ủy quyền _stake_ cho validator. Stake có nghĩa là các mã thông báo có trong _stake account_. Solana coi trọng số phiếu bầu của validator bằng số stake được ủy quyền cho họ, điều này mang lại cho những validator đó nhiều ảnh hưởng hơn trong việc xác định khối giao dịch hợp lệ tiếp theo trong blockchain. Solana sau đó tạo SOL mới theo định kỳ để thưởng cho những người tham gia stake và các validator. Bạn sẽ kiếm được nhiều phần thưởng hơn khi bạn ủy thác nhiều hơn.
 
 ## Tạo tài khoản Stake
+
 Để ủy quyền stake, bạn sẽ cần chuyển một số mã thông báo của bạn vào tài khoản stake. Để tạo một tài khoản, bạn sẽ cần một keypair. Public key của nó sẽ được sử dụng làm [địa chỉ của tài khoản stake](../staking/stake-accounts.md#account-address). Không cần mật khẩu hoặc mã hóa ở đây; keypair này sẽ bị hủy ngay sau khi tạo tài khoản stake.
 
 ```bash
@@ -47,6 +48,7 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Tổ chức phát hành stake và rút tiền
+
 [Stake và rút tiền](../staking/stake-accounts.md#understanding-account-authorities) có thể được thiết lập khi tạo tài khoản thông qua các tùy chọn `--stake-authority` and `--withdraw-authority`, hoặc sau đó bằng lệnh `solana stake-authorize`. Ví dụ, để thiết lập một stake authority mới, hãy chạy:
 
 ```bash
@@ -133,7 +135,7 @@ solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RE
     --fee-payer <KEYPAIR>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>`` là tài khoản stake hiện có, stake authority <code><KEYPAIR>` là withdraw authority và `<AMOUNT>` là số lượng mã thông báo cần chuyển `<RECIPIENT_ADDRESS>`.
+` <STAKE_ACCOUNT_ADDRESS>`` là tài khoản stake hiện có, stake authority <code><KEYPAIR> ` là withdraw authority và `<AMOUNT>` là số lượng mã thông báo cần chuyển `<RECIPIENT_ADDRESS>`.
 
 ## Chia Stake
 
@@ -144,6 +146,6 @@ solana split-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAK
     --fee-payer <KEYPAIR>
 ```
 
-`<STAKE_ACCOUNT_ADDRESS>`` là tài khoản stake hiện có, stake authority <code><KEYPAIR>` là stake authority,`<NEW_STAKE_ACCOUNT_KEYPAIR>` là keypair cho tài khoản mới và `<AMOUNT>` là số lượng mã thông báo để chuyển sang tài khoản mới.
+` <STAKE_ACCOUNT_ADDRESS>`` là tài khoản stake hiện có, stake authority <code><KEYPAIR> ` là stake authority,`<NEW_STAKE_ACCOUNT_KEYPAIR>` là keypair cho tài khoản mới và `<AMOUNT>` là số lượng mã thông báo để chuyển sang tài khoản mới.
 
 Để chia tài khoản stake thành địa chỉ tài khoản nguồn, hãy sử dụng `--seed`. Xem [Địa chỉ tài khoản Derive Stake](#advanced-derive-stake-account-addresses) để biết thêm chi tiết.

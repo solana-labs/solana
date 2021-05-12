@@ -4,7 +4,7 @@ title: 监控验证节点
 
 ## 检查 Gossip
 
-通过运行以下命令，确认您的验证节点的IP地址和**身份pubkey**在八卦网络中处于可见状态：
+通过运行以下命令，确认您的验证节点的 IP 地址和**身份 pubkey**在八卦网络中处于可见状态：
 
 ```bash
 solana-gossip spy --entrypoint devnet.solana.com:8001
@@ -28,7 +28,7 @@ solana vote-account ~/vote-account-keypair.json
 
 ## 获取集群信息
 
-有几个有用的JSON-RPC端点，用于监视集群上的验证节点以及集群的运行状况：
+有几个有用的 JSON-RPC 端点，用于监视集群上的验证节点以及集群的运行状况：
 
 ```bash
 ＃与solana-gossip相似，您应该在集群节点列表中看到您的验证节点

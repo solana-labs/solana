@@ -175,7 +175,7 @@ então `X > B`. .
                     |       |
       s + s.lockout |       |
                     +-------+
- 
+
 Text
 XPath: /pre[2]/code
 File: optimistic_confirmation.md

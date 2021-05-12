@@ -28,9 +28,9 @@ Los nodos se turnan siendo líderes y generando el PoH que codifica los cambios 
 
 ## Particiones, bifurcaciones
 
-Los forks pueden surgir en conteos de ticks de PoH que correspondan a un voto. El próximo líder puede no haber observado la última franja horaria de votación y puede empezar su ranura con entradas virtuales generadas de PoH. Estos ticks vacíos son generados por todos los nodos en el clúster a una velocidad configurada por clúster para hashes / per / tick ` Z `.
+Los forks pueden surgir en conteos de ticks de PoH que correspondan a un voto. El próximo líder puede no haber observado la última franja horaria de votación y puede empezar su ranura con entradas virtuales generadas de PoH. Estos ticks vacíos son generados por todos los nodos en el clúster a una velocidad configurada por clúster para hashes / per / tick `Z`.
 
-Solo hay dos versiones posibles de PoH durante un intervalo de votación: PoH con ticks ` T ` y entradas generadas por el líder actual, o PoH con solo ticks. La versión "sólo ticks" del PoH puede ser considerada como un contador virtual, uno que todos los nodos en el clúster pueden derivar del último tick en la ranura anterior.
+Solo hay dos versiones posibles de PoH durante un intervalo de votación: PoH con ticks `T` y entradas generadas por el líder actual, o PoH con solo ticks. La versión "sólo ticks" del PoH puede ser considerada como un contador virtual, uno que todos los nodos en el clúster pueden derivar del último tick en la ranura anterior.
 
 Los validadores pueden ignorar bifurcaciones en otros puntos \(por ejemplo, desde el líder equivocado\), o cortar al líder responsable de la bifurcación.
 
@@ -44,16 +44,16 @@ El siguiente diagrama representa la vista del validador del flujo de PoH con pos
 
 ![Generación de bifurcación](/img/fork-generation.svg)
 
-Tenga en cuenta que un ` E ` que aparece en 2 bifurcaciones en la misma ranura es una condición que se puede reducir, por lo que un validador que observe ` E3 ` y ` E3 '` puede reducir L3 y elija con seguridad ` x ` para ese espacio. Una vez que un validador se compromete con una bifurcación, otras bifurcaciones se pueden descartar por debajo de ese recuento de ticks. Para cualquier ranura, los validadores solo necesitan considerar una sola cadena "tiene entradas" o una cadena "solo ticks" para ser propuesta por un líder. Pero es posible que varias entradas virtuales se superpongan ya que se vinculan con la ranura anterior.
+Tenga en cuenta que un `E` que aparece en 2 bifurcaciones en la misma ranura es una condición que se puede reducir, por lo que un validador que observe `E3` y ` E3 '` puede reducir L3 y elija con seguridad `x` para ese espacio. Una vez que un validador se compromete con una bifurcación, otras bifurcaciones se pueden descartar por debajo de ese recuento de ticks. Para cualquier ranura, los validadores solo necesitan considerar una sola cadena "tiene entradas" o una cadena "solo ticks" para ser propuesta por un líder. Pero es posible que varias entradas virtuales se superpongan ya que se vinculan con la ranura anterior.
 
 #### División de tiempo
 
 Es útil considerar la rotación del líder sobre el recuento de ticks de PoH como una división de tiempo del trabajo de codificación del estado del clúster. La siguiente tabla presenta el árbol anterior de bifurcaciones como un contador dividido en tiempo.
 
-| leader slot      | L1 | L2 | L3 | L4 | L5 |
-|:---------------- |:-- |:-- |:-- |:-- |:-- |
-| data             | E1 | E2 | E3 | E4 | E5 |
-| ticks since prev |    |    |    | x  | xx |
+| leader slot      | L1  | L2  | L3  | L4  | L5  |
+| :--------------- | :-- | :-- | :-- | :-- | :-- |
+| data             | E1  | E2  | E3  | E4  | E5  |
+| ticks since prev |     |     |     | x   | xx  |
 
 Tenga en cuenta que sólo los datos del líder L3 serán aceptados durante la ranura de líder L3. Los datos de L3 pueden incluir tics de "recuperación" de regreso a una ranura que no sea L2 si L3 no observó los datos de L2. Las transmisiones de L4 y L5 incluyen las entradas de PoH "ticks to prev".
 

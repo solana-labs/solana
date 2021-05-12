@@ -24,19 +24,19 @@ O serviço de assinatura de votos consiste em um servidor RPC JSON e um processa
 
 1. Registra um novo nó de validador
 
-    - The request must contain validator's identity \(public key\)
-    - The request must be signed with the validator's private key
-    - The service drops the request if signature of the request cannot be verified
-    - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
-    - If a validator tries to register again, the service returns the public key from the pre-existing keypair
+   - The request must contain validator's identity \(public key\)
+   - The request must be signed with the validator's private key
+   - The service drops the request if signature of the request cannot be verified
+   - The service creates a new voting asymmetric key for the validator, and returns the public key as a response
+   - If a validator tries to register again, the service returns the public key from the pre-existing keypair
 
 2. Sign a vote
 
-    - The request must contain a voting transaction and all verification data
-    - The request must be signed with the validator's private key
-    - The service drops the request if signature of the request cannot be verified
-    - The service verifies the voting data
-    - The service returns a signature for the transaction
+   - The request must contain a voting transaction and all verification data
+   - The request must be signed with the validator's private key
+   - The service drops the request if signature of the request cannot be verified
+   - The service verifies the voting data
+   - The service returns a signature for the transaction
 
 ## Validator voting
 

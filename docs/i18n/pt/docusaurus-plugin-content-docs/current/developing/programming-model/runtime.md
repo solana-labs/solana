@@ -15,6 +15,7 @@ After the runtime executes each of the transaction's instructions, it uses the a
 After a program has processed an instruction the runtime verifies that the program only performed operations it was permitted to, and that the results adhere to the runtime policy.
 
 The policy is as follows:
+
 - Only the owner of the account may change owner.
   - And only if the account is writable.
   - And only if the account is not executable
@@ -30,9 +31,10 @@ The policy is as follows:
 
 ## Compute Budget
 
-To prevent a program from abusing computation resources each instruction in a transaction is given a compute budget.  The budget consists of computation units that are consumed as the program performs various operations and bounds that the program may not exceed.  When the program consumes its entire budget or exceeds a bound then the runtime halts the program and returns an error.
+To prevent a program from abusing computation resources each instruction in a transaction is given a compute budget. The budget consists of computation units that are consumed as the program performs various operations and bounds that the program may not exceed. When the program consumes its entire budget or exceeds a bound then the runtime halts the program and returns an error.
 
 The following operations incur a compute cost:
+
 - Executing BPF instructions
 - Calling system calls
   - logging
@@ -40,7 +42,7 @@ The following operations incur a compute cost:
   - cross-program invocations
   - ...
 
-For cross-program invocations the programs invoked inherit the budget of their parent.  If an invoked program consume the budget or exceeds a bound the entire invocation chain and the parent are halted.
+For cross-program invocations the programs invoked inherit the budget of their parent. If an invoked program consume the budget or exceeds a bound the entire invocation chain and the parent are halted.
 
 The current [compute budget](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L65) can be found in the Solana SDK.
 
@@ -59,6 +61,7 @@ log_pubkey_units: 100,
 ```
 
 Then the program
+
 - Could execute 200,000 BPF instructions if it does nothing else
 - Could log 2,000 log messages
 - Can not exceed 4k of stack usage
@@ -67,15 +70,15 @@ Then the program
 
 Since the compute budget is consumed incrementally as the program executes the total budget consumption will be a combination of the various costs of the operations it performs.
 
-At runtime a program may log how much of the compute budget remains.  See [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
+At runtime a program may log how much of the compute budget remains. See [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
-The budget values are conditional on feature enablement, take a look the compute budget's [new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) function to find out how the budget is constructed.  An understanding of how [features](runtime.md#features) work and what features are enabled on the cluster being used are required to determine the current budget's values.
+The budget values are conditional on feature enablement, take a look the compute budget's [new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) function to find out how the budget is constructed. An understanding of how [features](runtime.md#features) work and what features are enabled on the cluster being used are required to determine the current budget's values.
 
 ## New Features
 
-As Solana evolves, new features or patches may be introduced that changes the behavior of the cluster and how programs run.  Changes in behavior must be coordinated between the various nodes of the cluster, if nodes do not coordinate then these changes can result in a break-down of consensus.  Solana supports a mechanism called runtime features to facilitate the smooth adoption of changes.
+As Solana evolves, new features or patches may be introduced that changes the behavior of the cluster and how programs run. Changes in behavior must be coordinated between the various nodes of the cluster, if nodes do not coordinate then these changes can result in a break-down of consensus. Solana supports a mechanism called runtime features to facilitate the smooth adoption of changes.
 
-Runtime features are epoch coordinated events where one or more behavior changes to the cluster will occur.  New changes to Solana that will change behavior are wrapped with feature gates and disabled by default.  The Solana tools are then used to activate a feature, which marks it pending, once marked pending the feature will be activated at the next epoch.
+Runtime features are epoch coordinated events where one or more behavior changes to the cluster will occur. New changes to Solana that will change behavior are wrapped with feature gates and disabled by default. The Solana tools are then used to activate a feature, which marks it pending, once marked pending the feature will be activated at the next epoch.
 
 To determine which features are activated use the [Solana command-line tools](cli/install-solana-cli-tools.md):
 
@@ -83,4 +86,4 @@ To determine which features are activated use the [Solana command-line tools](cl
 solana feature status
 ```
 
-If you encounter problems first ensure that the Solana tools version you are using match the version returned by `solana cluster-version`.  If they do not match [install the correct tool suite](cli/install-solana-cli-tools.md).
+If you encounter problems first ensure that the Solana tools version you are using match the version returned by `solana cluster-version`. If they do not match [install the correct tool suite](cli/install-solana-cli-tools.md).

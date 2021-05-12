@@ -5,7 +5,7 @@ title: Firmar Transacción sin conexión
 Algunos modelos de seguridad requieren mantener las claves firmadas, y por lo tanto el proceso de firma, separado de la creación de transacciones y la transmisión de red. Los ejemplos incluyen:
 
 - Recopilando firmas de firmas geográficamente separadas en un [esquema de firmas múltiples](cli/usage.md#multiple-witnesses)
-- Firmar transacciones utilizando un [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking)) dispositivo de firma
+- Firmar transacciones utilizando un [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>) dispositivo de firma
 
 Este documento describe el uso de la CLI de Solana para firmar por separado y enviar una transacción.
 

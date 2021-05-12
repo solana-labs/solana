@@ -24,19 +24,19 @@ Dịch vụ ký phiếu bầu bao gồm một máy chủ JSON RPC và một bộ
 
 1. Đăng ký một node validator mới
 
-    - Yêu cầu phải chứa danh tính của validator \(public key\)
-    - Yêu cầu phải được ký bằng private key của validator
-    - Dịch vụ từ chối yêu cầu nếu không thể xác minh chữ ký của yêu cầu
-    - Dịch vụ tạo khóa bất đối xứng biểu quyết mới cho validator và trả về public key dưới dạng phản hồi
-    - Nếu validator cố gắng đăng ký lại, dịch vụ sẽ trả về public key từ keypair tồn tại trước đó
+   - Yêu cầu phải chứa danh tính của validator \(public key\)
+   - Yêu cầu phải được ký bằng private key của validator
+   - Dịch vụ từ chối yêu cầu nếu không thể xác minh chữ ký của yêu cầu
+   - Dịch vụ tạo khóa bất đối xứng biểu quyết mới cho validator và trả về public key dưới dạng phản hồi
+   - Nếu validator cố gắng đăng ký lại, dịch vụ sẽ trả về public key từ keypair tồn tại trước đó
 
 2. Ký một phiếu bầu
 
-    - Yêu cầu phải chứa giao dịch biểu quyết và tất cả dữ liệu xác minh
-    - Yêu cầu phải được ký bằng private key của validator
-    - Dịch vụ từ chối yêu cầu nếu không thể xác minh chữ ký của yêu cầu
-    - Dịch vụ xác minh dữ liệu biểu quyết
-    - Dịch vụ trả về chữ ký cho giao dịch
+   - Yêu cầu phải chứa giao dịch biểu quyết và tất cả dữ liệu xác minh
+   - Yêu cầu phải được ký bằng private key của validator
+   - Dịch vụ từ chối yêu cầu nếu không thể xác minh chữ ký của yêu cầu
+   - Dịch vụ xác minh dữ liệu biểu quyết
+   - Dịch vụ trả về chữ ký cho giao dịch
 
 ## Biểu quyết Validator
 

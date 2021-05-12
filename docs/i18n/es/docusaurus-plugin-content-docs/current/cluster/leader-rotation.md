@@ -81,8 +81,8 @@ El clúster debería poder recuperarse de la pérdida de todas las claves efíme
 
 ## Anexar entradas
 
-La duración de la programación de un líder se denomina _ época _. La época se divide en _ ranuras _, donde cada ranura tiene una duración de ` T ` PoH ticks.
+La duración de la programación de un líder se denomina _ época _. La época se divide en _ ranuras _, donde cada ranura tiene una duración de `T` PoH ticks.
 
-Un líder transmite entradas durante su espacio. Después de las marcas de ` T `, todos los validadores cambian al siguiente líder programado. Los validadores deben ignorar las entradas enviadas fuera del espacio asignado a un líder.
+Un líder transmite entradas durante su espacio. Después de las marcas de `T`, todos los validadores cambian al siguiente líder programado. Los validadores deben ignorar las entradas enviadas fuera del espacio asignado a un líder.
 
-Todos los ticks de ` T ` deben ser observados por el siguiente líder para que pueda construir sus propias entradas. Si las entradas no se observan \ (el líder está abajo \) o las entradas no son válidas \ (el líder tiene errores o es malicioso \), el siguiente líder debe producir ticks para llenar el espacio del líder anterior. Tenga en cuenta que el próximo líder debe realizar las solicitudes de reparación en paralelo y posponer el envío de ticks hasta que esté seguro de que otros validadores tampoco observaron las entradas del líder anterior. Si un líder construye incorrectamente sus propios ticks, el líder que lo sigue debe reemplazar todos sus ticks.
+Todos los ticks de `T` deben ser observados por el siguiente líder para que pueda construir sus propias entradas. Si las entradas no se observan \ (el líder está abajo \) o las entradas no son válidas \ (el líder tiene errores o es malicioso \), el siguiente líder debe producir ticks para llenar el espacio del líder anterior. Tenga en cuenta que el próximo líder debe realizar las solicitudes de reparación en paralelo y posponer el envío de ticks hasta que esté seguro de que otros validadores tampoco observaron las entradas del líder anterior. Si un líder construye incorrectamente sus propios ticks, el líder que lo sigue debe reemplazar todos sus ticks.

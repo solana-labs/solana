@@ -46,7 +46,7 @@ Resumen del elemento ABI: Algún hash fijo derivado de la información del tipo 
 
 Conocer el resumen de nuevos objetos ABI, los desarrolladores pueden añadir `frozen_abi` con un valor de resumen aleatorio y ejecutar las pruebas unitarias y reemplazarlo con el resumen correcto del mensaje de error de la prueba de afirmación.
 
-En general, una vez que agregamos `frozen_abi` y su cambio se publica en el canal de lanzamiento estable, su resumen nunca debería cambiar. Si ese cambio es necesario, optaremos por definir una nueva estructura `` como `FooV1`. Y flujo de liberación especial como bifurcaciones duras.
+En general, una vez que agregamos `frozen_abi` y su cambio se publica en el canal de lanzamiento estable, su resumen nunca debería cambiar. Si ese cambio es necesario, optaremos por definir una nueva estructura ``como`FooV1`. Y flujo de liberación especial como bifurcaciones duras.
 
 # Comentarios de la implementación
 
@@ -58,7 +58,7 @@ El objetivo de la implementación es detectar los cambios no deseados en ABI aut
 
 Cuando se ejecuta la comprobación de resumen de ABI, calcula dinámicamente un resumen de ABI digeriendo recursivamente el ABI de los campos del artículo ABI, al reutilizar la funcionalidad de serialización de `serde`, macro proc y especialización genérica. ¡Y entonces, la comprobación `assert!`s que su valor digest finalizado es idéntico como lo que se especifica en el atributo `frozen_abi`.
 
-Para darse cuenta de eso, crea una instancia de ejemplo del tipo y un personalizado ` Serializer ` instancia para ` serde ` para recorrer recursivamente sus campos como si serializando el ejemplo de verdad. Este recorrido debe realizarse a través de `serde` para capturar realmente qué tipo de datos realmente serían serializados por `serde`, incluso considerando no personalizado-`derivive`d `Serialize` implementaciones de características.
+Para darse cuenta de eso, crea una instancia de ejemplo del tipo y un personalizado `Serializer` instancia para `serde` para recorrer recursivamente sus campos como si serializando el ejemplo de verdad. Este recorrido debe realizarse a través de `serde` para capturar realmente qué tipo de datos realmente serían serializados por `serde`, incluso considerando no personalizado-`derivive`d `Serialize` implementaciones de características.
 
 # El proceso de digestión de ABI
 
@@ -77,7 +77,7 @@ Por otro lado, la digerción ABI no puede hacerse solo con `AbiEjemplo`, tampoco
 Información digestible:
 
 - nombre del tipo de oxidación
-- Nombre del tipo de datos de ` serde `
+- Nombre del tipo de datos de `serde`
 - todos los campos en `struct`
 - todas las variantes en `enum`
 - `struct`: normal(`struct {...}`) y estilo tuple (`struct(...)`)

@@ -40,10 +40,12 @@ solana-gossip spy --entrypoint devnet.solana.com:8001
 ## ضبط النظام (System Tuning)
 
 ### نظام التشغيل لينكس (Linux)
+
 #### أوتوماتيكي (Automatic)
+
 يتضمن solana repo برنامجًا خفيًا لضبط إعدادات النظام لتحسين الأداء (أي عن طريق زيادة المخزن المُؤقت (buffer) لنظام التشغيل UDP وحدود تعيين الملفات).
 
-تم تضمين الـ daemon أو البرنامج الخفي (`solana-sys-tuner`) في إصدار solana الثنائي (solana binary release). أعد تشغيله، قبل *before* إعادة تشغيل المُدقّق (validator) الخاص بك، بعد كل ترقية للبرنامج للتأكد من تطبيق أحدث الإعدادات المُوصى بها.
+تم تضمين الـ daemon أو البرنامج الخفي (`solana-sys-tuner`) في إصدار solana الثنائي (solana binary release). أعد تشغيله، قبل _before_ إعادة تشغيل المُدقّق (validator) الخاص بك، بعد كل ترقية للبرنامج للتأكد من تطبيق أحدث الإعدادات المُوصى بها.
 
 لتشغيله:
 
@@ -52,9 +54,11 @@ sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### الدليل (Manual)
+
 إذا كنت تفضل إدارة إعدادات النظام بنفسك، فيُمكنك القيام بذلك بإستخدام الأوامر (commands) التالية.
 
 ##### **زيادة المخزن المُؤقت (buffer) لـ UDP**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
 # Increase UDP buffer size
@@ -64,38 +68,49 @@ net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```
 
 ##### **زيادة حدود ملفات الذاكرة المُخططة (Increased memory mapped files limit)**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 500000
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
+
 إضافة
+
 ```
 LimitNOFILE=500000
 ```
+
 إلى قسم `[Service]` من ملف خدمة systemd الخاص بك، إذا كنت تستخدم واحدًا، فقُم بإضافة
+
 ```
 DefaultLimitNOFILE=500000
 ```
+
 إلى قسم `[Manager]` من `/etc/systemd/system.conf`.
+
 ```bash
 sudo systemctl daemon-reload
 ```
+
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
 * - nofile 500000
 EOF"
 ```
+
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
@@ -233,7 +248,7 @@ solana-validator \
 
 لفرض تسجيل المُدقّق (validator) إلى وحدة التحكم، أضف وسيطة `--log -`، وإلا فسيقوم المُدقّق (validator) بتسجيل الدخول تلقائيًا إلى ملف.
 
-> ملاحظة: يمكنك إستخدام ملف كلمات إستِرداد المحفظة الورقية [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your `--identity` and/or `--authorized-voter` keypairs. لإستخدامها، قُم بتمرير الوسيطة المُعنية كـ  `solana-validator --identity ASK ... --authorized-voter ASK ...` وسيُطلب منك كلمات الإستِرداد وكلمة المرور الإختيارية.
+> ملاحظة: يمكنك إستخدام ملف كلمات إستِرداد المحفظة الورقية [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your `--identity` and/or `--authorized-voter` keypairs. لإستخدامها، قُم بتمرير الوسيطة المُعنية كـ `solana-validator --identity ASK ... --authorized-voter ASK ...` وسيُطلب منك كلمات الإستِرداد وكلمة المرور الإختيارية.
 
 قُم بتأكيد إتصال المُدقّق (validator) الخاص بك بالشبكة عن طريق فتح محطة طرفية جديدة وتشغيل:
 
@@ -245,17 +260,20 @@ solana-gossip spy --entrypoint devnet.solana.com:8001
 
 ### التحكم في تخصيص منفذ (port) الشبكة المحلية
 
-بشكل إفتراضي، سيُحدد المُدقّق (validator) ديناميكيًا منافذ (ports) الشبكة المُتاحة في النطاق 8000-10000، ويُمكن تجاوزها بـ ` --dynamic-port-range `. على سبيل المثال، سوف يُقيِّد `solana-validator --dynamic-port-range 11000-11010 ...` المُدقّق (validator) على المنافذ 11000-11010.
+بشكل إفتراضي، سيُحدد المُدقّق (validator) ديناميكيًا منافذ (ports) الشبكة المُتاحة في النطاق 8000-10000، ويُمكن تجاوزها بـ `--dynamic-port-range`. على سبيل المثال، سوف يُقيِّد `solana-validator --dynamic-port-range 11000-11010 ...` المُدقّق (validator) على المنافذ 11000-11010.
 
 ### تحديد حجم دفتر الأستاذ (ledger) للحفاظ على مساحة القرص
+
 تسمح لك المُعلمة `--limit-ledger-size` بتحديد عدد قِطَع [shreds](../terminology.md#shred) دفتر الأستاذ الذي تحتفظ به العُقدة (node) على القرص. إذا لم تقم بتضمين هذه المُعلِّمة (parameter)، فسوف يحتفظ المُدقّق (validator) بدفتر الأستاذ (ledger) بالكامل حتى نفاد مساحة القرص.
 
-تُحاول القيمة الافتراضية إبقاء إستخدام قرص دفتر الأستاذ (ledger) أقل من 500GB.  قد يتم طلب إستخدام أكثر أو أقل للقرص عن طريق إضافة وسيطة إلى `--limit-ledger-size` إذا رغبت في ذلك. تحقق من `solana-validator --help` لقيمة الحد الإفتراضية المُستخدمة بواسطة `--limit-ledger-size`.  مزيد من المعلومات حول إختيار قيمة حد مُخصصة هي موجودة هنا [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+تُحاول القيمة الافتراضية إبقاء إستخدام قرص دفتر الأستاذ (ledger) أقل من 500GB. قد يتم طلب إستخدام أكثر أو أقل للقرص عن طريق إضافة وسيطة إلى `--limit-ledger-size` إذا رغبت في ذلك. تحقق من `solana-validator --help` لقيمة الحد الإفتراضية المُستخدمة بواسطة `--limit-ledger-size`. مزيد من المعلومات حول إختيار قيمة حد مُخصصة هي موجودة هنا [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### وحدة النظام (Systemd Unit)
+
 يعد تشغيل المُدقّق (validator) كوحدة systemd هي طريقة سهلة لإدارة التشغيل في الخلفية.
 
 على افتراض أن لديك مستخدم يسمى `sol` على جهازك، قم بإنشاء الملف `/etc/systemd/system/sol.service` من خلال ما يلي:
+
 ```
 [Unit]
 Description=Solana Validator
@@ -277,14 +295,16 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-الآن قُم بإنشاء `/home/sol/bin/validator.sh` لتضمين سطر الأوامر `solana-validator` المطلوب.  تأكد من أن تشغيل `/home/sol/bin/validator.sh` يبدأ المُدقّق (validator) يدويًا كما هو مُتوقع. لا تنسى وضع علامة قابل للتنفيذ (executable) بـ `chmod +x /home/sol/bin/validator.sh`
+الآن قُم بإنشاء `/home/sol/bin/validator.sh` لتضمين سطر الأوامر `solana-validator` المطلوب. تأكد من أن تشغيل `/home/sol/bin/validator.sh` يبدأ المُدقّق (validator) يدويًا كما هو مُتوقع. لا تنسى وضع علامة قابل للتنفيذ (executable) بـ `chmod +x /home/sol/bin/validator.sh`
 
 إبدأ الخدمة بـ:
+
 ```bash
 $ sudo systemctl enable --now sol
 ```
 
 ### الضبط (Logging)
+
 #### ضبط إخراج السجل (Log output tuning)
 
 يُمكن التحكم في الرسائل التي يُرسلها المُدقّق (validator) إلى السجل بواسطة مُتغير البيئة `RUST_LOG`. يُمكن العثور على التفاصيل في [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) لـ `env_logger` صندوق Rust.
@@ -300,6 +320,7 @@ $ sudo systemctl enable --now sol
 #### بإستخدام تدوير السجل (Using logrotate)
 
 مثال على إعداد `logrotate`، والذي يفترض أن المُدقّق (validator) يعمل كخدمة systemd تُسمى `sol.service` ويكتب ملف سجل على /home/sol/solana-validator.log:
+
 ```bash
 # Setup log rotation
 
@@ -318,14 +339,17 @@ systemctl restart logrotate.service
 ```
 
 ### تعطيل عمليات فحص المنفذ (port) لتسريع عمليات إعادة التشغيل
+
 بمجرد أن يعمل المُدقّق (validator) بشكل طبيعي، يُمكنك تقليل الوقت المُستغرق لإعادة تشغيل المُدقّق (validator) عن طريق إضافة علامة `--no-port-check` إلى سطر أوامر `solana-validator`.
 
 ### تعطيل ضغط اللقطة (snapshot) لتقليل إستخدام وحدة المُعالجة المركزية (CPU)
+
 إذا كنت لا تقدم اللقطات (snapshots) إلى جهات المُدقّقين (validators) الأخرى، فيُمكن تعطيل ضغط اللقطة (snapshot) لتقليل حِمل وحدة المُعالجة المركزية (CPU) على حساب إستخدام القرص بشكل أكبر قليلاً لتخزين اللقطات (snapshots) المحلية.
 
 أضف الوسيطة `--snapshot-compression none` إلى وسيطات سطر الأوامر `solana-validator` وأعد تشغيل المُدقّق (validator).
 
 ### إستخدام ramdisk مع الإمتداد والإنتشار إلى المُبادلة (spill-over into swap) لقاعدة بيانات الحسابات لتقليل تآكل أقراص الحالة الصلبة (SSD)
+
 إذا كان جهازك يحتوي على الكثير من ذاكرة الوصول العشوائ (RAM)، فيُمكن إستخدام tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) للإحتفاظ بقاعدة بيانات الحسابات
 
 عند إستخدام tmpfs، من الضروري أيضًا تكوين المُبادلة على جهازك أيضًا لتجنب نفاد مساحة tmpfs بشكل دوري.
@@ -333,12 +357,14 @@ systemctl restart logrotate.service
 يُوصى بإستخدام قسم tmpfs بسِعة 300GB، مع قسم مُبادلة مُصاحب بسِعة 250GB.
 
 مثال الإعدادات (Example configuration):
+
 1. `sudo mkdir /mnt/solana-accounts`
-2. أضف قسمًا بحجم 300GB لـ tmpfs عن طريق إضافة سطر جديد يحتوي على `tmpfs
-/mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` إلى `/etc/fstab` (على إفتراض أن المُدقّق الخاص بك يعمل تحت المُستخدم "sol").  **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
+2. أضف قسمًا بحجم 300GB لـ tmpfs عن طريق إضافة سطر جديد يحتوي على `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` إلى `/etc/fstab` (على إفتراض أن المُدقّق الخاص بك يعمل تحت المُستخدم "sol"). **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
 3. قم بإنشاء 250GB على الأقل من مساحة التبديل
-  - إختر جهازًا لإستخدامه بدلاً من `SWAPDEV` لبقية هذه التعليمات. من الناحية المثالية، حدد قسمًا مجانيًا للقرص بحجم 250GB أو أكبر على قرص سريع. إذا لم يكن أحدهما مُتاحًا، فقُم بإنشاء ملف مُبادلة بـ `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`، وقُم بضبط أذوناته على `sudo chmod 0600 /swapfile` وإستخدم `/swapfile` كـ `SWAPDEV` لبقية هذه التعليمات
-  - قم بتهيئة الجهاز (Format) للإستخدام كمُبادلة مع `sudo mkswap SWAPDEV`
+
+- إختر جهازًا لإستخدامه بدلاً من `SWAPDEV` لبقية هذه التعليمات. من الناحية المثالية، حدد قسمًا مجانيًا للقرص بحجم 250GB أو أكبر على قرص سريع. إذا لم يكن أحدهما مُتاحًا، فقُم بإنشاء ملف مُبادلة بـ `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`، وقُم بضبط أذوناته على `sudo chmod 0600 /swapfile` وإستخدم `/swapfile` كـ `SWAPDEV` لبقية هذه التعليمات
+- قم بتهيئة الجهاز (Format) للإستخدام كمُبادلة مع `sudo mkswap SWAPDEV`
+
 4. أضف ملف المُبادلة إلى `/etc/fstab` بسطر جديد يحتوي على `SWAPDEV swap swap defaults 0 0`
 5. قُم بتمكين التبديل بـ `sudo swapon -a` وقم بتركيب tmpfs بـ `sudo mount /mnt/solana-accounts/`
 6. تأكد من أن المُبادلة نشطة مع `free -g` وأن tmpfs مُثبت بـ `mount`
@@ -347,7 +373,7 @@ systemctl restart logrotate.service
 
 ### فهرسة الحساب (Account indexing)
 
-نظرًا لتزايد عدد الحسابات المأهولة في المجموعة، فإن طلبات RPC لبيانات الحساب التي تفحص مجموعة الحساب بالكامل مثل  -- الحصول على حسابات البرنامج [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) و الطلبات المُحَدَّدَة للرمز [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- قد يكون أداؤها ضعيفًا. إذا إحتاج المُدقّق (validator) الخاص بك إلى دعم أي من هذه الطلبات، فيُمكنك إستخدام المُعلمة `--account-index` لتنشيط فهرس حساب واحد أو أكثر في الذاكرة يعمل على تحسين أداء RPC بشكل ملحوظ عن طريق فهرسة الحسابات (indexing accounts) حسب حقل المفتاح. يدعم حاليًا قيم المُعلِّمات (parameters) التالية:
+نظرًا لتزايد عدد الحسابات المأهولة في المجموعة، فإن طلبات RPC لبيانات الحساب التي تفحص مجموعة الحساب بالكامل مثل -- الحصول على حسابات البرنامج [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) و الطلبات المُحَدَّدَة للرمز [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- قد يكون أداؤها ضعيفًا. إذا إحتاج المُدقّق (validator) الخاص بك إلى دعم أي من هذه الطلبات، فيُمكنك إستخدام المُعلمة `--account-index` لتنشيط فهرس حساب واحد أو أكثر في الذاكرة يعمل على تحسين أداء RPC بشكل ملحوظ عن طريق فهرسة الحسابات (indexing accounts) حسب حقل المفتاح. يدعم حاليًا قيم المُعلِّمات (parameters) التالية:
 
 - مُعرف البرنامج `program-id`: كل حساب مُفهرس بواسطة البرنامج الخاص به؛ يستخدمه [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
 - سَكّ الرمز `spl-token-mint`: كل حساب رمز لـ SPL مُفهرس بواسطة رمز السَّكّ (Mint) الخاص به؛ يستخدمه للحصول على حسابات الرمز المميز عن طريق التفويض [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) و الحصول على أكبر حسابات الرمز [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)

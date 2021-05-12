@@ -10,7 +10,7 @@ title: 専門用語
 
 ## アプリ
 
-Solanaクラスタと対話するフロントエンドアプリケーション。
+Solana クラスタと対話するフロントエンドアプリケーション。
 
 ## バンクステート
 
@@ -18,7 +18,7 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 ## ブロック
 
-[投票](terminology.md#entry) で覆われた台帳の [エントリ](terminology.md#ledger-vote) の連続集合。 [リーダ](terminology.md#leader)は[スロット](terminology.md#slot)ごとに最大でも1つのブロックを生成します。
+[投票](terminology.md#entry) で覆われた台帳の [エントリ](terminology.md#ledger-vote) の連続集合。 [リーダ](terminology.md#leader)は[スロット](terminology.md#slot)ごとに最大でも 1 つのブロックを生成します。
 
 ## ブロックハッシュ
 
@@ -26,15 +26,15 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 ## ブロックの高さ
 
-現在のブロックの下にある [ブロック](terminology.md#block) の数。 [ジェネシスブロック](terminology.md#genesis-block) の後にある最初のブロックは、高さ1です。
+現在のブロックの下にある [ブロック](terminology.md#block) の数。 [ジェネシスブロック](terminology.md#genesis-block) の後にある最初のブロックは、高さ 1 です。
 
 ## ブートストラップバリデータ
 
 [ブロック](terminology.md#validator) を生成する最初の [バリデータ](terminology.md#block)。
 
-## CBCブロック
+## CBC ブロック
 
-元帳内で最も小さく暗号化された塊（セグメント）は、多くのCBCブロックから成り立っています。 `ledger_segment_size / cbc_block_size` を正確に指定します。
+元帳内で最も小さく暗号化された塊（セグメント）は、多くの CBC ブロックから成り立っています。 `ledger_segment_size / cbc_block_size` を正確に指定します。
 
 ## クライアント
 
@@ -76,7 +76,7 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 [台帳](terminology.md#ledger) のエントリ、 [tick](terminology.md#tick) または [transactions entry](terminology.md#transactions-entry) のいずれか。
 
-## エントリーID
+## エントリー ID
 
 [は、](terminology.md#hash) エントリの最終的な内容に対して、 [エントリの](terminology.md#entry) をグローバルに一意の識別子として機能します。 ハッシュは以下の証拠となります。
 
@@ -96,7 +96,7 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 ## ファイナリティ
 
-[ステーキング](terminology.md#stake) の2/3を表すノードに共通の [ルート](terminology.md#root)がある場合。
+[ステーキング](terminology.md#stake) の 2/3 を表すノードに共通の [ルート](terminology.md#root)がある場合。
 
 ## フォーク
 
@@ -116,7 +116,7 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 ## インフレ
 
-トークン供給量の長期的増加は、"検証のための報酬"と"Solanaの継続的な開発のための資金"に使用されています。
+トークン供給量の長期的増加は、"検証のための報酬"と"Solana の継続的な開発のための資金"に使用されています。
 
 ## 命令
 
@@ -186,13 +186,13 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 [命令](terminology.md#instruction) を解釈するコード。
 
-## プログラムID
+## プログラム ID
 
 [プログラム](terminology.md#account) を含む [アカウント](terminology.md#program) の公開キー
 
 ## PoH
 
-証明の積み重ねで、証明が作成される前にデータが存在し、前の照明の更に前に正確な時間が経過していることを証明するもの。 [VDF](terminology.md#verifiable-delay-function)のように、PoHは作成にかかった時間よりも短い時間で検証することが出来ます。
+証明の積み重ねで、証明が作成される前にデータが存在し、前の照明の更に前に正確な時間が経過していることを証明するもの。 [VDF](terminology.md#verifiable-delay-function)のように、PoH は作成にかかった時間よりも短い時間で検証することが出来ます。
 
 ## 公開キー
 
@@ -212,7 +212,7 @@ Solanaクラスタと対話するフロントエンドアプリケーション�
 
 ## 署名
 
-R (32バイト) と S (32バイト) の 64 バイトの ed25519 署名。 Rは小さな次数でないエドワーズポイントであり、Sは0<＝S< Lの範囲内であるという要件を持ちます。この要件により、署名の可鍛性が確保されます。 各トランザクションには、 [手数料アカウント](terminology#fee-account)に少なくとも1つの署名が必要です。 したがって、トランザクション内の最初の署名は [transacton id](terminology.md#transaction-id) として扱うことができます。
+R (32 バイト) と S (32 バイト) の 64 バイトの ed25519 署名。 R は小さな次数でないエドワーズポイントであり、S は 0<＝ S< L の範囲内であるという要件を持ちます。この要件により、署名の可鍛性が確保されます。 各トランザクションには、 [手数料アカウント](terminology#fee-account)に少なくとも 1 つの署名が必要です。 したがって、トランザクション内の最初の署名は [transacton id](terminology.md#transaction-id) として扱うことができます。
 
 ## スロット
 
@@ -224,7 +224,7 @@ R (32バイト) と S (32バイト) の 64 バイトの ed25519 署名。 Rは�
 
 ## sol
 
-Solanaによって認識された [クラスタ](terminology.md#native-token) によって追跡された [ネイティブトークン](terminology.md#cluster)。
+Solana によって認識された [クラスタ](terminology.md#native-token) によって追跡された [ネイティブトークン](terminology.md#cluster)。
 
 ## ステーキング
 
@@ -232,7 +232,7 @@ Solanaによって認識された [クラスタ](terminology.md#native-token) �
 
 ## スーパーマジョリティ
 
-[クラスタ](terminology.md#cluster)の2/3。
+[クラスタ](terminology.md#cluster)の 2/3。
 
 ## システムバー
 
@@ -248,7 +248,7 @@ Solanaによって認識された [クラスタ](terminology.md#native-token) �
 
 ## ティックの高さ
 
-[台帳](terminology.md#ledger)のN番目の[目盛り](terminology.md#tick)。
+[台帳](terminology.md#ledger)の N 番目の[目盛り](terminology.md#tick)。
 
 ## トークン
 
@@ -262,9 +262,9 @@ Solanaによって認識された [クラスタ](terminology.md#native-token) �
 
 1 つまたは複数の [手順](terminology.md#instruction) [クライアント](terminology.md#client) によって署名された [キーペア](terminology.md#keypair) と、成功または失敗の 2 つの可能な結果のみでアトミックに実行されます。
 
-## トランザクションID
+## トランザクション ID
 
-最初の[署名](teminology.md#signature)は、[トランザクション](teminology.md#transaction)の中にあるもので、完全な[台帳r](teminology.md#ledger)の中でトランザクションを一意に識別するために使用することができます。
+最初の[署名](teminology.md#signature)は、[トランザクション](teminology.md#transaction)の中にあるもので、完全な[台帳 r](teminology.md#ledger)の中でトランザクションを一意に識別するために使用することができます。
 
 ## トランザクション確認
 

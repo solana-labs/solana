@@ -41,46 +41,55 @@ Las funciones de bajo riesgo, los cambios que no rompen el sistema y las correcc
 ### RPC API
 
 Lanzamientos de parches:
+
 - Corrección de errores
 - Correcciones de seguridad
 - Endpoint / eliminación de funciones
 
 Lanzamientos menores:
+
 - Nuevos endpoints y funciones de RPC
 
 Lanzamientos Mayores:
+
 - Eliminación de características obsoletas
 
 ### Cajas Rust
 
-* [`solana-sdk`](https://docs.rs/solana-sdk/) - SDK de Rust para crear transacciones y analizar estados de cuentas
-* [`solana-programa`](https://docs.rs/solana-program/) - Rust SDK para programas de escritura
-* [`solana-client`](https://docs.rs/solana-client/) - Cliente de Rust para conectar a la API RPC
-* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Cliente de Rust para administrar archivos de configuración del Solana CLI
+- [`solana-sdk`](https://docs.rs/solana-sdk/) - SDK de Rust para crear transacciones y analizar estados de cuentas
+- [`solana-programa`](https://docs.rs/solana-program/) - Rust SDK para programas de escritura
+- [`solana-client`](https://docs.rs/solana-client/) - Cliente de Rust para conectar a la API RPC
+- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Cliente de Rust para administrar archivos de configuración del Solana CLI
 
 Lanzamientos de parches:
+
 - Corrección de errores
 - Correcciones de seguridad
 - Mejoras de rendimiento
 
 Lanzamientos menores:
+
 - Nuevas APIs
 
 Lanzamientos Mayores
+
 - Eliminación de APIs obsoletas
 - Cambios de comportamiento incompatibles con el pasado
 
 ### Herramientas CLI
 
 Lanzamientos de parches:
+
 - Corrección de errores y seguridad
 - Mejoras de rendimiento
 - Subcomando / argumento obsoleto
 
 Lanzamientos menores:
+
 - Nuevos subcomandos
 
 Lanzamientos Mayores:
+
 - Cambio a los nuevos endpoints / configuración de la API RPC introducidos en la versión principal anterior.
 - Eliminación de características obsoletas
 

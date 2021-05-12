@@ -5,7 +5,7 @@ title: Ký Giao dịch Ngoại tuyến
 Một số mô hình bảo mật yêu cầu giữ các khóa ký và do đó, quá trình ký, tách biệt với việc tạo giao dịch và phát sóng mạng. Các ví dụ bao gồm:
 
 - Thu thập chữ ký từ những người ký khác nhau về mặt địa lý trong [sơ đồ nhiều chữ ký](cli/usage.md#multiple-witnesses)
-- Ký giao dịch bằng thiết bị ký [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking))
+- Ký giao dịch bằng thiết bị ký [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
 
 Tài liệu này mô tả việc sử dụng CLI của Solana để ký riêng và gửi giao dịch.
 

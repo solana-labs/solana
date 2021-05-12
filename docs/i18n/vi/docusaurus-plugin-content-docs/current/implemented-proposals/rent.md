@@ -28,7 +28,7 @@ Tiền thuê là do giá trị thời gian của kỷ nguyên, và các tài kho
 
 Nếu tài khoản ở chế độ miễn trừ, `Account::rent_epoch` chỉ cần cập nhật lên `current_epoch`.
 
-Nếu tài khoản không được miễn trừ, sự chênh lệnh giữa epoch tiếp theo và `Account::rent_epoch` được sử dụng để tính số tiền thuê tài khoản này \(thông qua `Rent::due()`\). Bất kỳ lamport phân số nào của phép tính đều bị cắt bớt. Tiền thuê đến hạn được khấu trừ khỏi `Account::lamports`` và <code>Account::rent_epoch` được cập nhật vào `current_epoch + 1` (= kỷ nguyên tiếp theo). Nếu số tiền thuê đến hạn ít hơn một lamport, không có thay đổi nào được thực hiện đối với tài khoản.
+Nếu tài khoản không được miễn trừ, sự chênh lệnh giữa epoch tiếp theo và `Account::rent_epoch` được sử dụng để tính số tiền thuê tài khoản này \(thông qua `Rent::due()`\). Bất kỳ lamport phân số nào của phép tính đều bị cắt bớt. Tiền thuê đến hạn được khấu trừ khỏi ` Account::lamports`` và <code>Account::rent_epoch ` được cập nhật vào `current_epoch + 1` (= kỷ nguyên tiếp theo). Nếu số tiền thuê đến hạn ít hơn một lamport, không có thay đổi nào được thực hiện đối với tài khoản.
 
 Các tài khoản có số dư không đủ để đáp ứng tiền thuê đến hạn sẽ không tải được.
 

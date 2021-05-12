@@ -4,18 +4,18 @@ title: 프로그램호출프로그램
 
 ## 프로그램 파생 주소
 
-Solana 런타임을 사용하면 프로그램 간 호출이라는 메커니즘을 통해 프로그램이 서로 호출 할 수 있습니다.  프로그램 간의 호출은 다른 프로그램의 명령을 호출하는 한 프로그램에 의해 수행됩니다.  호출 프로그램은 호출 된 프로그램이 명령 처리를 완료 할 때까지 중지됩니다.
+Solana 런타임을 사용하면 프로그램 간 호출이라는 메커니즘을 통해 프로그램이 서로 호출 할 수 있습니다. 프로그램 간의 호출은 다른 프로그램의 명령을 호출하는 한 프로그램에 의해 수행됩니다. 호출 프로그램은 호출 된 프로그램이 명령 처리를 완료 할 때까지 중지됩니다.
 
 For example, a client could create a transaction that modifies two accounts, each owned by separate on-chain programs:
 
-```rust,ignore
+````rust,ignore
 , ignore
 let message = Message :: new (vec! [
     .```rusttoken_instruction :: pay (& alice_pubkey),
     acme_instruction : : launch_missiles (& bob_pubkey),
 ]);
 client.send_and_confirm_message (& [& alice_keypair, & bob_keypair], & message);
-```
+````
 
 예를 들어, 클라이언트는 각각 별도의 온 체인 프로그램이 소유 한 두 개의 계정을 수정하는 트랜잭션을 생성 할 수 있습니다
 
@@ -47,7 +47,7 @@ mod acme {
 
 `invoke ()`는 Solana의 런타임에 내장되어 있으며 명령어의`program_id` 필드를 통해 주어진 명령어를`token` 프로그램으로 라우팅하는 역할을합니다.
 
-'invoke'를 사용하려면 호출자가 호출되는 명령에 필요한 모든 계정을 전달해야합니다.  이는 실행 가능한 계정 (명령의 프로그램 ID와 일치하는 계정)과 명령 프로세서에 전달 된 계정을 의미합니다.
+'invoke'를 사용하려면 호출자가 호출되는 명령에 필요한 모든 계정을 전달해야합니다. 이는 실행 가능한 계정 (명령의 프로그램 ID와 일치하는 계정)과 명령 프로세서에 전달 된 계정을 의미합니다.
 
 `pay ()`를 호출하기 전에 런타임에서`acme`가`token`이 소유 한 계정을 수정하지 않았는지 확인해야합니다. 'acme'가 'invoke'를 호출 할 때 계정의 현재 상태와 'acme'명령어 시작시 계정의 초기 상태에 런타임 정책을 적용하여이를 수행합니다. `pay ()`가 완료된 후 런타임은 런타임 정책을 다시 적용하여`token`이`acme`가 소유 한 계정을 수정하지 않았 음을 다시 확인해야하지만 이번에는`token` 프로그램 ID를 사용합니다. 마지막으로`pay_and_launch_missiles ()`가 완료된 후 런타임은 일반적으로하되 업데이트 된 모든`pre_ *`변수를 사용하여 런타임 정책을 한 번 더 적용해야합니다. `pay ()`까지`pay_and_launch_missiles ()`를 실행하면 잘못된 계정이 변경되지 않았고,`pay ()`는 잘못된 변경을하지 않았고,`pay ()`에서`pay_and_launch_missiles ()`가 반환 될 때까지 실행하면 잘못된 변경이 발생하지 않습니다. 그러면 런타임은 전체적으로 유효하지 않은 계정 변경을하지 않았으므로`pay_and_launch_missiles ()`를 전 이적으로 가정 할 수 있으므로 이러한 모든 계정 수정을 커밋 할 수 있습니다.
 
@@ -106,17 +106,17 @@ This capability is necessary for many DeFi applications since they require asset
 
 ### 프로그램 주소에 대한 개인 키
 
-프로그램 주소는 ed25519 곡선에 있지 않으므로 연결된 유효한 개인 키가 없으므로 서명을 생성 할 수 없습니다.  자체 개인 키는 없지만 프로그램에서 서명자로 프로그램 주소를 포함하는 명령을 발행하는 데 사용할 수 있습니다.
+프로그램 주소는 ed25519 곡선에 있지 않으므로 연결된 유효한 개인 키가 없으므로 서명을 생성 할 수 없습니다. 자체 개인 키는 없지만 프로그램에서 서명자로 프로그램 주소를 포함하는 명령을 발행하는 데 사용할 수 있습니다.
 
 ### 해시 기반 생성 프로그램 주소
 
-프로그램 주소는 256 비트 사전 이미지 방지 해시 함수를 사용하여 시드 및 프로그램 ID 모음에서 결정적으로 파생됩니다.  프로그램 주소는 관련 개인 키가 없는지 확인하기 위해 ed25519 곡선에 있지 않아야합니다. 생성 중에 주소가 곡선에있는 것으로 확인되면 오류가 반환됩니다.  주어진 시드 및 프로그램 ID 모음에 대해 약 50/50 변경이 발생합니다.  이것이 발생하면 다른 시드 세트 또는 시드 범프 (추가 8 비트 시드)를 사용하여 곡선에서 유효한 프로그램 주소를 찾을 수 있습니다.
+프로그램 주소는 256 비트 사전 이미지 방지 해시 함수를 사용하여 시드 및 프로그램 ID 모음에서 결정적으로 파생됩니다. 프로그램 주소는 관련 개인 키가 없는지 확인하기 위해 ed25519 곡선에 있지 않아야합니다. 생성 중에 주소가 곡선에있는 것으로 확인되면 오류가 반환됩니다. 주어진 시드 및 프로그램 ID 모음에 대해 약 50/50 변경이 발생합니다. 이것이 발생하면 다른 시드 세트 또는 시드 범프 (추가 8 비트 시드)를 사용하여 곡선에서 유효한 프로그램 주소를 찾을 수 있습니다.
 
 프로그램 파생 주소 :
 
 두 가지 조건이 주어지면 사용자는 온 체인 자산의 권한을 프로그램 주소로 안전하게 이전하거나 할당 할 수 있으며 프로그램은 재량에 따라 해당 권한을 다른 곳에서 할당 할 수 있습니다.
 
-```rust,ignore
+````rust,ignore
 , ignore
 pub fn create_address_with_seed (
     .```rustbase : & Pubkey,
@@ -126,13 +126,13 @@ pub fn create_address_with_seed (
     if seed.len ()&#062; MAX_ADDRESS_SEED_LEN {
         return Err (SystemError :: MaxSeedLengthExceeded);
     }
-```
+````
 
 프로그램은 임의의 수의 주소를 결정적으로 파생 할 수 있습니다. 씨앗을 사용하여. 이러한 시드는 주소가 사용되는 방식을 상징적으로 식별 할 수 있습니다.
 
 From `Pubkey`::
 
-```rust,ignore
+````rust,ignore
 From`Pubkey` ::
 
 ```rust, ignore
@@ -143,7 +143,7 @@ pub에fn create_program_address (
     seed : & [& [u8]],
     program_id : & Pubkey,
 )-> Result <Pubkey, PubkeyError>
-```
+````
 
 ### 프로그램 주소 사용
 

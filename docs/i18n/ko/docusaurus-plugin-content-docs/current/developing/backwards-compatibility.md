@@ -41,46 +41,55 @@ Solana RPC API, Rust SDK, CLI 도구 및 BPF 프로그램 SDK는 모두 각 Sola
 ### RPC API
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Endpoint / feature deprecation
 
 Minor releases:
+
 - New RPC endpoints and features
 
 Major releases:
+
 - Removal of deprecated features
 
 ### Rust Crates
 
-* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
-* [`solana-cli-config`] (https://docs.rs/ solana-cli-config /)-Solana CLI 구성 파일 관리를위한 Rust 클라이언트
-* [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
-* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
+- [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
+- [`solana-cli-config`] (https://docs.rs/ solana-cli-config /)-Solana CLI 구성 파일 관리를위한 Rust 클라이언트
+- [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
+- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Performance improvements
 
 Minor releases:
+
 - New APIs
 
 부 릴리스 : -새로운 RPC 엔드 포인트 및 기능
+
 - 주요 릴리스 -더 이상 사용되지 않는 API 제거 -이전 버전과 호환되지 않는 동작 변경
 - Backwards incompatible behavior changes
 
 ### CLI 도구
 
 Patch releases:
+
 - Bug and security fixes
 - Performance improvements
 - Subcommand / argument deprecation
 
 Minor releases:
+
 - 부 릴리스 : -새 하위 명령
 
 Major releases:
+
 - 주요 릴리스 : -새 RPC API 끝점 / 구성으로 전환 이전 주 버전에서 소개되었습니다.
 - Removal of deprecated features
 

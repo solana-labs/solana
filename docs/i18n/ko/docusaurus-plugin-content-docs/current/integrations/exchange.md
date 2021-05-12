@@ -9,11 +9,12 @@ title: 거래소에 Solana 추가
 고급 컴퓨터 / 클라우드 인스턴스에 최소 2 개의 노드를 설정하고, 최신 버전으로 즉시 업그레이드하고, 번들 모니터링 도구를 사용하여 서비스 운영을 주시하는 것이 좋습니다.
 
 이 설정을 통해 다음을 수행 할 수 있습니다 .-데이터를 가져오고 인출 트랜잭션을 제출하기 위해 Solana 메인 넷-베타 클러스터에 대한 신뢰할 수있는 게이트웨이를 갖출 수 있습니다.- 보유 된 과거 블록 데이터의 양을 완전히 제어 할 수 있습니다 .-한 노드가실패하더라도 서비스 가용성을 유지합니다
+
 - to have a trusted gateway to the Solana mainnet-beta cluster to get data and submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
-Solana에노드는 빠른 블록과 높은 TPS를 처리하기 위해 상대적으로 높은 컴퓨팅 성능을 필요로합니다.  특정 요구 사항은 \[하드웨어 권장 사항\] (../ running-validator / validator-reqs.md)을 참조하십시오.
+Solana에노드는 빠른 블록과 높은 TPS를 처리하기 위해 상대적으로 높은 컴퓨팅 성능을 필요로합니다. 특정 요구 사항은 \[하드웨어 권장 사항\] (../ running-validator / validator-reqs.md)을 참조하십시오.
 
 API를 노드를 실행하려면
 
@@ -33,22 +34,11 @@ solana-validator \
   --no-untrusted-rpc
 ```
 
-:`bash는
-solana-validator \
-  --ledger <LEDGER_PATH> \
-  --entrypoint <CLUSTER_ENTRYPOINT> \
-  --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
-  --rpc-port 8899 \
-  --no-voting \
-  --enable-rpc-transaction- 역사 \
-  --limit은 원장 크기는 \
-  --trusted - 검증 <VALIDATOR_ADDRESS> \
-  --no-신뢰할
-수없는-RPC`정의`--ledger`
+:`bash는 solana-validator \ --ledger <LEDGER_PATH> \ --entrypoint <CLUSTER_ENTRYPOINT> \ --expected-genesis-hash <EXPECTED_GENESIS_HASH> \ --rpc-port 8899 \ --no-voting \ --enable-rpc-transaction- 역사 \ --limit은 원장 크기는 \ --trusted - 검증 <VALIDATOR_ADDRESS> \ --no-신뢰할 수없는-RPC`정의`--ledger`
 
 `--entrypoint` 및`--expected-genesis-hash` 매개 변수는 모두 참여하는 클러스터에 따라 다릅니다. \[메인 넷 베타의 현재 매개 변수\] (../ clusters.md # example-solana-validator-command-line-2)
 
-`--limit-ledger-size` 매개 변수를 사용하면 원장 \[파쇄\] (. ./terminology.md#shred) 노드가 디스크에 유지합니다. 이 매개 변수를 포함하지 않으면 유효성 검사기는 디스크 공간이 부족해질 때까지 전체 원장을 유지합니다.  기본값은 원장 디스크 사용량을 500GB 미만으로 유지하려고합니다.  원하는 경우`--limit-ledger-size`에 인수를 추가하여 디스크 사용량을 더 많이 또는 더 적게 요청할 수 있습니다. `--limit-ledger-size`에서 사용하는 기본 제한 값은`solana-validator --help`를 확인하세요.  맞춤 제한 값 선택에 대한 자세한 내용은 \[여기\] (https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26)를 참조하세요.
+`--limit-ledger-size` 매개 변수를 사용하면 원장 \[파쇄\] (. ./terminology.md#shred) 노드가 디스크에 유지합니다. 이 매개 변수를 포함하지 않으면 유효성 검사기는 디스크 공간이 부족해질 때까지 전체 원장을 유지합니다. 기본값은 원장 디스크 사용량을 500GB 미만으로 유지하려고합니다. 원하는 경우`--limit-ledger-size`에 인수를 추가하여 디스크 사용량을 더 많이 또는 더 적게 요청할 수 있습니다. `--limit-ledger-size`에서 사용하는 기본 제한 값은`solana-validator --help`를 확인하세요. 맞춤 제한 값 선택에 대한 자세한 내용은 \[여기\] (https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26)를 참조하세요.
 
 하나 이상의`--trusted-validator` 매개 변수를 지정하면 악성 스냅 샷에서 부팅하지 못하도록 보호 할 수 있습니다. \[신뢰할 수있는 밸리데이터로 부팅하는 값에 대해 자세히 알아보기\] (../ running-validator / validator-start.md # trusted-validators)
 
@@ -79,22 +69,21 @@ solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 
 기본적으로 각 노드는 신뢰할 수있는 유효성 검사기 중 하나가 제공 한 스냅 샷에서 부팅됩니다. 이 스냅 샷은 체인의 현재 상태를 반영하지만 전체 내역 원장을 포함하지 않습니다. 노드 중 하나가 종료되고 새 스냅 샷에서 부팅되는 경우 해당 노드의 원장에 간격이있을 수 있습니다. 이 문제를 방지하려면`--no-snapshot-fetch` 매개 변수를`solana-validator` 명령에 추가하여 스냅 샷 대신 기록 원장 데이터를받습니다.
 
-최초 부팅시`--no-snapshot-fetch` 매개 변수를 전달하지 마십시오. 제네시스 블록에서 노드를 완전히 부팅 할 수는 없습니다.  대신 스냅 샷에서 먼저 부팅 한 다음 재부팅을 위해`--no-snapshot-fetch` 매개 변수를 추가합니다.
+최초 부팅시`--no-snapshot-fetch` 매개 변수를 전달하지 마십시오. 제네시스 블록에서 노드를 완전히 부팅 할 수는 없습니다. 대신 스냅 샷에서 먼저 부팅 한 다음 재부팅을 위해`--no-snapshot-fetch` 매개 변수를 추가합니다.
 
-나머지 네트워크의 노드에서 사용할 수있는 기록 원장의 양은 언제든지 제한된다는 점에 유의해야합니다.  일단 작동되면 밸리데이터이 상당한 다운 타임을 경험하면 네트워크를 따라 잡지 못할 수 있으며 신뢰할 수있는 밸리데이터으로부터 새 스냅 샷을 다운로드해야합니다.  이렇게하면 밸리데이터이 채울 수없는 과거 원장 데이터에 공백이 생깁니다.
-
+나머지 네트워크의 노드에서 사용할 수있는 기록 원장의 양은 언제든지 제한된다는 점에 유의해야합니다. 일단 작동되면 밸리데이터이 상당한 다운 타임을 경험하면 네트워크를 따라 잡지 못할 수 있으며 신뢰할 수있는 밸리데이터으로부터 새 스냅 샷을 다운로드해야합니다. 이렇게하면 밸리데이터이 채울 수없는 과거 원장 데이터에 공백이 생깁니다.
 
 ### 유효성 검사기 포트 노출 최소화 유효성
 
-검사기는 다른 모든 Solana 유효성 검사기의 인바운드 트래픽을 위해 다양한 UDP 및 TCP 포트를 열어야합니다.   이것이 가장 효율적인 작동 모드이며 강력하게 권장되지만 다른 Solana 유효성 검사기의 인바운드 트래픽 만 요구하도록 유효성 검사기를 제한 할 수 있습니다.
+검사기는 다른 모든 Solana 유효성 검사기의 인바운드 트래픽을 위해 다양한 UDP 및 TCP 포트를 열어야합니다. 이것이 가장 효율적인 작동 모드이며 강력하게 권장되지만 다른 Solana 유효성 검사기의 인바운드 트래픽 만 요구하도록 유효성 검사기를 제한 할 수 있습니다.
 
-먼저`--restricted-repair-only-mode` 인수를 추가합니다.  이렇게하면 유효성 검사기가 나머지 유효성 검사기로부터 푸시를받지 않고 대신 블록에 대해 계속해서 다른 유효성 검사기를 폴링해야하는 제한된 모드에서 작동하게됩니다.  밸리데이터는 * Gossip * 및 * ServeR * ( "serve repair") 포트를 사용하는 다른 밸리데이터에게만 UDP 패킷을 전송하고 * Gossip * 및 * Repair * 포트에서 UDP 패킷 만 수신합니다.
+먼저`--restricted-repair-only-mode` 인수를 추가합니다. 이렇게하면 유효성 검사기가 나머지 유효성 검사기로부터 푸시를받지 않고 대신 블록에 대해 계속해서 다른 유효성 검사기를 폴링해야하는 제한된 모드에서 작동하게됩니다. 밸리데이터는 _ Gossip _ 및 _ ServeR _ ( "serve repair") 포트를 사용하는 다른 밸리데이터에게만 UDP 패킷을 전송하고 _ Gossip _ 및 _ Repair _ 포트에서 UDP 패킷 만 수신합니다.
 
-Gossip * 포트는 양방향이며 유효성 검사기가 나머지 클러스터와 계속 연락 할 수 있도록합니다.  이제 Turbine이 비활성화되었으므로 유효성 검사기는 * ServeR *에서 네트워크의 나머지 부분에서 새 블록을 얻기위한 수리 요청을 전송합니다.  그러면 귀하의 밸리데이터은 다른 밸리데이터으로부터 * Repair * 포트에 대한 수리 응답을 받게됩니다.
+Gossip _ 포트는 양방향이며 유효성 검사기가 나머지 클러스터와 계속 연락 할 수 있도록합니다. 이제 Turbine이 비활성화되었으므로 유효성 검사기는 _ ServeR _에서 네트워크의 나머지 부분에서 새 블록을 얻기위한 수리 요청을 전송합니다. 그러면 귀하의 밸리데이터은 다른 밸리데이터으로부터 _ Repair \* 포트에 대한 수리 응답을 받게됩니다.
 
-유효성 검사기를 하나 이상의 유효성 검사기에서 요청하는 블록으로 만 제한하려면 먼저 해당 유효성 검사기에 대한 ID pubkey를 결정하고 각 PUBKEY에 대해`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` 인수를 추가합니다.  이로 인해 유효성 검사기가 추가하는 각 유효성 검사기에서 리소스가 소모되므로 대상 유효성 검사기와상의 한 후에 만이 작업을 아껴서 수행하십시오.
+유효성 검사기를 하나 이상의 유효성 검사기에서 요청하는 블록으로 만 제한하려면 먼저 해당 유효성 검사기에 대한 ID pubkey를 결정하고 각 PUBKEY에 대해`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` 인수를 추가합니다. 이로 인해 유효성 검사기가 추가하는 각 유효성 검사기에서 리소스가 소모되므로 대상 유효성 검사기와상의 한 후에 만이 작업을 아껴서 수행하십시오.
 
-이제 유효성 검사기는 명시 적으로 나열된 유효성 검사기와 * Gossip *, * Repair * 및 * ServeR * 포트에서만 통신해야합니다.
+이제 유효성 검사기는 명시 적으로 나열된 유효성 검사기와 _ Gossip _, _ Repair _ 및 _ ServeR _ 포트에서만 통신해야합니다.
 
 ## 입금 계정 설정
 
@@ -220,10 +209,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 - Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) request to the api node:
 
-```bash
+````bash
 :```bash는
 컬 -X POST -H "콘텐츠 형식 : 응용 프로그램 / JSON"-d '{ "jsonrpc": "2.0", "id": 1, "method": "getConfirmedSignaturesForAddress2", "params": [ "6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", { "limit": "3}]} 'localhost : 88993}]}'localhost : 8899
-```
+````
 
 - For each signature returned, get the transaction details by sending a [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
 
@@ -325,10 +314,10 @@ Solana 클러스터에 동기 전송을 전송하면 전송이 성공적이고 �
 
 Get the status of a batch of transactions using the [`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses). The `confirmations` field reports how many [confirmed blocks](../terminology.md#confirmed-block) have elapsed since the transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
 
-```bash
+````bash
 :```bash는
 컬 -X POST -H "Content-Type : application / json"-d '{ "jsonrpc": "2.0", "id": 1, "method": "getConfirmedBlocks", "params": [5]}'localhost : 8899
-```
+````
 
 #### Blockhash Expiration
 
@@ -407,7 +396,7 @@ SPL 토큰 워크 플로는 네이티브 SOL 토큰의 워크 플로와 비슷�
 
 ### Token Mints
 
-SPL 토큰의 각 * 유형 *은 * mint * 계정을 생성하여 선언됩니다.  이 계정은 공급, 소수 자릿수 및 민트를 제어하는 ​​다양한 권한과 같은 토큰 기능을 설명하는 메타 데이터를 저장합니다.  각 SPL 토큰 계정은 관련 민트를 참조하며 해당 유형의 SPL 토큰과 만 상호 작용할 수 있습니다.
+SPL 토큰의 각 * 유형 *은 _ mint _ 계정을 생성하여 선언됩니다. 이 계정은 공급, 소수 자릿수 및 민트를 제어하는 ​​다양한 권한과 같은 토큰 기능을 설명하는 메타 데이터를 저장합니다. 각 SPL 토큰 계정은 관련 민트를 참조하며 해당 유형의 SPL 토큰과 만 상호 작용할 수 있습니다.
 
 ### # 예제
 
@@ -435,11 +424,13 @@ spl-token-cli 2.0.1
 
 있습니다```SPL 토큰 -
 
-1. SPL 토큰은 필수 계정 일정량의 토큰이 입금되기 전에 생성됩니다.   토큰 계정은`spl-token create-account` 명령을 사용하여 명시 적으로 만들거나`spl-token transfer --fund-recipient ...`명령을 사용하여 암시 적으로 만들 수 있습니다.
+1. SPL 토큰은 필수 계정 일정량의 토큰이 입금되기 전에 생성됩니다. 토큰 계정은`spl-token create-account` 명령을 사용하여 명시 적으로 만들거나`spl-token transfer --fund-recipient ...`명령을 사용하여 암시 적으로 만들 수 있습니다.
 1. SPL 토큰 계정은 존재하는 동안 \[rent-exempt\] (developing / programming-model / accounts.md # rent-exmption) 상태를 유지해야하므로 계정 생성시 소량의 기본 SOL 토큰을 예치해야합니다. SPL 토큰 v2 계정의 경우이 금액은 0.00203928 SOL (2,039,280 램프 포트)입니다.
 
 #### Command Line
+
 같은 발생한다
+
 1. 주어진 민트와 연결
 1. 펀딩 계정의 키 쌍
 
@@ -448,6 +439,7 @@ spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
 #### Example
+
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -455,6 +447,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ```
 
 또는
+
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -465,11 +458,13 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### Checking an Account's Balance
 
 #### Command Line
+
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### Example
+
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -477,43 +472,40 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 ### Token Transfers
 
-버전은``````텍스트 SPL-토큰 CLI는 2.0.1```###
+버전은````텍스트 SPL-토큰 CLI는 2.0.1`###
 
-The recipient address however can be a normal wallet account.  If an associated token account for the given mint does not yet exist for that wallet, the transfer will create it provided that the `--fund-recipient` argument as provided.
+The recipient address however can be a normal wallet account. If an associated token account for the given mint does not yet exist for that wallet, the transfer will create it provided that the `--fund-recipient` argument as provided.
 
 #### Command Line
+
 ```
 $ spl-token transfer --fund-recipient <교환 토큰 계정> <인출 금액> <인출 주소>
 ```
 
 #### Example
+
 ```
 #### Example
 ```
 
 ### 예치
+
 각 `(user, mint)` 짝은 온체인에 구별되는 계정을 필요로 하며, 거래소들은 토큰 계정 배치를 미리 생성하고 유저 요청 시 할당할 것을 권장합니다. 모든 해당 계정은 거래소가 컨트롤하는 키페어 소유여야 합니다.
 
 입금 거래 모니터링은 위에서 설명한 \[block polling\] (# poll-for-blocks) 방법을 따라야합니다. SPL 토큰 \[Transfer\] (https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)을 발행하는 성공적인 거래를 위해 각 새 블록을 스캔해야합니다. 또는 \[Transfer2\] (https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) 명령으로 사용자 계정을 참조한 다음 \[토큰 계정을 쿼리합니다. balance\] (developing / clients / jsonrpc-api.md # gettokenaccountbalance) 업데이트.
 
-예`$
-SPL 토큰 전송 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-전송한 토큰
-  보낸사람 :
-  6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN받는사람 : 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
-서명:
-3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj`
+예`$ SPL 토큰 전송 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV 전송한 토큰 보낸사람 : 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN받는사람 : 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV 서명: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj`
 
 ### 출금
+
 입금 각각`(사용자, 민트)가`쌍 체인에 별도의 계정을 필요로하기 때문에, 교환이 사전에 토큰 계정의 배치를 작성하고 사용자에게 할당하는 것이 좋습니다 요청시.
 
-행`SPL
-토큰 균형
-<TOKEN_ACCOUNT_ADDRESS>`확인
+행`SPL 토큰 균형 <TOKEN_ACCOUNT_ADDRESS>`확인
 
-출금 주소로부터 관련된 올바른 민팅 토큰 계정이 결정되고 해당 계정으로 전송이 발생합니다.  Note that it's possible that the associated token account does not yet exist, at which point the exchange should fund the account on behalf of the user.  For SPL Token v2 accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280 lamports).
+출금 주소로부터 관련된 올바른 민팅 토큰 계정이 결정되고 해당 계정으로 전송이 발생합니다. Note that it's possible that the associated token account does not yet exist, at which point the exchange should fund the account on behalf of the user. For SPL Token v2 accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280 lamports).
 
 Template `spl-token transfer` command for a withdrawal:
+
 ```
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
@@ -521,7 +513,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 ### Other Considerations
 
 #### Freeze Authority
-규정 준수를 위해 SPL 토큰 발행 기관은 민트와 관련하여 생성 된 모든 계정에 대해 "권한 동결"을 선택적으로 보유하도록 선택할 수 있습니다.  이렇게하면 주어진 계정의 자산을 마음대로 \[고정\] (https://spl.solana.com/token#freezing-accounts)하여 해동 될 때까지 계정을 사용할 수 없게됩니다. 이 기능이 사용 중이면 동결 기관의 pubkey가 SPL 토큰의 민트 계정에 등록됩니다.
+
+규정 준수를 위해 SPL 토큰 발행 기관은 민트와 관련하여 생성 된 모든 계정에 대해 "권한 동결"을 선택적으로 보유하도록 선택할 수 있습니다. 이렇게하면 주어진 계정의 자산을 마음대로 \[고정\] (https://spl.solana.com/token#freezing-accounts)하여 해동 될 때까지 계정을 사용할 수 없게됩니다. 이 기능이 사용 중이면 동결 기관의 pubkey가 SPL 토큰의 민트 계정에 등록됩니다.
 
 ## 통합
 

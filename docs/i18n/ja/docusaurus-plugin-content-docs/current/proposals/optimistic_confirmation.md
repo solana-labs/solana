@@ -4,7 +4,7 @@ title: 最適化の確認
 
 ## プリミティブ
 
-`vote(X, S)` - 投票には"参照"スロットとして`X`が追加される。Xはこのフォークの**最新**の先祖で、このバリデータが切り替え証明付きで投票したものです。 バリデータが連続した投票を行い、それらがすべて子孫である限り、 同じ`X`を使用すべきです。 バリデータが前のスロットの子孫ではないスロット`s`に投票した場合、`X`は新しいスロット`s`に設定されます。 すべての投票は、`vote(X, S)`という形式になります。ここで、`S`は、投票されたスロット`(s, s.lockout)`のソートされたリストです。
+`vote(X, S)` - 投票には"参照"スロットとして`X`が追加される。X はこのフォークの**最新**の先祖で、このバリデータが切り替え証明付きで投票したものです。 バリデータが連続した投票を行い、それらがすべて子孫である限り、 同じ`X`を使用すべきです。 バリデータが前のスロットの子孫ではないスロット`s`に投票した場合、`X`は新しいスロット`s`に設定されます。 すべての投票は、`vote(X, S)`という形式になります。ここで、`S`は、投票されたスロット`(s, s.lockout)`のソートされたリストです。
 
 Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
@@ -62,7 +62,7 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
 上の図では、`S.last`への投票は`S'.last`への投票の後に送られることに注意してください(ロックアウトのため高い方の投票が後に送られます)。 したがって、投票の順序は次のようになるはずです。`X ... S'.last ... S.last`. つまり、`S'.last`の投票の後、バリデータはあるスロット`s > S'.last > X`でもう一方のフォークに戻ったはずです。 したがって、`S.last`への投票では、`X`ではなく、`S`を"基準"点として用いるべきでした。なぜなら、それはフォークの最後の"スイッチ"だったからです。
 
-これを強制するために、我々は"Optimistic Slashing"というスラッシング条件を定義します。 同じバリデータによる2つの異なる投票`vote(X, S)`と`vote(X', S')`があった場合、その投票は以下を満たさなければなりません。
+これを強制するために、我々は"Optimistic Slashing"というスラッシング条件を定義します。 同じバリデータによる 2 つの異なる投票`vote(X, S)`と`vote(X', S')`があった場合、その投票は以下を満たさなければなりません。
 
 - `X <= S.last`, `X' <= S'.last`
 - All `s` in `S` are ancestors/descendants of one another, all `s'` in `S'` are ancsestors/descendants of one another,
@@ -71,7 +71,7 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 - `X' > X` implies `X' > S.last` and `S'.last > S.last` and for all `s` in `S`, `s + lockout(s) < X'`
 - `X > X'` implies `X > S'.last` and `S.last > S'.last` and for all `s` in `S'`, `s + lockout(s) < X`
 
-(最後の2つのルールは、範囲が重ならないことを意味しています)。それ以外の場合、バリデータはスラッシュされます。
+(最後の 2 つのルールは、範囲が重ならないことを意味しています)。それ以外の場合、バリデータはスラッシュされます。
 
 `Range(vote)` - 投票`v = vote(X, S)`が与えられたとき、`Range(v)`をスロット`[X, S.last]`の範囲と定義します。
 
@@ -81,7 +81,7 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
 証明は要素`(validator_id, validator_vote(X, S))`のリストで、ここでは
 
-1. すべてのバリデーターIDの賭け金の合計＞`> 1/3`
+1. すべてのバリデーター ID の賭け金の合計＞`> 1/3`
 
 2. 各`(validator_id, validator_vote(X, S))`に対して、`S`にあるスロット`s`が存在し、以下のようになります:_ a.`s`は`validator_vote.last`と`old_vote.last`と`new_vote.last`の両方の共通の祖先ではありません。 _ b. ` s`は`validator_vote.last`の子孫ではありません。 \* c. `s + s.lockout() >= old_vote.last` (バリデータが`old_vote.last`のスロットで`s`にロックアウトされたままであることを意味します。)
 
@@ -89,15 +89,15 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
 ## 定義:
 
-"Optimistic confirmation" -Aブロックは`B` が、ステーキングの `>2/3` が `v` の票で投票した場合、"optimistic confirmation" を達成したと言われます。ここで、そのような`v`ごとの`Range(v)`は、`B.slot`を含みます。
+"Optimistic confirmation" -A ブロックは`B` が、ステーキングの `>2/3` が `v` の票で投票した場合、"optimistic confirmation" を達成したと言われます。ここで、そのような`v`ごとの`Range(v)`は、`B.slot`を含みます。
 
-最終決定 -Aブロックは、 少なくとも1人の正しいバリデータが` "B"` または `"B `の子孫"を root 化した場合、ブロック `B` は最終決定されたと言います。
+最終決定 -A ブロックは、 少なくとも 1 人の正しいバリデータが` "B"` または `"B `の子孫"を root 化した場合、ブロック `B` は最終決定されたと言います。
 
-差し戻し -Aブロックは、` B `の親でも子でもない別のブロック `B'` が確定した場合、 ブロック` B `は差し戻されたと言います。
+差し戻し -A ブロックは、`B`の親でも子でもない別のブロック `B'` が確定した場合、 ブロック`B`は差し戻されたと言います。
 
 ## 保証：
 
-楽観的な確認に達したブロック`B`は、少なくとも1つのバリデータがスラッシングされない限り、元に戻されることはありません。
+楽観的な確認に達したブロック`B`は、少なくとも 1 つのバリデータがスラッシングされない限り、元に戻されることはありません。
 
 ## 証明:
 
@@ -108,7 +108,7 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
 `optimistic confirmation`の定義によれば、これは`> 2/3`のバリデータが、 `Vote(X, S)`の形式で`X <=B <=v.last`という投票`v`をそれぞれ示したことを意味します。 この一連のバリデータを `Optimistic Validators`と呼びます。
 
-さて、`Optimistic Validators`のバリデータ`v`が与えられ、`v`が行った2つの投票、`Vote(X, S)`と`Vote(X', S')`が与えられ、`X <= B <= S. last`であり、`X' <= B <= S'.last`である場合、`X == X'`でなければ "Optimistic Slashing "条件に違反します。(各投票の "範囲 "が`B`で重なってしまいます。)
+さて、`Optimistic Validators`のバリデータ`v`が与えられ、`v`が行った 2 つの投票、`Vote(X, S)`と`Vote(X', S')`が与えられ、`X <= B <= S. last`であり、`X' <= B <= S'.last`である場合、`X == X'`でなければ "Optimistic Slashing "条件に違反します。(各投票の "範囲 "が`B`で重なってしまいます。)
 
 Thus define the `Optimistic Votes` to be the set of votes made by `Optimistic Validators`, where for each optimistic validator `v`, the vote made by `v` included in the set is the `maximal` vote `Vote(X, S)` with the greatest `S.last` out of any votes made by `v` that satisfy `X <= B <= S.last`. 上記から、`v`が行うそのようなすべての投票に対する`X`が一意であることがわかっているので、そのような一意の`最大`の投票があることがわかります。
 
@@ -276,7 +276,7 @@ Thus define the `Optimistic Votes` to be the set of votes made by `Optimistic Va
 
 `Vote(X, S)`が与えられたとき、`X' >> B> >= X`なので、`X' >> X`となり、"Optimistic Slashing "ルールにより、`X' >> S.last`となります。
 
-このような`X'`への"切り替え投票"を行うためには、切り替え証明`SP(Vote(X, S), Vote(X', S'))`で、このバリデータの最新の投票`S.last`でステーキングの`>1/3`以上がロックアウトされていることを示さなければなりません。 この`>1/3`と、`Optimistic Voters`セットのバリデータのセットが`> 2/3`の賭けであることから、`Optimistic Voters`セットから少なくとも1人の楽観的なバリデーター`W`が投票を提出していなければならないことを意味します(切替証明の定義を思い出してください)。 `Vote(X_w, S_w)`という、スロット`X'`に対するバリデータ`V`の切替証明に含まれていたもので、`S_w`には次のようなスロット`s`が含まれています。
+このような`X'`への"切り替え投票"を行うためには、切り替え証明`SP(Vote(X, S), Vote(X', S'))`で、このバリデータの最新の投票`S.last`でステーキングの`>1/3`以上がロックアウトされていることを示さなければなりません。 この`>1/3`と、`Optimistic Voters`セットのバリデータのセットが`> 2/3`の賭けであることから、`Optimistic Voters`セットから少なくとも 1 人の楽観的なバリデーター`W`が投票を提出していなければならないことを意味します(切替証明の定義を思い出してください)。 `Vote(X_w, S_w)`という、スロット`X'`に対するバリデータ`V`の切替証明に含まれていたもので、`S_w`には次のようなスロット`s`が含まれています。
 
 - `s` は `S.last` と `X'` の共通の祖先にはなりません
 - `s` は `S.last` の子孫ではありません。

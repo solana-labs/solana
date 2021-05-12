@@ -5,9 +5,10 @@ title: Mobile App Wallets
 Solana is supported by multiple third-party apps which should provide a familiar experience for most people who are new or experienced with using crypto wallets.
 
 ## Trust Wallet
+
 [Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android and can be used to send and receive SOL tokens.
 
-*Note: Trust Wallet does not support stake accounts or staking operations*
+_Note: Trust Wallet does not support stake accounts or staking operations_
 
 ### Trust Wallet Security
 
@@ -19,6 +20,7 @@ If someone gains access to your Trust Wallet application, they can access your r
 - Under the Options menu for a particular wallet tap "Show Recovery Phrase"
 
 ## Coin98
+
 [Coin98](https://coin98.app/) is an app available for iOS and Android and can be used to send and receive SOL tokens.
 
-*Note: Coin98 does not support stake accounts or staking operations*
+_Note: Coin98 does not support stake accounts or staking operations_

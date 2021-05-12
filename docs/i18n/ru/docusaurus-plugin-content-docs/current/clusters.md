@@ -23,9 +23,11 @@ Solana одновременно поддерживает несколько кл
   - Как правило, в Devnet используется более новая версия программного обеспечения, чем в Mainnet Beta
 - Точка входа для Gossip сервиса в кластере Devnet: `entrypoint.devnet.solana.com:8001`
 - Переменная метрик для Devnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - RPC URL для Devnet: `https://devnet.solana.com`
 
 ##### Пример конфигурации командной строки `solana` для Devnet
@@ -63,9 +65,11 @@ $ solana-validator \
 - Как правило, в Testnet используется самая свежая версия программного обеспечения, новее чем в кластерах Devnet и Mainnet Beta
 - Точка входа для Gossip сервиса в кластере Testnet: `entrypoint.testnet.solana.com:8001`
 - Переменная метрик для Testnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - RPC URL для Testnet: `https://testnet.solana.com`
 
 ##### Пример конфигурации командной строки `solana` для Testnet
@@ -110,9 +114,11 @@ $ solana-validator \
   - Примечание: Если вы используете кошелек без поддержки командной строки, например такой как [Solflare](wallet-guide/solflare.md), то кошелек всегда будет подключаться к Mainnet Beta.
 - Точка входа для Gossip сервиса в кластере Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Переменная метрик для Mainnet Beta:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - URL RPC для Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Пример конфигурации командной строки `solana` для Mainnet Beta

@@ -2,9 +2,10 @@
 title: 위임 스테이킹
 ---
 
-[SOL](transfer-tokens.md)을 받은 이후 _지분_을 밸리데이터에게 위임하여 사용하는것을 고려할 수 있습니다. 스테이킹은 _stake account_의 토큰을 말하는 것입니다. 솔라나의 검증인은 지분에 따라 투표합니다. 이를 통해 검증인이 결정하는데 더 많은 영향력을 행사할 수 있습니다. 그리고 블록체인에서 다음으로 유효한 트랜잭션 블록 결정에 더 큰 영향을 미칩니다. 이후 솔라나는 스테이커와 밸리데이터에게 보상하기 위해 주기적으로 새로운 SOL을 생성합니다. 더 많이 스테이킹할수록 더 많은 보상을 얻을 수 있습니다.
+[SOL](transfer-tokens.md)을 받은 이후 *지분*을 밸리데이터에게 위임하여 사용하는것을 고려할 수 있습니다. 스테이킹은 *stake account*의 토큰을 말하는 것입니다. 솔라나의 검증인은 지분에 따라 투표합니다. 이를 통해 검증인이 결정하는데 더 많은 영향력을 행사할 수 있습니다. 그리고 블록체인에서 다음으로 유효한 트랜잭션 블록 결정에 더 큰 영향을 미칩니다. 이후 솔라나는 스테이커와 밸리데이터에게 보상하기 위해 주기적으로 새로운 SOL을 생성합니다. 더 많이 스테이킹할수록 더 많은 보상을 얻을 수 있습니다.
 
 ## 스테이킹 계정 생성
+
 지분을 위임하려면 토큰을 스테이킹 계정으로 이전해야합니다. 스테이킹 계정을 생성하기 위해서는, 키 쌍이 필요합니다. 공개 키는 [ 스테이킹 계정 주소 ](../staking/stake-accounts.md#account-address)로 쓰입니다. 여기에서는 암호나 암호화가 필요하지 않습니다. 스테이킹 계정을 만든 후 키 쌍은 바로 삭제됩니다.
 
 ```bash
@@ -47,6 +48,7 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### 스테이킹 설정 및 권한 철회
+
 [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities) 계정은 `--stake-authority`와 `--withdraw-authority`옵션으로부터 계정을 만들 때 설정할 수 있습니다. 또는 `solana stake-authorize`명령으로 이후에 생성할 수 있습니다. 예를 들어 새로운 스테이킹 권한을 설정하려면 아래 명령어를 실행하세요:
 
 ```bash
@@ -125,7 +127,7 @@ solana deactivate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> \
 
 ## 스테이킹 철회
 
-` solana withdraw-stake ` 명령을 사용하여 스테이킹 계정에서 토큰을 철회합니다.
+`solana withdraw-stake` 명령을 사용하여 스테이킹 계정에서 토큰을 철회합니다.
 
 ```bash
 solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> <AMOUNT> \

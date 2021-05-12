@@ -2,25 +2,25 @@
 title: Solana Tool Suiteをインストールしよう。
 ---
 
-ご希望のワークフローに応じて、Solanaツールをコンピュータにインストールする方法は複数あります。
+ご希望のワークフローに応じて、Solana ツールをコンピュータにインストールする方法は複数あります。
 
-- [Solanaのインストールツールを使用する(最も簡単なオプション)](#use-solanas-install-tool)
+- [Solana のインストールツールを使用する(最も簡単なオプション)](#use-solanas-install-tool)
 - [ビルド済みのバイナリをダウンロードしてください。](#download-prebuilt-binaries)
 - [ソースからビルド](#build-from-source)
 
-## Solanaのインストールツールを使用
+## Solana のインストールツールを使用
 
 ### MacOS & Linux
 
 - お気に入りのターミナルアプリケーションを開いてください。
 
-- Solanaのリリース[](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION)をマシンにインストールしてください。
+- Solana のリリース[](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION)をマシンにインストールしてください。
 
 ```bash
 sh -c "$(curl -sSfL https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/install)"
 ```
 
-- `LATEST_SOLANA_RELEASE_VERSION`の代わりに、ご希望のソフトウェアバージョンに対応したリリースタグを使用することもできますし、`安定版`、`ベータ版`、`エッジ版`という3つのシンボリックなチャンネル名を使用することもできます。
+- `LATEST_SOLANA_RELEASE_VERSION`の代わりに、ご希望のソフトウェアバージョンに対応したリリースタグを使用することもできますし、`安定版`、`ベータ版`、`エッジ版`という 3 つのシンボリックなチャンネル名を使用することもできます。
 
 - 以下の出力は更新が成功したことを示します:
 
@@ -46,7 +46,7 @@ PATH環境変数を更新して、solanaのプログラムを含むようにし�
 solana --version
 ```
 
-- インストールが成功した後、`solana-install update`を使用すると、いつでも簡単にSolanaソフトウェアを新しいバージョンにアップデートすることができます。
+- インストールが成功した後、`solana-install update`を使用すると、いつでも簡単に Solana ソフトウェアを新しいバージョンにアップデートすることができます。
 
 ---
 
@@ -56,19 +56,19 @@ solana --version
 
   - Search for Command Prompt in the Windows search bar. コマンドプロンプトが表示されたら、右クリックして"Open as Administrator"を選択します。 "このアプリがあなたのデバイスに変更を加えることを許可しますか?"というポップアップウィンドウが表示されたら、"Yes"をクリックします。
 
-- 以下のコマンドをコピー＆ペーストし、Enterキーを押すと、Solanaのインストーラーが一時ディレクトリにダウンロードされます。
+- 以下のコマンドをコピー＆ペーストし、Enter キーを押すと、Solana のインストーラーが一時ディレクトリにダウンロードされます。
 
 ```bash
 curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe -create-dirs
 ```
 
-- 以下のコマンドをコピー＆ペーストしてEnterキーを押すと、最新版のSolanaがインストールされます。 お使いのシステムでセキュリティのポップアップが表示された場合は、プログラムの実行を許可するように選択してください。
+- 以下のコマンドをコピー＆ペーストして Enter キーを押すと、最新版の Solana がインストールされます。 お使いのシステムでセキュリティのポップアップが表示された場合は、プログラムの実行を許可するように選択してください。
 
 ```bash
 C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSI
 ```
 
-- インストーラが終了したら、Enterを押します。
+- インストーラが終了したら、Enter を押します。
 
 - コマンドプロンプトウィンドウを閉じて、通常のユーザーとして新しいコマンドプロンプトウィンドウを開き直します。
   - 検索バーで"Command Prompt"と検索し、"Command Prompt"アプリのアイコンを左クリックします（管理者として実行する必要はありません）。)
@@ -78,7 +78,7 @@ C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSI
 solana --version
 ```
 
-- インストールが成功した後、`solana-install update`を使用すると、いつでも簡単にSolanaソフトウェアを新しいバージョンにアップデートすることができます。
+- インストールが成功した後、`solana-install update`を使用すると、いつでも簡単に Solana ソフトウェアを新しいバージョンにアップデートすることができます。
 
 ## ビルド済みのバイナリをダウンロードしてください。
 
@@ -106,7 +106,7 @@ export PATH=$PWD/bin:$PATH
 
 ### Windows
 
-- [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest)に移動してバイナリをダウンロードし、**solana-release-x86_64-pc-windows-msvc.tar.bz2**をダウンロードし、WinZipなどを使ってアーカイブを展開してください。
+- [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest)に移動してバイナリをダウンロードし、**solana-release-x86_64-pc-windows-msvc.tar.bz2**をダウンロードし、WinZip などを使ってアーカイブを展開してください。
 
 - コマンドプロンプトを開き、バイナリを解凍したディレクトリに移動して実行します。
 

@@ -5,6 +5,7 @@ title: تفويض الحِصَّة (Delegate Stake)
 بعد أن تتلقى عُملة [received SOL](transfer-tokens.md)، قد تُفكر في إستخدامها عن طريق تفويض الحِصَّة _stake_ للمُدقّق (validator). إثبات الحِصَّة أو التَّحْصِيص (stake) هو ما نعتبره رموز في حِساب إثبات الحِصَّة أو التَّحْصِيص _stake account_. تقدر Solana التصويت على أساس كمية الرموز التي يتم إثبات حصتها المُفَوَّضَة لهم، ما يعطي هؤلاء المُدقّقين (validators) تأثيرا أكبر في تحديد الكتلة (block) الصالحة التالية من المُعاملات في شبكة البلوكشاين. تقوم Solana بعد ذلك بتوليد عملات SOL جديدة بشكل دوري لمُكافأة المحصِّصين (stakers) والمُدقّقين (validators). تكسب المُزيد من المكافآت كلما زادت الحِصَّة (stake) التي تُفَوِّضُها.
 
 ## إنشاء حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake Account)
+
 لتفويض الحِصَّة (stake)، سوف تحتاج إلى تحويل بعض العملات إلى حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account). لإنشاء حساب، ستحتاج إلى زوج مفاتيح (keypair). سيتم إستخدام المفتاح العمومي (Pubkey) الخاص به كعنوان حِساب إثبات الحِصَّة أو التَّحْصِيص [stake account address](../staking/stake-accounts.md#account-address). لا حاجة إلى كلمة مرور أو تشفير هنا؛ سيتم تجاهل زوج المفاتيح (keypair) هذا مُباشرة بعد إنشاء حِساب إثبات الحِصَّة أو التَّحْصِيص (Stake account).
 
 ```bash
@@ -47,6 +48,7 @@ solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
 ```
 
 ### تعيين الحِصَّة (Set Stake) وسُلطة سحب الرصيد (Withdraw Authorities)
+
 سُلطات إثبات الحِصَّة وسحب الرصيد [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities) يُمكن تعيينها عند إنشاء حساب عن طريق خيارات سُلطة التَّحْصِيص `--stake-authority` و وسحب الرصيد `--withdraw-authority`، أو بعد ذلك مع أمر الإذن بالتَّحْصِيص `solana stake-authorize`. على سبيل المثال، لتعيين سُلطة إثبات حِصَّة أو تحْصِيص (Stake authority) جديدة، قُم بتشغيل:
 
 ```bash

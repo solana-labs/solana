@@ -32,4 +32,4 @@ Ví dụ: URL đủ điều kiện cho thiết bị Ledger có thể là:
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-Tất cả các đường dẫn xuất đều bao gồm tiền tố ` 44 '/ 501' `, cho biết đường dẫn tuân theo [thông số kỹ thuật BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) và bất kỳ khóa dẫn xuất nào đều là khóa Solana (Coin type 501). Dấu ngoặc kép chỉ ra một nguồn gốc "hardened". Bởi vì Solana sử dụng cặp khóa Ed25519 tất cả các dẫn xuất đều được làm cứng và do đó việc thêm trích dẫn là tùy chọn và không cần thiết.
+Tất cả các đường dẫn xuất đều bao gồm tiền tố `44 '/ 501'`, cho biết đường dẫn tuân theo [thông số kỹ thuật BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) và bất kỳ khóa dẫn xuất nào đều là khóa Solana (Coin type 501). Dấu ngoặc kép chỉ ra một nguồn gốc "hardened". Bởi vì Solana sử dụng cặp khóa Ed25519 tất cả các dẫn xuất đều được làm cứng và do đó việc thêm trích dẫn là tùy chọn và không cần thiết.

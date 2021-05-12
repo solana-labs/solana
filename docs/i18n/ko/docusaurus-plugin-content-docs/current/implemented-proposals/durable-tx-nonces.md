@@ -24,7 +24,7 @@ title: Durable Transaction Nonces
 
 TODO : svgbob 이것을 플로우 차트에 넣습니다
 
-```text
+````text
 ```text
 Start
 Create Account
@@ -32,7 +32,7 @@ Create Account
 NonceInstructionUninitialized
   if state ==if state == Uninitialized
     if account.balance
-```
+````
 
 프로그램 아래 거버넌스 계정을 만들어이 기능 시작을 사용하고자하는 클라이언트. 이 계정은 저장된 해시가없는 'Uninitialized'상태이므로 사용할 수 없습니다.
 

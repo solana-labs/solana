@@ -168,7 +168,7 @@ Consider the situation of a single stake of 1,000 activated at epoch N, with net
 At epoch N+1, the amount available to be activated for the network is 400 \(20% of 2000\), and at epoch N, this example stake is the only stake activating, and so is entitled to all of the warmup room available.
 
 | epoch | effective | activating | total effective | total activating |
-|:----- | ---------:| ----------:| ---------------:| ----------------:|
+| :---- | --------: | ---------: | --------------: | ---------------: |
 | N-1   |           |            |           2,000 |                0 |
 | N     |         0 |      1,000 |           2,000 |            1,000 |
 | N+1   |       400 |        600 |           2,400 |              600 |
@@ -178,7 +178,7 @@ At epoch N+1, the amount available to be activated for the network is 400 \(20% 
 Were 2 stakes \(X and Y\) to activate at epoch N, they would be awarded a portion of the 20% in proportion to their stakes. At each epoch effective and activating for each stake is a function of the previous epoch's state.
 
 | epoch | X eff | X act | Y eff | Y act | total effective | total activating |
-|:----- | -----:| -----:| -----:| -----:| ---------------:| ----------------:|
+| :---- | ----: | ----: | ----: | ----: | --------------: | ---------------: |
 | N-1   |       |       |       |       |           2,000 |                0 |
 | N     |     0 | 1,000 |     0 |   200 |           2,000 |            1,200 |
 | N+1   |   333 |   667 |    67 |   133 |           2,400 |              800 |

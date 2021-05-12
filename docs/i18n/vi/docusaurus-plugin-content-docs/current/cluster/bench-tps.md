@@ -95,13 +95,13 @@ Ví dụ
 - Để bật `thông tin` ở mọi nơi và `gỡ lỗi` chỉ trong mô-đun solana::banking_stage:
 
   ```bash
-export RUST_LOG=solana=info,solana::banking_stage=debug
+  export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - Để bật ghi nhật ký chương trình BPF:
 
   ```bash
-export RUST_LOG=solana_bpf_loader=trace
+  export RUST_LOG=solana_bpf_loader=trace
   ```
 
 Nói chung, chúng tôi đang sử dụng `debug` cho các tin nhắn gỡ lỗi không thường xuyên, `trace` cho các tin nhắn có khả năng xảy ra thường xuyên và `thông tin` để ghi nhật ký liên quan đến hiệu suất.

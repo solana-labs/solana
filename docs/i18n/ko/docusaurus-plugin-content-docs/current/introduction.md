@@ -26,7 +26,7 @@ Solana 문서는 확장을 위해 처음부터 구축 된 블록체인 인 Solan
 
 ## SOL은 무엇입니까?
 
-SOL은 온 체인 프로그램을 실행하거나 출력을 검증하는 대가로 Solana 클러스터의 노드로 전달할 수있는 Solana의 기본 토큰 이름입니다. 시스템은 _lamports_라고하는 부분 SOL의 소액 결제를 수행 할 수 있습니다. Solana의 가장 큰 기술적 영향력을 기리기 위해 이름이 붙여졌습니다. \[Leslie Lamport\] (https://en.wikipedia.org/wiki/Leslie_Lamport). 램프 포트의 값은 0.000000001 SOL입니다.
+SOL은 온 체인 프로그램을 실행하거나 출력을 검증하는 대가로 Solana 클러스터의 노드로 전달할 수있는 Solana의 기본 토큰 이름입니다. 시스템은 *lamports*라고하는 부분 SOL의 소액 결제를 수행 할 수 있습니다. Solana의 가장 큰 기술적 영향력을 기리기 위해 이름이 붙여졌습니다. \[Leslie Lamport\] (https://en.wikipedia.org/wiki/Leslie_Lamport). 램프 포트의 값은 0.000000001 SOL입니다.
 
 ## 면책 조항
 

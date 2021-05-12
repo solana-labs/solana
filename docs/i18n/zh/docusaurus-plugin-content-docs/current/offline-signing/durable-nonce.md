@@ -2,7 +2,7 @@
 title: 持久交易随机数（Nonces）
 ---
 
-持久交易随机数是一个机制，它可以绕过交易典型的个短寿期 [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash)。 这些方案是作为Solana方案实施的，其机制详见 [proposal](../implemented-proposals/durable-tx-nonces.md)。
+持久交易随机数是一个机制，它可以绕过交易典型的个短寿期 [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash)。 这些方案是作为 Solana 方案实施的，其机制详见 [proposal](../implemented-proposals/durable-tx-nonces.md)。
 
 ## 使用示例
 
@@ -40,7 +40,7 @@ solana create-nonce-account nonce-keypair.json 1
 
 > [完整使用文档](../cli/usage.md#solana-create-nonce-account)
 
-### 查询存储Nonce值
+### 查询存储 Nonce 值
 
 创建持久的随机数交易需要在签名和提交时将存储的随机数值作为值传递给`--blockhash`参数。 使用以下方法获取当前存储的当前值：
 
@@ -58,7 +58,7 @@ solana nonce none-non-keypair.json
 
 > [完整使用文档](../cli/usage.md#solana-get-nonce)
 
-### 提升存储Nonce值
+### 提升存储 Nonce 值
 
 尽管通常不需要在更有用的交易之外进行存储，但存储的当前值可以通过以下方式获取：
 
@@ -76,9 +76,9 @@ solana new-nonce none-non-keypair.json
 
 > [完整使用文档](../cli/usage.md#solana-new-nonce)
 
-### 显示Nonce账户
+### 显示 Nonce 账户
 
-以更人性化的格式检查nonce 帐户
+以更人性化的格式检查 nonce 帐户
 
 - 命令
 
@@ -96,7 +96,7 @@ nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 
 > [完整使用文档](../cli/usage.md#solana-nonce-account)
 
-### 从Nonce帐号提取资产
+### 从 Nonce 帐号提取资产
 
 通过以下方式从 nonce 帐户提取资产
 
@@ -112,11 +112,11 @@ solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0
 3foNy1SBqwXSsfSfTdmYKDuhnVheRnKXpoPySiUDBVeDEs6iMVokgqm7AqfTjbk7QBE8mqomvMUMNQhtdMvFLide
 ```
 
-> 通过提取全部余额关闭nonce账户
+> 通过提取全部余额关闭 nonce 账户
 
 > [完整使用文档](../cli/usage.md#solana-withdraw-from-nonce-account)
 
-### 为Nonce账户分配新的授权
+### 为 Nonce 账户分配新的授权
 
 创建后重新分配 nonce 帐户的授权
 
@@ -134,9 +134,9 @@ solana authorize-non-account non-keypair.json nonce-authority.json
 
 > [完整使用文档](../cli/usage.md#solana-authorize-nonce-account)
 
-## 支持持久Nonce的其他命令
+## 支持持久 Nonce 的其他命令
 
-要将持久随机数与其他CLI子命令一起使用，必须支持两个参数。
+要将持久随机数与其他 CLI 子命令一起使用，必须支持两个参数。
 
 - `--nonce`，指定帐户存储 nonce 值
 - `--nonce-authority`，指定一个可选的 [nonce authority](#nonce-authority)
@@ -147,13 +147,13 @@ solana authorize-non-account non-keypair.json nonce-authority.json
 - [`委托质押`](../cli/usage.md#solana-delegate-stake)
 - [`停用质押`](../cli/usage.md#solana-deactivate-stake)
 
-### 使用持久Nonce的支付示例
+### 使用持久 Nonce 的支付示例
 
-在这里，我们演示了Alice使用持久 nonce 向Bob 1 SOL支付的费用。 对于支持持久随机数的所有子命令，该过程相同
+在这里，我们演示了 Alice 使用持久 nonce 向 Bob 1 SOL 支付的费用。 对于支持持久随机数的所有子命令，该过程相同
 
 #### - 创建帐户
 
-首先，我们需要为Alice、Alice的none和Bob准备一些账户
+首先，我们需要为 Alice、Alice 的 none 和 Bob 准备一些账户
 
 ```bash
 $ solana-keygen new -o alice.json
@@ -161,9 +161,9 @@ $ solana-keygen new -o nonce.json
 $ solana-keygen new -o bob.json
 ```
 
-#### - Alice账户充值
+#### - Alice 账户充值
 
-Alice 需要一些资产来创建一个 nonce 帐户并发送给 Bob。 空投一些SOL给她
+Alice 需要一些资产来创建一个 nonce 帐户并发送给 Bob。 空投一些 SOL 给她
 
 ```bash
 $ solana airdrop -k alice.json 10
@@ -172,9 +172,9 @@ $ solana airdrop -k alice.json 10
 
 #### - 创建 Alice 的 nonce 帐户
 
-现在Alice需要一个nonce 帐户。 创建一个
+现在 Alice 需要一个 nonce 帐户。 创建一个
 
-> 这里没有单独的 [nonce authority](#nonce-authority) 被使用，所以 `alice.json` 对nonce 帐户拥有完全的权限
+> 这里没有单独的 [nonce authority](#nonce-authority) 被使用，所以 `alice.json` 对 nonce 帐户拥有完全的权限
 
 ```bash
 $ solana create-nonce-account -k alice.json nonce.json 1
@@ -193,7 +193,7 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 
 #### - 用 Nonce 来补救！
 
-Alice 重试交易，这次指定她的nonce账户和存储在那里的区块哈希。
+Alice 重试交易，这次指定她的 nonce 账户和存储在那里的区块哈希。
 
 > 记住，`alice.json` 是这个示例中的 [nonce 授权](#nonce-authority)
 
@@ -211,7 +211,7 @@ HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckeegFjK8d
 
 #### - 成功了！
 
-交易成功！ Bob 从 Alice 那里收到1个SOL，并且Alice存储的nonce更新到了一个新的值
+交易成功！ Bob 从 Alice 那里收到 1 个 SOL，并且 Alice 存储的 nonce 更新到了一个新的值
 
 ```bash
 $ solana balance -k bob.json

@@ -35,9 +35,9 @@ bob.json</code>
 
 - Output
 
-```text
+````text
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ```###
-```
+````
 
 > \[전체 사용 문서\] (../ cli / usage.md # solana-create-nonce-account)
 
@@ -55,9 +55,9 @@ solana nonce nonce-keypair.json
 
 - Output
 
-```text
+````text
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU```&#062;
-```
+````
 
 > [Full usage documentation](../cli/usage.md#solana-get-nonce)
 
@@ -73,9 +73,9 @@ solana new-nonce nonce-keypair.json
 
 - Output
 
-```text
+````text
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK```&#062;
-```
+````
 
 > [Full usage documentation](../cli/usage.md#solana-new-nonce)
 
@@ -105,10 +105,7 @@ DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS을</code>&#062;
 
 ### 에 새 권한
 
-명령`배시
-솔라-keygen은 새로운 -o 논스-keypair.json을
-만들-거버넌스 - 계정 솔라 난스-keypair.json
-1`
+명령`배시 솔라-keygen은 새로운 -o 논스-keypair.json을 만들-거버넌스 - 계정 솔라 난스-keypair.json 1`
 
 - Command
 
@@ -120,9 +117,9 @@ DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS을</code>&#062;
 
 - Output
 
-```text
+````text
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV을```####
-```
+````
 
 > 전체 잔액을 인출하여 임시 계정 폐쇄
 
@@ -140,9 +137,9 @@ DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS을</code>&#062;
 
 - Output
 
-```text
+````text
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT```&#062;
-```
+````
 
 > [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
 
@@ -150,8 +147,7 @@ DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS을</code>&#062;
 
 >
 
-- `--nonce`, nonce 값을 저장하는 계정 지정-`--nonce
--authority`, 선택적 지정 \[nonce Authority\] (# nonce-authority)
+- `--nonce`, nonce 값을 저장하는 계정 지정-`--nonce -authority`, 선택적 지정 \[nonce Authority\] (# nonce-authority)
 - `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
 
 출력```텍스트
@@ -183,16 +179,16 @@ $ solana airdrop -k alice.json 10
 10 SOL
 ```
 
-#### 우리가앨리스에 대한 몇 가지 계정이 필요 먼저  앨리스의 비표와
+#### 우리가앨리스에 대한 몇 가지 계정이 필요 먼저 앨리스의 비표와
 
 이제 앨리스를 비표 계정이 필요합니다. 생성
 
 > 시도>,기억`alice.json`는 [거버넌스 기관이 예에서 (# 거버넌스입니다.
 
-```bash
+```````bash
 F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7``````bash는
 $의 솔라 지불 -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
-```
+```````
 
 #### - A failed first attempt to pay Bob
 
@@ -208,20 +204,18 @@ $ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx
 
 #### -Nonce를 구출하세요!
 
-명령`bash는
-솔라 새로운 넌스 넌스 -
-keypair.json`
+명령`bash는 솔라 새로운 넌스 넌스 - keypair.json`
 
 > Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
 
-```bash
+```````bash
 SOL``````bash는
 $ 솔라 거버넌스 - 계정 nonce.json
 1 SOL :균형
 최소밸런스필수 : 0.00136416 SOL의
 거버넌스 :
 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN```
-```
+```````
 
 ```bash
 $ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
@@ -232,16 +226,16 @@ HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8
 
 The transaction succeeds! 거래가 성공했습니다!밥은 새 앨리스와 앨리스의 저장 거버넌스의 발전에서 1 SOL을 수신
 
-```bash
+````bash
 값```bash는
 $의 솔라 균형 -k bob.json
 1
-```
+````
 
-```bash
+````bash
 거버넌스-권한)```bash는
 $ 솔라 거버넌스 - 계정  JSON
 밸런스: 1 개 SOL
 최소균형이 필요합니다 : 0.00136416 SOL의
 거버넌스 :
-```
+````

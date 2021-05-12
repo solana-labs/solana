@@ -31,7 +31,7 @@ Estado de voto es el estado actual de todos los votos que el validador ha enviad
 - Account::lamports: los lamports acumulados de la comisión. Estos no cuentan como participaciones.
 - `authorized_voter` - solo esta identidad está autorizada para enviar votos. Este campo sólo puede ser modificado por esta identidad.
 - `node_pubkey` - El nodo Solana que vota en esta cuenta.
-- ` Authorized_withdrawer `: la identidad de la entidad a cargo de los importes de esta cuenta, separada de la dirección de la cuenta y del firmante de voto autorizado.
+- `Authorized_withdrawer`: la identidad de la entidad a cargo de los importes de esta cuenta, separada de la dirección de la cuenta y del firmante de voto autorizado.
 
 ### VoteInstruction::Initialize\(VoteInit\)
 
@@ -65,7 +65,7 @@ StakeState::Stake es la preferencia actual de la delegación de la **staker** y 
 - `stake` - la cantidad puesta en stake \(sujeto a warmup y enfriamiento\) para generar recompensas, siempre menor o igual a Account::lamports.
 - `voter_pubkey` - La llave de la instancia de VoteState a la que se delegan los lamports.
 - `credits_observed` - Los créditos totales reclamados durante la vida del programa.
-- ` activated `: la época en la que se activó / delegó este stake. El stake total se contará después de warmup.
+- `activated`: la época en la que se activó / delegó este stake. El stake total se contará después de warmup.
 - `deactivated` -la época en la que se desactivó este stake, se requieren algunas épocas de enfriamiento antes de que la cuenta se desactive por completo, y el stake disponible para el retiro.
 - `authorized_staker` - la pubkey de la entidad que debe firmar las transacciones de delegación, activación y desactivación.
 - `authorized_wither` - la identidad de la entidad responsable de los lamports de esta cuenta, separados de la dirección de la cuenta y el participante autorizado.
@@ -168,7 +168,7 @@ Consideremos la situación de un solo stake de 1.000 es activada en la época N,
 En la época N+1, la cantidad disponible para activar para la red es 400 \(20% de 2000\), y en la época N, este stake de ejemplo es el único que se activa, y por lo tanto tiene derecho a toda la sala warmup disponible.
 
 | época | efectiva | activando | efectivo total | activación total |
-|:----- | --------:| ---------:| --------------:| ----------------:|
+| :---- | -------: | --------: | -------------: | ---------------: |
 | N-1   |          |           |          2,000 |                0 |
 | N     |        0 |     1,000 |          2,000 |            1,000 |
 | N+1   |      400 |       600 |          2,400 |              600 |
@@ -178,7 +178,7 @@ En la época N+1, la cantidad disponible para activar para la red es 400 \(20% d
 Si se activaran 2 stakes \(X y Y\) en la época N, se les concedería una porción del 20% en proporción a su stake. En cada época efectiva y activada para cada stake es una función del estado anterior de época.
 
 | época | X eff | X act | Y eff | Y act | efectivo total | activación total |
-|:----- | -----:| -----:| -----:| -----:| --------------:| ----------------:|
+| :---- | ----: | ----: | ----: | ----: | -------------: | ---------------: |
 | N-1   |       |       |       |       |          2,000 |                0 |
 | N     |     0 | 1,000 |     0 |   200 |          2,000 |            1,200 |
 | N+1   |   333 |   667 |    67 |   133 |          2,400 |              800 |

@@ -10,7 +10,7 @@ title: 등록 방법
 
 [\[여기에서 KYC / AML + 참여 컨트랙트 등록\] (https://tsm.coinlist.co/solana-staking)](https://tsm.coinlist.co/solana-staking)
 
-___ 동일한 법인 / 개인으로 SLP 또는 TdS에 대해 이전에 KYC / AML을 완료 한 경우이 과정을 다시 수행 할 필요가 없습니다. We do not accept U.S. entities or individuals.__
+**\_ 동일한 법인 / 개인으로 SLP 또는 TdS에 대해 이전에 KYC / AML을 완료 한 경우이 과정을 다시 수행 할 필요가 없습니다. We do not accept U.S. entities or individuals.**
 
 #### 3) 우리의 불화에 참여하세요
 

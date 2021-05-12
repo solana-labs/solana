@@ -2,7 +2,7 @@
 title: 发送和接收代币
 ---
 
-该网页展示了如何通过命令行钱包，使用命令行工具接收和发送 SOL代币，例如 [纸钱包](../wallet-guide/paper-wallet.md)， [文件系统钱包](../wallet-guide/file-system-wallet.md), 或[硬件钱包](../wallet-guide/hardware-wallets.md). 在开始之前，请确认您已经创建了一个钱包，并且可以访问其地址 (pubkey) 和签名密钥对。 请查看我们的[约定来输入不同钱包类型的密钥对](../cli/conventions.md#keypair-conventions).
+该网页展示了如何通过命令行钱包，使用命令行工具接收和发送 SOL 代币，例如 [纸钱包](../wallet-guide/paper-wallet.md)， [文件系统钱包](../wallet-guide/file-system-wallet.md), 或[硬件钱包](../wallet-guide/hardware-wallets.md). 在开始之前，请确认您已经创建了一个钱包，并且可以访问其地址 (pubkey) 和签名密钥对。 请查看我们的[约定来输入不同钱包类型的密钥对](../cli/conventions.md#keypair-conventions).
 
 ## 测试您的钱包
 
@@ -10,11 +10,11 @@ title: 发送和接收代币
 
 在这个例子中，我们将在第一个钱包的基础上再创建另一个钱包，然后转入一些代币。 这个步骤确保您可以在该钱包正常发送和接收代币。
 
-该测试将通过我们的开发者测试网（称为devnet）。 测试网发行的代币**并没有**实际价值，所以无需担心资产损失。
+该测试将通过我们的开发者测试网（称为 devnet）。 测试网发行的代币**并没有**实际价值，所以无需担心资产损失。
 
 #### 获取一些空投代币，开始操作
 
-首先，在测试网给您的钱包_空投_ 一些虚拟代币。
+首先，在测试网给您的钱包*空投* 一些虚拟代币。
 
 ```bash
 solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -70,7 +70,7 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 $ solana-keygen new --outfile my_solana_wallet.json   # 创建第一个文件系统钱包
 产生新的密钥对
 为了增加安全性，输入一个密码(空白表示不设置密码)：
-将新密钥对写入 my_solana_wallet.json 
+将新密钥对写入 my_solana_wallet.json
 ==========================================================================
 pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # 第一个钱包的地址
 ==========================================================================
@@ -99,7 +99,7 @@ $ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBM
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # 该笔交易的签名
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL  # 由于需要 0.000005 SOL 的交易费用，发送金额要稍微小于 5 SOL 
+4.999995 SOL  # 由于需要 0.000005 SOL 的交易费用，发送金额要稍微小于 5 SOL
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
 5 SOL  # 第二个钱包现在已经接收到第一个钱包发送的 5 SOL

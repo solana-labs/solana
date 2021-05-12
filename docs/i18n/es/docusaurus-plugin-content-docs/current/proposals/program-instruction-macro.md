@@ -2,7 +2,7 @@
 
 ## Problema
 
-Actualmente, la inspección de una transacción en la cadena requiere depender de una biblioteca de decodificación del lado del cliente, específica del lenguaje, para analizar la instrucción.  Si los métodos rpc pudieran devolver los detalles de las instrucciones decodificadas, estas soluciones personalizadas serían innecesarias.
+Actualmente, la inspección de una transacción en la cadena requiere depender de una biblioteca de decodificación del lado del cliente, específica del lenguaje, para analizar la instrucción. Si los métodos rpc pudieran devolver los detalles de las instrucciones decodificadas, estas soluciones personalizadas serían innecesarias.
 
 Podemos deserializar los datos de las instrucciones utilizando el enum de instrucciones de un programa, pero la decodificación de la lista de claves de la cuenta en identificadores legibles para el ser humano requiere un análisis manual. Si los métodos rpc pudieran devolver los detalles de las instrucciones decodificadas, estas soluciones personalizadas serían innecesarias. Nuestros enums de Instrucción actuales tienen esa información de cuenta, pero solo en documentos variantes.
 
@@ -46,6 +46,7 @@ pub enum TestInstruction {
 ```
 
 Un ejemplo de la TestInstruction generada con docs:
+
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -75,6 +76,7 @@ pub enum TestInstruction {
 ```
 
 Constructores generados:
+
 ```rust,ignore
 /// Transfer lamports
 ///

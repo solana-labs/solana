@@ -7,19 +7,19 @@ title: 검증 스테이킹 위임
 Solana 유효성 검사 클라이언트를 실행하려면 비교적 적절한 초기 하드웨어 자본 투자가 필요했습니다. ** 표 2 **는 예상 '기성품'비용으로 ~ 1M tx / s를 지원하는 하드웨어 구성의 예를 제공합니다.
 
 | Component         | Example                                          | Estimated Cost |
-|:----------------- |:------------------------------------------------ |:-------------- |
-| GPU               | 2x 2080 Ti                                       | \$2500        |
-| or                | 4x 1080 Ti                                       | \$2800        |
-| OS/Ledger Storage | Samsung 860 Evo 2TB                              | \$370         |
-| Accounts storage  | 2x Samsung 970 Pro M.2 512GB                     | \$340         |
-| RAM               | 32 Gb                                            | \$300         |
-| Motherboard       | AMD x399                                         | \$400         |
-| CPU               | AMD Threadripper 2920x                           | \$650         |
-| Case              |                                                  | \$100         |
-| Power supply      | EVGA 1600W                                       | \$300         |
-| Network           | &gt; 500 mbps                              |                |
-| Network \(1\)   | Google webpass business bay area 1gbps unlimited | \$5500/mo     |
-| Network \(2\)   | Hurricane Electric bay area colo 1gbps           | \$500/mo      |
+| :---------------- | :----------------------------------------------- | :------------- |
+| GPU               | 2x 2080 Ti                                       | \$2500         |
+| or                | 4x 1080 Ti                                       | \$2800         |
+| OS/Ledger Storage | Samsung 860 Evo 2TB                              | \$370          |
+| Accounts storage  | 2x Samsung 970 Pro M.2 512GB                     | \$340          |
+| RAM               | 32 Gb                                            | \$300          |
+| Motherboard       | AMD x399                                         | \$400          |
+| CPU               | AMD Threadripper 2920x                           | \$650          |
+| Case              |                                                  | \$100          |
+| Power supply      | EVGA 1600W                                       | \$300          |
+| Network           | &gt; 500 mbps                                    |                |
+| Network \(1\)     | Google webpass business bay area 1gbps unlimited | \$5500/mo      |
+| Network \(2\)     | Hurricane Electric bay area colo 1gbps           | \$500/mo       |
 
 ** 표 2 ** Solana 클라이언트 실행을위한 하이 엔드 하드웨어 설정 예시.
 

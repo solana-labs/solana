@@ -2,7 +2,7 @@
 title: ソラナクラスタ
 ---
 
-Solanaはさまざまな目的でいくつかの異なるクラスタを維持しています。
+Solana はさまざまな目的でいくつかの異なるクラスタを維持しています。
 
 始める前、最初に[Solana コマンドラインツールをインストールしたこと](cli/install-solana-cli-tools.md)を確認してください。
 
@@ -20,12 +20,14 @@ Solanaはさまざまな目的でいくつかの異なるクラスタを維持�
   - Devnet トークンは **本物ではありません**。
   - Devnet には、アプリケーションテスト用のエアドロップ用のトークン蛇口が含まれています。
   - Devnet には台帳リセットの対象となる可能性があります
-  - Devnet は通常、Mainnet Betaよりも新しいソフトウェアバージョンを実行します。
+  - Devnet は通常、Mainnet Beta よりも新しいソフトウェアバージョンを実行します。
 - Devnet のゴシップエントリポイント: `entrypoint.devnet.solana.com:8001`
 - Devnet のメトリック環境変数:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - RPC URL for Devnet: `https://devnet.solana.com`
 
 ##### コマンドライン構成の例 `solana`
@@ -63,9 +65,11 @@ The `--trusted-validator`s is operated by Solana
 - Testnet では通常、Devnet と Mainnet Beta よりも新しいソフトウェアリリースを実行します。
 - テストネットのゴシップエントリーポイント: `entrypoint.testnet.solana.com:8001`
 - Testnet のメトリック環境変数:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - テストネットの RPC URL: `https://testnet.solana.com`
 
 ##### コマンドライン構成の例 `solana`
@@ -94,10 +98,10 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-`--trusted-validator`s のIDは以下のとおりです。
+`--trusted-validator`s の ID は以下のとおりです。
 
 - `5D1fNXzv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
-- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - RPCノードを破壊 (ソラナ)
+- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - RPC ノードを破壊 (ソラナ)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
@@ -105,15 +109,17 @@ $ solana-validator \
 
 初期のトークンホルダとローンチパートナーのための、パーミッションレスで永続的なクラスタです。 現在、報酬とインフレは無効になっています。
 
-- "Mainnet Beta"で発行されたトークンは **本物** のSOLです。
-- CoinList競売などのトークンを購入/発行するためにお金を支払った場合は、これらのトークンはMainnet Betaで転送されます。
+- "Mainnet Beta"で発行されたトークンは **本物** の SOL です。
+- CoinList 競売などのトークンを購入/発行するためにお金を支払った場合は、これらのトークンは Mainnet Beta で転送されます。
   - 注意: [Solflare](wallet-guide/solflare.md)のようなコマンドライン以外のウォレットを使用している場合、 ウォレットは常にメインネットベータに接続されます。
 - テストネットのゴシップエントリポイント: `entrypoint.mainnet-beta.solana.com:8001`
 - Mainnet Beta のメトリック環境変数:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
-- Mainnet Beta用RPC URL: `https://api.mainnet-beta.solana.com`
+
+- Mainnet Beta 用 RPC URL: `https://api.mainnet-beta.solana.com`
 
 ##### コマンドラインの構成例 `solana`
 

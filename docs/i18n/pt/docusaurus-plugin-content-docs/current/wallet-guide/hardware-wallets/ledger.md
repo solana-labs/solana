@@ -2,7 +2,7 @@
 title: Ledger Nano
 ---
 
-This page describes how to use a Ledger Nano S or Nano X to interact with Solana using the command line tools.  To see other solutions to interact with Solana with your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
+This page describes how to use a Ledger Nano S or Nano X to interact with Solana using the command line tools. To see other solutions to interact with Solana with your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
 
 ## Before You Begin
 
@@ -41,7 +41,7 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
-* NOTE: keypair url parameters are ignored in **zsh** &nbsp;[see troubleshooting for more info](#troubleshooting)
+- NOTE: keypair url parameters are ignored in **zsh** &nbsp;[see troubleshooting for more info](#troubleshooting)
 
 You can use other values for the number after `key=` as well. Any of the addresses displayed by these commands are valid Solana wallet addresses. The private portion associated with each address is stored securely on the Nano, and is used to sign transactions from this address. Just make a note of which keypair URL you used to derive any address you will be using to receive tokens.
 

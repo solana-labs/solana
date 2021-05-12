@@ -83,8 +83,7 @@ Bằng chứng là một danh sách các phần tử `(validator_id, validator_v
 
 1. Tổng số stake của tất cả id validator `> 1/3`
 
-2. Đối với mỗi `(validator_id, validator_vote(X, S))`, tồn tại một số slot `s` trong `S`` đó:
-_ a.<code>s` không phải là tổ tiên chung của cả `validator_vote.last` và `old_vote.last` và `new_vote.last`. _ b. `s` không phải là hậu duệ của `validator_vote.last`. \* c. `s + s.lockout() >= old_vote.last` (ngụ ý rằng validator vẫn bị khóa trên slot `s` tại slot `old_vote.last`).
+2. Đối với mỗi `(validator_id, validator_vote(X, S))`, tồn tại một số slot `s` trong ` S`` đó: _ a.<code>s ` không phải là tổ tiên chung của cả `validator_vote.last` và `old_vote.last` và `new_vote.last`. \_ b. `s` không phải là hậu duệ của `validator_vote.last`. \* c. `s + s.lockout() >= old_vote.last` (ngụ ý rằng validator vẫn bị khóa trên slot `s` tại slot `old_vote.last`).
 
 Việc chuyển đổi các nhánh mà không có bằng chứng chuyển đổi hợp lệ có thể dễ dàng chuyển đổi.
 
@@ -277,8 +276,7 @@ Hãy để `Vote(X, S)` là phiếu bầu duy nhất trong `Optimistic Votes` đ
 
 Do `Vote(X, S)` vì `X' > B >= X`, sau đó `X' > X`, vì vậy theo quy tắc "Optimistic Slashing", `X' > S.last`.
 
-Để thực hiện "chuyển đổi phiếu bầu" thành `X'``, một switching proof
-<code>SP(Vote(X, S), Vote(X', S'))` phải cho thấy `> 1/3` stake bị khóa tại cuộc bỏ phiếu mới nhất của validator này, `S.last`. Kết hợp `>1/3` này với thực tế là các thiết lập của các validator trong `Optimistic Voters` bao gồm `> 2/3` của stake, ngụ ý ít nhất một validator lạc quan `W` từ `Optimistic Voters` phải gửi một phiếu bầu (nhớ lại định nghĩa của switching proof), `Vote(X_w, S_w)` đã được bao gồm trong validator `V` chuyển đổi bằng chứng cho slot `X'`, ở `S_w` chứa một slot `s` như vậy:
+Để thực hiện "chuyển đổi phiếu bầu" thành ` X'``, một switching proof <code>SP(Vote(X, S), Vote(X', S')) ` phải cho thấy `> 1/3` stake bị khóa tại cuộc bỏ phiếu mới nhất của validator này, `S.last`. Kết hợp `>1/3` này với thực tế là các thiết lập của các validator trong `Optimistic Voters` bao gồm `> 2/3` của stake, ngụ ý ít nhất một validator lạc quan `W` từ `Optimistic Voters` phải gửi một phiếu bầu (nhớ lại định nghĩa của switching proof), `Vote(X_w, S_w)` đã được bao gồm trong validator `V` chuyển đổi bằng chứng cho slot `X'`, ở `S_w` chứa một slot `s` như vậy:
 
 - `s` không phải là tổ tiên chung của `S.last` và `X'`
 - `s` không phải là hậu duệ của `S.last`.
@@ -291,8 +289,7 @@ Bởi vì `B` là tổ tiên của `S.last` nên nó cũng đúng sau đó:
 
 đã được bao gồm trong switching proof của `V`.
 
-Bây giờ vì `W` cũng là một thành viên của `Optimistic Voters`, sau đó theo `Lemma 1` ở trên, đưa ra một phiếu bầu bởi `W`, `Vote(X_w, S_w)` ở `S_w`` chứa một phiếu bầu cho
-một slot <code>s` ở `s + s.lockout > B` và `s` không phải là tổ tiên của `B`, sau đó `X_w > B`.
+Bây giờ vì `W` cũng là một thành viên của `Optimistic Voters`, sau đó theo `Lemma 1` ở trên, đưa ra một phiếu bầu bởi `W`, `Vote(X_w, S_w)` ở ` S_w`` chứa một phiếu bầu cho một slot <code>s ` ở `s + s.lockout > B` và `s` không phải là tổ tiên của `B`, sau đó `X_w > B`.
 
 Bởi vì validator `V` đã bao gồm bỏ phiếu `Vote(X_w, S_w)` trong proof of switching của nó cho slot `X'`, thì validator ngụ ý rằng `V'` đã gửi bỏ phiếu `Vote(X_w, S_w)` **trước khi** validator `V` gửi phiếu bầu chuyển đổi cho slot `X'`, `Vote(X', S')`.
 

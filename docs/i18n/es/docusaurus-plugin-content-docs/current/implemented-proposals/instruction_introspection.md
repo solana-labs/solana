@@ -4,7 +4,7 @@ title: introducción de instrucción
 
 ## Problema
 
-Algunos programas de contratos inteligentes pueden querer verificar que otra Instrucción está presente en un mensaje dado, ya que esa Instrucción podría estar realizando una verificación de ciertos datos. en una función recompilada. (Ver secp256k1\_instruction para un ejemplo).
+Algunos programas de contratos inteligentes pueden querer verificar que otra Instrucción está presente en un mensaje dado, ya que esa Instrucción podría estar realizando una verificación de ciertos datos. en una función recompilada. (Ver secp256k1_instruction para un ejemplo).
 
 ## Solución
 

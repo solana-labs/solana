@@ -4,7 +4,7 @@ title: Calling Between Programs
 
 ## Cross-Program Invocations
 
-The Solana runtime allows programs to call each other via a mechanism called cross-program invocation.  Calling between programs is achieved by one program invoking an instruction of the other.  The invoking program is halted until the invoked program finishes processing the instruction.
+The Solana runtime allows programs to call each other via a mechanism called cross-program invocation. Calling between programs is achieved by one program invoking an instruction of the other. The invoking program is halted until the invoked program finishes processing the instruction.
 
 For example, a client could create a transaction that modifies two accounts, each owned by separate on-chain programs:
 
@@ -46,7 +46,7 @@ mod acme {
 
 `invoke()` is built into Solana's runtime and is responsible for routing the given instruction to the `token` program via the instruction's `program_id` field.
 
-Note that `invoke` requires the caller to pass all the accounts required by the instruction being invoked.  This means that both the executable account (the ones that matches the instruction's program id) and the accounts passed to the instruction procesor.
+Note that `invoke` requires the caller to pass all the accounts required by the instruction being invoked. This means that both the executable account (the ones that matches the instruction's program id) and the accounts passed to the instruction procesor.
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any accounts owned by `token`. It does this by applying the runtime's policy to the current state of the accounts at the time `acme` calls `invoke` vs. the initial state of the accounts at the beginning of the `acme`'s instruction. After `pay()` completes, the runtime must again ensure that `token` didn't modify any accounts owned by `acme` by again applying the runtime's policy, but this time with the `token` program ID. Lastly, after `pay_and_launch_missiles()` completes, the runtime must apply the runtime policy one more time, where it normally would, but using all updated `pre_*` variables. If executing `pay_and_launch_missiles()` up to `pay()` made no invalid account changes, `pay()` made no invalid changes, and executing from `pay()` until `pay_and_launch_missiles()` returns made no invalid changes, then the runtime can transitively assume `pay_and_launch_missiles()` as whole made no invalid account changes, and therefore commit all these account modifications.
 
@@ -105,11 +105,11 @@ Given the two conditions, users can securely transfer or assign the authority of
 
 ### Private keys for program addresses
 
-A Program address does not lie on the ed25519 curve and therefore has no valid private key associated with it, and thus generating a signature for it is impossible.  While it has no private key of its own, it can be used by a program to issue an instruction that includes the Program address as a signer.
+A Program address does not lie on the ed25519 curve and therefore has no valid private key associated with it, and thus generating a signature for it is impossible. While it has no private key of its own, it can be used by a program to issue an instruction that includes the Program address as a signer.
 
 ### Hash-based generated program addresses
 
-Program addresses are deterministically derived from a collection of seeds and a program id using a 256-bit pre-image resistant hash function.  Program address must not lie on the ed25519 curve to ensure there is no associated private key. During generation an error will be returned if the address is found to lie on the curve.  There is about a 50/50 change of this happening for a given collection of seeds and program id.  If this occurs a different set of seeds or a seed bump (additional 8 bit seed) can be used to find a valid program address off the curve.
+Program addresses are deterministically derived from a collection of seeds and a program id using a 256-bit pre-image resistant hash function. Program address must not lie on the ed25519 curve to ensure there is no associated private key. During generation an error will be returned if the address is found to lie on the curve. There is about a 50/50 change of this happening for a given collection of seeds and program id. If this occurs a different set of seeds or a seed bump (additional 8 bit seed) can be used to find a valid program address off the curve.
 
 Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `system_instruction::create_address_with_seed`.
 

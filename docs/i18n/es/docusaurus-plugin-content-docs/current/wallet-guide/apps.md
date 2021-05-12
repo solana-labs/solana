@@ -5,9 +5,10 @@ title: Aplicaciones móviles de billeteras
 Solana está soportada por múltiples aplicaciones de terceros que deberían proporcionar una experiencia familiar para la mayoría de las personas que son nuevas o experimentadas con el uso de criptomonedas.
 
 ## Trust Wallet
+
 [Trust Wallet](https://trustwallet.com/) es una aplicación disponible para iOS y Android y puede utilizarse para enviar y recibir tokens SOL.
 
-*Nota: Trust Wallet no soporta cuentas de stake o operaciones de staking*
+_Nota: Trust Wallet no soporta cuentas de stake o operaciones de staking_
 
 ### Seguridad de Trust Wallet
 
@@ -19,6 +20,7 @@ Si alguien obtiene acceso a su aplicación de Trust Wallet, puede acceder a su f
 - Bajo el menú Opciones para una billetera en particular pulse "Mostrar frase de recuperación"
 
 ## Coin98
+
 [Coin98](https://coin98.app/) es una aplicación disponible para iOS y Android y puede ser usada para enviar y recibir tokens SOL.
 
-*Nota: Coin98 no soporta cuentas de stake o operaciones de staking*
+_Nota: Coin98 no soporta cuentas de stake o operaciones de staking_

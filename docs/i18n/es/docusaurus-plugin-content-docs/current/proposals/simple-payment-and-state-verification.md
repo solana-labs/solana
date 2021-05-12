@@ -43,6 +43,7 @@ El estado de la transacción es necesario para el recibo porque el recibo de est
 Actualmente, el Block-Merkle no está implementado, por lo que para verificar que `E` era una entrada en el bloque con el hash del banco `B`, necesitaríamos proporcionar todos los hashes de las entradas en el bloque. Idealmente este Block-Merkle se implementaría, ya que la alternativa es muy ineficiente.
 
 #### Cabeceras de bloque
+
 Para verificar las pruebas de inclusión de la transacción, los clientes deben poder infectar la topología de los forks en la red
 
 Más concretamente, el cliente ligero tendrá que hacer un seguimiento de las cabeceras de los bloques entrantes de manera que, dados dos hashes de bancos para los bloques `A` y `B`, puedan determinar si `A` es un ancestro de `B` (La sección siguiente sobre `Prueba de confirmación optimista` explica por qué). El contenido del encabezado son los campos necesarios para calcular el hash bancario.

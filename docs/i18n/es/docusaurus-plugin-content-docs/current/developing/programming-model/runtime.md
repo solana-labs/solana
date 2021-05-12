@@ -15,6 +15,7 @@ Después de que el tiempo de ejecución ejecuta cada una de las instrucciones de
 Después de que un programa haya procesado una instrucción, el tiempo de ejecución verifica que el programa sólo ha realizado las operaciones que se le han permitido y que los resultados se ajustan a la política de tiempo de ejecución.
 
 La política es la siguiente:
+
 - Sólo el dueño de la cuenta puede cambiar de propietario.
   - Y sólo si la cuenta es escribible.
   - Y sólo si la cuenta no es ejecutable
@@ -30,9 +31,10 @@ La política es la siguiente:
 
 ## Calcular presupuesto
 
-Para evitar que un programa abuse de los recursos de cálculo, cada instrucción de una transacción recibe un presupuesto de cálculo.  El presupuesto se compone de unidades de cálculo que se consumen a medida que el programa realiza diversas operaciones y de límites que el programa no puede superar.  Cuando el programa consume todo su presupuesto o supera un límite entonces el tiempo de ejecución detiene el programa y devuelve un error.
+Para evitar que un programa abuse de los recursos de cálculo, cada instrucción de una transacción recibe un presupuesto de cálculo. El presupuesto se compone de unidades de cálculo que se consumen a medida que el programa realiza diversas operaciones y de límites que el programa no puede superar. Cuando el programa consume todo su presupuesto o supera un límite entonces el tiempo de ejecución detiene el programa y devuelve un error.
 
 Las siguientes operaciones tienen un costo de cálculo:
+
 - Ejecutando instrucciones BPF
 - Llamadas al sistema
   - ingresando
@@ -40,7 +42,7 @@ Las siguientes operaciones tienen un costo de cálculo:
   - invocaciones entre programas
   - ...
 
-Para invocaciones entre programas, los programas invocados heredan el presupuesto de su padre.  Si un programa invocado consume el presupuesto o excede un límite total de la cadena de invocación y el padre se detiene.
+Para invocaciones entre programas, los programas invocados heredan el presupuesto de su padre. Si un programa invocado consume el presupuesto o excede un límite total de la cadena de invocación y el padre se detiene.
 
 El actual [presupuesto budget](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L65) se puede encontrar en el SDK de Solana.
 
@@ -59,6 +61,7 @@ log_pubkey_units: 100,
 ```
 
 Entonces el programa
+
 - Puede ejecutar 200,000 instrucciones BPF si no hace nada más
 - Puede registrar 2.000 mensajes de registro
 - No se puede exceder 4k del uso de la pila
@@ -67,15 +70,15 @@ Entonces el programa
 
 Dado que el presupuesto de computación se consume de forma incremental a medida que el programa se ejecuta, el consumo total del presupuesto será una combinación de los distintos costes de las operaciones que realiza.
 
-En tiempo de ejecución, un programa puede registrar la cantidad de presupuesto de cómputo que queda.  Consulte [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption). para obtener más información.
+En tiempo de ejecución, un programa puede registrar la cantidad de presupuesto de cómputo que queda. Consulte [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption). para obtener más información.
 
-Los valores del presupuesto están condicionados a la habilitación de la característica, eche un vistazo a la función [nueva](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) del presupuesto para saber cómo se construye el presupuesto.  Para determinar los valores del presupuesto actual es necesario conocer cómo funcionan las [características](runtime.md#features) y qué características están activadas en el clúster que se está utilizando.
+Los valores del presupuesto están condicionados a la habilitación de la característica, eche un vistazo a la función [nueva](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) del presupuesto para saber cómo se construye el presupuesto. Para determinar los valores del presupuesto actual es necesario conocer cómo funcionan las [características](runtime.md#features) y qué características están activadas en el clúster que se está utilizando.
 
 ## Características nuevas
 
-A medida que Solana evoluciona, se pueden introducir nuevas características o parches que cambien el comportamiento del clúster y cómo se ejecutan los programas.  Los cambios de comportamiento deben ser coordinados entre los distintos nodos del cluster, si los nodos no se coordinan entonces estos cambios pueden dar lugar a una ruptura del consenso.  Solana soporta un mecanismo llamado características de tiempo de ejecución para facilitar la adopción fluida de cambios.
+A medida que Solana evoluciona, se pueden introducir nuevas características o parches que cambien el comportamiento del clúster y cómo se ejecutan los programas. Los cambios de comportamiento deben ser coordinados entre los distintos nodos del cluster, si los nodos no se coordinan entonces estos cambios pueden dar lugar a una ruptura del consenso. Solana soporta un mecanismo llamado características de tiempo de ejecución para facilitar la adopción fluida de cambios.
 
-Las características de tiempo de ejecución son eventos coordinados por épocas en los que se producirán uno o más cambios de comportamiento en el clúster.  Los nuevos cambios en Solana que cambiarán el comportamiento están envueltos con puertas de características y deshabilitados por defecto.  A continuación, se utilizan las herramientas de Solana para activar una característica, que la marca como pendiente; una vez marcada como pendiente, la característica se activará en la siguiente época.
+Las características de tiempo de ejecución son eventos coordinados por épocas en los que se producirán uno o más cambios de comportamiento en el clúster. Los nuevos cambios en Solana que cambiarán el comportamiento están envueltos con puertas de características y deshabilitados por defecto. A continuación, se utilizan las herramientas de Solana para activar una característica, que la marca como pendiente; una vez marcada como pendiente, la característica se activará en la siguiente época.
 
 Para determinar qué características están activadas, utilice [las herramientas de línea de comandos de Solana](cli/install-solana-cli-tools.md):
 
@@ -83,4 +86,4 @@ Para determinar qué características están activadas, utilice [las herramienta
 estado de la característica solana
 ```
 
-Si encuentra problemas, primero asegúrese de que la versión de Solana tools que está usando coincide con la versión devuelta por `solana cluster-version`.  Si no coinciden con [instale la suite de herramientas correcta](cli/install-solana-cli-tools.md).
+Si encuentra problemas, primero asegúrese de que la versión de Solana tools que está usando coincide con la versión devuelta por `solana cluster-version`. Si no coinciden con [instale la suite de herramientas correcta](cli/install-solana-cli-tools.md).

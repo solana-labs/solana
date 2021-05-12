@@ -5,9 +5,9 @@ title: 오프라인 트랜잭션 서명
 일부 보안 모델은 서명 키를 유지해야하며 따라서 서명 프로세스가 트랜잭션 생성 및 네트워크 브로드 캐스트와 분리되어 있어야합니다. 예는 다음과 같습니다
 
 - Collecting signatures from geographically disparate signers in a [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking)) signing device
+- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>) signing device
 
-.-\[다중 서명 체계\] (cli / usage.md # multiple-witnesses)에서 지리적으로 다른 서명자로부터 서명 수집 -[airgapped]를 사용하여 트랜잭션 서명 (https://en.wikipedia.org/wiki/ Air_gap_ (networking)) 서명 장치이
+.-\[다중 서명 체계\] (cli / usage.md # multiple-witnesses)에서 지리적으로 다른 서명자로부터 서명 수집 -[airgapped]를 사용하여 트랜잭션 서명 (https://en.wikipedia.org/wiki/ Air*gap* (networking)) 서명 장치이
 
 ## 오프라인 서명을 지원하는 명령
 
@@ -33,7 +33,7 @@ title: 오프라인 트랜잭션 서명
 
 .-[`create-stake-account`] (cli / usage.md # solana-create-stake-account) -[`deactivate-stake`] ( cli / usage.md # solana-deactivate-stake) -[`delegate-stake`] (cli / usage.md # solana-delegate-stake) -[`split-stake`] (cli / usage.md # solana- split-stake) -[`stake-authorize`] (cli / usage.md # solana-stake-authorize) -[`stake-set-lockup`] (cli / usage.md # solana-stake-set-lockup) -[`transfer`] (cli / usage.md # solana-transfer) -[`withdraw-stake`] (cli / usage.md # solana-withdraw-stake)
 
-```bash
+````bash
 ```text
 solana @ offline1 $ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --blockhash 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc \
@@ -41,7 +41,7 @@ solana @ offline1 $ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut
     --keypair fee_payer.json \
     --from
 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL``출력
-```
+````
 
 하려면 명령 줄에서 다음 인수
 
@@ -65,18 +65,18 @@ To submit a transaction that has been signed offline to the network, pass the fo
 
 명령에
 
-```bash
+````bash
 ```bash
 solana @ online $ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     - 서명자 FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j =
     4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN받는사람 keypair.json
-```
+````
 
 ` ``bash는 솔라 @ 오프라인 $ 솔라 지불 --sign 전용 --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \받는사람 keypair.json
 
-```text
+````text
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN```##
-```
+````
 
 ## 다중 세션이상 오프라인
 
@@ -99,13 +99,13 @@ ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTH
 
 출력
 
-```text
+````text
 2)```텍스트
 Blockhash : 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
 서명자 (Pubkey = 서명) :
   674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL = 3vJtnba4dKQmEAieAekC1rJnPUndBcpvqRPRMoPWqhLEMCty2SdUxt2yvC1wQW6wVUa5putZMt6kdwCaTv8gk7sQ
 결석 서명자 (Pubkey) :
-```
+````
 
 { "blockhash" "5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF", "서명자": [ "FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j = 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN"]}
 
@@ -121,9 +121,9 @@ Blockhash : 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc
 
 '```##를
 
-```text
+````text
 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL```명령
-```
+````
 
 출력
 
@@ -138,9 +138,9 @@ solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
 
 Output (Online Submission)
 
-```text
+````text
 3bo5YiRagwmRikuH6H1d2gkKef5nFZXE3gJeoHxJbPjy```명령
-```
+````
 
 ## ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi```##가입하는 데 더 많은 시간을 구매
 

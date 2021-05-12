@@ -6,7 +6,7 @@ title: "Tài khoản"
 
 Nếu chương trình cần lưu trữ trạng thái giữa các giao dịch, chương trình sẽ sử dụng các _tài khoản_. Tài khoản tương tự như các tệp trong hệ điều hành như Linux. Giống như một tệp, tài khoản có thể giữ dữ liệu tùy ý và dữ liệu đó tồn tại ngoài vòng đời của chương trình. Cũng giống như tệp, tài khoản bao gồm siêu dữ liệu thời gian chạy cho biết ai được phép truy cập dữ liệu và cách thức.
 
-Không giống như một tệp, tài khoản bao gồm siêu dữ liệu cho thời gian tồn tại của tệp. Thời gian tồn tại đó được biểu thị bằng các "mã thông báo", là một số mã thông báo gốc theo phân số, được gọi là các _lamport_. Các tài khoản được giữ trong bộ nhớ của validator và trả tiền ["thuê"](#rent) để ở đó. Mỗi validator định kỳ quét tất cả các tài khoản và thu tiền thuê. Bất kỳ tài khoản nào giảm xuống 0 lamport sẽ bị xóa.  Các tài khoản cũng có thể được đánh dấu là [miễn-tiền thuê](#rent-exemption) nếu chúng có chứa đủ số lượng lamport.
+Không giống như một tệp, tài khoản bao gồm siêu dữ liệu cho thời gian tồn tại của tệp. Thời gian tồn tại đó được biểu thị bằng các "mã thông báo", là một số mã thông báo gốc theo phân số, được gọi là các _lamport_. Các tài khoản được giữ trong bộ nhớ của validator và trả tiền ["thuê"](#rent) để ở đó. Mỗi validator định kỳ quét tất cả các tài khoản và thu tiền thuê. Bất kỳ tài khoản nào giảm xuống 0 lamport sẽ bị xóa. Các tài khoản cũng có thể được đánh dấu là [miễn-tiền thuê](#rent-exemption) nếu chúng có chứa đủ số lượng lamport.
 
 Giống như cách người dùng Linux sử dụng đường dẫn để tra cứu tệp, một khách hàng Solana sử dụng một _địa chỉ_ để tra cứu tài khoản. Địa chỉ là một public key 256 bit.
 
@@ -20,11 +20,11 @@ Các giao dịch có thể [chỉ ra](transactions.md#message-header-format) r�
 
 ## Thực thi
 
-Nếu một tài khoản được đánh dấu là "có thể thực thi" trong siêu dữ liệu của nó thì nó được coi là một chương trình có thể được thực thi bằng cách bao gồm public key của tài khoản đó một [id chương trình](transactions.md#program-id) của hướng dẫn. Tài khoản được đánh dấu là có thể thực thi trong quá trình triển khai chương trình thành công bởi trình tải sở hữu tài khoản.  Ví dụ: trong quá trình triển khai chương trình BPF, khi trình tải đã xác định rằng bytecode BPF trong dữ liệu của tài khoản là hợp lệ, trình tải sẽ đánh dấu vĩnh viễn tài khoản chương trình là có thể thực thi được.  Sau khi thực thi, thời gian chạy thực thi rằng dữ liệu của tài khoản (chương trình) là bất biến.
+Nếu một tài khoản được đánh dấu là "có thể thực thi" trong siêu dữ liệu của nó thì nó được coi là một chương trình có thể được thực thi bằng cách bao gồm public key của tài khoản đó một [id chương trình](transactions.md#program-id) của hướng dẫn. Tài khoản được đánh dấu là có thể thực thi trong quá trình triển khai chương trình thành công bởi trình tải sở hữu tài khoản. Ví dụ: trong quá trình triển khai chương trình BPF, khi trình tải đã xác định rằng bytecode BPF trong dữ liệu của tài khoản là hợp lệ, trình tải sẽ đánh dấu vĩnh viễn tài khoản chương trình là có thể thực thi được. Sau khi thực thi, thời gian chạy thực thi rằng dữ liệu của tài khoản (chương trình) là bất biến.
 
 ## Creating
 
-Để tạo tài khoản, khách hàng tạo một _keypair_và đăng ký public key của nó bằng cách sử dụng hướng dẫn `SystemProgram::CreateAccount` với kích thước lưu trữ cố định được phân bổ trước tính bằng byte. Kích thước tối đa hiện tại của dữ liệu tài khoản là 10 megabyte.
+Để tạo tài khoản, khách hàng tạo một \_keypair_và đăng ký public key của nó bằng cách sử dụng hướng dẫn `SystemProgram::CreateAccount` với kích thước lưu trữ cố định được phân bổ trước tính bằng byte. Kích thước tối đa hiện tại của dữ liệu tài khoản là 10 megabyte.
 
 Địa chỉ tài khoản có thể là bất kỳ giá trị 256 bit tùy ý nào và có các cơ chế để người dùng nâng cao tạo địa chỉ dẫn xuất (`SystemProgram::CreateAccountWithSeed`, [`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
 
@@ -61,7 +61,6 @@ Và tính toán tiền thuê được thực hiện với độ chính xác là 
 Việc tính toán tiền thuê bao gồm siêu dữ liệu tài khoản (địa chỉ, chủ sở hữu, các lamport, v. v.) trong kích thước của một tài khoản. Do đó, tài khoản nhỏ nhất có thể dùng để tính tiền thuê là 128 byte.
 
 Ví dụ: một tài khoản được tạo với lần chuyển ban đầu là 10,000 lamport và không có dữ liệu bổ sung. Tiền thuê được ghi nợ ngay lập tức khi tạo ra, dẫn đến số dư là 7,561 lamport:
-
 
 ```text
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)

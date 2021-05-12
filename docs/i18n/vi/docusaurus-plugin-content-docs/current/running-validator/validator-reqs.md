@@ -25,7 +25,7 @@ title: Yêu cầu về Validator
 Dưới đây là các đề xuất của chúng tôi về các thông số kỹ thuật của máy thấp, trung bình và cao cấp:
 
 |                   | Thấp                | Trung bình             | Cao                    | Ghi chú                                                                                   |
-|:----------------- |:------------------- |:---------------------- |:---------------------- |:----------------------------------------------------------------------------------------- |
+| :---------------- | :------------------ | :--------------------- | :--------------------- | :---------------------------------------------------------------------------------------- |
 | CPU               | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | Hãy xem xét một bo mạch chủ hỗ trợ 10Gb với càng nhiều rãnh PCIe và khe cắm m.2 càng tốt. |
 | RAM               | 32GB                | 64GB                   | 128GB                  |                                                                                           |
 | Ledger Drive      | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | Hoặc SSD tương đương                                                                      |

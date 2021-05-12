@@ -31,7 +31,7 @@ solana-keygen pubkey ~ / my-solana-wallet / my-keypair.json
 ErRr1caKzK8L8nn4xmEWtimYRiTCAZXjBtVphuZ5vMKy
 ```
 
-`~ / my-solana-wallet / my-keypair.json`의 키 쌍에 해당하는 공개 키입니다. 키 쌍 파일의 공개 키는 _wallet address_입니다.
+`~ / my-solana-wallet / my-keypair.json`의 키 쌍에 해당하는 공개 키입니다. 키 쌍 파일의 공개 키는 *wallet address*입니다.
 
 ## 키 페어 파일에 대해 주소 확인
 

@@ -95,13 +95,13 @@ NDEBUG=1 ./multinode-demo/bench-tps.sh # runs against localhost by default
 - لتفعيل المعلومات `info` في كل مكان وتصحيح الأخطاء `debug` فقط في ملف solana::banking_stage:
 
   ```bash
-export RUST_LOG=solana=info,solana::banking_stage=debug
+  export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - لتفعيلها سِجَل برنامج BPF:
 
   ```bash
-export RUST_LOG=solana_bpf_loader=trace
+  export RUST_LOG=solana_bpf_loader=trace
   ```
 
 بشكل عام، نستخدم تصحيح الأخطاء `debug` لرسائل تصحيح الأخطاء غير المُتكررة، وتتبع `trace` الرسائل التي يحتمل أن تكون مُتكررة ومعلومات `info` التسجيل المُرتبط بالأداء.

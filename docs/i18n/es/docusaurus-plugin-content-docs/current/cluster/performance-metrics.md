@@ -20,6 +20,6 @@ El nodo asigna una marca de tiempo a cada nueva bifurcación y calcula el tiempo
 
 El software validador está desplegado en instancias GCP n1-standard-16 con disco pd-sd 1TB y 2x GPU Nvidia V100. Estos están desplegados en la región us-west-1.
 
-solana-bench-tps se inicia después de que la red converge desde una máquina cliente con una instancia n1-standard-16 de solo CPU con los siguientes argumentos: ` --tx \ _count = 50000 --thread-batch-sleep 1000 `
+solana-bench-tps se inicia después de que la red converge desde una máquina cliente con una instancia n1-standard-16 de solo CPU con los siguientes argumentos: `--tx \ _count = 50000 --thread-batch-sleep 1000`
 
 Las métricas TPS y de confirmación se capturan a partir de los números de tablero en un promedio de 5 minutos de cuando comienza la etapa de transferencia de las tps de los bancos.

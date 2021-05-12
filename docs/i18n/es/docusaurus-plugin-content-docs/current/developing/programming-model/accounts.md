@@ -6,7 +6,7 @@ title: "Cuentas"
 
 Si el programa necesita almacenar el estado entre las transacciones, lo hace usando _cuentas_. Las cuentas son similares a archivos en sistemas operativos como Linux. Al igual que un archivo, una cuenta puede contener datos arbitrarios y esos datos persisten más allá de la vida útil de un programa. También como un archivo, una cuenta incluye metadatos que le dice al tiempo de ejecución quién puede acceder a los datos y cómo.
 
-A diferencia de un archivo, la cuenta incluye metadatos para la vida útil del archivo. Que el tiempo de vida se expresa en "tokens", que es un número de tokens nativo fraccional, llamado _lamports_. Las cuentas se mantienen en memoria del validador y pagan ["renta"](#rent) para permanecer allí. Cada validador analiza periódicamente todas las cuentas y cobra alquiler. Cualquier cuenta que cae a cero lamports es purgada.  Las cuentas también pueden marcarse como [rent-exempt](#rent-exemption) si contienen un número de lamports.
+A diferencia de un archivo, la cuenta incluye metadatos para la vida útil del archivo. Que el tiempo de vida se expresa en "tokens", que es un número de tokens nativo fraccional, llamado _lamports_. Las cuentas se mantienen en memoria del validador y pagan ["renta"](#rent) para permanecer allí. Cada validador analiza periódicamente todas las cuentas y cobra alquiler. Cualquier cuenta que cae a cero lamports es purgada. Las cuentas también pueden marcarse como [rent-exempt](#rent-exemption) si contienen un número de lamports.
 
 Del mismo modo que un usuario de Linux usa una ruta para buscar un archivo, un cliente Solana utiliza una _dirección_ para buscar una cuenta. La dirección es una clave pública de 256 bits.
 
@@ -20,11 +20,11 @@ Las transacciones pueden [indicar](transactions.md#message-header-format) que al
 
 ## Ejecutable
 
-Si una cuenta está marcada como "ejecutable" en sus metadatas, entonces se considera un programa que puede ejecutarse incluyendo la clave pública de la cuenta una instrucción [id de programa](transactions.md#program-id). Los clientes son marcados como ejecutables durante un proceso de despliegue exitoso del programa por el cargador que posee la cuenta.  Por ejemplo, durante el despliegue del programa BPF, una vez que el cargador ha determinado que el bytecode BPF en los datos de la cuenta es válido, el cargador marca permanentemente la cuenta del programa como ejecutable.  Una vez ejecutable, el tiempo de ejecución impone que los datos de la cuenta (el programa) son inmutables.
+Si una cuenta está marcada como "ejecutable" en sus metadatas, entonces se considera un programa que puede ejecutarse incluyendo la clave pública de la cuenta una instrucción [id de programa](transactions.md#program-id). Los clientes son marcados como ejecutables durante un proceso de despliegue exitoso del programa por el cargador que posee la cuenta. Por ejemplo, durante el despliegue del programa BPF, una vez que el cargador ha determinado que el bytecode BPF en los datos de la cuenta es válido, el cargador marca permanentemente la cuenta del programa como ejecutable. Una vez ejecutable, el tiempo de ejecución impone que los datos de la cuenta (el programa) son inmutables.
 
 ## Creando
 
-Para crear una cuenta, un cliente genera un keypair __ y registra su clave pública usando la instrucción `SystemProgram::CreateAccount` con un tamaño de almacenamiento fijo en bytes. El tamaño máximo actual de los datos de una cuenta es de 10 megabytes.
+Para crear una cuenta, un cliente genera un keypair \_\_ y registra su clave pública usando la instrucción `SystemProgram::CreateAccount` con un tamaño de almacenamiento fijo en bytes. El tamaño máximo actual de los datos de una cuenta es de 10 megabytes.
 
 Una dirección de cuenta puede ser cualquier valor arbitrario de 256 bits, y hay mecanismos para usuarios avanzados para crear direcciones derivadas (`SystemProgram::CreateAccountWithSeed`, [`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
 
@@ -61,7 +61,6 @@ Y el cálculo del alquiler se hace con la precisión `f64` y el resultado final 
 El cálculo del alquiler incluye metadatos de la cuenta (dirección, propietario, lámports, etc) en el tamaño de una cuenta. Por lo tanto, la cuenta más pequeña puede ser para el alquiler cálculos es de 128 bytes.
 
 Por ejemplo, se crea una cuenta con la transferencia inicial de 10.000 lamports y sin datos adicionales. El alquiler se debitará inmediatamente al crear, resultando en un saldo de 7,561 lamports:
-
 
 ```text
 Alquiler: 2.439 = 19,055441478439427 (tasa de alquiler) * 128 bytes (tamaño mínimo de la cuenta) * 1 (época) Saldo de la cuenta: 7.561 = 10.000 (lamports transferidas) - 2.439 (tasa de alquiler de esta cuenta para una época)

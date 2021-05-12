@@ -248,81 +248,55 @@ Một [mục nhập](terminology.md#entry) sổ cái ước tính thời lượn
 
 ## chiều cao đánh dấu
 
-Đánh dấu/a> thứ N trong [sổ cái](terminology.md#ledger).</p> 
-
-
+Đánh dấu/a> thứ N trong [sổ cái](terminology.md#ledger).</p>
 
 ## mã thông báo
 
 Một khan hiếm, thành viên có thể thay thế của một tập hợp các mã thông báo.
 
-
-
 ## tps
 
 [Giao dịch](terminology.md#transaction) mỗi giây.
-
-
 
 ## giao dịch
 
 Một hoặc nhiều [hướng dẫn](terminology.md#instruction) được ký bởi [khách hàng](terminology.md#client) bằng một hoặc nhiều [keypair](terminology.md#keypair) và được thực thi nguyên tử chỉ với hai kết quả có thể xảy ra: thành công hoặc thất bại.
 
-
-
 ## id giao dịch
 
 [chữ ký](terminology.md#signature) đầu tiên trong [giao dịch](terminology.md#transaction), có thể được sử dụng để xác định duy nhất giao dịch trên [sổ cái](terminology.md#ledger) hoàn chỉnh.
-
-
 
 ## xác nhận giao dịch
 
 Số lượng [khối được xác nhận](terminology.md#confirmed-block) kể từ khi giao dịch được chấp nhận trên [sổ cái](terminology.md#ledger). Giao dịch được hoàn tất khi khối của nó trở thành [gốc](terminology.md#root).
 
-
-
 ## nhập giao dịch
 
 Một tập hợp các [giao dịch](terminology.md#transaction) có thể được thực hiện song song.
-
-
 
 ## người xác thực
 
 Người tham gia đầy đủ trong [ cụm ](terminology.md#cluster) chịu trách nhiệm xác thực [ sổ cái ](terminology.md#ledger) và tạo các [khối](terminology.md#block).
 
-
-
 ## VDF
 
 Xem [chức năng trì hoãn có thể xác minh](terminology.md#verifiable-delay-function).
-
-
 
 ## chức năng trì hoãn có thể xác minh
 
 Một hàm cần một khoảng thời gian cố định để thực thi tạo ra bằng chứng rằng nó đã chạy, sau đó có thể được xác minh trong thời gian ngắn hơn so với thời gian tạo ra.
 
-
-
 ## phiếu bầu
 
 Xem [bỏ phiếu sổ cái](terminology.md#ledger-vote).
-
-
 
 ## phiếu tín dụng
 
 Một kiểm đếm phần thưởng cho các [validator](terminology.md#validator). Tín dụng biểu quyết được trao cho một validator trong tài khoản bỏ phiếu của họ khi validator đạt được [gốc](terminology.md#root).
 
-
-
 ## ví
 
 Một bộ sưu tập các [keypair](terminology.md#keypair).
-
-
 
 ## thời kỳ ấm lên
 

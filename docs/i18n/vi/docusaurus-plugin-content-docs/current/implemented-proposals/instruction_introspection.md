@@ -4,7 +4,7 @@ title: hướng dẫn introspection
 
 ## Sự cố
 
-Một số chương trình hợp đồng thông minh có thể muốn xác minh rằng một Chỉ lệnh khác có trong một Thông báo nhất định vì Chỉ thị đó có thể đang thực hiện xác minh một số dữ liệu nhất định, trong một chức năng được biên dịch trước. (Xem hướng dẫn secp256k1\_để làm ví dụ).
+Một số chương trình hợp đồng thông minh có thể muốn xác minh rằng một Chỉ lệnh khác có trong một Thông báo nhất định vì Chỉ thị đó có thể đang thực hiện xác minh một số dữ liệu nhất định, trong một chức năng được biên dịch trước. (Xem hướng dẫn secp256k1_để làm ví dụ).
 
 ## Giải pháp
 

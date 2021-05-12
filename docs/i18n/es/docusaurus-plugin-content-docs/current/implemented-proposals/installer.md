@@ -47,7 +47,7 @@ $ cargo run -- --help
 
 ### Desplegar una nueva actualización a un clúster
 
-Dado un tarball de lanzamiento de solana \ (creado por ` ci / publish-tarball.sh ` \) que ya se ha subido a una URL de acceso público, los siguientes comandos implementarán la actualización:
+Dado un tarball de lanzamiento de solana \ (creado por `ci / publish-tarball.sh` \) que ya se ha subido a una URL de acceso público, los siguientes comandos implementarán la actualización:
 
 ```bash
 $ solana-keygen new -o update-manifest.json # <-- sólo se genera una vez, la clave pública se comparte con los usuarios
@@ -65,7 +65,7 @@ $ solana-install run solana-validator . . # <-- ejecuta un validador, reinicián
 
 ## Manifiesto de actualización en cadena
 
-Se utiliza un manifiesto de actualización para anunciar el despliegue de nuevos tarballs de lanzamiento en un clúster solana. El manifiesto de actualización se almacena mediante el programa ` config `, y cada cuenta de manifiesto de actualización describe un canal de actualización lógico para un triple objetivo determinado \ (p. Ej., ` x86_64-apple-darwin ` \). La clave pública de la cuenta es bien conocida entre la entidad que implementa nuevas actualizaciones y los usuarios que las consumen.
+Se utiliza un manifiesto de actualización para anunciar el despliegue de nuevos tarballs de lanzamiento en un clúster solana. El manifiesto de actualización se almacena mediante el programa `config`, y cada cuenta de manifiesto de actualización describe un canal de actualización lógico para un triple objetivo determinado \ (p. Ej., `x86_64-apple-darwin` \). La clave pública de la cuenta es bien conocida entre la entidad que implementa nuevas actualizaciones y los usuarios que las consumen.
 
 El tarball de actualización en sí está alojado en otro lugar, fuera de la cadena y se puede obtener desde el `download_url` especificado.
 

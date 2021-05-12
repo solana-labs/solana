@@ -41,46 +41,55 @@ Low risk features, non-breaking changes, and security and bug fixes are shipped 
 ### RPC API
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Endpoint / feature deprecation
 
 Minor releases:
+
 - New RPC endpoints and features
 
 Major releases:
+
 - Removal of deprecated features
 
 ### Rust Crates
 
-* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
-* [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
-* [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
-* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
+- [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
+- [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
+- [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
+- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Performance improvements
 
 Minor releases:
+
 - New APIs
 
 Major releases
+
 - Removal of deprecated APIs
 - Backwards incompatible behavior changes
 
 ### CLI Tools
 
 Patch releases:
+
 - Bug and security fixes
 - Performance improvements
 - Subcommand / argument deprecation
 
 Minor releases:
+
 - New subcommands
 
 Major releases:
+
 - Switch to new RPC API endpoints / configuration introduced in the previous major version.
 - Removal of deprecated features
 

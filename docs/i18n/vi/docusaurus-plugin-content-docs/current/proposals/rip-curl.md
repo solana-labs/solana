@@ -14,15 +14,15 @@ Một API phát trực tuyến, hướng đến giao dịch, thân thiện với
 
 Cải thiện trải nghiệm khách hàng:
 
-* Hỗ trợ kết nối trực tiếp từ các ứng dụng WebAssembly.
-* Khách hàng có thể được thông báo về tiến độ xác nhận trong thời gian-thực, bao gồm số phiếu bầu và tỷ trọng stake của cử tri.
-* Các khách hàng có thể được thông báo khi đợt fork nặng nề nhất thay đổi, nếu nó ảnh hưởng đến số lượng xác nhận giao dịch.
+- Hỗ trợ kết nối trực tiếp từ các ứng dụng WebAssembly.
+- Khách hàng có thể được thông báo về tiến độ xác nhận trong thời gian-thực, bao gồm số phiếu bầu và tỷ trọng stake của cử tri.
+- Các khách hàng có thể được thông báo khi đợt fork nặng nề nhất thay đổi, nếu nó ảnh hưởng đến số lượng xác nhận giao dịch.
 
 Dễ dàng hơn cho những validator hỗ trợ:
 
-* Mỗi validstor hỗ trợ một số kết nối đồng thời và không có ràng buộc tài nguyên đáng kể nào.
-* Trạng thái giao dịch không bao giờ được lưu trữ trong bộ nhớ và không thể được thăm dò.
-* Chữ ký chỉ được lưu trữ trong bộ nhớ cho đến khi mức cam kết mong muốn hoặc cho đến khi blockhash hết hạn, sẽ xảy ra sau này.
+- Mỗi validstor hỗ trợ một số kết nối đồng thời và không có ràng buộc tài nguyên đáng kể nào.
+- Trạng thái giao dịch không bao giờ được lưu trữ trong bộ nhớ và không thể được thăm dò.
+- Chữ ký chỉ được lưu trữ trong bộ nhớ cho đến khi mức cam kết mong muốn hoặc cho đến khi blockhash hết hạn, sẽ xảy ra sau này.
 
 Làm thế nào nó hoạt động:
 

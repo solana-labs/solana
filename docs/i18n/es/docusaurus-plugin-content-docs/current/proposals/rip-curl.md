@@ -14,15 +14,15 @@ Una API de streaming orientada a las transacciones y fácil de usar, construida 
 
 Mejora la experiencia del cliente:
 
-* Soporte de conexiones directamente desde aplicaciones de WebAssembly.
-* Los clientes pueden ser notificados del progreso de la confirmación en tiempo real, incluyendo votos y peso del stake de votantes.
-* Los clientes pueden ser notificados cuando el fork más pesado cambia, si afecta al recuento de confirmación de transacciones.
+- Soporte de conexiones directamente desde aplicaciones de WebAssembly.
+- Los clientes pueden ser notificados del progreso de la confirmación en tiempo real, incluyendo votos y peso del stake de votantes.
+- Los clientes pueden ser notificados cuando el fork más pesado cambia, si afecta al recuento de confirmación de transacciones.
 
 Fácil para que los validadores soporten:
 
-* Cada validador soporta algún número de conexiones simultáneas y de lo contrario no tiene restricciones significativas de recursos.
-* El estado de la transacción nunca se almacena en memoria y no se puede encuestar.
-* Las firmas sólo se almacenan en memoria hasta que el nivel de compromiso deseado o hasta que el blockhash caduque, que nunca es más tarde.
+- Cada validador soporta algún número de conexiones simultáneas y de lo contrario no tiene restricciones significativas de recursos.
+- El estado de la transacción nunca se almacena en memoria y no se puede encuestar.
+- Las firmas sólo se almacenan en memoria hasta que el nivel de compromiso deseado o hasta que el blockhash caduque, que nunca es más tarde.
 
 Cómo funciona:
 

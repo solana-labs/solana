@@ -2,7 +2,7 @@
 title: Ledger Nano
 ---
 
-Trang này mô tả cách sử dụng Ledger Nano S hoặc Nano X để tương tác với Solana bằng cách sử dụng các công cụ dòng lệnh.  Để xem các giải pháp khác để tương tác Solana với Nano của bạn, [hãy nhấn vào đây](../ledger-live.md#interact-with-the-solana-network).
+Trang này mô tả cách sử dụng Ledger Nano S hoặc Nano X để tương tác với Solana bằng cách sử dụng các công cụ dòng lệnh. Để xem các giải pháp khác để tương tác Solana với Nano của bạn, [hãy nhấn vào đây](../ledger-live.md#interact-with-the-solana-network).
 
 ## Trước khi bắt đầu
 
@@ -28,7 +28,7 @@ solana-keygen pubkey usb://ledger
 
 ### Xem địa chỉ Ví của bạn
 
-Nano của bạn hỗ trợ số lượng địa chỉ ví và người ký hợp lệ tùy ý. Để xem một địa chỉ bất kì, hãy sử dụng lệnh ` solana-keygen pubkey `, như được hiển thị bên dưới, theo sau là [URL keypair](../hardware-wallets.md#specify-a-keypair-url) hợp lệ.
+Nano của bạn hỗ trợ số lượng địa chỉ ví và người ký hợp lệ tùy ý. Để xem một địa chỉ bất kì, hãy sử dụng lệnh `solana-keygen pubkey`, như được hiển thị bên dưới, theo sau là [URL keypair](../hardware-wallets.md#specify-a-keypair-url) hợp lệ.
 
 Nhiều địa chỉ ví có thể hữu ích nếu bạn muốn chuyển các mã thông báo giữa tài khoản của riêng bạn cho các mục đích khác nhau hoặc sử dụng các keypair khác nhau trên thiết bị làm cơ quan ký cho tài khoản stake chẳng hạn.
 
@@ -41,7 +41,7 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
-* LƯU Ý: thông số url keypair bị bỏ qua trong **zsh** &nbsp;[hãy xem cách khắc phục sự cố để biết thêm thông tin](#troubleshooting)
+- LƯU Ý: thông số url keypair bị bỏ qua trong **zsh** &nbsp;[hãy xem cách khắc phục sự cố để biết thêm thông tin](#troubleshooting)
 
 Bạn cũng có thể sử dụng các giá trị khác cho số sau `key=`. Bất kỳ địa chỉ nào được hiển thị bởi các lệnh này đều là địa chỉ ví Solana hợp lệ. Phần riêng tư được liên kết với mỗi địa chỉ được lưu trữ an toàn trên Nano và được sử dụng để ký các giao dịch từ địa chỉ này. Chỉ cần ghi chú URL keypair nào bạn đã sử dụng để lấy bất kỳ địa chỉ nào bạn sử dụng để nhận mã thông báo.
 

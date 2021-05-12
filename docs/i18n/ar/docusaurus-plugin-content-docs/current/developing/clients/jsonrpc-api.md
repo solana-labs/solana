@@ -83,8 +83,7 @@ title: واجهة برمجة تطبيقات الـ JSON RPC أو JSON RPC API
 
 ## طلب التنسيق (Request Formatting)
 
-لتقديم طلب JSON-RPC، أرسل طلب HTTP POST مع رأس `Content-Type:
-application/json`. يجب أن تحتوي بيانات طلب JSON على 4 حقول:
+لتقديم طلب JSON-RPC، أرسل طلب HTTP POST مع رأس `Content-Type: application/json`. يجب أن تحتوي بيانات طلب JSON على 4 حقول:
 
 - `jsonrpc: <string>`، مُعيّن إلى `"2.0"`
 - المُعرف `id: <number>`، العدد الصحيح الفريد من نوعه تم إنشاؤه من قبل العميل
@@ -123,7 +122,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ## إعداد إلتزام الحالة (Configuring State Commitment)
 
-فيما يتعلق بعمليات الإختبار المبدئي (preflight) ومُعالجة المُعاملات، تختار عُقَد Solana البنك الذي يجب الإستعلام عنه بناء على شرط الإلتزام الذي حدده العميل. يصف الإلتزام كيف يتم الإنتهاء من الكتلة (block) في ذلك الوقت.  عند الإستعلام عن حالة دفتر الأستاذ (ledger) ، يُوصى بإستخدام مُستويات إلتزام أقل للإبلاغ عن التقدم ومُستويات أعلى لضمان عدم التراجع عن الحالة.
+فيما يتعلق بعمليات الإختبار المبدئي (preflight) ومُعالجة المُعاملات، تختار عُقَد Solana البنك الذي يجب الإستعلام عنه بناء على شرط الإلتزام الذي حدده العميل. يصف الإلتزام كيف يتم الإنتهاء من الكتلة (block) في ذلك الوقت. عند الإستعلام عن حالة دفتر الأستاذ (ledger) ، يُوصى بإستخدام مُستويات إلتزام أقل للإبلاغ عن التقدم ومُستويات أعلى لضمان عدم التراجع عن الحالة.
 
 بالترتيب التنازلي للإلتزام (الأكثر إكتمالًا إلى الأقل إكتمالًا) ، يُمكن للعملاء تحديد:
 
@@ -133,9 +132,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   - يتضمن أصوات القيل والقال (gossip) وإعادتها.
   - فهو لا يحسب الأصوات على سُلالة مُتحدِّري (descendants) الكتلة (block)، بل يُوجهون الأصوات على تلك الكتلة (block).
   - يدعم مُستوى التأكيد هذا أيضا ضمانات "التأكيد المُتفائل" (optimistic confirmation) في الإصدار 1.3 وما بعده.
-- الأحدث `"recent"` - العُقدة (node) سوف تستفسر عن أحدث كتلة (block).  لاحظ أن الكتلة (block) قد لا تكون كاملة.
+- الأحدث `"recent"` - العُقدة (node) سوف تستفسر عن أحدث كتلة (block). لاحظ أن الكتلة (block) قد لا تكون كاملة.
 
-لمُعالجة العديد من المُعاملات التابعة في سلاسل ما، يُوصى بإستخدام إلتزام ` "singleGossip" ` ، الذي يُوازن بين السرعة وأمان التراجع. للسلامة الكاملة، من المُستحسن إستخدام الإلتزام الأقصى`"max"`.
+لمُعالجة العديد من المُعاملات التابعة في سلاسل ما، يُوصى بإستخدام إلتزام `"singleGossip"` ، الذي يُوازن بين السرعة وأمان التراجع. للسلامة الكاملة، من المُستحسن إستخدام الإلتزام الأقصى`"max"`.
 
 #### مثال
 
@@ -188,7 +187,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - المفتاح العمومي (pubkey) للحساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
 - `<object>` - كائن تكوين (إختياري) يحتوي على الحقول الإختيارية التالية:
   - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل هو النوع `<string>`.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل هو النوع `<string>`.
   - (إختياري) شريحة البيانات `dataSlice: <object>` - الحد من بيانات الحساب التي تم إرجاعها بإستخدام المُوازنة المُقدمة `: <usize>` و طول `length: <usize>` الحقول؛ مُتاح فقط لترميز "base58", "base64" أو "base64+zstd".
 
 #### النتائج:
@@ -206,6 +205,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -221,7 +221,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 الإستجابة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -245,7 +247,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -261,7 +265,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 الإستجابة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -307,6 +313,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -314,8 +321,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "context": { "slot": 1 }, "value": 0 },
+  "id": 1
+}
 ```
 
 ### الحصول على إلتزام الكتلة (getBlockCommitment)
@@ -338,6 +350,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
@@ -345,14 +358,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],
+  "jsonrpc": "2.0",
+  "result": {
+    "commitment": [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 10, 32
+    ],
     "totalStake": 42
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -370,12 +387,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### النتائج:
 
-* `<i64>` - الوقت التقديري للإنتاج، كختم زمني Unx (ثوان منذ الفترة Unix)
-* `<null>` - الختم الزمني (Timestamp) غير متوفر لهذه الكتلة (block)
+- `<i64>` - الوقت التقديري للإنتاج، كختم زمني Unx (ثوان منذ الفترة Unix)
+- `<null>` - الختم الزمني (Timestamp) غير متوفر لهذه الكتلة (block)
 
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
@@ -383,8 +401,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":1574721591,"id":1}
+{ "jsonrpc": "2.0", "result": 1574721591, "id": 1 }
 ```
 
 ### الحصول على عُقَد المجموعة (getClusterNodes)
@@ -408,6 +427,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}
@@ -415,6 +435,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -438,7 +459,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### المُعلمات (parameters):
 
 - `<u64>` - الفُتحة (slot)، كرقم صحيح u64
-- `<string>` - الترميز لكل مُعاملة تم إرجاعها، إما "jsonsonParsed", "base58" بطيء (*slow*)، "base64". إذا لم يتم توفير المُعلِّمة (parameter)، فإن الترميز المُفترض (Default) هو "json". يُحاول ترميز "jsonParsed" إستخدام مُحلِّلي (parsers) التعليمات الخاصة بالبرامج لإرجاع بيانات أكثر قابلية للقراءة ووضوحا في قائمة تعليمات.معاملة. الرسالة `transaction.message.instructions`. إذا كانت "jsonParsed" مطلوبة ولكن لا يمكن العثور على مُحلل (parser)، فإن التعليمات تعود إلى ترميز JSON العادي للحسابات `accounts` ، البيانات `data` وحقول مُعرف البرنامج `programIdIndex`.
+- `<string>` - الترميز لكل مُعاملة تم إرجاعها، إما "jsonsonParsed", "base58" بطيء (_slow_)، "base64". إذا لم يتم توفير المُعلِّمة (parameter)، فإن الترميز المُفترض (Default) هو "json". يُحاول ترميز "jsonParsed" إستخدام مُحلِّلي (parsers) التعليمات الخاصة بالبرامج لإرجاع بيانات أكثر قابلية للقراءة ووضوحا في قائمة تعليمات.معاملة. الرسالة `transaction.message.instructions`. إذا كانت "jsonParsed" مطلوبة ولكن لا يمكن العثور على مُحلل (parser)، فإن التعليمات تعود إلى ترميز JSON العادي للحسابات `accounts` ، البيانات `data` وحقول مُعرف البرنامج `programIdIndex`.
 
 #### النتائج:
 
@@ -471,6 +492,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
@@ -478,6 +500,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -494,20 +517,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -528,12 +539,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
             },
             "instructions": [
               {
-                "accounts": [
-                  1,
-                  2,
-                  3,
-                  0
-                ],
+                "accounts": [1, 2, 3, 0],
                 "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
                 "programIdIndex": 4
               }
@@ -552,7 +558,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
@@ -560,6 +568,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -576,20 +585,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -647,12 +644,12 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### النتائج:
 
-سيكون حقل النتيجة مجموعة من عدد صحيح من u64 يُورد كتل (blocks) مُؤَكدة بين `start_slot` وإما `end_slo`، إذا قدمت، أو أحدث كتلة مُؤَكدة ، شاملة.  الحد الأقصى المسموح به هو 500,000 فُتحة (slots).
-
+سيكون حقل النتيجة مجموعة من عدد صحيح من u64 يُورد كتل (blocks) مُؤَكدة بين `start_slot` وإما `end_slo`، إذا قدمت، أو أحدث كتلة مُؤَكدة ، شاملة. الحد الأقصى المسموح به هو 500,000 فُتحة (slots).
 
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}
@@ -660,8 +657,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":1574721591,"id":1}
+{ "jsonrpc": "2.0", "result": 1574721591, "id": 1 }
 ```
 
 ### الحصول على الكتل المُؤَكدة بحدود (getConfirmedBlocksWithLimit)
@@ -680,6 +678,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
@@ -687,8 +686,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
 ```
 
 ### الحصول على التوقيعات المُؤَكدة للعنوان (getConfirmedSignaturesForAddress)
@@ -714,6 +714,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -730,6 +731,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -747,22 +749,27 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 إرجاع التوقيعات المُؤَكدة للمعاملات التي تتضمن ملف العنوان إلى الوراء في الوقت المُناسب من التوقيع المُقدم أو أحدث كتلة (block) مُؤَكدة
 
 #### المُعلمات (parameters):
-* `<string>` - المفتاح العمومي (pubkey) للحساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
-* `<object>` - كائن تكوين (إختياري) يحتوي على الحقول الإختيارية التالية:
-  * الحد الأقصى `limit: <number>` - (إختياري) الحد الأقصى لتوقيعات المُعاملة للإرجاع (بين 1 و 1000، الإفتراض: 1000).
-  * قبل `before: <string>` - (إختياري) بدء البحث إلى الوراء من توقيع هذه المُعاملة. في حالة عدم تقديمه، يبدأ البحث من أقصى أعلى كتلة (block) مُؤَكدة.
-  * حتى`until: <string>` - (إختياري) البحث حتى توقيع هذه المُعاملة، إذا وجدت قبل الوصول إلى الحد الأقصى.
+
+- `<string>` - المفتاح العمومي (pubkey) للحساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
+- `<object>` - كائن تكوين (إختياري) يحتوي على الحقول الإختيارية التالية:
+  - الحد الأقصى `limit: <number>` - (إختياري) الحد الأقصى لتوقيعات المُعاملة للإرجاع (بين 1 و 1000، الإفتراض: 1000).
+  - قبل `before: <string>` - (إختياري) بدء البحث إلى الوراء من توقيع هذه المُعاملة. في حالة عدم تقديمه، يبدأ البحث من أقصى أعلى كتلة (block) مُؤَكدة.
+  - حتى`until: <string>` - (إختياري) البحث حتى توقيع هذه المُعاملة، إذا وجدت قبل الوصول إلى الحد الأقصى.
 
 #### النتائج:
+
 سيكون حقل النتيجة عبارة عن مجموعة من معلومات توقيع المُعاملة، مُرتبة من المُعاملة الأحدث إلى الأقدم:
-* `<object>`
-  * `signature: <string>` - توقيع المُعاملة كسلسلة مُرمّزة base-58
-  * الفُتحة `slot: <u64>` - الفُتحة (slot) التي تحتوي على الكتلة (block) مع المُعاملة
-  * خطأ `err: <object | null>` - خطأ إذا فشلت المُعاملة، لاغِ إذا نجحت المُعاملة. تعريفات خطأ المُعاملة [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-  * المُذكرة `memo: <string |null>` - مُذكرة مُرتبطة بالمُعاملة، لاغية إذا لم تكن هناك مُذكرة موجودة
+
+- `<object>`
+  - `signature: <string>` - توقيع المُعاملة كسلسلة مُرمّزة base-58
+  - الفُتحة `slot: <u64>` - الفُتحة (slot) التي تحتوي على الكتلة (block) مع المُعاملة
+  - خطأ `err: <object | null>` - خطأ إذا فشلت المُعاملة، لاغِ إذا نجحت المُعاملة. تعريفات خطأ المُعاملة [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - المُذكرة `memo: <string |null>` - مُذكرة مُرتبطة بالمُعاملة، لاغية إذا لم تكن هناك مُذكرة موجودة
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -779,6 +786,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -801,7 +809,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### المُعلمات (parameters):
 
 - يحاول ترميز base-58 `<string>` إستخدام معلِّمات (parameters) التعليمات الخاصة بالبرامج لإرجاع بيانات أكثر قابلية للقراءة ووضوحا في قائمة المُعاملة. الرسالة. التعليمات `transaction.message.instructions`. إذا كانت "jsonParsed" مطلوبة ولكن لا يُمكن العثور على مُحلل (parser)، فإن التعليمات تعود إلى ترميز JSON العادي (حقول الحسابات `accounts`، البيانات `data`، فهرس مُعرف البرنامج `programIdIndex`).
-- `<string>` - الترميز لكل مُعاملة تم إرجاعها، إما "json"، "jsonParsed"، "base58" (*slow*)، أو "base64". إذا لم يتم توفير المُعلِّمة (parameter)، فإن الترميز المُفترض (Default) هو "json.
+- `<string>` - الترميز لكل مُعاملة تم إرجاعها، إما "json"، "jsonParsed"، "base58" (_slow_)، أو "base64". إذا لم يتم توفير المُعلِّمة (parameter)، فإن الترميز المُفترض (Default) هو "json.
 
 #### النتائج:
 
@@ -821,7 +829,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       - خطأ `"err": <ERR>` - فشلت المُعاملة مع خطأ في المُعاملة (TransactionError)
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -837,6 +847,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -845,20 +856,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -880,12 +879,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         },
         "instructions": [
           {
-            "accounts": [
-              1,
-              2,
-              3,
-              0
-            ],
+            "accounts": [1, 2, 3, 0],
             "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
             "programIdIndex": 4
           }
@@ -902,7 +896,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -918,6 +914,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -926,20 +923,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -975,6 +960,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
@@ -982,6 +968,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1017,12 +1004,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1057,6 +1046,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1071,6 +1061,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1109,6 +1100,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
@@ -1116,6 +1108,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1156,6 +1149,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1163,6 +1157,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1197,6 +1192,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
@@ -1204,8 +1200,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":250000,"id":1}
+{ "jsonrpc": "2.0", "result": 250000, "id": 1 }
 ```
 
 ### الحصول على تجزئة مرحلة التكوين (getGenesisHash)
@@ -1223,6 +1220,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
@@ -1230,15 +1228,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
+  "id": 1
+}
 ```
 
 ### الحصول على الصِّحَّة (getHealth)
 
 يُرجع صِحَّة العُقدة (node) الحالية.
 
-إذا تم توفير حُجَج المُدقّقين الموثوق بهم `--trusted-validator` إلى مُدقّق `solana-validator`، فسيتم إرجاع "ok" (مُوافق) عندما تكون العُقدة (node) ضمن مسافة فُتحات الفحص الصِّحَّي `HEALTH_CHECK_SLOT_DISTANCE` لأعلى مُدقّق موثوق به، وإلا فسيتم إرجاع خطأ.  رسالة "ok" (حسنا) تُعاد دائماً إذا لم يتم توفير أي مُدقّقين (validators) موثوقين.
+إذا تم توفير حُجَج المُدقّقين الموثوق بهم `--trusted-validator` إلى مُدقّق `solana-validator`، فسيتم إرجاع "ok" (مُوافق) عندما تكون العُقدة (node) ضمن مسافة فُتحات الفحص الصِّحَّي `HEALTH_CHECK_SLOT_DISTANCE` لأعلى مُدقّق موثوق به، وإلا فسيتم إرجاع خطأ. رسالة "ok" (حسنا) تُعاد دائماً إذا لم يتم توفير أي مُدقّقين (validators) موثوقين.
 
 #### المُعلمات (parameters):
 
@@ -1246,12 +1249,12 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### النتائج:
 
-إذا كانت العُقدة (node) سليمة صِحَّيا: "ok" (حسنًا) إذا كانت العُقدة (node) غير سليمة صِحَّيا، يتم إرجاع رد خطأ في JSON RPC.  تفاصيل الرد على الخطأ (error) هي غير مُستقر **UNSTABLE** وقد تتغير في المُستقبل
-
+إذا كانت العُقدة (node) سليمة صِحَّيا: "ok" (حسنًا) إذا كانت العُقدة (node) غير سليمة صِحَّيا، يتم إرجاع رد خطأ في JSON RPC. تفاصيل الرد على الخطأ (error) هي غير مُستقر **UNSTABLE** وقد تتغير في المُستقبل
 
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1259,11 +1262,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة الصِحَّية:
+
 ```json
-{"jsonrpc":"2.0","result":250000,"id":1}
+{ "jsonrpc": "2.0", "result": 250000, "id": 1 }
 ```
 
 النتيجة غير الصِحَّية (الصِحَّة العامة):
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1277,6 +1282,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 نتيجة غير صِحَّية (إذا توافرت معلومات إضافية)
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1308,6 +1314,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getIdentity"}
@@ -1315,8 +1322,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WW2DJBpN"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WW2DJBpN" },
+  "id": 1
+}
 ```
 
 ### الحصول على مُحافظ التَضَخُّم (getInflationGovernor)
@@ -1340,6 +1352,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
@@ -1347,6 +1360,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1381,6 +1395,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
@@ -1388,8 +1403,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "epoch": 100,
+    "foundation": 0.001,
+    "total": 0.149,
+    "validator": 0.148
+  },
+  "id": 1
+}
 ```
 
 ### الحصول على أكبر الحِسابات (getLargestAccounts)
@@ -1413,6 +1438,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
@@ -1420,6 +1446,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1523,19 +1550,26 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
 ```
 
 النتيجة:
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -1555,6 +1589,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[50]}
@@ -1562,8 +1597,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ### الحصول على حسابات متعددة (getMultipleAccounts)
@@ -1575,9 +1611,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<array>` - المفتاح العمومي (pubkey) للحِساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64"، "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل من النوع `<string>`.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64"، "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل من النوع `<string>`.
   - (إختياري) `dataSlice: <object>` - الحد من بيانات الحساب التي تم إرجاعها بإستخدام المُوازنة المُقدمة `offset: <usize>` و `length: <usize>` الحقول؛ مُتاح فقط لترميز "base58", "base64" أو "base64+zstd".
-
 
 #### النتائج:
 
@@ -1596,6 +1631,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1613,6 +1649,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1622,20 +1659,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     },
     "value": [
       {
-        "data": [
-          "AAAAAAEAAAACtzNsyJrW0g==",
-          "base64"
-        ],
+        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base64"
-        ],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1648,7 +1679,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1666,6 +1699,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1685,10 +1719,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base58"
-        ],
+        "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1709,12 +1740,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - المفتاح العمومي (pubkey) للبرنامج الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما يكون `data` الحقل من نوع `<string>`.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يقتصر "base58" على بيانات الحساب التي تقل عن 128 bytes. سيقوم "base64" بإرجاع البيانات المُرمّزة لـ base64 لبيانات الحساب من أي حجم. "base64+zstd" يضغط على بيانات الحساب بإستخدام [Zstandard](https://facebook.github.io/zstd/) و base64-en النتيجة. يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما يكون `data` الحقل من نوع `<string>`.
   - (إختياري) `dataSlice: <object>` - الحد من بيانات الحساب التي تم إرجاعها بإستخدام المقدمة `offset: <usize>` و `length: <usize>` الحقول؛ متاح فقط لترميز "base58", "base64" أو "base64+zstd".
   - (اختياري) `filters: <array>` - نتائج الفلترة بإستخدام كائنات فلترة مُختلفة [filter objects](jsonrpc-api.md#filters); الحساب يجب أن يفي بجميع معايير الفلترة لتضمينها في النتائج
 
 ##### الفلاتر (Filters):
+
 - `memcmp: <object>` - مُقارنة سلسلة من الـ bytes التي تم توفيرها مع بيانات حِساب البرنامج في إزاحة (offset) مُعينة. الحقول (Fields):
+
   - `offset: <usize>` - الإزاحة في بيانات حساب البرنامج لبدء المُقارنة
   - `بايت: <string>` - لبدء مقارنة البيانات، كسلسلة مرمّزة base-58
 
@@ -1726,13 +1759,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `pubkey: <string>` - المفتاح العمومي (public key) كسلسلة مُرمّزة base-58
 - `account: <object>` - كائن JSON، مع الحقول الفرعية التالية:
-   - `lamports: <u64>`، عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
-   - المالك `owner: <string>`، المفتاح العمومي المُرمّز base-58 للبرنامج الذي تم تعيين هذا الحساب له `data: <[string,encoding]|object>`، البيانات المُرتبطة بالحِساب، إما كبيانات ثنائية مُشَفَّرَة أو شكل `{<program>: <state>}`، إعتمادًا على مُعلِّمة (parameter) الترميز
-   - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحِساب يحتوي على برنامج \(وهو فقط-للقراءة\)
-   - إيجار الفترة `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، ك u64
+  - `lamports: <u64>`، عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
+  - المالك `owner: <string>`، المفتاح العمومي المُرمّز base-58 للبرنامج الذي تم تعيين هذا الحساب له `data: <[string,encoding]|object>`، البيانات المُرتبطة بالحِساب، إما كبيانات ثنائية مُشَفَّرَة أو شكل `{<program>: <state>}`، إعتمادًا على مُعلِّمة (parameter) الترميز
+  - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحِساب يحتوي على برنامج \(وهو فقط-للقراءة\)
+  - إيجار الفترة `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، ك u64
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -1740,6 +1775,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1760,7 +1796,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1788,6 +1826,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1826,6 +1865,7 @@ Rpcresponse يحتوي على كائن JSON يتكون من كائن JSON لسل
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
@@ -1833,6 +1873,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1857,6 +1898,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 يُرجع قائمة بعينات الأداء الأخيرة، في ترتيب الفُتحة (slot) العكسية. تُؤخذ عينات الأداء كل 60 ثانية وتشمل عدد المُعاملات و الفُتحات (slots) التي تحدث في نافذة زمنية مُعَيَّنة.
 
 #### المُعلمات (parameters):
+
 - الحد الأقصى `limit: <usize>` - (إختياري) عدد العينات المُراد إرجاعها (حد أقصى 720)
 
 #### النتائج:
@@ -1872,6 +1914,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 // curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[4]}
@@ -1879,6 +1922,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1912,7 +1956,6 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-
 ### الحصول على لقطة الفُتحة (getSnapshotSlot)
 
 تُرجع أعلى فُتحة (slot) تحتوي العُقدة (node) التي لديها لقطة لها
@@ -1928,6 +1971,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1935,13 +1979,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":100,"id":1}
+{ "jsonrpc": "2.0", "result": 100, "id": 1 }
 ```
 
 النتيجة عندما لا تحتوي العُقدة (node) على لقطة:
+
 ```json
-{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32008, "message": "No snapshot" },
+  "id": 1
+}
 ```
 
 ### الحصول على حالات التوقيع (getSignatureStatuses)
@@ -1975,6 +2025,7 @@ Rpcresponse يحتوي على كائن JSON يتألف من مجموعة من ع
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1992,6 +2043,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2007,7 +2059,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "confirmed",
+        "confirmationStatus": "confirmed"
       },
       null
     ]
@@ -2017,7 +2069,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2035,6 +2089,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2050,7 +2105,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "finalized",
+        "confirmationStatus": "finalized"
       },
       null
     ]
@@ -2074,6 +2129,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -2081,8 +2137,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### الحصول على قائد الفُتحة (getSlotLeader)
@@ -2100,6 +2157,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -2107,8 +2165,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS",
+  "id": 1
+}
 ```
 
 ### الحصول على تنشيط الحِصَّة (getStakeActivation)
@@ -2117,21 +2180,23 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### المُعلمات (parameters):
 
-* `<string>` - المفتاح العمومي (pubkey) لحساب التَّحْصِيص (Stake account) الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
-* `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
-  * (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  * (إختياري) `epoch: <u64>` - الفترة (epoch) التي يُمكن حساب تفاصيل التفعيل لها. إذا لم يتم توفير المُعلِّمة (parameter)، فإن الإفتراضات (Defaults) للفترة (epoch) الحالية.
+- `<string>` - المفتاح العمومي (pubkey) لحساب التَّحْصِيص (Stake account) الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
+- `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
+  - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (إختياري) `epoch: <u64>` - الفترة (epoch) التي يُمكن حساب تفاصيل التفعيل لها. إذا لم يتم توفير المُعلِّمة (parameter)، فإن الإفتراضات (Defaults) للفترة (epoch) الحالية.
 
 #### النتائج:
 
 سيكون ناتج الإستجابة (response output) كائن Json مع الحقول التالية:
 
-* `state: <string` - حالة تفعيل حساب التَّحْصِيص (Stake account)، واحدة من: نَشِطة `active`، غير نَشِطة `inactive`، في طور التنشِيط `activating`، في طور إلغاء التنشِيط `deactivating`
-* `active: <u64>` - الحِصَّة (stake) نشِطة أثناء الفترة (epoch)
-* `inactive: <u64>` - الحِصَّة (stake) غير النشِطة خلال الفترة (epoch)
+- `state: <string` - حالة تفعيل حساب التَّحْصِيص (Stake account)، واحدة من: نَشِطة `active`، غير نَشِطة `inactive`، في طور التنشِيط `activating`، في طور إلغاء التنشِيط `deactivating`
+- `active: <u64>` - الحِصَّة (stake) نشِطة أثناء الفترة (epoch)
+- `inactive: <u64>` - الحِصَّة (stake) غير النشِطة خلال الفترة (epoch)
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -2139,12 +2204,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "active": 197717120, "inactive": 0, "state": "active" },
+  "id": 1
+}
 ```
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2162,6 +2234,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2194,6 +2267,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -2201,6 +2275,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2244,6 +2319,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -2251,6 +2327,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2276,11 +2353,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `<string>` - المفتاح العمومي (pubkey) للحِساب بمُفوض الحِساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
 - `<object>` - إما:
-  * `mint: <string>` - المفتاح العمومي (Pubkey) للعملة المُحَدَّدة التي تم سَكُّها (Mint) لتقييد الحِسابات، كسلسلة مُرمّزة base-58؛ أو
-  * `programId: <string>` - مُعرف رمز البرنامج (Token Program ID) الذي يمتلك الحسابات، كسلسلة مُرمّزة base-58
+  - `mint: <string>` - المفتاح العمومي (Pubkey) للعملة المُحَدَّدة التي تم سَكُّها (Mint) لتقييد الحِسابات، كسلسلة مُرمّزة base-58؛ أو
+  - `programId: <string>` - مُعرف رمز البرنامج (Token Program ID) الذي يمتلك الحسابات، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على عملية سك (mint) صحيحة لحساب مُعَيَّن، فسيتم تصفية هذا الحِساب من النتائج.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على عملية سك (mint) صحيحة لحساب مُعَيَّن، فسيتم تصفية هذا الحِساب من النتائج.
   - (إختياري) `dataSlice: <object>` - الحد من بيانات الحساب التي تم إرجاعها بإستخدام `offset: <usize>` المُقدمة و `length: <usize>` الحقول؛ مُتاح فقط لترميز "base58", "base64" أو "base64+zstd".
 
 #### النتائج:
@@ -2289,11 +2366,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `pubkey: <string>` - المفتاح العمومي (public key) كسلسلة مُرمّزة base-58
 - `account: <object>` - كائن JSON، مع الحقول الفرعية التالية:
-   - `lamports: <u64>`، عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
-   - المالك `owner: <string>`، المفتاح العمومي (pubkey) المُرمّز base-58 من البرنامج الذي تم تعيين هذا الحساب له
-   - `data: <object>`، بيانات حالة الرمز المُرتبطة بالحساب، إما كبيانات ثنائية مُشفَّرة أو بتنسيق `{<program>: <state>}`
-   - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحساب يحتوي على برنامج \(وهو فقط-للقراءة\)
-   - فترة الإيجار `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، مثل u64
+  - `lamports: <u64>`، عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
+  - المالك `owner: <string>`، المفتاح العمومي (pubkey) المُرمّز base-58 من البرنامج الذي تم تعيين هذا الحساب له
+  - `data: <object>`، بيانات حالة الرمز المُرتبطة بالحساب، إما كبيانات ثنائية مُشفَّرة أو بتنسيق `{<program>: <state>}`
+  - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحساب يحتوي على برنامج \(وهو فقط-للقراءة\)
+  - فترة الإيجار `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، مثل u64
 
 #### مثال:
 
@@ -2317,6 +2394,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2364,11 +2442,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `<string>` - المفتاح العمومي (pubkey) للحِساب الذي سيتم الإستفسار عنه، كسلسلة مُرمّزة base-58
 - `<object>` - إما:
-  * `mint: <string>` - المفتاح العمومي (Pubkey) للعملة المُحَدَّدة التي تم سَكُّها (Mint) للحد من الحِسابات عليه، كسلسلة مُرمّزة base-58؛ أو
-  * مُعرف البرنامج `programId: <string>` - المفتاح العمومي (Pubkey) لمُعرف رمز البرنامج (Token Program ID) الذي يمتلك الحِسابات، كسلسلة مُرمّزة base-58
+  - `mint: <string>` - المفتاح العمومي (Pubkey) للعملة المُحَدَّدة التي تم سَكُّها (Mint) للحد من الحِسابات عليه، كسلسلة مُرمّزة base-58؛ أو
+  - مُعرف البرنامج `programId: <string>` - المفتاح العمومي (Pubkey) لمُعرف رمز البرنامج (Token Program ID) الذي يمتلك الحِسابات، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - (إختياري) الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على عملية سَكّ (mint) صحيحة لحِساب مُعَيَّن، فسيتم تصفية هذا الحِساب من النتائج.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على عملية سَكّ (mint) صحيحة لحِساب مُعَيَّن، فسيتم تصفية هذا الحِساب من النتائج.
   - (إختياري) `dataSlice: <object>` - الحد من بيانات الحِساب التي تم إرجاعها بإستخدام `offset: <usize>` المُقدمة و `length: <usize>` الحقول؛ متاح فقط لترميز "base58", "base64" أو "base64+zstd".
 
 #### النتائج:
@@ -2377,11 +2455,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `pubkey: <string>` - المفتاح العمومي (public key) كسلسلة مُرمّزة base-58
 - `account: <object>` - كائن JSON، مع الحقول الفرعية التالية:
-   - `الlamports: <u64>`عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
-   - `المالك: <string>`، المفتاح العمومي (pubkey) المُرمّز base-58 من البرنامج الذي تم تعيين هذا الحساب له
-   - `data: <object>`، بيانات حالة الرمز المُرتبطة بالحساب، إما كبيانات ثنائية مُشفَّرة أو بتنسيق `{<program>: <state>}`
-   - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحِساب يحتوي على برنامج \(وهو فقط-للقراءة\)
-   - إيجار الفترة `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، ك u64
+  - `الlamports: <u64>`عدد الـ lamports المُخَصَّصَة لهذا الحساب، كـ u64
+  - `المالك: <string>`، المفتاح العمومي (pubkey) المُرمّز base-58 من البرنامج الذي تم تعيين هذا الحساب له
+  - `data: <object>`، بيانات حالة الرمز المُرتبطة بالحساب، إما كبيانات ثنائية مُشفَّرة أو بتنسيق `{<program>: <state>}`
+  - قابل للتنفيذ `executable: <bool>`، المنطقية (boolean) تُشير إلى ما إذا كان الحِساب يحتوي على برنامج \(وهو فقط-للقراءة\)
+  - إيجار الفترة `rentEpoch: <u64>`، الفترة (epoch) التي سيكون فيها هذا الحساب مدينا بالإيجار القادم، ك u64
 
 #### مثال:
 
@@ -2405,6 +2483,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2471,6 +2550,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2523,6 +2603,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2562,8 +2643,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":268,"id":1}
+{ "jsonrpc": "2.0", "result": 268, "id": 1 }
 ```
 
 ### الحصول على الإصدار (getVersion)
@@ -2584,6 +2666,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -2591,8 +2674,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.6.0" }, "id": 1 }
 ```
 
 ### الحصول على حِسابات التصويت (getVoteAccounts)
@@ -2616,7 +2700,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `epochcredits: <array>` - تاريخ عدد الأرصدة (credits) المُكتسبة في نهاية كل فترة (epoch)، كمجموعة من المجموعات تحتوي على: `[epoch, credits, previousCredits]`
 
 #### مثال:
+
 الطلب:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
@@ -2624,6 +2710,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2633,8 +2720,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "commission": 0,
         "epochVoteAccount": true,
         "epochCredits": [
-          [ 1, 64, 0 ],
-          [ 2, 192, 64 ]
+          [1, 64, 0],
+          [2, 192, 64]
         ],
         "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
         "lastVote": 147,
@@ -2680,8 +2767,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### طلب التوزيع الحر (requestAirdrop)
@@ -2708,8 +2796,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+  "id": 1
+}
 ```
 
 ### إرسال مُعاملة (sendTransaction)
@@ -2737,7 +2830,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<object>` - (إختياري) إعدادات الكائن تحتوي على الحقول الإختيارية التالية:
   - `skipPreflight: <bool>` - إذا كان صحيحا، تخطي عمليات التحقق قبل الطيران (المُفترض: خطأ)
   - `preflightCommitment: <string>` - (إختياري) [Commitment](jsonrpc-api.md#configuring-state-commitment) لإستخدام الإختبار المبدئي (المُفترض: `"max"`).
-  - `encoding: <string>` - الترميز (إختياري) المُستخدم لبيانات المُعاملة. إما `"base58"` (*slow*، **DEPRECATED**) ، أو `"base64"`. (المُفترض: `"base58"`).
+  - `encoding: <string>` - الترميز (إختياري) المُستخدم لبيانات المُعاملة. إما `"base58"` (_slow_، **DEPRECATED**) ، أو `"base64"`. (المُفترض: `"base58"`).
 
 #### النتائج:
 
@@ -2760,8 +2853,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb",
+  "id": 1
+}
 ```
 
 ### مُحاكاة المُعاملة (simulateTransaction)
@@ -2774,7 +2872,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<object>` - كائن تكوين (إختياري) يحتوي على الحقول الإختيارية التالية:
   - التحقق من التوقيع `sigVerify: <bool>` - إذا كان صحيحا سيتم التَحَقُّق من توقيعات المُعاملة (المُفترض: خاطئ)
   - الإتزام `commitment: <string>` - (إختياري) [Commitment](jsonrpc-api.md#configuring-state-commitment) المُستوى لمُحاكاة المُعاملة (المُفترض: `"max"`).
-  - `encoding: <string>` - الترميز (إختياري) المُستخدم لبيانات المُعاملة. إما `"base58"` (*slow*، **DEPRECATED**) ، أو `"base64"`. (المُفترض: `"base58"`).
+  - `encoding: <string>` - الترميز (إختياري) المُستخدم لبيانات المُعاملة. إما `"base58"` (_slow_، **DEPRECATED**) ، أو `"base64"`. (المُفترض: `"base58"`).
 
 #### النتائج:
 
@@ -2799,6 +2897,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2838,8 +2937,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ### خروج المُدقّق (validatorExit)
@@ -2864,8 +2964,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ## إشتراك الWebsocket أو Subscription Websocket
@@ -2885,7 +2986,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - المفتاح العمومي (pubkey)، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام موزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يمكن العثور على مُحلل (parser)، يعود الحقل إلى الترميز ثنائي، يمكن الكشف عنها عندما تكون `data` الحقل من نوع`<string>`.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام موزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يمكن العثور على مُحلل (parser)، يعود الحقل إلى الترميز ثنائي، يمكن الكشف عنها عندما تكون `data` الحقل من نوع`<string>`.
 
 #### النتائج:
 
@@ -2894,6 +2995,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2921,13 +3023,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 23784,"id": 1}
+{ "jsonrpc": "2.0", "result": 23784, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
 
 ترميز Base58:
+
 ```json
 {
   "jsonrpc": "635.0",
@@ -2951,6 +3055,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 ترميز Parsed-JSON:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2995,19 +3100,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "accountUnsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### سِجِلات الإشتراك (logsSubscribe)
 
-إشترك في تسجيل المعاملات.  **UNSTABLE**
+إشترك في تسجيل المعاملات. **UNSTABLE**
 
 #### المُعلمات (parameters):
 
@@ -3025,6 +3131,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 طلب:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3048,13 +3155,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
 
 ترميز Base58:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3092,14 +3201,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "logsUnsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### الإشتراك في البرنامج (programSubscribe)
@@ -3111,7 +3221,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - المفتاح العمومي (Pubkey) لمُعرف برنامج، كسلسلة مُرمّزة base-58
 - `<object>` - (إختياري) تحتوي إعدادات الكائن على الحقول الإختيارية التالية:
   - (إختياري) - الإلتزام [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(*slow*) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل من النوع`<string>`.
+  - الترميز `encoding: <string>` - الترميز لبيانات الحساب، إما "base58" بطيء "(_slow_) ، "base64", "base64+zstd" ، أو "jsonParsed". يُحاول ترميز "jsonParsed" إستخدام مُوزعي الحالة الخاصين بالبرنامج لإرجاع المزيد من بيانات حالة الحساب التي يُمكن قراءتها بشكل واضح. إذا طُلب "jsonParsed" ولكن لا يُمكن العثور على مُحلِّل (parser)، يعود الحقل إلى الترميز "base64"، يُمكن الكشف عنها عندما تكون بيانات `data` الحقل من النوع`<string>`.
   - (اختياري) `filters: <array>` - نتائج الفلترة بإستخدام كائنات فلترة مُختلفة [filter objects](jsonrpc-api.md#filters); الحساب يجب أن يفي بجميع معايير الفلترة لتضمينها في النتائج
 
 #### النتائج:
@@ -3121,6 +3231,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3164,13 +3275,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
 
 ترميز Base58:
+
 ```json
 {
   "jsonrpc": "635.0",
@@ -3194,6 +3307,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 ترميز Parsed-JSON:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3238,14 +3352,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"programunsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "programunsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### الإشتراك في التوقيع (signatureSubscribe)
@@ -3264,6 +3379,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3288,11 +3404,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3326,14 +3444,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "signatureUnsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### الإشتراكك في الفُتحة (slotSubscribe)
@@ -3351,14 +3470,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
@@ -3393,14 +3513,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotunsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotunsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### الإشتراك في الجذر (rooSubscribe)
@@ -3418,14 +3539,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootSubscribe" }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
@@ -3458,19 +3580,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootUnsubscribe", "params": [0] }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### الإشتراك في التصويت (voteSubscribe) - غير مستقر، المُفترض (Default) مُعطل
 
-**هذا الإشتراك غير مُستقر ومُتاح فقط إذا تم تشغيل المُدقّق (validator) بالعلامة `--rpc-pubsubenable-vote-subscrative`.  تنسيق هذا الإشتراك قد يتغير في المُستقبل**
+**هذا الإشتراك غير مُستقر ومُتاح فقط إذا تم تشغيل المُدقّق (validator) بالعلامة `--rpc-pubsubenable-vote-subscrative`. تنسيق هذا الإشتراك قد يتغير في المُستقبل**
 
 إشترك لتلقي الإشعار في أي وقت يتم فيه مُراقبة تصويت جديد في أصوات القيل والقال (gossip). هذه الأصوات مُسبقة الإجماع (pre-consensus) لذلك لا يُوجد ضمان لهذه الأصوات لدخول دفتر الأستاذ (ledger).
 
@@ -3485,14 +3608,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"voteSubsubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "voteSubsubscribe" }
 ```
 
 النتيجة:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### تنسيق الإشعار:
@@ -3529,11 +3653,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### مثال:
 
 الطلب:
+
 ```json
-{"jsonrpc":"2.0", "id":1, "method":"voteunsubscribe", "params":[0]}
+{ "jsonrpc": "2.0", "id": 1, "method": "voteunsubscribe", "params": [0] }
 ```
 
 الإستجابة:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```

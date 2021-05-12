@@ -2,9 +2,10 @@
 title: ステーキングをデリゲートしよう。
 ---
 
-[SOL](transfer-tokens.md)を受け取った後は、バリデータに _ステーキング_を委ねて活用することも考えられます。 ステーキングとは、 _ステーキングアカウント_にあるトークンのことです。 Solanaはバリデーターの投票を、彼らに委任されたステーキングの量によって重み付けし、ブロックチェーンの次の有効な取引ブロックを決定する際に、バリデーターがより大きな影響力を持つようにします。 Solanaはその後、定期的に新しいSOLを生成し、ステーカーやバリデーターに報酬を与えます。 委任したステーキング量が多ければ多いほど、より多くの報酬を得ることができます。
+[SOL](transfer-tokens.md)を受け取った後は、バリデータに *ステーキング*を委ねて活用することも考えられます。 ステーキングとは、 *ステーキングアカウント*にあるトークンのことです。 Solana はバリデーターの投票を、彼らに委任されたステーキングの量によって重み付けし、ブロックチェーンの次の有効な取引ブロックを決定する際に、バリデーターがより大きな影響力を持つようにします。 Solana はその後、定期的に新しい SOL を生成し、ステーカーやバリデーターに報酬を与えます。 委任したステーキング量が多ければ多いほど、より多くの報酬を得ることができます。
 
 ## ステーキングアカウントを作ろう。
+
 ステーキングを委任するには、トークンをステークアカウントに移す必要があります。 アカウントを作成するには、キーペアが必要です。 その公開鍵は、 [ステーキングアカウントアドレス](../staking/stake-accounts.md#account-address)として使用されます パスワードや暗号化は必要ありません。このキーペアは、ステーキングアカウントの作成後すぐに破棄されます。
 
 ```bash
@@ -27,7 +28,7 @@ solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-`<"AMOUNT">` トークンは、"from"の `<キーペア>` から、"stake-account.jsonの公開キー"の新しいステーキングアカウントに転送されます。
+`<"AMOUNT">` トークンは、"from"の `<キーペア>` から、"stake-account.json の公開キー"の新しいステーキングアカウントに転送されます。
 
 "stake-account.json"ファイルを破棄できるようになりました。 追加のアクションを認可するには、 `"stake-account.json"`ではなく、`"--stake-authority"` または"--withdraw-authority"キーペアを使用します。
 
@@ -47,6 +48,7 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPp6HbRumTFPEiGug9oCdvQ5F
 ```
 
 ### ステーキングと引き出し権限を設定しよう。
+
 ["ステーキングおよび引き出しの権限"](../staking/stake-accounts.md#understanding-account-authorities)は、アカウント作成時に`"--stake-authority"`および`"--withdraw-authority"`オプションで設定することができ、またアカウント作成後には`"solana stake-authorize"` コマンドで設定することもできます。 例えば、新しいステーキング権限を設定するには、"run:"と入力します。
 
 ```bash
@@ -66,7 +68,7 @@ solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STR
     --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> --fee-payer <KEYPAIR>
 ```
 
-`<STRING>`は32バイトまでの任意の文字列ですが、一般的にはどの派生アカウントかに対応する数字を指定します。 最初のアカウントは"0"、次に"1"、というようになります。 `<STAKE_ACCOUNT_KEYPAIR>` の公開キーは、をベースアドレスとして動作します。 このコマンドは、ベースアドレスとシード文字列から新しいアドレスを派生させます。 コマンドが派生するステーキングアドレスを確認するには、`solana create-address-with-seed`を使用します。
+`<STRING>`は 32 バイトまでの任意の文字列ですが、一般的にはどの派生アカウントかに対応する数字を指定します。 最初のアカウントは"0"、次に"1"、というようになります。 `<STAKE_ACCOUNT_KEYPAIR>` の公開キーは、をベースアドレスとして動作します。 このコマンドは、ベースアドレスとシード文字列から新しいアドレスを派生させます。 コマンドが派生するステーキングアドレスを確認するには、`solana create-address-with-seed`を使用します。
 
 ```bash
 solana create-address-with-seed -from <PUBKEY> <SEED_STRING> SAKE
@@ -84,7 +86,7 @@ solana create-address-with-seed -from <PUBKEY> <SEED_STRING> SAKE
 solana validators
 ```
 
-各行の1列目にはバリデータのID、2列目には投票用アカウントのアドレスが入っています。 バリデータを選択し、その投票アカウントアドレスを`solana delegate-stake`で使用します。
+各行の 1 列目にはバリデータの ID、2 列目には投票用アカウントのアドレスが入っています。 バリデータを選択し、その投票アカウントアドレスを`solana delegate-stake`で使用します。
 
 ```bash
 solana delegate-stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS> \

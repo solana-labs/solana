@@ -86,8 +86,7 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 The instruction's [program id](terminology.md#program-id) specifies which program will process this instruction. The program's account's owner specifies which loader should be used to load and execute the program and the data contains information about how the runtime should execute the program.
 
-In the case of [deployed BPF programs](developing/deployed-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode.  Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
-
+In the case of [deployed BPF programs](developing/deployed-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
 Unlike deployed programs, [builtins](developing/builtins/programs.md) are handled differently in that they are built directly into the Solana runtime.
 
@@ -106,7 +105,6 @@ The [Solana Program Library's Token program](https://github.com/solana-labs/sola
 ## Signatures
 
 Each transaction explicitly lists all account public keys referenced by the transaction's instructions. A subset of those public keys are each accompanied by a transaction signature. Those signatures signal on-chain programs that the account holder has authorized the transaction. Typically, the program uses the authorization to permit debiting the account or modifying its data. More information about how the authorization is communicated to a program can be found in [Accounts](accounts.md#signers)
-
 
 ## Recent Blockhash
 

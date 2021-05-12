@@ -4,7 +4,7 @@ title: Llamada entre programas
 
 ## Invocaciones interprogramas
 
-El tiempo de ejecución Solana permite a los programas llamarse unos a otros a través de un mecanismo llamado invocación entre programas.  La llamada entre programas se logra mediante un programa que invoca una instrucción del otro.  El programa de invocación se detiene hasta que el programa invocado termine de procesar la instrucción.
+El tiempo de ejecución Solana permite a los programas llamarse unos a otros a través de un mecanismo llamado invocación entre programas. La llamada entre programas se logra mediante un programa que invoca una instrucción del otro. El programa de invocación se detiene hasta que el programa invocado termine de procesar la instrucción.
 
 Por ejemplo, un cliente podría crear una transacción que modifique dos cuentas, cada una de ellas propiedad de programas separados en cadena:
 
@@ -46,7 +46,7 @@ mod acme {
 
 `invoke()` está integrado en el tiempo de ejecución de Solana y es responsable de enrutar la instrucción dada al programa `token` a través del campo `program_id` de la instrucción.
 
-Tenga en cuenta que `invoke` requiere que el llamante pase todas las cuentas requeridas por la instrucción que se está invocando.  Esto significa que tanto la cuenta ejecutable (la que coincide con el id de programa de la instrucción) como las cuentas pasadas al procesador de la instrucción.
+Tenga en cuenta que `invoke` requiere que el llamante pase todas las cuentas requeridas por la instrucción que se está invocando. Esto significa que tanto la cuenta ejecutable (la que coincide con el id de programa de la instrucción) como las cuentas pasadas al procesador de la instrucción.
 
 Antes de invocar `pay()`, el tiempo de ejecución debe asegurarse de que `acme` no ha modificado ninguna cuenta propiedad de `token`. Lo hace aplicando la política del tiempo de ejecución al estado actual de las cuentas en el momento en que `acme` llama a `invoke` frente al estado inicial de las cuentas al comienzo de la instrucción de `acme`. Después de que `pay()` se complete, el tiempo de ejecución debe volver a asegurarse de que `token` no modificó ninguna cuenta propiedad de `acme` aplicando de nuevo la política del tiempo de ejecución, pero esta vez con el ID del programa `token`. Por último, después de que `pay_and_launch_missiles()` finalice, el tiempo de ejecución debe aplicar la política de tiempo de ejecución una vez más, donde normalmente lo haría, pero utilizando todas las variables actualizadas `pre_*`. Si al ejecutar `pay_and_launch_missiles()` hasta `pay()` no se han realizado cambios no válidos en la cuenta `pay()` y no se han realizado cambios no válidos, y al ejecutar desde `pay()` hasta `pay_and_launch_missiles()`, entonces el tiempo de ejecución puede asumir transitivamente que `pay_and_launch_missiles()` en su totalidad no hizo cambios inválidos en la cuenta, y por lo tanto consignar todas estas modificaciones en la cuenta.
 
@@ -105,11 +105,11 @@ Dadas las dos condiciones, los usuarios pueden transferir o asignar de forma seg
 
 ### Claves privadas para direcciones del programa
 
-Una dirección de programa no se encuentra en la curva ed25519 y, por tanto, no tiene una clave privada válida asociada, por lo que es imposible generar una firma para ella.  Aunque no tiene clave privada propia, puede ser utilizado por un programa para emitir una instrucción que incluya la dirección del Programa como firmante.
+Una dirección de programa no se encuentra en la curva ed25519 y, por tanto, no tiene una clave privada válida asociada, por lo que es imposible generar una firma para ella. Aunque no tiene clave privada propia, puede ser utilizado por un programa para emitir una instrucción que incluya la dirección del Programa como firmante.
 
 ### Direcciones de programa generadas en base a Hash
 
-Las direcciones de los programas se obtienen de forma determinista a partir de una colección de semillas y un identificador de programa mediante una función hash de 256 bits resistente a la preimagen.  La dirección del programa no debe estar en la curva ed25519 para asegurar que no hay una clave privada asociada. Durante la generación aparecerá un error si la dirección se encuentra en la curva.  La probabilidad de que esto ocurra es de un 50 % para una determinada colección de semillas y un identificador de programa.  Si esto ocurre, se puede utilizar un conjunto diferente de semillas o un bump de semillas (semilla adicional de 8 bits) para encontrar una dirección de programa válida fuera de la curva.
+Las direcciones de los programas se obtienen de forma determinista a partir de una colección de semillas y un identificador de programa mediante una función hash de 256 bits resistente a la preimagen. La dirección del programa no debe estar en la curva ed25519 para asegurar que no hay una clave privada asociada. Durante la generación aparecerá un error si la dirección se encuentra en la curva. La probabilidad de que esto ocurra es de un 50 % para una determinada colección de semillas y un identificador de programa. Si esto ocurre, se puede utilizar un conjunto diferente de semillas o un bump de semillas (semilla adicional de 8 bits) para encontrar una dirección de programa válida fuera de la curva.
 
 Las direcciones de programa deterministas para los programas siguen una ruta de derivación similar a la de las cuentas creadas con `SystemInstruction::CreateAccountWithSeed` que se implementa con `system_instruction::create_address_with_seed`.
 

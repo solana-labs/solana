@@ -6,7 +6,7 @@ Các giao dịch hiện tại bao gồm trường phí cho biết trường phí
 
 ## Phí do tắc nghẽn
 
-Mỗi validator sử dụng _chữ ký trên mỗi slot_ \ (SPS \) để ước tính tắc nghẽn mạng và _mục tiêu SPS_ để ước tính khả năng xử lý mong muốn của cụm. Validator học mục tiêu SPS từ cấu hình genesis, trong khi nó tính toán SPS từ các giao dịch được xử lý gần đây. Cấu hình genesis cũng xác định mục tiêu `lamports_per_signature`, là phí tính cho mỗi chữ ký khi cụm đang hoạt động tại_mục tiêu SPS_.
+Mỗi validator sử dụng _chữ ký trên mỗi slot_ \ (SPS \) để ước tính tắc nghẽn mạng và _mục tiêu SPS_ để ước tính khả năng xử lý mong muốn của cụm. Validator học mục tiêu SPS từ cấu hình genesis, trong khi nó tính toán SPS từ các giao dịch được xử lý gần đây. Cấu hình genesis cũng xác định mục tiêu `lamports_per_signature`, là phí tính cho mỗi chữ ký khi cụm đang hoạt động tại*mục tiêu SPS*.
 
 ## Tính phí
 

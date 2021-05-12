@@ -168,7 +168,7 @@ Hãy xem xét tình huống của một stake duy nhất là 1,000 được kíc
 Tại kỷ nguyên N+1, số tiền có sẵn để kích hoạt mạng là 400 \(20% của 2000\), và tại kỷ nguyên N, số tiền stake ví dụ này là số tiền stake duy nhất được kích hoạt và do đó được hưởng tất cả các room khởi động có sẵn.
 
 | kỷ nguyên | có hiệu lực | kích hoạt | tổng hiệu quả | tổng kích hoạt |
-|:--------- | -----------:| ---------:| -------------:| --------------:|
+| :-------- | ----------: | --------: | ------------: | -------------: |
 | N-1       |             |           |         2,000 |              0 |
 | N         |           0 |     1,000 |         2,000 |          1,000 |
 | N+1       |         400 |       600 |         2,400 |            600 |
@@ -178,7 +178,7 @@ Tại kỷ nguyên N+1, số tiền có sẵn để kích hoạt mạng là 400 
 Nếu có 2 stake \(X và Y\) được kích hoạt ở kỷ nguyên N, họ sẽ được thưởng một phần trong 20% tương ứng với số tiền stake của họ. Tại kỷ nguyên có hiệu lực và kích hoạt cho stake là một chức năng của trạng thái của các kỷ nguyên trước đó.
 
 | kỷ nguyên | X eff | X act | X eff | X act | tổng hiệu quả | tổng kích hoạt |
-|:--------- | -----:| -----:| -----:| -----:| -------------:| --------------:|
+| :-------- | ----: | ----: | ----: | ----: | ------------: | -------------: |
 | N-1       |       |       |       |       |         2,000 |              0 |
 | N         |     0 | 1,000 |     0 |   200 |         2,000 |          1,200 |
 | N+1       |   333 |   667 |    67 |   133 |         2,400 |            800 |

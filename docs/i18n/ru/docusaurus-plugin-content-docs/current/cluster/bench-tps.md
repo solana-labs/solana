@@ -95,13 +95,13 @@ NDEBUG=1 ./multinode-demo/bench-tps.sh # запускается против loc
 - Чтобы включить `информацию` везде и `отладки` только в solana::banking_stage module:
 
   ```bash
-экспорт RUST_LOG=solana=info,solana:banking_stage=debug
+  экспорт RUST_LOG=solana=info,solana:banking_stage=debug
   ```
 
 - Чтобы включить запись в журнал программы BPF:
 
   ```bash
-экспорт RUST_LOG=solana_bpf_loader=trace
+  экспорт RUST_LOG=solana_bpf_loader=trace
   ```
 
 Обычно мы используем `отладку` для нежелательных отладочных сообщений, `трассировку` потенциально частых сообщений и `информацию` для протоколирования связанных с производительностью.

@@ -2,7 +2,7 @@
 title: Solana Cluster RPCエンドポイント
 ---
 
-Solanaは [JSON-RPC](developing/clients/jsonrpc-api.md) の各パブリッククラスタへの要求を満たすために専用の api ノードを維持しており、サードパーティも同様です。 現在利用可能なパブリックRPCエンドポイントと、各パブリッククラスターで推奨されるRPCエンドポイントをご紹介します。
+Solana は [JSON-RPC](developing/clients/jsonrpc-api.md) の各パブリッククラスタへの要求を満たすために専用の api ノードを維持しており、サードパーティも同様です。 現在利用可能なパブリック RPC エンドポイントと、各パブリッククラスターで推奨される RPC エンドポイントをご紹介します。
 
 ## Devnet
 

@@ -37,7 +37,7 @@ Antes de que la votación se pase a la pila, todos los votos previos a la votaci
 Por ejemplo, una lista de votos con el siguiente estado:
 
 | voto | momento del voto | bloqueos | tiempo de expiración de bloqueo |
-| ----:| ----------------:| --------:| -------------------------------:|
+| ---: | ---------------: | -------: | ------------------------------: |
 |    4 |                4 |        2 |                               6 |
 |    3 |                3 |        4 |                               7 |
 |    2 |                2 |        8 |                              10 |
@@ -46,7 +46,7 @@ Por ejemplo, una lista de votos con el siguiente estado:
 _Voto 5_ es al momento 9, y el estado resultante es
 
 | voto | momento del voto | bloqueo | tiempo de expiración de bloqueo |
-| ----:| ----------------:| -------:| -------------------------------:|
+| ---: | ---------------: | ------: | ------------------------------: |
 |    5 |                9 |       2 |                              11 |
 |    2 |                2 |       8 |                              10 |
 |    1 |                1 |      16 |                              17 |
@@ -54,7 +54,7 @@ _Voto 5_ es al momento 9, y el estado resultante es
 _Vota 6_ es en el momento 10
 
 | voto | momento del voto | bloqueo | tiempo de expiración de bloqueo |
-| ----:| ----------------:| -------:| -------------------------------:|
+| ---: | ---------------: | ------: | ------------------------------: |
 |    6 |               10 |       2 |                              12 |
 |    5 |                9 |       4 |                              13 |
 |    2 |                2 |       8 |                              10 |
@@ -63,7 +63,7 @@ _Vota 6_ es en el momento 10
 En el momento 10 los nuevos votos alcanzaron hasta las votaciones anteriores. Pero _voto 2_ expira a las 10, así que cuando _vote 7_ en el momento 11 se apliquen los votos incluyendo y por encima _voto 2_ se mostrarán.
 
 | voto | momento del voto | bloqueo | tiempo de expiración de bloqueo |
-| ----:| ----------------:| -------:| -------------------------------:|
+| ---: | ---------------: | ------: | ------------------------------: |
 |    7 |               11 |       2 |                              13 |
 |    1 |                1 |      16 |                              17 |
 

@@ -68,7 +68,7 @@ title: التأكيد المُتفائل (Optimistic Confirmation)
 - كل `s` في `S` هم أسلاف (ancestors) / سُلالة مُتحدِّرة (descendants) من بعضهم البعض، كل `s'` في `S'` هم أسلاف (ancestors) / سُلالة مُتحدِّرة (descendants) من بعضهم البعض،
 -
 - يُشير الرقم `X == X'` إلى أن `S` هو أصل `S'` أو أن `S'` هو أصل `S`
-- يُشير الرقم `X' > X` إلى `X' > S.last` و `S'.last > S.last` ولجميع ` s ` في `S`, `s + lockout(s) < X'`
+- يُشير الرقم `X' > X` إلى `X' > S.last` و `S'.last > S.last` ولجميع `s` في `S`, `s + lockout(s) < X'`
 - يُشير الرقم `X > X'` إلى `X > S'.last` و `S.last > S'.last` ولكل `s` في `S'`, `s + lockout(s) < X`
 
 (تُشير القاعدتان الأخيرتان إلى عدم إمكانية تداخل النطاقات): وإلا يتم الإقتطاع للمُدقّق (validator).

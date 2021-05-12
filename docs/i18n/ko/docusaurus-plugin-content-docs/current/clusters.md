@@ -23,9 +23,11 @@ Explorers ::explorer
   - -의 DevNet 사이 키 차이 Mainnet 베타 -의DevNet 토큰은 **하지 실제 ** -의 DevNet 응용 프로그램 테스트를위한 airdrops에 대한 토큰 수도꼭지를 포함 -의 DevNet이 원장 재설정 대상이 될 수 있습니다 -의 DevNet는 일반적으로 Mainnet 베타보다 최신 소프트웨어 버전을 실행
 - Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - Metrics environment variable for Devnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG = "host = https : //metrics.solana.com : 8086, db = devnet, u = scratch_writer, p = topsecret "
 ```
+
 - -Devnet 용 RPC URL :`https : // devnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -54,18 +56,20 @@ export SOLANA_METRICS_CONFIG = "host = https : //metrics.solana.com : 8086, db =
 - Testnet typically runs a newer software release than both Devnet and Mainnet Beta
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - -메인 넷 베타 용 RPC URL :`https : // api.mainnet-beta.solana.com`
 
 ##### Example `solana` command-line configuration
 
-```bash
+````bash
 구성``떠들썩한파티
 솔라 구성 세트 --url
 https://testnet.solana.com```#####
-```
+````
 
 ##### 예`솔라나 - validator` 명령
 
@@ -110,9 +114,11 @@ $ 솔라 -validator \
   - -참고 : \[Solflare\] (wallet-guide / solflare.md)와 같은 비 명령 줄 지갑을 사용하는 경우 지갑은 항상 메인 넷 베타에 연결됩니다.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - -메인 넷 베타 용 가십 진입 점 :`entrypoint.mainnet-beta.solana.com : 8001`-메인 넷 베타 용 측정 항목 환경 변수 :
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Example `solana` command-line configuration

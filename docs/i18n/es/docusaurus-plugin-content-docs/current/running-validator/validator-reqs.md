@@ -24,13 +24,13 @@ title: Requisitos de Validador
 
 Estas son nuestras recomendaciones para las especificaciones de máquinas de baja, mediana y de alto nivel:
 
-|                           | Baja                | Media                  | Alta                   | Notas                                                                                         |
-|:------------------------- |:------------------- |:---------------------- |:---------------------- |:--------------------------------------------------------------------------------------------- |
-| CPU                       | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | Considere una placa base de 10 Gb con tantos carriles PCIe y ranuras de m.2 como sea posible. |
-| RAM                       | 32GB                | 64GB                   | 128GB                  |                                                                                               |
-| Unidad Ledger             | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | O equivalente SSD                                                                             |
+|                         | Baja                | Media                  | Alta                   | Notas                                                                                         |
+| :---------------------- | :------------------ | :--------------------- | :--------------------- | :-------------------------------------------------------------------------------------------- |
+| CPU                     | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | Considere una placa base de 10 Gb con tantos carriles PCIe y ranuras de m.2 como sea posible. |
+| RAM                     | 32GB                | 64GB                   | 128GB                  |                                                                                               |
+| Unidad Ledger           | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | O equivalente SSD                                                                             |
 | Unidad de clientes\(s\) | Ninguna             | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                               |
-| GPU                       | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Cualquier número de GPUs con capacidad cuda son soportados en plataformas Linux.              |
+| GPU                     | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Cualquier número de GPUs con capacidad cuda son soportados en plataformas Linux.              |
 
 ## Máquinas virtuales en plataformas en la nube
 

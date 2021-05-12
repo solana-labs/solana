@@ -5,6 +5,7 @@ title: Delegar tu Stake
 Después de que hayas [recibido SOL](transfer-tokens.md), podrías considerar usarlo delegando _stake_ a un validador. Stake es lo que llamamos tokens en una _cuenta de stake_. Solana pondera los votos de los validadores por la cantidad de stake que se les delega, lo que da a esos validadores más influencia en la determinación del siguiente bloque válido de transacciones en la cadena de bloques. Entonces Solana genera nuevos SOL periódicamente para recompensar a los jugadores y validadores. Ganas más recompensas cuanto mayor sea el stake que delegas.
 
 ## Crear una cuenta Stake
+
 Para delegar la stake, tendrás que transferir algunos tokens a una cuenta de stake. Para crear una cuenta, necesitará un keypair. Su clave pública se utilizará como la [dirección de cuenta stake](../staking/stake-accounts.md#account-address). No hay necesidad de una contraseña o cifrado aquí; este keypair será descartado justo después de crear la cuenta stake.
 
 ```bash
@@ -47,6 +48,7 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Establecer Autoridades de Stake y Retiro
+
 [Las autoridades de Stake y retiro](../staking/stake-accounts.md#understanding-account-authorities) pueden establecerse al crear una cuenta a través de las opciones `--stake-authority` y `--withdrawal -authority`, o después con el comando `solana stake-authorize`. Por ejemplo, para establecer una nueva autoridad de Stake, ejecuta:
 
 ```bash

@@ -10,7 +10,7 @@ Para utilizar una cartera de línea de comandos, primero debe [instalar las herr
 
 ## Cartera del Sistema de Archivos
 
-Una billetera del sistema de archivos __, conocida como una billetera FS, es un directorio en el sistema de archivos de su computadora. Cada archivo en el directorio contiene un keypair.
+Una billetera del sistema de archivos \_\_, conocida como una billetera FS, es un directorio en el sistema de archivos de su computadora. Cada archivo en el directorio contiene un keypair.
 
 ### Seguridad de la cartera del sistema de archivos
 
@@ -20,7 +20,7 @@ Una cartera de sistema de archivos es la forma de cartera más conveniente y men
 
 ## Cartera de papel
 
-Una cartera de papel __ es una colección de _frases de semilla_ escritas en papel. Una semilla es un número de palabras (normalmente 12 o 24) que pueden ser usadas para regenerar un par de claves bajo demanda.
+Una cartera de papel \__ es una colección de \_frases de semilla_ escritas en papel. Una semilla es un número de palabras (normalmente 12 o 24) que pueden ser usadas para regenerar un par de claves bajo demanda.
 
 ### Seguridad de cartera de papel
 

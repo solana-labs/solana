@@ -2,7 +2,7 @@
 title: Ledger Nano
 ---
 
-本网页展示了如何通过 Ledger Nano S 或 Nano X 来使用命令行工具与 Solana 交互。  其他解决方案与 Solana 与 Nano 的交互， [请点击这里](../ledger-live.md#interact-with-the-solana-network)
+本网页展示了如何通过 Ledger Nano S 或 Nano X 来使用命令行工具与 Solana 交互。 其他解决方案与 Solana 与 Nano 的交互， [请点击这里](../ledger-live.md#interact-with-the-solana-network)
 
 ## 开始前的准备
 
@@ -24,11 +24,11 @@ title: Ledger Nano
 solana-keygen pubkey usb://ledger
 ```
 
-该步骤确认您的 Ledger 设备已经连接正确，并且能够与 Solana CLI 正常交互。 该命令返回你 Ledger 设备唯一的_钱包 ID_. 当有多台 Nano 设备连接到同一台计算机时， 您可以通过钱包 ID 来指定想使用的 Ledger 硬件钱包。 如果您的电脑只使用一个 Nano 设备，那么就无需指明钱包 ID。 关于通过钱包 ID 使用特定 Ledger 的信息，请参阅[管理多个硬件钱包](#manage-multiple-hardware-wallets)。
+该步骤确认您的 Ledger 设备已经连接正确，并且能够与 Solana CLI 正常交互。 该命令返回你 Ledger 设备唯一的*钱包 ID*. 当有多台 Nano 设备连接到同一台计算机时， 您可以通过钱包 ID 来指定想使用的 Ledger 硬件钱包。 如果您的电脑只使用一个 Nano 设备，那么就无需指明钱包 ID。 关于通过钱包 ID 使用特定 Ledger 的信息，请参阅[管理多个硬件钱包](#manage-multiple-hardware-wallets)。
 
 ### 查看您的钱包地址
 
-您的 Nano 支持任意数量的有效钱包地址和签名者。 要查看任何地址，请使用前面所说的 `solana-keygen pubkey` 命令，然后接上一个有效的 [密钥对URL](../hardware-wallets.md#specify-a-keypair-url)。
+您的 Nano 支持任意数量的有效钱包地址和签名者。 要查看任何地址，请使用前面所说的 `solana-keygen pubkey` 命令，然后接上一个有效的 [密钥对 URL](../hardware-wallets.md#specify-a-keypair-url)。
 
 如果需要在自己帐户之间的传输代币，您可以使用多个钱包地址。或在设备上对某一个抵押账号使用不同的键对作为签名授权。
 
@@ -41,7 +41,7 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
-* 注意：密钥对 URL 参数在 **zsh** &nbsp;[更多解决方案](#troubleshooting)中将被忽视。
+- 注意：密钥对 URL 参数在 **zsh** &nbsp;[更多解决方案](#troubleshooting)中将被忽视。
 
 您也可以在 `key=` 后面输入其他的数值。 这些命令显示的任何地址都是有效的 Solana 钱包地址。 与每个地址相关联的隐私信息都安全地存储在 Nano 上，并对该地址的交易进行签名。 只需给你生成的任何地址的密钥对 URL 进行备注，就可以用来接收代币。
 
@@ -69,7 +69,7 @@ solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 
 您也可以在[Explorer](https://explorer.solana.com/accounts)查看任何账户地址的余额，在网页浏览器中将地址粘贴到搜索框来查看余额。
 
-注意：任何余额为 0 SOL的地址（例如您在 Ledger 新创建的地址），将在浏览器器中显示“未找到”。 Solana 对空账户和不存在账户的处理是一样的。 当您的帐户地址中有一些 SOL 代币的时候才会正确显示。
+注意：任何余额为 0 SOL 的地址（例如您在 Ledger 新创建的地址），将在浏览器器中显示“未找到”。 Solana 对空账户和不存在账户的处理是一样的。 当您的帐户地址中有一些 SOL 代币的时候才会正确显示。
 
 ### 从 Nano 发送 SOL
 
@@ -81,7 +81,7 @@ solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 ```
 
-下面是一个完整的实例。 首先，通过某个密钥对 URL 中查看一个地址。 然后检查该地址的余额。 最后，输入一笔交易来发送 `1` SOL到接收地址 `7cvkjYAkUYs4W8XcXscca7cBrEGFeSUjeZmKoNBvEwyri`。 按下回车键传输命令时，您将看到在 Ledger 设备批准交易细节的提示。 在设备上通过左右键查看交易细节。 如果信息正确，请同时按下"允许"界面的两个按钮，否则请在"拒绝"界面按下这两个按钮。
+下面是一个完整的实例。 首先，通过某个密钥对 URL 中查看一个地址。 然后检查该地址的余额。 最后，输入一笔交易来发送 `1` SOL 到接收地址 `7cvkjYAkUYs4W8XcXscca7cBrEGFeSUjeZmKoNBvEwyri`。 按下回车键传输命令时，您将看到在 Ledger 设备批准交易细节的提示。 在设备上通过左右键查看交易细节。 如果信息正确，请同时按下"允许"界面的两个按钮，否则请在"拒绝"界面按下这两个按钮。
 
 ```bash
 ~$ solana-keygen pubkey usb://ledger?key=42

@@ -24,19 +24,19 @@ El servicio de firma de votos consiste en un servidor RPC JSON y un procesador d
 
 1. Registrar un nuevo nodo validador
 
-    - La solicitud debe contener la identidad del validador \(clave pública\)
-    - La solicitud debe ser firmada con la clave privada del validador
-    - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
-    - El servicio crea una nueva clave asimétrica de votación para el validador, y devuelve la clave pública como respuesta
-    - Si un validador intenta registrarse de nuevo, el servicio devuelve la clave pública del par de claves preexistente
+   - La solicitud debe contener la identidad del validador \(clave pública\)
+   - La solicitud debe ser firmada con la clave privada del validador
+   - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
+   - El servicio crea una nueva clave asimétrica de votación para el validador, y devuelve la clave pública como respuesta
+   - Si un validador intenta registrarse de nuevo, el servicio devuelve la clave pública del par de claves preexistente
 
 2. Firma un voto
 
-    - La solicitud debe contener una transacción de votación y todos los datos de verificación
-    - La solicitud debe ser firmada con la clave privada del validador
-    - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
-    - El servicio verifica los datos de votación
-    - El servicio devuelve una firma para la transacción
+   - La solicitud debe contener una transacción de votación y todos los datos de verificación
+   - La solicitud debe ser firmada con la clave privada del validador
+   - El servicio elimina la solicitud si la firma de la solicitud no puede ser verificada
+   - El servicio verifica los datos de votación
+   - El servicio devuelve una firma para la transacción
 
 ## Votación del validador
 

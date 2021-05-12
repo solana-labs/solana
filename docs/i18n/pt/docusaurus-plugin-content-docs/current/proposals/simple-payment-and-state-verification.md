@@ -43,6 +43,7 @@ Transaction status is necessary for the receipt because the state receipt is con
 Currently, the Block-Merkle is not implemented, so to verify `E` was an entry in the block with bank hash `B`, we would need to provide all the entry hashes in the block. Ideally this Block-Merkle would be implmented, as the alternative is very inefficient.
 
 #### Block Headers
+
 In order to verify transaction inclusion proofs, light clients need to be able to infer the topology of the forks in the network
 
 More specifically, the light client will need to track incoming block headers such that given two bank hashes for blocks `A` and `B`, they can determine whether `A` is an ancestor of `B` (Below section on `Optimistic Confirmation Proof` explains why!). Contents of header are the fields necessary to compute the bank hash.

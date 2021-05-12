@@ -23,9 +23,11 @@ Explorers:
   - Devnet thường sẽ chạy một phiên bản phần mềm mới hơn Mainnet Beta
 - Điểm nhập gossip cho Devnet: `entrypoint.devnet.solana.com:8001`
 - Các số liệu biến đổi môi trường cho Devnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - URL RPC cho Devnet: `https://devnet.solana.com`
 
 ##### Ví dụ về cấu hình dòng lệnh `solana`
@@ -63,9 +65,11 @@ $ solana-validator \
 - Testnet thường sẽ chạy một bản phát hành phần mềm mới hơn cả Devnet và Mainnet Beta
 - Điểm nhập gossip cho Testnet: `entrypoint.testnet.solana.com:8001`
 - Các số liệu biến đổi môi trường cho Testnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - URL RPC cho Testnet: `https://testnet.solana.com`
 
 ##### Ví dụ về cấu hình dòng lệnh `solana`
@@ -110,9 +114,11 @@ Một cụm liên tục, không được phép dành cho chủ sở hữu mã th
   - Lưu ý: Nếu bạn đang sử dụng ví không phải dòng lệnh như [Solflare](wallet-guide/solflare.md), ví sẽ luôn kết nối với Mainnet Beta.
 - Điểm nhập gossip cho Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Các số liệu biến đổi môi trường cho Mainnet Beta:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - URL RPC cho Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Ví dụ về cấu hình dòng lệnh `solana`

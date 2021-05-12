@@ -16,7 +16,7 @@ Se componentes de nível superior requerem mais funcionalidades do que o que pod
 
 ### Tratamento de erros
 
-O cliente `` deve usar o existente `TransportError` enum para erros, exceto que o campo `personalizado (String)` deve ser alterado para `Custom(Box<dyn Error>`.
+O cliente ``deve usar o existente`TransportError`enum para erros, exceto que o campo`personalizado (String)`deve ser alterado para`Custom(Box<dyn Error>`.
 
 ### Estratégia de implementação
 

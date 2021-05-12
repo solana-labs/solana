@@ -106,7 +106,7 @@ trong đó `<PUBKEY>` được thay thế bằng địa chỉ ví và từ khóa
 
 ## Kiểm tra số dư Tài khoản
 
-Tất cả những gì cần thiết để kiểm tra số dư tài khoản là public key của tài khoản. Để lấy public key một cách an toàn từ ví giấy, hãy làm theo [Khởi tạo Public Key](#public-key-derivation) và hướng dẫn [air gapped computer](https://en.wikipedia.org/wiki/Air_gap_(networking)). Sau đó, public key có thể được nhập bằng tay hoặc kết nối USB vào máy được nối mạng.
+Tất cả những gì cần thiết để kiểm tra số dư tài khoản là public key của tài khoản. Để lấy public key một cách an toàn từ ví giấy, hãy làm theo [Khởi tạo Public Key](#public-key-derivation) và hướng dẫn [air gapped computer](<https://en.wikipedia.org/wiki/Air_gap_(networking)>). Sau đó, public key có thể được nhập bằng tay hoặc kết nối USB vào máy được nối mạng.
 
 Tiếp theo, Chạy công cụ `solana` CLI để [kết nối với một cụm cụ thể ](../cli/choose-a-cluster.md):
 

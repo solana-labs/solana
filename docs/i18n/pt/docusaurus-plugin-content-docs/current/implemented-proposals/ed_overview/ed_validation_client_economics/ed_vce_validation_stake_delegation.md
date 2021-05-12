@@ -7,19 +7,19 @@ title: Delegação de Stake de Validação
 Executar um cliente Solana de validação exigiu um investimento relativamente modesto de capital no hardware. **Tabela 2** fornece um exemplo de configuração de hardware para suportar ~1M tx/s com custos estimados 'off-the-shelf':
 
 | Componente              | Exemplo                                              | Custo estimado |
-|:----------------------- |:---------------------------------------------------- |:-------------- |
-| GPU                     | 2x 2080 Ti                                           | \$2500        |
-| ou                      | 2x 1080 Ti                                           | \$2800        |
-| Armazenamento SO/Ledger | Samsung 860 Evo 2TB                                  | \$370         |
-| Armazenamento de contas | 2x Samsung 970 Pro M.2 512GB                         | \$340         |
-| RAM                     | 32 Gb                                                | \$300         |
-| Placa-mãe               | AMD x399                                             | \$400         |
-| Cpu                     | AMD Threadripper 2920x                               | \$650         |
-| Case                    |                                                      | \$100         |
-| Fonte de energia        | EVGA 1600W                                           | \$300         |
-| Rede                    | &gt; 500 mbps                                  |                |
-| Rede \(1\)            | Google webpass área bay de negócios 1gbps ilimitados | \$5500/mês    |
-| Rede \(2\)            | Área de baía elétrica furacão colo 1gbps             | \$500/mês     |
+| :---------------------- | :--------------------------------------------------- | :------------- |
+| GPU                     | 2x 2080 Ti                                           | \$2500         |
+| ou                      | 2x 1080 Ti                                           | \$2800         |
+| Armazenamento SO/Ledger | Samsung 860 Evo 2TB                                  | \$370          |
+| Armazenamento de contas | 2x Samsung 970 Pro M.2 512GB                         | \$340          |
+| RAM                     | 32 Gb                                                | \$300          |
+| Placa-mãe               | AMD x399                                             | \$400          |
+| Cpu                     | AMD Threadripper 2920x                               | \$650          |
+| Case                    |                                                      | \$100          |
+| Fonte de energia        | EVGA 1600W                                           | \$300          |
+| Rede                    | &gt; 500 mbps                                        |                |
+| Rede \(1\)              | Google webpass área bay de negócios 1gbps ilimitados | \$5500/mês     |
+| Rede \(2\)              | Área de baía elétrica furacão colo 1gbps             | \$500/mês      |
 
 **Exemplo de configuração de hardware de alto nível** para executar um cliente Solana,.
 

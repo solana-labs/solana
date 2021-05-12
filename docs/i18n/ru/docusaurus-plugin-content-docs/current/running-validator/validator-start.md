@@ -40,10 +40,12 @@ solana-gossip spy --entrypoint devnet.solana.com:8001
 ## Настройка системы
 
 ### Linux
+
 #### Автоматическая настройка
+
 Репозиторий solana включает демон для настройки системных параметров для оптимизации производительности (то есть увеличения UDP буфера ОС и ограничения сопоставления файлов).
 
-Демон (`solana-sys-tuner`) включен в бинарный релиз solana. Перезапустите его, *перед* перезапуском валидатора после каждого обновления ПО, чтобы убедиться, что применяются последние рекомендуемые параметры.
+Демон (`solana-sys-tuner`) включен в бинарный релиз solana. Перезапустите его, _перед_ перезапуском валидатора после каждого обновления ПО, чтобы убедиться, что применяются последние рекомендуемые параметры.
 
 Чтобы запустить его:
 
@@ -52,9 +54,11 @@ sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Ручная настройка
+
 Если вы хотите управлять системными настройками самостоятельно, вы можете сделать это следующими командами.
 
 ##### **Увеличить UDP-буфер**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
 # Increase UDP buffer size
@@ -64,38 +68,49 @@ net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```
 
 ##### **Увеличенный лимит сопоставленных файлов памяти**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 500000
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
+
 Добавьте
+
 ```
 LimitNOFILE=500000
 ```
+
 в раздел `[Service]` службы вашего systemd файла, если вы используете его. Или добавьте
+
 ```
 DefaultLimitNOFILE=500000
 ```
+
 в раздел `[Manager]` файла `/etc/systemd/system.conf`.
+
 ```bash
 sudo systemctl daemon-reload
 ```
+
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
 * - nofile 500000
 EOF"
 ```
+
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
@@ -248,14 +263,17 @@ solana-gossip spy --entrypoint devnet.solana.com:8001
 По умолчанию валидатор будет динамически выбирать доступные сетевые порты в диапазоне 8000-10000. Это может быть изменено с помощью `--dynamic-port-range`. Например `solana-validator --dynamic-port-range 11000-110...` ограничит использование портов на 11000-11010.
 
 ### Ограничение размера ledger для сохранения дискового пространства
+
 Параметр `--limit-ledger-size` позволяет указать, сколько будет занимать [shreds](../terminology.md#shred) на диске. Если вы не включаете этот параметр, то валидатор будет держать весь ledger до тех пор, пока не закончится место на диске.
 
-Значение по умолчанию ограничивает размер ledger до 500ГБ.  Большее или меньшее использование диска может быть установлено добавлением аргумента `--limit-ledger-size`. Посмотрите `solana-validator --help` для изменения значения по умолчанию, используемого `--limit-ledger-size`.  Дополнительная информация о выборе предельного значения [доступна здесь](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+Значение по умолчанию ограничивает размер ledger до 500ГБ. Большее или меньшее использование диска может быть установлено добавлением аргумента `--limit-ledger-size`. Посмотрите `solana-validator --help` для изменения значения по умолчанию, используемого `--limit-ledger-size`. Дополнительная информация о выборе предельного значения [доступна здесь](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Systemd Unit
+
 Запуск валидатора в качестве systemd unit - это один из простых способов управления работой в фоновом режиме.
 
 Если у вас есть пользователь с названием `sol` на вашей машине, создайте файл `/etc/systemd/system/sol.service` с следующими параметрами:
+
 ```
 [Unit]
 Description=Solana Validator
@@ -277,14 +295,16 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Теперь создайте `/home/sol/bin/validator.sh` для включения желаемых параметров `solana-validator` командной строки.  Убедитесь, что запуск `/home/sol/bin/validator.sh` вручную запускает валидатор. Не забудьте включить права на исполнение `chmod +x /home/sol/bin/validator.sh`
+Теперь создайте `/home/sol/bin/validator.sh` для включения желаемых параметров `solana-validator` командной строки. Убедитесь, что запуск `/home/sol/bin/validator.sh` вручную запускает валидатор. Не забудьте включить права на исполнение `chmod +x /home/sol/bin/validator.sh`
 
 Запуск в качестве службы:
+
 ```bash
 $ sudo systemctl enable --now sol
 ```
 
 ### Логирование
+
 #### Настройка вывода журнала
 
 Сообщения журнала валидатора могут контролироваться переменной окружения `RUST_LOG`. Детали имеются в [документации](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) для `env_logger`.
@@ -300,6 +320,7 @@ $ sudo systemctl enable --now sol
 #### Использование logrotate
 
 Пример установки `logrotate`, который предполагает, что валидатор работает как системная служба, называемая `sol.service` и записывает лог файл в /home/sol/solana-validator.log:
+
 ```bash
 # Setup log rotation
 
@@ -318,14 +339,17 @@ systemctl restart logrotate.service
 ```
 
 ### Отключение проверки портов для ускорения перезапуска
+
 Как только ваш валидатор заработает нормально, вы можете сократить время, необходимое для перезапуска валидатора, добавив флаг `--no-port-check` в командную строку `solana-validator`.
 
 ### Отключение сжатия снэпшота для уменьшения использования ЦП
+
 Если вы не предоставляете снэпшоты другим валидаторам, сжатие снимков можно отключить, чтобы уменьшить нагрузку ЦП за счет чуть большего использования диска для локального снэпшота.
 
 Добавьте параметр `--snapshot-compression none` к `solana-validator` и перезапустите валидатора.
 
 ### Использование ramdisk с расширением в файл подкачки касательно папки accounts для уменьшения износа SSD
+
 Если на вашей машине много оперативной памяти, ramdisk tmpfs ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) может использоваться для хранения папки accounts
 
 При использовании tmpfs важно также настроить файл подкачки, во избежание возможного переполнения tmpfs.
@@ -333,12 +357,14 @@ systemctl restart logrotate.service
 Рекомендуется использовать раздел 300GB tmpfs, вместе с файлом подкачки в 250GB.
 
 Пример конфигурации:
+
 1. `sudo mkdir /mnt/solana-accounts`
-2. Добавьте 300ГБ tmpfs путем добавления новой строки, содержащей `tmpfs
-/mnt/solana-accounts tmpfs rw,size=300G, ser=sol 0 0` в `/etc/fstab` (при условии, что ваш валидатор запущен под пользователем "sol").  **ВНИМАНИЕ: Если вы неправильно отредактируете /etc/fstab ваша машина может перестать загружаться**
+2. Добавьте 300ГБ tmpfs путем добавления новой строки, содержащей `tmpfs /mnt/solana-accounts tmpfs rw,size=300G, ser=sol 0 0` в `/etc/fstab` (при условии, что ваш валидатор запущен под пользователем "sol"). **ВНИМАНИЕ: Если вы неправильно отредактируете /etc/fstab ваша машина может перестать загружаться**
 3. Создайте по крайней мере 250ГБ файл подкачки
-  - Выберите устройство, используемое вместо `SWAPDEV` для остальной части этих инструкций. В идеале выберите свободный раздел 250GB или больше на быстром диске. Если такой файл подкачки отсутствует, создайте его `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, установите права доступа `sudo chmod 0600 /swapfile` и используйте `/swapfile` как `SWAPDEV` для остальных этих инструкций
-  - Пометьте этот файл для использования в качестве файла подкачки с помощью SWAPDEV `sudo mkswap`
+
+- Выберите устройство, используемое вместо `SWAPDEV` для остальной части этих инструкций. В идеале выберите свободный раздел 250GB или больше на быстром диске. Если такой файл подкачки отсутствует, создайте его `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, установите права доступа `sudo chmod 0600 /swapfile` и используйте `/swapfile` как `SWAPDEV` для остальных этих инструкций
+- Пометьте этот файл для использования в качестве файла подкачки с помощью SWAPDEV `sudo mkswap`
+
 4. Добавить файл подкачки в `/etc/fstab` новой строкой, содержащей `SWAPDEV swap swap defaults 0 0`
 5. Включите файл подкачки с помощью `sudo swapon -a` и смонтируйте tmpfs `sudo mount /mnt/solana-accounts/`
 6. Убедитесь, что он активен с помощью `free -g`, а с помощью `mount`, что tmpfs смонтирован

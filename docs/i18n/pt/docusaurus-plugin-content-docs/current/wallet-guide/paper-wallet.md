@@ -106,7 +106,7 @@ onde `<PUBKEY>` é substituído pelo endereço da carteira e eles a palavra-chav
 
 ## Verificando Saldo de uma Conta
 
-Tudo que é necessário para verificar o saldo da conta é a chave pública de uma conta. Para recuperar as chaves públicas de forma segura a partir de uma carteira de papel, siga as instruções de [Derivação da chave pública](#public-key-derivation) em um [computador preso](https://en.wikipedia.org/wiki/Air_gap_(networking)). Chaves públicas podem ser digitadas manualmente ou transferidas através de um USB para uma máquina em rede.
+Tudo que é necessário para verificar o saldo da conta é a chave pública de uma conta. Para recuperar as chaves públicas de forma segura a partir de uma carteira de papel, siga as instruções de [Derivação da chave pública](#public-key-derivation) em um [computador preso](<https://en.wikipedia.org/wiki/Air_gap_(networking)>). Chaves públicas podem ser digitadas manualmente ou transferidas através de um USB para uma máquina em rede.
 
 Em seguida, configure a ferramenta de `solana` CLI para [conectar a um determinado cluster](../cli/choose-a-cluster.md):
 

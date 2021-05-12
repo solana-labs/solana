@@ -7,19 +7,19 @@ title: المُصادقة على تفويض الحِصَّة (Validation Stake D
 يتطلب تشغيل عميل المُصادقة (validation-client) للتثبت من صحة Solana إستثمارًا متواضعًا نسبيًا في رأسمال الأجهزة مقدمًا. يُوفر **Table 2** مثالاً لتكوين الأجهزة لدعم حوالي مليون مُعاملة / الثانية الواحدة بتكاليف تقديرية:
 
 | المكون                            | مثال                                             | التكلفة التقديرية |
-|:--------------------------------- |:------------------------------------------------ |:----------------- |
-| GPU                               | 2x 2080 Ti                                       | \$2500           |
-| أو                                | 4x 1080 Ti                                       | \$2800           |
-| OS/Ledger Storage                 | Samsung 860 Evo 2TB                              | \$370            |
-| تخزين الحسابات (Accounts storage) | 2x Samsung 970 Pro M.2 512GB                     | \$340            |
-| RAM                               | 32 Gb                                            | \$300            |
-| اللوحة الأم (Motherboard)         | AMD x399                                         | \$400            |
-| المُعالج (CPU)                    | AMD Threadripper 2920x                           | \$650            |
-| الصندق (Case)                     |                                                  | \$100            |
-| إمدادات الطاقة (Power supply)     | EVGA 1600W                                       | \$300            |
-| الشبكة                            | &gt; 500 mbps                              |                   |
-| الشبكة \(1\)                    | Google webpass business bay area 1gbps unlimited | \$5500/شهرياً    |
-| الشبكة \(2\)                    | Hurricane Electric bay area colo 1gbps           | \$500/شهرياً     |
+| :-------------------------------- | :----------------------------------------------- | :---------------- |
+| GPU                               | 2x 2080 Ti                                       | \$2500            |
+| أو                                | 4x 1080 Ti                                       | \$2800            |
+| OS/Ledger Storage                 | Samsung 860 Evo 2TB                              | \$370             |
+| تخزين الحسابات (Accounts storage) | 2x Samsung 970 Pro M.2 512GB                     | \$340             |
+| RAM                               | 32 Gb                                            | \$300             |
+| اللوحة الأم (Motherboard)         | AMD x399                                         | \$400             |
+| المُعالج (CPU)                    | AMD Threadripper 2920x                           | \$650             |
+| الصندق (Case)                     |                                                  | \$100             |
+| إمدادات الطاقة (Power supply)     | EVGA 1600W                                       | \$300             |
+| الشبكة                            | &gt; 500 mbps                                    |                   |
+| الشبكة \(1\)                      | Google webpass business bay area 1gbps unlimited | \$5500/شهرياً     |
+| الشبكة \(2\)                      | Hurricane Electric bay area colo 1gbps           | \$500/شهرياً      |
 
 **Table 2** مثال لإعداد الأجهزة المُتطورة لتشغيل عميل Solana.
 

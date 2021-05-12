@@ -23,9 +23,11 @@ Exploradores:
   - Devnet normalmente ejecuta una versión de software más reciente que la Beta Mainnet
 - Punto de entrada de Gossip para Devnet: `entrypoint.devnet.solana.com:8001`
 - Variable de entorno de las métricas para Devnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - URL RPC para Devnet: `https://devnet.solana.com`
 
 ##### Ejemplo de configuración de línea de comandos `solana`
@@ -63,9 +65,11 @@ El `--trusted-validator`s está operado por Solana
 - Testnet normalmente ejecuta un lanzamiento de software más reciente que Devnet y Mainnet Beta
 - Punto de entrada de Gossip para Testnet: `entrypoint.testnet.solana.com:8001`
 - Variable de entorno de las métricas para Testnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - URL RPC para Testnet: `https://testnet.solana.com`
 
 ##### Ejemplo de configuración de línea de comandos `solana`
@@ -110,9 +114,11 @@ Un clúster persistente sin permisos para poseedores de tokens iniciales y socio
   - Nota: Si está utilizando una billetera que no es de línea de comandos, como [Solflare](wallet-guide/solflare.md), la billetera siempre se conectará a Mainnet Beta.
 - Punto de entrada de Gossip para Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Variable de entorno de las métricas para Mainnet Beta:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - URL RPC para Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Ejemplo de configuración de línea de comandos `solana`

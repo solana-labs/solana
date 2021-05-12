@@ -9,11 +9,12 @@ Este guia descreve como adicionar SOL token nativo de Solana à sua Exchange de 
 É altamente recomendável configurar pelo menos dois nós em instâncias de alta grau/na nuvem atualizando prontamente para versões mais recentes e mantendo um olho no serviço operações com uma ferramenta de monitoramento empacotada.
 
 Esta configuração permite você:
+
 - para ter um gateway confiável para o cluster Solana mainnet-beta para obter dados e enviar transações de retirada
 - para ter controle total sobre quantos dados de bloco histórico são mantidos
 - para manter sua disponibilidade de serviço, mesmo se um nó falhar
 
-Javier Solana exige poder de computação relativamente elevado para lidar com nossos blocos rápidos e alto TPS.  Para requisitos específicos, consulte [recomendações de hardware](../running-validator/validator-reqs.md).
+Javier Solana exige poder de computação relativamente elevado para lidar com nossos blocos rápidos e alto TPS. Para requisitos específicos, consulte [recomendações de hardware](../running-validator/validator-reqs.md).
 
 Para executar um nó de api:
 
@@ -37,7 +38,7 @@ Personalize `--ledger` com o local de armazenamento de registro desejado, e `--r
 
 Os parâmetros `--entrypoint` e `--expected-genesis-hash` são todos específicos para o cluster que você está se juntando. [Parâmetros atuais para Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-O parâmetro `--limit-ledger-size` permite que você especifique quantos ledger [shhundred](../terminology.md#shred) seu nó retém no disco. Se você não incluir esse parâmetro, o validador manterá o livro-razão inteiro até que ele esgote espaço em disco.  As tentativas de valor padrão para manter o uso do disco de registro menos de 500GB.  Mais ou menos uso de disco pode ser solicitado adicionando um argumento a `--limit-ledger-size` se desejado. Verifique `solana-validator --help` no valor de limite padrão usado por `--limit-ledger-size`.  Mais informações sobre selecionar um limite personalizado está [disponível aqui](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+O parâmetro `--limit-ledger-size` permite que você especifique quantos ledger [shhundred](../terminology.md#shred) seu nó retém no disco. Se você não incluir esse parâmetro, o validador manterá o livro-razão inteiro até que ele esgote espaço em disco. As tentativas de valor padrão para manter o uso do disco de registro menos de 500GB. Mais ou menos uso de disco pode ser solicitado adicionando um argumento a `--limit-ledger-size` se desejado. Verifique `solana-validator --help` no valor de limite padrão usado por `--limit-ledger-size`. Mais informações sobre selecionar um limite personalizado está [disponível aqui](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 Especificar um ou mais parâmetros `--trusted-validator` podem protegê-lo de inicialização de um instantâneo malicioso. [Mais sobre o valor de inicialização com validadores confiáveis](../running-validator/validator-start.md#trusted-validators)
 
@@ -68,22 +69,21 @@ Curtir validadores acionados, nós esperamos que todos os validadores operados e
 
 Por padrão, cada um dos seus nós inicializará a partir de um snapshot fornecido por um de seus validadores confiáveis. Este instantâneo reflete o estado atual da cadeia, mas não contém o registro histórico completo. Se uma das suas botas e um sair de uma nova foto, pode haver uma lacuna no livro-razão nesse nó. Em para evitar esse problema adicione o parâmetro `--no-snapshot-fetch` ao comando `solana-validator` para receber dados históricos de ledger em vez de um snapshot .
 
-Não passe o parâmetro `--no-snapshot-fetch` na sua inicialização inicial, pois não é possível inicializar o nó a partir do bloco de gênesis.  Em vez disso, inicialize a partir de um snapshot primeiro e depois adicione o parâmetro `--no-snapshot-fetch` para reinicializações.
+Não passe o parâmetro `--no-snapshot-fetch` na sua inicialização inicial, pois não é possível inicializar o nó a partir do bloco de gênesis. Em vez disso, inicialize a partir de um snapshot primeiro e depois adicione o parâmetro `--no-snapshot-fetch` para reinicializações.
 
-É importante notar que a quantidade de livro razão histórico disponível para seus nós do resto da rede é limitada a qualquer momento no tempo.  Uma vez operacional se seus validadores experimentarem inatividade significante, eles podem não ser capazes de alcançar a rede e precisarem baixar um novo instantâneo de um validador confiável.  Ao fazer isso, os seus validadores agora terão uma lacuna nos seus dados históricos que não podem ser preenchidos.
-
+É importante notar que a quantidade de livro razão histórico disponível para seus nós do resto da rede é limitada a qualquer momento no tempo. Uma vez operacional se seus validadores experimentarem inatividade significante, eles podem não ser capazes de alcançar a rede e precisarem baixar um novo instantâneo de um validador confiável. Ao fazer isso, os seus validadores agora terão uma lacuna nos seus dados históricos que não podem ser preenchidos.
 
 ### Minimizando a Exposição da Porta do Validador
 
-O validador requer que várias portas UDP e TCP estejam abertas para o tráfego de entrada de todos os outros validadores Javier Solana.   Embora este seja o modo mais eficiente de operação, e é fortemente recomendado, É possível restringir o validador para exigir apenas o tráfego de entrada de um outro validador Solana.
+O validador requer que várias portas UDP e TCP estejam abertas para o tráfego de entrada de todos os outros validadores Javier Solana. Embora este seja o modo mais eficiente de operação, e é fortemente recomendado, É possível restringir o validador para exigir apenas o tráfego de entrada de um outro validador Solana.
 
-Primeiro adicione o argumento `--restricted-repair-only-mode`.  Isto fará com que o validador opere em um modo restrito onde não receberá pushes de o resto dos validadores e, em vez disso, precisará sondar continuamente outros validadores para blocos.  O validador só transmitirá pacotes UDP para outros validadores usando os *Gossip* e *ServeR* ("serve repair") ports, e somente receber pacotes UDP em suas portas *Gossip* e *Reparar*.
+Primeiro adicione o argumento `--restricted-repair-only-mode`. Isto fará com que o validador opere em um modo restrito onde não receberá pushes de o resto dos validadores e, em vez disso, precisará sondar continuamente outros validadores para blocos. O validador só transmitirá pacotes UDP para outros validadores usando os _Gossip_ e _ServeR_ ("serve repair") ports, e somente receber pacotes UDP em suas portas _Gossip_ e _Reparar_.
 
-A porta *Gossip* é bidirecional e permite que seu validador permaneça em contato com o resto do cluster.  Seu validador transmite no *ServeR* para fazer pedidos de reparo para obter novos blocos do resto da rede, desde que a Turbina está desativada agora.  Seu validador então receberá respostas de reparo na porta *Repair* de outros validadores.
+A porta _Gossip_ é bidirecional e permite que seu validador permaneça em contato com o resto do cluster. Seu validador transmite no _ServeR_ para fazer pedidos de reparo para obter novos blocos do resto da rede, desde que a Turbina está desativada agora. Seu validador então receberá respostas de reparo na porta _Repair_ de outros validadores.
 
-Para restringir ainda mais o validador para solicitar apenas blocos de um ou mais validadores, Primeiro, determine a chave de identidade desse validador e adicione os argumentos do `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` para cada PUBKEY.  Isso fará com que seu validador seja um drenão de recurso em cada validador que você adicionar, então por favor faça isso com moderação e somente depois de consultar o validador de alvo de.
+Para restringir ainda mais o validador para solicitar apenas blocos de um ou mais validadores, Primeiro, determine a chave de identidade desse validador e adicione os argumentos do `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` para cada PUBKEY. Isso fará com que seu validador seja um drenão de recurso em cada validador que você adicionar, então por favor faça isso com moderação e somente depois de consultar o validador de alvo de.
 
-Seu validador agora só deve estar se comunicando com os validadores explicitamente listados e apenas no *Gossip*, *Reparo* e *ServeR* portas.
+Seu validador agora só deve estar se comunicando com os validadores explicitamente listados e apenas no _Gossip_, _Reparo_ e _ServeR_ portas.
 
 ## Configurando contas de depósito
 
@@ -193,7 +193,7 @@ If you need more information about the transaction type or other specifics, you 
 
 ### Address History
 
-You can also query the transaction history of a specific address. This is generally *not* a viable method for tracking all your deposit addresses over all slots, but may be useful for examining a few accounts for a specific period of time.
+You can also query the transaction history of a specific address. This is generally _not_ a viable method for tracking all your deposit addresses over all slots, but may be useful for examining a few accounts for a specific period of time.
 
 - Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) request to the api node:
 
@@ -433,13 +433,13 @@ O fluxo de trabalho do Token SPL é semelhante ao dos tokens nativos de SOL, mas
 
 ### Token Mints
 
-Cada *tipo* do SPL Token é declarado criando uma conta *mint*.  Esta conta armazena metadados que descrevem recursos do token, como a oferta, número de decimais e várias autoridades com controle sobre a mentalidade.  Cada conta SPL Token faz referência a sua menta associada e só pode interagir com Tokens SPL desse tipo.
+Cada _tipo_ do SPL Token é declarado criando uma conta _mint_. Esta conta armazena metadados que descrevem recursos do token, como a oferta, número de decimais e várias autoridades com controle sobre a mentalidade. Cada conta SPL Token faz referência a sua menta associada e só pode interagir com Tokens SPL desse tipo.
 
 ### Instalando a `spl-token` Ferramenta CLI
 
 Contas SPL Token são necessárias e modificadas usando o utilitário da linha de comando `spl-token`. Os exemplos fornecidos nesta seção dependem de ter ele instalado no sistema local.
 
-`spl-token` é distribuído a partir de Rust [crates.io](https://crates.io/crates/spl-token) via o Rust `cargo` utilitário de linha de comando. A última versão do `de carga` pode ser instalada usando um útil one-liner para a sua plataforma em [rustup.rs](https://rustup.rs). Assim que o ` cargo ` for instalado, o ` spl-token ` pode ser obtido com o seguinte comando:
+`spl-token` é distribuído a partir de Rust [crates.io](https://crates.io/crates/spl-token) via o Rust `cargo` utilitário de linha de comando. A última versão do `de carga` pode ser instalada usando um útil one-liner para a sua plataforma em [rustup.rs](https://rustup.rs). Assim que o `cargo` for instalado, o `spl-token` pode ser obtido com o seguinte comando:
 
 ```
 cargo instalar spl-token-cli
@@ -461,11 +461,13 @@ spl-token-cli 2.0.1
 
 Contas SPL Token transportam requisitos adicionais que o Programa de Sistema nativo contas não:
 
-1. Contas de token SPL devem ser criadas antes que uma quantidade de tokens possa ser depositada.   Contas de token podem ser criadas explicitamente com o comando `spl-token create-account` , ou implicitamente pela transferência de `spl-token --fund-recipient . .` comando.
+1. Contas de token SPL devem ser criadas antes que uma quantidade de tokens possa ser depositada. Contas de token podem ser criadas explicitamente com o comando `spl-token create-account` , ou implicitamente pela transferência de `spl-token --fund-recipient . .` comando.
 1. As contas SPL Token devem permanecer [isentas de aluguel](developing/programming-model/accounts.md#rent-exemption) pela duração da sua existência e portanto requer que uma pequena quantidade de tokens nativos SOL seja depositada na criação da conta. Para contas SPL Token v2, este valor é 0.00203928 SOL (2.039,280 lamports).
 
 #### Linha de comando
+
 Para criar uma conta SPL Token com as seguintes propriedades:
+
 1. Associado com a menta determinada
 1. Possuído pelo keypair da conta de financiamento
 
@@ -474,6 +476,7 @@ criar-conta de criação-token <TOKEN_MINT_ADDRESS>
 ```
 
 #### Exemplo
+
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -481,6 +484,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ```
 
 Ou para criar uma conta SPL Token com um par de chave específico:
+
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -491,11 +495,13 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### Verificando Saldo de uma Conta
 
 #### Linha de comando
+
 ```
 saldo de solana <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### Exemplo
+
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -505,14 +511,16 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 A conta de origem de uma transferência é a conta token real que contém o valor de.
 
-O endereço do destinatário no entanto pode ser uma conta de carteira normal.  Se um associado conta token para a casa da moeda fornecida ainda não existe para essa carteira, o transferência irá criá-lo, desde que o argumento ` --fund-receiver ` como forneceu.
+O endereço do destinatário no entanto pode ser uma conta de carteira normal. Se um associado conta token para a casa da moeda fornecida ainda não existe para essa carteira, o transferência irá criá-lo, desde que o argumento `--fund-receiver` como forneceu.
 
 #### Linha de comando
+
 ```
 transferência spl-token <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
 #### Exemplo
+
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Transfer 1 tokens
@@ -522,20 +530,23 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 ```
 
 ### Depósito
-Uma vez que cada par ` (user, mint) ` requer uma conta separada na cadeia, é recomendado que uma Exchange crie lotes de contas de token com antecedência e os atribua aos usuários a pedido. Essas contas devem ser propriedade de chaves-chave controladas por troca.
+
+Uma vez que cada par `(user, mint)` requer uma conta separada na cadeia, é recomendado que uma Exchange crie lotes de contas de token com antecedência e os atribua aos usuários a pedido. Essas contas devem ser propriedade de chaves-chave controladas por troca.
 
 O monitoramento para as transações de depósito deve seguir o [método de consulta de bloco](#poll-for-blocks) descrito acima. Each new block should be scanned for successful transactions issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92) or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) instructions referencing user accounts, then querying the [token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance) updates.
 
 [Considerações](https://github.com/solana-labs/solana/issues/12318) estão sendo feitas para superar os campos `pré-saldos` e `pós-Saldo` status de transação metadados para incluir transferências de saldo SPL token.
 
 ### Retirar
+
 O endereço de retirada que um usuário fornece deve ser o mesmo endereço usado para retirada regular SOL.
 
 Antes de realizar uma transferência [de retirada](#token-transfers), a troca deve verificar o endereço como [descrito acima](#validating-user-supplied-account-addresses-for-withdrawals).
 
-A partir do endereço de retirada, o token associado conta para a casa da moeda correta determinada e a transferência emitida para essa conta.  Note que é possível que a conta de token associada ainda não existe, em que ponto a troca deve financiar a conta em nome do usuário.  Para SPL Token v2 contas, o financiamento da conta de saque exigirá 0,00203928 SOL (2.039.280 lamports).
+A partir do endereço de retirada, o token associado conta para a casa da moeda correta determinada e a transferência emitida para essa conta. Note que é possível que a conta de token associada ainda não existe, em que ponto a troca deve financiar a conta em nome do usuário. Para SPL Token v2 contas, o financiamento da conta de saque exigirá 0,00203928 SOL (2.039.280 lamports).
 
 Modelo `de transferência spl-token` comando para uma retirada:
+
 ```
 $ transferência spl-token <exchange token account> <withdrawal amount> <withdrawal address> --fund-recipient
 ```
@@ -543,7 +554,8 @@ $ transferência spl-token <exchange token account> <withdrawal amount> <withdra
 ### Outras Considerações
 
 #### Autoridade de congelamento
-Por razões de conformidade regulamentar, uma entidade emissora de token SPL pode opcionalmente escolher manter a "Autoridade" sobre todas as contas criadas em associação com sua mentalidade.  Isto permite que [bloqueiem](https://spl.solana.com/token#freezing-accounts) os ativos em uma determinada conta, tornando a conta inutilizável até o descongelamento. Se este recurso estiver em uso, a pubkey da autoridade congelada será registrada na conta de SPL Token.
+
+Por razões de conformidade regulamentar, uma entidade emissora de token SPL pode opcionalmente escolher manter a "Autoridade" sobre todas as contas criadas em associação com sua mentalidade. Isto permite que [bloqueiem](https://spl.solana.com/token#freezing-accounts) os ativos em uma determinada conta, tornando a conta inutilizável até o descongelamento. Se este recurso estiver em uso, a pubkey da autoridade congelada será registrada na conta de SPL Token.
 
 ## Testando a Integração
 

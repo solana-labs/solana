@@ -50,10 +50,10 @@ Lưu ý rằng một `E` xuất hiện trên 2 fork tại cùng một slot là �
 
 Sẽ rất hữu ích khi coi việc luân chuyển leader qua số lần tick PoH như là sự phân chia thời gian của công việc mã hóa trạng thái cho cụm. Bảng sau đây trình bày cây của các fork ở trên dưới dạng một sổ cái phân chia theo thời gian.
 
-| leader slot           | L1 | L2 | L3 | L4 | L5 |
-|:--------------------- |:-- |:-- |:-- |:-- |:-- |
-| dữ liệu               | E1 | E2 | E3 | E4 | E5 |
-| các tick trở về trước |    |    |    | x  | xx |
+| leader slot           | L1  | L2  | L3  | L4  | L5  |
+| :-------------------- | :-- | :-- | :-- | :-- | :-- |
+| dữ liệu               | E1  | E2  | E3  | E4  | E5  |
+| các tick trở về trước |     |     |     | x   | xx  |
 
 Lưu ý rằng chỉ dữ liệu từ leader L3 mới được chấp nhận trong leader slot L3. Dữ liệu từ L3 có thể bao gồm các tick "bắt kịp" trở lại một slot khác ngoài L2 nếu L3 không quan sát dữ liệu của L2. Truyền của L4 và L5 bao gồm các mục PoH "các tick để chiếm ưu thế".
 

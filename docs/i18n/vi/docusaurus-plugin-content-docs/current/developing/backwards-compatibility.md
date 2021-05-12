@@ -41,46 +41,55 @@ Các tính năng rủi ro thấp, các thay đổi không vi phạm cũng như c
 ### RPC API
 
 Bản vá lỗi:
+
 - Sửa lỗi
 - Các bản sửa lỗi bảo mật
 - Điểm cuối / tính năng không được dùng nữa
 
 Bản phát hành nhỏ:
+
 - Các tính năng và điểm cuối RPC mới
 
 Các bản phát hành chính:
+
 - Loại bỏ các tính năng không dùng nữa
 
 ### Thùng Rust
 
-* [`solana-sdk`](https://docs.rs/solana-sdk/) - SDK Rust để tạo các giao dịch và phân tích trạng thái tài khoản
-* [`solana-program`](https://docs.rs/solana-program/) - Rust SDK để viết các chương trình
-* [`solana-client`](https://docs.rs/solana-client/) - Khách hàng Rust để kết nối với API RPC
-* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Khách hàng Rust để quản lý tệp cấu hình Solana CLI
+- [`solana-sdk`](https://docs.rs/solana-sdk/) - SDK Rust để tạo các giao dịch và phân tích trạng thái tài khoản
+- [`solana-program`](https://docs.rs/solana-program/) - Rust SDK để viết các chương trình
+- [`solana-client`](https://docs.rs/solana-client/) - Khách hàng Rust để kết nối với API RPC
+- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Khách hàng Rust để quản lý tệp cấu hình Solana CLI
 
 Bản vá lỗi:
+
 - Sửa lỗi
 - Các bản sửa lỗi bảo mật
 - Các cải tiến hiệu suất
 
 Bản phát hành nhỏ:
+
 - Các API mới
 
 Các bản phát hành chính
+
 - Loại bỏ các API không dùng nữa
 - Ngược lại các thay đổi hành vi không tương thích
 
 ### Các công cụ CLI
 
 Bản vá lỗi:
+
 - Các bản sửa lỗi và bảo mật
 - Các cải tiến hiệu suất
 - Lệnh con / đối số không được chấp nhận
 
 Bản phát hành nhỏ:
+
 - Lệnh con mới
 
 Các bản phát hành chính:
+
 - Chuyển sang cấu hình / điểm cuối API RPC mới được giới thiệu trong phiên bản chính trước đó.
 - Loại bỏ các tính năng không dùng nữa
 

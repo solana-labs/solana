@@ -95,13 +95,13 @@ NDEBUG=1 ./multinode-demo/bench-tps.sh # runs against localhost by default
 - 要在任意位置启用 `info` 以及只能在 solana::banking_stage 模块中启用 `debug` ：
 
   ```bash
-export RUST_LOG=solana=info,solana::banking_stage=debug
+  export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - 启用 BPF 程序日志记录：
 
   ```bash
-export RUST_LOG=solana_bpf_loader=trace
+  export RUST_LOG=solana_bpf_loader=trace
   ```
 
 一般来说，我们正在使用 `debug` 处理不经常的调试消息， `trace` 处理可能频繁的消息， `info` 用于与性能相关的记录。

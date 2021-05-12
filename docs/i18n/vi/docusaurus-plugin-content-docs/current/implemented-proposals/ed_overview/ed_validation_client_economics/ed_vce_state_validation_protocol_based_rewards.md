@@ -20,44 +20,42 @@ Lợi suất staking hàng năm dựa trên giao thức hiệu quả \(%\) trên
 
 Yếu tố đầu tiên là một chức năng của chỉ các tham số giao thức \(tức là không phụ thuộc vào hành vi của validator trong một kỷ nguyên nhất định\) và dẫn đến một lịch trình lạm phát được thiết kế để khuyến khích sự tham gia sớm, cung cấp sự ổn định tiền tệ rõ ràng và cung cấp bảo mật tối ưu trong mạng.
 
-Là bước đầu tiên để hiểu tác động của *Lịch trình lạm phát * đối với nền kinh tế Solana, chúng tôi đã mô phỏng phạm vi trên và dưới của việc phát hành mã thông báo theo thời gian có thể trông như thế nào phạm vi hiện tại của các tham số Lịch trình Lạm phát đang được nghiên cứu.
+Là bước đầu tiên để hiểu tác động của _Lịch trình lạm phát _ đối với nền kinh tế Solana, chúng tôi đã mô phỏng phạm vi trên và dưới của việc phát hành mã thông báo theo thời gian có thể trông như thế nào phạm vi hiện tại của các tham số Lịch trình Lạm phát đang được nghiên cứu.
 
 Đặc biệt:
 
-- *Tỷ lệ lạm phát ban đầu*: 7-9%
-- *Tỷ lệ phi lạm phát*: -14-16%
-- *Tỷ lệ Lạm phát dài hạn*: 1-2%
+- _Tỷ lệ lạm phát ban đầu_: 7-9%
+- _Tỷ lệ phi lạm phát_: -14-16%
+- _Tỷ lệ Lạm phát dài hạn_: 1-2%
 
 Sử dụng các phạm vi này để mô phỏng một số Lich trình lạm phát có thể có, chúng ta có thể khám phá lạm phát theo thời gian:
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-Trong biểu đồ trên, các giá trị trung bình của phạm vi được xác định để minh họa sự đóng góp của mỗi tham số. Từ các *Lich trình lạm phát* mô phỏng này, chúng tôi cũng có thể dự đoán phạm vi phát hành mã thông báo theo thời gian.
+Trong biểu đồ trên, các giá trị trung bình của phạm vi được xác định để minh họa sự đóng góp của mỗi tham số. Từ các _Lich trình lạm phát_ mô phỏng này, chúng tôi cũng có thể dự đoán phạm vi phát hành mã thông báo theo thời gian.
 
 ![](/img/p_total_supply_ranges.png)
 
-Cuối cùng, chúng tôi có thể ước tính *Lợi nhuận đã stake* trên SOL đã stake, nếu chúng tôi giới thiệu một tham số bổ sung, đã được thảo luận trước đó, *% của SOL đã stake*:
-
+Cuối cùng, chúng tôi có thể ước tính _Lợi nhuận đã stake_ trên SOL đã stake, nếu chúng tôi giới thiệu một tham số bổ sung, đã được thảo luận trước đó, _% của SOL đã stake_:
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 
+Trong trường hợp này, vì _% trong số SOL đã stake_ là một tham số phải được ước tính (không giống như các tham số _Lịch trình lạm phát_), sẽ dễ dàng hơn khi sử dụng các tham số _Lịch trình lạm phát_ cụ thể và khám phá phạm vi _% trong số SOL đã stake_. Đối với ví dụ dưới đây, chúng tôi đã chọn giữa các phạm vi tham số được khám phá ở trên:
 
-Trong trường hợp này, vì *% trong số SOL đã stake* là một tham số phải được ước tính (không giống như các tham số *Lịch trình lạm phát*), sẽ dễ dàng hơn khi sử dụng các tham số *Lịch trình lạm phát* cụ thể và khám phá phạm vi *% trong số SOL đã stake*. Đối với ví dụ dưới đây, chúng tôi đã chọn giữa các phạm vi tham số được khám phá ở trên:
+- _Tỷ lệ lạm phát ban đầu_: 8%
+- _Tỷ lệ phi lạm phát_: -15%
+- _Tỷ lệ Lạm phát dài hạn_: 1.5%
 
-- *Tỷ lệ lạm phát ban đầu*: 8%
-- *Tỷ lệ phi lạm phát*: -15%
-- *Tỷ lệ Lạm phát dài hạn*: 1.5%
-
-Giá trị *% trong số SOL đã stake* nằm trong khoảng từ 60% - 90%, mà chúng tôi cảm thấy bao gồm phạm vi chúng tôi mong đợi để quan sát, dựa trên phản hồi từ nhà đầu tư và cộng đồng validator cũng như những gì quan sát được trên các giao thức Proof-of-Stake tương đương.
+Giá trị _% trong số SOL đã stake_ nằm trong khoảng từ 60% - 90%, mà chúng tôi cảm thấy bao gồm phạm vi chúng tôi mong đợi để quan sát, dựa trên phản hồi từ nhà đầu tư và cộng đồng validator cũng như những gì quan sát được trên các giao thức Proof-of-Stake tương đương.
 
 ![](/img/p_ex_staked_yields.png)
 
-Một lần nữa, phần trên cho thấy một ví dụ về *Lợi nhuận stake* mà một người tham gia stake có thể mong đợi theo thời gian trên mạng Solana với *Lịch trình lạm phát* như được chỉ định. Đây là một *Lợi nhuận cố định* được lý tưởng hóa vì nó bỏ qua tác động của thời gian hoạt động của validator đối với phần thưởng, hoa hồng của validator, điều chỉnh lợi nhuận tiềm năng và các sự cố slashing tiềm ẩn. Nó cũng bỏ qua rằng *% trong số SOL đã stake* là động theo thiết kế - các động lực kinh tế được thiết lập bởi *Lịch trình lạm phát* này.
+Một lần nữa, phần trên cho thấy một ví dụ về _Lợi nhuận stake_ mà một người tham gia stake có thể mong đợi theo thời gian trên mạng Solana với _Lịch trình lạm phát_ như được chỉ định. Đây là một _Lợi nhuận cố định_ được lý tưởng hóa vì nó bỏ qua tác động của thời gian hoạt động của validator đối với phần thưởng, hoa hồng của validator, điều chỉnh lợi nhuận tiềm năng và các sự cố slashing tiềm ẩn. Nó cũng bỏ qua rằng _% trong số SOL đã stake_ là động theo thiết kế - các động lực kinh tế được thiết lập bởi _Lịch trình lạm phát_ này.
 
 ### Năng suất Staking được điều chỉnh
 
-Đánh giá đầy đủ về tiềm năng kiếm tiền từ việc staking mã thông báo phải tính đến *Pha loãng mã thông báo* và tác động của nó đối với lợi nhuận staking. Đối với điều này, chúng tôi xác định *điều chỉnh năng suất Staking* là sự thay đổi trong quyền sở hữu nguồn cung mã thông báo phân đoạn đối với các mã thông báo đã stake do phân phối phát hành lạm phát. Tức là. tác động pha loãng tích cực của lạm phát.
+Đánh giá đầy đủ về tiềm năng kiếm tiền từ việc staking mã thông báo phải tính đến _Pha loãng mã thông báo_ và tác động của nó đối với lợi nhuận staking. Đối với điều này, chúng tôi xác định _điều chỉnh năng suất Staking_ là sự thay đổi trong quyền sở hữu nguồn cung mã thông báo phân đoạn đối với các mã thông báo đã stake do phân phối phát hành lạm phát. Tức là. tác động pha loãng tích cực của lạm phát.
 
-Chúng tôi có thể kiểm tra *năng suất staking được điều chỉnh* như một hàm của tỷ lệ lạm phát và phần trăm mã thông báo đã stake trên mạng. Chúng ta có thể thấy điều này được vẽ cho các phân số staking khác nhau ở đây:
+Chúng tôi có thể kiểm tra _năng suất staking được điều chỉnh_ như một hàm của tỷ lệ lạm phát và phần trăm mã thông báo đã stake trên mạng. Chúng ta có thể thấy điều này được vẽ cho các phân số staking khác nhau ở đây:
 
 ![](/img/p_ex_staked_dilution.png)

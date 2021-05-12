@@ -9,11 +9,12 @@ Hướng dẫn này mổ tả cách thêm mã thông báo SOL của Solana vào 
 Chúng tôi thực sự khuyên bạn nên thiết lập ít nhất hai node trên máy tính cao cấp/phiên bản đám mây, nâng cấp lên phiên bản mới hơn ngay lập tức và theo dõi các hoạt động dịch vụ bằng công cụ giám sát đi kèm.
 
 Thiết lập này cho phép bạn:
+
 - để có một cổng thông tin đáng tin cậy vào cụm mainnet-beta của Solana để lấy dữ liệu và gửi các giao dịch rút tiền
 - có toàn quyền kiểm soát toàn bộ số dữ liệu về lịch sử khối được lưu giữ
 - để duy trì tính khả dụng của dịch vụ ngay cả khi một node bị lỗi
 
-Các node Solana yêu cầu sức mạnh tính toán tương đối cao để xử lý các khối nhanh và TPS cao.  Đối với các yêu cầu cụ thể, vui lòng xem [khuyến nghị phần cứng](../running-validator/validator-reqs.md).
+Các node Solana yêu cầu sức mạnh tính toán tương đối cao để xử lý các khối nhanh và TPS cao. Đối với các yêu cầu cụ thể, vui lòng xem [khuyến nghị phần cứng](../running-validator/validator-reqs.md).
 
 Để chạy một node api:
 
@@ -37,7 +38,7 @@ Tùy chỉnh `--ledger` cho vị trí lưu trữ ledger mong muốn của bạn 
 
 Các thông số `--entrypoint` và `--expected-genesis-hash` đều dành riêng cho cụm mà bạn đang tham gia. [Các thông số hiện tại cho Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-Thông số `--limit-ledger-size` cho phép bạn chỉ định số lượng sổ cái [shreds](../terminology.md#shred) mà node của bạn giữ lại trên ổ đĩa cứng. Nếu không có thông số này, validator sẽ giữ toàn bộ sổ cái cho đến khi nó hết dung lượng ổ đĩa cứng.  Giá trị mặc định cố gắng duy trì mức sử dụng ổ đĩa cứng sổ cái dưới 500GB.  Có thể yêu cầu mức sử dụng ổ đĩa cứng nhiều hơn hoặc ít hơn bằng cách thêm đối số vào `--limit-ledger-size` nếu muốn. Kiểm tra `solana-validator --help` để biết giá trị giới hạn mặc định được sử dụng bởi `--limit-ledger-size`.  Thông tin thêm về việc chọn một giá trị giới hạn tùy chỉnh [có sẵn tại đây](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+Thông số `--limit-ledger-size` cho phép bạn chỉ định số lượng sổ cái [shreds](../terminology.md#shred) mà node của bạn giữ lại trên ổ đĩa cứng. Nếu không có thông số này, validator sẽ giữ toàn bộ sổ cái cho đến khi nó hết dung lượng ổ đĩa cứng. Giá trị mặc định cố gắng duy trì mức sử dụng ổ đĩa cứng sổ cái dưới 500GB. Có thể yêu cầu mức sử dụng ổ đĩa cứng nhiều hơn hoặc ít hơn bằng cách thêm đối số vào `--limit-ledger-size` nếu muốn. Kiểm tra `solana-validator --help` để biết giá trị giới hạn mặc định được sử dụng bởi `--limit-ledger-size`. Thông tin thêm về việc chọn một giá trị giới hạn tùy chỉnh [có sẵn tại đây](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 Chỉ định một hoặc nhiều thông số `--trusted-validator` có thể bảo vệ bạn khỏi một ảnh chụp nhanh độc hại. T[Tìm hiểu thêm về giá trị của việc khởi động với các validator đáng tin cậy](../running-validator/validator-start.md#trusted-validators)
 
@@ -68,22 +69,21 @@ Giống như các validator stake, chúng tôi hy vọng mọi validator do sàn
 
 Theo mặc định, mỗi node của bạn sẽ khởi động từ một ảnh chụp nhanh do một trong những validator đáng tin cậy bạn cung cấp. Ảnh chụp nhanh này phản ánh trạng thái hiện tại của chuỗi, nhưng không chứa lịch sử sổ cái hoàn chỉnh. Nếu một trong các node của bạn thoát ra và khởi động từ một ảnh chụp nhanh mới, có thể có một khoảng trống trong sổ cái trên node đó. Để ngăn chặn sự cố này, hãy thêm thông số `--no-snapshot-fetch` vào lệnh `solana-validator` của bạn để nhận lịch sử dữ liệu sổ cái thay vì ảnh chụp nhanh.
 
-Không chuyển thông số `--no-snapshot-fetch` vào lần khởi động đầu tiên của bạn vì không thể khởi động node từ tất cả các cách từ khối genesis.  Thay vào đó, hãy khởi động từ một ảnh chụp nhanh trước và sau đó thêm thông số `--no-snapshot-fetch` để khởi động lại.
+Không chuyển thông số `--no-snapshot-fetch` vào lần khởi động đầu tiên của bạn vì không thể khởi động node từ tất cả các cách từ khối genesis. Thay vào đó, hãy khởi động từ một ảnh chụp nhanh trước và sau đó thêm thông số `--no-snapshot-fetch` để khởi động lại.
 
-Điều quan trọng cần lưu ý là số lượng lịch sử sổ cái có sẵn cho các node của bạn từ phần còn lại của mạng bị giới hạn tại bất kỳ thời điểm nào.  Sau khi hoạt động nếu các validator của bạn gặp phải thời gian chết, chúng có thể không bắt kịp mạng và sẽ cần tải xuống ảnh chụp nhanh mới từ validator đáng tin cậy.  Khi làm như vậy, các validator của bạn bây giờ sẽ có một khoảng trống trong dữ liệu lịch sử sổ cái của nó mà không thể được lấp đầy.
-
+Điều quan trọng cần lưu ý là số lượng lịch sử sổ cái có sẵn cho các node của bạn từ phần còn lại của mạng bị giới hạn tại bất kỳ thời điểm nào. Sau khi hoạt động nếu các validator của bạn gặp phải thời gian chết, chúng có thể không bắt kịp mạng và sẽ cần tải xuống ảnh chụp nhanh mới từ validator đáng tin cậy. Khi làm như vậy, các validator của bạn bây giờ sẽ có một khoảng trống trong dữ liệu lịch sử sổ cái của nó mà không thể được lấp đầy.
 
 ### Giảm Thiểu Phơi Sáng Cổng validator
 
-Validator yêu cầu các cổng UDP và TCP khác nhau phải mở cho lưu lượng đến từ tất cả các vadidator Solana khác.   Mặc dù đây là phương thức hoạt động hiệu quả nhất và rất được khuyến khích nhưng có thể hạn chế, validator chỉ yêu cầu lưu lượng truy cập đến từ một validator Solana khác.
+Validator yêu cầu các cổng UDP và TCP khác nhau phải mở cho lưu lượng đến từ tất cả các vadidator Solana khác. Mặc dù đây là phương thức hoạt động hiệu quả nhất và rất được khuyến khích nhưng có thể hạn chế, validator chỉ yêu cầu lưu lượng truy cập đến từ một validator Solana khác.
 
-Đầu tiên hãy thêm đối số `--restricted-repair-only-mode`.  Điều này sẽ khiến validator hoạt động ở chế độ hạn chế, nơi nó sẽ không nhận được các cú hích từ phần còn lại của các validator và thay vào đó sẽ cần liên tục thăm dò các validator khác cho các khối.  Validator sẽ chỉ truyền các gói UDP đến các validator khác bằng cách sử dụng các cổng *Gossip* và *ServeR* ("phục vụ sửa chữa")* và chỉ nhận các gói UDP trên các cổng *Gossip* và *Repair*.</p>
+Đầu tiên hãy thêm đối số `--restricted-repair-only-mode`. Điều này sẽ khiến validator hoạt động ở chế độ hạn chế, nơi nó sẽ không nhận được các cú hích từ phần còn lại của các validator và thay vào đó sẽ cần liên tục thăm dò các validator khác cho các khối. Validator sẽ chỉ truyền các gói UDP đến các validator khác bằng cách sử dụng các cổng _Gossip_ và _ServeR_ ("phục vụ sửa chữa")* và chỉ nhận các gói UDP trên các cổng *Gossip* và *Repair\*.</p>
 
-Cổng *Gossip* là hai chiều và cho phép validator của bạn tiếp tục liên lạc với phần còn lại của cụm.  Validator của bạn truyền trên *ServeR* để thực hiện các yêu cầu sửa chữa nhằm lấy các khối mới từ phần còn lại của mạng, vì Turbine hiện đã bị vô hiệu hóa.  Validator của bạn sau đó sẽ nhận được phản hồi sửa chữa trên cổng *Sửa chữa* từ các validator khác.
+Cổng _Gossip_ là hai chiều và cho phép validator của bạn tiếp tục liên lạc với phần còn lại của cụm. Validator của bạn truyền trên _ServeR_ để thực hiện các yêu cầu sửa chữa nhằm lấy các khối mới từ phần còn lại của mạng, vì Turbine hiện đã bị vô hiệu hóa. Validator của bạn sau đó sẽ nhận được phản hồi sửa chữa trên cổng _Sửa chữa_ từ các validator khác.
 
-Để hạn chế hơn nữa validator chỉ yêu cầu khối từ một hoặc nhiều validator, trước tiên hãy xác định pubkey nhận dạng cho validator đó và thêm đối số `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` cho mỗi PUBKEY.  Điều này sẽ khiến validator của bạn tiêu hao tài nguyên trên mỗi validator mà bạn thêm vào, vì vậy hãy thực hiện điều này một cách tiết kiệm và chỉ sau khi tham khảo ý kiến ​​của validator mục tiêu.
+Để hạn chế hơn nữa validator chỉ yêu cầu khối từ một hoặc nhiều validator, trước tiên hãy xác định pubkey nhận dạng cho validator đó và thêm đối số `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` cho mỗi PUBKEY. Điều này sẽ khiến validator của bạn tiêu hao tài nguyên trên mỗi validator mà bạn thêm vào, vì vậy hãy thực hiện điều này một cách tiết kiệm và chỉ sau khi tham khảo ý kiến ​​của validator mục tiêu.
 
-Validator của bạn bây giờ chỉ nên giao tiếp với các validator được liệt kê cụ thể và trên các cổng *Gossip*, *Repair* và *ServeR*.
+Validator của bạn bây giờ chỉ nên giao tiếp với các validator được liệt kê cụ thể và trên các cổng _Gossip_, _Repair_ và _ServeR_.
 
 ## Thiết lập Tài khoản Tiền gửi
 
@@ -193,7 +193,7 @@ Nếu bạn cần thêm thông tin về giao dịch hoặc các chi tiết cụ 
 
 ### Lịch sử Địa chỉ
 
-Bạn cũng có thể truy vấn lịch sử giao dịch của một địa chỉ cụ thể. Đây *không phải* là một phương pháp khả thi để theo dõi tất cả các địa chỉ gửi tiền của bạn trên tất cả các slot, nhưng có thể hữu ích để kiểm tra một vài tài khoản trong một khoảng thời gian cụ thể.
+Bạn cũng có thể truy vấn lịch sử giao dịch của một địa chỉ cụ thể. Đây _không phải_ là một phương pháp khả thi để theo dõi tất cả các địa chỉ gửi tiền của bạn trên tất cả các slot, nhưng có thể hữu ích để kiểm tra một vài tài khoản trong một khoảng thời gian cụ thể.
 
 - Gửi một yêu cầu [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) đến node api:
 
@@ -314,7 +314,7 @@ solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localho
 solana fees --url http://localhost:8899
 ```
 
-Trong công cụ dòng lệnh, hãy chuyển đối số `--no-wait` để gửi chuyển một cách không đồng bộ và bao gồm blockhash gần đây của bạn với đối số ` --blockhash `:
+Trong công cụ dòng lệnh, hãy chuyển đối số `--no-wait` để gửi chuyển một cách không đồng bộ và bao gồm blockhash gần đây của bạn với đối số `--blockhash`:
 
 ```bash
 solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
@@ -435,7 +435,7 @@ Quy trình làm việc của Mã thông báo SPL tương tự như quy trình c�
 
 ### Mã thông báo Đúc
 
-Mỗi *loại* của Mã thông báo SPL được khai báo bằng cách tạo tài khoản *đúc*.  Tài khoản này lưu trữ siêu dữ liệu mô tả các tính năng của mã thông báo như nguồn cung cấp, số lượng số thập phân và các cơ quan chức năng khác nhau có quyền kiểm soát đối với việc đúc tiền.  Mỗi tài khoản Mã thông báo SPL tham chiếu đến cơ sở liên kết của nó và chỉ có thể tương tác với Mã thông báo SPL thuộc loại đó.
+Mỗi _loại_ của Mã thông báo SPL được khai báo bằng cách tạo tài khoản _đúc_. Tài khoản này lưu trữ siêu dữ liệu mô tả các tính năng của mã thông báo như nguồn cung cấp, số lượng số thập phân và các cơ quan chức năng khác nhau có quyền kiểm soát đối với việc đúc tiền. Mỗi tài khoản Mã thông báo SPL tham chiếu đến cơ sở liên kết của nó và chỉ có thể tương tác với Mã thông báo SPL thuộc loại đó.
 
 ### Cài đặt Công cụ CLI `spl-token`
 
@@ -463,11 +463,13 @@ spl-token-cli 2.0.1
 
 Tài khoản Mã thông báo SPL có các yêu cầu bổ sung mà tài khoản Chương trình hệ thống gốc không có:
 
-1. Tài khoản Mã thông báo SPL phải được tạo ra trước khi có thể gửi một lượng mã thông báo.   Tài khoản Mã thông báo có thể được tạo một cách rõ ràng bằng lệnh `spl-token create-account` hoặc hoàn toàn bằng lệnh `spl-token transfer --fund-recipient ...`.
+1. Tài khoản Mã thông báo SPL phải được tạo ra trước khi có thể gửi một lượng mã thông báo. Tài khoản Mã thông báo có thể được tạo một cách rõ ràng bằng lệnh `spl-token create-account` hoặc hoàn toàn bằng lệnh `spl-token transfer --fund-recipient ...`.
 1. Tài khoản Mã thông báo SPL phải được [miễn tiền thuê](developing/programming-model/accounts.md#rent-exemption) trong suốt thời gian tồn tại và do đó yêu cầu một lượng nhỏ mã thông báo SOL gốc được gửi khi tạo tài khoản. Đối với tài khoản Mã thông báo SPL v2, số lượng này là 0,00203928 SOL (2,039,280 lamport).
 
 #### Dòng lệnh
+
 Để tạo tài khoản Mã thông báo SPL với các thuộc tính sau:
+
 1. Liên kết với đúc tiền đã cho
 1. Thuộc sở hữu của keypair của tài khoản tài trợ
 
@@ -476,6 +478,7 @@ spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
 #### Ví dụ
+
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -483,6 +486,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ```
 
 Hoặc tạo tài khoản Mã thông báo SPL với keypair cụ thể:
+
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -493,11 +497,13 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### Kiểm tra số dư tài khoản
 
 #### Dòng lệnh
+
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### Ví dụ
+
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -507,14 +513,16 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 Tài khoản nguồn để chuyển là tài khoản mã thông báo thực tế có chứa số tiền.
 
-Tuy nhiên địa chỉ người nhận có thể là một tài khoản ví bình thường.  Nếu tài khoản mã thông báo được liên kết cho đúc tiền đã cho không tồn tại trong ví đó, quá trình chuyển sẽ tạo nó với điều kiện là đối số `--fund-recipient` như được cung cấp.
+Tuy nhiên địa chỉ người nhận có thể là một tài khoản ví bình thường. Nếu tài khoản mã thông báo được liên kết cho đúc tiền đã cho không tồn tại trong ví đó, quá trình chuyển sẽ tạo nó với điều kiện là đối số `--fund-recipient` như được cung cấp.
 
 #### Dòng lệnh
+
 ```
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
 #### Ví dụ
+
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Transfer 1 tokens
@@ -524,6 +532,7 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 ```
 
 ### Gửi tiền
+
 Vì mỗi cặp `(user, mint)` yêu cầu một tài khoản riêng biệt trên chuỗi, nên một sàn giao dịch nên tạo trước các lô tài khoản mã thông báo và chỉ định chúng cho người dùng theo yêu cầu. Tất cả các tài khoản này phải được sở hữu bởi các keypair do sàn giao dịch kiểm soát.
 
 Việc giám sát các giao dịch tiền gửi phải tuân theo phương pháp [thăm dò khối](#poll-for-blocks) được mô tả ở trên. Mỗi khối mới sẽ được quét để tìm các giao dịch thành công phát hành lệnh Mã thông báo SPL [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92) hoặc [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) tham chiếu đến tài khoản người dùng, sau đó truy vấn và cập nhật [số dư mã thông báo của tài khoản](developing/clients/jsonrpc-api.md#gettokenaccountbalance).
@@ -531,13 +540,15 @@ Việc giám sát các giao dịch tiền gửi phải tuân theo phương pháp
 Chúng tôi đang [Cân nhắc](https://github.com/solana-labs/solana/issues/12318) việc bổ sung các trường siêu dữ liệu trạng thái `preBalance` và `postBalance`giao dịch để bao gồm chuyển số dư Mã thông báo SPL.
 
 ### Rút tiền
+
 Địa chỉ rút tiền mà người dùng cung cấp phải giống với địa chỉ được sử dụng để rút tiền SOL thông thường.
 
 Trước khi thực hiện [chuyển khoản](#token-transfers) rút tiền, sàn giao dịch nên kiểm tra địa chỉ như [mô tả ở trên](#validating-user-supplied-account-addresses-for-withdrawals).
 
-Từ địa chỉ rút tiền, tài khoản mã thông báo được liên kết để xác định đúng cơ sở đúc tiền và chuyển khoản được cấp cho tài khoản đó.  Lưu ý rằng có thể tài khoản mã thông báo được liên kết chưa tồn tại, tại thời điểm đó, sàn giao dịch sẽ thay mặt người dùng tài trợ cho tài khoản.  Đối với Mã thông báo SPL v2, việc nạp tiền vào tài khoản rút tiền sẽ yêu cầu 0,00203928 SOL (2,039,280 lamport).
+Từ địa chỉ rút tiền, tài khoản mã thông báo được liên kết để xác định đúng cơ sở đúc tiền và chuyển khoản được cấp cho tài khoản đó. Lưu ý rằng có thể tài khoản mã thông báo được liên kết chưa tồn tại, tại thời điểm đó, sàn giao dịch sẽ thay mặt người dùng tài trợ cho tài khoản. Đối với Mã thông báo SPL v2, việc nạp tiền vào tài khoản rút tiền sẽ yêu cầu 0,00203928 SOL (2,039,280 lamport).
 
 Lệnh mẫu `spl-token transfer` để rút tiền:
+
 ```
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
@@ -545,7 +556,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 ### Cân nhắc khác
 
 #### Cơ quan đóng băng
-Vì lý do tuân thủ quy định, pháp nhân phát hành Mã thông báo SPL có thể tùy chọn chọn giữ "Cơ quan đóng băng" trên tất cả các tài khoản được tạo liên quan đến đúc tiền của nó.  Điều này cho phép họ [đóng băng](https://spl.solana.com/token#freezing-accounts) tài sản trong một tài khoản nhất định theo ý muốn, khiến tài khoản không thể sử dụng được cho đến khi tan băng. Nếu tính năng này được sử dụng, pubkey của cơ quan đóng băng sẽ được đăng ký trong tài khoản đúc tiền của Mã thông báo SPL.
+
+Vì lý do tuân thủ quy định, pháp nhân phát hành Mã thông báo SPL có thể tùy chọn chọn giữ "Cơ quan đóng băng" trên tất cả các tài khoản được tạo liên quan đến đúc tiền của nó. Điều này cho phép họ [đóng băng](https://spl.solana.com/token#freezing-accounts) tài sản trong một tài khoản nhất định theo ý muốn, khiến tài khoản không thể sử dụng được cho đến khi tan băng. Nếu tính năng này được sử dụng, pubkey của cơ quan đóng băng sẽ được đăng ký trong tài khoản đúc tiền của Mã thông báo SPL.
 
 ## Kiểm tra Tích hợp
 

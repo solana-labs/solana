@@ -43,6 +43,7 @@ Trạng thái giao dịch là cần thiết cho biên nhận vì biên nhận tr
 Hiện tại, Block-Merkle chưa được triển khai, vì vậy để xác minh `E` là một mục nhập trong khối với hàm băm ngân hàng `B`, chúng tôi sẽ cần cung cấp tất cả các băm mục nhập trong khối. Lý tưởng nhất là Block-Merkle này sẽ được cấy ghép, vì giải pháp thay thế rất kém hiệu quả.
 
 #### Tiêu đề khối
+
 Để xác minh bằng chứng bao gồm giao dịch, light clients cần có khả năng suy ra cấu trúc liên kết của các nhánh trong mạng
 
 Cụ thể hơn, light client sẽ cần theo dõi các tiêu đề khối đến sao cho có hai hàm băm ngân hàng cho các khối `A` and `B` chúng có thể xác định xem liệu `A` có phải là tổ tiên của `B` (Phần bên dưới `Optimistic Confirmation Proof` giải thích tại sao!). Nội dung của tiêu đề là các trường cần thiết để tính toán hàm băm ngân hàng.

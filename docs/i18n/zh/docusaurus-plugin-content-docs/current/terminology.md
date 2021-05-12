@@ -10,7 +10,7 @@ title: 术语
 
 ## 应用程序（app）
 
-与Solana集群交互的前端应用程序。
+与 Solana 集群交互的前端应用程序。
 
 ## 账户状态（bank state）
 
@@ -22,7 +22,7 @@ title: 术语
 
 ## 区块哈希（blockhash）
 
-在一定[区块高度](terminology.md#block-height)，[账本](terminology.md#ledger)产生的一组连续的[哈希](terminology.md#hash)。 取自插槽最后的 [条目id](terminology.md#entry-id)
+在一定[区块高度](terminology.md#block-height)，[账本](terminology.md#ledger)产生的一组连续的[哈希](terminology.md#hash)。 取自插槽最后的 [条目 id](terminology.md#entry-id)
 
 ## 区块高度（block height）
 
@@ -96,7 +96,7 @@ title: 术语
 
 ## 最终性（finality）
 
-代表2/3[质押](terminology.md#stake)的节点达成一个公共[根](terminology.md#root)。
+代表 2/3[质押](terminology.md#stake)的节点达成一个公共[根](terminology.md#root)。
 
 ## 分叉（fork）
 
@@ -116,7 +116,7 @@ title: 术语
 
 ## 通货膨胀（inflation）
 
-随着时间的流逝，代币供应的增加用于资助验证奖励和为Solana的持续发展提供资金。
+随着时间的流逝，代币供应的增加用于资助验证奖励和为 Solana 的持续发展提供资金。
 
 ## 指令（instruction）
 
@@ -176,7 +176,7 @@ title: 术语
 
 ## 点数（point）
 
-奖励制度中的加权[积分](terminology.md#credit)。 在[验证节点](terminology.md#validator) [奖励制度](cluster/stake-delegation-and-rewards.md)中，赎回过程中所获得的[质押](terminology.md#stake)点数是所获得的[投票积分](terminology.md#vote-credit)与所抵押lamports数量的乘积。
+奖励制度中的加权[积分](terminology.md#credit)。 在[验证节点](terminology.md#validator) [奖励制度](cluster/stake-delegation-and-rewards.md)中，赎回过程中所获得的[质押](terminology.md#stake)点数是所获得的[投票积分](terminology.md#vote-credit)与所抵押 lamports 数量的乘积。
 
 ## 私钥（private key）
 
@@ -186,7 +186,7 @@ title: 术语
 
 解释[指令](terminology.md#instruction)的代码。
 
-## 程序ID（program id）
+## 程序 ID（program id）
 
 [帐户](terminology.md#account) 公钥包含的一个 [程序](terminology.md#program)。
 
@@ -212,7 +212,7 @@ title: 术语
 
 ## 签名（signature）
 
-R(32字节) 和S(32字节) 的64字节ed25519签名。 要求R为不小于小数的压缩Edwards点，而S为 0 <= S < L范围内的标量。此要求确保不具有签名延展性。 每笔交易必须至少有一个用于[费用账户](terminology#fee-account)的签名。 因此，交易中的第一个签名可以被视为[交易ID](terminology.md#transaction-id)。
+R(32 字节) 和 S(32 字节) 的 64 字节 ed25519 签名。 要求 R 为不小于小数的压缩 Edwards 点，而 S 为 0 <= S < L 范围内的标量。此要求确保不具有签名延展性。 每笔交易必须至少有一个用于[费用账户](terminology#fee-account)的签名。 因此，交易中的第一个签名可以被视为[交易 ID](terminology.md#transaction-id)。
 
 ## 插槽（slot）
 
@@ -224,7 +224,7 @@ R(32字节) 和S(32字节) 的64字节ed25519签名。 要求R为不小于小数
 
 ## sol 代币
 
-由Solana公司认可的[集群](terminology.md#cluster)跟踪的[原生代币](terminology.md#native-token)。
+由 Solana 公司认可的[集群](terminology.md#cluster)跟踪的[原生代币](terminology.md#native-token)。
 
 ## 质押（stake）
 

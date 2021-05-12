@@ -13,7 +13,7 @@ Una vez que los pasos de configuración mostrados a continuación están complet
 - Instalar [software de escritorio Ledger Live](https://www.ledger.com/ledger-live/)
   - Si ya tiene instalado Ledger Live, actualice a la última versión de Ledger Live, que habilita las actualizaciones más recientes de firmware y aplicaciones.
 - Conecta tu Nano a tu ordenador y sigue las instrucciones en pantalla.
-- Actualice el firmware en su nuevo Nano.  Esto es necesario para asegurarte de que puedes instalar la última versión de la aplicación Solana.
+- Actualice el firmware en su nuevo Nano. Esto es necesario para asegurarte de que puedes instalar la última versión de la aplicación Solana.
   - [Actualizar Firmware de Nano S](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [Actualizar Firmware Nano X](https://support.ledger.com/hc/en-us/articles/360013349800)
 
@@ -30,11 +30,11 @@ Una vez que los pasos de configuración mostrados a continuación están complet
 Para asegurarse de que tiene la última funcionalidad, si está utilizando una versión anterior de la aplicación Solana, por favor actualice a la versión `v1.. 1` siguiendo estos pasos.
 
 - Asegúrese de que tiene Ledger Live versión 2.10.0 o posterior.
-  - Para comprobar su versión de Ledger Live, haga clic en el botón Ajustes en la esquina superior derecha, luego haga clic en "Acerca de".  Si una nueva versión de Ledger Live está disponible, deberías ver un banner que te pide que actualices cuando abras Ledger Live.
+  - Para comprobar su versión de Ledger Live, haga clic en el botón Ajustes en la esquina superior derecha, luego haga clic en "Acerca de". Si una nueva versión de Ledger Live está disponible, deberías ver un banner que te pide que actualices cuando abras Ledger Live.
 - Actualice el firmware en su Nano
   - [Actualizar Firmware de Nano S](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [Actualizar Firmware Nano X](https://support.ledger.com/hc/en-us/articles/360013349800)
--  Después de una actualización exitosa del firmware, la aplicación Solana debería reinstalarse automáticamente con la última versión de la aplicación.
+- Después de una actualización exitosa del firmware, la aplicación Solana debería reinstalarse automáticamente con la última versión de la aplicación.
 
 ## Interactuar con la red Solana
 

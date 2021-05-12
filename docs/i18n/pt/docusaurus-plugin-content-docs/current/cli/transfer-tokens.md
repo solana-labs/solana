@@ -56,7 +56,7 @@ transferência de solana --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url ht
 
 onde você substitui `<KEYPAIR>` pelo caminho para um par de chaves em sua primeira carteira, e substitua `<RECIPIENT_ACCOUNT_ADDRESS>` pelo endereço de sua segunda carteira.
 
-Confirme os saldos atualizados com ` solana balance `:
+Confirme os saldos atualizados com `solana balance`:
 
 ```bash
 solana airdrop <ACCOUNT_ADDRESS> --url http://devnet.solana.com
@@ -118,7 +118,7 @@ Se você já possui SOL e quer enviar tokens para alguém, você vai precisar de
 transferência de solana --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> --url --fee-payer <AMOUNT>
 ```
 
-Confirme os saldos atualizados com ` solana balance `:
+Confirme os saldos atualizados com `solana balance`:
 
 ```bash
 saldo de solana <ACCOUNT_ADDRESS>

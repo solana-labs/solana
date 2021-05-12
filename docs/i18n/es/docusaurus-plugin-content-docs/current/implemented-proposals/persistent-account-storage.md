@@ -10,7 +10,7 @@ Almacenamiento persistente como NVMEs son entre 20 y 40 veces más baratas que D
 
 ## AppendVec
 
-AppendVec es una estructura de datos que permite lecturas aleatorias simultáneas con un solo escritor de anexo. Crecer o redimensionar la capacidad del AppendVec requiere acceso exclusivo. Esto se implementa con un ` offset ` atómico, que se actualiza al final de un anexo completo.
+AppendVec es una estructura de datos que permite lecturas aleatorias simultáneas con un solo escritor de anexo. Crecer o redimensionar la capacidad del AppendVec requiere acceso exclusivo. Esto se implementa con un `offset` atómico, que se actualiza al final de un anexo completo.
 
 La memoria subyacente de un AppendVec es un archivo mapeado en memoria. Los archivos mapeados por memoria permiten un acceso rápido al azar y la paginación es manejada por el sistema operativo.
 

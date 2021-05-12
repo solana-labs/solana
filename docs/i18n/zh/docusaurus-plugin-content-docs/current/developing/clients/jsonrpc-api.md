@@ -2,9 +2,9 @@
 title: JSON RPC API
 ---
 
-Solana节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范接受HTTP请求。
+Solana 节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范接受 HTTP 请求。
 
-要与JavaScript应用程序中的Solana节点进行交互，请使用[solana-web3.js](https://github.com/solana-labs/solana-web3.js)库，该库为RPC方法提供了方便的接口。
+要与 JavaScript 应用程序中的 Solana 节点进行交互，请使用[solana-web3.js](https://github.com/solana-labs/solana-web3.js)库，该库为 RPC 方法提供了方便的接口。
 
 ## RPC HTTP 端点
 
@@ -83,15 +83,14 @@ Solana节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范接
 
 ## 请求格式
 
-要发出 JSON-RPC 请求，请发送带有`Content-Type:
-application/json`的 HTTP POST 请求。 JSON请求数据应包含4个字段：
+要发出 JSON-RPC 请求，请发送带有`Content-Type: application/json`的 HTTP POST 请求。 JSON 请求数据应包含 4 个字段：
 
 - `jsonrpc: <string>`，设置为 `"2.0"`
 - `id： <number>`，一个独特的客户端生成的识别整数
 - `method: <string>`，一个包含要调用方法的字符串
 - `params: <array>`，一个 JSON 数组的有序参数值
 
-使用curl的示例：
+使用 curl 的示例：
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -112,18 +111,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `id: <number>`, 匹配请求标识符
 - `result: <array|number|object|string>`, 请求的数据或成功确认
 
-通过发送JSON-RPC请求对象数组作为单个POST的数据，可以批量发送请求。
+通过发送 JSON-RPC 请求对象数组作为单个 POST 的数据，可以批量发送请求。
 
 ## 定义
 
-- 哈希（Hash）：一个数据块的SHA-256哈希。
-- 公钥（Pubkey）：Ed25519密钥对的公钥。
-- 交易（Transaction）：由客户密钥对签名以授权这些操作的Solana指令列表。
-- 签名（Signature）：交易的有效载荷数据的Ed25519签名，包括指令。 它可以用来识别交易。
+- 哈希（Hash）：一个数据块的 SHA-256 哈希。
+- 公钥（Pubkey）：Ed25519 密钥对的公钥。
+- 交易（Transaction）：由客户密钥对签名以授权这些操作的 Solana 指令列表。
+- 签名（Signature）：交易的有效载荷数据的 Ed25519 签名，包括指令。 它可以用来识别交易。
 
 ## 配置状态承诺
 
-对于飞行前检查和交易处理，Solana节点根据客户端设置的承诺要求选择要查询的银行状态。 该承诺描述了该时间点块的最终确定方式。  查询账本状态时，建议使用较低级别的承诺来报告进度，而使用较高级别以确保不会回滚该状态。
+对于飞行前检查和交易处理，Solana 节点根据客户端设置的承诺要求选择要查询的银行状态。 该承诺描述了该时间点块的最终确定方式。 查询账本状态时，建议使用较低级别的承诺来报告进度，而使用较高级别以确保不会回滚该状态。
 
 客户可以按照承诺的降序排列(从最高确定到最低确定)：
 
@@ -132,8 +131,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `"singleGossip"` - 节点将查询由集群的多数投票的最新区块。
   - 它融合了八卦和重播的选票。
   - 它不计算该区块后代的票数，而仅对该区块的直接票数进行计数。
-  - 此确认级别还支持1.3版及更高版本中的“乐观确认”保证。
-- `"recent"` - 节点将查询其最近的块。  注意，该区块可能不完整。
+  - 此确认级别还支持 1.3 版及更高版本中的“乐观确认”保证。
+- `"recent"` - 节点将查询其最近的块。 注意，该区块可能不完整。
 
 为了连续处理许多相关的事务，建议使用`"singleGossip"`承诺，以平衡速度和回滚安全性。 为了安全起见，建议使用`"max"`承诺。
 
@@ -161,18 +160,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 如果未提供承诺配置，则该节点将默认为`max`承诺
 
-只有查询库状态的方法才接受承诺参数。 它们在下面的API参考中指出。
+只有查询库状态的方法才接受承诺参数。 它们在下面的 API 参考中指出。
 
-#### RpcResponse结构
+#### RpcResponse 结构
 
-许多采用承诺参数的方法会返回RpcResponse JSON对象，该对象由两部分组成：
+许多采用承诺参数的方法会返回 RpcResponse JSON 对象，该对象由两部分组成：
 
-- `context` : RpcResponseContext JSON结构，包括一个`slot`字段，在该字段上评估操作。
+- `context` : RpcResponseContext JSON 结构，包括一个`slot`字段，在该字段上评估操作。
 - `value` ：操作本身返回的值。
 
 ## 健康检查
 
-尽管不是JSON RPC API，但RPC HTTP端点上的`GET / health`提供了一种健康检查机制，供负载平衡器或其他网络基础结构使用。 根据以下条件，此请求将始终返回带有 "ok" 或 "behind" 正文的 HTTP 200 OK 响应：
+尽管不是 JSON RPC API，但 RPC HTTP 端点上的`GET / health`提供了一种健康检查机制，供负载平衡器或其他网络基础结构使用。 根据以下条件，此请求将始终返回带有 "ok" 或 "behind" 正文的 HTTP 200 OK 响应：
 
 1. 如果向`solana-validator`提供了一个或多个`--trusted-validator`参数，则当节点位于最高可信验证器的`HEALTH_CHECK_SLOT_DISTANCE`插槽内时，返回 "ok"，否则返回 "behind"。
 2. 如果未提供受信任的验证器，则始终返回 "ok"。
@@ -181,31 +180,32 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getAccountInfo
 
-返回与提供的Pubkey帐户关联的所有信息
+返回与提供的 Pubkey 帐户关联的所有信息
 
 #### 参数：
 
-- `<string>` - 要查询的帐户的公钥，以base-58编码的字符串
+- `<string>` - 要查询的帐户的公钥，以 base-58 编码的字符串
 - `<object>` -(可选)包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(*很慢*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于128个字节的帐户数据。 "base64" 将为任何大小的Account数据返回base64编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行base64编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
+  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(_很慢_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的 Account 数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
   - (可选) `dataSlice：<object>` - 使用提供的`offset：<usize>` 和`length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
 
 #### 结果：
 
-结果是一个RpcResponse JSON对象，其`值`等于：
+结果是一个 RpcResponse JSON 对象，其`值`等于：
 
 - `<null>` - 如果所请求的帐户不存在
-- `<object>` - 否则为JSON对象，其中包含：
-  - `lamports: <u64>`，分配给此帐户的Lamport数量，以u64表示
-  - `owner: <string>`，此帐户已分配给该程序的base-58编码的Pubkey
-  - `data: <[string, encoding]|object>`，与帐户关联的数据，可以是编码的二进制数据，也可以是JSON格式的`{<program>: <state>}`，具体取决于编码参数
+- `<object>` - 否则为 JSON 对象，其中包含：
+  - `lamports: <u64>`，分配给此帐户的 Lamport 数量，以 u64 表示
+  - `owner: <string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
+  - `data: <[string, encoding]|object>`，与帐户关联的数据，可以是编码的二进制数据，也可以是 JSON 格式的`{<program>: <state>}`，具体取决于编码参数
   - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
-  - `rentEpoch: <u64>`，此帐户下一次将要欠租金的时期，即u64
+  - `rentEpoch: <u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -221,7 +221,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 响应：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -245,7 +247,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例：
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -261,7 +265,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 响应：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -297,7 +303,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<string>` - 要查询的帐户的公钥，以base-58编码的字符串
+- `<string>` - 要查询的帐户的公钥，以 base-58 编码的字符串
 - `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
@@ -307,6 +313,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -314,8 +321,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "context": { "slot": 1 }, "value": 0 },
+  "id": 1
+}
 ```
 
 ### getBlockCommitment
@@ -332,12 +344,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `commitment` - 承诺，包括以下任何一项：
   - `<null>` - 未知区块
-  - `<array>` - 承诺，在每个深度从 0 到 `MAX_LOCKOUT_HISTORY` + 1 上投票的lamports中的集群质押数量
-- `totalStake` - 当前epoch的全部活跃质押（以lamports计算）
+  - `<array>` - 承诺，在每个深度从 0 到 `MAX_LOCKOUT_HISTORY` + 1 上投票的 lamports 中的集群质押数量
+- `totalStake` - 当前 epoch 的全部活跃质押（以 lamports 计算）
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
@@ -345,14 +358,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],
+  "jsonrpc": "2.0",
+  "result": {
+    "commitment": [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 10, 32
+    ],
     "totalStake": 42
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -360,7 +377,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 返回已确认块的估计生产时间。
 
-每个验证者通过向特定块的投票间歇性地添加时间戳，定期将其UTC时间报告给账本。 根据记录在账本上的一组最近区块中的Vote时间戳的权益加权平均值计算请求区块的时间。
+每个验证者通过向特定块的投票间歇性地添加时间戳，定期将其 UTC 时间报告给账本。 根据记录在账本上的一组最近区块中的 Vote 时间戳的权益加权平均值计算请求区块的时间。
 
 从快照引导或限制账本大小(通过清除旧插槽) 引导的节点将返回其最低根+ `TIMESTAMP_SLOT_RANGE`以下的块的空时间戳。 对拥有此历史数据感兴趣的用户必须查询根据起源建立的节点，并保留整个账本。
 
@@ -370,12 +387,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-* `<i64>` - 估计生产时间为 Unix 时间戳 (自Unix epoch以来的秒数)
-* `<null>` - 此区块不可用的时间戳
+- `<i64>` - 估计生产时间为 Unix 时间戳 (自 Unix epoch 以来的秒数)
+- `<null>` - 此区块不可用的时间戳
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}
@@ -383,8 +401,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":1574721591,"id":1}
+{ "jsonrpc": "2.0", "result": 1574721591, "id": 1 }
 ```
 
 ### getClusterNodes
@@ -399,7 +418,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 结果字段将是一个 JSON 对象的数组，每个子字段如下：
 
-- `pubkey： <string>` - 节点公钥作为基本58编码字符串
+- `pubkey： <string>` - 节点公钥作为基本 58 编码字符串
 - `gossip: <string>` - 节点的 Gossip 网络地址
 - `tpu: <string>` - 节点的 TPU 网络地址
 - `rpc: <string>|null` - 节点的 JSON RPC 网络地址，或 `null` 如果未启用 JSON RPC 服务
@@ -408,6 +427,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}
@@ -415,6 +435,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -437,8 +458,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<u64>` - 作为u64整数
-- `<string>` - 为每个返回的交易编码，或者是"json", "jsonParsed", "base58"(*慢*), "base64"。 如果参数未提供，默认编码为“json”。 "jsonParsed"编码尝试使用针对特定程序的教学解析器返回在 `transaction.message.instruction` 列表中更易读和更明确的数据。 如果“jsonParsed”是请求的，但无法找到解析器，则该指令返回到正则JSON编码(`帐户`, `数据`和 `程序 ID 索引` 字段).
+- `<u64>` - 作为 u64 整数
+- `<string>` - 为每个返回的交易编码，或者是"json", "jsonParsed", "base58"(_慢_), "base64"。 如果参数未提供，默认编码为“json”。 "jsonParsed"编码尝试使用针对特定程序的教学解析器返回在 `transaction.message.instruction` 列表中更易读和更明确的数据。 如果“jsonParsed”是请求的，但无法找到解析器，则该指令返回到正则 JSON 编码(`帐户`, `数据`和 `程序 ID 索引` 字段).
 
 #### 结果：
 
@@ -447,30 +468,31 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<null>` - 如果指定的区块未确认
 - `<object>` - 如果区块得到确认，则具有以下字段的对象：
   - `blockhash: <string>` - 该区块的区块哈希作为基准-58 编码字符串
-  - `previousBlockhash: <string>` - 该区块的父级区块哈希，以base-58编码的字符串；如果由于账本清理而导致父块不可用，则此字段将返回“11111111111111111111111111111111”
+  - `previousBlockhash: <string>` - 该区块的父级区块哈希，以 base-58 编码的字符串；如果由于账本清理而导致父块不可用，则此字段将返回“11111111111111111111111111111111”
   - `parentSlot: <u64>` - 该区块的父级插槽索引
-  - `transactions: <array>` - 包含以下内容的JSON对象数组：
-    - `transaction: <object|[string,encoding]>` - [交易](#transaction-structure) 对象，采用JSON格式或已编码的二进制数据，具体取决于编码参数
+  - `transactions: <array>` - 包含以下内容的 JSON 对象数组：
+    - `transaction: <object|[string,encoding]>` - [交易](#transaction-structure) 对象，采用 JSON 格式或已编码的二进制数据，具体取决于编码参数
     - `meta: <object>` - 交易状态元数据对象，包含`null`或：
-      - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回null。 [TransactionError定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-      - `fee: <u64>` - 该交易收取的费用，以u64整数表示
-      - `preBalances: <array>` - 处理交易之前的u64帐户余额数组
-      - `postBalances: <array>` - 处理交易后的u64帐户余额数组
+      - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+      - `fee: <u64>` - 该交易收取的费用，以 u64 整数表示
+      - `preBalances: <array>` - 处理交易之前的 u64 帐户余额数组
+      - `postBalances: <array>` - 处理交易后的 u64 帐户余额数组
       - `innerInstructions: <array|undefined>` -[内部指令](#inner-instructions-structure)的列表，如果在此事务处理期间尚未启用内部指令记录，则将其省略
       - `logMessages: <array>` - 字符串日志消息的数组；如果在此事务期间尚未启用日志消息记录，则将其省略
       - DEPRECATED: `status: <object>` - 交易状态
         - `"Ok": <null>` - 交易成功
-        - `"Err": <ERR>` - 事务失败，出现TransactionError
-  - `rewards: <array>` - 包含以下内容的JSON对象数组：
-    - `pubkey: <string>` - 接收奖励的帐户的公钥，以base-58编码的字符串
-    - `lamports: <i64>`- 帐户贷记或借记的奖励灯饰的数量，作为i64
-    - `postBalance: <u64>` - 应用奖励后以Lamports为单位的帐户余额
+        - `"Err": <ERR>` - 事务失败，出现 TransactionError
+  - `rewards: <array>` - 包含以下内容的 JSON 对象数组：
+    - `pubkey: <string>` - 接收奖励的帐户的公钥，以 base-58 编码的字符串
+    - `lamports: <i64>`- 帐户贷记或借记的奖励灯饰的数量，作为 i64
+    - `postBalance: <u64>` - 应用奖励后以 Lamports 为单位的帐户余额
     - `rewardType: <string|undefined>` - 奖励类型：“费用”，“租金”，“投票”，“赌注”
-  - `blockTime: <i64 | null>` - 估计的生产时间，以Unix时间戳记(自Unix时代以来的秒数)。 如果不可用，则返回null
+  - `blockTime: <i64 | null>` - 估计的生产时间，以 Unix 时间戳记(自 Unix 时代以来的秒数)。 如果不可用，则返回 null
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
@@ -478,6 +500,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -494,20 +517,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -528,12 +539,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
             },
             "instructions": [
               {
-                "accounts": [
-                  1,
-                  2,
-                  3,
-                  0
-                ],
+                "accounts": [1, 2, 3, 0],
                 "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
                 "programIdIndex": 4
               }
@@ -552,7 +558,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
@@ -560,6 +568,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -576,20 +585,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -607,34 +604,34 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 交易结构
 
-交易与其他区块链上的交易有很大不同。 请务必阅读[交易解剖](developing/programming-model/transactions.md)，以了解Solana上的交易。
+交易与其他区块链上的交易有很大不同。 请务必阅读[交易解剖](developing/programming-model/transactions.md)，以了解 Solana 上的交易。
 
-交易的JSON结构定义如下：
+交易的 JSON 结构定义如下：
 
-- `signatures: <array[string]>` - 应用于交易的以base-58编码的签名的列表。 该列表的长度始终为`message.header.numRequiredSignatures`，并且不为空。 索引`i”`处的签名对应于`message.account_keys`中索引`i`处的公钥。 第一个用作[交易ID](../../terminology.md#transaction-id)。
+- `signatures: <array[string]>` - 应用于交易的以 base-58 编码的签名的列表。 该列表的长度始终为`message.header.numRequiredSignatures`，并且不为空。 索引`i”`处的签名对应于`message.account_keys`中索引`i`处的公钥。 第一个用作[交易 ID](../../terminology.md#transaction-id)。
 - `message: <object>` - 定义交易的内容。
-  - `accountKeys: <array[string]>` - 交易使用的base-58编码公共密钥列表，包括指令和签名。 第一个`message.header.numRequiredSignatures`公钥必须对交易进行签名。
+  - `accountKeys: <array[string]>` - 交易使用的 base-58 编码公共密钥列表，包括指令和签名。 第一个`message.header.numRequiredSignatures`公钥必须对交易进行签名。
   - `header: <object>` - 详细说明交易所需的帐户类型和签名。
     - `numRequiredSignatures: <number>` - 使交易有效所需的签名总数。 签名必须与`message.account_keys`的第一个`numRequiredSignatures`匹配。
-    - `numReadonlySignedAccounts: <number>` - 签名密钥的最后一个`numReadonlySignedAccounts`是只读帐户。 程序可以处理多个事务，这些事务在单个PoH条目中加载只读帐户，但不允许贷记或借记Lamport或修改帐户数据。 顺序评估针对同一读写帐户的交易。
+    - `numReadonlySignedAccounts: <number>` - 签名密钥的最后一个`numReadonlySignedAccounts`是只读帐户。 程序可以处理多个事务，这些事务在单个 PoH 条目中加载只读帐户，但不允许贷记或借记 Lamport 或修改帐户数据。 顺序评估针对同一读写帐户的交易。
     - `numReadonlyUnsignedAccounts: <number>` - 未签名密钥的最后一个`numReadonlyUnsignedAccounts`是只读帐户。
-  - `recentBlockhash: <string>` - 账本中最近区块的基数为58的编码哈希，用于防止交易重复并延长交易寿命。
+  - `recentBlockhash: <string>` - 账本中最近区块的基数为 58 的编码哈希，用于防止交易重复并延长交易寿命。
   - `instructions: <array[object]>` - 程序指令的列表，如果全部成功，这些指令将依次执行并在一次原子事务中提交。
     - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
     - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
-    - `data: <string>` - 程序输入的数据以base-58字符串编码。
+    - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
 
 #### 内部指令结构
 
-Solana运行时记录在事务处理期间调用的跨程序指令，并使这些程序可用，以提高每个事务指令在链上执行的内容的透明度。 调用的指令按原始事务处理指令分组，并按处理顺序列出。
+Solana 运行时记录在事务处理期间调用的跨程序指令，并使这些程序可用，以提高每个事务指令在链上执行的内容的透明度。 调用的指令按原始事务处理指令分组，并按处理顺序列出。
 
-内部指令的JSON结构定义为以下结构中的对象列表：
+内部指令的 JSON 结构定义为以下结构中的对象列表：
 
 - `index: number` - 内部指令源自的(一个或多个) 交易指令的索引
 - `instructions: <array[object]>` - 内部程序指令的有序列表，在单个事务指令期间被调用。
   - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
   - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
-  - `data: <string>` - 程序输入的数据以base-58字符串编码。
+  - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
 
 ### getConfirmedBlocks
 
@@ -642,17 +639,17 @@ Solana运行时记录在事务处理期间调用的跨程序指令，并使这�
 
 #### 参数：
 
-- `<u64>` - start_slot，作为u64整数
-- `<u64>` - (可选) end_slot，作为u64整数
+- `<u64>` - start_slot，作为 u64 整数
+- `<u64>` - (可选) end_slot，作为 u64 整数
 
 #### 结果：
 
-结果字段将是一个u64整数数组，其中列出了在`start_slot`和`end_slot`之间（如果提供）或最近确认的块（包括首尾）之间的已确认块。  允许的最大范围是500,000个插槽。
-
+结果字段将是一个 u64 整数数组，其中列出了在`start_slot`和`end_slot`之间（如果提供）或最近确认的块（包括首尾）之间的已确认块。 允许的最大范围是 500,000 个插槽。
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
@@ -660,8 +657,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
 ```
 
 ### getConfirmedBlocksWithLimit
@@ -670,16 +668,17 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<u64>` -start_slot，作为u64整数
-- `<u64>` - 限制，如u64整数
+- `<u64>` -start_slot，作为 u64 整数
+- `<u64>` - 限制，如 u64 整数
 
 #### 结果：
 
-结果字段将是一个u64整数数组，其中列出了已确认的块（从`start_slot`开始），最多到`limit`个块（包括上限）。
+结果字段将是一个 u64 整数数组，其中列出了已确认的块（从`start_slot`开始），最多到`limit`个块（包括上限）。
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
@@ -687,19 +686,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
 ```
 
 ### getConfirmedSignaturesForAddress
 
-**不推荐使用：请改用getConfirmedSignaturesForAddress2**
+**不推荐使用：请改用 getConfirmedSignaturesForAddress2**
 
-返回指定槽位范围内涉及地址的事务的所有已确认签名的列表。 允许的最大范围是10,000个插槽
+返回指定槽位范围内涉及地址的事务的所有已确认签名的列表。 允许的最大范围是 10,000 个插槽
 
 #### 参数：
 
-- `<string>` - 帐户地址为base-58编码的字符串
+- `<string>` - 帐户地址为 base-58 编码的字符串
 - `<u64>` - 起始插槽（包含在内）
 - `<u64>` -末端插槽（包含在内）
 
@@ -707,13 +707,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 结果字段将是以下内容的数组：
 
-- `<string>` - 交易签名为以base-58编码的字符串
+- `<string>` - 交易签名为以 base-58 编码的字符串
 
 签名将根据其在其中确认的插槽进行排序，从最低到最高
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -730,6 +731,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -747,22 +749,27 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 从提供的签名或最近确认的块中返回涉及时间在后的地址的交易的确认签名
 
 #### 参数：
-* `<string>` - 帐户地址为base-58编码的字符串
-* `<object>` - (可选) 包含以下字段的配置对象：
-  * `limit: <number>` - (可选) 要返回的最大交易签名 (1到1,000之间，默认值：1,000)。
-  * `before: <string>` -(可选) 从此事务签名开始向后搜索。 如果未提供，则从最大已确认最大块的顶部开始搜索。
-  * `until: <string>` - (可选) 搜索直到此交易签名，如果在达到限制之前被发现。
+
+- `<string>` - 帐户地址为 base-58 编码的字符串
+- `<object>` - (可选) 包含以下字段的配置对象：
+  - `limit: <number>` - (可选) 要返回的最大交易签名 (1 到 1,000 之间，默认值：1,000)。
+  - `before: <string>` -(可选) 从此事务签名开始向后搜索。 如果未提供，则从最大已确认最大块的顶部开始搜索。
+  - `until: <string>` - (可选) 搜索直到此交易签名，如果在达到限制之前被发现。
 
 #### 结果：
+
 结果字段将是交易签名信息的数组，按从新到旧的顺序排列：
-* `<object>`
-  * `signature: <string>` - 交易签名为以base-58编码的字符串
-  * `slot: <u64>` - 包含交易区块的插槽
-  * `err: <object | null>` - 如果事务失败，则返回错误；如果事务成功，则返回null。 [TransactionError定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-  * `memo: <string |null>` - 与交易关联的备忘录，如果没有备忘录，则为null
+
+- `<object>`
+  - `signature: <string>` - 交易签名为以 base-58 编码的字符串
+  - `slot: <u64>` - 包含交易区块的插槽
+  - `err: <object | null>` - 如果事务失败，则返回错误；如果事务成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `memo: <string |null>` - 与交易关联的备忘录，如果没有备忘录，则为 null
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -780,6 +787,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -801,28 +809,30 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<string>` - 交易签名，以base-58编码的字符串，N编码尝试使用特定于程序的指令解析器来返回`transaction.message.instructions`列表中更多的人性化和显式的数据。 如果请求“jsonParsed”但找不到解析器，则该指令将退回到常规JSON编码(`帐户`，`数据`和`programIdIndex`字段)。
-- `<string>` -(可选) 用于返回的事务的编码，可以是“ json”，“ jsonParsed”，“ base58”(* slow *)或“ base64”。 如果未提供参数，则默认编码为JSON。
+- `<string>` - 交易签名，以 base-58 编码的字符串，N 编码尝试使用特定于程序的指令解析器来返回`transaction.message.instructions`列表中更多的人性化和显式的数据。 如果请求“jsonParsed”但找不到解析器，则该指令将退回到常规 JSON 编码(`帐户`，`数据`和`programIdIndex`字段)。
+- `<string>` -(可选) 用于返回的事务的编码，可以是“ json”，“ jsonParsed”，“ base58”(_ slow _)或“ base64”。 如果未提供参数，则默认编码为 JSON。
 
 #### 结果：
 
 - `<null>` - 如果未找到交易或未确认
 - `<object>` - 如果区块得到确认，则具有以下字段的对象：
   - `slot: <u64>` - 处理该交易记录的插槽
-  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) 对象，采用JSON格式或已编码的二进制数据，具体取决于编码参数
+  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) 对象，采用 JSON 格式或已编码的二进制数据，具体取决于编码参数
   - `meta: <object | null>` - 交易状态元数据对象：
-    - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回null。 [TransactionError定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-    - `fee: <u64>` - 此交易收取的费用，以u64整数表示
-    - `preBalances: <array>` - 处理交易之前的u64帐户余额数组
-    - `postBalances: <array>` - 处理交易后的u64帐户余额数组
+    - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+    - `fee: <u64>` - 此交易收取的费用，以 u64 整数表示
+    - `preBalances: <array>` - 处理交易之前的 u64 帐户余额数组
+    - `postBalances: <array>` - 处理交易后的 u64 帐户余额数组
     - `innerInstructions: <array|undefined>` -[内部指令](#inner-instructions-structure)列表，如果在此交易处理期间尚未启用内部指令记录，则将其省略
     - `logMessages: <array>` - 字符串日志消息的数组；如果在此交易期间尚未启用日志消息记录，则将其省略
     - DEPRECATED: `status: <object>` - 交易状态
       - `"Ok": <null>` - 交易成功
-      - `"Err": <ERR>` - 交易失败，出现TransactionError
+      - `"Err": <ERR>` - 交易失败，出现 TransactionError
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -838,6 +848,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -846,20 +857,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -881,12 +880,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         },
         "instructions": [
           {
-            "accounts": [
-              1,
-              2,
-              3,
-              0
-            ],
+            "accounts": [1, 2, 3, 0],
             "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
             "programIdIndex": 4
           }
@@ -903,7 +897,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -919,6 +915,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -927,20 +924,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -957,7 +942,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getEpochInfo
 
-返回当前epoch的信息
+返回当前 epoch 的信息
 
 #### 参数：
 
@@ -969,13 +954,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `absoluteSlot: <u64>`，当前插槽
 - `块高度： <u64>`，当前区块高度
-- `epoch: <u64>`，目前的epoch
-- `slotIndex: <u64>`，相对于当前epoch开始的插槽
-- `slotsInEpoch: <u64>`，此epoch的插槽数
+- `epoch: <u64>`，目前的 epoch
+- `slotIndex: <u64>`，相对于当前 epoch 开始的插槽
+- `slotsInEpoch: <u64>`，此 epoch 的插槽数
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
@@ -983,6 +969,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -999,7 +986,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getEpochSchedule
 
-从该集群的创世配置返回epoch时间表信息
+从该集群的创世配置返回 epoch 时间表信息
 
 #### 参数：
 
@@ -1011,13 +998,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `slotsPerEpoch: <u64>`，每个时期的最大插槽数
 - `leaderScheduleSlotOffset：<u64>`，在某个时期开始之前的槽数，以计算该时期的领导者时间表
-- `warmup：<bool>`，epoch是否开始短而长
+- `warmup：<bool>`，epoch 是否开始短而长
 - `firstNormalEpoch：<u64>`，第一个正常长度的时期，log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
-- `firstNormalSlot：<u64>`，MINIMUM_SLOTS_PER_EPOCH \ *(2.pow(firstNormalEpoch)-1)
+- `firstNormalSlot：<u64>`，MINIMUM_SLOTS_PER_EPOCH \ \*(2.pow(firstNormalEpoch)-1)
 
 #### 例子：
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
@@ -1025,6 +1013,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1039,7 +1028,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-### 获取费用计算器对于Blockhash
+### 获取费用计算器对于 Blockhash
 
 返回与查询区块哈希关联的费用计算器，如果区块哈希已过期，则返回`null`
 
@@ -1059,6 +1048,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 例子：
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1073,6 +1063,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1111,6 +1102,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 例子：
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
@@ -1118,6 +1110,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1149,7 +1142,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其中`value`设置为具有以下字段的JSON对象：
+结果将是 RpcResponse JSON 对象，其中`value`设置为具有以下字段的 JSON 对象：
 
 - `blockhash：<string>` - 以 base-58 编码的 Hash 字符串
 - `feeCalculator：<object>` - FeeCalculator 对象，此区块哈希的费用明细表
@@ -1158,6 +1151,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1165,6 +1159,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1199,6 +1194,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
@@ -1206,8 +1202,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":250000,"id":1}
+{ "jsonrpc": "2.0", "result": 250000, "id": 1 }
 ```
 
 ### getGenesisHash
@@ -1225,6 +1222,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
@@ -1232,15 +1230,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
+  "id": 1
+}
 ```
 
 ### getHealth
 
 返回节点的当前运行状况。
 
-如果将一个或多个 `--trusted-validator` 参数提供给 `solana-validator`，则当节点位于最高可信验证器的 `HEALTH_CHECK_SLOT_DISTANCE` 插槽内时，将返回 "ok"，否则将返回错误。  如果未提供受信任的验证器，则始终返回“ ok”。
+如果将一个或多个 `--trusted-validator` 参数提供给 `solana-validator`，则当节点位于最高可信验证器的 `HEALTH_CHECK_SLOT_DISTANCE` 插槽内时，将返回 "ok"，否则将返回错误。 如果未提供受信任的验证器，则始终返回“ ok”。
 
 #### 参数：
 
@@ -1248,12 +1251,12 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-如果该节点运行状况良好，则为 "ok"；如果该节点运行状况不良，则将返回 JSON RPC 错误响应。  错误响应的详细信息是 **不稳定**，将来可能会更改
-
+如果该节点运行状况良好，则为 "ok"；如果该节点运行状况不良，则将返回 JSON RPC 错误响应。 错误响应的详细信息是 **不稳定**，将来可能会更改
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getHealth"}
@@ -1261,11 +1264,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 健康结果：
+
 ```json
-{"jsonrpc":"2.0","result": "ok","id":1}
+{ "jsonrpc": "2.0", "result": "ok", "id": 1 }
 ```
 
 不健康的结果(通用)：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1279,6 +1284,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 不健康的结果(如果有其他信息可用)
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1310,6 +1316,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getIdentity"}
@@ -1317,8 +1324,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN" },
+  "id": 1
+}
 ```
 
 ### getInflationGovernor
@@ -1331,7 +1343,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果字段将是具有以下字段的JSON对象：
+结果字段将是具有以下字段的 JSON 对象：
 
 - `initial：<f64>`，从时间 0 开始的初始通胀百分比
 - `terminal：<f64>`，终端通胀百分比
@@ -1342,6 +1354,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
@@ -1349,6 +1362,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 No translations matched your search
 {
@@ -1366,7 +1380,7 @@ No translations matched your search
 
 ### getInflationRate
 
-返回当前epoch的特定通货膨胀值
+返回当前 epoch 的特定通货膨胀值
 
 #### 参数：
 
@@ -1374,7 +1388,7 @@ No translations matched your search
 
 #### 结果：
 
-结果字段将是具有以下字段的JSON对象：
+结果字段将是具有以下字段的 JSON 对象：
 
 - `total：<f64>`，总通货膨胀
 - `validator：<f64>`，分配给验证节点的通货膨胀
@@ -1384,6 +1398,7 @@ No translations matched your search
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
@@ -1391,13 +1406,23 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "epoch": 100,
+    "foundation": 0.001,
+    "total": 0.149,
+    "validator": 0.148
+  },
+  "id": 1
+}
 ```
 
 ### getLargestAccounts
 
-按Lamport余额返回20个最大帐户
+按 Lamport 余额返回 20 个最大帐户
 
 #### 参数：
 
@@ -1407,15 +1432,16 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是一个RpcResponse JSON对象，其`值`等于一个数组：
+结果将是一个 RpcResponse JSON 对象，其`值`等于一个数组：
 
-- `<object>` - 否则为JSON对象，其中包含：
+- `<object>` - 否则为 JSON 对象，其中包含：
   - `address：<string>`，以 Base-58 为底的帐户编码地址
   - `lamports：<u64>`，帐户中 lamport 的数量，以 u64 表示
 
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
@@ -1423,6 +1449,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1526,6 +1553,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
@@ -1533,13 +1561,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -1559,6 +1593,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}
@@ -1566,8 +1601,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ### getMultipleAccounts
@@ -1579,13 +1615,12 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<array>` - 要查询的公钥数组，以 base-58 编码的字符串
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选)[承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(*慢一点*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
+  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_慢一点_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
   - (可选) `dataSlice：<object>` - 使用提供的 `offset：<usize>` 和 `length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
-
 
 #### 结果：
 
-结果将是一个RpcResponse JSON对象，其`值`等于：
+结果将是一个 RpcResponse JSON 对象，其`值`等于：
 
 数组：
 
@@ -1600,6 +1635,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1623,6 +1659,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1632,20 +1669,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     },
     "value": [
       {
-        "data": [
-          "AAAAAAEAAAACtzNsyJrW0g==",
-          "base64"
-        ],
+        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base64"
-        ],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1658,7 +1689,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1679,6 +1712,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1698,10 +1732,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base58"
-        ],
+        "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1722,12 +1753,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - 程序的发布密钥，以 base-58 编码的字符串
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding<string>` - 帐户数据的编码，可以是 "base58"(*slow*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
+  - `encoding<string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
   - (可选)`dataSlice：<object>` - 使用提供的 `offset: <usize>` 和 `length: <usize>` 字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
   - (可选)`filters：<array>` - 使用各种 [filter objects](jsonrpc-api.md#filters) 过滤结果；帐户必须满足所有过滤条件，才能包含在结果中
 
 ##### 过滤器：
+
 - `memcmp：<object>` - 比较提供的一系列字节和程序帐户数据的特定偏移量。 栏位：
+
   - `offset：<usize>` - 进入计划帐户数据的偏移量以开始比较
   - `bytes：<string>` - 要匹配的数据，以 base-58 编码的字符串
 
@@ -1735,17 +1768,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果字段将是一个JSON对象数组，其中包含：
+结果字段将是一个 JSON 对象数组，其中包含：
 
 - `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
 - `account：<object>` - 一个 JSON 对象，具有以下子字段：
-   - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-   - `owner：<string>`，此帐户已分配给程序的 base-58 编码程序的 Pubkey `data：<[string，encoding] | object>`，与帐户相关联的数据，可以是编码的二进制数据或 JSON 格式为 `{<program>: <state>}`，具体取决于编码参数
-   - `executable：<bool>`，布尔值，指示帐户是否包含程序(并且严格为只读)
-   - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
+  - `owner：<string>`，此帐户已分配给程序的 base-58 编码程序的 Pubkey `data：<[string，encoding] | object>`，与帐户相关联的数据，可以是编码的二进制数据或 JSON 格式为 `{<program>: <state>}`，具体取决于编码参数
+  - `executable：<bool>`，布尔值，指示帐户是否包含程序(并且严格为只读)
+  - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}
@@ -1753,6 +1788,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1773,7 +1809,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1801,6 +1839,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1830,7 +1869,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-一个 RPC 响应，其中包含一个由字符串 blockhash 和 FeeCalculator JSON 对象组成的JSON 对象。
+一个 RPC 响应，其中包含一个由字符串 blockhash 和 FeeCalculator JSON 对象组成的 JSON 对象。
 
 - `RpcResponse <object>` - RpcResponse JSON 对象，其中 `value` 字段设置为 JSON 对象，包括：
 - `blockhash：<string>` - 以 base-58 编码的 Hash 字符串
@@ -1839,6 +1878,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
@@ -1846,6 +1886,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1866,9 +1907,10 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
 
 ### getRecentPerformanceSamples
 
-以相反的插槽顺序返回最近的性能样本列表。 每60秒进行一次性能采样，其中包括在给定时间窗口内发生的交易和插槽的数量。
+以相反的插槽顺序返回最近的性能样本列表。 每 60 秒进行一次性能采样，其中包括在给定时间窗口内发生的交易和插槽的数量。
 
 #### 参数：
+
 - `limit：<usize>` -(可选) 要返回的样本数(最大为 720)
 
 #### 结果：
@@ -1884,6 +1926,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
 #### 示例:
 
 请求：
+
 ```bash
 // Request
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1892,6 +1935,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1925,7 +1969,6 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-
 ### getSnapshotSlot
 
 返回节点具有快照的最高插槽
@@ -1941,6 +1984,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
@@ -1948,13 +1992,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":100,"id":1}
+{ "jsonrpc": "2.0", "result": 100, "id": 1 }
 ```
 
 节点没有快照时的结果：
+
 ```json
-{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32008, "message": "No snapshot" },
+  "id": 1
+}
 ```
 
 ### getSignatureStatuses
@@ -1988,6 +2038,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2005,6 +2056,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2020,7 +2072,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "confirmed",
+        "confirmationStatus": "confirmed"
       },
       null
     ]
@@ -2030,7 +2082,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2048,6 +2102,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2063,7 +2118,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "finalized",
+        "confirmationStatus": "finalized"
       },
       null
     ]
@@ -2087,6 +2142,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlot"}
@@ -2094,8 +2150,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### getSlotLeader
@@ -2113,6 +2170,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
@@ -2120,31 +2178,38 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS",
+  "id": 1
+}
 ```
 
 ### getStakeActivation
 
-返回权益账户的epoch激活信息
+返回权益账户的 epoch 激活信息
 
 #### 参数：
 
-* `<string>` - 要查询的股份账户的公钥，以 base-58 编码的字符串
-* `<object>` - (可选) 包含以下可选字段的配置对象：
-  * (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  * (可选)`epoch：<u64>` - 用于计算激活详细信息的时期。 如果未提供参数，则默认为当前 epoch。
+- `<string>` - 要查询的股份账户的公钥，以 base-58 编码的字符串
+- `<object>` - (可选) 包含以下可选字段的配置对象：
+  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+  - (可选)`epoch：<u64>` - 用于计算激活详细信息的时期。 如果未提供参数，则默认为当前 epoch。
 
 #### 结果：
 
-结果将是具有以下字段的JSON对象：
+结果将是具有以下字段的 JSON 对象：
 
-* `state：<string` - 股份账户的激活状态，其中之一：`active`，`inactive`，`activating`，`deactivating`
-* `active：<u64>` - 时期有效的股份
-* `inactive：<u64>` - 在新时期无效的股份
+- `state：<string` - 股份账户的激活状态，其中之一：`active`，`inactive`，`activating`，`deactivating`
+- `active：<u64>` - 时期有效的股份
+- `inactive：<u64>` - 在新时期无效的股份
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}
@@ -2152,12 +2217,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "active": 197717120, "inactive": 0, "state": "active" },
+  "id": 1
+}
 ```
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2175,6 +2247,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2197,7 +2270,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于包含以下内容的JSON对象：
+结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
 
 - `total：<u64>` - Lamports 的总供应量
 - ` circulating：<u64>` - 以 lamports 的循环供应
@@ -2207,6 +2280,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getSupply"}
@@ -2214,6 +2288,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2239,7 +2314,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountBalance
 
-返回SPL令牌帐户的代币余额。 **UNSTABLE**
+返回 SPL 令牌帐户的代币余额。 **UNSTABLE**
 
 #### 参数：
 
@@ -2248,7 +2323,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于包含以下内容的JSON对象：
+结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
 
 - `uiAmount：<f64>` - 余额，使用薄荷规定的小数
 - `amount：<string>` - 不带小数的原始余额，u64 的字符串表示形式
@@ -2257,6 +2332,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}
@@ -2264,6 +2340,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2283,30 +2360,30 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountsByDelegate
 
-通过批准的代表返回所有SPL令牌帐户。 **UNSTABLE**
+通过批准的代表返回所有 SPL 令牌帐户。 **UNSTABLE**
 
 #### 参数：
 
 - `<string>` - 要查询的帐户委托人的公钥，以 base-58 编码的字符串
 - `<object>` - 可以：
-  * `mint：<string>` - 特定令牌Mint的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
-  * `programId：<string>` - 拥有帐户的Token程序 ID 的 Pubkey，以 base-58 编码的字符串
+  - `mint：<string>` - 特定令牌 Mint 的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
+  - `programId：<string>` - 拥有帐户的 Token 程序 ID 的 Pubkey，以 base-58 编码的字符串
 - `<object>` - (可选) 包含以下可选字段的配置对象：
   - (可选)[承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(*慢一点*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
+  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_慢一点_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
   - (可选) `dataSlice：<object>` - 使用提供的 `offset: <usize>` 和 `length: <usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于JSON对象的数组，其中将包含：
+结果将是 RpcResponse JSON 对象，其`值`等于 JSON 对象的数组，其中将包含：
 
 - `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
-- `account：<object>` - 一个JSON对象，具有以下子字段：
-   - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-   - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
-   - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是JSON 格式的 `{<program>: <state>}`
-   - `executable: <bool>`，布尔值，指示帐户是否包含程序 \(并且严格为只读\)
-   - ` rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+- `account：<object>` - 一个 JSON 对象，具有以下子字段：
+  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
+  - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
+  - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是 JSON 格式的 `{<program>: <state>}`
+  - `executable: <bool>`，布尔值，指示帐户是否包含程序 \(并且严格为只读\)
+  - ` rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
 
@@ -2330,6 +2407,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2371,30 +2449,30 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountsByOwner
 
-按代币所有者返回所有SPL代币帐户。 **UNSTABLE**
+按代币所有者返回所有 SPL 代币帐户。 **UNSTABLE**
 
 #### 参数：
 
 - `<string>` - 要查询的帐户所有者的公钥，以 base-58 编码的字符串
 - `<object>` - 可以：
-  * `mint：<string>` - 特定代币 Mint 的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
-  * `programId：<string>` - 拥有帐户的 Token 程序ID的 Pubkey，以base-58编码的字符串
+  - `mint：<string>` - 特定代币 Mint 的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
+  - `programId：<string>` - 拥有帐户的 Token 程序 ID 的 Pubkey，以 base-58 编码的字符串
 - `<object>` - (可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - 帐户数据的编码，可以是 "base58"(*slow*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
+  - `encoding: <string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
   - (可选) `dataSlice：<object>` - 使用提供的 `offset：<usize>` 和 `length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于JSON对象的数组，其中将包含：
+结果将是 RpcResponse JSON 对象，其`值`等于 JSON 对象的数组，其中将包含：
 
 - `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
-- `account：<object>` - 一个JSON 对象，具有以下子字段：
-   - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-   - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
-   - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是JSON 格式的 `{<program>: <state>}`
-   - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
-   - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+- `account：<object>` - 一个 JSON 对象，具有以下子字段：
+  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
+  - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
+  - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是 JSON 格式的 `{<program>: <state>}`
+  - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
+  - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
 
@@ -2418,6 +2496,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2468,7 +2547,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于包含以下内容的JSON对象数组：
+结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象数组：
 
 - `address：<string>` - 代币帐户的地址
 - `uiAmount：<f64>` - 代币账户余额，使用薄荷规定的小数
@@ -2484,6 +2563,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2512,7 +2592,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenSupply
 
-返回SPL代币类型的总供给。 **UNSTABLE**
+返回 SPL 代币类型的总供给。 **UNSTABLE**
 
 #### 参数：
 
@@ -2521,7 +2601,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是RpcResponse JSON对象，其`值`等于包含以下内容的JSON对象：
+结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
 
 - `uiAmount：<f64>` - 代币总供给，使用薄荷规定的小数
 - `amount：<string>` - 不带小数的原始令牌总数，u64 的字符串表示形式
@@ -2536,6 +2616,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2575,13 +2656,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":268,"id":1}
+{ "jsonrpc": "2.0", "result": 268, "id": 1 }
 ```
 
 ### getVersion
 
-返回在节点上运行的当前solana版本
+返回在节点上运行的当前 solana 版本
 
 #### 参数：
 
@@ -2589,7 +2671,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果字段将是具有以下字段的JSON对象：
+结果字段将是具有以下字段的 JSON 对象：
 
 - `solana-core`，solana-core 的软件版本
 - `feature-set`，当前软件功能集的唯一标识符
@@ -2597,6 +2679,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVersion"}
@@ -2604,8 +2687,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.6.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -2618,10 +2702,10 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果字段将是 `current` 帐户和 `delinquent` 帐户的JSON对象，每个帐户都包含带有以下子字段的JSON对象数组：
+结果字段将是 `current` 帐户和 `delinquent` 帐户的 JSON 对象，每个帐户都包含带有以下子字段的 JSON 对象数组：
 
-- `votePubkey：<string>` - 投票帐户公钥，以base-58编码的字符串
-- `nodePubkey：<string>` - 节点公钥，以base-58编码的字符串
+- `votePubkey：<string>` - 投票帐户公钥，以 base-58 编码的字符串
+- `nodePubkey：<string>` - 节点公钥，以 base-58 编码的字符串
 - `activatedStake：<u64>` - 抽奖活动中的股份，委托给该投票帐户，并在该时期处于活动状态
 - `epochVoteAccount：<bool>` - 布尔，是否为此时代投注了投票帐户
 - `commission: <number>`，应支付给投票帐户的奖励支出的百分比(0-100)
@@ -2629,7 +2713,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `epochCredits：<array>` - 每个时期结束时获得多少学分的历史，以包含 `[epoch，credits，previousCredits]` 的阵列数组的形式出现
 
 #### 示例:
+
 请求：
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
@@ -2637,6 +2723,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2646,8 +2733,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "commission": 0,
         "epochVoteAccount": true,
         "epochCredits": [
-          [ 1, 64, 0 ],
-          [ 2, 192, 64 ]
+          [1, 64, 0],
+          [2, 192, 64]
         ],
         "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
         "lastVote": 147,
@@ -2693,8 +2780,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### requestAirdrop
@@ -2709,7 +2797,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-- `<string>` - 空投的交易签名，以base-58编码的字符串
+- `<string>` - 空投的交易签名，以 base-58 编码的字符串
 
 #### 示例:
 
@@ -2721,8 +2809,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+  "id": 1
+}
 ```
 
 ### sendTransaction
@@ -2731,9 +2824,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 此方法不会以任何方式更改交易；它将客户端创建的交易按原样中继到节点。
 
-如果节点的rpc服务接收到该交易，则此方法将立即成功，而无需等待任何确认。 此方法的成功响应不能保证集群能够处理或确认交易。
+如果节点的 rpc 服务接收到该交易，则此方法将立即成功，而无需等待任何确认。 此方法的成功响应不能保证集群能够处理或确认交易。
 
-尽管rpc服务将合理地重试提交，但是如果交易的 `recent_blockhash` 在到达之前到期，则该交易可能会被拒绝。
+尽管 rpc 服务将合理地重试提交，但是如果交易的 `recent_blockhash` 在到达之前到期，则该交易可能会被拒绝。
 
 使用 [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) 确保交易得到处理和确认。
 
@@ -2742,7 +2835,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 1. 交易签名已验证
 2. 根据预检承诺指定的银行插槽模拟交易。 失败时将返回错误。 如果需要，可以禁用预检检查。 建议指定相同的承诺和飞行前承诺，以避免混淆行为。
 
-返回的签名是交易中的第一个签名，用于标识交易([交易ID](../../terminology.md#transanction-id))。 在提交之前，可以很容易地从交易数据中提取该标识符。
+返回的签名是交易中的第一个签名，用于标识交易([交易 ID](../../terminology.md#transanction-id))。 在提交之前，可以很容易地从交易数据中提取该标识符。
 
 #### 参数：
 
@@ -2750,7 +2843,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<object>` -(可选) 包含以下字段的配置对象：
   - `skipPreflight：<bool>` - 如果为 true，则跳过预检交易检查(默认值：false)
   - `preflightCommitment：<string>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment) 用于预检的级别(默认值：`"max"`)。
-  - `encoding：<string>` -(可选)用于交易数据的编码。 `"base58"`(*slow*，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
+  - `encoding：<string>` -(可选)用于交易数据的编码。 `"base58"`(_slow_，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
 
 #### 结果：
 
@@ -2773,8 +2866,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb",
+  "id": 1
+}
 ```
 
 ### simulateTransaction
@@ -2787,13 +2885,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<object>` -(可选) 包含以下字段的配置对象：
   - `sigVerify：<bool>` - 如果为 true，则将验证交易签名(默认值：false)
   - `commitment：<string>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment) 级别以(默认值：`"max"`) 模拟交易。
-  - `encoding：<string>` - (可选) 用于交易数据的编码。 `"base58"` (*slow*，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
+  - `encoding：<string>` - (可选) 用于交易数据的编码。 `"base58"` (_slow_，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
 
 #### 结果：
 
-包含TransactionStatus对象的RpcResponse结果将是RpcResponse JSON对象，其中`value`设置为具有以下字段的JSON对象：
+包含 TransactionStatus 对象的 RpcResponse 结果将是 RpcResponse JSON 对象，其中`value`设置为具有以下字段的 JSON 对象：
 
-- `err：<object>` - 如果交易失败，则返回错误；如果交易成功，则返回null。 [TransactionError定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `err：<object>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs：<array | null>` - 交易指令在执行期间输出的日志消息数组，如果在交易能够执行之前模拟失败(例如，由于无效的哈希或签名验证失败)，则返回 null
 
 #### 示例:
@@ -2812,6 +2910,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2851,13 +2950,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":null,"id":1}
+{ "jsonrpc": "2.0", "result": null, "id": 1 }
 ```
 
 ### validatorExit
 
-如果验证器在启用RPC退出的情况下启动(`--enable-rpc-exit`参数)，则此请求将导致验证器退出。
+如果验证器在启用 RPC 退出的情况下启动(`--enable-rpc-exit`参数)，则此请求将导致验证器退出。
 
 #### 参数：
 
@@ -2877,15 +2977,16 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 结果：
+
 ```json
-{"jsonrpc":"2.0","result":true,"id":1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
-## 订阅Websocket
+## 订阅 Websocket
 
-在 `ws://<ADDRESS>/` 连接到RPC PubSub Websocket之后：
+在 `ws://<ADDRESS>/` 连接到 RPC PubSub Websocket 之后：
 
-- 使用以下方法向Websocket提交订阅请求
+- 使用以下方法向 Websocket 提交订阅请求
 - 多个订阅可能一次处于活动状态
 - 许多订阅都采用可选的[`commitment` 参数](jsonrpc-api.md#configuring-state-commitment)，定义了如何最终完成更改以触发通知。 对于订阅，如果未指定承诺，则默认值为 `"singleGossip"`。
 
@@ -2898,7 +2999,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - 帐户 Pubkey，以 base-58 编码的字符串
 - `<object>` - (可选) 包含以下可选字段的配置对象：
   - `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(*slow*)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed" 但找不到解析器，则该字段将退回到二进制编码，当 `data` 字段为 `<string>` 类型时可检测到。
+  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed" 但找不到解析器，则该字段将退回到二进制编码，当 `data` 字段为 `<string>` 类型时可检测到。
 
 #### 结果：
 
@@ -2907,6 +3008,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 示例:
 
 请求：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2934,13 +3036,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 23784,"id": 1}
+{ "jsonrpc": "2.0", "result": 23784, "id": 1 }
 ```
 
 #### 通知形式
 
 Base58 编码：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2951,7 +3055,10 @@ Base58 编码：
         "slot": 5199307
       },
       "value": {
-        "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+        "data": [
+          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+          "base58"
+        ],
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
@@ -2963,7 +3070,8 @@ Base58 编码：
 }
 ```
 
-Parsed-JSON编码：
+Parsed-JSON 编码：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2974,7 +3082,10 @@ Parsed-JSON编码：
         "slot": 5199307
       },
       "value": {
-        "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+        "data": [
+          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+          "base58"
+        ],
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
@@ -2992,7 +3103,7 @@ Parsed-JSON编码：
 
 #### 参数：
 
-- `<number>` - 要取消的帐户订阅ID
+- `<number>` - 要取消的帐户订阅 ID
 
 #### 结果：
 
@@ -3001,26 +3112,27 @@ Parsed-JSON编码：
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "accountUnsubscribe", "params": [0] }
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### logsSubscribe
 
-订阅交易日志记录。  **UNSTABLE**
+订阅交易日志记录。 **UNSTABLE**
 
 #### 参数：
 
 - `filter：<string><object>` - 过滤条件，日志按帐户类型接收结果；目前支持：
   - "all" - 订阅除简单投票交易以外的所有交易
   - "allWithVotes" - 订阅所有交易，包括简单的投票交易
-  - `{ "mentions": [ <string> ] }` - 订阅所有提及提供的Pubkey的交易(以 base-58 编码的字符串)
+  - `{ "mentions": [ <string> ] }` - 订阅所有提及提供的 Pubkey 的交易(以 base-58 编码的字符串)
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
@@ -3031,6 +3143,7 @@ Parsed-JSON编码：
 #### 示例:
 
 请求：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3054,13 +3167,15 @@ Parsed-JSON编码：
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### 通知形式
 
 Base58 编码：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3098,14 +3213,15 @@ Base58 编码：
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "logsUnsubscribe", "params": [0] }
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### programSubscribe
@@ -3117,7 +3233,7 @@ Base58 编码：
 - `<string>` - program_id Pubkey，以 base-58 编码的字符串
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是“ base58”(*slow*)，“ base64”，“ base64 + zstd”或“ jsonParsed”。 “jsonParsed”编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求“ jsonParsed”但找不到解析器，则该字段将回退为base64编码，当 `data` 字段为 `<string>` 类型时可检测到。
+  - `encoding：<string>` - 帐户数据的编码，可以是“ base58”(_slow_)，“ base64”，“ base64 + zstd”或“ jsonParsed”。 “jsonParsed”编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求“ jsonParsed”但找不到解析器，则该字段将回退为 base64 编码，当 `data` 字段为 `<string>` 类型时可检测到。
   - (可选) `filters：<array>` - 使用各种 [filter objects](jsonrpc-api.md#filters) 过滤结果；帐户必须满足所有过滤条件，才能包含在结果中
 
 #### 结果：
@@ -3127,6 +3243,7 @@ Base58 编码：
 #### 示例:
 
 请求：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3170,13 +3287,15 @@ Base58 编码：
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### 通知形式
 
 Base58 编码：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3189,12 +3308,15 @@ Base58 编码：
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
-          "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+          "data": [
+            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+            "base58"
+          ],
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3203,6 +3325,7 @@ Base58 编码：
 ```
 
 Parsed-JSON 编码：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3215,12 +3338,15 @@ Parsed-JSON 编码：
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
-          "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+          "data": [
+            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+            "base58"
+          ],
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3243,14 +3369,15 @@ Parsed-JSON 编码：
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"programUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "programUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### signatureSubscribe
@@ -3269,6 +3396,7 @@ Result:
 #### 示例:
 
 请求：
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3293,11 +3421,13 @@ Result:
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### 通知形式
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3331,14 +3461,15 @@ Result:
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "signatureUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### slotSubscribe
@@ -3351,19 +3482,20 @@ Result:
 
 #### 结果：
 
-- `integer` - 订阅id(需要取消订阅)
+- `integer` - 订阅 id(需要取消订阅)
 
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### 通知形式
@@ -3398,14 +3530,15 @@ Result:
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotUnsubscribe", "params": [0] }
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### rootSubscribe
@@ -3423,14 +3556,15 @@ Result:
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootSubscribe" }
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### 通知形式
@@ -3454,7 +3588,7 @@ Result:
 
 #### 参数：
 
-- `<integer>` - 要取消的订阅ID
+- `<integer>` - 要取消的订阅 ID
 
 #### 结果：
 
@@ -3463,19 +3597,20 @@ Result:
 #### 示例：:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootUnsubscribe", "params": [0] }
 ```
 
 结果：
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### 投票订阅-不稳定，默认情况下处于禁用状态
 
-**此订阅是不稳定的，并且仅在验证器以`--rpc-pubsub-enable-vote-subscription`标志启动时可用。  此订阅的格式将来可能会更改**
+**此订阅是不稳定的，并且仅在验证器以`--rpc-pubsub-enable-vote-subscription`标志启动时可用。 此订阅的格式将来可能会更改**
 
 订阅以在八卦中观察到新的投票时接收通知。 这些票是事先同意的，因此不能保证这些票会进入账本。
 
@@ -3490,14 +3625,15 @@ Result:
 #### 示例:
 
 请求：
-```json
-{"jsonrpc":"2.0", "id":1, "method":"voteSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "voteSubscribe" }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### 通知形式
@@ -3525,7 +3661,7 @@ Result:
 
 #### 参数：
 
-- `<integer>` - 要取消的订阅ID
+- `<integer>` - 要取消的订阅 ID
 
 #### 结果：
 
@@ -3534,11 +3670,13 @@ Result:
 #### 示例:
 
 请求：
+
 ```json
-{"jsonrpc":"2.0", "id":1, "method":"voteUnsubscribe", "params":[0]}
+{ "jsonrpc": "2.0", "id": 1, "method": "voteUnsubscribe", "params": [0] }
 ```
 
 响应：
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```

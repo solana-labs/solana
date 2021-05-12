@@ -40,7 +40,9 @@ Cuando se inicie su validador, busque el siguiente mensaje de registro para indi
 ## Ajuste del sistema
 
 ### Linux
+
 #### Automático
+
 El repo de solana incluye un daemon para ajustar la configuración del sistema para optimizar el rendimiento (es decir, aumentando el buffer UDP del OS y los límites de mapeo de archivos).
 
 El daemon (`solana-sys-tuner`) está incluido en la versión binaria de solana. Reinicie, *antes de*reiniciar su validador, después de cada actualización de software para asegurarse de que se apliquen los últimos ajustes recomendados.
@@ -52,9 +54,11 @@ sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Manual
+
 Si prefiere administrar la configuración del sistema por sí solo, puede hacerlo con los siguientes comandos.
 
 ##### **Aumentar búferes UDP**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
 # Increase UDP buffer size
@@ -64,38 +68,49 @@ net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
 EOF"
 ```
+
 ```bash
 sudo sysctl -p iger/sysctl.d/20-solana-udp-buffers.conf
 ```
 
 ##### **Aumento del límite de archivos asignados a memoria**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 500000
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
+
 Añadir
+
 ```
 LimitNOFILE=500000
 ```
+
 a la sección `[Service]` de su archivo de servicio del sistema, si utiliza uno, de lo contrario añada
+
 ```
 DefaultLimitNOFILE=500000
 ```
+
 a la sección `[Manager]` de `/etc/systemd/system.conf`.
+
 ```bash
 sudo systemctl daemon-reload
 ```
+
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
 * - nofile 500000
 EOF"
 ```
+
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
@@ -248,14 +263,17 @@ Si su validador está conectado, su clave pública y su dirección IP aparecerá
 Por defecto, el validador seleccionará dinámicamente los puertos de red disponibles en el rango 8000-10000 y puede ser reemplazado con `--dynamic-port-range`. Por ejemplo, `solana-validator --dynamic-port-range 11000-11010 ...` restringirá el validador a los puertos 11000-11010.
 
 ### Limitando el tamaño del ledger para conservar espacio en disco
+
 El parámetro `--limit-ledger-size` le permite especificar cuántos ledger [shreds](../terminology.md#shred) su nodo retiene en el disco. Si no incluye este parámetro, el validador mantendrá el libro de valores entero hasta que se agote de espacio en disco.
 
-El valor predeterminado intenta mantener el uso del disco ledger por debajo de 500GB.  Se puede solicitar más o menos uso del disco añadiendo un argumento a `--limit-ledger-size` si se desea. Compruebe `solana-validator --help` para conocer el valor límite por defecto utilizado por `--limit-ledger-size`.  Más información sobre seleccionar un valor límite personalizado está [disponible aquí](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+El valor predeterminado intenta mantener el uso del disco ledger por debajo de 500GB. Se puede solicitar más o menos uso del disco añadiendo un argumento a `--limit-ledger-size` si se desea. Compruebe `solana-validator --help` para conocer el valor límite por defecto utilizado por `--limit-ledger-size`. Más información sobre seleccionar un valor límite personalizado está [disponible aquí](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Unidad de sistema
+
 Ejecutar el validador como una unidad systemd es una forma sencilla de gestionar la ejecución en segundo plano.
 
 Asumiendo que tiene un usuario llamado `sol` en su máquina, cree el archivo `/etc/systemd/system/sol.service` con lo siguiente:
+
 ```
 [Unit]
 Description=Solana Validator
@@ -277,14 +295,16 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Ahora crea `/home/sol/bin/validator.sh` para incluir la línea de comandos deseada `solana-validator`.  Asegúrese de que la ejecución de `/home/sol/bin/validator.sh` inicia manualmente el validador como se esperaba. No te olvides de marcarlo como ejecutable con `chmod +x /home/sol/bin/validator.sh`
+Ahora crea `/home/sol/bin/validator.sh` para incluir la línea de comandos deseada `solana-validator`. Asegúrese de que la ejecución de `/home/sol/bin/validator.sh` inicia manualmente el validador como se esperaba. No te olvides de marcarlo como ejecutable con `chmod +x /home/sol/bin/validator.sh`
 
 Iniciar el servicio con:
+
 ```bash
 $ sudo systemctl habilitar --now sol
 ```
 
 ### Registrandose
+
 #### Ajuste de la salida del registro
 
 Los mensajes que un validador emite al registro pueden ser controlados por la variable de entorno `RUST_LOG`. Los detalles pueden encontrarse en la [documentación](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) para la `caja env_logger` Caja.
@@ -300,6 +320,7 @@ El validador volverá a abrirlo cuando reciba la señal `USR1`, que es el primit
 #### Usando logrotate
 
 Un ejemplo de configuración para el `logrotate`, el cual asume que el validador está corriendo como un servicio de sistema llamado `sol. service` y escribe un archivo de registro en /home/sol/solana-validator.log:
+
 ```bash
 # Setup log rotation
 
@@ -318,14 +339,17 @@ systemctl restart logrotate.service
 ```
 
 ### Desactivar comprobaciones de puertos para acelerar reinicios
+
 Una vez que el validador está funcionando normalmente, puede reducir el tiempo que toma reiniciar su validador añadiendo la bandera `--no-port-check` a su línea de comandos `solana-validator`.
 
 ### Desactivar la compresión de Snapshot para reducir el uso de CPU
+
 Si no estás sirviendosnapshots a otros validadores, la compresión de snapshot puede desactivarse para reducir la carga de la CPU a expensas de un poco más de uso de disco para almacenamiento local de snapshots.
 
 Agregue el argumento `--snapshot-compression none` a los argumentos de la línea de comandos `solana-validator` y reinicie el validador.
 
 ### Utilizando un ramdisk con spill-over en swap para la base de datos de cuentas para reducir el desgaste SSD
+
 Si su máquina tiene un montón de RAM, un ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) puede ser usado para mantener la base de datos de cuentas
 
 Al usar tmpfs también es esencial configurar el intercambio en su máquina, así como evitar que se agote el espacio tmpfs periódicamente.
@@ -333,11 +357,14 @@ Al usar tmpfs también es esencial configurar el intercambio en su máquina, as�
 Se recomienda una partición tmpfs de 300GB, con una partición de intercambio de 250GB.
 
 Ejemplo de configuración:
+
 1. `sudo mkdir /mnt/solana-accounts`
-2. Añade una parición tmpfs de 300GB añadiendo una nueva línea que contenga `tmpfs/mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` a `/etc/fstab` (asumiendo que su validador se está ejecutando bajo el usuario "sol").  **CUIDADO: Si edita incorrectamente /etc/fstab su máquina puede dejar de arrancar**
+2. Añade una parición tmpfs de 300GB añadiendo una nueva línea que contenga `tmpfs/mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` a `/etc/fstab` (asumiendo que su validador se está ejecutando bajo el usuario "sol"). **CUIDADO: Si edita incorrectamente /etc/fstab su máquina puede dejar de arrancar**
 3. Crear al menos 250GB de espacio de intercambio
-  - Elija un dispositivo para usar en lugar de `SWAPDEV` para el resto de estas instrucciones. Seleccione Idealmente una partición de disco libre de 250GB o superior en un disco rápido. Si uno no está disponible, cree un archivo de intercambio con `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, establece sus permisos con `sudo chmod 0600 /swapfile` y usa `/swapfile` como `SWAPDEV` para el resto de estas instrucciones
-  - Formatear el dispositivo para su uso como intercambio con `sudo mkswap SWAPDEV`
+
+- Elija un dispositivo para usar en lugar de `SWAPDEV` para el resto de estas instrucciones. Seleccione Idealmente una partición de disco libre de 250GB o superior en un disco rápido. Si uno no está disponible, cree un archivo de intercambio con `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, establece sus permisos con `sudo chmod 0600 /swapfile` y usa `/swapfile` como `SWAPDEV` para el resto de estas instrucciones
+- Formatear el dispositivo para su uso como intercambio con `sudo mkswap SWAPDEV`
+
 4. Añade el archivo de intercambio a `/etc/fstab` con una nueva línea que contenga `SWAPDEV swap swap defaults 0 0`
 5. Habilitar intercambio con `sudo swapon -a` y montar tmpfs con `sudo mount /mnt/solana-accounts/`
 6. Confirmar que el swap está activo con `free -g` y que el tmpfs está montado con `mount`

@@ -83,8 +83,7 @@ JavaScript 애플리케이션 내에서 Solana 노드와 상호 작용하려면 
 
 ## 요청 형식
 
-JSON-RPC 요청을하려면`Content-Type:
-application/json` 와 함께 HTTP POST 요청을 보냅니다. JSON 요청 데이터는 4개의 필드를 포함해야합니다.
+JSON-RPC 요청을하려면`Content-Type: application/json` 와 함께 HTTP POST 요청을 보냅니다. JSON 요청 데이터는 4개의 필드를 포함해야합니다.
 
 - `jsonrpc: <string>`,`"2.0"`으로 설정
 - `id: <number>`, 고유한 클라이언트 생성 식별 정수
@@ -123,7 +122,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ## State Commitment 구성
 
-사전 확인 및 트랜잭션 처리를 위해 솔라나 노드는 클라이언트가 설정한 커밋 요구 사항에 따라 쿼리할 뱅크 상태를 선택합니다. 이 커밋은 해당 시점에서 블록이 어떻게 완성되었는지를 설명합니다.  원장 상태를 쿼리할 때 진행 상황을 보고하려면 더 낮은 수준의 커밋을 사용하고 상태가 롤백되지 않도록 하려면 더 높은 수준을 사용하는 것이 좋습니다.
+사전 확인 및 트랜잭션 처리를 위해 솔라나 노드는 클라이언트가 설정한 커밋 요구 사항에 따라 쿼리할 뱅크 상태를 선택합니다. 이 커밋은 해당 시점에서 블록이 어떻게 완성되었는지를 설명합니다. 원장 상태를 쿼리할 때 진행 상황을 보고하려면 더 낮은 수준의 커밋을 사용하고 상태가 롤백되지 않도록 하려면 더 높은 수준을 사용하는 것이 좋습니다.
 
 커밋의 내림차순(가장 강한 완료에서 가장 약한 완료 순) 으로 클라이언트는 다음을 지정할 수 있습니다.
 
@@ -133,7 +132,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   - 가십과 릴레이로부터 투표를 모읍니다.
   - 자식 블록에 대한 투표는 계산하지 않고 해당 블록에 대한 직접 투표만 계산합니다.
   - 확정 레벨은 "낙천적 확정"을 지지하며 1.3 릴리즈 이후부터 확정됩니다.
-- `"recent"`- 노드는 가장 최근 블록을 쿼리합니다.  해당 블록은 완전하지 않을 수 있습니다.
+- `"recent"`- 노드는 가장 최근 블록을 쿼리합니다. 해당 블록은 완전하지 않을 수 있습니다.
 
 많은 종속 트랜잭션을 연속적으로 처리하려면 속도와 롤백 안전성의 균형을 유지하는`"singleGossip"`커밋을 사용하는 것이 좋습니다. 안전을 위해`"max"`커밋을 사용하는 것이 좋습니다.
 
@@ -185,7 +184,7 @@ JSON RPC API는 아니지만, RPC HTTP 엔드포인트의 `GET /health`는 로�
 - `<string>`- 쿼리 할 계정의 Pubkey, base-58 인코딩 문자열
 - `<object>` - (조건부) 다음 조건부 필드를 담고있는 설정 오브젝트:
   - (조건부) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - "base58"나 (*slow*), "base64", "base64+zstd", 또는 "jsonParsed"로 암호화. "base58"는 128 바이트 미만의 계정 데이터로 제한됩니다. "base64"는 모든 사이즈의 계정 데이터에 대한 base64 암호화 데이터를 반환합니다. "base64+zstd"는 [Zstandard](https://facebook.github.io/zstd/)를 통해 계정 데이터를 압축하며 base64로 결과물을 암호화 합니다. "jsonParsed" 인코딩은 특정 프로그램에 대한 상태 파서를 사용하여 사람이 읽을 수 있고 표면적인 상태 데이터를 반환하도록 합니다. 만일 "jsonParsed"가 요청되었지만 파서를 찾을 수 없는 경우, 필드는 "base64" 인코등으로 돌아가며, `data`필드가 타이핑 되었을 때 `<string>`을 찾을 수 있게 됩니다.
+  - `encoding: <string>` - "base58"나 (_slow_), "base64", "base64+zstd", 또는 "jsonParsed"로 암호화. "base58"는 128 바이트 미만의 계정 데이터로 제한됩니다. "base64"는 모든 사이즈의 계정 데이터에 대한 base64 암호화 데이터를 반환합니다. "base64+zstd"는 [Zstandard](https://facebook.github.io/zstd/)를 통해 계정 데이터를 압축하며 base64로 결과물을 암호화 합니다. "jsonParsed" 인코딩은 특정 프로그램에 대한 상태 파서를 사용하여 사람이 읽을 수 있고 표면적인 상태 데이터를 반환하도록 합니다. 만일 "jsonParsed"가 요청되었지만 파서를 찾을 수 없는 경우, 필드는 "base64" 인코등으로 돌아가며, `data`필드가 타이핑 되었을 때 `<string>`을 찾을 수 있게 됩니다.
   - (조건부) `dataSlice: <object>` - limit the returned account data using the 제공된 `offset: <usize>`과 `length: <usize>` 필드에 따라 반환되는 계정 데이터를 제한합니다; 오직 "base58", "base64" 또는 "base64+zstd" 인코딩에만 쓸 수 있습니다.
 
 #### 결과:
@@ -203,6 +202,7 @@ JSON RPC API는 아니지만, RPC HTTP 엔드포인트의 `GET /health`는 로�
 #### 예제:
 
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -224,7 +224,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   }
 '
 ```
+
 응답:
+
 ```json
 {
   "json rpc ":"2.0 ",
@@ -248,7 +250,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 예제:
+
 요청:
+
 ```bash
 curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d '
   {
@@ -264,7 +268,9 @@ curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d
   }
 '
 ```
+
 응답:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -310,6 +316,7 @@ curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d
 #### 예제:
 
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
@@ -317,8 +324,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 결과:
+
 ```json
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "context": { "slot": 1 }, "value": 0 },
+  "id": 1
+}
 ```
 
 ### getBlockCommitment
@@ -341,6 +353,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### Example:
 
 Request:
+
 ```bash
 curl http : / / localhost : 8899 -X POST -H "Content-Type : application / json"-d '
   { "jsonrpc": "2.0", "id": 1, "method": "getBlockCommitment", "params": [5 ]}
@@ -348,11 +361,15 @@ curl http : / / localhost : 8899 -X POST -H "Content-Type : application / json"-
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "commitment": [0,0,0,0,0,0,0,0,0,0 , 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],
+    "commitment": [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 10, 32
+    ],
     "totalStake": 42
   },
   "id": 1
@@ -373,12 +390,13 @@ Result:
 
 #### Results:
 
-* `<i64>`-예상 생산 시간, Unix 타임스탬프 (Unix 시대 이후 초) *`<null>`-이 블록에 대해 타임스탬프를 사용할 수 없습니다.
-* `<null>` - timestamp is not available for this block
+- `<i64>`-예상 생산 시간, Unix 타임스탬프 (Unix 시대 이후 초) \*`<null>`-이 블록에 대해 타임스탬프를 사용할 수 없습니다.
+- `<null>` - timestamp is not available for this block
 
 #### Example:
 
 Request:
+
 ```bash
 curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d '
   { "jsonrpc" : "2.0", "id": 1, "method": "getBlockTime", "params": [5]}
@@ -386,8 +404,9 @@ curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d
 ```
 
 Result:
+
 ```json
-{ "jsonrpc": "2.0", "result": 1574721591, "id": 1}
+{ "jsonrpc": "2.0", "result": 1574721591, "id": 1 }
 ```
 
 ### getClusterNodes
@@ -411,6 +430,7 @@ None
 #### Example:
 
 Request:
+
 ```bash
 curl http://loc alhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
@@ -418,6 +438,7 @@ curl http://loc alhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -441,7 +462,7 @@ Result:
 #### Parameters:
 
 - `<u64>`-limit, as u64 integer
-- `<u64>`-슬롯, u64 정수 -`<string>`-반환 된 각 트랜잭션에 대한 인코딩 ( "json", "jsonParsed", "base58"(* slow *), "base64"). 매개 변수가 제공되지 않은 경우 기본 인코딩은 "json"입니다. 'jsonParsed'인코딩은 프로그램 별 명령어 파서를 사용하여 'transaction.message.instructions'목록에 더 많은 사람이 읽을 수 있고 명시적인 데이터를 반환하려고 시도합니다. "jsonParsed"가 요청되었지만 파서를 찾을 수없는 경우 지침은 일반 JSON 인코딩 (`accounts`,`data` 및`programIdIndex` 필드)으로 대체됩니다.
+- `<u64>`-슬롯, u64 정수 -`<string>`-반환 된 각 트랜잭션에 대한 인코딩 ( "json", "jsonParsed", "base58"(_ slow _), "base64"). 매개 변수가 제공되지 않은 경우 기본 인코딩은 "json"입니다. 'jsonParsed'인코딩은 프로그램 별 명령어 파서를 사용하여 'transaction.message.instructions'목록에 더 많은 사람이 읽을 수 있고 명시적인 데이터를 반환하려고 시도합니다. "jsonParsed"가 요청되었지만 파서를 찾을 수없는 경우 지침은 일반 JSON 인코딩 (`accounts`,`data` 및`programIdIndex` 필드)으로 대체됩니다.
 
 #### Results:
 
@@ -474,6 +495,7 @@ The result field will be an object with the following fields:
 #### 예시:
 
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
@@ -481,6 +503,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 결과:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -497,20 +520,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -531,12 +542,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
             },
             "instructions": [
               {
-                "accounts": [
-                  1,
-                  2,
-                  3,
-                  0
-                ],
+                "accounts": [1, 2, 3, 0],
                 "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
                 "programIdIndex": 4
               }
@@ -555,7 +561,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 #### 예제:
+
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
@@ -563,6 +571,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 결과:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -579,20 +588,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "fee": 5000,
           "innerInstructions": [],
           "logMessages": [],
-          "postBalances": [
-            499998932500,
-            26858640,
-            1,
-            1,
-            1
-          ],
-          "preBalances": [
-            499998937500,
-            26858640,
-            1,
-            1,
-            1
-          ],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
           "status": {
             "Ok": null
           }
@@ -650,12 +647,12 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 결과:
 
-결과 필드는 u64 정수의 리스트이며 이는 `message. accountKeys`와 `end_slot` 사이, 또는 마지막으로 확정된 블록입니다.  허용된 최대 벙위는 500,000 슬롯입니다.
-
+결과 필드는 u64 정수의 리스트이며 이는 `message. accountKeys`와 `end_slot` 사이, 또는 마지막으로 확정된 블록입니다. 허용된 최대 벙위는 500,000 슬롯입니다.
 
 #### 예시:
 
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
@@ -663,8 +660,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 결과:
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
 ```
 
 ### getConfirmedBlocksWithLimit
@@ -683,6 +681,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 예시:
 
 요청:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
@@ -690,8 +689,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 결과:
+
 ```json
-{"jsonrpc":"2.0","result":[5,6,7],"id":1}
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
 ```
 
 ### getConfirmedSignaturesForAddress
@@ -717,6 +717,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Conte nt-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
@@ -724,6 +725,7 @@ curl http://localhost:8899 -X POST -H "Conte nt-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -752,23 +754,28 @@ Result:
 Returns confirmed signatures for transactions involving an address backwards in time from the provided signature or most recent confirmed block
 
 #### Parameters:
-* `<string>` - account address as base-58 encoded string
-* `<object>` - (optional) Configuration object containing the following fields:
-  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
-  * `before: <string>` - (optional) start searching backwards from this transaction signature. If not provided the search starts from the top of the highest max confirmed block.
-  * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
+
+- `<string>` - account address as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following fields:
+  - `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+  - `before: <string>` - (optional) start searching backwards from this transaction signature. If not provided the search starts from the top of the highest max confirmed block.
+  - `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
 
 #### Results:
+
 The result field will be an array of transaction signature information, ordered from newest to oldest transaction:
-* `<object>`
-  * `signature: <string>` - transaction signature as base-58 encoded string
-  * `-이 블록의 상위 슬롯 인덱스-`transactions
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-  * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+
+- `<object>`
+  - `signature: <string>` - transaction signature as base-58 encoded string
+  - `-이 블록의 상위 슬롯 인덱스-`transactions
+  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
 
 #### Example:
+
 Request:
-```bash
+
+````bash
 :```bash는
 곱슬 곱슬에 http : // localhost를 : 8899 -X POST -H "콘텐츠 형식 : 응용 프로그램 / JSON"-d '
   {
@@ -783,9 +790,10 @@ Request:
     ]
   }
 '
-```
+````
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -815,7 +823,7 @@ Returns the current Transaction count from the led ger
 #### Parameters:
 
 - &lt;string&gt;`-58로 인코딩 된 문자열로 트랜잭션 서명 N 인코딩은 프로그램 별 명령어 파서를 사용하여` transaction.message.instructions`l ist. "jsonParsed"가 요청되었지만 파서를 찾을 수없는 경우 지침은 일반 JSON 인코딩 (`accounts`,`data`및`programIdIndex` 필드)으로 대체됩니다.
-- `&lt;string&gt;`-반환 된 트랜잭션에 대한 인코딩 ( "json", "jsonParsed", "base58"(* slow *) 또는 "base64"). 매개 변수가 제공되지 않은 경우 기본 인코딩은 JSON입니다.
+- `&lt;string&gt;`-반환 된 트랜잭션에 대한 인코딩 ( "json", "jsonParsed", "base58"(_ slow _) 또는 "base64"). 매개 변수가 제공되지 않은 경우 기본 인코딩은 JSON입니다.
 
 #### Results:
 
@@ -835,7 +843,9 @@ Returns the current Transaction count from the led ger
       - `"Err": <ERR>` - Transaction failed with TransactionError
 
 #### Example:
+
 Request:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -856,6 +866,7 @@ Request:
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -864,20 +875,8 @@ Result:
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "postBalances": [
-        499998932500,
-        26858640,
-        1,
-        1,
-        1
-      ],
-      "preBalances": [
-        499998937500,
-        26858640,
-        1,
-        1,
-        1
-      ],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
       "status": {
         "Ok": null
       }
@@ -899,12 +898,7 @@ Result:
         },
         "instructions": [
           {
-            "accounts": [
-              1,
-              2,
-              3,
-              0
-            ],
+            "accounts": [1, 2, 3, 0],
             "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
             "programIdIndex": 4
           }
@@ -921,7 +915,9 @@ Result:
 ```
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -937,6 +933,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -984,6 +981,7 @@ The result field will be an object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
@@ -991,6 +989,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1026,6 +1025,7 @@ The result field will be an object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
@@ -1033,6 +1033,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1067,6 +1068,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1081,6 +1083,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1119,6 +1122,7 @@ The `result` field will be an `object` with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
@@ -1126,6 +1130,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1166,6 +1171,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
@@ -1173,6 +1179,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1207,6 +1214,7 @@ None
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
@@ -1214,8 +1222,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":250000,"id":1}
+{ "jsonrpc": "2.0", "result": 250000, "id": 1 }
 ```
 
 ### getGenesisHash
@@ -1233,6 +1242,7 @@ None
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
@@ -1240,15 +1250,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
+  "id": 1
+}
 ```
 
 ### getHealth
 
 Returns the current health of the node.
 
-If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator, otherwise an error is returned.  "ok" is always returned if no trusted validators are provided.
+If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator, otherwise an error is returned. "ok" is always returned if no trusted validators are provided.
 
 #### Parameters:
 
@@ -1256,12 +1271,12 @@ None
 
 #### Results:
 
-If the node is healthy: "ok" If the node is unhealthy, a JSON RPC error response is returned.  The specifics of the error response are **UNSTABLE** and may change in the future
-
+If the node is healthy: "ok" If the node is unhealthy, a JSON RPC error response is returned. The specifics of the error response are **UNSTABLE** and may change in the future
 
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getHealth"}
@@ -1269,11 +1284,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Healthy Result:
+
 ```json
-{"jsonrpc":"2.0","result": "ok","id":1}
+{ "jsonrpc": "2.0", "result": "ok", "id": 1 }
 ```
 
 Unhealthy Result (generic):
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1287,6 +1304,7 @@ Unhealthy Result (generic):
 ```
 
 Unhealthy Result (if additional information is available)
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1318,6 +1336,7 @@ The result field will be a JSON object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -1331,8 +1350,13 @@ Request:
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN" },
+  "id": 1
+}
 ```
 
 ### getInflationGovernor
@@ -1356,6 +1380,7 @@ The result field will be a JSON object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
@@ -1363,6 +1388,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1382,10 +1408,7 @@ Result:
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base58"
-        ],
+        "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1417,6 +1440,7 @@ The result field will be a JSON object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
@@ -1424,8 +1448,18 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "epoch": 100,
+    "foundation": 0.001,
+    "total": 0.149,
+    "validator": 0.148
+  },
+  "id": 1
+}
 ```
 
 ### getLargestAccounts
@@ -1449,6 +1483,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
@@ -1456,6 +1491,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1559,6 +1595,7 @@ Returns the leader schedule for an epoch
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
@@ -1566,13 +1603,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{
-    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
   },
-  "id":1
+  "id": 1
 }
 ```
 
@@ -1592,6 +1635,7 @@ Returns minimum balance required to make account rent exempt.
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}
@@ -1599,8 +1643,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":500,"id":1}
+{ "jsonrpc": "2.0", "result": 500, "id": 1 }
 ```
 
 ### getMultipleAccounts
@@ -1612,9 +1657,8 @@ Returns the account information for a list of Pubkeys
 - `<array>` - An array of Pubkeys to query, as base-58 encoded strings
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed". "base58" is limited to Account data of less than 128 bytes. "base64" will return base64 encoded data for Account data of any size. "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result. "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed". "base58" is limited to Account data of less than 128 bytes. "base64" will return base64 encoded data for Account data of any size. "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result. "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
-
 
 #### Results:
 
@@ -1633,6 +1677,7 @@ An array of:
 #### Example:
 
 Request:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -1659,6 +1704,7 @@ Request:
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1668,20 +1714,14 @@ Result:
     },
     "value": [
       {
-        "data": [
-          "AAAAAAEAAAACtzNsyJrW0g==",
-          "base64"
-        ],
+        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
         "rentEpoch": 2
       },
       {
-        "data": [
-          "",
-          "base64"
-        ],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
@@ -1694,7 +1734,9 @@ Result:
 ```
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1715,6 +1757,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1726,17 +1769,17 @@ Result:
       },
       "value": {
         "data": {
-           "program": "nonce",
-           "parsed": {
-              "type": "initialized",
-              "info": {
-                 "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-                 "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
-                 "feeCalculator": {
-                    "lamportsPerSignature": 5000
-                 }
+          "program": "nonce",
+          "parsed": {
+            "type": "initialized",
+            "info": {
+              "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+              "feeCalculator": {
+                "lamportsPerSignature": 5000
               }
-           }
+            }
+          }
         },
         "executable": false,
         "lamports": 33594,
@@ -1758,12 +1801,14 @@ Returns all accounts owned by the provided program Pubkey
 - `<string>` - Pubkey of program, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed". "base58"은 128 바이트 미만의 계정 데이터로 제한됩니다. "base64"는 모든 크기의 계정 데이터에 대해 base64로 인코딩 된 데이터를 반환합니다. "base64 + zstd"는 \[Zstandard\] (https://facebook.github.io/zstd/)를 사용하여 계정 데이터를 압축하고 결과를 base64로 인코딩합니다. "jsonParsed"인코딩은 프로그램 별 상태 파서를 사용하여 사람이 읽을 수 있고 명시적인 계정 상태 데이터를 반환하려고합니다. "jsonParsed"가 요청되었지만 파서를 찾을 수없는 경우 필드는 "base64"인코딩으로 대체되며,`data` 필드가`&lt;string&gt;`유형일 때 감지 할 수 있습니다.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed". "base58"은 128 바이트 미만의 계정 데이터로 제한됩니다. "base64"는 모든 크기의 계정 데이터에 대해 base64로 인코딩 된 데이터를 반환합니다. "base64 + zstd"는 \[Zstandard\] (https://facebook.github.io/zstd/)를 사용하여 계정 데이터를 압축하고 결과를 base64로 인코딩합니다. "jsonParsed"인코딩은 프로그램 별 상태 파서를 사용하여 사람이 읽을 수 있고 명시적인 계정 상태 데이터를 반환하려고합니다. "jsonParsed"가 요청되었지만 파서를 찾을 수없는 경우 필드는 "base64"인코딩으로 대체되며,`data` 필드가`&lt;string&gt;`유형일 때 감지 할 수 있습니다.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 ##### Filters:
+
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
+
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as base-58 encoded string
 
@@ -1775,13 +1820,15 @@ The result field will be an array of JSON objects, which will contain:
 
 - `pubkey: <string>` - the account Pubkey as base-58 encoded string
 - `account: <object>` - a JSON object, with the following sub fields:
-   - `lamports: <u64>`, number of lamports assigned to this account, as a u64
-   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
-   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}
@@ -1789,6 +1836,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1809,7 +1857,9 @@ Result:
 ```
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -1837,6 +1887,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1875,6 +1926,7 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
@@ -1882,6 +1934,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1905,6 +1958,7 @@ Result:
 Returns a list of recent performance samples, in reverse slot order. Performance samples are taken every 60 seconds and include the number of transactions and slots that occur in a given time window.
 
 #### Parameters:
+
 - `limit: <usize>` - (optional) number of samples to return (maximum 720)
 
 #### Results:
@@ -1920,6 +1974,7 @@ An array of:
 #### Example:
 
 Request:
+
 ```bash
 // Request
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1928,6 +1983,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -1961,7 +2017,6 @@ Result:
 }
 ```
 
-
 ### getSnapshotSlo t
 
 Returns the highest slot that the node has a snapshot for
@@ -1977,6 +2032,7 @@ None
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
@@ -1984,13 +2040,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":100,"id":1}
+{ "jsonrpc": "2.0", "result": 100, "id": 1 }
 ```
 
 Result when the node has no snapshot:
+
 ```json
-{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32008, "message": "No snapshot" },
+  "id": 1
+}
 ```
 
 ### getSignatureStatuses
@@ -2024,6 +2086,7 @@ An array of:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2041,6 +2104,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2056,7 +2120,7 @@ Result:
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "confirmed",
+        "confirmationStatus": "confirmed"
       },
       null
     ]
@@ -2066,7 +2130,9 @@ Result:
 ```
 
 #### Example:
+
 Request:
+
 ```bash
 curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d '
   {
@@ -2106,6 +2172,7 @@ curl http : // localhost : 8899 -X POST -H "Content-Type : application / json"-d
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2121,7 +2188,7 @@ Result:
         "status": {
           "Ok": null
         },
-        "confirmationStatus": "finalized",
+        "confirmationStatus": "finalized"
       },
       null
     ]
@@ -2145,6 +2212,7 @@ Returns the current slot the node is processing
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlot"}
@@ -2152,8 +2220,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### getSlotLeader
@@ -2171,6 +2240,7 @@ Returns the current slot leader
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
@@ -2178,8 +2248,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS",
+  "id": 1
+}
 ```
 
 ### getStakeActivation
@@ -2188,21 +2263,23 @@ Returns epoch activation information for a stake account
 
 #### Parameters:
 
-* `<string>` - Pubkey of stake account to query, as base-58 encoded string
-* `<object>` - (optional) Configuration object containing the following optional fields:
-  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  * (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+- `<string>` - Pubkey of stake account to query, as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
 
 #### Results:
 
 The result will be a JSON object with the following fields:
 
-* `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
-* `active: <u64>` - stake active during the epoch
-* `inactive: <u64>` - stake inactive during the epoch
+- `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
+- `active: <u64>` - stake active during the epoch
+- `inactive: <u64>` - stake inactive during the epoch
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}
@@ -2210,12 +2287,19 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": { "active": 197717120, "inactive": 0, "state": "active" },
+  "id": 1
+}
 ```
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {
@@ -2233,6 +2317,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 (optional) [Commitment](jsonrpc-api.md#configuri ng-state-commitment)
 ```
@@ -2257,6 +2342,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getSupply"}
@@ -2264,6 +2350,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2307,6 +2394,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}
@@ -2314,6 +2402,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2339,11 +2428,11 @@ Returns all SPL Token accounts by approved Del egate. **UNSTABLE**
 
 - `<string>` - Pubkey of account delegate to query, as base-58 encoded string
 - `<object>` - Either:
-  * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
-  * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+  - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
 #### Results:
@@ -2352,11 +2441,11 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 
 - `pubkey: <string>` - the account Pubkey as base-58 encoded string
 - `account: <object>` - a JSON object, with the following sub fields:
-   - `lamports: <u64>`, number of lamports assigned to this account, as a u64
-   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
-   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -2380,6 +2469,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2427,11 +2517,11 @@ Returns all SPL Token accounts by token owner. **UNSTABLE**
 
 - `<string>` - Pubkey of account owner to query, as base-58 encoded string
 - `<object>` - Either:
-  * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
-  * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+  - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
 #### Results:
@@ -2440,11 +2530,11 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 
 - `pubkey: <string>` - the account Pubkey as base-58 encoded string
 - `account: <object>` - a JSON object, with the following sub fields:
-   - `lamports: <u64>`, number of lamports assigned to this account, as a u64
-   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
-   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -2468,6 +2558,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2534,6 +2625,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2567,6 +2659,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2606,8 +2699,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":268,"id":1}
+{ "jsonrpc": "2.0", "result": 268, "id": 1 }
 ```
 
 ### getVersion
@@ -2628,6 +2722,7 @@ The result field will be a JSON object with the following fields:
 #### Example:
 
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVersion"}
@@ -2635,8 +2730,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.6.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -2660,7 +2756,9 @@ The result field will be a JSON object of `current` and `delinquent` accounts, e
 - `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
 
 #### Example:
+
 Request:
+
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
@@ -2668,6 +2766,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2677,8 +2776,8 @@ Result:
         "commission": 0,
         "epochVoteAccount": true,
         "epochCredits": [
-          [ 1, 64, 0 ],
-          [ 2, 192, 64 ]
+          [1, 64, 0],
+          [2, 192, 64]
         ],
         "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
         "lastVote": 147,
@@ -2724,8 +2823,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
 ```
 
 ### requestAirdrop
@@ -2752,8 +2852,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+  "id": 1
+}
 ```
 
 ### sendTransaction
@@ -2781,7 +2886,7 @@ The returned signature is the first signature in the transaction, which is used 
 - `<object>` - (optional) Configuration object containing the following field:
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
   - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"max"`).
-  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
 #### Results:
 
@@ -2804,8 +2909,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
+{
+  "jsonrpc": "2.0",
+  "result": "2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb",
+  "id": 1
+}
 ```
 
 ### simulateTransaction
@@ -2818,7 +2928,7 @@ Simulate sending a transaction
 - `<object>` - (optional) Configuration object containing the following field:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"max"`).
-  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
 #### Results:
 
@@ -2843,6 +2953,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2882,8 +2993,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":null,"id":1}
+{ "jsonrpc": "2.0", "result": null, "id": 1 }
 ```
 
 ### validatorExit
@@ -2908,8 +3020,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 ```
 
 Result:
+
 ```json
-{"jsonrpc":"2.0","result":true,"id":1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ## Subscription Websocket
@@ -2929,7 +3042,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 - `<string>` - account Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
@@ -2938,6 +3051,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 #### Example:
 
 Request:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2965,13 +3079,15 @@ Request:
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 23784,"id": 1}
+{ "jsonrpc": "2.0", "result": 23784, "id": 1 }
 ```
 
 #### Notification Format:
 
 Base58 encoding:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -2982,7 +3098,10 @@ Base58 encoding:
         "slot": 5199307
       },
       "value": {
-        "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+        "data": [
+          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+          "base58"
+        ],
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
@@ -2995,6 +3114,7 @@ Base58 encoding:
 ```
 
 Parsed-JSON encoding:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3006,17 +3126,17 @@ Parsed-JSON encoding:
       },
       "value": {
         "data": {
-           "program": "nonce",
-           "parsed": {
-              "type": "initialized",
-              "info": {
-                 "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-                 "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
-                 "feeCalculator": {
-                    "lamportsPerSignature": 5000
-                 }
+          "program": "nonce",
+          "parsed": {
+            "type": "initialized",
+            "info": {
+              "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+              "feeCalculator": {
+                "lamportsPerSignature": 5000
               }
-           }
+            }
+          }
         },
         "executable": false,
         "lamports": 33594,
@@ -3044,19 +3164,20 @@ Unsubscribe from account change notifications
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "accountUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### logsSubscribe
 
-Subscribe to transaction logging.  **UNSTABLE**
+Subscribe to transaction logging. **UNSTABLE**
 
 #### Parameters:
 
@@ -3074,6 +3195,7 @@ Subscribe to transaction logging.  **UNSTABLE**
 #### Example:
 
 Request:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3097,13 +3219,15 @@ Request:
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### Notification Format:
 
 Base58 encoding:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3141,14 +3265,15 @@ Unsubscribe from transaction logging
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "logsUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### programSubscribe
@@ -3160,7 +3285,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 - `<string>` - program_id Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 #### Results:
@@ -3170,6 +3295,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 #### Example:
 
 Request:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3213,13 +3339,15 @@ Request:
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 24040,"id": 1}
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
 #### Notification Format:
 
 Base58 encoding:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3232,12 +3360,15 @@ Base58 encoding:
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
-          "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
+          "data": [
+            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+            "base58"
+          ],
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3246,6 +3377,7 @@ Base58 encoding:
 ```
 
 Parsed-JSON encoding:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3259,23 +3391,23 @@ Parsed-JSON encoding:
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
           "data": {
-             "program": "nonce",
-             "parsed": {
-                "type": "initialized",
-                "info": {
-                   "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-                   "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
-                   "feeCalculator": {
-                      "lamportsPerSignature": 5000
-                   }
+            "program": "nonce",
+            "parsed": {
+              "type": "initialized",
+              "info": {
+                "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                "feeCalculator": {
+                  "lamportsPerSignature": 5000
                 }
-             }
+              }
+            }
           },
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
-        },
+        }
       }
     },
     "subscription": 24040
@@ -3298,14 +3430,15 @@ Unsubscribe from program-owned account change notifications
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"programUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "programUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### signatureSubscribe
@@ -3324,6 +3457,7 @@ Subscribe to a transaction signature to receive notification when the transactio
 #### Example:
 
 Request:
+
 ```json
 {
   "jsonrpc ":" 2.0
@@ -3345,11 +3479,13 @@ getConfirmedTransaction을
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Notification Format:
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3383,14 +3519,15 @@ Unsubscribe from signature confirmation notification
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "signatureUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### slotSubscribe
@@ -3408,14 +3545,15 @@ None
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Notification Format:
@@ -3450,14 +3588,15 @@ Unsubscribe from slot notifications
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "slotUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### rootSubscribe
@@ -3475,14 +3614,15 @@ None
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootSubscribe" }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Notification Format:
@@ -3515,19 +3655,20 @@ Unsubscribe from root notifications
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "rootUnsubscribe", "params": [0] }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
 ### voteSubscribe - Unstable, disabled by default
 
-**This subscription is unstable and only available if the validator was started with the `--rpc-pubsub-enable-vote-subscription` flag.  The format of this subscription may change in the future**
+**This subscription is unstable and only available if the validator was started with the `--rpc-pubsub-enable-vote-subscription` flag. The format of this subscription may change in the future**
 
 Subscribe to receive notification anytime a new vote is observed in gossip. These votes are pre-consensus therefore there is no guarantee these votes will enter the ledger.
 
@@ -3542,14 +3683,15 @@ None
 #### Example:
 
 Request:
-```json
-{"jsonrpc":"2.0", "id":1, "method":"voteSubscribe"}
 
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "voteSubscribe" }
 ```
 
 Result:
+
 ```json
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
 #### Notification Format:
@@ -3586,11 +3728,13 @@ Unsubscribe from vote notifications
 #### Example:
 
 Request:
+
 ```json
-{"jsonrpc":"2.0", "id":1, "method":"voteUnsubscribe", "params":[0]}
+{ "jsonrpc": "2.0", "id": 1, "method": "voteUnsubscribe", "params": [0] }
 ```
 
 Response:
+
 ```json
-{"jsonrpc": "2.0","result": true,"id": 1}
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
 ```

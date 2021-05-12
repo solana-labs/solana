@@ -27,7 +27,7 @@ Este cálculo se realiza en un banco candidato votable `b` de la siguiente maner
 }
 ```
 
-donde ` f ` es una función de acumulación que modifica la entrada ` Stake ` para la ranura ` a ` con algunos datos derivables de vote ` v ` y ` vote_account ` (apuesta, bloqueo, etc.). Ten en cuenta que los `ancestors` aquí solo incluyen ranuras presentes en la caché de estado actual. Las firmas para los bancos antes de lo que los presentes en la caché de estado no serían consultables de todos modos, por lo que esos bancos no están incluidos en los cálculos de compromiso aquí.
+donde `f` es una función de acumulación que modifica la entrada `Stake` para la ranura `a` con algunos datos derivables de vote `v` y `vote_account` (apuesta, bloqueo, etc.). Ten en cuenta que los `ancestors` aquí solo incluyen ranuras presentes en la caché de estado actual. Las firmas para los bancos antes de lo que los presentes en la caché de estado no serían consultables de todos modos, por lo que esos bancos no están incluidos en los cálculos de compromiso aquí.
 
 Ahora naturalmente podemos aumentar el cálculo anterior para crear también un arreglo de `BlockCommitment` para cada banco `b` por:
 
@@ -36,7 +36,7 @@ Ahora naturalmente podemos aumentar el cálculo anterior para crear también un 
 
 Procederemos con los detalles de 2) ya que 1) es trivial.
 
-Antes de continuar, cabe destacar que para la cuenta de voto de algún validador ` a `, el número de confirmaciones locales para ese validador en la ranura ` s ` es ` v.num_confirmations `, donde ` v ` es el voto más pequeño en la pila de votos ` a.votes ` tal que `v.slot >= s` (es decir, no hay necesidad de mirar votos > v ya que el número de confirmaciones será menor).
+Antes de continuar, cabe destacar que para la cuenta de voto de algún validador `a`, el número de confirmaciones locales para ese validador en la ranura `s` es `v.num_confirmations`, donde `v` es el voto más pequeño en la pila de votos `a.votes` tal que `v.slot >= s` (es decir, no hay necesidad de mirar votos > v ya que el número de confirmaciones será menor).
 
 Ahora más específicamente, aumentamos el cálculo anterior a:
 
