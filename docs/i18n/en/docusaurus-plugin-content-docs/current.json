@@ -106,5 +106,21 @@
   "sidebar.docs.category.Accepted": {
     "message": "Accepted",
     "description": "The label for category Accepted in sidebar docs"
+  },
+  "sidebar.docs.category.Runtime Facilities": {
+    "message": "Runtime Facilities",
+    "description": "The label for category Runtime Facilities in sidebar docs"
+  },
+  "sidebar.docs.category.On-chain Programs": {
+    "message": "On-chain Programs",
+    "description": "The label for category On-chain Programs in sidebar docs"
+  },
+  "sidebar.docs.category.Economics": {
+    "message": "Economics",
+    "description": "The label for category Economics in sidebar docs"
+  },
+  "sidebar.docs.category.Inflation Design": {
+    "message": "Inflation Design",
+    "description": "The label for category Inflation Design in sidebar docs"
   }
 }
