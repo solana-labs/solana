@@ -27,7 +27,7 @@ on devnet have **no** value, so don't worry if you lose them.
 First, _airdrop_ yourself some play tokens on the devnet.
 
 ```bash
-solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 ```
 
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
@@ -39,7 +39,7 @@ Confirm the airdrop was successful by checking the account's balance.
 It should output `1 SOL`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 ```
 
 #### Create a second wallet address
@@ -71,7 +71,7 @@ with the private keypair corresponding to the sender's public key in the
 transaction.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://api.devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
@@ -81,7 +81,7 @@ wallet.
 Confirm the updated balances with `solana balance`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url http://api.devnet.solana.com
 ```
 
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
@@ -101,11 +101,11 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
+$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
 Requesting airdrop of 1 SOL from 35.233.193.70:9900
 1 SOL
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com # Check the address's balance
 1 SOL
 
 $ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
@@ -118,13 +118,13 @@ Save this seed phrase to recover your new keypair:
 clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://api.devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com
 0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
-$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
+$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://api.devnet.solana.com
 0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
 
 ```
