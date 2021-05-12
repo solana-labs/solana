@@ -28,7 +28,7 @@ use solana_runtime::{
     bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
-    snapshot_utils::SnapshotVersion,
+    snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -674,6 +674,7 @@ fn load_bank_forks(
             snapshot_path,
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
+            maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -801,6 +802,14 @@ fn main() {
         .takes_value(true)
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
+
+    let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
+    let maximum_snapshots_to_retain_arg = Arg::with_name("maximum_snapshots_to_retain")
+        .long("maximum-snapshots-to-retain")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .default_value(&default_max_snapshot_to_retain)
+        .help("Maximum number of snapshots to hold on to during snapshot purge");
 
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
@@ -1073,6 +1082,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&snapshot_version_arg)
+            .arg(&maximum_snapshots_to_retain_arg)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1848,6 +1858,8 @@ fn main() {
                         })
                     });
 
+            let maximum_snapshots_to_retain =
+                value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,
@@ -2062,6 +2074,7 @@ fn main() {
                         output_directory,
                         ArchiveFormat::TarZstd,
                         None,
+                        maximum_snapshots_to_retain,
                     )
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to create snapshot: {}", err);

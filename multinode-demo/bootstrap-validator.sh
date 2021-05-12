@@ -72,6 +72,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 == --maximum-snapshots-to-retain ]]; then
+      args+=("$1" "$2")
+      shift 2
     else
       echo "Unknown argument: $1"
       $program --help

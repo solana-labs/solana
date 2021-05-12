@@ -1684,6 +1684,7 @@ fn test_snapshot_download() {
         &validator_archive_path,
         archive_snapshot_hash,
         false,
+        snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
     )
     .unwrap();
 
@@ -3134,6 +3135,7 @@ fn setup_snapshot_validator_config(
         snapshot_path: PathBuf::from(snapshot_dir.path()),
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
+        maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
     };
 
     // Create the account paths

@@ -22,6 +22,7 @@ impl SnapshotPackagerService {
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
+        maximum_snapshots_to_retain: usize,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -41,9 +42,10 @@ impl SnapshotPackagerService {
 
                     let snapshot_package = pending_snapshot_package.lock().unwrap().take();
                     if let Some(snapshot_package) = snapshot_package {
-                        if let Err(err) =
-                            snapshot_utils::archive_snapshot_package(&snapshot_package)
-                        {
+                        if let Err(err) = snapshot_utils::archive_snapshot_package(
+                            &snapshot_package,
+                            maximum_snapshots_to_retain,
+                        ) {
                             warn!("Failed to create snapshot archive: {}", err);
                         } else {
                             hashes.push((snapshot_package.slot, snapshot_package.hash));
@@ -173,7 +175,11 @@ mod tests {
         );
 
         // Make tarball from packageable snapshot
-        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        snapshot_utils::archive_snapshot_package(
+            &snapshot_package,
+            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        )
+        .unwrap();
 
         // before we compare, stick an empty status_cache in this dir so that the package comparison works
         // This is needed since the status_cache is added by the packager and is not collected from

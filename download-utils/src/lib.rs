@@ -178,8 +178,9 @@ pub fn download_snapshot(
     snapshot_output_dir: &Path,
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
+    maximum_snapshots_to_retain: usize,
 ) -> Result<(), String> {
-    snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir);
+    snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir, maximum_snapshots_to_retain);
 
     for compression in &[
         ArchiveFormat::TarZstd,

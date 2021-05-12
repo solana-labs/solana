@@ -21,6 +21,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
     std::{
+        cmp::max,
         cmp::Ordering,
         collections::HashSet,
         fmt,
@@ -44,6 +45,7 @@ const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 const TMP_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
+pub const DEFAULT_MAX_SNAPSHOTS_TO_RETAIN: usize = 2;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -226,7 +228,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
     }
 }
 
-pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()> {
+pub fn archive_snapshot_package(
+    snapshot_package: &AccountsPackage,
+    maximum_snapshots_to_retain: usize,
+) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot
@@ -362,7 +367,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
-    purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
+    purge_old_snapshot_archives(
+        snapshot_package.tar_output_file.parent().unwrap(),
+        maximum_snapshots_to_retain,
+    );
 
     timer.stop();
     info!(
@@ -717,11 +725,20 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     archives.into_iter().next()
 }
 
-pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) {
+pub fn purge_old_snapshot_archives<P: AsRef<Path>>(
+    snapshot_output_dir: P,
+    maximum_snapshots_to_retain: usize,
+) {
+    info!(
+        "Purging old snapshots in {:?}, retaining {}",
+        snapshot_output_dir.as_ref(),
+        maximum_snapshots_to_retain
+    );
     let mut archives = get_snapshot_archives(snapshot_output_dir);
     // Keep the oldest snapshot so we can always play the ledger from it.
     archives.pop();
-    for old_archive in archives.into_iter().skip(2) {
+    let max_snaps = max(1, maximum_snapshots_to_retain);
+    for old_archive in archives.into_iter().skip(max_snaps) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
     }
@@ -936,6 +953,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: Q,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
+    maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -964,7 +982,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 
     let package = process_accounts_package_pre(package, thread_pool);
 
-    archive_snapshot_package(&package)?;
+    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
     Ok(package.tar_output_file)
 }
 
@@ -1137,13 +1155,58 @@ mod tests {
             snapshot_hash_of(&format!("snapshot-42-{}.tar", Hash::default())),
             Some((42, Hash::default(), ArchiveFormat::Tar))
         );
-        assert!(snapshot_hash_of(&format!(
-            "{}snapshot-42-{}.tar",
-            TMP_SNAPSHOT_PREFIX,
-            Hash::default()
-        ))
-        .is_none());
 
         assert!(snapshot_hash_of("invalid").is_none());
+    }
+
+    fn common_test_purge_old_snapshot_archives(
+        snapshot_names: &[&String],
+        maximum_snapshots_to_retain: usize,
+        expected_snapshots: &[&String],
+    ) {
+        let temp_snap_dir = tempfile::TempDir::new().unwrap();
+
+        for snap_name in snapshot_names {
+            let snap_path = temp_snap_dir.path().join(&snap_name);
+            let mut _snap_file = File::create(snap_path);
+        }
+        purge_old_snapshot_archives(temp_snap_dir.path(), maximum_snapshots_to_retain);
+
+        let mut retained_snaps = HashSet::new();
+        for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
+            let entry_path_buf = entry.unwrap().path();
+            let entry_path = entry_path_buf.as_path();
+            let snapshot_name = entry_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            retained_snaps.insert(snapshot_name);
+        }
+
+        for snap_name in expected_snapshots {
+            assert!(retained_snaps.contains(snap_name.as_str()));
+        }
+        assert!(retained_snaps.len() == expected_snapshots.len());
+    }
+
+    #[test]
+    fn test_purge_old_snapshot_archives() {
+        // Create 3 snapshots, retaining 1,
+        // expecting the oldest 1 and the newest 1 are retained
+        let snap1_name = format!("snapshot-1-{}.tar.zst", Hash::default());
+        let snap2_name = format!("snapshot-3-{}.tar.zst", Hash::default());
+        let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
+        let snapshot_names = vec![&snap1_name, &snap2_name, &snap3_name];
+        let expected_snapshots = vec![&snap1_name, &snap3_name];
+        common_test_purge_old_snapshot_archives(&snapshot_names, 1, &expected_snapshots);
+
+        // retaining 0, the expectation is the same as for 1, as at least 1 newest is expected to be retained
+        common_test_purge_old_snapshot_archives(&snapshot_names, 0, &expected_snapshots);
+
+        // retaining 2, all three should be retained
+        let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
+        common_test_purge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
     }
 }
