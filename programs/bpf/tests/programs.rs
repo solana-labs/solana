@@ -4,6 +4,7 @@
 extern crate solana_bpf_loader_program;
 
 use itertools::izip;
+use log::{log_enabled, trace, Level::Trace};
 use solana_account_decoder::parse_bpf_loader::{
     parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
 };
@@ -252,6 +253,14 @@ fn run_program(
                             .unwrap();
                         println!("TRACE (jit): {}", tracer_display);
                         assert!(false);
+                    } else if log_enabled!(Trace) {
+                        let mut trace_buffer = String::new();
+                        tracer
+                            .as_ref()
+                            .unwrap()
+                            .write(&mut trace_buffer, vm.get_program())
+                            .unwrap();
+                        trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
                     }
                 }
                 tracer = Some(vm.get_tracer().clone());

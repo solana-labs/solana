@@ -9046,7 +9046,7 @@ pub(crate) mod tests {
     fn test_get_filtered_indexed_accounts() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut account_indexes = AccountSecondaryIndexes::default();
-        account_indexes.insert(AccountIndex::ProgramId);
+        account_indexes.indexes.insert(AccountIndex::ProgramId);
         let bank = Arc::new(Bank::new_with_config(
             &genesis_config,
             account_indexes,
