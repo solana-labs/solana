@@ -88,32 +88,3 @@ Possible solution:
 4. Once the requester sees the "correct" hash is different than their frozen hash, they dump the block so that they can accept a new block, and ask the network for the block with the correct hash.
 
 Of course the repairer might lie to you, and you'll get the wrong version of the block, in which case you'll end up with another dead block and repeat the procedure.
-
-### The fork choice problem
-How should we weight votes in fork choice if a validator votes on two or more different versions of the same slot?
-
-For instance, take the below fork choice. We have two version of 8 and 8'. A validator can add both
-to fork choice if they replayed one version, dumped it, and repaired a different version.
-
-```text
-                  .
-                    |------- 8 (30%) ---- 9
-    |-------- 5 ----
-    |               |------7----8' (30%)----10
-0---
-    |---------- 6 (40%)
-
-```
-
-If somebody votes on both 8 and 8' should their votes:
-
-1) Count for both forks? (Seem like the safest route, but you'll need to make sure common ancestors
-like 5, and 0 don't double count the same validator's stake, this implies some extra state necesary for tracking)
-
-2) Only count one of the forks based on some arbitrary metric like take the biggest hash? This one seems incorrect since some validators may not have seen the incorrect version, dumped it, then repaired the correct version.
-
-This means some validators may have seen only one version, while others have seen both, and this may make them value fork 6 differently. For instance, if version 8 is the correct version, but version 8' has the higher hash, then if we observe both versions, we may detract validator votes from version 8 if those same validators also voted on 8', but if we only observed verson 8, that won't happen.
-
-3) We cannot simply ignore those votes, since that might cause 6 to be selected.
-
-4) Something more complex and involved :)
