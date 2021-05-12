@@ -15,6 +15,7 @@ pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64
 pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
 pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
+pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -39,6 +40,9 @@ pub enum RpcCustomError {
     NoSnapshot,
     LongTermStorageSlotSkipped {
         slot: Slot,
+    },
+    KeyExcludedFromSecondaryIndex {
+        index_key: String,
     },
 }
 
@@ -115,6 +119,17 @@ impl From<RpcCustomError> for Error {
             RpcCustomError::LongTermStorageSlotSkipped { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED),
                 message: format!("Slot {} was skipped, or missing in long-term storage", slot),
+                data: None,
+            },
+            RpcCustomError::KeyExcludedFromSecondaryIndex { index_key } => Self {
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX,
+                ),
+                message: format!(
+                    "{} excluded from account secondary indexes; \
+                    this RPC method unavailable for key",
+                    index_key
+                ),
                 data: None,
             },
         }
