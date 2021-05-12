@@ -20,7 +20,7 @@ use rayon::ThreadPool;
 use solana_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
-    shred::{Nonce, Shred},
+    shred::{Nonce, Shred, SHRED_PAYLOAD_SIZE},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
@@ -251,7 +251,8 @@ where
                             // with sufficiently large buffers. Needed to ensure
                             // call to `new_from_serialized_shred` is safe.
                             assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
-                            let serialized_shred = packet.data.to_vec();
+                            let mut serialized_shred = packet.data.to_vec();
+                            serialized_shred.truncate(SHRED_PAYLOAD_SIZE);
                             if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
                                 let repair_info = {
                                     if packet.meta.repair {
