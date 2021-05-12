@@ -1,9 +1,12 @@
-use crate::rpc_request;
-use solana_sdk::{
-    signature::SignerError, transaction::TransactionError, transport::TransportError,
+use {
+    crate::rpc_request,
+    solana_faucet::faucet::FaucetError,
+    solana_sdk::{
+        signature::SignerError, transaction::TransactionError, transport::TransportError,
+    },
+    std::io,
+    thiserror::Error,
 };
-use std::io;
-use thiserror::Error;
 
 pub use reqwest; // export `reqwest` for clients
 
@@ -21,6 +24,8 @@ pub enum ClientErrorKind {
     SigningError(#[from] SignerError),
     #[error(transparent)]
     TransactionError(#[from] TransactionError),
+    #[error(transparent)]
+    FaucetError(#[from] FaucetError),
     #[error("Custom: {0}")]
     Custom(String),
 }
@@ -44,6 +49,7 @@ impl From<ClientErrorKind> for TransportError {
             ClientErrorKind::RpcError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::FaucetError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
         }
     }
@@ -153,6 +159,15 @@ impl From<SignerError> for ClientError {
 
 impl From<TransactionError> for ClientError {
     fn from(err: TransactionError) -> Self {
+        Self {
+            request: None,
+            kind: err.into(),
+        }
+    }
+}
+
+impl From<FaucetError> for ClientError {
+    fn from(err: FaucetError) -> Self {
         Self {
             request: None,
             kind: err.into(),

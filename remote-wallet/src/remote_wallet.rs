@@ -1,21 +1,22 @@
-use crate::{
-    ledger::{is_valid_ledger, LedgerWallet},
-    ledger_error::LedgerError,
+use {
+    crate::{
+        ledger::{is_valid_ledger, LedgerWallet},
+        ledger_error::LedgerError,
+        locator::{Locator, LocatorError, Manufacturer},
+    },
+    log::*,
+    parking_lot::{Mutex, RwLock},
+    solana_sdk::{
+        derivation_path::{DerivationPath, DerivationPathError},
+        pubkey::Pubkey,
+        signature::{Signature, SignerError},
+    },
+    std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use log::*;
-use parking_lot::{Mutex, RwLock};
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Signature, SignerError},
-};
-use std::{
-    fmt,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use thiserror::Error;
-use url::Url;
 
 const HID_GLOBAL_USAGE_PAGE: u16 = 0xFF00;
 const HID_USB_DEVICE_CLASS: u8 = 0;
@@ -32,8 +33,8 @@ pub enum RemoteWalletError {
     #[error("device with non-supported product ID or vendor ID was detected")]
     InvalidDevice,
 
-    #[error("invalid derivation path: {0}")]
-    InvalidDerivationPath(String),
+    #[error(transparent)]
+    DerivationPathError(#[from] DerivationPathError),
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
@@ -55,6 +56,9 @@ pub enum RemoteWalletError {
 
     #[error("remote wallet operation rejected by the user")]
     UserCancel,
+
+    #[error(transparent)]
+    LocatorError(#[from] LocatorError),
 }
 
 impl From<hidapi::HidError> for RemoteWalletError {
@@ -237,7 +241,7 @@ pub struct RemoteWalletInfo {
     /// RemoteWallet device model
     pub model: String,
     /// RemoteWallet device manufacturer
-    pub manufacturer: String,
+    pub manufacturer: Manufacturer,
     /// RemoteWallet device serial number
     pub serial: String,
     /// RemoteWallet host device path
@@ -249,74 +253,12 @@ pub struct RemoteWalletInfo {
 }
 
 impl RemoteWalletInfo {
-    pub fn parse_path(path: String) -> Result<(Self, DerivationPath), RemoteWalletError> {
-        let wallet_path = Url::parse(&path).map_err(|e| {
-            RemoteWalletError::InvalidDerivationPath(format!("parse error: {:?}", e))
-        })?;
-
-        if wallet_path.host_str().is_none() {
-            return Err(RemoteWalletError::InvalidDerivationPath(
-                "missing remote wallet type".to_string(),
-            ));
-        }
-
-        let mut wallet_info = RemoteWalletInfo {
-            manufacturer: wallet_path.host_str().unwrap().to_string(),
+    pub fn parse_locator(locator: Locator) -> Self {
+        RemoteWalletInfo {
+            manufacturer: locator.manufacturer,
+            pubkey: locator.pubkey.unwrap_or_default(),
             ..RemoteWalletInfo::default()
-        };
-
-        if let Some(wallet_id) = wallet_path.path_segments().map(|c| c.collect::<Vec<_>>()) {
-            if !wallet_id[0].is_empty() {
-                wallet_info.pubkey = Pubkey::from_str(wallet_id[0]).map_err(|e| {
-                    RemoteWalletError::InvalidDerivationPath(format!(
-                        "pubkey from_str error: {:?}",
-                        e
-                    ))
-                })?;
-            }
         }
-
-        let mut derivation_path = DerivationPath::default();
-        let mut query_pairs = wallet_path.query_pairs();
-        if query_pairs.count() > 0 {
-            for _ in 0..query_pairs.count() {
-                if let Some(mut pair) = query_pairs.next() {
-                    if pair.0 == "key" {
-                        let key_path = pair.1.to_mut();
-                        let _key_path = key_path.clone();
-                        if key_path.ends_with('/') {
-                            key_path.pop();
-                        }
-                        let mut parts = key_path.split('/');
-                        if let Some(account) = parts.next() {
-                            derivation_path.account =
-                                Some(DerivationPathComponent::from_str(account)?);
-                        }
-                        if let Some(change) = parts.next() {
-                            derivation_path.change =
-                                Some(DerivationPathComponent::from_str(change)?);
-                        }
-                        if parts.next().is_some() {
-                            return Err(RemoteWalletError::InvalidDerivationPath(format!(
-                                "key path `{}` too deep, only <account>/<change> supported",
-                                _key_path
-                            )));
-                        }
-                    } else {
-                        return Err(RemoteWalletError::InvalidDerivationPath(format!(
-                            "invalid query string `{}={}`, only `key` supported",
-                            pair.0, pair.1
-                        )));
-                    }
-                }
-                if query_pairs.next().is_some() {
-                    return Err(RemoteWalletError::InvalidDerivationPath(
-                        "invalid query string, extra fields not supported".to_string(),
-                    ));
-                }
-            }
-        }
-        Ok((wallet_info, derivation_path))
     }
 
     pub fn get_pretty_path(&self) -> String {
@@ -328,96 +270,6 @@ impl RemoteWalletInfo {
             && (self.pubkey == other.pubkey
                 || self.pubkey == Pubkey::default()
                 || other.pubkey == Pubkey::default())
-    }
-}
-
-#[derive(Clone, Default, PartialEq)]
-pub struct DerivationPathComponent(u32);
-
-impl DerivationPathComponent {
-    pub const HARDENED_BIT: u32 = 1 << 31;
-
-    pub fn as_u32(&self) -> u32 {
-        self.0
-    }
-}
-
-impl From<u32> for DerivationPathComponent {
-    fn from(n: u32) -> Self {
-        Self(n | Self::HARDENED_BIT)
-    }
-}
-
-impl FromStr for DerivationPathComponent {
-    type Err = RemoteWalletError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let index_str = if let Some(stripped) = s.strip_suffix('\'') {
-            eprintln!("all path components are promoted to hardened representation");
-            stripped
-        } else {
-            s
-        };
-        index_str.parse::<u32>().map(|ki| ki.into()).map_err(|_| {
-            RemoteWalletError::InvalidDerivationPath(format!(
-                "failed to parse path component: {:?}",
-                s
-            ))
-        })
-    }
-}
-
-impl std::fmt::Display for DerivationPathComponent {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let hardened = if (self.0 & Self::HARDENED_BIT) == 0 {
-            ""
-        } else {
-            "'"
-        };
-        let index = self.0 & !Self::HARDENED_BIT;
-        write!(fmt, "{}{}", index, hardened)
-    }
-}
-
-impl std::fmt::Debug for DerivationPathComponent {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, fmt)
-    }
-}
-
-#[derive(Default, PartialEq, Clone)]
-pub struct DerivationPath {
-    pub account: Option<DerivationPathComponent>,
-    pub change: Option<DerivationPathComponent>,
-}
-
-impl fmt::Debug for DerivationPath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let account = if let Some(account) = &self.account {
-            format!("/{:?}", account)
-        } else {
-            "".to_string()
-        };
-        let change = if let Some(change) = &self.change {
-            format!("/{:?}", change)
-        } else {
-            "".to_string()
-        };
-        write!(f, "m/44'/501'{}{}", account, change)
-    }
-}
-
-impl DerivationPath {
-    pub fn get_query(&self) -> String {
-        if let Some(account) = &self.account {
-            if let Some(change) = &self.change {
-                format!("?key={}/{}", account, change)
-            } else {
-                format!("?key={}", account)
-            }
-        } else {
-            "".to_string()
-        }
     }
 }
 
@@ -448,151 +300,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_path() {
+    fn test_parse_locator() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2", pubkey)).unwrap();
+        let locator = Locator {
+            manufacturer: Manufacturer::Ledger,
+            pubkey: Some(pubkey),
+        };
+        let wallet_info = RemoteWalletInfo::parse_locator(locator);
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1'/2'", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1\'/2\'", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2/", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: None,
-            }
-        );
 
-        // Test that wallet id need not be complete for key derivation to work
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path("usb://ledger?key=1".to_string()).unwrap();
+        // Test that pubkey need not be populated
+        let locator = Locator {
+            manufacturer: Manufacturer::Ledger,
+            pubkey: None,
+        };
+        let wallet_info = RemoteWalletInfo::parse_locator(locator);
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey: Pubkey::default(),
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: None,
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path("usb://ledger/?key=1/2".to_string()).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey: Pubkey::default(),
-            error: None,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
-        );
-
-        // Failure cases
-        assert!(
-            RemoteWalletInfo::parse_path("usb://ledger/bad-pubkey?key=1/2".to_string()).is_err()
-        );
-        assert!(RemoteWalletInfo::parse_path("usb://?key=1/2".to_string()).is_err());
-        assert!(RemoteWalletInfo::parse_path("usb:/ledger?key=1/2".to_string()).is_err());
-        assert!(RemoteWalletInfo::parse_path("ledger?key=1/2".to_string()).is_err());
-        assert!(RemoteWalletInfo::parse_path("usb://ledger?key=1/2/3".to_string()).is_err());
-        // Other query strings cause an error
-        assert!(
-            RemoteWalletInfo::parse_path("usb://ledger/?key=1/2&test=other".to_string()).is_err()
-        );
-        assert!(RemoteWalletInfo::parse_path("usb://ledger/?Key=1/2".to_string()).is_err());
-        assert!(RemoteWalletInfo::parse_path("usb://ledger/?test=other".to_string()).is_err());
     }
 
     #[test]
     fn test_remote_wallet_info_matches() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let info = RemoteWalletInfo {
-            manufacturer: "Ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             model: "Nano S".to_string(),
             serial: "0001".to_string(),
             host_device_path: "/host/device/path".to_string(),
@@ -600,11 +344,11 @@ mod tests {
             error: None,
         };
         let mut test_info = RemoteWalletInfo {
-            manufacturer: "Not Ledger".to_string(),
+            manufacturer: Manufacturer::Unknown,
             ..RemoteWalletInfo::default()
         };
         assert!(!info.matches(&test_info));
-        test_info.manufacturer = "Ledger".to_string();
+        test_info.manufacturer = Manufacturer::Ledger;
         assert!(info.matches(&test_info));
         test_info.model = "Other".to_string();
         assert!(info.matches(&test_info));
@@ -625,7 +369,7 @@ mod tests {
         let pubkey_str = pubkey.to_string();
         let remote_wallet_info = RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -635,63 +379,5 @@ mod tests {
             remote_wallet_info.get_pretty_path(),
             format!("usb://ledger/{}", pubkey_str)
         );
-    }
-
-    #[test]
-    fn test_get_query() {
-        let derivation_path = DerivationPath {
-            account: None,
-            change: None,
-        };
-        assert_eq!(derivation_path.get_query(), "".to_string());
-        let derivation_path = DerivationPath {
-            account: Some(1.into()),
-            change: None,
-        };
-        assert_eq!(
-            derivation_path.get_query(),
-            format!("?key={}", DerivationPathComponent::from(1))
-        );
-        let derivation_path = DerivationPath {
-            account: Some(1.into()),
-            change: Some(2.into()),
-        };
-        assert_eq!(
-            derivation_path.get_query(),
-            format!(
-                "?key={}/{}",
-                DerivationPathComponent::from(1),
-                DerivationPathComponent::from(2)
-            )
-        );
-    }
-
-    #[test]
-    fn test_derivation_path_debug() {
-        let mut path = DerivationPath::default();
-        assert_eq!(format!("{:?}", path), "m/44'/501'".to_string());
-
-        path.account = Some(1.into());
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'".to_string());
-
-        path.change = Some(2.into());
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'/2'".to_string());
-    }
-
-    #[test]
-    fn test_derivation_path_component() {
-        let f = DerivationPathComponent::from(1);
-        assert_eq!(f.as_u32(), 1 | DerivationPathComponent::HARDENED_BIT);
-
-        let fs = DerivationPathComponent::from_str("1").unwrap();
-        assert_eq!(fs, f);
-
-        let fs = DerivationPathComponent::from_str("1'").unwrap();
-        assert_eq!(fs, f);
-
-        assert!(DerivationPathComponent::from_str("-1").is_err());
-
-        assert_eq!(format!("{}", f), "1'".to_string());
-        assert_eq!(format!("{:?}", f), "1'".to_string());
     }
 }

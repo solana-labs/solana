@@ -5,7 +5,7 @@ use std::{thread::sleep, time::Duration};
 pub fn check_recent_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
         let balance = client
-            .get_balance_with_commitment(pubkey, CommitmentConfig::recent())
+            .get_balance_with_commitment(pubkey, CommitmentConfig::processed())
             .unwrap()
             .value;
         if balance == expected_balance {
@@ -20,7 +20,7 @@ pub fn check_recent_balance(expected_balance: u64, client: &RpcClient, pubkey: &
 
 pub fn check_ready(rpc_client: &RpcClient) {
     while rpc_client
-        .get_slot_with_commitment(CommitmentConfig::recent())
+        .get_slot_with_commitment(CommitmentConfig::processed())
         .unwrap()
         < 5
     {

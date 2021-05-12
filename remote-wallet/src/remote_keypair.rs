@@ -1,13 +1,17 @@
-use crate::{
-    ledger::get_ledger_from_info,
-    remote_wallet::{
-        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
-        RemoteWalletType,
+use {
+    crate::{
+        ledger::get_ledger_from_info,
+        locator::{Locator, Manufacturer},
+        remote_wallet::{
+            RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+            RemoteWalletType,
+        },
     },
-};
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
+    solana_sdk::{
+        derivation_path::DerivationPath,
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+    },
 };
 
 pub struct RemoteKeypair {
@@ -52,13 +56,14 @@ impl Signer for RemoteKeypair {
 }
 
 pub fn generate_remote_keypair(
-    path: String,
+    locator: Locator,
+    derivation_path: DerivationPath,
     wallet_manager: &RemoteWalletManager,
     confirm_key: bool,
     keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
-    let (remote_wallet_info, derivation_path) = RemoteWalletInfo::parse_path(path)?;
-    if remote_wallet_info.manufacturer == "ledger" {
+    let remote_wallet_info = RemoteWalletInfo::parse_locator(locator);
+    if remote_wallet_info.manufacturer == Manufacturer::Ledger {
         let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
         let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());
         Ok(RemoteKeypair::new(

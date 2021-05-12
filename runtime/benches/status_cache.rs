@@ -16,7 +16,7 @@ type BankStatusCache = StatusCache<()>;
 fn test_statuscache_serialize(bencher: &mut Bencher) {
     let mut status_cache = BankStatusCache::default();
     status_cache.add_root(0);
-    status_cache.clear_signatures();
+    status_cache.clear();
     for hash_index in 0..100 {
         let blockhash = Hash::new(&vec![hash_index; std::mem::size_of::<Hash>()]);
         let mut id = blockhash;

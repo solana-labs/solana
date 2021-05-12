@@ -12,6 +12,16 @@ cargo="$(readlink -f "./cargo")"
 
 scripts/increment-cargo-version.sh check
 
+# Disallow uncommitted Cargo.lock changes
+(
+  _ scripts/cargo-for-all-lock-files.sh tree
+  set +e
+  if ! _ git diff --exit-code; then
+    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    exit 1
+  fi
+)
+
 echo --- build environment
 (
   set -x
@@ -35,7 +45,7 @@ export RUSTFLAGS="-D warnings -A incomplete_features"
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   # Exclude --benches as it's not available in rust stable yet
-  if _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" check --locked --tests --bins --examples; then
+  if _ scripts/cargo-for-all-lock-files.sh stable check --locked --tests --bins --examples; then
     true
   else
     check_status=$?
@@ -46,57 +56,29 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   fi
 
   # Ensure nightly and --benches
-  _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets
+  _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
 _ ci/order-crates-for-publishing.py
-_ "$cargo" stable fmt --all -- --check
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
-_ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings
+_ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
 
-cargo_audit_ignores=(
-  # failure is officially deprecated/unmaintained
-  #
-  # Blocked on multiple upstream crates removing their `failure` dependency.
-  --ignore RUSTSEC-2020-0036
+_ "$cargo" stable fmt --all -- --check
 
-  # `net2` crate has been deprecated; use `socket2` instead
-  #
-  # Blocked on https://github.com/paritytech/jsonrpc/issues/575
-  --ignore RUSTSEC-2020-0016
-
-  # stdweb is unmaintained
-  #
-  # Blocked on multiple upstream crates removing their `stdweb` dependency.
-  --ignore RUSTSEC-2020-0056
-
-  # Potential segfault in the time crate
-  #
-  # Blocked on multiple crates updating `time` to >= 0.2.23
-  --ignore RUSTSEC-2020-0071
-
-  # difference is unmaintained
-  #
-  # Blocked on predicates v1.0.6 removing its dependency on `difference`
-  --ignore RUSTSEC-2020-0095
-
-)
-_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
+_ ci/do-audit.sh
 
 {
   cd programs/bpf
-  _ "$cargo" stable audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
       cd "$project"
-      _ "$cargo" stable fmt -- --check
-      _ "$cargo" nightly test
       _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
+      _ "$cargo" stable fmt -- --check
     )
   done
 }

@@ -1,52 +1,92 @@
 use crate::{
-    cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
-    pubkey_references::LockedPubkeyReferences, serve_repair::RepairType,
+    cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+    serve_repair::RepairType,
 };
+use itertools::Itertools;
 use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::{Arc, Mutex, RwLock},
 };
 
-pub type SlotPubkeys = HashMap<Arc<Pubkey>, u64>;
-pub type ClusterSlotsMap = RwLock<HashMap<Slot, Arc<RwLock<SlotPubkeys>>>>;
+// Limit the size of cluster-slots map in case
+// of receiving bogus epoch slots values.
+const CLUSTER_SLOTS_TRIM_SIZE: usize = 524_288; // 512K
+
+pub type SlotPubkeys = HashMap<Pubkey, u64>;
 
 #[derive(Default)]
 pub struct ClusterSlots {
-    cluster_slots: ClusterSlotsMap,
-    keys: LockedPubkeyReferences,
-    since: RwLock<Option<u64>>,
+    cluster_slots: RwLock<BTreeMap<Slot, Arc<RwLock<SlotPubkeys>>>>,
     validator_stakes: RwLock<Arc<NodeIdToVoteAccounts>>,
     epoch: RwLock<Option<u64>>,
-    self_id: RwLock<Pubkey>,
+    cursor: Mutex<Cursor>,
 }
 
 impl ClusterSlots {
     pub fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
+
     pub fn update(&self, root: Slot, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
-        self.update_peers(cluster_info, bank_forks);
-        let since = *self.since.read().unwrap();
-        let epoch_slots = cluster_info.get_epoch_slots_since(since);
+        self.update_peers(bank_forks);
+        let epoch_slots = {
+            let mut cursor = self.cursor.lock().unwrap();
+            cluster_info.get_epoch_slots(&mut cursor)
+        };
         self.update_internal(root, epoch_slots);
     }
-    fn update_internal(&self, root: Slot, epoch_slots: (Vec<EpochSlots>, Option<u64>)) {
-        let (epoch_slots_list, since) = epoch_slots;
-        for epoch_slots in epoch_slots_list {
-            let slots = epoch_slots.to_slots(root);
-            for slot in &slots {
-                if *slot <= root {
-                    continue;
-                }
-                let unduplicated_pubkey = self.keys.get_or_insert(&epoch_slots.from);
-                self.insert_node_id(*slot, unduplicated_pubkey);
+
+    fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>) {
+        // Attach validator's total stake.
+        let epoch_slots_list: Vec<_> = {
+            let validator_stakes = self.validator_stakes.read().unwrap();
+            epoch_slots_list
+                .into_iter()
+                .map(|epoch_slots| {
+                    let stake = match validator_stakes.get(&epoch_slots.from) {
+                        Some(v) => v.total_stake,
+                        None => 0,
+                    };
+                    (epoch_slots, stake)
+                })
+                .collect()
+        };
+        let slot_nodes_stakes = epoch_slots_list
+            .into_iter()
+            .flat_map(|(epoch_slots, stake)| {
+                epoch_slots
+                    .to_slots(root)
+                    .into_iter()
+                    .filter(|slot| *slot > root)
+                    .zip(std::iter::repeat((epoch_slots.from, stake)))
+            })
+            .into_group_map();
+        let slot_nodes_stakes: Vec<_> = {
+            let mut cluster_slots = self.cluster_slots.write().unwrap();
+            slot_nodes_stakes
+                .into_iter()
+                .map(|(slot, nodes_stakes)| {
+                    let slot_nodes = cluster_slots.entry(slot).or_default().clone();
+                    (slot_nodes, nodes_stakes)
+                })
+                .collect()
+        };
+        for (slot_nodes, nodes_stakes) in slot_nodes_stakes {
+            slot_nodes.write().unwrap().extend(nodes_stakes);
+        }
+        {
+            let mut cluster_slots = self.cluster_slots.write().unwrap();
+            *cluster_slots = cluster_slots.split_off(&(root + 1));
+            // Allow 10% overshoot so that the computation cost is amortized
+            // down. The slots furthest away from the root are discarded.
+            if 10 * cluster_slots.len() > 11 * CLUSTER_SLOTS_TRIM_SIZE {
+                warn!("trimming cluster slots");
+                let key = *cluster_slots.keys().nth(CLUSTER_SLOTS_TRIM_SIZE).unwrap();
+                cluster_slots.split_off(&key);
             }
         }
-        self.cluster_slots.write().unwrap().retain(|x, _| *x > root);
-        self.keys.purge();
-        *self.since.write().unwrap() = since;
     }
 
     pub fn collect(&self, id: &Pubkey) -> HashSet<Slot> {
@@ -54,13 +94,13 @@ impl ClusterSlots {
             .read()
             .unwrap()
             .iter()
-            .filter(|(_, keys)| keys.read().unwrap().get(id).is_some())
-            .map(|(slot, _)| slot)
-            .cloned()
+            .filter(|(_, keys)| keys.read().unwrap().contains_key(id))
+            .map(|(slot, _)| *slot)
             .collect()
     }
 
-    pub fn insert_node_id(&self, slot: Slot, node_id: Arc<Pubkey>) {
+    #[cfg(test)]
+    pub(crate) fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
             .validator_stakes
             .read()
@@ -68,23 +108,17 @@ impl ClusterSlots {
             .get(&node_id)
             .map(|v| v.total_stake)
             .unwrap_or(0);
-        let mut slot_pubkeys = self.cluster_slots.read().unwrap().get(&slot).cloned();
-        if slot_pubkeys.is_none() {
-            let new_slot_pubkeys = Arc::new(RwLock::new(HashMap::default()));
-            self.cluster_slots
-                .write()
-                .unwrap()
-                .insert(slot, new_slot_pubkeys.clone());
-            slot_pubkeys = Some(new_slot_pubkeys);
-        }
-        slot_pubkeys
-            .unwrap()
+        let slot_pubkeys = self
+            .cluster_slots
             .write()
             .unwrap()
-            .insert(node_id, balance);
+            .entry(slot)
+            .or_default()
+            .clone();
+        slot_pubkeys.write().unwrap().insert(node_id, balance);
     }
 
-    fn update_peers(&self, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
+    fn update_peers(&self, bank_forks: &RwLock<BankForks>) {
         let root_bank = bank_forks.read().unwrap().root_bank();
         let root_epoch = root_bank.epoch();
         let my_epoch = *self.epoch.read().unwrap();
@@ -92,16 +126,11 @@ impl ClusterSlots {
         if Some(root_epoch) != my_epoch {
             let validator_stakes = root_bank
                 .epoch_stakes(root_epoch)
-                .expect(
-                    "Bank must have epoch stakes
-                for its own epoch",
-                )
+                .expect("Bank must have epoch stakes for its own epoch")
                 .node_id_to_vote_accounts()
                 .clone();
 
             *self.validator_stakes.write().unwrap() = validator_stakes;
-            let id = cluster_info.id();
-            *self.self_id.write().unwrap() = id;
             *self.epoch.write().unwrap() = Some(root_epoch);
         }
     }
@@ -160,8 +189,7 @@ impl ClusterSlots {
             .read()
             .unwrap()
             .keys()
-            .filter(|x| **x > root)
-            .filter(|x| !my_slots.contains(*x))
+            .filter(|x| **x > root && !my_slots.contains(*x))
             .map(|x| RepairType::HighestShred(*x, 0))
             .collect()
     }
@@ -176,23 +204,20 @@ mod tests {
     fn test_default() {
         let cs = ClusterSlots::default();
         assert!(cs.cluster_slots.read().unwrap().is_empty());
-        assert!(cs.since.read().unwrap().is_none());
     }
 
     #[test]
     fn test_update_noop() {
         let cs = ClusterSlots::default();
-        cs.update_internal(0, (vec![], None));
+        cs.update_internal(0, vec![]);
         assert!(cs.cluster_slots.read().unwrap().is_empty());
-        assert!(cs.since.read().unwrap().is_none());
     }
 
     #[test]
     fn test_update_empty() {
         let cs = ClusterSlots::default();
         let epoch_slot = EpochSlots::default();
-        cs.update_internal(0, (vec![epoch_slot], Some(0)));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        cs.update_internal(0, vec![epoch_slot]);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -202,8 +227,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[0], 0);
-        cs.update_internal(0, (vec![epoch_slot], Some(0)));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        cs.update_internal(0, vec![epoch_slot]);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -212,8 +236,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, (vec![epoch_slot], Some(0)));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        cs.update_internal(0, vec![epoch_slot]);
         assert!(cs.lookup(0).is_none());
         assert!(cs.lookup(1).is_some());
         assert_eq!(
@@ -241,8 +264,8 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(Arc::new(k1), std::u64::MAX / 2);
-        map.insert(Arc::new(k2), 0);
+        map.insert(k1, std::u64::MAX / 2);
+        map.insert(k2, 0);
         cs.cluster_slots
             .write()
             .unwrap()
@@ -263,14 +286,14 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(Arc::new(k2), 0);
+        map.insert(k2, 0);
         cs.cluster_slots
             .write()
             .unwrap()
             .insert(0, Arc::new(RwLock::new(map)));
         //make sure default weights are used as well
         let validator_stakes: HashMap<_, _> = vec![(
-            *Arc::new(k1),
+            k1,
             NodeVoteAccounts {
                 total_stake: std::u64::MAX / 2,
                 vote_accounts: vec![Pubkey::default()],
@@ -317,7 +340,7 @@ mod tests {
         // Mark the first validator as completed slot 9, should pick that validator,
         // even though it only has default stake, while the other validator has
         // max stake
-        cs.insert_node_id(slot, Arc::new(contact_infos[0].id));
+        cs.insert_node_id(slot, contact_infos[0].id);
         assert_eq!(
             cs.compute_weights_exclude_noncomplete(slot, &contact_infos),
             vec![(1, 0)]
@@ -343,7 +366,7 @@ mod tests {
         );
 
         *cs.validator_stakes.write().unwrap() = map;
-        cs.update_internal(0, (vec![epoch_slot], None));
+        cs.update_internal(0, vec![epoch_slot]);
         assert!(cs.lookup(1).is_some());
         assert_eq!(
             cs.lookup(1)
@@ -360,7 +383,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, (vec![epoch_slot], None));
+        cs.update_internal(0, vec![epoch_slot]);
         let self_id = solana_sdk::pubkey::new_rand();
         assert_eq!(
             cs.generate_repairs_for_missing_slots(&self_id, 0),
@@ -374,7 +397,7 @@ mod tests {
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
         let self_id = epoch_slot.from;
-        cs.update_internal(0, (vec![epoch_slot], None));
+        cs.update_internal(0, vec![epoch_slot]);
         let slots: Vec<Slot> = cs.collect(&self_id).into_iter().collect();
         assert_eq!(slots, vec![1]);
     }
@@ -385,7 +408,7 @@ mod tests {
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
         let self_id = epoch_slot.from;
-        cs.update_internal(0, (vec![epoch_slot], None));
+        cs.update_internal(0, vec![epoch_slot]);
         assert!(cs
             .generate_repairs_for_missing_slots(&self_id, 0)
             .is_empty());

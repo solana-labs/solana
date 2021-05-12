@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod counter;
 pub mod datapoint;
 mod metrics;

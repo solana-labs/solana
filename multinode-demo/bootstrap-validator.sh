@@ -48,6 +48,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-rpc-transaction-history ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --enable-cpi-and-log-storage ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then
       args+=("$1")
       shift
@@ -67,6 +70,9 @@ while [[ -n $1 ]]; do
       args+=("$1" "$2")
       shift 2
     elif [[ $1 == --accounts ]]; then
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 == --maximum-snapshots-to-retain ]]; then
       args+=("$1" "$2")
       shift 2
     else
@@ -94,8 +100,6 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 }
 
 args+=(
-  --enable-rpc-exit
-  --enable-rpc-set-log-filter
   --require-tower
   --ledger "$ledger_dir"
   --rpc-port 8899
@@ -103,6 +107,8 @@ args+=(
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
+  --no-poh-speed-test
+  --no-wait-for-vote-to-start-leader
 )
 default_arg --gossip-port 8001
 default_arg --log -

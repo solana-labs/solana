@@ -1,5 +1,6 @@
 use crate::{
-    consensus::{ComputedBankState, SwitchForkDecision, Tower},
+    consensus::{SwitchForkDecision, Tower},
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::ProgressMap,
     replay_stage::HeaviestForkFailures,
 };
@@ -16,12 +17,12 @@ pub(crate) struct SelectVoteAndResetForkResult {
 }
 
 pub(crate) trait ForkChoice {
+    type ForkChoiceKey;
     fn compute_bank_stats(
         &mut self,
         bank: &Bank,
         tower: &Tower,
-        progress: &mut ProgressMap,
-        computed_bank_state: &ComputedBankState,
+        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
     );
 
     // Returns:
@@ -36,4 +37,8 @@ pub(crate) trait ForkChoice {
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>);
+
+    fn mark_fork_invalid_candidate(&mut self, invalid_slot: &Self::ForkChoiceKey);
+
+    fn mark_fork_valid_candidate(&mut self, valid_slot: &Self::ForkChoiceKey);
 }

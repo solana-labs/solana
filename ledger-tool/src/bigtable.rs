@@ -4,10 +4,13 @@ use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_slot, is_valid_pubkey},
 };
-use solana_cli_output::display::println_transaction;
+use solana_cli_output::{
+    display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
+    OutputFormat,
+};
 use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use solana_transaction_status::ConfirmedBlock;
+use solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding};
 use std::{
     path::Path,
     process::exit,
@@ -20,6 +23,7 @@ async fn upload(
     starting_slot: Slot,
     ending_slot: Option<Slot>,
     allow_missing_metadata: bool,
+    force_reupload: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
@@ -31,6 +35,7 @@ async fn upload(
         starting_slot,
         ending_slot,
         allow_missing_metadata,
+        force_reupload,
         Arc::new(AtomicBool::new(false)),
     )
     .await
@@ -46,31 +51,18 @@ async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
+async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
     let block = bigtable.get_confirmed_block(slot).await?;
 
-    println!("Slot: {}", slot);
-    println!("Parent Slot: {}", block.parent_slot);
-    println!("Blockhash: {}", block.blockhash);
-    println!("Previous Blockhash: {}", block.previous_blockhash);
-    if block.block_time.is_some() {
-        println!("Block Time: {:?}", block.block_time);
-    }
-    if !block.rewards.is_empty() {
-        println!("Rewards: {:?}", block.rewards);
-    }
-    for (index, transaction_with_meta) in block.transactions.into_iter().enumerate() {
-        println!("Transaction {}:", index);
-        println_transaction(
-            &transaction_with_meta.transaction,
-            &transaction_with_meta.meta.map(|meta| meta.into()),
-            "  ",
-        );
-    }
+    let cli_block = CliBlock {
+        encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64),
+        slot,
+    };
+    println!("{}", output_format.formatted_string(&cli_block));
     Ok(())
 }
 
@@ -86,36 +78,48 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn confirm(
+    signature: &Signature,
+    verbose: bool,
+    output_format: OutputFormat,
+) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
     let transaction_status = bigtable.get_signature_status(signature).await?;
 
+    let mut transaction = None;
+    let mut get_transaction_error = None;
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_transaction)) => {
-                println!(
-                    "\nTransaction executed in slot {}:",
-                    confirmed_transaction.slot
-                );
-                println_transaction(
-                    &confirmed_transaction.transaction.transaction,
-                    &confirmed_transaction.transaction.meta.map(|m| m.into()),
-                    "  ",
-                );
+                transaction = Some(CliTransaction {
+                    transaction: EncodedTransaction::encode(
+                        confirmed_transaction.transaction.transaction.clone(),
+                        UiTransactionEncoding::Json,
+                    ),
+                    meta: confirmed_transaction.transaction.meta.map(|m| m.into()),
+                    block_time: confirmed_transaction.block_time,
+                    slot: Some(confirmed_transaction.slot),
+                    decoded_transaction: confirmed_transaction.transaction.transaction,
+                    prefix: "  ".to_string(),
+                    sigverify_status: vec![],
+                });
             }
-            Ok(None) => println!("Finalized transaction details not available"),
-            Err(err) => println!("Unable to get finalized transaction details: {}", err),
+            Ok(None) => {}
+            Err(err) => {
+                get_transaction_error = Some(format!("{:?}", err));
+            }
         }
-        println!();
     }
-    if let Some(err) = &transaction_status.err {
-        println!("Transaction failed: {}", err);
-    } else {
-        println!("{:?}", transaction_status.confirmation_status());
-    }
+    let cli_transaction = CliTransactionConfirmation {
+        confirmation_status: Some(transaction_status.confirmation_status()),
+        transaction,
+        get_transaction_error,
+        err: transaction_status.err.clone(),
+    };
+    println!("{}", output_format.formatted_string(&cli_transaction));
     Ok(())
 }
 
@@ -183,6 +187,8 @@ pub async fn transaction_history(
                                         &transaction_with_meta.transaction,
                                         &transaction_with_meta.meta.clone().map(|m| m.into()),
                                         "  ",
+                                        None,
+                                        None,
                                     );
                                 }
                             }
@@ -215,7 +221,8 @@ impl BigTableSubCommand for App<'_, '_> {
         self.subcommand(
             SubCommand::with_name("bigtable")
                 .about("Ledger data on a BigTable instance")
-                .setting(AppSettings::ArgRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(
                     SubCommand::with_name("upload")
                         .about("Upload the ledger to BigTable")
@@ -244,6 +251,16 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("allow-missing-metadata")
                                 .takes_value(false)
                                 .help("Don't panic if transaction metadata is missing"),
+                        )
+                        .arg(
+                            Arg::with_name("force_reupload")
+                                .long("force")
+                                .takes_value(false)
+                                .help(
+                                    "Force reupload of any blocks already present in BigTable instance\
+                                    Note: reupload will *not* delete any data from the tx-by-addr table;\
+                                    Use with care.",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -300,13 +317,6 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .required(true)
                                 .index(1)
                                 .help("The transaction signature to confirm"),
-                        )
-                        .arg(
-                            Arg::with_name("verbose")
-                                .short("v")
-                                .long("verbose")
-                                .takes_value(false)
-                                .help("Show additional information"),
                         ),
                 )
                 .subcommand(
@@ -365,13 +375,6 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("show-transactions")
                                 .takes_value(false)
                                 .help("Display the full transactions"),
-                        )
-                        .arg(
-                            Arg::with_name("verbose")
-                                .short("v")
-                                .long("verbose")
-                                .takes_value(false)
-                                .help("Show additional information"),
                         ),
                 ),
         )
@@ -379,13 +382,28 @@ impl BigTableSubCommand for App<'_, '_> {
 }
 
 pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
-    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+
+    let verbose = matches.is_present("verbose");
+    let output_format = matches
+        .value_of("output_format")
+        .map(|value| match value {
+            "json" => OutputFormat::Json,
+            "json-compact" => OutputFormat::JsonCompact,
+            _ => unreachable!(),
+        })
+        .unwrap_or(if verbose {
+            OutputFormat::DisplayVerbose
+        } else {
+            OutputFormat::Display
+        });
 
     let future = match matches.subcommand() {
         ("upload", Some(arg_matches)) => {
             let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
+            let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore =
                 crate::open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
 
@@ -394,12 +412,13 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 starting_slot,
                 ending_slot,
                 allow_missing_metadata,
+                force_reupload,
             ))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
-            runtime.block_on(block(slot))
+            runtime.block_on(block(slot, output_format))
         }
         ("blocks", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -413,9 +432,8 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 .unwrap()
                 .parse()
                 .expect("Invalid signature");
-            let verbose = arg_matches.is_present("verbose");
 
-            runtime.block_on(confirm(&signature, verbose))
+            runtime.block_on(confirm(&signature, verbose, output_format))
         }
         ("transaction-history", Some(arg_matches)) => {
             let address = pubkey_of(arg_matches, "address").unwrap();
@@ -427,7 +445,6 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let until = arg_matches
                 .value_of("until")
                 .map(|signature| signature.parse().expect("Invalid signature"));
-            let verbose = arg_matches.is_present("verbose");
             let show_transactions = arg_matches.is_present("show_transactions");
 
             runtime.block_on(transaction_history(

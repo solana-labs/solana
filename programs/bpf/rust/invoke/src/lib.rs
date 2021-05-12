@@ -29,7 +29,6 @@ const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
 const TEST_RETURN_ERROR: u8 = 11;
 const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
 const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
-const TEST_WRITE_DEESCALATION: u8 = 14;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -354,6 +353,53 @@ fn process_instruction(
                     assert_eq!(data[i as usize], 42);
                 }
             }
+
+            msg!("Test writable deescalation");
+            {
+                const NUM_BYTES: usize = 10;
+                let mut buffer = [0; NUM_BYTES];
+                buffer.copy_from_slice(
+                    &accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES],
+                );
+
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                    vec![WRITE_ACCOUNT, NUM_BYTES as u8],
+                );
+                let _ = invoke(&instruction, accounts);
+
+                assert_eq!(
+                    buffer,
+                    accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]
+                );
+            }
+
+            msg!("Create account and init data");
+            {
+                let from_lamports = accounts[FROM_INDEX].lamports();
+                let to_lamports = accounts[DERIVED_KEY2_INDEX].lamports();
+
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[
+                        (accounts[FROM_INDEX].key, true, true),
+                        (accounts[DERIVED_KEY2_INDEX].key, true, false),
+                        (accounts[SYSTEM_PROGRAM_INDEX].key, false, false),
+                    ],
+                    vec![CREATE_AND_INIT, bump_seed2],
+                );
+                invoke(&instruction, accounts)?;
+
+                assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 1);
+                assert_eq!(accounts[DERIVED_KEY2_INDEX].lamports(), to_lamports + 1);
+                let data = accounts[DERIVED_KEY2_INDEX].try_borrow_mut_data()?;
+                assert_eq!(data[0], 0x0e);
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0x0f);
+                for i in 1..20 {
+                    assert_eq!(data[i], i as u8);
+                }
+            }
         }
         TEST_PRIVILEGE_ESCALATION_SIGNER => {
             msg!("Test privilege escalation signer");
@@ -556,15 +602,6 @@ fn process_instruction(
                 vec![VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE],
             );
             invoke(&invoked_instruction, accounts)?;
-        }
-        TEST_WRITE_DEESCALATION => {
-            msg!("Test writable deescalation");
-            let instruction = create_instruction(
-                *accounts[INVOKED_PROGRAM_INDEX].key,
-                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
-                vec![WRITE_ACCOUNT, 10],
-            );
-            let _ = invoke(&instruction, accounts);
         }
         _ => panic!(),
     }

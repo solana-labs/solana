@@ -4,7 +4,7 @@
 //!
 pub use crate::slot_hashes::SlotHashes;
 
-use crate::sysvar::Sysvar;
+use crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::Sysvar};
 
 crate::declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
 
@@ -13,6 +13,10 @@ impl Sysvar for SlotHashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
         20_488 // golden, update if MAX_ENTRIES changes
+    }
+    fn from_account_info(_account_info: &AccountInfo) -> Result<Self, ProgramError> {
+        // This sysvar is too large to bincode::deserialize in-program
+        Err(ProgramError::UnsupportedSysvar)
     }
 }
 

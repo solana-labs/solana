@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{

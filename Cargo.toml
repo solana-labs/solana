@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "accounts-cluster-bench",
     "bench-exchange",
     "bench-streamer",
     "bench-tps",
@@ -30,7 +31,6 @@ members = [
     "log-analyzer",
     "merkle-root-bench",
     "merkle-tree",
-    "stake-o-matic",
     "storage-bigtable",
     "storage-proto",
     "streamer",
@@ -49,10 +49,8 @@ members = [
     "programs/noop",
     "programs/ownable",
     "programs/stake",
-    "programs/vest",
     "programs/vote",
     "remote-wallet",
-    "ramp-tps",
     "runtime",
     "runtime/store-tool",
     "sdk",
@@ -76,3 +74,6 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+[profile.dev]
+split-debuginfo = "unpacked"

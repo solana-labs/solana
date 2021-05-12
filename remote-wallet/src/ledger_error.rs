@@ -1,5 +1,4 @@
-use num_derive::FromPrimitive;
-use thiserror::Error;
+use {num_derive::FromPrimitive, thiserror::Error};
 
 #[derive(Error, Debug, Clone, FromPrimitive, PartialEq)]
 pub enum LedgerError {
@@ -37,7 +36,7 @@ pub enum LedgerError {
     SdkTimeout = 0x6810,
 
     #[error("Ledger PIC exception")]
-    SdkExceptionPIC = 0x6811,
+    SdkExceptionPic = 0x6811,
 
     #[error("Ledger app exit exception")]
     SdkExceptionAppExit = 0x6812,

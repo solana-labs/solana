@@ -1,28 +1,80 @@
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
-use solana_sdk::{
-    hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
-    transaction::Transaction,
+use {
+    crate::cli_output::CliSignatureVerificationStatus,
+    chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
+    console::style,
+    indicatif::{ProgressBar, ProgressStyle},
+    solana_sdk::{
+        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
+        program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
+    },
+    solana_transaction_status::UiTransactionStatusMeta,
+    spl_memo::id as spl_memo_id,
+    spl_memo::v1::id as spl_memo_v1_id,
+    std::{collections::HashMap, fmt, io},
 };
-use solana_transaction_status::UiTransactionStatusMeta;
-use std::{collections::HashMap, fmt, io};
 
-pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: bool) -> String {
-    if use_lamports_unit {
-        let ess = if lamports == 1 { "" } else { "s" };
-        let unit = if show_unit {
-            format!(" lamport{}", ess)
-        } else {
-            "".to_string()
-        };
-        format!("{:?}{}", lamports, unit)
+#[derive(Clone, Debug)]
+pub struct BuildBalanceMessageConfig {
+    pub use_lamports_unit: bool,
+    pub show_unit: bool,
+    pub trim_trailing_zeros: bool,
+}
+
+impl Default for BuildBalanceMessageConfig {
+    fn default() -> Self {
+        Self {
+            use_lamports_unit: false,
+            show_unit: true,
+            trim_trailing_zeros: true,
+        }
+    }
+}
+
+fn is_memo_program(k: &Pubkey) -> bool {
+    let k_str = k.to_string();
+    (k_str == spl_memo_v1_id().to_string()) || (k_str == spl_memo_id().to_string())
+}
+
+pub fn build_balance_message_with_config(
+    lamports: u64,
+    config: &BuildBalanceMessageConfig,
+) -> String {
+    let value = if config.use_lamports_unit {
+        lamports.to_string()
     } else {
         let sol = lamports_to_sol(lamports);
         let sol_str = format!("{:.9}", sol);
-        let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
-        let unit = if show_unit { " SOL" } else { "" };
-        format!("{}{}", pretty_sol, unit)
-    }
+        if config.trim_trailing_zeros {
+            sol_str
+                .trim_end_matches('0')
+                .trim_end_matches('.')
+                .to_string()
+        } else {
+            sol_str
+        }
+    };
+    let unit = if config.show_unit {
+        if config.use_lamports_unit {
+            let ess = if lamports == 1 { "" } else { "s" };
+            format!(" lamport{}", ess)
+        } else {
+            " SOL".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+    format!("{}{}", value, unit)
+}
+
+pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: bool) -> String {
+    build_balance_message_with_config(
+        lamports,
+        &BuildBalanceMessageConfig {
+            use_lamports_unit,
+            show_unit,
+            ..BuildBalanceMessageConfig::default()
+        },
+    )
 }
 
 // Pretty print a "name value"
@@ -80,35 +132,98 @@ pub fn println_signers(
     println!();
 }
 
+fn format_account_mode(message: &Message, index: usize) -> String {
+    format!(
+        "{}r{}{}", // accounts are always readable...
+        if message.is_signer(index) {
+            "s" // stands for signer
+        } else {
+            "-"
+        },
+        if message.is_writable(index, /*demote_sysvar_write_locks=*/ true) {
+            "w" // comment for consistent rust fmt (no joking; lol)
+        } else {
+            "-"
+        },
+        // account may be executable on-chain while not being
+        // designated as a program-id in the message
+        if message.maybe_executable(index) {
+            "x"
+        } else {
+            // programs to be executed via CPI cannot be identified as
+            // executable from the message
+            "-"
+        },
+    )
+}
+
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
     transaction: &Transaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
 ) -> io::Result<()> {
     let message = &transaction.message;
+    if let Some(block_time) = block_time {
+        writeln!(
+            w,
+            "{}Block Time: {:?}",
+            prefix,
+            Local.timestamp(block_time, 0)
+        )?;
+    }
     writeln!(
         w,
         "{}Recent Blockhash: {:?}",
         prefix, message.recent_blockhash
     )?;
-    for (signature_index, signature) in transaction.signatures.iter().enumerate() {
+    let sigverify_statuses = if let Some(sigverify_status) = sigverify_status {
+        sigverify_status
+            .iter()
+            .map(|s| format!(" ({})", s))
+            .collect()
+    } else {
+        vec!["".to_string(); transaction.signatures.len()]
+    };
+    for (signature_index, (signature, sigverify_status)) in transaction
+        .signatures
+        .iter()
+        .zip(&sigverify_statuses)
+        .enumerate()
+    {
         writeln!(
             w,
-            "{}Signature {}: {:?}",
-            prefix, signature_index, signature
+            "{}Signature {}: {:?}{}",
+            prefix, signature_index, signature, sigverify_status,
         )?;
     }
-    writeln!(w, "{}{:?}", prefix, message.header)?;
+    let mut fee_payer_index = None;
     for (account_index, account) in message.account_keys.iter().enumerate() {
-        writeln!(w, "{}Account {}: {:?}", prefix, account_index, account)?;
+        if fee_payer_index.is_none() && message.is_non_loader_key(account, account_index) {
+            fee_payer_index = Some(account_index)
+        }
+        writeln!(
+            w,
+            "{}Account {}: {} {}{}",
+            prefix,
+            account_index,
+            format_account_mode(message, account_index),
+            account,
+            if Some(account_index) == fee_payer_index {
+                " (fee payer)"
+            } else {
+                ""
+            },
+        )?;
     }
     for (instruction_index, instruction) in message.instructions.iter().enumerate() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
         writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
         writeln!(
             w,
-            "{}  Program: {} ({})",
+            "{}  Program:   {} ({})",
             prefix, program_pubkey, instruction.program_id_index
         )?;
         for (account_index, account) in instruction.accounts.iter().enumerate() {
@@ -143,6 +258,11 @@ pub fn write_transaction<W: io::Write>(
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, system_instruction)?;
+                raw = false;
+            }
+        } else if is_memo_program(&program_pubkey) {
+            if let Ok(s) = std::str::from_utf8(&instruction.data) {
+                writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
                 raw = false;
             }
         }
@@ -217,13 +337,50 @@ pub fn println_transaction(
     transaction: &Transaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
 ) {
     let mut w = Vec::new();
-    if write_transaction(&mut w, transaction, transaction_status, prefix).is_ok() {
+    if write_transaction(
+        &mut w,
+        transaction,
+        transaction_status,
+        prefix,
+        sigverify_status,
+        block_time,
+    )
+    .is_ok()
+    {
         if let Ok(s) = String::from_utf8(w) {
             print!("{}", s);
         }
     }
+}
+
+pub fn writeln_transaction(
+    f: &mut dyn fmt::Write,
+    transaction: &Transaction,
+    transaction_status: &Option<UiTransactionStatusMeta>,
+    prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
+) -> fmt::Result {
+    let mut w = Vec::new();
+    if write_transaction(
+        &mut w,
+        transaction,
+        transaction_status,
+        prefix,
+        sigverify_status,
+        block_time,
+    )
+    .is_ok()
+    {
+        if let Ok(s) = String::from_utf8(w) {
+            write!(f, "{}", s)?;
+        }
+    }
+    Ok(())
 }
 
 /// Creates a new process bar for processing that will take an unknown amount of time
@@ -233,6 +390,13 @@ pub fn new_spinner_progress_bar() -> ProgressBar {
         .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
     progress_bar.enable_steady_tick(100);
     progress_bar
+}
+
+pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
+    match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
+        Some(ndt) => DateTime::<Utc>::from_utc(ndt, Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
+        None => format!("UnixTimestamp {}", unix_timestamp),
+    }
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::{
     declare_sysvar_id,
     fee_calculator::FeeCalculator,

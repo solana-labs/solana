@@ -1,22 +1,22 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { StructType, object, string, enums, pick } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { Infer, string, enums, type } from "superstruct";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type NonceAccountType = StructType<typeof NonceAccountType>;
+export type NonceAccountType = Infer<typeof NonceAccountType>;
 export const NonceAccountType = enums(["uninitialized", "initialized"]);
 
-export type NonceAccountInfo = StructType<typeof NonceAccountInfo>;
-export const NonceAccountInfo = pick({
-  authority: Pubkey,
+export type NonceAccountInfo = Infer<typeof NonceAccountInfo>;
+export const NonceAccountInfo = type({
+  authority: PublicKeyFromString,
   blockhash: string(),
-  feeCalculator: pick({
+  feeCalculator: type({
     lamportsPerSignature: string(),
   }),
 });
 
-export type NonceAccount = StructType<typeof NonceAccount>;
-export const NonceAccount = object({
+export type NonceAccount = Infer<typeof NonceAccount>;
+export const NonceAccount = type({
   type: NonceAccountType,
   info: NonceAccountInfo,
 });

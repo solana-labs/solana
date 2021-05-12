@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
@@ -289,12 +290,11 @@ fn load_blocks(
         start_slot, end_slot
     );
 
-    let slots = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
+    let slots = rpc_client.get_blocks(start_slot, Some(end_slot))?;
 
     let mut blocks = vec![];
     for slot in slots.into_iter() {
-        let block =
-            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+        let block = rpc_client.get_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
         blocks.push((slot, block));
     }
     Ok(blocks)
@@ -357,7 +357,7 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
 #[cfg(test)]
 mod test {
     use super::*;
-    use serial_test_derive::serial;
+    use serial_test::serial;
     use solana_client::rpc_config::RpcSendTransactionConfig;
     use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
@@ -418,7 +418,7 @@ mod test {
             .unwrap();
 
         rpc_client
-            .poll_for_signature_with_commitment(&stake1_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(&stake1_signature, CommitmentConfig::processed())
             .unwrap();
 
         // A balance increase by system transfer is ignored
@@ -473,7 +473,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake3_initialize_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -504,7 +504,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake3_withdraw_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -529,7 +529,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake4_initialize_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -560,7 +560,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake45_split_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -577,12 +577,15 @@ mod test {
             ))
             .unwrap();
         rpc_client
-            .poll_for_signature_with_commitment(&fund_system1_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(
+                &fund_system1_signature,
+                CommitmentConfig::processed(),
+            )
             .unwrap();
         accounts_info.enroll_system_account(
             &system1_keypair.pubkey(),
             rpc_client
-                .get_slot_with_commitment(CommitmentConfig::recent())
+                .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
             2 * one_sol,
         );
@@ -616,12 +619,15 @@ mod test {
             ))
             .unwrap();
         rpc_client
-            .poll_for_signature_with_commitment(&fund_system2_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(
+                &fund_system2_signature,
+                CommitmentConfig::processed(),
+            )
             .unwrap();
         accounts_info.enroll_system_account(
             &system2_keypair.pubkey(),
             rpc_client
-                .get_slot_with_commitment(CommitmentConfig::recent())
+                .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
             2 * one_sol,
         );
@@ -644,7 +650,7 @@ mod test {
 
         // Process all the transactions
         let current_slot = rpc_client
-            .get_slot_with_commitment(CommitmentConfig::recent())
+            .get_slot_with_commitment(CommitmentConfig::processed())
             .unwrap();
         process_slots(&rpc_client, &mut accounts_info, current_slot + 1);
 

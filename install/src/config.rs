@@ -1,9 +1,11 @@
-use crate::update_manifest::UpdateManifest;
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use std::fs::{create_dir_all, File};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use {
+    crate::update_manifest::UpdateManifest,
+    serde::{Deserialize, Serialize},
+    solana_sdk::pubkey::Pubkey,
+    std::fs::{create_dir_all, File},
+    std::io::{self, Write},
+    std::path::{Path, PathBuf},
+};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum ExplicitRelease {
@@ -18,7 +20,7 @@ pub struct Config {
     pub current_update_manifest: Option<UpdateManifest>,
     pub update_poll_secs: u64,
     pub explicit_release: Option<ExplicitRelease>,
-    releases_dir: PathBuf,
+    pub releases_dir: PathBuf,
     active_release_dir: PathBuf,
 }
 

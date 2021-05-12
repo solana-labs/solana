@@ -8,6 +8,7 @@ import {
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { InitializeInfo } from "./types";
+import { displayTimestampUtc } from "utils/date";
 
 export function InitializeDetailsCard(props: {
   ix: ParsedInstruction;
@@ -66,8 +67,8 @@ export function InitializeDetailsCard(props: {
       {info.lockup.unixTimestamp > 0 && (
         <tr>
           <td>Lockup Expiry Timestamp</td>
-          <td className="text-lg-right">
-            {new Date(info.lockup.unixTimestamp * 1000).toUTCString()}
+          <td className="text-lg-right text-monospace">
+            {displayTimestampUtc(info.lockup.unixTimestamp * 1000)}
           </td>
         </tr>
       )}

@@ -4,6 +4,7 @@
 
 use crate::{
     account::Account,
+    account::AccountSharedData,
     clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -61,7 +62,7 @@ impl FromStr for ClusterType {
     }
 }
 
-#[frozen_abi(digest = "VxfEg5DXq5czYouMdcCbqDzUE8jGi3iSDSjzrrWp5iG")]
+#[frozen_abi(digest = "FX48h9vjJZPvka4J9UvcPQkVcMdYLQujhbvUmVFq6qLx")]
 #[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
@@ -98,7 +99,7 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
         GenesisConfig::new(
             &[(
                 faucet_keypair.pubkey(),
-                Account::new(lamports, 0, &system_program::id()),
+                AccountSharedData::new(lamports, 0, &system_program::id()),
             )],
             &[],
         ),
@@ -131,13 +132,14 @@ impl Default for GenesisConfig {
 
 impl GenesisConfig {
     pub fn new(
-        accounts: &[(Pubkey, Account)],
+        accounts: &[(Pubkey, AccountSharedData)],
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
             accounts: accounts
                 .iter()
                 .cloned()
+                .map(|(key, account)| (key, Account::from(account)))
                 .collect::<BTreeMap<Pubkey, Account>>(),
             native_instruction_processors: native_instruction_processors.to_vec(),
             ..GenesisConfig::default()
@@ -147,11 +149,6 @@ impl GenesisConfig {
     pub fn hash(&self) -> Hash {
         let serialized = serialize(&self).unwrap();
         hash(&serialized)
-    }
-
-    pub fn disable_cap_altering_features_for_preciseness(&mut self) {
-        self.accounts
-            .remove(&crate::feature_set::simple_capitalization::id());
     }
 
     fn genesis_filename(ledger_path: &Path) -> PathBuf {
@@ -201,8 +198,8 @@ impl GenesisConfig {
         file.write_all(&serialized)
     }
 
-    pub fn add_account(&mut self, pubkey: Pubkey, account: Account) {
-        self.accounts.insert(pubkey, account);
+    pub fn add_account(&mut self, pubkey: Pubkey, account: AccountSharedData) {
+        self.accounts.insert(pubkey, Account::from(account));
     }
 
     pub fn add_native_instruction_processor(&mut self, name: String, program_id: Pubkey) {
@@ -218,7 +215,10 @@ impl GenesisConfig {
     }
 
     pub fn ns_per_slot(&self) -> u128 {
-        self.poh_config.target_tick_duration.as_nanos() * self.ticks_per_slot() as u128
+        self.poh_config
+            .target_tick_duration
+            .as_nanos()
+            .saturating_mul(self.ticks_per_slot() as u128)
     }
 
     pub fn slots_per_year(&self) -> f64 {
@@ -241,8 +241,10 @@ impl fmt::Display for GenesisConfig {
              Shred version: {}\n\
              Ticks per slot: {:?}\n\
              Hashes per tick: {:?}\n\
+             Target tick duration: {:?}\n\
              Slots per epoch: {}\n\
              Warmup epochs: {}abled\n\
+             Slots per year: {}\n\
              {:?}\n\
              {:?}\n\
              {:?}\n\
@@ -256,12 +258,14 @@ impl fmt::Display for GenesisConfig {
             compute_shred_version(&self.hash(), None),
             self.ticks_per_slot,
             self.poh_config.hashes_per_tick,
+            self.poh_config.target_tick_duration,
             self.epoch_schedule.slots_per_epoch,
             if self.epoch_schedule.warmup {
                 "en"
             } else {
                 "dis"
             },
+            self.slots_per_year(),
             self.inflation,
             self.rent,
             self.fee_rate_governor,
@@ -315,11 +319,11 @@ mod tests {
         let mut config = GenesisConfig::default();
         config.add_account(
             faucet_keypair.pubkey(),
-            Account::new(10_000, 0, &Pubkey::default()),
+            AccountSharedData::new(10_000, 0, &Pubkey::default()),
         );
         config.add_account(
             solana_sdk::pubkey::new_rand(),
-            Account::new(1, 0, &Pubkey::default()),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
         );
         config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
 

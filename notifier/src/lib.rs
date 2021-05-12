@@ -20,7 +20,7 @@
 use log::*;
 use reqwest::{blocking::Client, StatusCode};
 use serde_json::json;
-use std::{env, thread::sleep, time::Duration};
+use std::{env, str::FromStr, thread::sleep, time::Duration};
 
 struct TelegramWebHook {
     bot_token: String,
@@ -80,6 +80,7 @@ enum NotificationType {
     Slack(String),
     Telegram(TelegramWebHook),
     Twilio(TwilioWebHook),
+    Log(Level),
 }
 
 pub struct Notifier {
@@ -116,6 +117,16 @@ impl Notifier {
 
         if let Ok(Some(webhook)) = get_twilio_config() {
             notifiers.push(NotificationType::Twilio(webhook));
+        }
+
+        if let Ok(log_level) = env::var(format!("{}LOG_NOTIFIER_LEVEL", env_prefix)) {
+            match Level::from_str(&log_level) {
+                Ok(level) => notifiers.push(NotificationType::Log(level)),
+                Err(e) => warn!(
+                    "could not parse specified log notifier level string ({}): {}",
+                    log_level, e
+                ),
+            }
         }
 
         info!("{} notifiers", notifiers.len());
@@ -190,6 +201,9 @@ impl Notifier {
                     if let Err(err) = self.client.post(&url).form(&params).send() {
                         warn!("Failed to send Twilio message: {:?}", err);
                     }
+                }
+                NotificationType::Log(level) => {
+                    log!(*level, "{}", msg)
                 }
             }
         }

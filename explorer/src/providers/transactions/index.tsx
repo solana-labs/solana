@@ -3,6 +3,7 @@ import {
   TransactionSignature,
   Connection,
   SignatureResult,
+  TransactionConfirmationStatus,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
@@ -20,6 +21,7 @@ export interface TransactionStatusInfo {
   result: SignatureResult;
   timestamp: Timestamp;
   confirmations: Confirmations;
+  confirmationStatus?: TransactionConfirmationStatus;
 }
 
 export interface TransactionStatus {
@@ -75,16 +77,6 @@ export async function fetchTransactionStatus(
 
     let info = null;
     if (value !== null) {
-      let blockTime = null;
-      try {
-        blockTime = await connection.getBlockTime(value.slot);
-      } catch (error) {
-        if (cluster === Cluster.MainnetBeta) {
-          reportError(error, { slot: `${value.slot}` });
-        }
-      }
-      let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
-
       let confirmations: Confirmations;
       if (typeof value.confirmations === "number") {
         confirmations = value.confirmations;
@@ -92,10 +84,21 @@ export async function fetchTransactionStatus(
         confirmations = "max";
       }
 
+      let blockTime = null;
+      try {
+        blockTime = await connection.getBlockTime(value.slot);
+      } catch (error) {
+        if (cluster === Cluster.MainnetBeta && confirmations === "max") {
+          reportError(error, { slot: `${value.slot}` });
+        }
+      }
+      let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
+
       info = {
         slot: value.slot,
         timestamp,
         confirmations,
+        confirmationStatus: value.confirmationStatus,
         result: { err: value.err },
       };
     }

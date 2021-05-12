@@ -5,19 +5,18 @@
 //! but they are undocumented, may change over time, and are generally more
 //! cumbersome to use.
 
+use borsh::BorshDeserialize;
 use futures::{future::join_all, Future, FutureExt};
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use solana_banks_interface::{BanksRequest, BanksResponse};
+use solana_program::{
+    clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
+    rent::Rent, sysvar,
+};
 use solana_sdk::{
     account::{from_account, Account},
-    clock::Slot,
     commitment_config::CommitmentLevel,
-    fee_calculator::FeeCalculator,
-    hash::Hash,
-    pubkey::Pubkey,
-    rent::Rent,
     signature::Signature,
-    sysvar,
     transaction::{self, Transaction},
     transport,
 };
@@ -122,7 +121,7 @@ impl BanksClient {
     pub fn get_fees(
         &mut self,
     ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, Slot)>> + '_ {
-        self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::Root)
+        self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
     }
 
     /// Return the cluster rent
@@ -130,7 +129,7 @@ impl BanksClient {
         self.get_account(sysvar::rent::id()).map(|result| {
             let rent_sysvar = result?
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Rent sysvar not present"))?;
-            from_account::<Rent>(&rent_sysvar).ok_or_else(|| {
+            from_account::<Rent, _>(&rent_sysvar).ok_or_else(|| {
                 io::Error::new(io::ErrorKind::Other, "Failed to deserialize Rent sysvar")
             })
         })
@@ -196,7 +195,7 @@ impl BanksClient {
     /// Return the most recent rooted slot height. All transactions at or below this height
     /// are said to be finalized. The cluster will not fork to a higher slot height.
     pub fn get_root_slot(&mut self) -> impl Future<Output = io::Result<Slot>> + '_ {
-        self.get_slot_with_context(context::current(), CommitmentLevel::Root)
+        self.get_slot_with_context(context::current(), CommitmentLevel::default())
     }
 
     /// Return the account at the given address at the slot corresponding to the given
@@ -216,6 +215,33 @@ impl BanksClient {
         address: Pubkey,
     ) -> impl Future<Output = io::Result<Option<Account>>> + '_ {
         self.get_account_with_commitment(address, CommitmentLevel::default())
+    }
+
+    /// Return the unpacked account data at the given address
+    /// If the account is not found, an error is returned
+    pub fn get_packed_account_data<T: Pack>(
+        &mut self,
+        address: Pubkey,
+    ) -> impl Future<Output = io::Result<T>> + '_ {
+        self.get_account(address).map(|result| {
+            let account =
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Account not found"))?;
+            T::unpack_from_slice(&account.data)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to deserialize account"))
+        })
+    }
+
+    /// Return the unpacked account data at the given address
+    /// If the account is not found, an error is returned
+    pub fn get_account_data_with_borsh<T: BorshDeserialize>(
+        &mut self,
+        address: Pubkey,
+    ) -> impl Future<Output = io::Result<T>> + '_ {
+        self.get_account(address).map(|result| {
+            let account =
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "account not found"))?;
+            T::try_from_slice(&account.data)
+        })
     }
 
     /// Return the balance in lamports of an account at the given address at the slot
@@ -289,7 +315,10 @@ pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClie
 mod tests {
     use super::*;
     use solana_banks_server::banks_server::start_local_server;
-    use solana_runtime::{bank::Bank, bank_forks::BankForks, genesis_utils::create_genesis_config};
+    use solana_runtime::{
+        bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
+        genesis_utils::create_genesis_config,
+    };
     use solana_sdk::{message::Message, signature::Signer, system_instruction};
     use std::sync::{Arc, RwLock};
     use tarpc::transport;
@@ -308,9 +337,12 @@ mod tests {
         // `runtime.block_on()` just once, to run all the async code.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
-            &genesis.genesis_config,
-        ))));
+        let bank = Bank::new(&genesis.genesis_config);
+        let slot = bank.slot();
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
@@ -318,7 +350,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(&bank_forks).await;
+            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
             let mut banks_client = start_client(client_transport).await?;
 
             let recent_blockhash = banks_client.get_recent_blockhash().await?;
@@ -336,9 +368,12 @@ mod tests {
         // server-side functionality is available to the client.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
-            &genesis.genesis_config,
-        ))));
+        let bank = Bank::new(&genesis.genesis_config);
+        let slot = bank.slot();
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -346,7 +381,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(&bank_forks).await;
+            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
             let mut banks_client = start_client(client_transport).await?;
             let (_, recent_blockhash, last_valid_slot) = banks_client.get_fees().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);

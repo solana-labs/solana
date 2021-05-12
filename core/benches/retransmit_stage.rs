@@ -6,6 +6,7 @@ extern crate test;
 use log::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
+use solana_core::max_slots::MaxSlots;
 use solana_core::retransmit_stage::retransmitter;
 use solana_ledger::entry::Entry;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
@@ -80,8 +81,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let keypair = Arc::new(Keypair::new());
     let slot = 0;
     let parent = 0;
-    let shredder =
-        Shredder::new(slot, parent, 0.0, keypair, 0, 0).expect("Failed to create entry shredder");
+    let shredder = Shredder::new(slot, parent, keypair, 0, 0).unwrap();
     let mut data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
 
     let num_packets = data_shreds.len();
@@ -92,6 +92,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &leader_schedule_cache,
         cluster_info,
         packet_receiver,
+        &Arc::new(MaxSlots::default()),
+        None,
     );
 
     let mut index = 0;

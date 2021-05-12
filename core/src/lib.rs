@@ -1,4 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![allow(clippy::integer_arithmetic)]
 //! The `solana` library implements the Solana high-performance blockchain architecture.
 //! It includes a full Rust implementation of the architecture (see
 //! [Validator](server/struct.Validator.html)) as well as hooks to GPU implementations of its most
@@ -15,11 +16,14 @@ pub mod cluster_info_vote_listener;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 mod deprecated;
+pub mod max_slots;
 pub mod sample_performance_service;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
+mod cluster_info_metrics;
+pub mod cluster_slot_state_verifier;
 pub mod cluster_slots;
 pub mod cluster_slots_service;
 pub mod consensus;
@@ -38,25 +42,28 @@ pub mod fork_choice;
 pub mod gen_keys;
 pub mod gossip_service;
 pub mod heaviest_subtree_fork_choice;
+pub mod latest_validator_votes_for_frozen_banks;
 pub mod ledger_cleanup_service;
 pub mod non_circulating_supply;
 pub mod optimistic_confirmation_verifier;
 pub mod optimistically_confirmed_bank_tracker;
+pub mod outstanding_requests;
 pub mod packet_hasher;
 pub mod ping_pong;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;
-pub mod pubkey_references;
 pub mod repair_response;
 pub mod repair_service;
 pub mod repair_weight;
 pub mod repair_weighted_traversal;
 pub mod replay_stage;
+pub mod request_response;
 mod result;
 pub mod retransmit_stage;
 pub mod rewards_recorder_service;
 pub mod rpc;
+pub mod rpc_completed_slots_service;
 pub mod rpc_health;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
@@ -74,6 +81,7 @@ pub mod tpu;
 pub mod transaction_status_service;
 pub mod tree_diff;
 pub mod tvu;
+pub mod unfrozen_gossip_verified_vote_hashes;
 pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_stake_tracker;

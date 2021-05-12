@@ -7,9 +7,9 @@ license = "Apache-2.0"
 name = "proto"
 publish = false
 repository = "https://github.com/solana-labs/solana"
-version = "1.6.0"
+version = "1.7.0"
 
 [workspace]
 
 [dependencies]
-tonic-build = "0.2.0"
+tonic-build = "0.4.0"

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::pubkey::Pubkey;
 use crate::sanitize::SanitizeError;
 

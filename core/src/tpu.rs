@@ -5,7 +5,10 @@ use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
+    cluster_info_vote_listener::{
+        ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
+        VerifiedVoteSender, VoteTracker,
+    },
     fetch_stage::FetchStage,
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -28,6 +31,8 @@ use std::{
     },
     thread,
 };
+
+pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 pub struct Tpu {
     fetch_stage: FetchStage,
@@ -56,9 +61,12 @@ impl Tpu {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         verified_vote_sender: VerifiedVoteSender,
+        gossip_verified_vote_hash_sender: GossipVerifiedVoteHashSender,
         replay_vote_receiver: ReplayVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
+        tpu_coalesce_ms: u64,
+        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -67,6 +75,7 @@ impl Tpu {
             &exit,
             &packet_sender,
             &poh_recorder,
+            tpu_coalesce_ms,
         );
         let (verified_sender, verified_receiver) = unbounded();
 
@@ -85,9 +94,11 @@ impl Tpu {
             bank_forks,
             subscriptions.clone(),
             verified_vote_sender,
+            gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             blockstore.clone(),
             bank_notification_sender,
+            cluster_confirmed_slot_sender,
         );
 
         let banking_stage = BankingStage::new(

@@ -256,7 +256,7 @@ pub fn derive_abi_sample(item: TokenStream) -> TokenStream {
 fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
     let type_name = &input.ident;
     let mut serialized_variants = quote! {};
-    let mut variant_count = 0;
+    let mut variant_count: u64 = 0;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     for variant in &input.variants {
         // Don't digest a variant with serde(skip)
@@ -264,10 +264,14 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
             continue;
         };
         let sample_variant = quote_sample_variant(&type_name, &ty_generics, &variant);
-        variant_count += 1;
+        variant_count = if let Some(variant_count) = variant_count.checked_add(1) {
+            variant_count
+        } else {
+            break;
+        };
         serialized_variants.extend(quote! {
             #sample_variant;
-            Serialize::serialize(&sample_variant, digester.create_enum_child())?;
+            Serialize::serialize(&sample_variant, digester.create_enum_child()?)?;
         });
     }
 
@@ -280,7 +284,7 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
                 use ::solana_frozen_abi::abi_example::AbiExample;
                 digester.update_with_string(format!("enum {} (variants = {})", enum_name, #variant_count));
                 #serialized_variants
-                Ok(digester.create_child())
+                digester.create_child()
             }
         }
     }).into()

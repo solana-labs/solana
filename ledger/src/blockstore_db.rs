@@ -17,7 +17,6 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_storage_proto::convert::generated;
-use solana_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -64,7 +63,7 @@ pub enum BlockstoreError {
     RocksDb(#[from] rocksdb::Error),
     SlotNotRooted,
     DeadSlot,
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
@@ -75,6 +74,8 @@ pub enum BlockstoreError {
     NoVoteTimestampsInRange,
     ProtobufEncodeError(#[from] prost::EncodeError),
     ProtobufDecodeError(#[from] prost::DecodeError),
+    ParentEntriesUnavailable,
+    SlotUnavailable,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
@@ -417,10 +418,6 @@ pub trait TypedColumn: Column {
     type Type: Serialize + DeserializeOwned;
 }
 
-impl TypedColumn for columns::TransactionStatus {
-    type Type = TransactionStatusMeta;
-}
-
 impl TypedColumn for columns::AddressSignatures {
     type Type = blockstore_meta::AddressSignatureMeta;
 }
@@ -452,6 +449,7 @@ impl<T: SlotColumn> Column for T {
         index
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> u64 {
         slot
     }
@@ -483,6 +481,7 @@ impl Column for columns::TransactionStatus {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
     }
@@ -490,6 +489,9 @@ impl Column for columns::TransactionStatus {
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+impl ProtobufColumn for columns::TransactionStatus {
+    type Type = generated::TransactionStatusMeta;
 }
 
 impl Column for columns::AddressSignatures {
@@ -516,6 +518,7 @@ impl Column for columns::AddressSignatures {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
     }
@@ -542,6 +545,7 @@ impl Column for columns::TransactionStatusIndex {
         index
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: u64) -> u64 {
         slot
     }
@@ -590,6 +594,7 @@ impl Column for columns::ShredCode {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -619,6 +624,7 @@ impl Column for columns::ShredData {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -697,6 +703,7 @@ impl Column for columns::ErasureMeta {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }

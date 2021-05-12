@@ -6,9 +6,9 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
         {Arc, RwLock},
     },
-    thread::sleep,
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -79,6 +79,14 @@ impl ClusterSlotsService {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
+            let slots = match completed_slots_receiver.recv_timeout(Duration::from_millis(200)) {
+                Ok(slots) => Some(slots),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => {
+                    warn!("Cluster slots service - sender disconnected");
+                    break;
+                }
+            };
             let new_root = bank_forks.read().unwrap().root();
             let id = cluster_info.id();
             let mut lowest_slot_elapsed = Measure::start("lowest_slot_elapsed");
@@ -87,7 +95,9 @@ impl ClusterSlotsService {
             lowest_slot_elapsed.stop();
             let mut update_completed_slots_elapsed =
                 Measure::start("update_completed_slots_elapsed");
-            Self::update_completed_slots(&completed_slots_receiver, &cluster_info);
+            if let Some(slots) = slots {
+                Self::update_completed_slots(slots, &completed_slots_receiver, &cluster_info);
+            }
             cluster_slots.update(new_root, &cluster_info, &bank_forks);
             update_completed_slots_elapsed.stop();
 
@@ -113,20 +123,20 @@ impl ClusterSlotsService {
                 cluster_slots_service_timing = ClusterSlotsServiceTiming::default();
                 last_stats = Instant::now();
             }
-            sleep(Duration::from_millis(200));
         }
     }
 
     fn update_completed_slots(
+        mut slots: Vec<Slot>,
         completed_slots_receiver: &CompletedSlotsReceiver,
         cluster_info: &ClusterInfo,
     ) {
-        let mut slots: Vec<Slot> = vec![];
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
+
         if !slots.is_empty() {
             cluster_info.push_epoch_slots(&slots);
         }
@@ -175,19 +185,21 @@ impl ClusterSlotsService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::Node;
+    use crate::{cluster_info::Node, crds_value::CrdsValueLabel};
 
     #[test]
     pub fn test_update_lowest_slot() {
-        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
+        let pubkey = Pubkey::new_unique();
+        let node_info = Node::new_localhost_with_pubkey(&pubkey);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info);
-        ClusterSlotsService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
+        ClusterSlotsService::update_lowest_slot(&pubkey, 5, &cluster_info);
         cluster_info.flush_push_queue();
-        let lowest = cluster_info
-            .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| {
-                lowest_slot.clone()
-            })
-            .unwrap();
+        let lowest = {
+            let label = CrdsValueLabel::LowestSlot(pubkey);
+            let gossip = cluster_info.gossip.read().unwrap();
+            let entry = gossip.crds.get(&label).unwrap();
+            entry.value.lowest_slot().unwrap().clone()
+        };
         assert_eq!(lowest.lowest, 5);
     }
 }

@@ -22,7 +22,11 @@ pub fn load_program<T: Client>(
     let instruction = system_instruction::create_account(
         &from_keypair.pubkey(),
         &program_pubkey,
-        1,
+        1.max(
+            bank_client
+                .get_minimum_balance_for_rent_exemption(program.len())
+                .unwrap(),
+        ),
         program.len() as u64,
         loader_pubkey,
     );
@@ -58,9 +62,11 @@ pub fn load_buffer_account<T: Client>(
     bank_client: &T,
     from_keypair: &Keypair,
     buffer_keypair: &Keypair,
+    buffer_authority_keypair: &Keypair,
     program: &[u8],
 ) {
     let buffer_pubkey = buffer_keypair.pubkey();
+    let buffer_authority_pubkey = buffer_authority_keypair.pubkey();
 
     bank_client
         .send_and_confirm_message(
@@ -69,7 +75,7 @@ pub fn load_buffer_account<T: Client>(
                 &bpf_loader_upgradeable::create_buffer(
                     &from_keypair.pubkey(),
                     &buffer_pubkey,
-                    Some(&buffer_pubkey),
+                    &buffer_authority_pubkey,
                     1.max(
                         bank_client
                             .get_minimum_balance_for_rent_exemption(program.len())
@@ -89,14 +95,14 @@ pub fn load_buffer_account<T: Client>(
         let message = Message::new(
             &[bpf_loader_upgradeable::write(
                 &buffer_pubkey,
-                None,
+                &buffer_authority_pubkey,
                 offset,
                 chunk.to_vec(),
             )],
             Some(&from_keypair.pubkey()),
         );
         bank_client
-            .send_and_confirm_message(&[from_keypair, &buffer_keypair], message)
+            .send_and_confirm_message(&[from_keypair, &buffer_authority_keypair], message)
             .unwrap();
         offset += chunk_size as u32;
     }
@@ -113,14 +119,20 @@ pub fn load_upgradeable_program<T: Client>(
     let program_pubkey = executable_keypair.pubkey();
     let authority_pubkey = authority_keypair.pubkey();
 
-    load_buffer_account(bank_client, &from_keypair, buffer_keypair, &program);
+    load_buffer_account(
+        bank_client,
+        &from_keypair,
+        buffer_keypair,
+        authority_keypair,
+        &program,
+    );
 
     let message = Message::new(
         &bpf_loader_upgradeable::deploy_with_max_program_len(
             &from_keypair.pubkey(),
             &program_pubkey,
             &buffer_keypair.pubkey(),
-            Some(&authority_pubkey),
+            &authority_pubkey,
             1.max(
                 bank_client
                     .get_minimum_balance_for_rent_exemption(
@@ -134,7 +146,10 @@ pub fn load_upgradeable_program<T: Client>(
         Some(&from_keypair.pubkey()),
     );
     bank_client
-        .send_and_confirm_message(&[from_keypair, &executable_keypair], message)
+        .send_and_confirm_message(
+            &[from_keypair, &executable_keypair, &authority_keypair],
+            message,
+        )
         .unwrap();
 }
 
@@ -188,5 +203,5 @@ pub fn create_invoke_instruction<T: Serialize>(
     data: &T,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(from_pubkey, true)];
-    Instruction::new(program_id, data, account_metas)
+    Instruction::new_with_bincode(program_id, data, account_metas)
 }

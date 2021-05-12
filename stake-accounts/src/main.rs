@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 mod arg_parser;
 mod args;
 mod stake_accounts;

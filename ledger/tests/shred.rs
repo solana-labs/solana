@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use solana_ledger::entry::Entry;
 use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
@@ -21,9 +22,7 @@ type IndexShredsMap = BTreeMap<u32, Vec<Shred>>;
 fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
     let slot = 0x1234_5678_9abc_def0;
-    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
-        .expect("Failed in creating shredder");
-
+    let shredder = Shredder::new(slot, slot - 5, keypair.clone(), 0, 0).unwrap();
     let num_fec_sets = 100;
     let num_data_shreds = (MAX_DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets) as usize;
     let keypair0 = Keypair::new();
@@ -77,7 +76,6 @@ fn test_multi_fec_block_coding() {
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
             shred_start_index,
-            shred_start_index,
             slot,
         )
         .unwrap();
@@ -122,6 +120,7 @@ fn test_multi_fec_block_different_size_coding() {
     for (fec_data_shreds, fec_coding_shreds) in fec_data.values().zip(fec_coding.values()) {
         let first_data_index = fec_data_shreds.first().unwrap().index() as usize;
         let first_code_index = fec_coding_shreds.first().unwrap().index() as usize;
+        assert_eq!(first_data_index, first_code_index);
         let num_data = fec_data_shreds.len();
         let num_coding = fec_coding_shreds.len();
         let all_shreds: Vec<Shred> = fec_data_shreds
@@ -130,17 +129,9 @@ fn test_multi_fec_block_different_size_coding() {
             .chain(fec_coding_shreds.iter().step_by(2))
             .cloned()
             .collect();
-
-        let recovered_data = Shredder::try_recovery(
-            all_shreds,
-            num_data,
-            num_coding,
-            first_data_index,
-            first_code_index,
-            slot,
-        )
-        .unwrap();
-
+        let recovered_data =
+            Shredder::try_recovery(all_shreds, num_data, num_coding, first_data_index, slot)
+                .unwrap();
         // Necessary in order to ensure the last shred in the slot
         // is part of the recovered set, and that the below `index`
         // calcuation in the loop is correct
@@ -199,8 +190,7 @@ fn setup_different_sized_fec_blocks(
     parent_slot: Slot,
     keypair: Arc<Keypair>,
 ) -> (IndexShredsMap, IndexShredsMap, usize) {
-    let shredder =
-        Shredder::new(slot, parent_slot, 1.0, keypair, 0, 0).expect("Failed in creating shredder");
+    let shredder = Shredder::new(slot, parent_slot, keypair, 0, 0).unwrap();
     let keypair0 = Keypair::new();
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());

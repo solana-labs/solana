@@ -373,7 +373,7 @@ pub fn get_broadcast_peers(
 /// # Remarks
 pub fn broadcast_shreds(
     s: &UdpSocket,
-    shreds: &Arc<Vec<Shred>>,
+    shreds: &[Shred],
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
@@ -402,7 +402,7 @@ pub fn broadcast_shreds(
         match send_mmsg(s, &packets[sent..]) {
             Ok(n) => sent += n,
             Err(e) => {
-                return Err(Error::IO(e));
+                return Err(Error::Io(e));
             }
         }
     }
@@ -447,7 +447,7 @@ pub mod test {
         entry::create_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
-        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder, RECOMMENDED_FEC_RATE},
+        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
@@ -472,12 +472,14 @@ pub mod test {
     ) {
         let num_entries = max_ticks_per_n_shreds(num, None);
         let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
-        let keypair = Arc::new(Keypair::new());
-        let shredder = Shredder::new(slot, 0, RECOMMENDED_FEC_RATE, keypair, 0, 0)
-            .expect("Expected to create a new shredder");
-
-        let coding_shreds = shredder
-            .data_shreds_to_coding_shreds(&data_shreds[0..], &mut ProcessShredsStats::default());
+        let keypair = Keypair::new();
+        let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+            &keypair,
+            &data_shreds[0..],
+            true, // is_last_in_slot
+            &mut ProcessShredsStats::default(),
+        )
+        .unwrap();
         (
             data_shreds.clone(),
             coding_shreds.clone(),

@@ -28,16 +28,16 @@ use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot};
 use bincode::serialize;
-use indexmap::map::{rayon::ParValues, Entry, IndexMap, Values};
+use indexmap::map::{rayon::ParValues, Entry, IndexMap};
 use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
-use solana_sdk::timing::timestamp;
-use std::cmp;
-use std::collections::{hash_map, HashMap};
-use std::ops::{Index, IndexMut};
+use std::{
+    cmp::Ordering,
+    collections::{hash_map, BTreeMap, HashMap},
+    ops::{Bound, Index, IndexMut},
+};
 
 const CRDS_SHARDS_BITS: u32 = 8;
 // Limit number of crds values associated with each unique pubkey. This
@@ -48,17 +48,24 @@ const MAX_CRDS_VALUES_PER_PUBKEY: usize = 32;
 pub struct Crds {
     /// Stores the map of labels and values
     table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
-    pub num_inserts: usize, // Only used in tests.
+    cursor: Cursor, // Next insert ordinal location.
     shards: CrdsShards,
     nodes: IndexSet<usize>, // Indices of nodes' ContactInfo.
     votes: IndexSet<usize>, // Indices of Vote crds values.
+    // Indices of EpochSlots keyed by insert order.
+    epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
+    // Indices of all entries keyed by insert order.
+    entries: BTreeMap<u64 /*insert order*/, usize /*index*/>,
 }
 
 #[derive(PartialEq, Debug)]
 pub enum CrdsError {
-    InsertFailed,
+    // Hash of the crds value which failed to insert should be recorded in
+    // failed_inserts to be excluded from the next pull-request.
+    InsertFailed(Hash),
+    UnknownStakes,
 }
 
 /// This structure stores some local metadata associated with the CrdsValue
@@ -66,42 +73,39 @@ pub enum CrdsError {
 /// stored in the Crds
 #[derive(PartialEq, Debug, Clone)]
 pub struct VersionedCrdsValue {
+    /// Ordinal index indicating insert order.
+    ordinal: u64,
     pub value: CrdsValue,
-    /// local time when inserted
-    pub insert_timestamp: u64,
     /// local time when updated
-    pub local_timestamp: u64,
+    pub(crate) local_timestamp: u64,
     /// value hash
-    pub value_hash: Hash,
+    pub(crate) value_hash: Hash,
 }
 
-impl PartialOrd for VersionedCrdsValue {
-    fn partial_cmp(&self, other: &VersionedCrdsValue) -> Option<cmp::Ordering> {
-        if self.value.label() != other.value.label() {
-            None
-        } else if self.value.wallclock() == other.value.wallclock() {
-            Some(self.value_hash.cmp(&other.value_hash))
-        } else {
-            Some(self.value.wallclock().cmp(&other.value.wallclock()))
-        }
+#[derive(Clone, Copy, Default)]
+pub struct Cursor(u64);
+
+impl Cursor {
+    fn ordinal(&self) -> u64 {
+        self.0
+    }
+
+    // Updates the cursor position given the ordinal index of value consumed.
+    #[inline]
+    fn consume(&mut self, ordinal: u64) {
+        self.0 = self.0.max(ordinal + 1);
     }
 }
+
 impl VersionedCrdsValue {
-    pub fn new(local_timestamp: u64, value: CrdsValue) -> Self {
+    fn new(value: CrdsValue, cursor: Cursor, local_timestamp: u64) -> Self {
         let value_hash = hash(&serialize(&value).unwrap());
         VersionedCrdsValue {
+            ordinal: cursor.ordinal(),
             value,
-            insert_timestamp: local_timestamp,
             local_timestamp,
             value_hash,
         }
-    }
-
-    /// New random VersionedCrdsValue for tests and simulations.
-    pub fn new_rand<R: rand::Rng>(rng: &mut R, keypair: Option<&Keypair>) -> Self {
-        let delay = 10 * 60 * 1000; // 10 minutes
-        let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
-        Self::new(now, CrdsValue::new_rand(rng, keypair))
     }
 }
 
@@ -109,87 +113,102 @@ impl Default for Crds {
     fn default() -> Self {
         Crds {
             table: IndexMap::default(),
-            num_inserts: 0,
+            cursor: Cursor::default(),
             shards: CrdsShards::new(CRDS_SHARDS_BITS),
             nodes: IndexSet::default(),
             votes: IndexSet::default(),
+            epoch_slots: BTreeMap::default(),
             records: HashMap::default(),
+            entries: BTreeMap::default(),
+        }
+    }
+}
+
+// Returns true if the first value updates the 2nd one.
+// Both values should have the same key/label.
+fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
+    assert_eq!(value.label(), other.value.label(), "labels mismatch!");
+    match value.wallclock().cmp(&other.value.wallclock()) {
+        Ordering::Less => false,
+        Ordering::Greater => true,
+        // Ties should be broken in a deterministic way across the cluster.
+        // For backward compatibility this is done by comparing hash of
+        // serialized values.
+        Ordering::Equal => {
+            let value_hash = hash(&serialize(&value).unwrap());
+            other.value_hash < value_hash
         }
     }
 }
 
 impl Crds {
-    /// must be called atomically with `insert_versioned`
-    pub fn new_versioned(&self, local_timestamp: u64, value: CrdsValue) -> VersionedCrdsValue {
-        VersionedCrdsValue::new(local_timestamp, value)
+    /// Returns true if the given value updates an existing one in the table.
+    /// The value is outdated and fails to insert, if it already exists in the
+    /// table with a more recent wallclock.
+    pub(crate) fn upserts(&self, value: &CrdsValue) -> bool {
+        match self.table.get(&value.label()) {
+            Some(other) => overrides(value, other),
+            None => true,
+        }
     }
-    pub fn would_insert(
-        &self,
+
+    pub fn insert(
+        &mut self,
         value: CrdsValue,
         local_timestamp: u64,
-    ) -> (bool, VersionedCrdsValue) {
-        let new_value = self.new_versioned(local_timestamp, value);
-        let label = new_value.value.label();
-        // New value is outdated and fails to insert, if it already exists in
-        // the table with a more recent wallclock.
-        let outdated = matches!(self.table.get(&label), Some(current) if new_value <= *current);
-        (!outdated, new_value)
-    }
-    /// insert the new value, returns the old value if insert succeeds
-    pub fn insert_versioned(
-        &mut self,
-        new_value: VersionedCrdsValue,
     ) -> Result<Option<VersionedCrdsValue>, CrdsError> {
-        let label = new_value.value.label();
+        let label = value.label();
+        let pubkey = value.pubkey();
+        let value = VersionedCrdsValue::new(value, self.cursor, local_timestamp);
         match self.table.entry(label) {
             Entry::Vacant(entry) => {
                 let entry_index = entry.index();
-                self.shards.insert(entry_index, &new_value);
-                match new_value.value.data {
+                self.shards.insert(entry_index, &value);
+                match value.value.data {
                     CrdsData::ContactInfo(_) => {
                         self.nodes.insert(entry_index);
                     }
                     CrdsData::Vote(_, _) => {
                         self.votes.insert(entry_index);
                     }
+                    CrdsData::EpochSlots(_, _) => {
+                        self.epoch_slots.insert(value.ordinal, entry_index);
+                    }
                     _ => (),
                 };
-                self.records
-                    .entry(new_value.value.pubkey())
-                    .or_default()
-                    .insert(entry_index);
-                entry.insert(new_value);
-                self.num_inserts += 1;
+                self.entries.insert(value.ordinal, entry_index);
+                self.records.entry(pubkey).or_default().insert(entry_index);
+                self.cursor.consume(value.ordinal);
+                entry.insert(value);
                 Ok(None)
             }
-            Entry::Occupied(mut entry) if *entry.get() < new_value => {
-                let index = entry.index();
-                self.shards.remove(index, entry.get());
-                self.shards.insert(index, &new_value);
-                self.num_inserts += 1;
+            Entry::Occupied(mut entry) if overrides(&value.value, entry.get()) => {
+                let entry_index = entry.index();
+                self.shards.remove(entry_index, entry.get());
+                self.shards.insert(entry_index, &value);
+                if let CrdsData::EpochSlots(_, _) = value.value.data {
+                    self.epoch_slots.remove(&entry.get().ordinal);
+                    self.epoch_slots.insert(value.ordinal, entry_index);
+                }
+                self.entries.remove(&entry.get().ordinal);
+                self.entries.insert(value.ordinal, entry_index);
                 // As long as the pubkey does not change, self.records
                 // does not need to be updated.
-                debug_assert_eq!(entry.get().value.pubkey(), new_value.value.pubkey());
-                Ok(Some(entry.insert(new_value)))
+                debug_assert_eq!(entry.get().value.pubkey(), pubkey);
+                self.cursor.consume(value.ordinal);
+                Ok(Some(entry.insert(value)))
             }
             _ => {
                 trace!(
                     "INSERT FAILED data: {} new.wallclock: {}",
-                    new_value.value.label(),
-                    new_value.value.wallclock(),
+                    value.value.label(),
+                    value.value.wallclock(),
                 );
-                Err(CrdsError::InsertFailed)
+                Err(CrdsError::InsertFailed(value.value_hash))
             }
         }
     }
-    pub fn insert(
-        &mut self,
-        value: CrdsValue,
-        local_timestamp: u64,
-    ) -> Result<Option<VersionedCrdsValue>, CrdsError> {
-        let new_value = self.new_versioned(local_timestamp, value);
-        self.insert_versioned(new_value)
-    }
+
     pub fn lookup(&self, label: &CrdsValueLabel) -> Option<&CrdsValue> {
         self.table.get(label).map(|x| &x.value)
     }
@@ -225,9 +244,47 @@ impl Crds {
         })
     }
 
-    /// Returns all entries which are Vote.
-    pub(crate) fn get_votes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
-        self.votes.iter().map(move |i| self.table.index(*i))
+    /// Returns all vote entries inserted since the given cursor.
+    /// Updates the cursor as the votes are consumed.
+    pub(crate) fn get_votes<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let since = cursor.ordinal();
+        self.votes.iter().filter_map(move |i| {
+            let entry = self.table.index(*i);
+            if entry.ordinal >= since {
+                cursor.consume(entry.ordinal);
+                Some(entry)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns epoch-slots inserted since the given cursor.
+    /// Updates the cursor as the values are consumed.
+    pub(crate) fn get_epoch_slots<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.epoch_slots.range(range).map(move |(ordinal, index)| {
+            cursor.consume(*ordinal);
+            self.table.index(*index)
+        })
+    }
+
+    /// Returns all entries inserted since the given cursor.
+    pub(crate) fn get_entries<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.entries.range(range).map(move |(ordinal, index)| {
+            cursor.consume(*ordinal);
+            self.table.index(*index)
+        })
     }
 
     /// Returns all records associated with a pubkey.
@@ -239,6 +296,11 @@ impl Crds {
             .map(move |i| self.table.index(*i))
     }
 
+    /// Returns number of known pubkeys (network size).
+    pub(crate) fn num_nodes(&self) -> usize {
+        self.records.len()
+    }
+
     pub fn len(&self) -> usize {
         self.table.len()
     }
@@ -247,7 +309,8 @@ impl Crds {
         self.table.is_empty()
     }
 
-    pub fn values(&self) -> Values<'_, CrdsValueLabel, VersionedCrdsValue> {
+    #[cfg(test)]
+    pub(crate) fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.table.values()
     }
 
@@ -269,7 +332,15 @@ impl Crds {
 
     /// Update the timestamp's of all the labels that are associated with Pubkey
     pub fn update_record_timestamp(&mut self, pubkey: &Pubkey, now: u64) {
-        if let Some(indices) = self.records.get(pubkey) {
+        // It suffices to only overwrite the origin's timestamp since that is
+        // used when purging old values. If the origin does not exist in the
+        // table, fallback to exhaustive update on all associated records.
+        let origin = CrdsValueLabel::ContactInfo(*pubkey);
+        if let Some(origin) = self.table.get_mut(&origin) {
+            if origin.local_timestamp < now {
+                origin.local_timestamp = now;
+            }
+        } else if let Some(indices) = self.records.get(pubkey) {
             for index in indices {
                 let entry = self.table.index_mut(*index);
                 if entry.local_timestamp < now {
@@ -287,28 +358,31 @@ impl Crds {
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
-        #[rustversion::before(1.49.0)]
-        fn select_nth<T: Ord>(xs: &mut Vec<T>, _nth: usize) {
-            xs.sort_unstable();
-        }
-        #[rustversion::since(1.49.0)]
-        fn select_nth<T: Ord>(xs: &mut Vec<T>, nth: usize) {
-            xs.select_nth_unstable(nth);
-        }
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
         // Given an index of all crd values associated with a pubkey,
         // returns crds labels of old values to be evicted.
         let evict = |pubkey, index: &IndexSet<usize>| {
-            let timeout = *timeouts.get(pubkey).unwrap_or(&default_timeout);
+            let timeout = timeouts.get(pubkey).copied().unwrap_or(default_timeout);
+            let local_timestamp = {
+                let origin = CrdsValueLabel::ContactInfo(*pubkey);
+                match self.table.get(&origin) {
+                    Some(origin) => origin.local_timestamp,
+                    None => 0,
+                }
+            };
             let mut old_labels = Vec::new();
             // Buffer of crds values to be evicted based on their wallclock.
             let mut recent_unlimited_labels: Vec<(u64 /*wallclock*/, usize /*index*/)> = index
                 .into_iter()
                 .filter_map(|ix| {
                     let (label, value) = self.table.get_index(*ix).unwrap();
-                    if value.local_timestamp.saturating_add(timeout) <= now {
+                    let expiry_timestamp = value
+                        .local_timestamp
+                        .max(local_timestamp)
+                        .saturating_add(timeout);
+                    if expiry_timestamp <= now {
                         old_labels.push(label.clone());
                         None
                     } else {
@@ -325,7 +399,7 @@ impl Crds {
                 .saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
             // Partition on wallclock to discard the older ones.
             if nth > 0 && nth < recent_unlimited_labels.len() {
-                select_nth(&mut recent_unlimited_labels, nth);
+                recent_unlimited_labels.select_nth_unstable(nth);
             }
             old_labels.extend(
                 recent_unlimited_labels
@@ -354,8 +428,12 @@ impl Crds {
             CrdsData::Vote(_, _) => {
                 self.votes.swap_remove(&index);
             }
+            CrdsData::EpochSlots(_, _) => {
+                self.epoch_slots.remove(&value.ordinal);
+            }
             _ => (),
         }
+        self.entries.remove(&value.ordinal);
         // Remove the index from records associated with the value's pubkey.
         let pubkey = value.value.pubkey();
         let mut records_entry = match self.records.entry(pubkey) {
@@ -385,8 +463,12 @@ impl Crds {
                     self.votes.swap_remove(&size);
                     self.votes.insert(index);
                 }
+                CrdsData::EpochSlots(_, _) => {
+                    self.epoch_slots.insert(value.ordinal, index);
+                }
                 _ => (),
             };
+            self.entries.insert(value.ordinal, index);
             let pubkey = value.value.pubkey();
             let records = self.records.get_mut(&pubkey).unwrap();
             records.swap_remove(&size);
@@ -394,14 +476,74 @@ impl Crds {
         }
         Some(value)
     }
+
+    /// Returns true if the number of unique pubkeys in the table exceeds the
+    /// given capacity (plus some margin).
+    /// Allows skipping unnecessary calls to trim without obtaining a write
+    /// lock on gossip.
+    pub(crate) fn should_trim(&self, cap: usize) -> bool {
+        // Allow 10% overshoot so that the computation cost is amortized down.
+        10 * self.records.len() > 11 * cap
+    }
+
+    /// Trims the table by dropping all values associated with the pubkeys with
+    /// the lowest stake, so that the number of unique pubkeys are bounded.
+    pub(crate) fn trim(
+        &mut self,
+        cap: usize, // Capacity hint for number of unique pubkeys.
+        // Set of pubkeys to never drop.
+        // e.g. trusted validators, self pubkey, ...
+        keep: &[Pubkey],
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Result<Vec<VersionedCrdsValue>, CrdsError> {
+        if self.should_trim(cap) {
+            let size = self.records.len().saturating_sub(cap);
+            self.drop(size, keep, stakes)
+        } else {
+            Ok(Vec::default())
+        }
+    }
+
+    // Drops 'size' many pubkeys with the lowest stake.
+    fn drop(
+        &mut self,
+        size: usize,
+        keep: &[Pubkey],
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Result<Vec<VersionedCrdsValue>, CrdsError> {
+        if stakes.is_empty() {
+            return Err(CrdsError::UnknownStakes);
+        }
+        let mut keys: Vec<_> = self
+            .records
+            .keys()
+            .map(|k| (stakes.get(k).copied().unwrap_or_default(), *k))
+            .collect();
+        if size < keys.len() {
+            keys.select_nth_unstable(size);
+        }
+        let keys: Vec<_> = keys
+            .into_iter()
+            .take(size)
+            .map(|(_, k)| k)
+            .filter(|k| !keep.contains(k))
+            .flat_map(|k| &self.records[&k])
+            .map(|k| self.table.get_index(*k).unwrap().0.clone())
+            .collect();
+        Ok(keys.iter().map(|k| self.remove(k).unwrap()).collect())
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{contact_info::ContactInfo, crds_value::NodeInstance};
+    use crate::{
+        contact_info::ContactInfo,
+        crds_value::{new_rand_timestamp, NodeInstance},
+    };
     use rand::{thread_rng, Rng};
     use rayon::ThreadPoolBuilder;
+    use solana_sdk::signature::{Keypair, Signer};
     use std::{collections::HashSet, iter::repeat_with};
 
     #[test]
@@ -417,8 +559,12 @@ mod test {
     fn test_update_old() {
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let value_hash = hash(&serialize(&val).unwrap());
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
-        assert_eq!(crds.insert(val.clone(), 1), Err(CrdsError::InsertFailed));
+        assert_eq!(
+            crds.insert(val.clone(), 1),
+            Err(CrdsError::InsertFailed(value_hash))
+        );
         assert_eq!(crds.table[&val.label()].local_timestamp, 0);
     }
     #[test]
@@ -447,8 +593,7 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
-
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
+        assert_eq!(crds.table[&val.label()].ordinal, 0);
 
         let val2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(val2.label().pubkey(), val.label().pubkey());
@@ -456,20 +601,20 @@ mod test {
 
         crds.update_record_timestamp(&val.label().pubkey(), 2);
         assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
+        assert_eq!(crds.table[&val.label()].ordinal, 1);
         assert_eq!(crds.table[&val2.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val2.label()].insert_timestamp, 0);
+        assert_eq!(crds.table[&val2.label()].ordinal, 1);
 
         crds.update_record_timestamp(&val.label().pubkey(), 1);
         assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
+        assert_eq!(crds.table[&val.label()].ordinal, 1);
 
         let mut ci = ContactInfo::default();
         ci.wallclock += 1;
         let val3 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
         assert_matches!(crds.insert(val3, 3), Ok(Some(_)));
         assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
-        assert_eq!(crds.table[&val2.label()].insert_timestamp, 3);
+        assert_eq!(crds.table[&val2.label()].ordinal, 2);
     }
     #[test]
     fn test_find_old_records_default() {
@@ -612,8 +757,9 @@ mod test {
         let mut num_overrides = 0;
         for _ in 0..4096 {
             let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
-            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
-            match crds.insert_versioned(value) {
+            let value = CrdsValue::new_rand(&mut rng, Some(keypair));
+            let local_timestamp = new_rand_timestamp(&mut rng);
+            match crds.insert(value, local_timestamp) {
                 Ok(None) => {
                     num_inserts += 1;
                     check_crds_shards(&crds);
@@ -626,7 +772,7 @@ mod test {
                 Err(_) => (),
             }
         }
-        assert_eq!(num_inserts, crds.num_inserts);
+        assert_eq!(num_inserts, crds.cursor.0 as usize);
         assert!(num_inserts > 700);
         assert!(num_overrides > 500);
         assert!(crds.table.len() > 200);
@@ -641,29 +787,131 @@ mod test {
         }
     }
 
+    fn check_crds_value_indices<R: rand::Rng>(
+        rng: &mut R,
+        crds: &Crds,
+    ) -> (
+        usize, // number of nodes
+        usize, // number of votes
+        usize, // number of epoch slots
+    ) {
+        let size = crds.table.len();
+        let since = if size == 0 || rng.gen() {
+            rng.gen_range(0, crds.cursor.0 + 1)
+        } else {
+            crds.table[rng.gen_range(0, size)].ordinal
+        };
+        let num_epoch_slots = crds
+            .table
+            .values()
+            .filter(|v| v.ordinal >= since)
+            .filter(|v| matches!(v.value.data, CrdsData::EpochSlots(_, _)))
+            .count();
+        let mut cursor = Cursor(since);
+        assert_eq!(num_epoch_slots, crds.get_epoch_slots(&mut cursor).count());
+        assert_eq!(
+            cursor.0,
+            crds.epoch_slots
+                .iter()
+                .last()
+                .map(|(k, _)| k + 1)
+                .unwrap_or_default()
+                .max(since)
+        );
+        for value in crds.get_epoch_slots(&mut Cursor(since)) {
+            assert!(value.ordinal >= since);
+            match value.value.data {
+                CrdsData::EpochSlots(_, _) => (),
+                _ => panic!("not an epoch-slot!"),
+            }
+        }
+        let num_votes = crds
+            .table
+            .values()
+            .filter(|v| v.ordinal >= since)
+            .filter(|v| matches!(v.value.data, CrdsData::Vote(_, _)))
+            .count();
+        let mut cursor = Cursor(since);
+        assert_eq!(num_votes, crds.get_votes(&mut cursor).count());
+        assert_eq!(
+            cursor.0,
+            crds.table
+                .values()
+                .filter(|v| matches!(v.value.data, CrdsData::Vote(_, _)))
+                .map(|v| v.ordinal)
+                .max()
+                .map(|k| k + 1)
+                .unwrap_or_default()
+                .max(since)
+        );
+        for value in crds.get_votes(&mut Cursor(since)) {
+            assert!(value.ordinal >= since);
+            match value.value.data {
+                CrdsData::Vote(_, _) => (),
+                _ => panic!("not a vote!"),
+            }
+        }
+        let num_entries = crds
+            .table
+            .values()
+            .filter(|value| value.ordinal >= since)
+            .count();
+        let mut cursor = Cursor(since);
+        assert_eq!(num_entries, crds.get_entries(&mut cursor).count());
+        assert_eq!(
+            cursor.0,
+            crds.entries
+                .iter()
+                .last()
+                .map(|(k, _)| k + 1)
+                .unwrap_or_default()
+                .max(since)
+        );
+        for value in crds.get_entries(&mut Cursor(since)) {
+            assert!(value.ordinal >= since);
+        }
+        let num_nodes = crds
+            .table
+            .values()
+            .filter(|v| matches!(v.value.data, CrdsData::ContactInfo(_)))
+            .count();
+        let num_votes = crds
+            .table
+            .values()
+            .filter(|v| matches!(v.value.data, CrdsData::Vote(_, _)))
+            .count();
+        let num_epoch_slots = crds
+            .table
+            .values()
+            .filter(|v| matches!(v.value.data, CrdsData::EpochSlots(_, _)))
+            .count();
+        assert_eq!(
+            crds.table.len(),
+            crds.get_entries(&mut Cursor::default()).count()
+        );
+        assert_eq!(num_nodes, crds.get_nodes_contact_info().count());
+        assert_eq!(num_votes, crds.get_votes(&mut Cursor::default()).count());
+        assert_eq!(
+            num_epoch_slots,
+            crds.get_epoch_slots(&mut Cursor::default()).count()
+        );
+        for vote in crds.get_votes(&mut Cursor::default()) {
+            match vote.value.data {
+                CrdsData::Vote(_, _) => (),
+                _ => panic!("not a vote!"),
+            }
+        }
+        for epoch_slots in crds.get_epoch_slots(&mut Cursor::default()) {
+            match epoch_slots.value.data {
+                CrdsData::EpochSlots(_, _) => (),
+                _ => panic!("not an epoch-slot!"),
+            }
+        }
+        (num_nodes, num_votes, num_epoch_slots)
+    }
+
     #[test]
     fn test_crds_value_indices() {
-        fn check_crds_value_indices(crds: &Crds) -> (usize, usize) {
-            let num_nodes = crds
-                .table
-                .values()
-                .filter(|value| matches!(value.value.data, CrdsData::ContactInfo(_)))
-                .count();
-            let num_votes = crds
-                .table
-                .values()
-                .filter(|value| matches!(value.value.data, CrdsData::Vote(_, _)))
-                .count();
-            assert_eq!(num_nodes, crds.get_nodes_contact_info().count());
-            assert_eq!(num_votes, crds.get_votes().count());
-            for vote in crds.get_votes() {
-                match vote.value.data {
-                    CrdsData::Vote(_, _) => (),
-                    _ => panic!("not a vote!"),
-                }
-            }
-            (num_nodes, num_votes)
-        }
         let mut rng = thread_rng();
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(128).collect();
         let mut crds = Crds::default();
@@ -671,8 +919,9 @@ mod test {
         let mut num_overrides = 0;
         for k in 0..4096 {
             let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
-            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
-            match crds.insert_versioned(value) {
+            let value = CrdsValue::new_rand(&mut rng, Some(keypair));
+            let local_timestamp = new_rand_timestamp(&mut rng);
+            match crds.insert(value, local_timestamp) {
                 Ok(None) => {
                     num_inserts += 1;
                 }
@@ -682,26 +931,31 @@ mod test {
                 }
                 Err(_) => (),
             }
-            if k % 64 == 0 {
-                check_crds_value_indices(&crds);
+            if k % 16 == 0 {
+                check_crds_value_indices(&mut rng, &crds);
             }
         }
-        assert_eq!(num_inserts, crds.num_inserts);
+        assert_eq!(num_inserts, crds.cursor.0 as usize);
         assert!(num_inserts > 700);
         assert!(num_overrides > 500);
         assert!(crds.table.len() > 200);
         assert!(num_inserts > crds.table.len());
-        let (num_nodes, num_votes) = check_crds_value_indices(&crds);
+        let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
         assert!(num_nodes > 100, "num nodes: {}", num_nodes);
         assert!(num_votes > 100, "num votes: {}", num_votes);
+        assert!(
+            num_epoch_slots > 100,
+            "num epoch slots: {}",
+            num_epoch_slots
+        );
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key);
-            if crds.table.len() % 64 == 0 {
-                check_crds_value_indices(&crds);
+            if crds.table.len() % 16 == 0 {
+                check_crds_value_indices(&mut rng, &crds);
             }
         }
     }
@@ -725,8 +979,9 @@ mod test {
         let mut crds = Crds::default();
         for k in 0..4096 {
             let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
-            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
-            let _ = crds.insert_versioned(value);
+            let value = CrdsValue::new_rand(&mut rng, Some(keypair));
+            let local_timestamp = new_rand_timestamp(&mut rng);
+            let _ = crds.insert(value, local_timestamp);
             if k % 64 == 0 {
                 check_crds_records(&crds);
             }
@@ -743,6 +998,57 @@ mod test {
             }
         }
         assert!(crds.records.is_empty());
+    }
+
+    #[test]
+    fn test_drop() {
+        fn num_unique_pubkeys<'a, I>(values: I) -> usize
+        where
+            I: IntoIterator<Item = &'a VersionedCrdsValue>,
+        {
+            values
+                .into_iter()
+                .map(|v| v.value.pubkey())
+                .collect::<HashSet<_>>()
+                .len()
+        }
+        let mut rng = thread_rng();
+        let keypairs: Vec<_> = repeat_with(Keypair::new).take(64).collect();
+        let stakes = keypairs
+            .iter()
+            .map(|k| (k.pubkey(), rng.gen_range(0, 1000)))
+            .collect();
+        let mut crds = Crds::default();
+        for _ in 0..2048 {
+            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let value = CrdsValue::new_rand(&mut rng, Some(keypair));
+            let local_timestamp = new_rand_timestamp(&mut rng);
+            let _ = crds.insert(value, local_timestamp);
+        }
+        let num_values = crds.table.len();
+        let num_pubkeys = num_unique_pubkeys(crds.table.values());
+        assert!(!crds.should_trim(num_pubkeys));
+        assert!(crds.should_trim(num_pubkeys * 5 / 6));
+        let purged = crds.drop(16, &[], &stakes).unwrap();
+        assert_eq!(purged.len() + crds.table.len(), num_values);
+        assert_eq!(num_unique_pubkeys(&purged), 16);
+        assert_eq!(num_unique_pubkeys(crds.table.values()), num_pubkeys - 16);
+        let attach_stake = |v: &VersionedCrdsValue| {
+            let pk = v.value.pubkey();
+            (stakes[&pk], pk)
+        };
+        assert!(
+            purged.iter().map(attach_stake).max().unwrap()
+                < crds.table.values().map(attach_stake).min().unwrap()
+        );
+        let purged = purged
+            .into_iter()
+            .map(|v| v.value.pubkey())
+            .collect::<HashSet<_>>();
+        for (k, v) in crds.table {
+            assert!(!purged.contains(&k.pubkey()));
+            assert!(!purged.contains(&v.value.pubkey()));
+        }
     }
 
     #[test]
@@ -768,97 +1074,94 @@ mod test {
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_equal() {
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
-        let v1 = VersionedCrdsValue::new(1, val.clone());
-        let v2 = VersionedCrdsValue::new(1, val);
+        let v1 = VersionedCrdsValue::new(val.clone(), Cursor::default(), 1);
+        let v2 = VersionedCrdsValue::new(val, Cursor::default(), 1);
         assert_eq!(v1, v2);
         assert!(!(v1 != v2));
-        assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Equal));
-        assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Equal));
+        assert!(!overrides(&v1.value, &v2));
+        assert!(!overrides(&v2.value, &v1));
     }
     #[test]
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_hash_order() {
         let v1 = VersionedCrdsValue::new(
-            1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::default(),
                 0,
             ))),
+            Cursor::default(),
+            1, // local_timestamp
         );
-        let v2 = VersionedCrdsValue::new(1, {
-            let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-            contact_info.rpc = socketaddr!("0.0.0.0:0");
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info))
-        });
+        let v2 = VersionedCrdsValue::new(
+            {
+                let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
+                contact_info.rpc = socketaddr!("0.0.0.0:0");
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info))
+            },
+            Cursor::default(),
+            1, // local_timestamp
+        );
 
         assert_eq!(v1.value.label(), v2.value.label());
         assert_eq!(v1.value.wallclock(), v2.value.wallclock());
         assert_ne!(v1.value_hash, v2.value_hash);
         assert!(v1 != v2);
         assert!(!(v1 == v2));
-        if v1 > v2 {
-            assert!(v1 > v2);
-            assert!(v2 < v1);
-            assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Greater));
-            assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Less));
-        } else if v2 > v1 {
-            assert!(v1 < v2);
-            assert!(v2 > v1);
-            assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Less));
-            assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Greater));
+        if v1.value_hash > v2.value_hash {
+            assert!(overrides(&v1.value, &v2));
+            assert!(!overrides(&v2.value, &v1));
         } else {
-            panic!("bad PartialOrd implementation?");
+            assert!(overrides(&v2.value, &v1));
+            assert!(!overrides(&v1.value, &v2));
         }
     }
     #[test]
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_wallclock_order() {
         let v1 = VersionedCrdsValue::new(
-            1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::default(),
                 1,
             ))),
+            Cursor::default(),
+            1, // local_timestamp
         );
         let v2 = VersionedCrdsValue::new(
-            1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::default(),
                 0,
             ))),
+            Cursor::default(),
+            1, // local_timestamp
         );
         assert_eq!(v1.value.label(), v2.value.label());
-        assert!(v1 > v2);
-        assert!(!(v1 < v2));
+        assert!(overrides(&v1.value, &v2));
+        assert!(!overrides(&v2.value, &v1));
         assert!(v1 != v2);
         assert!(!(v1 == v2));
-        assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Greater));
-        assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Less));
     }
     #[test]
+    #[should_panic(expected = "labels mismatch!")]
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
-            1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
+            Cursor::default(),
+            1, // local_timestamp
         );
         let v2 = VersionedCrdsValue::new(
-            1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
+            Cursor::default(),
+            1, // local_timestamp
         );
         assert_ne!(v1, v2);
         assert!(!(v1 == v2));
-        assert!(!(v1 < v2));
-        assert!(!(v1 > v2));
-        assert!(!(v2 < v1));
-        assert!(!(v2 > v1));
-        assert_eq!(v1.partial_cmp(&v2), None);
-        assert_eq!(v2.partial_cmp(&v1), None);
+        assert!(!overrides(&v2.value, &v1));
     }
 }

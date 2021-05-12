@@ -1,16 +1,23 @@
 use {
+    bzip2::bufread::BzDecoder,
     clap::{
         crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
     },
+    regex::Regex,
+    solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
+        collections::HashMap,
         env,
         ffi::OsStr,
-        fs,
+        fs::{self, File},
+        io::{prelude::*, BufReader, BufWriter},
         path::{Path, PathBuf},
         process::exit,
-        process::Command,
+        process::{Command, Stdio},
+        str::FromStr,
     },
+    tar::Archive,
 };
 
 struct Config {
@@ -44,7 +51,7 @@ impl Default for Config {
     }
 }
 
-fn spawn<I, S>(program: &Path, args: I)
+fn spawn<I, S>(program: &Path, args: I) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -56,17 +63,221 @@ where
     }
     println!();
 
-    let mut child = Command::new(program)
+    let child = Command::new(program)
         .args(&args)
+        .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_else(|err| {
             eprintln!("Failed to execute {}: {}", program.display(), err);
             exit(1);
         });
 
-    let exit_status = child.wait().expect("failed to wait on child");
-    if !exit_status.success() {
+    let output = child.wait_with_output().expect("failed to wait on child");
+    if !output.status.success() {
         exit(1);
+    }
+    output
+        .stdout
+        .as_slice()
+        .iter()
+        .map(|&c| c as char)
+        .collect::<String>()
+}
+
+// Check whether a package is installed and install it if missing.
+fn install_if_missing(
+    config: &Config,
+    package: &str,
+    version: &str,
+    url: &str,
+    file: &Path,
+) -> Result<(), String> {
+    // Check whether the package is already in ~/.cache/solana.
+    // Donwload it and place in the proper location if not found.
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        eprintln!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    let target_path = home_dir
+        .join(".cache")
+        .join("solana")
+        .join(version)
+        .join(package);
+    if !target_path.is_dir() {
+        if target_path.exists() {
+            fs::remove_file(&target_path).map_err(|err| err.to_string())?;
+        }
+        let mut url = String::from(url);
+        url.push('/');
+        url.push_str(version);
+        url.push('/');
+        url.push_str(file.to_str().unwrap());
+        download_file(&url.as_str(), &file, true)?;
+        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
+        let zip = File::open(&file).map_err(|err| err.to_string())?;
+        let tar = BzDecoder::new(BufReader::new(zip));
+        let mut archive = Archive::new(tar);
+        archive
+            .unpack(&target_path)
+            .map_err(|err| err.to_string())?;
+        fs::remove_file(file).map_err(|err| err.to_string())?;
+    }
+    // Make a symbolyc link source_path -> target_path in the
+    // sdk/bpf/dependencies directory if no valid link found.
+    let source_base = config.bpf_sdk.join("dependencies");
+    if !source_base.exists() {
+        fs::create_dir_all(&source_base).map_err(|err| err.to_string())?;
+    }
+    let source_path = source_base.join(package);
+    // Check whether the correct symbolic link exists.
+    let missing_source = if source_path.exists() {
+        let invalid_link = if let Ok(link_target) = source_path.read_link() {
+            link_target != target_path
+        } else {
+            true
+        };
+        if invalid_link {
+            fs::remove_file(&source_path).map_err(|err| err.to_string())?;
+        }
+        invalid_link
+    } else {
+        true
+    };
+    if missing_source {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target_path, source_path).map_err(|err| err.to_string())?;
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(target_path, source_path)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+// Process dump file attributing call instructions with callee function names
+fn postprocess_dump(program_dump: &Path) {
+    if !program_dump.exists() {
+        return;
+    }
+    let postprocessed_dump = program_dump.with_extension("postprocessed");
+    let head_re = Regex::new(r"^([0-9a-f]{16}) (.+)").unwrap();
+    let insn_re = Regex::new(r"^ +([0-9]+)((\s[0-9a-f]{2})+)\s.+").unwrap();
+    let call_re = Regex::new(r"^ +([0-9]+)(\s[0-9a-f]{2})+\scall (-?)0x([0-9a-f]+)").unwrap();
+    let relo_re = Regex::new(r"^([0-9a-f]{16})  [0-9a-f]{16} R_BPF_64_32 +0{16} (.+)").unwrap();
+    let mut a2n: HashMap<i64, String> = HashMap::new();
+    let mut rel: HashMap<u64, String> = HashMap::new();
+    let mut name = String::from("");
+    let mut state = 0;
+    let file = match File::open(program_dump) {
+        Ok(x) => x,
+        _ => return,
+    };
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        if line == "Disassembly of section .text" {
+            state = 1;
+        }
+        if state == 0 {
+            if relo_re.is_match(line) {
+                let captures = relo_re.captures(line).unwrap();
+                let address = u64::from_str_radix(&captures[1], 16).unwrap();
+                let symbol = captures[2].to_string();
+                rel.insert(address, symbol);
+            }
+        } else if state == 1 {
+            if head_re.is_match(line) {
+                state = 2;
+                let captures = head_re.captures(line).unwrap();
+                name = captures[2].to_string();
+            }
+        } else if state == 2 {
+            state = 1;
+            if insn_re.is_match(line) {
+                let captures = insn_re.captures(line).unwrap();
+                let address = i64::from_str(&captures[1]).unwrap();
+                a2n.insert(address, name.clone());
+            }
+        }
+    }
+    let file = match File::create(&postprocessed_dump) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut out = BufWriter::new(file);
+    let file = match File::open(program_dump) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut pc = 0u64;
+    let mut step = 0u64;
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        if head_re.is_match(line) {
+            let captures = head_re.captures(line).unwrap();
+            pc = u64::from_str_radix(&captures[1], 16).unwrap();
+            writeln!(out, "{}", line).unwrap();
+            continue;
+        }
+        if insn_re.is_match(line) {
+            let captures = insn_re.captures(line).unwrap();
+            step = if captures[2].len() > 24 { 16 } else { 8 };
+        }
+        if call_re.is_match(line) {
+            if rel.contains_key(&pc) {
+                writeln!(out, "{} ; {}", line, rel[&pc]).unwrap();
+            } else {
+                let captures = call_re.captures(line).unwrap();
+                let pc = i64::from_str(&captures[1]).unwrap().checked_add(1).unwrap();
+                let offset = i64::from_str_radix(&captures[4], 16).unwrap();
+                let offset = if &captures[3] == "-" {
+                    offset.checked_neg().unwrap()
+                } else {
+                    offset
+                };
+                let address = pc.checked_add(offset).unwrap();
+                if a2n.contains_key(&address) {
+                    writeln!(out, "{} ; {}", line, a2n[&address]).unwrap();
+                } else {
+                    writeln!(out, "{}", line).unwrap();
+                }
+            }
+        } else {
+            writeln!(out, "{}", line).unwrap();
+        }
+        pc = pc.checked_add(step).unwrap();
+    }
+    fs::rename(postprocessed_dump, program_dump).unwrap();
+}
+
+// check whether custom BPF toolchain is linked, and link it if it is not.
+fn link_bpf_toolchain(config: &Config) {
+    let toolchain_path = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("rust");
+    let rustup = PathBuf::from("rustup");
+    let rustup_args = vec!["toolchain", "list", "-v"];
+    let rustup_output = spawn(&rustup, &rustup_args);
+    let mut do_link = true;
+    for line in rustup_output.lines() {
+        if line.starts_with("bpf") {
+            let mut it = line.split_whitespace();
+            let _ = it.next();
+            let path = it.next();
+            if path.unwrap() != toolchain_path.to_str().unwrap() {
+                let rustup_args = vec!["toolchain", "uninstall", "bpf"];
+                spawn(&rustup, &rustup_args);
+            } else {
+                do_link = false;
+            }
+            break;
+        }
+    }
+    if do_link {
+        let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
+        spawn(&rustup, &rustup_args);
     }
 }
 
@@ -118,7 +329,9 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory.join("bpfel-unknown-unknown/release");
+    let target_build_directory = target_directory
+        .join("bpfel-unknown-unknown")
+        .join("release");
 
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         eprintln!(
@@ -139,27 +352,71 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         println!("Legacy program feature detected");
     }
+    let bpf_tools_filename = if cfg!(target_os = "macos") {
+        "solana-bpf-tools-osx.tar.bz2"
+    } else {
+        "solana-bpf-tools-linux.tar.bz2"
+    };
+    install_if_missing(
+        &config,
+        "bpf-tools",
+        "v1.7",
+        "https://github.com/solana-labs/bpf-tools/releases/download",
+        &PathBuf::from(bpf_tools_filename),
+    )
+    .expect("Failed to install bpf-tools");
+    link_bpf_toolchain(&config);
 
-    let xargo_build = config.bpf_sdk.join("rust/xargo-build.sh");
-    let mut xargo_build_args = vec![];
+    let llvm_bin = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin");
+    env::set_var("CC", llvm_bin.join("clang"));
+    env::set_var("AR", llvm_bin.join("llvm-ar"));
+    env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
+    env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
+    let linker = llvm_bin.join("ld.lld");
+    let linker_script = config.bpf_sdk.join("rust").join("bpf.ld");
+    let mut rust_flags = String::from("-C lto=no");
+    rust_flags.push_str(" -C opt-level=2");
+    rust_flags.push_str(" -C link-arg=-z -C link-arg=notext");
+    rust_flags.push_str(" -C link-arg=-T");
+    rust_flags.push_str(linker_script.to_str().unwrap());
+    rust_flags.push_str(" -C link-arg=--Bdynamic");
+    rust_flags.push_str(" -C link-arg=-shared");
+    rust_flags.push_str(" -C link-arg=--threads=1");
+    rust_flags.push_str(" -C link-arg=--entry=entrypoint");
+    rust_flags.push_str(" -C linker=");
+    rust_flags.push_str(linker.to_str().unwrap());
+    env::set_var("RUSTFLAGS", rust_flags);
 
+    let cargo_build = PathBuf::from("cargo");
+    let mut cargo_build_args = vec![
+        "+bpf",
+        "build",
+        "--target",
+        "bpfel-unknown-unknown",
+        "--release",
+    ];
     if config.no_default_features {
-        xargo_build_args.push("--no-default-features");
+        cargo_build_args.push("--no-default-features");
     }
     for feature in &config.features {
-        xargo_build_args.push("--features");
-        xargo_build_args.push(feature);
+        cargo_build_args.push("--features");
+        cargo_build_args.push(feature);
     }
     if legacy_program_feature_present {
         if !config.no_default_features {
-            xargo_build_args.push("--no-default-features");
+            cargo_build_args.push("--no-default-features");
         }
-        xargo_build_args.push("--features=program");
+        cargo_build_args.push("--features=program");
     }
     if config.verbose {
-        xargo_build_args.push("--verbose");
+        cargo_build_args.push("--verbose");
     }
-    spawn(&config.bpf_sdk.join(xargo_build), &xargo_build_args);
+    spawn(&cargo_build, &cargo_build_args);
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
@@ -199,16 +456,17 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
             spawn(
-                &config.bpf_sdk.join("scripts/strip.sh"),
+                &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
             );
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
             spawn(
-                &config.bpf_sdk.join("scripts/dump.sh"),
+                &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
             );
+            postprocess_dump(&program_dump);
         }
 
         println!();
@@ -244,8 +502,14 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .packages
         .iter()
         .filter(|package| {
-            package.manifest_path.with_file_name("Xargo.toml").exists()
-                && metadata.workspace_members.contains(&package.id)
+            if metadata.workspace_members.contains(&package.id) {
+                for target in package.targets.iter() {
+                    if target.kind.contains(&"cdylib".to_string()) {
+                        return true;
+                    }
+                }
+            }
+            false
         })
         .collect::<Vec<_>>();
 
@@ -255,6 +519,10 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 }
 
 fn main() {
+    if cfg!(windows) {
+        println!("Solana Rust BPF toolchain is not available on Windows");
+        exit(1);
+    }
     let default_config = Config::default();
     let default_bpf_sdk = format!("{}", default_config.bpf_sdk.display());
 

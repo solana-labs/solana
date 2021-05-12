@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod bench;
 mod cli;
 pub mod order_book;

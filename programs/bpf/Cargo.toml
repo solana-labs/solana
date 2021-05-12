@@ -1,7 +1,7 @@
 [package]
 name = "solana-bpf-programs"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.6.0"
+version = "1.7.0"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "README.md"
@@ -23,16 +23,18 @@ bincode = "1.1.4"
 byteorder = "1.3.2"
 elf = "0.0.10"
 itertools = "0.10.0"
+log = "0.4.11"
 miow = "0.2.2"
 net2 = "0.2.37"
-solana-bpf-loader-program = { path = "../bpf_loader", version = "1.6.0" }
-solana-cli-output = { path = "../../cli-output", version = "1.6.0" }
-solana-logger = { path = "../../logger", version = "1.6.0" }
-solana-measure = { path = "../../measure", version = "1.6.0" }
-solana_rbpf = "=0.2.3"
-solana-runtime = { path = "../../runtime", version = "1.6.0" }
-solana-sdk = { path = "../../sdk", version = "1.6.0" }
-solana-transaction-status = { path = "../../transaction-status", version = "1.6.0" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.7.0" }
+solana-cli-output = { path = "../../cli-output", version = "=1.7.0" }
+solana-logger = { path = "../../logger", version = "=1.7.0" }
+solana-measure = { path = "../../measure", version = "=1.7.0" }
+solana_rbpf = "=0.2.8"
+solana-runtime = { path = "../../runtime", version = "=1.7.0" }
+solana-sdk = { path = "../../sdk", version = "=1.7.0" }
+solana-transaction-status = { path = "../../transaction-status", version = "=1.7.0" }
+solana-account-decoder = { path = "../../account-decoder", version = "=1.7.0" }
 
 
 [[bench]]
@@ -51,6 +53,7 @@ members = [
     "rust/dup_accounts",
     "rust/error_handling",
     "rust/external_spend",
+    "rust/finalize",
     "rust/instruction_introspection",
     "rust/invoke",
     "rust/invoke_and_error",
@@ -66,13 +69,12 @@ members = [
     "rust/param_passing",
     "rust/param_passing_dep",
     "rust/rand",
-    "rust/ristretto",
     "rust/ro_modify",
     "rust/sanity",
-    "rust/sha256",
+    "rust/sha",
     "rust/spoof1",
     "rust/spoof1_system",
-    "rust/sysval",
+    "rust/sysvar",
     "rust/upgradeable",
     "rust/upgraded",
 ]

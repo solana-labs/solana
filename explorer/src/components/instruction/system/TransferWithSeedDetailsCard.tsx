@@ -65,7 +65,7 @@ export function TransferWithSeedDetailsCard(props: {
       <tr>
         <td>Seed</td>
         <td className="text-lg-right">
-          <Copyable right text={info.sourceSeed}>
+          <Copyable text={info.sourceSeed}>
             <code>{info.sourceSeed}</code>
           </Copyable>
         </td>

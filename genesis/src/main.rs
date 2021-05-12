@@ -1,16 +1,15 @@
 //! A command-line executable for generating the chain's genesis config.
+#![allow(clippy::integer_arithmetic)]
 
 #[macro_use]
 extern crate solana_budget_program;
 #[macro_use]
 extern crate solana_exchange_program;
-#[macro_use]
-extern crate solana_vest_program;
 
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
-    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
+    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{
@@ -18,7 +17,7 @@ use solana_ledger::{
 };
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
-    account::Account,
+    account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -81,17 +80,19 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
             )
         })?;
 
-        let mut account = Account::new(account_details.balance, 0, &owner_program_id);
+        let mut account = AccountSharedData::new(account_details.balance, 0, &owner_program_id);
         if account_details.data != "~" {
-            account.data = base64::decode(account_details.data.as_str()).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Invalid account data: {}: {:?}", account_details.data, err),
-                )
-            })?;
+            account.set_data(
+                base64::decode(account_details.data.as_str()).map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Invalid account data: {}: {:?}", account_details.data, err),
+                    )
+                })?,
+            );
         }
-        account.executable = account_details.executable;
-        lamports += account.lamports;
+        account.set_executable(account_details.executable);
+        lamports += account.lamports();
         genesis_config.add_account(pubkey, account);
     }
 
@@ -325,6 +326,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
+                .validator(is_slot)
                 .takes_value(true)
                 .help("The number of slots in an epoch"),
         )
@@ -459,7 +461,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ClusterType::Development => {
                 let hashes_per_tick =
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
-                poh_config.hashes_per_tick = Some(hashes_per_tick);
+                poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
             }
             ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
                 poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
@@ -490,11 +492,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let native_instruction_processors = if cluster_type == ClusterType::Development {
-        vec![
-            solana_vest_program!(),
-            solana_budget_program!(),
-            solana_exchange_program!(),
-        ]
+        vec![solana_budget_program!(), solana_exchange_program!()]
     } else {
         vec![]
     };
@@ -502,10 +500,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut genesis_config = GenesisConfig {
         native_instruction_processors,
         ticks_per_slot,
-        epoch_schedule,
+        poh_config,
         fee_rate_governor,
         rent,
-        poh_config,
+        epoch_schedule,
         cluster_type,
         ..GenesisConfig::default()
     };
@@ -533,7 +531,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         genesis_config.add_account(
             *identity_pubkey,
-            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
+            AccountSharedData::new(bootstrap_validator_lamports, 0, &system_program::id()),
         );
 
         let vote_account = vote_state::create_account_with_authorized(
@@ -567,7 +565,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     if let Some(faucet_pubkey) = faucet_pubkey {
         genesis_config.add_account(
             faucet_pubkey,
-            Account::new(faucet_lamports, 0, &system_program::id()),
+            AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
         );
     }
 
@@ -617,13 +615,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         });
                     genesis_config.add_account(
                         address,
-                        Account {
+                        AccountSharedData::from(Account {
                             lamports: genesis_config.rent.minimum_balance(program_data.len()),
                             data: program_data,
                             executable: true,
                             owner: loader,
                             rent_epoch: 0,
-                        },
+                        }),
                     );
                 }
                 _ => unreachable!(),

@@ -42,6 +42,7 @@ Operate a configured testnet
  startnode    - Start an individual node (previously stopped with stopNode)
  stopnode     - Stop an individual node
  startclients - Start client nodes only
+ prepare      - Prepare software deployment. (Build/download the software release)
  update       - Deploy a new software update to the cluster
  upgrade      - Upgrade software on bootstrap validator. (Restart bootstrap validator manually to run it)
 
@@ -168,7 +169,7 @@ annotateBlockexplorerUrl() {
 }
 
 build() {
-  supported=("18.04")
+  supported=("20.04")
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
     # shellcheck source=ci/rust-version.sh
@@ -185,13 +186,29 @@ build() {
 
     buildVariant=
     if $debugBuild; then
-      buildVariant=debug
+      buildVariant=--debug
     fi
 
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$buildVariant\"
+      scripts/cargo-install-all.sh farf $buildVariant --validator-only
     "
+  )
+
+  (
+    set +e
+    COMMIT="$(git rev-parse HEAD)"
+    BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    TAG="$(git describe --exact-match --tags HEAD 2>/dev/null)"
+    if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+      NOTE=$TAG
+    else
+      NOTE=$BRANCH
+    fi
+    (
+      echo "channel: devbuild $NOTE"
+      echo "commit: $COMMIT"
+    ) > "$SOLANA_ROOT"/farf/version.yml
   )
   echo "Build took $SECONDS seconds"
 }
@@ -247,7 +264,7 @@ deployBootstrapValidator() {
     ;;
   local)
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:$CARGO_BIN/"
-    ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/version.yml "$ipAddress:~/"
     ;;
   skip)
     ;;
@@ -507,7 +524,7 @@ prepareDeploy() {
     if [[ -n $releaseChannel ]]; then
       echo "Downloading release from channel: $releaseChannel"
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
-      declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+      declare updateDownloadUrl=https://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       (
         set -x
         curl -L -I "$updateDownloadUrl"
@@ -818,8 +835,8 @@ while [[ -n $1 ]]; do
       doBuild=false
       shift 1
     elif [[ $1 = --limit-ledger-size ]]; then
-      maybeLimitLedgerSize="$1"
-      shift 1
+      maybeLimitLedgerSize="$1 $2"
+      shift 2
     elif [[ $1 = --skip-poh-verify ]]; then
       maybeSkipLedgerVerify="$1"
       shift 1
@@ -1038,6 +1055,9 @@ restart)
 start)
   prepareDeploy
   deploy
+  ;;
+prepare)
+  prepareDeploy
   ;;
 sanity)
   sanity

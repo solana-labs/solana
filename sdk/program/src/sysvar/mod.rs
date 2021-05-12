@@ -47,14 +47,14 @@ macro_rules! declare_sysvar_id(
     )
 );
 
-// owner pubkey for sysvar accounts
+// Owner pubkey for sysvar accounts
 crate::declare_id!("Sysvar1111111111111111111111111111111111111");
 
 pub trait SysvarId {
     fn check_id(pubkey: &Pubkey) -> bool;
 }
 
-// utilities for moving into and out of Accounts
+// Sysvar utilities
 pub trait Sysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
 {
@@ -70,6 +70,34 @@ pub trait Sysvar:
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
     }
+    fn get() -> Result<Self, ProgramError> {
+        Err(ProgramError::UnsupportedSysvar)
+    }
+}
+
+#[macro_export]
+macro_rules! impl_sysvar_get {
+    ($syscall_name:ident) => {
+        fn get() -> Result<Self, ProgramError> {
+            let mut var = Self::default();
+            let var_addr = &mut var as *mut _ as *mut u8;
+
+            #[cfg(target_arch = "bpf")]
+            let result = unsafe {
+                extern "C" {
+                    fn $syscall_name(var_addr: *mut u8) -> u64;
+                }
+                $syscall_name(var_addr)
+            };
+            #[cfg(not(target_arch = "bpf"))]
+            let result = crate::program_stubs::$syscall_name(var_addr);
+
+            match result {
+                crate::entrypoint::SUCCESS => Ok(var),
+                e => Err(e.into()),
+            }
+        }
+    };
 }
 
 #[cfg(test)]

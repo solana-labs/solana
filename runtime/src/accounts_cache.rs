@@ -1,6 +1,12 @@
 use dashmap::DashMap;
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{
+    account::{AccountSharedData, ReadableAccount},
+    clock::Slot,
+    hash::Hash,
+    pubkey::Pubkey,
+};
 use std::{
+    borrow::Borrow,
     collections::BTreeSet,
     ops::Deref,
     sync::{
@@ -42,24 +48,37 @@ impl SlotCacheInner {
         );
     }
 
-    pub fn insert(&self, pubkey: &Pubkey, account: Account, hash: Hash) {
+    pub fn insert(
+        &self,
+        pubkey: &Pubkey,
+        account: AccountSharedData,
+        hash: Option<impl Borrow<Hash>>,
+        slot: Slot,
+    ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
             self.same_account_writes_size
-                .fetch_add(account.data.len() as u64, Ordering::Relaxed);
+                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
         } else {
             self.unique_account_writes_size
-                .fetch_add(account.data.len() as u64, Ordering::Relaxed);
+                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
         }
-        self.cache.insert(*pubkey, CachedAccount { account, hash });
+        let item = Arc::new(CachedAccountInner {
+            account,
+            hash: RwLock::new(hash.map(|h| *h.borrow())),
+            slot,
+            pubkey: *pubkey,
+        });
+        self.cache.insert(*pubkey, item.clone());
+        item
     }
 
     pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<CachedAccount> {
         self.cache
             .get(pubkey)
             // 1) Maybe can eventually use a Cow to avoid a clone on every read
-            // 2) Popping is only safe if its guaranteed only replay/banking threads
-            // are reading from the AccountsDb
+            // 2) Popping is only safe if it's guaranteed that only
+            //    replay/banking threads are reading from the AccountsDb
             .map(|account_ref| account_ref.value().clone())
     }
 
@@ -70,6 +89,11 @@ impl SlotCacheInner {
     pub fn is_frozen(&self) -> bool {
         self.is_frozen.load(Ordering::SeqCst)
     }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.unique_account_writes_size.load(Ordering::Relaxed)
+            + self.same_account_writes_size.load(Ordering::Relaxed)
+    }
 }
 
 impl Deref for SlotCacheInner {
@@ -79,10 +103,33 @@ impl Deref for SlotCacheInner {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CachedAccount {
-    pub account: Account,
-    pub hash: Hash,
+pub type CachedAccount = Arc<CachedAccountInner>;
+
+#[derive(Debug)]
+pub struct CachedAccountInner {
+    pub account: AccountSharedData,
+    hash: RwLock<Option<Hash>>,
+    slot: Slot,
+    pubkey: Pubkey,
+}
+
+impl CachedAccountInner {
+    pub fn hash(&self) -> Hash {
+        let hash = self.hash.read().unwrap();
+        match *hash {
+            Some(hash) => hash,
+            None => {
+                drop(hash);
+                let hash = crate::accounts_db::AccountsDb::hash_account(
+                    self.slot,
+                    &self.account,
+                    &self.pubkey,
+                );
+                *self.hash.write().unwrap() = Some(hash);
+                hash
+            }
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -118,7 +165,13 @@ impl AccountsCache {
         );
     }
 
-    pub fn store(&self, slot: Slot, pubkey: &Pubkey, account: Account, hash: Hash) {
+    pub fn store(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        account: AccountSharedData,
+        hash: Option<impl Borrow<Hash>>,
+    ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -130,7 +183,7 @@ impl AccountsCache {
                 .or_insert(Arc::new(SlotCacheInner::default()))
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash);
+        slot_cache.insert(pubkey, account, hash, slot)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -164,7 +217,7 @@ impl AccountsCache {
             // we return all slots <= `max_root`
             std::mem::replace(&mut w_maybe_unflushed_roots, greater_than_max_root)
         } else {
-            std::mem::replace(&mut *w_maybe_unflushed_roots, BTreeSet::new())
+            std::mem::take(&mut *w_maybe_unflushed_roots)
         }
     }
 
@@ -230,8 +283,8 @@ pub mod tests {
         cache.store(
             inserted_slot,
             &Pubkey::new_unique(),
-            Account::new(1, 0, &Pubkey::default()),
-            Hash::default(),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
+            Some(&Hash::default()),
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -248,8 +301,8 @@ pub mod tests {
         cache.store(
             inserted_slot,
             &Pubkey::new_unique(),
-            Account::new(1, 0, &Pubkey::default()),
-            Hash::default(),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
+            Some(&Hash::default()),
         );
 
         // If the cache is told the size limit is 0, it should return nothing because there's only

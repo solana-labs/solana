@@ -1,19 +1,21 @@
-use crate::keypair::{
-    keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
-    ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+use {
+    crate::keypair::{
+        keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+        ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    },
+    chrono::DateTime,
+    clap::ArgMatches,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        clock::UnixTimestamp,
+        commitment_config::CommitmentConfig,
+        genesis_config::ClusterType,
+        native_token::sol_to_lamports,
+        pubkey::Pubkey,
+        signature::{read_keypair_file, Keypair, Signature, Signer},
+    },
+    std::{str::FromStr, sync::Arc},
 };
-use chrono::DateTime;
-use clap::ArgMatches;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    clock::UnixTimestamp,
-    commitment_config::CommitmentConfig,
-    genesis_config::ClusterType,
-    native_token::sol_to_lamports,
-    pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, Signature, Signer},
-};
-use std::{str::FromStr, sync::Arc};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
@@ -55,7 +57,7 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            keypair_from_seed_phrase(name, skip_validation, true).ok()
+            keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
         } else {
             read_keypair_file(value).ok()
         }
@@ -70,7 +72,7 @@ pub fn keypairs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Keypair>>
             .filter_map(|value| {
                 if value == ASK_KEYWORD {
                     let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                    keypair_from_seed_phrase(name, skip_validation, true).ok()
+                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
                 } else {
                     read_keypair_file(value).ok()
                 }

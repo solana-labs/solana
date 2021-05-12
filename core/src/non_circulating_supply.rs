@@ -2,7 +2,7 @@ use solana_runtime::{
     accounts_index::{AccountIndex, IndexKey},
     bank::Bank,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::ReadableAccount, pubkey::Pubkey};
 use solana_stake_program::stake_state::StakeState;
 use std::{collections::HashSet, sync::Arc};
 
@@ -31,16 +31,16 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         bank.get_filtered_indexed_accounts(
             &IndexKey::ProgramId(solana_stake_program::id()),
             // The program-id account index checks for Account owner on inclusion. However, due to
-            // the current AccountsDB implementation, an account may remain in storage as a
+            // the current AccountsDb implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
-            |account| account.owner == solana_stake_program::id(),
+            |account| account.owner() == &solana_stake_program::id(),
         )
     } else {
         bank.get_program_accounts(&solana_stake_program::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
-        let stake_account = StakeState::from(&account).unwrap_or_default();
+        let stake_account = StakeState::from(account).unwrap_or_default();
         match stake_account {
             StakeState::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
@@ -119,6 +119,52 @@ solana_sdk::pubkeys!(
         "CUageMFi49kzoDqtdU8NvQ4Bq3sbtJygjKDAXJ45nmAi",
         "5smrYwb1Hr2T8XMnvsqccTgXxuqQs14iuE8RbHFYf2Cf",
         "xQadXQiUTCCFhfHjvQx1hyJK6KVWr1w2fD6DT3cdwj7",
+        "8DE8fqPfv1fp9DHyGyDFFaMjpopMgDeXspzoi9jpBJjC",
+        "3itU5ME8L6FDqtMiRoUiT1F7PwbkTtHBbW51YWD5jtjm",
+        "AsrYX4FeLXnZcrjcZmrASY2Eq1jvEeQfwxtNTxS5zojA",
+        "8rT45mqpuDBR1vcnDc9kwP9DrZAXDR4ZeuKWw3u1gTGa",
+        "nGME7HgBT6tAJN1f6YuCCngpqT5cvSTndZUVLjQ4jwA",
+        "CzAHrrrHKx9Lxf6wdCMrsZkLvk74c7J2vGv8VYPUmY6v",
+        "AzHQ8Bia1grVVbcGyci7wzueSWkgvu7YZVZ4B9rkL5P6",
+        "FiWYY85b58zEEcPtxe3PuqzWPjqBJXqdwgZeqSBmT9Cn",
+        "GpxpMVhrBBBEYbEJxdR62w3daWz444V7m6dxYDZKH77D",
+        "3bTGcGB9F98XxnrBNftmmm48JGfPgi5sYxDEKiCjQYk3",
+        "8pNBEppa1VcFAsx4Hzq9CpdXUXZjUXbvQwLX2K7QsCwb",
+        "HKJgYGTTYYR2ZkfJKHbn58w676fKueQXmvbtpyvrSM3N",
+        "3jnknRabs7G2V9dKhxd2KP85pNWXKXiedYnYxtySnQMs",
+        "4sxwau4mdqZ8zEJsfryXq4QFYnMJSCp3HWuZQod8WU5k",
+        "Fg12tB1tz8w6zJSQ4ZAGotWoCztdMJF9hqK8R11pakog",
+        "GEWSkfWgHkpiLbeKaAnwvqnECGdRNf49at5nFccVey7c",
+        "CND6ZjRTzaCFVdX7pSSWgjTfHZuhxqFDoUBqWBJguNoA",
+        "2WWb1gRzuXDd5viZLQF7pNRR6Y7UiyeaPpaL35X6j3ve",
+        "BUnRE27mYXN9p8H1Ay24GXhJC88q2CuwLoNU2v2CrW4W",
+        "CsUqV42gVQLJwQsKyjWHqGkfHarxn9hcY4YeSjgaaeTd",
+        "5khMKAcvmsFaAhoKkdg3u5abvKsmjUQNmhTNP624WB1F",
+        "GpYnVDgB7dzvwSgsjQFeHznjG6Kt1DLBFYrKxjGU1LuD",
+        "DQQGPtj7pphPHCLzzBuEyDDQByUcKGrsJdsH7SP3hAug",
+        "FwfaykN7ACnsEUDHANzGHqTGQZMcGnUSsahAHUqbdPrz",
+        "JCwT5Ygmq3VeBEbDjL8s8E82Ra2rP9bq45QfZE7Xyaq7",
+        "H3Ni7vG1CsmJZdTvxF7RkAf9UM5qk4RsohJsmPvtZNnu",
+        "CVgyXrbEd1ctEuvq11QdpnCQVnPit8NLdhyqXQHLprM2",
+        "EAJJD6nDqtXcZ4DnQb19F9XEz8y8bRDHxbWbahatZNbL",
+        "6o5v1HC7WhBnLfRHp8mQTtCP2khdXXjhuyGyYEoy2Suy",
+        "3ZrsTmNM6AkMcqFfv3ryfhQ2jMfqP64RQbqVyAaxqhrQ",
+        "6zw7em7uQdmMpuS9fGz8Nq9TLHa5YQhEKKwPjo5PwDK4",
+        "CuatS6njAcfkFHnvai7zXCs7syA9bykXWsDCJEWfhjHG",
+        "Hz9nydgN1k15wnwffKX7CSmZp4VFTnTwLXAEdomFGNXy",
+        "Ep5Y58PaSyALPrdFxDVAdfKtVdP55vApvsWjb3jSmXsG",
+        "EziVYi3Sv5kJWxmU77PnbrT8jmkVuqwdiFLLzZpLVEn7",
+        "H1rt8KvXkNhQExTRfkY8r9wjZbZ8yCih6J4wQ5Fz9HGP",
+        "6nN69B4uZuESZYxr9nrLDjmKRtjDZQXrehwkfQTKw62U",
+        "Hm9JW7of5i9dnrboS8pCUCSeoQUPh7JsP1rkbJnW7An4",
+        "5D5NxsNVTgXHyVziwV7mDFwVDS6voaBsyyGxUbhQrhNW",
+        "EMAY24PrS6rWfvpqffFCsTsFJypeeYYmtUc26wdh3Wup",
+        "Br3aeVGapRb2xTq17RU2pYZCoJpWA7bq6TKBCcYtMSmt",
+        "BUjkdqUuH5Lz9XzcMcR4DdEMnFG6r8QzUMBm16Rfau96",
+        "Es13uD2p64UVPFpEWfDtd6SERdoNR2XVgqBQBZcZSLqW",
+        "AVYpwVou2BhdLivAwLxKPALZQsY7aZNkNmGbP2fZw7RU",
+        "DrKzW5koKSZp4mg4BdHLwr72MMXscd2kTiWgckCvvPXz",
+        "9hknftBZAQL4f48tWfk3bUEV5YSLcYYtDRqNmpNnhCWG",
     ]
 );
 
@@ -130,6 +176,11 @@ solana_sdk::pubkeys!(
         "3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB",
         "FdGYQdiRky8NZzN9wZtczTBcWLYYRXrJ3LMDhqDPn5rM",
         "4e6KwQpyzGQPfgVr5Jn3g5jLjbXB4pKPa2jRLohEb1QA",
+        "FjiEiVKyMGzSLpqoB27QypukUfyWHrwzPcGNtopzZVdh",
+        "DwbVjia1mYeSGoJipzhaf4L5hfer2DJ1Ys681VzQm5YY",
+        "GeMGyvsTEsANVvcT5cme65Xq5MVU8fVVzMQ13KAZFNS2",
+        "Bj3aQ2oFnZYfNR1njzRjmWizzuhvfcYLckh76cqsbuBM",
+        "4ZJhPQAgUseCsWhKvJLTmmRRUV74fdoTpQLNfKoekbPY",
     ]
 );
 
@@ -138,6 +189,7 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
+        account::AccountSharedData,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
     };
@@ -194,9 +246,11 @@ mod tests {
             ..GenesisConfig::default()
         };
         let mut bank = Arc::new(Bank::new(&genesis_config));
+        let sysvar_and_native_program_delta = 10;
         assert_eq!(
             bank.capitalization(),
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
+                + sysvar_and_native_program_delta,
         );
 
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
@@ -212,7 +266,10 @@ mod tests {
         bank = Arc::new(new_from_parent(&bank));
         let new_balance = 11;
         for key in non_circulating_accounts {
-            bank.store_account(&key, &Account::new(new_balance, 0, &Pubkey::default()));
+            bank.store_account(
+                &key,
+                &AccountSharedData::new(new_balance, 0, &Pubkey::default()),
+            );
         }
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(

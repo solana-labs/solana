@@ -37,7 +37,7 @@ pub fn write(
     bytes: Vec<u8>,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(*account_pubkey, true)];
-    Instruction::new(
+    Instruction::new_with_bincode(
         *program_id,
         &LoaderInstruction::Write { offset, bytes },
         account_metas,
@@ -49,5 +49,5 @@ pub fn finalize(account_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
         AccountMeta::new(*account_pubkey, true),
         AccountMeta::new_readonly(rent::id(), false),
     ];
-    Instruction::new(*program_id, &LoaderInstruction::Finalize, account_metas)
+    Instruction::new_with_bincode(*program_id, &LoaderInstruction::Finalize, account_metas)
 }

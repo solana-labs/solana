@@ -7,9 +7,10 @@ use crate::{
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::{
+    account::{ReadableAccount, WritableAccount},
     hash::hash,
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -34,8 +35,12 @@ fn apply_signature(
         if let Some(key) = witness_keyed_account.signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-                witness_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+                contract_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_sub_lamports(payment.lamports)?;
+                witness_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_add_lamports(payment.lamports)?;
                 return Ok(());
             }
         }
@@ -45,8 +50,12 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
@@ -76,8 +85,12 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
@@ -95,7 +108,7 @@ fn apply_account_data(
     if let Some(ref mut expr) = budget_state.pending_budget {
         let key = witness_keyed_account.unsigned_key();
         let program_id = witness_keyed_account.owner()?;
-        let actual_hash = hash(&witness_keyed_account.try_account_ref()?.data);
+        let actual_hash = hash(&witness_keyed_account.try_account_ref()?.data());
         expr.apply_witness(&Witness::AccountData(actual_hash, program_id), key);
         final_payment = expr.final_payment();
     }
@@ -107,36 +120,45 @@ fn apply_account_data(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+
     let instruction = limited_deserialize(data)?;
 
     trace!("process_instruction: {:?}", instruction);
 
     match instruction {
         BudgetInstruction::InitializeAccount(expr) => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
 
             if let Some(payment) = expr.final_payment() {
                 let to_keyed_account = contract_keyed_account;
-                let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-                contract_keyed_account.try_account_ref_mut()?.lamports = 0;
-                to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+                let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
+                contract_keyed_account
+                    .try_account_ref_mut()?
+                    .set_lamports(0);
+                to_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_add_lamports(payment.lamports)?;
                 return Ok(());
             }
             let existing =
-                BudgetState::deserialize(&contract_keyed_account.try_account_ref_mut()?.data).ok();
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref_mut()?.data())
+                    .ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
@@ -145,13 +167,17 @@ pub fn process_instruction(
                 pending_budget: Some(*expr),
                 initialized: true,
             };
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
-                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -167,17 +193,21 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
                 dt,
             )?;
             trace!("apply timestamp committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplySignature => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
-                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -193,16 +223,20 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
             )?;
             trace!("apply signature committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplyAccountData => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
-                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -214,10 +248,14 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
             )?;
             trace!("apply account data committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
     }
 }
@@ -229,7 +267,7 @@ mod tests {
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::account::Account;
+    use solana_sdk::account::{Account, AccountSharedData};
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
@@ -522,13 +560,16 @@ mod tests {
     fn test_pay_when_account_data() {
         let (bank, alice_keypair) = create_bank(42);
         let game_pubkey = solana_sdk::pubkey::new_rand();
-        let game_account = Account {
+        let game_account = AccountSharedData::from(Account {
             lamports: 1,
             data: vec![1, 2, 3],
             ..Account::default()
-        };
+        });
         bank.store_account(&game_pubkey, &game_account);
-        assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
+        assert_eq!(
+            bank.get_account(&game_pubkey).unwrap().data(),
+            &vec![1, 2, 3]
+        );
 
         let bank_client = BankClient::new(bank);
 
@@ -549,7 +590,7 @@ mod tests {
             &bob_pubkey,
             &budget_pubkey,
             &game_pubkey,
-            &game_account.owner,
+            game_account.owner(),
             game_hash,
             41,
         );

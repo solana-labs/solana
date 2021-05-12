@@ -1,11 +1,13 @@
 //! This account contains the current cluster fees
 //!
-use crate::{fee_calculator::FeeCalculator, sysvar::Sysvar};
+use crate::{
+    fee_calculator::FeeCalculator, impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar,
+};
 
 crate::declare_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Fees {
     pub fee_calculator: FeeCalculator,
 }
@@ -17,4 +19,6 @@ impl Fees {
     }
 }
 
-impl Sysvar for Fees {}
+impl Sysvar for Fees {
+    impl_sysvar_get!(sol_get_fees_sysvar);
+}

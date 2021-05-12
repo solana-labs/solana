@@ -12,6 +12,7 @@ use crate::{
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
@@ -27,7 +28,7 @@ use crate::{
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    tpu::Tpu,
+    tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
 };
@@ -45,7 +46,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::{
-    accounts_index::AccountIndex,
+    accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
@@ -65,10 +66,11 @@ use solana_vote_program::vote_state::VoteState;
 use std::time::Instant;
 use std::{
     collections::HashSet,
+    fmt,
     net::SocketAddr,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
     thread::sleep,
@@ -76,8 +78,9 @@ use std::{
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
+const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 90;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -104,12 +107,15 @@ pub struct ValidatorConfig {
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
+    pub rocksdb_compaction_interval: Option<u64>,
+    pub rocksdb_max_compaction_jitter: Option<u64>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
     pub require_tower: bool,
+    pub tower_path: Option<PathBuf>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
     pub contact_save_interval: u64,
@@ -118,9 +124,15 @@ pub struct ValidatorConfig {
     pub send_transaction_leader_forward_count: u64,
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
-    pub account_indexes: HashSet<AccountIndex>,
+    pub poh_hashes_per_batch: u64,
+    pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
+    pub accounts_db_test_hash_calculation: bool,
+    pub accounts_db_use_index_hash_calculation: bool,
+    pub tpu_coalesce_ms: u64,
+    pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub no_wait_for_vote_to_start_leader: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -151,12 +163,15 @@ impl Default for ValidatorConfig {
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
+            rocksdb_compaction_interval: None,
+            rocksdb_max_compaction_jitter: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
             poh_verify: true,
             cuda: false,
             require_tower: false,
+            tower_path: None,
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -165,27 +180,71 @@ impl Default for ValidatorConfig {
             send_transaction_leader_forward_count: 2,
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
-            account_indexes: HashSet::new(),
+            poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
+            account_indexes: AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
+            accounts_db_test_hash_calculation: false,
+            accounts_db_use_index_hash_calculation: true,
+            tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
+            validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
+            no_wait_for_vote_to_start_leader: true,
         }
+    }
+}
+
+// `ValidatorStartProgress` contains status information that is surfaced to the node operator over
+// the admin RPC channel to help them to follow the general progress of node startup without
+// having to watch log messages.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum ValidatorStartProgress {
+    Initializing, // Catch all, default state
+    SearchingForRpcService,
+    DownloadingSnapshot { slot: Slot, rpc_addr: SocketAddr },
+    CleaningBlockStore,
+    CleaningAccounts,
+    LoadingLedger,
+    StartingServices,
+    Halted, // Validator halted due to `--dev-halt-at-slot` argument
+    WaitingForSupermajority,
+
+    // `Running` is the terminal state once the validator fully starts and all services are
+    // operational
+    Running,
+}
+
+impl Default for ValidatorStartProgress {
+    fn default() -> Self {
+        Self::Initializing
     }
 }
 
 #[derive(Default)]
 pub struct ValidatorExit {
+    exited: bool,
     exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
 }
 
 impl ValidatorExit {
     pub fn register_exit(&mut self, exit: Box<dyn FnOnce() + Send + Sync>) {
-        self.exits.push(exit);
+        if self.exited {
+            exit();
+        } else {
+            self.exits.push(exit);
+        }
     }
 
-    pub fn exit(self) {
-        for exit in self.exits {
+    pub fn exit(&mut self) {
+        self.exited = true;
+        for exit in self.exits.drain(..) {
             exit();
         }
+    }
+}
+
+impl fmt::Debug for ValidatorExit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} exits", self.exits.len())
     }
 }
 
@@ -193,22 +252,18 @@ impl ValidatorExit {
 struct TransactionHistoryServices {
     transaction_status_sender: Option<TransactionStatusSender>,
     transaction_status_service: Option<TransactionStatusService>,
+    max_complete_transaction_status_slot: Arc<AtomicU64>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_sender: Option<CacheBlockTimeSender>,
     cache_block_time_service: Option<CacheBlockTimeService>,
 }
 
-struct RpcServices {
-    json_rpc_service: JsonRpcService,
-    pubsub_service: PubSubService,
-    optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker,
-}
-
 pub struct Validator {
-    pub id: Pubkey,
-    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
-    rpc_service: Option<RpcServices>,
+    validator_exit: Arc<RwLock<ValidatorExit>>,
+    json_rpc_service: Option<JsonRpcService>,
+    pubsub_service: Option<PubSubService>,
+    optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_service: Option<CacheBlockTimeService>,
@@ -244,9 +299,11 @@ impl Validator {
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
+        authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
+        should_check_duplicate_instance: bool,
+        start_progress: Arc<RwLock<ValidatorStartProgress>>,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -256,12 +313,13 @@ impl Validator {
 
         if config.voting_disabled {
             warn!("voting disabled");
-            authorized_voter_keypairs.clear();
+            authorized_voter_keypairs.write().unwrap().clear();
         } else {
-            for authorized_voter_keypair in &authorized_voter_keypairs {
+            for authorized_voter_keypair in authorized_voter_keypairs.read().unwrap().iter() {
                 warn!("authorized voter: {}", authorized_voter_keypair.pubkey());
             }
         }
+
         report_target_features();
 
         for cluster_entrypoint in &cluster_entrypoints {
@@ -286,6 +344,7 @@ impl Validator {
 
         if let Some(shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
+                *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
                     wait_for_supermajority_slot + 1,
@@ -295,6 +354,7 @@ impl Validator {
         }
 
         info!("Cleaning accounts paths..");
+        *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
         for accounts_path in &config.account_paths {
             cleanup_accounts_path(accounts_path);
@@ -307,11 +367,15 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
-        let mut validator_exit = ValidatorExit::default();
         let exit = Arc::new(AtomicBool::new(false));
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
+        {
+            let exit = exit.clone();
+            config
+                .validator_exit
+                .write()
+                .unwrap()
+                .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
+        }
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
@@ -319,12 +383,13 @@ impl Validator {
             bank_forks,
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
+            completed_slots_receivers,
             leader_schedule_cache,
             snapshot_hash,
             TransactionHistoryServices {
                 transaction_status_sender,
                 transaction_status_service,
+                max_complete_transaction_status_slot,
                 rewards_recorder_sender,
                 rewards_recorder_service,
                 cache_block_time_sender,
@@ -339,7 +404,10 @@ impl Validator {
             config.poh_verify,
             &exit,
             config.enforce_ulimit_nofile,
+            &start_progress,
         );
+
+        *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -405,6 +473,7 @@ impl Validator {
             config.pubsub_config.enable_vote_subscription,
         ));
 
+        let max_slots = Arc::new(MaxSlots::default());
         let (completed_data_sets_sender, completed_data_sets_receiver) =
             bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
         let completed_data_sets_service = CompletedDataSetsService::new(
@@ -412,6 +481,7 @@ impl Validator {
             blockstore.clone(),
             subscriptions.clone(),
             &exit,
+            max_slots.clone(),
         );
 
         info!(
@@ -424,33 +494,38 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            leader_schedule_cache.next_leader_slot(
-                &id,
+        let (mut poh_recorder, entry_receiver, record_receiver) =
+            PohRecorder::new_with_clear_signal(
+                bank.tick_height(),
+                bank.last_blockhash(),
                 bank.slot(),
-                &bank,
-                Some(&blockstore),
-                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
-            ),
-            bank.ticks_per_slot(),
-            &id,
-            &blockstore,
-            blockstore.new_shreds_signals.first().cloned(),
-            &leader_schedule_cache,
-            &poh_config,
-        );
+                leader_schedule_cache.next_leader_slot(
+                    &id,
+                    bank.slot(),
+                    &bank,
+                    Some(&blockstore),
+                    GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
+                ),
+                bank.ticks_per_slot(),
+                &id,
+                &blockstore,
+                blockstore.new_shreds_signals.first().cloned(),
+                &leader_schedule_cache,
+                &poh_config,
+                exit.clone(),
+            );
         if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
         }
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let (rpc_service, bank_notification_sender) = if let Some((rpc_addr, rpc_pubsub_addr)) =
-            config.rpc_addrs
-        {
+        let (
+            json_rpc_service,
+            pubsub_service,
+            optimistically_confirmed_bank_tracker,
+            bank_notification_sender,
+        ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc) {
                 assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
             } else {
@@ -458,47 +533,52 @@ impl Validator {
             }
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (
-                Some(RpcServices {
-                    json_rpc_service: JsonRpcService::new(
-                        rpc_addr,
-                        config.rpc_config.clone(),
-                        config.snapshot_config.clone(),
-                        bank_forks.clone(),
-                        block_commitment_cache.clone(),
-                        blockstore.clone(),
-                        cluster_info.clone(),
-                        Some(poh_recorder.clone()),
-                        genesis_config.hash(),
-                        ledger_path,
-                        validator_exit.clone(),
-                        config.trusted_validators.clone(),
-                        rpc_override_health_check.clone(),
-                        optimistically_confirmed_bank.clone(),
-                        config.send_transaction_retry_ms,
-                        config.send_transaction_leader_forward_count,
-                    ),
-                    pubsub_service: PubSubService::new(
+                Some(JsonRpcService::new(
+                    rpc_addr,
+                    config.rpc_config.clone(),
+                    config.snapshot_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    Some(poh_recorder.clone()),
+                    genesis_config.hash(),
+                    ledger_path,
+                    config.validator_exit.clone(),
+                    config.trusted_validators.clone(),
+                    rpc_override_health_check.clone(),
+                    optimistically_confirmed_bank.clone(),
+                    config.send_transaction_retry_ms,
+                    config.send_transaction_leader_forward_count,
+                    max_slots.clone(),
+                    leader_schedule_cache.clone(),
+                    max_complete_transaction_status_slot,
+                )),
+                if config.rpc_config.minimal_api {
+                    None
+                } else {
+                    Some(PubSubService::new(
                         config.pubsub_config.clone(),
                         &subscriptions,
                         rpc_pubsub_addr,
                         &exit,
-                    ),
-                    optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker::new(
-                        bank_notification_receiver,
-                        &exit,
-                        bank_forks.clone(),
-                        optimistically_confirmed_bank,
-                        subscriptions.clone(),
-                    ),
-                }),
+                    ))
+                },
+                Some(OptimisticallyConfirmedBankTracker::new(
+                    bank_notification_receiver,
+                    &exit,
+                    bank_forks.clone(),
+                    optimistically_confirmed_bank,
+                    subscriptions.clone(),
+                )),
                 Some(bank_notification_sender),
             )
         } else {
-            (None, None)
+            (None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
-            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::max() and
+            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::finalized() and
             // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
             block_commitment_cache
                 .write()
@@ -507,6 +587,7 @@ impl Validator {
 
             // Park with the RPC service running, ready for inspection!
             warn!("Validator halted");
+            *start_progress.write().unwrap() = ValidatorStartProgress::Halted;
             std::thread::park();
         }
 
@@ -517,6 +598,7 @@ impl Validator {
             Some(bank_forks.clone()),
             node.sockets.gossip,
             config.gossip_validators.clone(),
+            should_check_duplicate_instance,
             &exit,
         );
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
@@ -544,6 +626,7 @@ impl Validator {
                     snapshot_hash,
                     &exit,
                     &cluster_info,
+                    snapshot_config.maximum_snapshots_to_retain,
                 );
                 (
                     Some(snapshot_packager_service),
@@ -557,9 +640,20 @@ impl Validator {
             check_poh_speed(&genesis_config, None);
         }
 
-        if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
+        let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
+            config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check,
+            &start_progress,
+        ) {
+            waited
+        } else {
             abort();
-        }
+        };
+
+        let wait_for_vote_to_start_leader =
+            !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -567,6 +661,8 @@ impl Validator {
             &exit,
             bank.ticks_per_slot(),
             config.poh_pinned_cpu_core,
+            config.poh_hashes_per_batch,
+            record_receiver,
         );
         assert_eq!(
             blockstore.new_shreds_signals.len(),
@@ -580,6 +676,8 @@ impl Validator {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
+        let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -617,7 +715,7 @@ impl Validator {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
+            completed_slots_receivers,
             block_commitment_cache,
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
@@ -626,10 +724,12 @@ impl Validator {
             snapshot_config_and_pending_package,
             vote_tracker.clone(),
             retransmit_slots_sender,
+            gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
             replay_vote_sender.clone(),
             completed_data_sets_sender,
             bank_notification_sender.clone(),
+            cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -639,7 +739,13 @@ impl Validator {
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+                test_hash_calculation: config.accounts_db_test_hash_calculation,
+                use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
+                rocksdb_compaction_interval: config.rocksdb_compaction_interval,
+                rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
+                wait_for_vote_to_start_leader,
             },
+            &max_slots,
         );
 
         let tpu = Tpu::new(
@@ -659,17 +765,22 @@ impl Validator {
             vote_tracker,
             bank_forks,
             verified_vote_sender,
+            gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
             bank_notification_sender,
+            config.tpu_coalesce_ms,
+            cluster_confirmed_slot_sender,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
+        *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
-            id,
             gossip_service,
             serve_repair_service,
-            rpc_service,
+            json_rpc_service,
+            pubsub_service,
+            optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
             cache_block_time_service,
@@ -681,15 +792,13 @@ impl Validator {
             poh_service,
             poh_recorder,
             ip_echo_server,
-            validator_exit,
+            validator_exit: config.validator_exit.clone(),
         }
     }
 
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
-        if let Some(x) = self.validator_exit.write().unwrap().take() {
-            x.exit()
-        }
+        self.validator_exit.write().unwrap().exit();
     }
 
     pub fn close(mut self) {
@@ -725,18 +834,23 @@ impl Validator {
     pub fn join(self) {
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
-        if let Some(RpcServices {
-            json_rpc_service,
-            pubsub_service,
-            optimistically_confirmed_bank_tracker,
-        }) = self.rpc_service
-        {
+
+        if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
+        }
+
+        if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
+        }
+
+        if let Some(optimistically_confirmed_bank_tracker) =
+            self.optimistically_confirmed_bank_tracker
+        {
             optimistically_confirmed_bank_tracker
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
         }
+
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service
                 .join()
@@ -780,7 +894,7 @@ impl Validator {
 
 fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
-        if let Some(vote_state) = VoteState::from(&account) {
+        if let Some(vote_state) = VoteState::from(account) {
             return !vote_state.votes.is_empty();
         }
     }
@@ -821,7 +935,7 @@ fn post_process_restored_tower(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
     config: &ValidatorConfig,
-    ledger_path: &Path,
+    tower_path: &Path,
     bank_forks: &BankForks,
 ) -> Tower {
     let mut should_require_tower = config.require_tower;
@@ -900,7 +1014,7 @@ fn post_process_restored_tower(
 
             Tower::new_from_bankforks(
                 &bank_forks,
-                &ledger_path,
+                tower_path,
                 &validator_identity,
                 &vote_account,
             )
@@ -916,18 +1030,20 @@ fn new_banks_from_ledger(
     poh_verify: bool,
     exit: &Arc<AtomicBool>,
     enforce_ulimit_nofile: bool,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) -> (
     GenesisConfig,
     BankForks,
     Arc<Blockstore>,
     Receiver<bool>,
-    CompletedSlotsReceiver,
+    [CompletedSlotsReceiver; 2],
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
     TransactionHistoryServices,
     Tower,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
+    *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
 
     // This needs to be limited otherwise the state in the VoteAccount data
@@ -951,7 +1067,7 @@ fn new_banks_from_ledger(
     let BlockstoreSignals {
         mut blockstore,
         ledger_signal_receiver,
-        completed_slots_receiver,
+        completed_slots_receivers,
         ..
     } = Blockstore::open_with_signal(
         ledger_path,
@@ -961,7 +1077,9 @@ fn new_banks_from_ledger(
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
-    let restored_tower = Tower::restore(ledger_path, &validator_identity);
+    let tower_path = config.tower_path.as_deref().unwrap_or(ledger_path);
+
+    let restored_tower = Tower::restore(tower_path, &validator_identity);
     if let Ok(tower) = &restored_tower {
         reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
             error!("Failed to reconcile blockstore with tower: {:?}", err);
@@ -984,7 +1102,11 @@ fn new_banks_from_ledger(
     let blockstore = Arc::new(blockstore);
     let transaction_history_services =
         if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
-            initialize_rpc_transaction_history_services(blockstore.clone(), exit)
+            initialize_rpc_transaction_history_services(
+                blockstore.clone(),
+                exit,
+                config.rpc_config.enable_cpi_and_log_storage,
+            )
         } else {
             TransactionHistoryServices::default()
         };
@@ -998,7 +1120,10 @@ fn new_banks_from_ledger(
         process_options,
         transaction_history_services
             .transaction_status_sender
-            .clone(),
+            .as_ref(),
+        transaction_history_services
+            .cache_block_time_sender
+            .as_ref(),
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
@@ -1030,7 +1155,7 @@ fn new_banks_from_ledger(
         ));
         bank_forks.set_root(
             warp_slot,
-            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
@@ -1041,6 +1166,8 @@ fn new_banks_from_ledger(
             None,
             &snapshot_config.snapshot_package_output_path,
             snapshot_config.archive_format,
+            Some(&bank_forks.root_bank().get_thread_pool()),
+            snapshot_config.maximum_snapshots_to_retain,
         )
         .unwrap_or_else(|err| {
             error!("Unable to create snapshot: {}", err);
@@ -1054,7 +1181,7 @@ fn new_banks_from_ledger(
         &validator_identity,
         &vote_account,
         &config,
-        &ledger_path,
+        tower_path,
         &bank_forks,
     );
 
@@ -1070,7 +1197,7 @@ fn new_banks_from_ledger(
         bank_forks,
         blockstore,
         ledger_signal_receiver,
-        completed_slots_receiver,
+        completed_slots_receivers,
         leader_schedule_cache,
         snapshot_hash,
         transaction_history_services,
@@ -1153,11 +1280,17 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
+    enable_cpi_and_log_storage: bool,
 ) -> TransactionHistoryServices {
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
-    let transaction_status_sender = Some(transaction_status_sender);
+    let transaction_status_sender = Some(TransactionStatusSender {
+        sender: transaction_status_sender,
+        enable_cpi_and_log_storage,
+    });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
+        max_complete_transaction_status_slot.clone(),
         blockstore.clone(),
         exit,
     ));
@@ -1180,6 +1313,7 @@ fn initialize_rpc_transaction_history_services(
     TransactionHistoryServices {
         transaction_status_sender,
         transaction_status_service,
+        max_complete_transaction_status_slot,
         rewards_recorder_sender,
         rewards_recorder_service,
         cache_block_time_sender,
@@ -1187,24 +1321,41 @@ fn initialize_rpc_transaction_history_services(
     }
 }
 
-// Return true on error, indicating the validator should exit.
+#[derive(Debug, PartialEq)]
+enum ValidatorError {
+    BadExpectedBankHash,
+    NotEnoughLedgerData,
+}
+
+// Return if the validator waited on other nodes to start. In this case
+// it should not wait for one of it's votes to land to produce blocks
+// because if the whole network is waiting, then it will stall.
+//
+// Error indicates that a bad hash was encountered or another condition
+// that is unrecoverable and the validator should exit.
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
-) -> bool {
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+) -> Result<bool, ValidatorError> {
     if let Some(wait_for_supermajority) = config.wait_for_supermajority {
         match wait_for_supermajority.cmp(&bank.slot()) {
-            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Less => return Ok(false),
             std::cmp::Ordering::Greater => {
-                error!("Ledger does not have enough data to wait for supermajority, please enable snapshot fetch. Has {} needs {}", bank.slot(), wait_for_supermajority);
-                return true;
+                error!(
+                    "Ledger does not have enough data to wait for supermajority, \
+                    please enable snapshot fetch. Has {} needs {}",
+                    bank.slot(),
+                    wait_for_supermajority
+                );
+                return Err(ValidatorError::NotEnoughLedgerData);
             }
             _ => {}
         }
     } else {
-        return false;
+        return Ok(false);
     }
 
     if let Some(expected_bank_hash) = config.expected_bank_hash {
@@ -1214,21 +1365,23 @@ fn wait_for_supermajority(
                 bank.hash(),
                 expected_bank_hash
             );
-            return true;
+            return Err(ValidatorError::BadExpectedBankHash);
         }
     }
 
+    *start_progress.write().unwrap() = ValidatorStartProgress::WaitingForSupermajority;
     for i in 1.. {
         if i % 10 == 1 {
             info!(
-                "Waiting for 80% of activated stake at slot {} to be in gossip...",
+                "Waiting for {}% of activated stake at slot {} to be in gossip...",
+                WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
                 bank.slot()
             );
         }
 
         let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info, i % 10 == 0);
 
-        if gossip_stake_percent >= 80 {
+        if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
             break;
         }
         // The normal RPC health checks don't apply as the node is waiting, so feign health to
@@ -1238,7 +1391,7 @@ fn wait_for_supermajority(
         sleep(Duration::new(1, 0));
     }
     rpc_override_health_check.store(false, Ordering::Relaxed);
-    false
+    Ok(true)
 }
 
 fn report_target_features() {
@@ -1251,24 +1404,32 @@ fn report_target_features() {
         }
     );
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // We exclude Mac OS here to be compatible with computers that have Mac M1 chips.
+    // For these computers, one must install rust/cargo/brew etc. using Rosetta 2,
+    // which allows them to run software targeted for x86_64 on an aarch64.
+    // Hence the code below will run on these machines (target_arch="x86_64")
+    // if we don't exclude with target_os="macos".
+    //
+    // It's going to require more more work to get Solana building
+    // on Mac M1's without Rosetta,
+    // and when that happens we should remove this
+    // (the feature flag for code targeting that is target_arch="aarch64")
+    #[cfg(all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        not(target_os = "macos")
+    ))]
     {
-        unsafe { check_avx() };
-    }
-}
-
-// Validator binaries built on a machine with AVX support will generate invalid opcodes
-// when run on machines without AVX causing a non-obvious process abort.  Instead detect
-// the mismatch and error cleanly.
-#[target_feature(enable = "avx")]
-unsafe fn check_avx() {
-    if is_x86_feature_detected!("avx") {
-        info!("AVX detected");
-    } else {
-        error!(
-            "Your machine does not have AVX support, please rebuild from source on your machine"
-        );
-        abort();
+        // Validator binaries built on a machine with AVX support will generate invalid opcodes
+        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
+        // the mismatch and error cleanly.
+        if is_x86_feature_detected!("avx") {
+            info!("AVX detected");
+        } else {
+            error!(
+                "Your machine does not have AVX support, please rebuild from source on your machine"
+            );
+            abort();
+        }
     }
 }
 
@@ -1360,10 +1521,10 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 // Cleanup anything that looks like an accounts append-vec
 fn cleanup_accounts_path(account_path: &std::path::Path) {
-    if std::fs::remove_dir_all(account_path).is_err() {
+    if let Err(e) = std::fs::remove_dir_all(account_path) {
         warn!(
-            "encountered error removing accounts path: {:?}",
-            account_path
+            "encountered error removing accounts path: {:?}: {}",
+            account_path, e
         );
     }
 }
@@ -1403,14 +1564,21 @@ mod tests {
             rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
             ..ValidatorConfig::default()
         };
+        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            vec![voting_keypair.clone()],
+            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
             vec![leader_node.info],
             &config,
+            true, // should_check_duplicate_instance
+            start_progress.clone(),
+        );
+        assert_eq!(
+            *start_progress.read().unwrap(),
+            ValidatorStartProgress::Running
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -1478,9 +1646,11 @@ mod tests {
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
-                    vec![Arc::new(vote_account_keypair)],
+                    Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![leader_node.info.clone()],
                     &config,
+                    true, // should_check_duplicate_instance
+                    Arc::new(RwLock::new(ValidatorStartProgress::default())),
                 )
             })
             .collect();
@@ -1512,21 +1682,29 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let mut config = ValidatorConfig::default();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+
         assert!(!wait_for_supermajority(
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check.clone()
-        ));
+            rpc_override_health_check.clone(),
+            &start_progress,
+        )
+        .unwrap());
 
         // bank=0, wait=1, should fail
         config.wait_for_supermajority = Some(1);
-        assert!(wait_for_supermajority(
-            &config,
-            &bank,
-            &cluster_info,
-            rpc_override_health_check.clone()
-        ));
+        assert_eq!(
+            wait_for_supermajority(
+                &config,
+                &bank,
+                &cluster_info,
+                rpc_override_health_check.clone(),
+                &start_progress,
+            ),
+            Err(ValidatorError::NotEnoughLedgerData)
+        );
 
         // bank=1, wait=0, should pass, bank is past the wait slot
         let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
@@ -1535,18 +1713,24 @@ mod tests {
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check.clone()
-        ));
+            rpc_override_health_check.clone(),
+            &start_progress,
+        )
+        .unwrap());
 
         // bank=1, wait=1, equal, but bad hash provided
         config.wait_for_supermajority = Some(1);
         config.expected_bank_hash = Some(hash(&[1]));
-        assert!(wait_for_supermajority(
-            &config,
-            &bank,
-            &cluster_info,
-            rpc_override_health_check
-        ));
+        assert_eq!(
+            wait_for_supermajority(
+                &config,
+                &bank,
+                &cluster_info,
+                rpc_override_health_check,
+                &start_progress,
+            ),
+            Err(ValidatorError::BadExpectedBankHash)
+        );
     }
 
     #[test]

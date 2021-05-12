@@ -5,7 +5,6 @@ use crate::{
 use solana_sdk::{
     feature_set,
     instruction::InstructionError,
-    keyed_account::KeyedAccount,
     process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     system_program,
@@ -14,14 +13,13 @@ use solana_sdk::{
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 
-    let result = process_instruction(program_id, keyed_accounts, instruction_data, invoke_context);
+    let result = process_instruction(program_id, instruction_data, invoke_context);
 
     match &result {
         Ok(()) => stable_log::program_success(&logger, program_id),
@@ -32,14 +30,10 @@ fn process_instruction_with_program_logging(
 
 macro_rules! with_program_logging {
     ($process_instruction:expr) => {
-        |program_id: &Pubkey,
-         keyed_accounts: &[KeyedAccount],
-         instruction_data: &[u8],
-         invoke_context: &mut dyn InvokeContext| {
+        |program_id: &Pubkey, instruction_data: &[u8], invoke_context: &mut dyn InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
                 program_id,
-                keyed_accounts,
                 instruction_data,
                 invoke_context,
             )
@@ -60,14 +54,10 @@ fn genesis_builtins() -> Vec<Builtin> {
             solana_vote_program::id(),
             with_program_logging!(solana_vote_program::vote_instruction::process_instruction),
         ),
-        // Remove legacy_stake_processor and move stake_instruction::process_instruction back to
-        // genesis_builtins around the v1.6 timeframe
         Builtin::new(
             "stake_program",
             solana_stake_program::id(),
-            with_program_logging!(
-                solana_stake_program::legacy_stake_processor::process_instruction
-            ),
+            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
         ),
         Builtin::new(
             "config_program",
@@ -92,26 +82,15 @@ pub enum ActivationType {
 /// normal child Bank creation.
 /// https://github.com/solana-labs/solana/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    vec![
-        (
-            Builtin::new(
-                "secp256k1_program",
-                solana_sdk::secp256k1_program::id(),
-                solana_secp256k1_program::process_instruction,
-            ),
-            feature_set::secp256k1_program_enabled::id(),
-            ActivationType::NewProgram,
+    vec![(
+        Builtin::new(
+            "secp256k1_program",
+            solana_sdk::secp256k1_program::id(),
+            solana_secp256k1_program::process_instruction,
         ),
-        (
-            Builtin::new(
-                "stake_program_v3",
-                solana_stake_program::id(),
-                solana_stake_program::stake_instruction::process_instruction,
-            ),
-            feature_set::stake_program_v3::id(),
-            ActivationType::NewVersion,
-        ),
-    ]
+        feature_set::secp256k1_program_enabled::id(),
+        ActivationType::NewProgram,
+    )]
 }
 
 pub(crate) fn get() -> Builtins {

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+mkdir -p "$(dirname "$0")"/../dependencies
 cd "$(dirname "$0")"/../dependencies
 
 if [[ "$(uname)" = Darwin ]]; then
@@ -39,24 +40,6 @@ download() {
   return 1
 }
 
-clone() {
-  declare url=$1
-  declare version=$2
-
-  rm -rf temp
-  if (
-    set -x
-    git clone --recursive --depth 1 --single-branch --branch "$version" "$url" temp
-  ); then
-    (
-      shopt -s dotglob nullglob
-      mv temp/* .
-    )
-    return 0
-  fi
-  return 1
-}
-
 get() {
   declare version=$1
   declare dirname=$2
@@ -84,26 +67,6 @@ get() {
   return 1
 }
 
-# Install xargo
-version=0.3.22
-if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
-  (
-    args=()
-    # shellcheck disable=SC2154
-    if [[ -n $rust_stable ]]; then
-      args+=(+"$rust_stable")
-    fi
-    args+=(install xargo --version "$version" --root .)
-    set -ex
-    cargo "${args[@]}"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  ./bin/xargo --version >xargo-$version.md 2>&1
-fi
-
 # Install Criterion
 if [[ $machine == "linux" ]]; then
   version=v2.3.3
@@ -128,72 +91,32 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
   touch criterion-$version.md
 fi
 
-# Install LLVM
-version=v0.0.15
-if [[ ! -e llvm-native-$version.md || ! -e llvm-native ]]; then
-  (
-    set -e
-    rm -rf llvm-native*
-    rm -rf xargo
-    job="download \
-           https://github.com/solana-labs/llvm-builder/releases/download \
-           $version \
-           solana-llvm-$machine.tar.bz2 \
-           llvm-native"
-    get $version llvm-native "$job"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  touch llvm-native-$version.md
-fi
-
 # Install Rust-BPF
-version=v0.2.5
-if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
+version=v1.7
+if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
-    rm -rf rust-bpf-$machine*
+    rm -rf bpf-tools*
     rm -rf xargo
     job="download \
-           https://github.com/solana-labs/rust-bpf-builder/releases/download \
+           https://github.com/solana-labs/bpf-tools/releases/download \
            $version \
-           solana-rust-bpf-$machine.tar.bz2 \
-           rust-bpf-$machine"
-    get $version rust-bpf-$machine "$job"
-
-    set -ex
-    ./rust-bpf-$machine/bin/rustc --print sysroot
-    set +e
-    rustup toolchain uninstall bpf
-    set -e
-    rustup toolchain link bpf rust-bpf-$machine
+           solana-bpf-tools-$machine.tar.bz2 \
+           bpf-tools"
+    get $version bpf-tools "$job"
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
     exit 1
   fi
-  touch rust-bpf-$machine-$version.md
-fi
-
-# Install Rust-BPF Sysroot sources
-version=v0.13
-if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
-  (
-    set -e
-    rm -rf rust-bpf-sysroot*
-    rm -rf xargo
-    job="clone \
-           https://github.com/solana-labs/rust-bpf-sysroot.git \
-           $version"
-    get $version rust-bpf-sysroot "$job"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  touch rust-bpf-sysroot-$version.md
+  touch bpf-tools-$version.md
+  set -ex
+  ./bpf-tools/rust/bin/rustc --version
+  ./bpf-tools/rust/bin/rustc --print sysroot
+  set +e
+  rustup toolchain uninstall bpf
+  set -e
+  rustup toolchain link bpf bpf-tools/rust
 fi
 
 exit 0

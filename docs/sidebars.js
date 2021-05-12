@@ -1,27 +1,18 @@
 module.exports = {
   docs: {
-    "About": [
-      "introduction",
-      "terminology",
-      "history",
-    ],
-    "Wallets": [
+    About: ["introduction", "terminology", "history"],
+    Wallets: [
       "wallet-guide",
       "wallet-guide/apps",
       {
         type: "category",
         label: "Web Wallets",
-        items: [
-          "wallet-guide/web-wallets",
-          "wallet-guide/solflare",
-        ],
+        items: ["wallet-guide/web-wallets", "wallet-guide/solflare"],
       },
       {
         type: "category",
         label: "Hardware Wallets",
-        items: [
-          "wallet-guide/ledger-live",
-        ],
+        items: ["wallet-guide/ledger-live"],
       },
       {
         type: "category",
@@ -42,11 +33,7 @@ module.exports = {
       },
       "wallet-guide/support",
     ],
-    "Staking": [
-      "staking",
-      "staking/stake-accounts",
-      "staking/stake-programming",
-    ],
+    Staking: ["staking", "staking/stake-accounts"],
     "Command Line": [
       "cli",
       "cli/install-solana-cli-tools",
@@ -55,10 +42,11 @@ module.exports = {
       "cli/transfer-tokens",
       "cli/delegate-stake",
       "cli/manage-stake-accounts",
+      "cli/deploy-a-program",
       "offline-signing",
       "offline-signing/durable-nonce",
     ],
-    "Developing": [
+    Developing: [
       {
         type: "category",
         label: "Programming Model",
@@ -76,33 +64,34 @@ module.exports = {
         items: [
           "developing/clients/jsonrpc-api",
           "developing/clients/javascript-api",
+          "developing/clients/rust-api",
         ],
       },
       {
         type: "category",
-        label: "Builtins",
+        label: "Runtime Facilities",
         items: [
-          "developing/builtins/programs",
-          "developing/builtins/sysvars",
+          "developing/runtime-facilities/programs",
+          "developing/runtime-facilities/sysvars",
         ],
       },
       {
         type: "category",
-        label: "Deployed Programs",
+        label: "On-chain Programs",
         items: [
-          "developing/deployed-programs/overview",
-          "developing/deployed-programs/developing-rust",
-          "developing/deployed-programs/developing-c",
-          "developing/deployed-programs/deploying",
-          "developing/deployed-programs/debugging",
-          "developing/deployed-programs/examples",
-          "developing/deployed-programs/faq",
+          "developing/on-chain-programs/overview",
+          "developing/on-chain-programs/developing-rust",
+          "developing/on-chain-programs/developing-c",
+          "developing/on-chain-programs/deploying",
+          "developing/on-chain-programs/debugging",
+          "developing/on-chain-programs/examples",
+          "developing/on-chain-programs/faq",
         ],
       },
       "developing/backwards-compatibility",
     ],
-    "Integrating": ["integrations/exchange"],
-    "Validating": [
+    Integrating: ["integrations/exchange"],
+    Validating: [
       "running-validator",
       "running-validator/validator-reqs",
       "running-validator/validator-start",
@@ -141,13 +130,13 @@ module.exports = {
       },
       "running-validator/validator-troubleshoot",
     ],
-    "Clusters": [
+    Clusters: [
       "clusters",
       "cluster/rpc-endpoints",
       "cluster/bench-tps",
-      "cluster/performance-metrics"
+      "cluster/performance-metrics",
     ],
-    "Architecture": [
+    Architecture: [
       {
         type: "category",
         label: "Cluster",
@@ -175,33 +164,26 @@ module.exports = {
         ],
       },
     ],
+    Economics: [
+      "economics_overview",
+      {
+        type: "category",
+        label: "Inflation Design",
+        items: [
+          "inflation/terminology",
+          "inflation/inflation_schedule",
+          "inflation/adjusted_staking_yield",
+        ],
+      },
+      "transaction_fees",
+      "storage_rent_economics",
+    ],
     "Design Proposals": [
       {
         type: "category",
         label: "Implemented",
         items: [
           "implemented-proposals/implemented-proposals",
-          {
-            type: "category",
-            label: "Economic Design",
-            items: [
-              "implemented-proposals/ed_overview/ed_overview",
-              {
-                type: "category",
-                label: "Validation Client Economics",
-                items: [
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_overview",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_protocol_based_rewards",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_transaction_fees",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_validation_stake_delegation",
-                ],
-              },
-              "implemented-proposals/ed_overview/ed_storage_rent_economics",
-              "implemented-proposals/ed_overview/ed_economic_sustainability",
-              "implemented-proposals/ed_overview/ed_mvp",
-              "implemented-proposals/ed_overview/ed_references",
-            ],
-          },
           "implemented-proposals/abi-management",
           "implemented-proposals/bank-timestamp-correction",
           "implemented-proposals/commitment",
@@ -245,7 +227,7 @@ module.exports = {
           "proposals/optimistic_confirmation",
           "proposals/embedding-move",
           "proposals/rip-curl",
-        ]
+        ],
       },
     ],
   },

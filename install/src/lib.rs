@@ -1,10 +1,13 @@
+#![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate lazy_static;
 
-use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    input_parsers::pubkey_of,
-    input_validators::{is_pubkey, is_url},
+use {
+    clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand},
+    solana_clap_utils::{
+        input_parsers::pubkey_of,
+        input_validators::{is_pubkey, is_url},
+    },
 };
 
 mod build_env;
@@ -151,15 +154,13 @@ pub fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("info")
-                .about("displays information about the current installation")
+                .about("Displays information about the current installation")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("local_info_only")
                         .short("l")
                         .long("local")
-                        .help(
-                        "only display local information, don't check the cluster for new updates",
-                    ),
+                        .help("only display local information, don't check for updates"),
                 )
                 .arg(
                     Arg::with_name("eval")
@@ -169,7 +170,7 @@ pub fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("deploys a new update")
+                .about("Deploys a new update")
                 .setting(AppSettings::DisableVersion)
                 .arg({
                     let arg = Arg::with_name("from_keypair_file")
@@ -209,8 +210,13 @@ pub fn main() -> Result<(), String> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("gc")
+                .about("Delete older releases from the install cache to reclaim disk space")
+                .setting(AppSettings::DisableVersion),
+        )
+        .subcommand(
             SubCommand::with_name("update")
-                .about("checks for an update, and if available downloads and applies it")
+                .about("Checks for an update, and if available downloads and applies it")
                 .setting(AppSettings::DisableVersion),
         )
         .subcommand(
@@ -255,7 +261,8 @@ pub fn main() -> Result<(), String> {
                 update_manifest_keypair_file,
             )
         }
-        ("update", Some(_matches)) => command::update(config_file).map(|_| ()),
+        ("gc", Some(_matches)) => command::gc(config_file),
+        ("update", Some(_matches)) => command::update(config_file, false).map(|_| ()),
         ("run", Some(matches)) => {
             let program_name = matches.value_of("program_name").unwrap();
             let program_arguments = matches
@@ -273,7 +280,7 @@ pub fn main_init() -> Result<(), String> {
     solana_logger::setup();
 
     let matches = App::new("solana-install-init")
-        .about("initializes a new installation")
+        .about("Initializes a new installation")
         .version(solana_version::version!())
         .arg({
             let arg = Arg::with_name("config_file")

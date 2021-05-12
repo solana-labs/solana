@@ -13,9 +13,11 @@ export function RawParsedDetails({
       {children}
 
       <tr>
-        <td>Instruction Data (JSON)</td>
+        <td>
+          Instruction Data <span className="text-muted">(JSON)</span>
+        </td>
         <td className="text-lg-right">
-          <pre className="d-inline-block text-left">
+          <pre className="d-inline-block text-left json-wrap">
             {JSON.stringify(ix.parsed, null, 2)}
           </pre>
         </td>

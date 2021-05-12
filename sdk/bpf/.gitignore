@@ -1,7 +1,8 @@
 /dependencies/criterion*
 /dependencies/hashbrown*
 /dependencies/llvm-native*
-/dependencies/rust-bpf*
+/dependencies/rust-bpf-sysroot*
+/dependencies/bpf-tools*
 /dependencies/xargo*
 /dependencies/bin*
 /dependencies/.crates.toml

@@ -1,9 +1,11 @@
+#![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 
 pub mod parse_accounts;
+pub mod parse_associated_token;
 pub mod parse_bpf_loader;
 pub mod parse_instruction;
 pub mod parse_stake;
@@ -20,7 +22,7 @@ use solana_account_decoder::parse_token::UiTokenAmount;
 pub use solana_runtime::bank::RewardType;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     deserialize_utils::default_on_eof,
     instruction::CompiledInstruction,
     message::{Message, MessageHeader},
@@ -281,22 +283,18 @@ pub struct TransactionStatus {
 
 impl TransactionStatus {
     pub fn satisfies_commitment(&self, commitment_config: CommitmentConfig) -> bool {
-        match commitment_config.commitment {
-            CommitmentLevel::Max | CommitmentLevel::Root => self.confirmations.is_none(),
-            CommitmentLevel::SingleGossip => {
-                if let Some(status) = &self.confirmation_status {
-                    *status != TransactionConfirmationStatus::Processed
-                } else {
-                    // These fallback cases handle TransactionStatus RPC responses from older software
-                    self.confirmations.is_some() && self.confirmations.unwrap() > 1
-                        || self.confirmations.is_none()
-                }
+        if commitment_config.is_finalized() {
+            self.confirmations.is_none()
+        } else if commitment_config.is_confirmed() {
+            if let Some(status) = &self.confirmation_status {
+                *status != TransactionConfirmationStatus::Processed
+            } else {
+                // These fallback cases handle TransactionStatus RPC responses from older software
+                self.confirmations.is_some() && self.confirmations.unwrap() > 1
+                    || self.confirmations.is_none()
             }
-            CommitmentLevel::Single => match self.confirmations {
-                Some(confirmations) => confirmations >= 1,
-                None => true,
-            },
-            CommitmentLevel::Recent => true,
+        } else {
+            true
         }
     }
 
@@ -365,6 +363,48 @@ impl ConfirmedBlock {
             block_time: self.block_time,
         }
     }
+
+    pub fn configure(
+        self,
+        encoding: UiTransactionEncoding,
+        transaction_details: TransactionDetails,
+        show_rewards: bool,
+    ) -> UiConfirmedBlock {
+        let (transactions, signatures) = match transaction_details {
+            TransactionDetails::Full => (
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.encode(encoding))
+                        .collect(),
+                ),
+                None,
+            ),
+            TransactionDetails::Signatures => (
+                None,
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.transaction.signatures[0].to_string())
+                        .collect(),
+                ),
+            ),
+            TransactionDetails::None => (None, None),
+        };
+        UiConfirmedBlock {
+            previous_blockhash: self.previous_blockhash,
+            blockhash: self.blockhash,
+            parent_slot: self.parent_slot,
+            transactions,
+            signatures,
+            rewards: if show_rewards {
+                Some(self.rewards)
+            } else {
+                None
+            },
+            block_time: self.block_time,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -376,6 +416,62 @@ pub struct EncodedConfirmedBlock {
     pub transactions: Vec<EncodedTransactionWithStatusMeta>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiConfirmedBlock {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transactions: Option<Vec<EncodedTransactionWithStatusMeta>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rewards: Option<Rewards>,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
+    fn from(block: EncodedConfirmedBlock) -> Self {
+        Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: Some(block.transactions),
+            signatures: None,
+            rewards: Some(block.rewards),
+            block_time: block.block_time,
+        }
+    }
+}
+
+impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
+    fn from(block: UiConfirmedBlock) -> Self {
+        Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: block.transactions.unwrap_or_default(),
+            rewards: block.rewards.unwrap_or_default(),
+            block_time: block.block_time,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionDetails {
+    Full,
+    Signatures,
+    None,
+}
+
+impl Default for TransactionDetails {
+    fn default() -> Self {
+        Self::Full
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -620,11 +716,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Finalized),
         };
 
-        assert!(status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -634,11 +728,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Confirmed),
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -648,11 +740,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Processed),
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -662,11 +752,9 @@ mod test {
             confirmation_status: None,
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         // Test single_gossip fallback cases
         let status = TransactionStatus {
@@ -676,7 +764,7 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -685,7 +773,7 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -694,6 +782,6 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
     }
 }

@@ -14,20 +14,15 @@ TEST_PREFIX ?= test_
 OUT_DIR ?= ./out
 OS := $(shell uname)
 
-ifeq ($(DOCKER),1)
-$(warning DOCKER=1 is experimential and may not work as advertised)
-LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-docker/
-LLVM_SYSTEM_INC_DIRS := /usr/local/lib/clang/8.0.0/include
-else
-LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-native/
-LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/8.0.0/include
-endif
+LLVM_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/llvm
+LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/11.0.1/include
 
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
 CXX := $(LLVM_DIR)/bin/clang++
 LLD := $(LLVM_DIR)/bin/ld.lld
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
+READ_ELF := $(LLVM_DIR)/bin/llvm-readelf
 endif
 
 SYSTEM_INC_DIRS := \
@@ -50,6 +45,7 @@ BPF_C_FLAGS := \
   $(C_FLAGS) \
   -target bpf \
   -fPIC \
+  -march=bpfel+solana
 
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
@@ -59,6 +55,7 @@ BPF_CXX_FLAGS := \
   -fno-exceptions \
   -fno-asynchronous-unwind-tables \
   -fno-unwind-tables \
+  -march=bpfel+solana
 
 BPF_LLD_FLAGS := \
   -z notext \
@@ -68,9 +65,11 @@ BPF_LLD_FLAGS := \
   --entry entrypoint \
 
 OBJ_DUMP_FLAGS := \
-  -color \
-  -source \
-  -disassemble \
+  --source \
+  --disassemble \
+
+READ_ELF_FLAGS := \
+  --all \
 
 TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)../dependencies/criterion/lib)
 TESTFRAMEWORK_FLAGS := \
@@ -126,7 +125,8 @@ help:
 	@echo '  - make all - Build all the programs and tests, run the tests'
 	@echo '  - make programs - Build all the programs'
 	@echo '  - make tests - Build and run all tests'
-	@echo '  - make dump_<program name> - Dumps the contents of the program to stdout'
+	@echo '  - make dump_<program name> - Dump the contents of the program to stdout'
+	@echo '  - make readelf_<program name> - Display information about the ELF binary'
 	@echo '  - make <program name> - Build a single program by name'
 	@echo '  - make <test name> - Build and run a single test by name'
 	@echo ''
@@ -137,7 +137,7 @@ help:
 	$(foreach name, $(TEST_NAMES), @echo '  - $(name)'$(\n))
 	@echo ''
 	@echo 'Example:'
-	@echo '  - Assuming a programed named foo (src/foo/foo.c)'
+	@echo '  - Assuming a program named foo (src/foo/foo.c)'
 	@echo '    - make foo'
 	@echo '    - make dump_foo'
 	@echo ''
@@ -150,7 +150,7 @@ $1: $2
 endef
 
 define CC_RULE
-$1: $2 
+$1: $2
 	@echo "[cxx] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
 	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $1 -c $2 -MD -MF $(1:.o=.d)
@@ -168,6 +168,11 @@ $1: $2
 	@echo "[lld] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
 	$(_@)$(LLD) $(BPF_LLD_FLAGS) -o $1 $2
+ifeq (,$(wildcard $(subst .so,-keypair.json,$1)))
+	$(_@)solana-keygen new --no-passphrase --silent -o $(subst .so,-keypair.json,$1)
+endif
+	@echo To deploy this program:
+	@echo $$$$ solana program deploy $(abspath $1)
 endef
 
 define TEST_C_RULE
@@ -245,6 +250,9 @@ tests: $(TEST_NAMES)
 
 dump_%: %
 	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
+
+readelf_%: %
+	$(_@)$(READ_ELF) $(READ_ELF_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
 
 clean:
 	rm -rf $(OUT_DIR)

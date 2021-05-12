@@ -12,6 +12,20 @@ pub(super) struct SerializableAccountStorageEntry {
     accounts_current_len: usize,
 }
 
+pub trait SerializableStorage {
+    fn id(&self) -> AppendVecId;
+    fn current_len(&self) -> usize;
+}
+
+impl SerializableStorage for SerializableAccountStorageEntry {
+    fn id(&self) -> AppendVecId {
+        self.id
+    }
+    fn current_len(&self) -> usize {
+        self.accounts_current_len
+    }
+}
+
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
 
@@ -21,12 +35,6 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
             id: rhs.append_vec_id(),
             accounts_current_len: rhs.accounts.len(),
         }
-    }
-}
-
-impl From<SerializableAccountStorageEntry> for AccountStorageEntry {
-    fn from(s: SerializableAccountStorageEntry) -> Self {
-        AccountStorageEntry::new_empty_map(s.id, s.accounts_current_len)
     }
 }
 
@@ -207,7 +215,7 @@ impl<'a> TypeContext<'a> for Context {
     {
         (
             SerializableVersionedBank::from(serializable_bank.bank.get_fields_to_serialize()),
-            SerializableAccountsDB::<'a, Self> {
+            SerializableAccountsDb::<'a, Self> {
                 accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
                 account_storage_entries: serializable_bank.snapshot_storages,
@@ -219,7 +227,7 @@ impl<'a> TypeContext<'a> for Context {
 
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_db: &SerializableAccountsDB<'a, Self>,
+        serializable_db: &SerializableAccountsDb<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized,

@@ -71,6 +71,7 @@
 //! ```
 //! time: 4007, tip converged: 10, trunk id: 3830, trunk time: 3827, trunk converged 100, trunk height 348
 //! ```
+#![allow(clippy::integer_arithmetic)]
 
 extern crate rand;
 use rand::{thread_rng, Rng};

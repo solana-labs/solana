@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { FetchStatus } from "providers/cache";
+import { CacheEntry, FetchStatus } from "providers/cache";
 import {
   useFetchAccountInfo,
   useAccountInfo,
@@ -16,10 +16,8 @@ import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { OwnedTokensCard } from "components/account/OwnedTokensCard";
-import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
-import { TokenRegistry } from "tokenRegistry";
 import { VoteAccountSection } from "components/account/VoteAccountSection";
 import { NonceAccountSection } from "components/account/NonceAccountSection";
 import { VotesCard } from "components/account/VotesCard";
@@ -28,33 +26,62 @@ import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
+import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
+import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import { Identicon } from "components/common/Identicon";
+import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
+import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
+import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 
-const TABS_LOOKUP: { [id: string]: Tab } = {
-  "spl-token:mint": {
-    slug: "largest",
-    title: "Distribution",
-    path: "/largest",
-  },
-  vote: {
-    slug: "vote-history",
-    title: "Vote History",
-    path: "/vote-history",
-  },
-  "sysvar:recentBlockhashes": {
-    slug: "blockhashes",
-    title: "Blockhashes",
-    path: "/blockhashes",
-  },
-  "sysvar:slotHashes": {
-    slug: "slot-hashes",
-    title: "Slot Hashes",
-    path: "/slot-hashes",
-  },
-  "sysvar:stakeHistory": {
-    slug: "stake-history",
-    title: "Stake History",
-    path: "/stake-history",
-  },
+const IDENTICON_WIDTH = 64;
+
+const TABS_LOOKUP: { [id: string]: Tab[] } = {
+  "spl-token:mint": [
+    {
+      slug: "transfers",
+      title: "Transfers",
+      path: "/transfers",
+    },
+    {
+      slug: "instructions",
+      title: "Instructions",
+      path: "/instructions",
+    },
+    {
+      slug: "largest",
+      title: "Distribution",
+      path: "/largest",
+    },
+  ],
+  vote: [
+    {
+      slug: "vote-history",
+      title: "Vote History",
+      path: "/vote-history",
+    },
+  ],
+  "sysvar:recentBlockhashes": [
+    {
+      slug: "blockhashes",
+      title: "Blockhashes",
+      path: "/blockhashes",
+    },
+  ],
+  "sysvar:slotHashes": [
+    {
+      slug: "slot-hashes",
+      title: "Slot Hashes",
+      path: "/slot-hashes",
+    },
+  ],
+  "sysvar:stakeHistory": [
+    {
+      slug: "stake-history",
+      title: "Stake History",
+      path: "/stake-history",
+    },
+  ],
 };
 
 const TOKEN_TABS_HIDDEN = [
@@ -67,49 +94,77 @@ const TOKEN_TABS_HIDDEN = [
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
+  const fetchAccount = useFetchAccountInfo();
+  const { status } = useCluster();
+  const info = useAccountInfo(address);
   let pubkey: PublicKey | undefined;
 
   try {
     pubkey = new PublicKey(address);
   } catch (err) {}
 
+  // Fetch account on load
+  React.useEffect(() => {
+    if (!info && status === ClusterStatus.Connected && pubkey) {
+      fetchAccount(pubkey);
+    }
+  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <AccountHeader address={address} />
+          <AccountHeader address={address} info={info} />
         </div>
       </div>
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} />
+        <DetailsSections pubkey={pubkey} tab={tab} info={info} />
       )}
     </div>
   );
 }
 
-export function AccountHeader({ address }: { address: string }) {
-  const { cluster } = useCluster();
-  const tokenDetails = TokenRegistry.get(address, cluster);
-  if (tokenDetails) {
+export function AccountHeader({
+  address,
+  info,
+}: {
+  address: string;
+  info?: CacheEntry<Account>;
+}) {
+  const { tokenRegistry } = useTokenRegistry();
+  const tokenDetails = tokenRegistry.get(address);
+  const account = info?.data;
+  const data = account?.details?.data;
+  const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+
+  if (tokenDetails || isToken) {
     return (
       <div className="row align-items-end">
-        {tokenDetails.logo && (
-          <div className="col-auto">
-            <div className="avatar avatar-lg header-avatar-top">
+        <div className="col-auto">
+          <div className="avatar avatar-lg header-avatar-top">
+            {tokenDetails?.logoURI ? (
               <img
-                src={tokenDetails.logo}
+                src={tokenDetails.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
-            </div>
+            ) : (
+              <Identicon
+                address={address}
+                className="avatar-img rounded-circle border border-body identicon-wrapper"
+                style={{ width: IDENTICON_WIDTH }}
+              />
+            )}
           </div>
-        )}
+        </div>
 
         <div className="col mb-3 ml-n3 ml-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">{tokenDetails.name}</h2>
+          <h2 className="header-title">
+            {tokenDetails?.name || "Unknown Token"}
+          </h2>
         </div>
       </div>
     );
@@ -123,17 +178,19 @@ export function AccountHeader({ address }: { address: string }) {
   );
 }
 
-function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
+function DetailsSections({
+  pubkey,
+  tab,
+  info,
+}: {
+  pubkey: PublicKey;
+  tab?: string;
+  info?: CacheEntry<Account>;
+}) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
-  const info = useAccountInfo(address);
-  const { status } = useCluster();
   const location = useLocation();
-
-  // Fetch account on load
-  React.useEffect(() => {
-    if (!info && status === ClusterStatus.Connected) fetchAccount(pubkey);
-  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { flaggedAccounts } = useFlaggedAccounts();
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -157,6 +214,12 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
   return (
     <>
+      {flaggedAccounts.has(address) && (
+        <div className="alert alert-danger alert-scam" role="alert">
+          Warning! This account has been flagged by the community as a scam
+          account. Please be cautious sending SOL to this account.
+        </div>
+      )}
       {<InfoSection account={account} />}
       {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
     </>
@@ -166,7 +229,15 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
 
-  if (data && data.program === "stake") {
+  if (data && data.program === "bpf-upgradeable-loader") {
+    return (
+      <UpgradeableLoaderAccountSection
+        account={account}
+        parsedData={data.parsed}
+        programData={data.programData}
+      />
+    );
+  } else if (data && data.program === "stake") {
     return (
       <StakeAccountSection
         account={account}
@@ -200,14 +271,16 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs =
+export type MoreTabs =
   | "history"
   | "tokens"
   | "largest"
   | "vote-history"
   | "slot-hashes"
   | "stake-history"
-  | "blockhashes";
+  | "blockhashes"
+  | "transfers"
+  | "instructions";
 
 function MoreSection({
   account,
@@ -249,6 +322,8 @@ function MoreSection({
         </>
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
+      {tab === "transfers" && <TokenTransfersCard pubkey={pubkey} />}
+      {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
@@ -282,16 +357,16 @@ function getTabs(data?: ProgramData): Tab[] {
   ];
 
   let programTypeKey = "";
-  if (data && "type" in data.parsed) {
+  if (data && "parsed" in data && "type" in data.parsed) {
     programTypeKey = `${data.program}:${data.parsed.type}`;
   }
 
   if (data && data.program in TABS_LOOKUP) {
-    tabs.push(TABS_LOOKUP[data.program]);
+    tabs.push(...TABS_LOOKUP[data.program]);
   }
 
   if (data && programTypeKey in TABS_LOOKUP) {
-    tabs.push(TABS_LOOKUP[programTypeKey]);
+    tabs.push(...TABS_LOOKUP[programTypeKey]);
   }
 
   if (

@@ -18,6 +18,7 @@ struct Config {
     features: Vec<String>,
     test_name: Option<String>,
     no_default_features: bool,
+    no_run: bool,
     offline: bool,
     verbose: bool,
     workspace: bool,
@@ -34,6 +35,7 @@ impl Default for Config {
             features: vec![],
             test_name: None,
             no_default_features: false,
+            no_run: false,
             offline: false,
             verbose: false,
             workspace: false,
@@ -109,6 +111,10 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         cargo_args.push(test_name);
     }
 
+    if config.no_run {
+        cargo_args.push("--no-run");
+    }
+
     // If the program crate declares the "test-bpf" feature, pass it along to the tests so they can
     // distinguish between `cargo test` and `cargo test-bpf`
     if set_test_bpf_feature {
@@ -146,8 +152,14 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .packages
         .iter()
         .filter(|package| {
-            package.manifest_path.with_file_name("Xargo.toml").exists()
-                && metadata.workspace_members.contains(&package.id)
+            if metadata.workspace_members.contains(&package.id) {
+                for target in package.targets.iter() {
+                    if target.kind.contains(&"cdylib".to_string()) {
+                        return true;
+                    }
+                }
+            }
+            false
         })
         .collect::<Vec<_>>();
 
@@ -216,6 +228,12 @@ fn main() {
                 .help("Place final BPF build artifacts in this directory"),
         )
         .arg(
+            Arg::with_name("no_run")
+                .long("no-run")
+                .takes_value(false)
+                .help("Compile, but don't run tests"),
+        )
+        .arg(
             Arg::with_name("offline")
                 .long("offline")
                 .takes_value(false)
@@ -255,6 +273,7 @@ fn main() {
             .unwrap_or_else(Vec::new),
         test_name: value_t!(matches, "test", String).ok(),
         no_default_features: matches.is_present("no_default_features"),
+        no_run: matches.is_present("no_run"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),

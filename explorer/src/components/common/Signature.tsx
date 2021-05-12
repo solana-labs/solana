@@ -1,36 +1,29 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { TransactionSignature } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
+import { Copyable } from "./Copyable";
 
-type CopyState = "copy" | "copied";
 type Props = {
   signature: TransactionSignature;
   alignRight?: boolean;
   link?: boolean;
   truncate?: boolean;
+  truncateChars?: number;
 };
 
-export function Signature({ signature, alignRight, link, truncate }: Props) {
-  const [state, setState] = useState<CopyState>("copy");
+export function Signature({
+  signature,
+  alignRight,
+  link,
+  truncate,
+  truncateChars,
+}: Props) {
+  let signatureLabel = signature;
 
-  const copyToClipboard = () => navigator.clipboard.writeText(signature);
-  const handleClick = () =>
-    copyToClipboard().then(() => {
-      setState("copied");
-      setTimeout(() => setState("copy"), 1000);
-    });
-
-  const copyIcon =
-    state === "copy" ? (
-      <span className="fe fe-copy" onClick={handleClick}></span>
-    ) : (
-      <span className="fe fe-check-circle"></span>
-    );
-
-  const copyButton = (
-    <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
-  );
+  if (truncateChars) {
+    signatureLabel = signature.slice(0, truncateChars) + "…";
+  }
 
   return (
     <div
@@ -38,19 +31,20 @@ export function Signature({ signature, alignRight, link, truncate }: Props) {
         alignRight ? "justify-content-end" : ""
       }`}
     >
-      {copyButton}
-      <span className="text-monospace">
-        {link ? (
-          <Link
-            className={truncate ? "text-truncate signature-truncate" : ""}
-            to={clusterPath(`/tx/${signature}`)}
-          >
-            {signature}
-          </Link>
-        ) : (
-          signature
-        )}
-      </span>
+      <Copyable text={signature} replaceText={!alignRight}>
+        <span className="text-monospace">
+          {link ? (
+            <Link
+              className={truncate ? "text-truncate signature-truncate" : ""}
+              to={clusterPath(`/tx/${signature}`)}
+            >
+              {signatureLabel}
+            </Link>
+          ) : (
+            signatureLabel
+          )}
+        </span>
+      </Copyable>
     </div>
   );
 }

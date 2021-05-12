@@ -1,14 +1,18 @@
-use clap::{crate_description, crate_name, App, Arg};
-use solana_clap_utils::input_parsers::{lamports_of_sol, value_of};
-use solana_faucet::{
-    faucet::{run_faucet, Faucet, FAUCET_PORT},
-    socketaddr,
-};
-use solana_sdk::signature::read_keypair_file;
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    sync::{Arc, Mutex},
-    thread,
+use {
+    clap::{crate_description, crate_name, values_t, App, Arg},
+    log::*,
+    solana_clap_utils::input_parsers::{lamports_of_sol, value_of},
+    solana_faucet::{
+        faucet::{run_faucet, Faucet, FAUCET_PORT},
+        socketaddr,
+    },
+    solana_sdk::signature::read_keypair_file,
+    std::{
+        collections::HashSet,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        sync::{Arc, Mutex},
+        thread,
+    },
 };
 
 #[tokio::main]
@@ -52,6 +56,17 @@ async fn main() {
                 .takes_value(true)
                 .help("Request limit for a single request, in SOL"),
         )
+        .arg(
+            Arg::with_name("allowed_ip")
+                .long("allow-ip")
+                .value_name("IP_ADDRESS")
+                .takes_value(true)
+                .multiple(true)
+                .help(
+                    "Allow requests from a particular IP address without request limit; \
+                    recipient address will be used to check request limits instead",
+                ),
+        )
         .get_matches();
 
     let faucet_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
@@ -61,20 +76,27 @@ async fn main() {
     let per_time_cap = lamports_of_sol(&matches, "per_time_cap");
     let per_request_cap = lamports_of_sol(&matches, "per_request_cap");
 
+    let allowed_ips: HashSet<_> = values_t!(matches.values_of("allowed_ip"), IpAddr)
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+
     let faucet_addr = socketaddr!(0, FAUCET_PORT);
 
-    let faucet = Arc::new(Mutex::new(Faucet::new(
+    let faucet = Arc::new(Mutex::new(Faucet::new_with_allowed_ips(
         faucet_keypair,
         time_slice,
         per_time_cap,
         per_request_cap,
+        allowed_ips,
     )));
 
     let faucet1 = faucet.clone();
     thread::spawn(move || loop {
         let time = faucet1.lock().unwrap().time_slice;
         thread::sleep(time);
-        faucet1.lock().unwrap().clear_request_count();
+        debug!("clearing ip cache");
+        faucet1.lock().unwrap().clear_caches();
     });
 
     run_faucet(faucet, faucet_addr, None).await;

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! @brief Solana Rust-based BPF program entry point supported by the original
 //!  and now deprecated BPFLoader.  For more information see
 //!  './bpf_loader_deprecated.rs'
@@ -105,9 +106,9 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<u64>();
 
             accounts.push(AccountInfo {
+                key,
                 is_signer,
                 is_writable,
-                key,
                 lamports,
                 data,
                 owner,

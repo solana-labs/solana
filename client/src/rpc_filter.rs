@@ -16,10 +16,15 @@ impl RpcFilterType {
                 match encoding {
                     MemcmpEncoding::Binary => {
                         let MemcmpEncodedBytes::Binary(bytes) = &compare.bytes;
-                        bs58::decode(&bytes)
-                            .into_vec()
-                            .map(|_| ())
-                            .map_err(|e| e.into())
+
+                        if bytes.len() > 128 {
+                            Err(RpcFilterError::Base58DataTooLarge)
+                        } else {
+                            bs58::decode(&bytes)
+                                .into_vec()
+                                .map(|_| ())
+                                .map_err(|e| e.into())
+                        }
                     }
                 }
             }
@@ -27,10 +32,12 @@ impl RpcFilterType {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, PartialEq, Debug)]
 pub enum RpcFilterError {
     #[error("bs58 decode error")]
     DecodeError(#[from] bs58::decode::Error),
+    #[error("encoded binary (base 58) data should be less than 129 bytes")]
+    Base58DataTooLarge,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -139,5 +146,37 @@ mod tests {
             encoding: None,
         }
         .bytes_match(&data));
+    }
+
+    #[test]
+    fn test_verify_memcmp() {
+        let base58_bytes = "\
+            1111111111111111111111111111111111111111111111111111111111111111\
+            1111111111111111111111111111111111111111111111111111111111111111";
+        assert_eq!(base58_bytes.len(), 128);
+        assert_eq!(
+            RpcFilterType::Memcmp(Memcmp {
+                offset: 0,
+                bytes: MemcmpEncodedBytes::Binary(base58_bytes.to_string()),
+                encoding: None,
+            })
+            .verify(),
+            Ok(())
+        );
+
+        let base58_bytes = "\
+            1111111111111111111111111111111111111111111111111111111111111111\
+            1111111111111111111111111111111111111111111111111111111111111111\
+            1";
+        assert_eq!(base58_bytes.len(), 129);
+        assert_eq!(
+            RpcFilterType::Memcmp(Memcmp {
+                offset: 0,
+                bytes: MemcmpEncodedBytes::Binary(base58_bytes.to_string()),
+                encoding: None,
+            })
+            .verify(),
+            Err(RpcFilterError::Base58DataTooLarge)
+        );
     }
 }

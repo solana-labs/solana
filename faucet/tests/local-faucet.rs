@@ -6,7 +6,6 @@ use solana_sdk::{
     system_instruction,
     transaction::Transaction,
 };
-use std::sync::mpsc::channel;
 
 #[test]
 fn test_local_faucet() {
@@ -18,9 +17,7 @@ fn test_local_faucet() {
     let message = Message::new(&[create_instruction], Some(&keypair.pubkey()));
     let expected_tx = Transaction::new(&[&keypair], message, blockhash);
 
-    let (sender, receiver) = channel();
-    run_local_faucet(keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(keypair, None);
 
     let result = request_airdrop_transaction(&faucet_addr, &to, lamports, blockhash);
     assert_eq!(expected_tx, result.unwrap());

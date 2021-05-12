@@ -1,4 +1,5 @@
 //! The `net_utils` module assists with networking
+#![allow(clippy::integer_arithmetic)]
 use {
     log::*,
     rand::{thread_rng, Rng},
@@ -197,8 +198,7 @@ fn do_verify_reachable_ports(
                     .collect::<Vec<_>>(),
                 checked_ports_and_sockets
                     .iter()
-                    .map(|(_, sockets)| sockets)
-                    .flatten(),
+                    .flat_map(|(_, sockets)| sockets),
             );
 
             let _ = ip_echo_server_request(

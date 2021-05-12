@@ -6,10 +6,10 @@ use crate::{
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
+    outstanding_requests::OutstandingRequests,
     repair_response,
-    repair_service::{RepairInfo, RepairService},
+    repair_service::{OutstandingRepairs, RepairInfo, RepairService},
     result::{Error, Result},
-    serve_repair::DEFAULT_NONCE,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
@@ -26,8 +26,9 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
+use solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
+use std::collections::HashSet;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
@@ -35,6 +36,9 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+
+pub type DuplicateSlotSender = CrossbeamSender<Slot>;
+pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -86,21 +90,25 @@ fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
     shred_receiver: &CrossbeamReceiver<Shred>,
+    duplicate_slot_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
-        if !blockstore.has_duplicate_shreds_in_slot(shred.slot()) {
+        let shred_slot = shred.slot();
+        if !blockstore.has_duplicate_shreds_in_slot(shred_slot) {
             if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(
-                shred.slot(),
+                shred_slot,
                 shred.index(),
                 &shred.payload,
                 shred.is_data(),
             ) {
                 cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(
-                    shred.slot(),
+                    shred_slot,
                     existing_shred_payload,
                     shred.payload,
                 )?;
+
+                duplicate_slot_sender.send(shred_slot)?;
             }
         }
 
@@ -116,11 +124,48 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair(repair_info: &Option<RepairMeta>) -> bool {
-    repair_info
+fn verify_repair(
+    outstanding_requests: &mut OutstandingRepairs,
+    shred: &Shred,
+    repair_meta: &Option<RepairMeta>,
+) -> bool {
+    repair_meta
         .as_ref()
-        .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
+        .map(|repair_meta| {
+            outstanding_requests.register_response(
+                repair_meta.nonce,
+                &shred,
+                solana_sdk::timing::timestamp(),
+            )
+        })
         .unwrap_or(true)
+}
+
+fn prune_shreds_invalid_repair(
+    shreds: &mut Vec<Shred>,
+    repair_infos: &mut Vec<Option<RepairMeta>>,
+    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+) {
+    assert_eq!(shreds.len(), repair_infos.len());
+    let mut i = 0;
+    let mut removed = HashSet::new();
+    {
+        let mut outstanding_requests = outstanding_requests.write().unwrap();
+        shreds.retain(|shred| {
+            let should_keep = (
+                verify_repair(&mut outstanding_requests, &shred, &repair_infos[i]),
+                i += 1,
+            )
+                .0;
+            if !should_keep {
+                removed.insert(i - 1);
+            }
+            should_keep
+        });
+    }
+    i = 0;
+    repair_infos.retain(|_repair_info| (!removed.contains(&i), i += 1).0);
+    assert_eq!(shreds.len(), repair_infos.len());
 }
 
 fn run_insert<F>(
@@ -130,6 +175,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -141,11 +187,7 @@ where
         repair_infos.extend(more_repair_infos);
     }
 
-    assert_eq!(shreds.len(), repair_infos.len());
-    let mut i = 0;
-    shreds.retain(|_shred| (verify_repair(&repair_infos[i]), i += 1).0);
-    repair_infos.retain(|repair_info| verify_repair(&repair_info));
-    assert_eq!(shreds.len(), repair_infos.len());
+    prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -319,6 +361,7 @@ impl WindowService {
         cluster_slots: Arc<ClusterSlots>,
         verified_vote_receiver: VerifiedVoteReceiver,
         completed_data_sets_sender: CompletedDataSetsSender,
+        duplicate_slots_sender: DuplicateSlotSender,
     ) -> WindowService
     where
         F: 'static
@@ -326,6 +369,9 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        let outstanding_requests: Arc<RwLock<OutstandingRepairs>> =
+            Arc::new(RwLock::new(OutstandingRequests::default()));
+
         let bank_forks = Some(repair_info.bank_forks.clone());
 
         let repair_service = RepairService::new(
@@ -336,6 +382,7 @@ impl WindowService {
             repair_info,
             cluster_slots,
             verified_vote_receiver,
+            outstanding_requests.clone(),
         );
 
         let (insert_sender, insert_receiver) = unbounded();
@@ -346,6 +393,7 @@ impl WindowService {
             exit.clone(),
             blockstore.clone(),
             duplicate_receiver,
+            duplicate_slots_sender,
         );
 
         let t_insert = Self::start_window_insert_thread(
@@ -355,6 +403,7 @@ impl WindowService {
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
+            outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -381,6 +430,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         duplicate_receiver: CrossbeamReceiver<Shred>,
+        duplicate_slot_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
@@ -393,8 +443,12 @@ impl WindowService {
                 }
 
                 let mut noop = || {};
-                if let Err(e) = run_check_duplicate(&cluster_info, &blockstore, &duplicate_receiver)
-                {
+                if let Err(e) = run_check_duplicate(
+                    &cluster_info,
+                    &blockstore,
+                    &duplicate_receiver,
+                    &duplicate_slot_sender,
+                ) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;
                     }
@@ -408,8 +462,9 @@ impl WindowService {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-        duplicate_sender: CrossbeamSender<Shred>,
+        check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
+        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -423,7 +478,7 @@ impl WindowService {
             .name("solana-window-insert".to_string())
             .spawn(move || {
                 let handle_duplicate = |shred| {
-                    let _ = duplicate_sender.send(shred);
+                    let _ = check_duplicate_sender.send(shred);
                 };
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut last_print = Instant::now();
@@ -439,6 +494,7 @@ impl WindowService {
                         &handle_duplicate,
                         &mut metrics,
                         &completed_data_sets_sender,
+                        &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
@@ -538,6 +594,7 @@ impl WindowService {
                 handle_timeout();
                 false
             }
+            Error::CrossbeamSendError => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);
@@ -566,7 +623,6 @@ mod test {
         shred::{DataShredHeader, Shredder},
     };
     use solana_sdk::{
-        clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, Signer},
@@ -580,8 +636,7 @@ mod test {
         parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone(), 0, 0)
-            .expect("Failed to create entry shredder");
+        let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
         shredder.entries_to_shreds(&entries, true, 0).0
     }
 
@@ -627,7 +682,7 @@ mod test {
         );
 
         // If it's a coding shred, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
         let mut coding_shred =
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
@@ -680,6 +735,7 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let (sender, receiver) = unbounded();
+        let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
         let (shreds, _) = make_many_slot_entries(5, 5, 10);
         blockstore
             .insert_shreds(shreds.clone(), None, false)
@@ -692,7 +748,44 @@ mod test {
         let keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
         let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
-        run_check_duplicate(&cluster_info, &blockstore, &receiver).unwrap();
+        run_check_duplicate(
+            &cluster_info,
+            &blockstore,
+            &receiver,
+            &duplicate_slot_sender,
+        )
+        .unwrap();
         assert!(blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
+        assert_eq!(
+            duplicate_slot_receiver.try_recv().unwrap(),
+            duplicate_shred_slot
+        );
+    }
+
+    #[test]
+    fn test_prune_shreds() {
+        use crate::serve_repair::RepairType;
+        use std::net::{IpAddr, Ipv4Addr};
+        solana_logger::setup();
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
+        let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        let mut shreds = vec![shred.clone(), shred.clone(), shred];
+        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let repair_meta = RepairMeta {
+            _from_addr,
+            nonce: 0,
+        };
+        let outstanding_requests = Arc::new(RwLock::new(OutstandingRepairs::default()));
+        let repair_type = RepairType::Orphan(9);
+        let nonce = outstanding_requests
+            .write()
+            .unwrap()
+            .add_request(repair_type, timestamp());
+        let repair_meta1 = RepairMeta { _from_addr, nonce };
+        let mut repair_infos = vec![None, Some(repair_meta), Some(repair_meta1)];
+        prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, &outstanding_requests);
+        assert_eq!(repair_infos.len(), 2);
+        assert!(repair_infos[0].is_none());
+        assert_eq!(repair_infos[1].as_ref().unwrap().nonce, nonce);
     }
 }

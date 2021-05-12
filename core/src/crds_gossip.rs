@@ -4,12 +4,15 @@
 //! packet::PACKET_DATA_SIZE size.
 
 use crate::{
+    cluster_info::Ping,
+    contact_info::ContactInfo,
     crds::{Crds, VersionedCrdsValue},
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
     crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
     duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+    ping_pong::PingCache,
 };
 use rayon::ThreadPool;
 use solana_ledger::shred::Shred;
@@ -19,7 +22,11 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::timestamp,
 };
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Mutex,
+};
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
@@ -62,16 +69,12 @@ impl CrdsGossip {
         values
             .into_iter()
             .filter_map(|val| {
-                let res = self
+                let old = self
                     .push
-                    .process_push_message(&mut self.crds, from, val, now);
-                if let Ok(Some(val)) = res {
-                    self.pull
-                        .record_old_hash(val.value_hash, val.local_timestamp);
-                    Some(val)
-                } else {
-                    None
-                }
+                    .process_push_message(&mut self.crds, from, val, now)
+                    .ok()?;
+                self.pull.record_old_hash(old.as_ref()?.value_hash, now);
+                old
             })
             .collect()
     }
@@ -94,22 +97,14 @@ impl CrdsGossip {
         prune_map
     }
 
-    pub fn process_push_messages(&mut self, pending_push_messages: Vec<(CrdsValue, u64)>) {
-        for (push_message, timestamp) in pending_push_messages {
-            let _ =
-                self.push
-                    .process_push_message(&mut self.crds, &self.id, push_message, timestamp);
-        }
-    }
-
     pub fn new_push_messages(
         &mut self,
-        pending_push_messages: Vec<(CrdsValue, u64)>,
+        pending_push_messages: Vec<CrdsValue>,
         now: u64,
-    ) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
-        self.process_push_messages(pending_push_messages);
-        let push_messages = self.push.new_push_messages(&self.crds, now);
-        (self.id, push_messages)
+    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+        let self_pubkey = self.id;
+        self.process_push_message(&self_pubkey, pending_push_messages, now);
+        self.push.new_push_messages(&self.crds, now)
     }
 
     pub(crate) fn push_duplicate_shred(
@@ -208,7 +203,7 @@ impl CrdsGossip {
             gossip_validators,
             &self.id,
             self.shred_version,
-            self.pull.pull_request_time.len(),
+            self.crds.num_nodes(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
     }
@@ -217,20 +212,25 @@ impl CrdsGossip {
     pub fn new_pull_request(
         &self,
         thread_pool: &ThreadPool,
+        self_keypair: &Keypair,
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
-    ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+        ping_cache: &Mutex<PingCache>,
+        pings: &mut Vec<(SocketAddr, Ping)>,
+    ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
             &self.crds,
-            &self.id,
+            self_keypair,
             self.shred_version,
             now,
             gossip_validators,
             stakes,
             bloom_size,
+            ping_cache,
+            pings,
         )
     }
 
@@ -238,7 +238,7 @@ impl CrdsGossip {
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&mut self, from: &Pubkey, now: u64) {
+    pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
@@ -266,7 +266,11 @@ impl CrdsGossip {
         response: Vec<CrdsValue>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
-    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>, Vec<Hash>) {
+    ) -> (
+        Vec<CrdsValue>, // valid responses.
+        Vec<CrdsValue>, // responses with expired timestamps.
+        Vec<Hash>,      // hash of outdated values.
+    ) {
         self.pull
             .filter_pull_responses(&self.crds, timeouts, response, now, process_pull_stats)
     }
@@ -275,13 +279,13 @@ impl CrdsGossip {
     pub fn process_pull_responses(
         &mut self,
         from: &Pubkey,
-        responses: Vec<VersionedCrdsValue>,
-        responses_expired_timeout: Vec<VersionedCrdsValue>,
+        responses: Vec<CrdsValue>,
+        responses_expired_timeout: Vec<CrdsValue>,
         failed_inserts: Vec<Hash>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
     ) {
-        let success = self.pull.process_pull_responses(
+        self.pull.process_pull_responses(
             &mut self.crds,
             from,
             responses,
@@ -290,7 +294,6 @@ impl CrdsGossip {
             now,
             process_pull_stats,
         );
-        self.push.push_pull_responses(success, now);
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
@@ -312,10 +315,6 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
         let mut rv = 0;
-        if now > self.push.msg_timeout {
-            let min = now - self.push.msg_timeout;
-            self.push.purge_old_pending_push_messages(&self.crds, min);
-        }
         if now > 5 * self.push.msg_timeout {
             let min = now - 5 * self.push.msg_timeout;
             self.push.purge_old_received_cache(min);
@@ -342,7 +341,7 @@ impl CrdsGossip {
         Self {
             crds: self.crds.clone(),
             push: self.push.mock_clone(),
-            pull: self.pull.clone(),
+            pull: self.pull.mock_clone(),
             ..*self
         }
     }

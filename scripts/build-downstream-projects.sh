@@ -22,6 +22,7 @@ update_solana_dependencies() {
   while IFS='' read -r line; do tomls+=("$line"); done < <(find "$1" -name Cargo.toml)
 
   sed -i -e "s#\(solana-program = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-program-test = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-sdk = \"\).*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-sdk = { version = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-client = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
@@ -33,6 +34,7 @@ patch_crates_io() {
 [patch.crates-io]
 solana-client = { path = "$solana_dir/client" }
 solana-program = { path = "$solana_dir/sdk/program" }
+solana-program-test = { path = "$solana_dir/program-test" }
 solana-sdk = { path = "$solana_dir/sdk" }
 EOF
 }
@@ -65,15 +67,8 @@ spl() {
     ./patch.crates-io.sh "$solana_dir"
 
     $cargo build
-
-    # Generic `cargo test`/`cargo test-bpf` disabled due to BPF VM interface changes between Solana 1.4
-    # and 1.5...
-    #$cargo test
-    #$cargo_test_bpf
-
-    $cargo_test_bpf --manifest-path token/program/Cargo.toml
-    $cargo_test_bpf --manifest-path associated-token-account/program/Cargo.toml
-    $cargo_test_bpf --manifest-path feature-proposal/program/Cargo.toml
+    $cargo test
+    $cargo_test_bpf
   )
 }
 
@@ -83,14 +78,16 @@ serum_dex() {
     rm -rf serum-dex
     git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
-    # TODO: Remove next line and debug build failure
-    git checkout 54400763dbcc64bc955621298f0bada33b591f53
 
     update_solana_dependencies .
     patch_crates_io Cargo.toml
     patch_crates_io dex/Cargo.toml
-    echo "[workspace]" >> dex/Cargo.toml
-
+    cat >> dex/Cargo.toml <<EOF
+[workspace]
+exclude = [
+    "crank",
+]
+EOF
     $cargo build
 
     $cargo_build_bpf \

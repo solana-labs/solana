@@ -1,9 +1,13 @@
+#![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate log;
 
 use rayon::iter::*;
-use solana_core::cluster_info::{ClusterInfo, Node};
-use solana_core::gossip_service::GossipService;
+use solana_core::{
+    cluster_info::{ClusterInfo, Node},
+    crds::Cursor,
+    gossip_service::GossipService,
+};
 use solana_runtime::bank_forks::BankForks;
 
 use solana_perf::packet::Packet;
@@ -25,8 +29,14 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
-    let gossip_service =
-        GossipService::new(&cluster_info, None, test_node.sockets.gossip, None, exit);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        test_node.sockets.gossip,
+        None,
+        true, // should_check_duplicate_instance
+        exit,
+    );
     let _ = cluster_info.my_contact_info();
     (
         cluster_info,
@@ -47,6 +57,7 @@ fn test_node_with_bank(
         Some(bank_forks),
         test_node.sockets.gossip,
         None,
+        true, // should_check_duplicate_instance
         exit,
     );
     let _ = cluster_info.my_contact_info();
@@ -191,9 +202,9 @@ pub fn cluster_info_retransmit() {
     assert!(done);
     let mut p = Packet::default();
     p.meta.size = 10;
-    let peers = c1.retransmit_peers();
+    let peers = c1.tvu_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
-    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false).unwrap();
+    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, &tn1, false).unwrap();
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
@@ -297,12 +308,11 @@ pub fn cluster_info_scale() {
             let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
-            let mut num_inserts = 0;
             for node in nodes.iter() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
                     .0
-                    .get_votes(0)
+                    .get_votes(&mut Cursor::default())
                     .1
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
@@ -311,7 +321,6 @@ pub fn cluster_info_scale() {
                 num_push_total += node.0.gossip.read().unwrap().push.num_total;
                 num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
                 num_pulls += node.0.gossip.read().unwrap().pull.num_pulls;
-                num_inserts += node.0.gossip.read().unwrap().crds.num_inserts;
                 if has_tx == 0 {
                     not_done += 1;
                 }
@@ -321,7 +330,6 @@ pub fn cluster_info_scale() {
             warn!("num_push_total: {}", num_push_total);
             warn!("num_pushes: {}", num_pushes);
             warn!("num_pulls: {}", num_pulls);
-            warn!("num_inserts: {}", num_inserts);
             success = not_done < (nodes.len() / 20);
             if success {
                 break;
@@ -339,7 +347,6 @@ pub fn cluster_info_scale() {
             node.0.gossip.write().unwrap().push.num_total = 0;
             node.0.gossip.write().unwrap().push.num_pushes = 0;
             node.0.gossip.write().unwrap().pull.num_pulls = 0;
-            node.0.gossip.write().unwrap().crds.num_inserts = 0;
         }
     }
 

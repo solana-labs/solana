@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
 
@@ -8,7 +9,6 @@ extern crate self as solana_frozen_abi;
 pub mod abi_digester;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 pub mod abi_example;
-
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod hash;
 

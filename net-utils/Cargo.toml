@@ -1,11 +1,12 @@
 [package]
 name = "solana-net-utils"
-version = "1.6.0"
+version = "1.7.0"
 description = "Solana Network Utilities"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-net-utils"
 edition = "2018"
 
 [dependencies]
@@ -14,13 +15,13 @@ clap = "2.33.1"
 log = "0.4.11"
 nix = "0.19.0"
 rand = "0.7.0"
-serde = "1.0.112"
+serde = "1.0.122"
 serde_derive = "1.0.103"
 socket2 = "0.3.17"
-solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-solana-logger = { path = "../logger", version = "1.6.0" }
-solana-version = { path = "../version", version = "1.6.0" }
-tokio = { version = "0.3.5", features = ["full"] }
+solana-clap-utils = { path = "../clap-utils", version = "=1.7.0" }
+solana-logger = { path = "../logger", version = "=1.7.0" }
+solana-version = { path = "../version", version = "=1.7.0" }
+tokio = { version = "1", features = ["full"] }
 url = "2.1.1"
 
 [lib]

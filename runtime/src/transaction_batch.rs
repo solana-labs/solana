@@ -1,12 +1,13 @@
 use crate::bank::Bank;
+use crate::hashed_transaction::HashedTransaction;
 use solana_sdk::transaction::{Result, Transaction};
+use std::borrow::Cow;
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    transactions: &'b [Transaction],
-    iteration_order: Option<Vec<usize>>,
+    hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
     pub(crate) needs_unlock: bool,
 }
 
@@ -14,18 +15,13 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        transactions: &'b [Transaction],
-        iteration_order: Option<Vec<usize>>,
+        hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
     ) -> Self {
-        assert_eq!(lock_results.len(), transactions.len());
-        if let Some(iteration_order) = &iteration_order {
-            assert_eq!(transactions.len(), iteration_order.len());
-        }
+        assert_eq!(lock_results.len(), hashed_txs.len());
         Self {
             lock_results,
             bank,
-            transactions,
-            iteration_order,
+            hashed_txs,
             needs_unlock: true,
         }
     }
@@ -34,16 +30,12 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn transactions(&self) -> &[Transaction] {
-        self.transactions
+    pub fn hashed_transactions(&self) -> &[HashedTransaction] {
+        &self.hashed_txs
     }
 
-    pub fn iteration_order(&self) -> Option<&[usize]> {
-        self.iteration_order.as_deref()
-    }
-
-    pub fn iteration_order_vec(&self) -> Option<Vec<usize>> {
-        self.iteration_order.clone()
+    pub fn transactions_iter(&self) -> impl Iterator<Item = &Transaction> {
+        self.hashed_txs.iter().map(|h| h.transaction())
     }
 
     pub fn bank(&self) -> &Bank {
@@ -69,20 +61,20 @@ mod tests {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let batch = bank.prepare_batch(&txs, None);
+        let batch = bank.prepare_batch(txs.iter());
 
         // Grab locks
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(txs.iter());
         assert!(batch2.lock_results().iter().all(|x| x.is_err()));
 
         // Drop the first set of locks
         drop(batch);
 
         // Now grabbing locks should work again
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(txs.iter());
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
@@ -95,7 +87,7 @@ mod tests {
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Grab locks
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(txs.iter());
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
 
         // Prepare another batch without locks

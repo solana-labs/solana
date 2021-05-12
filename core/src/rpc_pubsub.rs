@@ -12,6 +12,7 @@ use solana_client::{
     },
     rpc_response::{
         Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult, SlotInfo,
+        SlotUpdate,
     },
 };
 #[cfg(test)]
@@ -138,6 +139,30 @@ pub trait RpcSolPubSub {
         name = "slotUnsubscribe"
     )]
     fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+    // Get series of updates for all slots
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        subscribe,
+        name = "slotsUpdatesSubscribe"
+    )]
+    fn slots_updates_subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    );
+
+    // Unsubscribe from slots updates notification subscription.
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        unsubscribe,
+        name = "slotsUpdatesUnsubscribe"
+    )]
+    fn slots_updates_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when vote is encountered
     #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
@@ -428,6 +453,40 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
     }
 
+    fn slots_updates_subscribe(
+        &self,
+        _meta: Self::Metadata,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    ) {
+        info!("slots_updates_subscribe");
+        if let Err(err) = self.check_subscription_count() {
+            subscriber.reject(err).unwrap_or_default();
+            return;
+        }
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("slots_updates_subscribe: id={:?}", sub_id);
+        self.subscriptions
+            .add_slots_updates_subscription(sub_id, subscriber);
+    }
+
+    fn slots_updates_unsubscribe(
+        &self,
+        _meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool> {
+        info!("slots_updates_unsubscribe");
+        if self.subscriptions.remove_slots_updates_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
     fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<RpcVote>) {
         info!("vote_subscribe");
         if let Err(err) = self.check_subscription_count() {
@@ -488,9 +547,9 @@ mod tests {
         rpc_subscriptions::tests::robust_poll_or_panic,
     };
     use crossbeam_channel::unbounded;
-    use jsonrpc_core::{futures::sync::mpsc, Response};
+    use jsonrpc_core::{futures::channel::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
-    use serial_test_derive::serial;
+    use serial_test::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
     use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
     use solana_runtime::{
@@ -503,6 +562,7 @@ mod tests {
         },
     };
     use solana_sdk::{
+        account::ReadableAccount,
         commitment_config::CommitmentConfig,
         hash::Hash,
         message::Message,
@@ -543,7 +603,7 @@ mod tests {
     }
 
     fn create_session() -> Arc<Session> {
-        Arc::new(Session::new(mpsc::channel(1).0))
+        Arc::new(Session::new(mpsc::unbounded().0))
     }
 
     #[test]
@@ -579,7 +639,7 @@ mod tests {
             subscriber,
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::single()),
+                commitment: Some(CommitmentConfig::finalized()),
                 ..RpcSignatureSubscribeConfig::default()
             }),
         );
@@ -612,13 +672,14 @@ mod tests {
             subscriber,
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::single()),
+                commitment: Some(CommitmentConfig::finalized()),
                 enable_received_notification: Some(true),
             }),
         );
         let received_slot = 1;
         rpc.subscriptions
             .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
+
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
         let expected_res =
@@ -632,6 +693,39 @@ mod tests {
                    "value": expected_res,
                },
                "subscription": 1,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        // Test "received" for gossip subscription
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
+        rpc.signature_subscribe(
+            session,
+            subscriber,
+            tx.signatures[0].to_string(),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::confirmed()),
+                enable_received_notification: Some(true),
+            }),
+        );
+        let received_slot = 2;
+        rpc.subscriptions
+            .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
+
+        // Test signature confirmation notification
+        let (response, _) = robust_poll_or_panic(receiver);
+        let expected_res =
+            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "signatureNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": received_slot },
+                   "value": expected_res,
+               },
+               "subscription": 2,
            }
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
@@ -721,7 +815,7 @@ mod tests {
             subscriber,
             stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -744,14 +838,14 @@ mod tests {
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #1
-        let expected_data = bank_forks
+        let account = bank_forks
             .read()
             .unwrap()
             .get(1)
             .unwrap()
             .get_account(&stake_account.pubkey())
-            .unwrap()
-            .data;
+            .unwrap();
+        let expected_data = account.data();
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -781,6 +875,7 @@ mod tests {
             &stake_authority.pubkey(),
             &new_stake_authority,
             StakeAuthorize::Staker,
+            None,
         );
         let message = Message::new(&[ix], Some(&stake_authority.pubkey()));
         let tx = Transaction::new(&[&stake_authority], message, blockhash);
@@ -830,7 +925,7 @@ mod tests {
             subscriber,
             nonce_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: Some(UiAccountEncoding::JsonParsed),
                 data_slice: None,
             }),
@@ -848,18 +943,18 @@ mod tests {
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #1
-        let expected_data = bank_forks
+        let account = bank_forks
             .read()
             .unwrap()
             .get(1)
             .unwrap()
             .get_account(&nonce_account.pubkey())
-            .unwrap()
-            .data;
+            .unwrap();
+        let expected_data = account.data();
         let expected_data = parse_account_data(
             &nonce_account.pubkey(),
             &system_program::id(),
-            &expected_data,
+            expected_data,
             None,
         )
         .unwrap();
@@ -952,7 +1047,7 @@ mod tests {
             subscriber,
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1006,7 +1101,7 @@ mod tests {
             subscriber,
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1177,14 +1272,16 @@ mod tests {
         });
 
         // Process votes and check they were notified.
-        let (s, _r) = unbounded();
+        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
+        let (gossip_verified_vote_hash_sender, _gossip_verified_vote_hash_receiver) = unbounded();
         let (_replay_votes_sender, replay_votes_receiver) = unbounded();
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
             &bank,
             &rpc.subscriptions,
-            &s,
+            &gossip_verified_vote_hash_sender,
+            &verified_vote_sender,
             &replay_votes_receiver,
         )
         .unwrap();

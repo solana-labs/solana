@@ -3,6 +3,7 @@ import { clusterApiUrl, Connection } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
 import { reportError } from "utils/sentry";
+import { localStorageIsAvailable } from "utils";
 
 export enum ClusterStatus {
   Connected,
@@ -134,7 +135,9 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   const [showModal, setShowModal] = React.useState(false);
   const query = useQuery();
   const cluster = parseQuery(query);
-  const enableCustomUrl = localStorage.getItem("enableCustomUrl") !== null;
+  const enableCustomUrl =
+    localStorageIsAvailable() &&
+    localStorage.getItem("enableCustomUrl") !== null;
   const customUrl = enableCustomUrl
     ? query.get("customUrl") || ""
     : state.customUrl;

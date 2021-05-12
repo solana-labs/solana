@@ -43,7 +43,7 @@ async function fetch(dispatch: Dispatch, cluster: Cluster, url: string) {
   dispatch(Status.Connecting);
 
   try {
-    const connection = new Connection(url, "max");
+    const connection = new Connection(url, "finalized");
     const supply = (await connection.getSupply()).value;
 
     // Update state if still connecting

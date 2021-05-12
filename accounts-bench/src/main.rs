@@ -1,12 +1,15 @@
+#![allow(clippy::integer_arithmetic)]
+#[macro_use]
+extern crate log;
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
-    accounts_index::Ancestors,
+    accounts_index::{AccountSecondaryIndexes, Ancestors},
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 fn main() {
     solana_logger::setup();
@@ -51,11 +54,16 @@ fn main() {
 
     let path = PathBuf::from(env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_owned()))
         .join("accounts-bench");
+    println!("cleaning file system: {:?}", path);
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts =
-        Accounts::new_with_config(vec![path], &ClusterType::Testnet, HashSet::new(), false);
+    let accounts = Accounts::new_with_config(
+        vec![path],
+        &ClusterType::Testnet,
+        AccountSecondaryIndexes::default(),
+        false,
+    );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)
@@ -84,6 +92,8 @@ fn main() {
         ancestors.insert(i as u64, i - 1);
         accounts.add_root(i as u64);
     }
+    let mut elapsed = vec![0; iterations];
+    let mut elapsed_store = vec![0; iterations];
     for x in 0..iterations {
         if clean {
             let mut time = Measure::start("clean");
@@ -97,13 +107,37 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let hash = accounts
-                .accounts_db
-                .update_accounts_hash(0, &ancestors, true)
-                .0;
+            let results = accounts.accounts_db.update_accounts_hash(0, &ancestors);
             time.stop();
-            println!("hash: {} {}", hash, time);
+            let mut time_store = Measure::start("hash using store");
+            let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
+                false,
+                false,
+                solana_sdk::clock::Slot::default(),
+                &ancestors,
+                None,
+            );
+            time_store.stop();
+            if results != results_store {
+                error!("results different: \n{:?}\n{:?}", results, results_store);
+            }
+            println!(
+                "hash,{},{},{},{}%",
+                results.0,
+                time,
+                time_store,
+                (time_store.as_us() as f64 / time.as_us() as f64 * 100.0f64) as u32
+            );
             create_test_accounts(&accounts, &mut pubkeys, 1, 0);
+            elapsed[x] = time.as_us();
+            elapsed_store[x] = time_store.as_us();
         }
+    }
+
+    for x in elapsed {
+        info!("update_accounts_hash(us),{}", x);
+    }
+    for x in elapsed_store {
+        info!("calculate_accounts_hash_without_index(us),{}", x);
     }
 }

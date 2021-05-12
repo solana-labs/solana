@@ -1,29 +1,29 @@
 use {
     clap::{value_t, value_t_or_exit, App, Arg},
-    console::style,
     fd_lock::FdLock,
-    indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
     solana_clap_utils::{
-        input_parsers::{pubkey_of, pubkeys_of},
+        input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
             is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
             normalize_to_url_if_moniker,
         },
     },
-    solana_client::{client_error, rpc_client::RpcClient, rpc_request},
+    solana_client::rpc_client::RpcClient,
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_sdk::{
-        account::Account,
-        clock::{Slot, DEFAULT_TICKS_PER_SLOT, MS_PER_TICK},
-        commitment_config::CommitmentConfig,
-        native_token::{sol_to_lamports, Sol},
+        account::AccountSharedData,
+        clock::Slot,
+        epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+        native_token::sol_to_lamports,
         pubkey::Pubkey,
         rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
-    solana_validator::{start_logger, test_validator::*},
+    solana_validator::{
+        admin_rpc_service, dashboard::Dashboard, redirect_stderr_to_file, test_validator::*,
+    },
     std::{
         collections::HashSet,
         fs, io,
@@ -31,10 +31,15 @@ use {
         path::{Path, PathBuf},
         process::exit,
         sync::mpsc::channel,
-        thread,
-        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
+
+/* 10,000 was derived empirically by watching the size
+ * of the rocksdb/ directory self-limit itself to the
+ * 40MB-150MB range when running `solana-test-validator`
+ */
+const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
 
 #[derive(PartialEq)]
 enum Output {
@@ -43,23 +48,10 @@ enum Output {
     Dashboard,
 }
 
-/// Creates a new process bar for processing that will take an unknown amount of time
-fn new_spinner_progress_bar() -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
-    progress_bar.set_draw_target(ProgressDrawTarget::stdout());
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
-    progress_bar
-}
-
-/// Pretty print a "name value"
-fn println_name_value(name: &str, value: &str) {
-    println!("{} {}", style(name).bold(), value);
-}
-
 fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
+    let default_faucet_port = FAUCET_PORT.to_string();
+    let default_limit_ledger_size = DEFAULT_MAX_LEDGER_SHREDS.to_string();
 
     let matches = App::new("solana-test-validator")
         .about("Test Validator")
@@ -137,13 +129,22 @@ fn main() {
                 .help("Log mode: stream the validator log"),
         )
         .arg(
+            Arg::with_name("faucet_port")
+                .long("faucet-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .default_value(&default_faucet_port)
+                .validator(solana_validator::port_validator)
+                .help("Enable the faucet on this port"),
+        )
+        .arg(
             Arg::with_name("rpc_port")
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
                 .default_value(&default_rpc_port)
                 .validator(solana_validator::port_validator)
-                .help("Use this port for JSON RPC and the next port for the RPC websocket"),
+                .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
         .arg(
             Arg::with_name("bpf_program")
@@ -156,6 +157,72 @@ fn main() {
                     "Add a BPF program to the genesis configuration. \
                        If the ledger already exists then this parameter is silently ignored",
                 ),
+        )
+        .arg(
+            Arg::with_name("no_bpf_jit")
+                .long("no-bpf-jit")
+                .takes_value(false)
+                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+        )
+        .arg(
+            Arg::with_name("slots_per_epoch")
+                .long("slots-per-epoch")
+                .value_name("SLOTS")
+                .validator(|value| {
+                    value
+                        .parse::<Slot>()
+                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .and_then(|slot| {
+                            if slot < MINIMUM_SLOTS_PER_EPOCH {
+                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
+                .takes_value(true)
+                .help(
+                    "Override the number of slots in an epoch. \
+                       If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("Gossip port number for the validator"),
+        )
+        .arg(
+            Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help(
+                    "Gossip DNS name or IP address for the validator to advertise in gossip \
+                       [default: 127.0.0.1]",
+                ),
+        )
+        .arg(
+            Arg::with_name("dynamic_port_range")
+                .long("dynamic-port-range")
+                .value_name("MIN_PORT-MAX_PORT")
+                .takes_value(true)
+                .validator(solana_validator::port_range_validator)
+                .help(
+                    "Range to use for dynamically assigned ports \
+                    [default: 1024-65535]",
+                ),
+        )
+        .arg(
+            Arg::with_name("bind_address")
+                .long("bind-address")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .default_value("0.0.0.0")
+                .help("IP address to bind the validator ports [default: 0.0.0.0]"),
         )
         .arg(
             Arg::with_name("clone_account")
@@ -188,6 +255,14 @@ fn main() {
                         referenced by the --url argument will be used",
                 ),
         )
+        .arg(
+            Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .value_name("SHRED_COUNT")
+                .takes_value(true)
+                .default_value(default_limit_ledger_size.as_str())
+                .help("Keep this amount of shreds in root slots."),
+        )
         .get_matches();
 
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
@@ -216,10 +291,33 @@ fn main() {
         Output::Dashboard
     };
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
+    let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
+    let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
+    let gossip_host = matches.value_of("gossip_host").map(|gossip_host| {
+        solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --gossip-host: {}", err);
+            exit(1);
+        })
+    });
+    let gossip_port = value_t!(matches, "gossip_port", u16).ok();
+    let dynamic_port_range = matches.value_of("dynamic_port_range").map(|port_range| {
+        solana_net_utils::parse_port_range(port_range).unwrap_or_else(|| {
+            eprintln!("Failed to parse --dynamic-port-range");
+            exit(1);
+        })
+    });
+    let bind_address = matches.value_of("bind_address").map(|bind_address| {
+        solana_net_utils::parse_host(bind_address).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --bind-address: {}", err);
+            exit(1);
+        })
+    });
+
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        FAUCET_PORT,
+        faucet_port,
     ));
+    let bpf_jit = !matches.is_present("no_bpf_jit");
 
     let mut programs = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
@@ -228,13 +326,13 @@ fn main() {
             match address_program {
                 [address, program] => {
                     let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid address {}: {}", address, err);
+                        println!("Error: invalid address {}: {}", address, err);
                         exit(1);
                     });
 
                     let program_path = PathBuf::from(program);
                     if !program_path.exists() {
-                        eprintln!(
+                        println!(
                             "Error: program file does not exist: {}",
                             program_path.display()
                         );
@@ -261,12 +359,12 @@ fn main() {
             Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
             None => {
                 cluster_rpc_client.as_ref().unwrap_or_else(|_| {
-                        eprintln!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
+                        println!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
                         exit(1);
 
                 }).get_slot()
                     .unwrap_or_else(|err| {
-                        eprintln!("Unable to get current cluster slot: {}", err);
+                        println!("Unable to get current cluster slot: {}", err);
                         exit(1);
                     })
             }
@@ -277,7 +375,7 @@ fn main() {
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Unable to create directory {}: {}",
                 ledger_path.display(),
                 err
@@ -288,8 +386,8 @@ fn main() {
 
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        eprintln!(
-            "Error: Unable to lock {} directory. Check if another solana-test-validator is running",
+        println!(
+            "Error: Unable to lock {} directory. Check if another validator is running",
             ledger_path.display()
         );
         exit(1);
@@ -297,7 +395,7 @@ fn main() {
 
     if reset_ledger {
         remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
-            eprintln!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
             exit(1);
         })
     }
@@ -326,14 +424,14 @@ fn main() {
     } else {
         None
     };
-    let _logger_thread = start_logger(logfile);
+    let _logger_thread = redirect_stderr_to_file(logfile);
 
     let faucet_lamports = sol_to_lamports(1_000_000.);
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(
             |err| {
-                eprintln!(
+                println!(
                     "Error: Failed to write {}: {}",
                     faucet_keypair_file.display(),
                     err
@@ -342,200 +440,144 @@ fn main() {
             },
         );
     }
+
     let faucet_keypair =
         read_keypair_file(faucet_keypair_file.to_str().unwrap()).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Failed to read {}: {}",
                 faucet_keypair_file.display(),
                 err
             );
             exit(1);
         });
-
-    let validator_start = Instant::now();
-
-    let test_validator = {
-        let _progress_bar = if output == Output::Dashboard {
-            println_name_value("Mint address:", &mint_address.to_string());
-            println_name_value("Ledger location:", &format!("{}", ledger_path.display()));
-            println_name_value("Log:", &format!("{}", validator_log_symlink.display()));
-            let progress_bar = new_spinner_progress_bar();
-            progress_bar.set_message("Initializing...");
-            Some(progress_bar)
-        } else {
-            None
-        };
-
-        let mut genesis = TestValidatorGenesis::default();
-        genesis
-            .ledger_path(&ledger_path)
-            .add_account(
-                faucet_keypair.pubkey(),
-                Account::new(faucet_lamports, 0, &system_program::id()),
-            )
-            .rpc_config(JsonRpcConfig {
-                enable_validator_exit: true,
-                enable_rpc_transaction_history: true,
-                faucet_addr,
-                ..JsonRpcConfig::default()
-            })
-            .rpc_port(rpc_port)
-            .add_programs_with_path(&programs);
-
-        if !clone_accounts.is_empty() {
-            genesis.clone_accounts(
-                clone_accounts,
-                cluster_rpc_client
-                    .as_ref()
-                    .expect("bug: --url argument missing?"),
-            );
-        }
-
-        if let Some(warp_slot) = warp_slot {
-            genesis.warp_slot(warp_slot);
-        }
-        genesis.start_with_mint_address(mint_address)
-    }
-    .unwrap_or_else(|err| {
-        eprintln!("Error: failed to start validator: {}", err);
-        exit(1);
-    });
+    let faucet_pubkey = faucet_keypair.pubkey();
 
     if let Some(faucet_addr) = &faucet_addr {
         let (sender, receiver) = channel();
         run_local_faucet_with_port(faucet_keypair, sender, None, faucet_addr.port());
-        receiver.recv().expect("run faucet");
+        let _ = receiver.recv().expect("run faucet").unwrap_or_else(|err| {
+            println!("Error: failed to start faucet: {}", err);
+            exit(1);
+        });
     }
 
-    if output == Output::Dashboard {
-        let rpc_client = test_validator.rpc_client().0;
-        let identity = &rpc_client.get_identity().expect("get_identity");
-        println_name_value("Identity:", &identity.to_string());
-        println_name_value(
-            "Version:",
-            &rpc_client.get_version().expect("get_version").solana_core,
-        );
-        println_name_value("JSON RPC URL:", &test_validator.rpc_url());
-        println_name_value(
-            "JSON RPC PubSub Websocket:",
-            &test_validator.rpc_pubsub_url(),
-        );
-        println_name_value("Gossip Address:", &test_validator.gossip().to_string());
-        println_name_value("TPU Address:", &test_validator.tpu().to_string());
-        if let Some(faucet_addr) = &faucet_addr {
-            println_name_value(
-                "Faucet Address:",
-                &format!("{}:{}", &test_validator.gossip().ip(), faucet_addr.port()),
-            );
-        }
-
-        let progress_bar = new_spinner_progress_bar();
-
-        fn get_validator_stats(
-            rpc_client: &RpcClient,
-            identity: &Pubkey,
-        ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol, String)> {
-            let processed_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
-            let confirmed_slot =
-                rpc_client.get_slot_with_commitment(CommitmentConfig::single_gossip())?;
-            let finalized_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
-            let transaction_count =
-                rpc_client.get_transaction_count_with_commitment(CommitmentConfig::recent())?;
-            let identity_balance = rpc_client
-                .get_balance_with_commitment(identity, CommitmentConfig::single_gossip())?
-                .value;
-
-            let health = match rpc_client.get_health() {
-                Ok(()) => "ok".to_string(),
-                Err(err) => {
-                    if let client_error::ClientErrorKind::RpcError(
-                        rpc_request::RpcError::RpcResponseError {
-                            code: _,
-                            message: _,
-                            data:
-                                rpc_request::RpcResponseErrorData::NodeUnhealthy {
-                                    num_slots_behind: Some(num_slots_behind),
-                                },
-                        },
-                    ) = &err.kind
-                    {
-                        format!("{} slots behind", num_slots_behind)
-                    } else {
-                        "unhealthy".to_string()
-                    }
-                }
-            };
-
-            Ok((
-                processed_slot,
-                confirmed_slot,
-                finalized_slot,
-                transaction_count,
-                Sol(identity_balance),
-                health,
-            ))
-        }
-
-        loop {
-            let snapshot_slot = rpc_client.get_snapshot_slot().ok();
-
-            for _i in 0..10 {
-                match get_validator_stats(&rpc_client, &identity) {
-                    Ok((
-                        processed_slot,
-                        confirmed_slot,
-                        finalized_slot,
-                        transaction_count,
-                        identity_balance,
-                        health,
-                    )) => {
-                        let uptime = chrono::Duration::from_std(validator_start.elapsed()).unwrap();
-
-                        progress_bar.set_message(&format!(
-                            "{:02}:{:02}:{:02} \
-                            {}| \
-                            Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
-                            Snapshot Slot: {} | \
-                            Transactions: {} | {}",
-                            uptime.num_hours(),
-                            uptime.num_minutes() % 60,
-                            uptime.num_seconds() % 60,
-                            if health == "ok" {
-                                "".to_string()
-                            } else {
-                                format!("| {} ", style(health).bold().red())
-                            },
-                            processed_slot,
-                            confirmed_slot,
-                            finalized_slot,
-                            snapshot_slot
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "-".to_string()),
-                            transaction_count,
-                            identity_balance
-                        ));
-                    }
-                    Err(err) => {
-                        progress_bar.set_message(&format!("{}", err));
-                    }
-                }
-                thread::sleep(Duration::from_millis(
-                    MS_PER_TICK * DEFAULT_TICKS_PER_SLOT / 2,
-                ));
+    if TestValidatorGenesis::ledger_exists(&ledger_path) {
+        for (name, long) in &[
+            ("bpf_program", "--bpf-program"),
+            ("clone_account", "--clone"),
+            ("mint_address", "--mint"),
+            ("slots_per_epoch", "--slots-per-epoch"),
+        ] {
+            if matches.is_present(name) {
+                println!("{} argument ignored, ledger already exists", long);
             }
         }
     }
 
-    std::thread::park();
+    let mut genesis = TestValidatorGenesis::default();
+    genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
+
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: Some(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                rpc_port,
+            )),
+            start_progress: genesis.start_progress.clone(),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: genesis.validator_exit.clone(),
+            authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
+        },
+    );
+    let dashboard = if output == Output::Dashboard {
+        Some(
+            Dashboard::new(
+                &ledger_path,
+                Some(&validator_log_symlink),
+                Some(&mut genesis.validator_exit.write().unwrap()),
+            )
+            .unwrap(),
+        )
+    } else {
+        None
+    };
+
+    genesis
+        .ledger_path(&ledger_path)
+        .add_account(
+            faucet_pubkey,
+            AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
+        )
+        .rpc_config(JsonRpcConfig {
+            enable_rpc_transaction_history: true,
+            enable_cpi_and_log_storage: true,
+            faucet_addr,
+            ..JsonRpcConfig::default()
+        })
+        .bpf_jit(bpf_jit)
+        .rpc_port(rpc_port)
+        .add_programs_with_path(&programs);
+
+    if !clone_accounts.is_empty() {
+        genesis.clone_accounts(
+            clone_accounts,
+            cluster_rpc_client
+                .as_ref()
+                .expect("bug: --url argument missing?"),
+        );
+    }
+
+    if let Some(warp_slot) = warp_slot {
+        genesis.warp_slot(warp_slot);
+    }
+
+    if let Some(slots_per_epoch) = slots_per_epoch {
+        genesis.epoch_schedule(EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            /* enable_warmup_epochs = */ false,
+        ));
+    }
+
+    if let Some(gossip_host) = gossip_host {
+        genesis.gossip_host(gossip_host);
+    }
+
+    if let Some(gossip_port) = gossip_port {
+        genesis.gossip_port(gossip_port);
+    }
+
+    if let Some(dynamic_port_range) = dynamic_port_range {
+        genesis.port_range(dynamic_port_range);
+    }
+
+    if let Some(bind_address) = bind_address {
+        genesis.bind_ip_addr(bind_address);
+    }
+
+    match genesis.start_with_mint_address(mint_address) {
+        Ok(test_validator) => {
+            if let Some(dashboard) = dashboard {
+                dashboard.run(Duration::from_millis(250));
+            }
+            test_validator.join();
+        }
+        Err(err) => {
+            drop(dashboard);
+            println!("Error: failed to start validator: {}", err);
+            exit(1);
+        }
+    }
 }
 
 fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
     for entry in fs::read_dir(&ledger_path)? {
         let entry = entry?;
-        if entry.metadata()?.is_file() {
-            fs::remove_file(&entry.path())?
-        } else {
+        if entry.metadata()?.is_dir() {
             fs::remove_dir_all(&entry.path())?
+        } else {
+            fs::remove_file(&entry.path())?
         }
     }
     Ok(())

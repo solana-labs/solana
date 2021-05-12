@@ -196,7 +196,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             // If the inner key was moved to a different primary key, remove
             // the previous index entry.
 
-            // Check is necessary because anoher thread's writes could feasibly be
+            // Check is necessary because another thread's writes could feasibly be
             // interleaved between  `should_insert = { ... slots_map.get(...) ... }` and
             // `prev_key = { ... slots_map.insert(...) ... }`
             // Currently this isn't possible due to current AccountsIndex's (pubkey, slot)-per-thread
@@ -255,7 +255,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
 
     // Specifying `slots_to_remove` == Some will only remove keys for those specific slots
     // found for the `inner_key` in the reverse index. Otherwise, passing `None`
-    // will  remove all keys that are found for the `inner_key` in the reverse index.
+    // will remove all keys that are found for the `inner_key` in the reverse index.
 
     // Note passing `None` is dangerous unless you're sure there's no other competing threads
     // writing updates to the index for this Pubkey at the same time!

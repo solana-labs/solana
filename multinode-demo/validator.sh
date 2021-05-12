@@ -8,6 +8,7 @@ source "$here"/common.sh
 
 args=(
   --max-genesis-archive-unpacked-size 1073741824
+  --no-poh-speed-test
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
@@ -103,9 +104,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --rpc-port ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --enable-rpc-exit ]]; then
-      args+=("$1")
-      shift
     elif [[ $1 = --rpc-faucet-address ]]; then
       args+=("$1" "$2")
       shift 2
@@ -121,6 +119,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --snapshot-interval-slots ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --maximum-snapshots-to-retain ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --limit-ledger-size ]]; then
       args+=("$1" "$2")
       shift 2
@@ -128,6 +129,9 @@ while [[ -n $1 ]]; do
       args+=("$1")
       shift
     elif [[ $1 = --enable-rpc-transaction-history ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 = --enable-cpi-and-log-storage ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --skip-poh-verify ]]; then
@@ -223,8 +227,6 @@ default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
-default_arg --enable-rpc-exit
-default_arg --enable-rpc-set-log-filter
 default_arg --require-tower
 
 if [[ -n $SOLANA_CUDA ]]; then
@@ -275,7 +277,9 @@ setup_validator_accounts() {
       echo "Adding $node_sol to validator identity account:"
       (
         set -x
-        $solana_cli --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" transfer "$identity" "$node_sol"
+        $solana_cli \
+          --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" \
+          transfer --allow-unfunded-recipient "$identity" "$node_sol"
       ) || return $?
     fi
 

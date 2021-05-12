@@ -1,18 +1,19 @@
 use crate::alloc;
 
 use alloc::{Alloc, AllocErr};
+use solana_rbpf::aligned_memory::AlignedMemory;
 use std::alloc::Layout;
 
 #[derive(Debug)]
-pub struct BPFAllocator {
-    heap: Vec<u8>,
+pub struct BpfAllocator {
+    heap: AlignedMemory,
     start: u64,
     len: u64,
     pos: u64,
 }
 
-impl BPFAllocator {
-    pub fn new(heap: Vec<u8>, virtual_address: u64) -> Self {
+impl BpfAllocator {
+    pub fn new(heap: AlignedMemory, virtual_address: u64) -> Self {
         let len = heap.len() as u64;
         Self {
             heap,
@@ -23,7 +24,7 @@ impl BPFAllocator {
     }
 }
 
-impl Alloc for BPFAllocator {
+impl Alloc for BpfAllocator {
     fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr> {
         let bytes_to_align = (self.pos as *const u8).align_offset(layout.align()) as u64;
         if self

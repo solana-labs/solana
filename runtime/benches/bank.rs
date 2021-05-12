@@ -1,4 +1,5 @@
 #![feature(test)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate test;
 
@@ -10,7 +11,6 @@ use solana_sdk::{
     clock::MAX_RECENT_BLOCKHASHES,
     genesis_config::create_genesis_config,
     instruction::InstructionError,
-    keyed_account::KeyedAccount,
     message::Message,
     process_instruction::InvokeContext,
     pubkey::Pubkey,
@@ -33,7 +33,6 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
     _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -85,7 +84,7 @@ pub fn create_native_loader_transactions(
 }
 
 fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
-    let results = bank.process_transactions(&transactions);
+    let results = bank.process_transactions(transactions);
     assert!(results.iter().all(Result::is_ok));
 }
 

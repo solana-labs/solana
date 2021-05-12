@@ -66,12 +66,14 @@ fn authorize_stake_accounts_instructions(
         stake_authority_pubkey,
         new_stake_authority_pubkey,
         StakeAuthorize::Staker,
+        None,
     );
     let instruction1 = stake_instruction::authorize(
         &stake_account_address,
         withdraw_authority_pubkey,
         new_withdraw_authority_pubkey,
         StakeAuthorize::Withdrawer,
+        None,
     );
     vec![instruction0, instruction1]
 }
@@ -187,9 +189,9 @@ fn apply_lockup_changes(lockup: &LockupArgs, existing_lockup: &Lockup) -> Lockup
         x => x,
     };
     LockupArgs {
-        custodian,
-        epoch,
         unix_timestamp,
+        epoch,
+        custodian,
     }
 }
 
@@ -278,7 +280,7 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
-        account::Account,
+        account::{AccountSharedData, ReadableAccount},
         client::SyncClient,
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
@@ -304,9 +306,13 @@ mod tests {
         fee_payer_keypair
     }
 
-    fn get_account_at<C: SyncClient>(client: &C, base_pubkey: &Pubkey, i: usize) -> Account {
+    fn get_account_at<C: SyncClient>(
+        client: &C,
+        base_pubkey: &Pubkey,
+        i: usize,
+    ) -> AccountSharedData {
         let account_address = derive_stake_account_address(&base_pubkey, i);
-        client.get_account(&account_address).unwrap().unwrap()
+        AccountSharedData::from(client.get_account(&account_address).unwrap().unwrap())
     }
 
     fn get_balances<C: SyncClient>(
@@ -330,7 +336,8 @@ mod tests {
         (0..num_accounts)
             .map(|i| {
                 let address = derive_stake_account_address(&base_pubkey, i);
-                let account = client.get_account(&address).unwrap().unwrap();
+                let account =
+                    AccountSharedData::from(client.get_account(&address).unwrap().unwrap());
                 (address, StakeState::lockup_from(&account).unwrap())
             })
             .collect()
@@ -367,7 +374,7 @@ mod tests {
             .unwrap();
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        assert_eq!(account.lamports, lamports);
+        assert_eq!(account.lamports(), lamports);
         let authorized = StakeState::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);

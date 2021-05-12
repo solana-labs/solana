@@ -1,5 +1,5 @@
 ---
-title: Embedding the Move Langauge
+title: Embedding the Move Language
 ---
 
 ## Problem

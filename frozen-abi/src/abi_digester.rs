@@ -1,15 +1,11 @@
 use crate::abi_example::{normalize_type_name, AbiEnumVisitor};
 use crate::hash::{Hash, Hasher};
-
 use log::*;
-
 use serde::ser::Error as SerdeError;
 use serde::ser::*;
 use serde::{Serialize, Serializer};
-
 use std::any::type_name;
 use std::io::Write;
-
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -31,6 +27,8 @@ pub enum DigestError {
     Node(Sstr, Box<DigestError>),
     #[error("leaf error")]
     Leaf(Sstr, Sstr, Box<DigestError>),
+    #[error("arithmetic overflow")]
+    ArithmeticOverflow,
 }
 
 impl SerdeError for DigestError {
@@ -81,22 +79,30 @@ impl AbiDigester {
         }
     }
 
-    pub fn create_child(&self) -> Self {
-        Self {
+    pub fn create_child(&self) -> Result<Self, DigestError> {
+        let depth = self
+            .depth
+            .checked_add(1)
+            .ok_or(DigestError::ArithmeticOverflow)?;
+        Ok(Self {
             data_types: self.data_types.clone(),
-            depth: self.depth + 1,
+            depth,
             for_enum: false,
             opaque_scope: self.opaque_scope.clone(),
-        }
+        })
     }
 
-    pub fn create_enum_child(&self) -> Self {
-        Self {
+    pub fn create_enum_child(&self) -> Result<Self, DigestError> {
+        let depth = self
+            .depth
+            .checked_add(1)
+            .ok_or(DigestError::ArithmeticOverflow)?;
+        Ok(Self {
             data_types: self.data_types.clone(),
-            depth: self.depth + 1,
+            depth,
             for_enum: true,
             opaque_scope: self.opaque_scope.clone(),
-        }
+        })
     }
 
     pub fn digest_data<T: ?Sized + Serialize>(&mut self, value: &T) -> DigestResult {
@@ -124,7 +130,12 @@ impl AbiDigester {
             })
             .collect::<Vec<_>>()
             .join(" ");
-        buf = format!("{:0width$}{}\n", "", buf, width = self.depth * INDENT_WIDTH);
+        buf = format!(
+            "{:0width$}{}\n",
+            "",
+            buf,
+            width = self.depth.saturating_mul(INDENT_WIDTH)
+        );
         info!("updating with: {}", buf.trim_end());
         (*self.data_types.borrow_mut()).push(buf);
     }
@@ -145,7 +156,7 @@ impl AbiDigester {
 
     fn digest_element<T: ?Sized + Serialize>(&mut self, v: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("element");
-        self.create_child().digest_data(v).map(|_| ())
+        self.create_child()?.digest_data(v).map(|_| ())
     }
 
     fn digest_named_field<T: ?Sized + Serialize>(
@@ -154,7 +165,7 @@ impl AbiDigester {
         v: &T,
     ) -> Result<(), DigestError> {
         self.update_with_string(format!("field {}: {}", key, type_name::<T>()));
-        self.create_child()
+        self.create_child()?
             .digest_data(v)
             .map(|_| ())
             .map_err(|e| DigestError::wrap_by_str(e, key))
@@ -162,7 +173,7 @@ impl AbiDigester {
 
     fn digest_unnamed_field<T: ?Sized + Serialize>(&mut self, v: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("field");
-        self.create_child().digest_data(v).map(|_| ())
+        self.create_child()?.digest_data(v).map(|_| ())
     }
 
     #[allow(clippy::unnecessary_wraps)]
@@ -297,12 +308,12 @@ impl Serializer for AbiDigester {
     {
         // emulate the ABI digest for the Option enum; see TestMyOption
         self.update(&["enum Option (variants = 2)"]);
-        let mut variant_digester = self.create_child();
+        let mut variant_digester = self.create_child()?;
 
         variant_digester.update_with_string("variant(0) None (unit)".to_owned());
         variant_digester
             .update_with_string(format!("variant(1) Some({}) (newtype)", type_name::<T>()));
-        variant_digester.create_child().digest_data(v)
+        variant_digester.create_child()?.digest_data(v)
     }
 
     fn serialize_unit_struct(mut self, name: Sstr) -> DigestResult {
@@ -321,7 +332,7 @@ impl Serializer for AbiDigester {
         T: ?Sized + Serialize,
     {
         self.update_with_string(format!("struct {}({}) (newtype)", name, type_name::<T>()));
-        self.create_child()
+        self.create_child()?
             .digest_data(v)
             .map_err(|e| DigestError::wrap_by_str(e, "newtype_struct"))
     }
@@ -343,7 +354,7 @@ impl Serializer for AbiDigester {
             variant,
             type_name::<T>()
         ));
-        self.create_child()
+        self.create_child()?
             .digest_data(v)
             .map_err(|e| DigestError::wrap_by_str(e, "newtype_variant"))
     }
@@ -355,17 +366,17 @@ impl Serializer for AbiDigester {
             "Exactly 1 seq element is needed to generate the ABI digest precisely"
         );
         self.update_with_string(format!("seq (elements = {})", len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_tuple(mut self, len: usize) -> DigestResult {
         self.update_with_string(format!("tuple (elements = {})", len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_tuple_struct(mut self, name: Sstr, len: usize) -> DigestResult {
         self.update_with_string(format!("struct {} (fields = {}) (tuple)", name, len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_tuple_variant(
@@ -377,7 +388,7 @@ impl Serializer for AbiDigester {
     ) -> DigestResult {
         self.check_for_enum("tuple_variant", variant)?;
         self.update_with_string(format!("variant({}) {} (fields = {})", i, variant, len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_map(mut self, len: Option<usize>) -> DigestResult {
@@ -387,12 +398,12 @@ impl Serializer for AbiDigester {
             "Exactly 1 map entry is needed to generate the ABI digest precisely"
         );
         self.update_with_string(format!("map (entries = {})", len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_struct(mut self, name: Sstr, len: usize) -> DigestResult {
         self.update_with_string(format!("struct {} (fields = {})", name, len));
-        Ok(self.create_child())
+        self.create_child()
     }
 
     fn serialize_struct_variant(
@@ -407,7 +418,7 @@ impl Serializer for AbiDigester {
             "variant({}) struct {} (fields = {})",
             i, variant, len
         ));
-        Ok(self.create_child())
+        self.create_child()
     }
 }
 
@@ -468,12 +479,12 @@ impl SerializeMap for AbiDigester {
 
     fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("key");
-        self.create_child().digest_data(key).map(|_| ())
+        self.create_child()?.digest_data(key).map(|_| ())
     }
 
     fn serialize_value<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("value");
-        self.create_child().digest_data(value).map(|_| ())
+        self.create_child()?.digest_data(value).map(|_| ())
     }
 
     fn end(self) -> DigestResult {
@@ -561,21 +572,21 @@ mod tests {
     #[frozen_abi(digest = "GttWH8FAY3teUjTaSds9mL3YbiDQ7qWw7WAvDXKd4ZzX")]
     type TestUnitStruct = std::marker::PhantomData<i8>;
 
-    #[frozen_abi(digest = "2zvXde11f8sNnFbc9E6ZZeFxV7D2BTVLKEZmNTsCDBpS")]
+    #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
     #[derive(Serialize, AbiExample, AbiEnumVisitor)]
     enum TestEnum {
-        VARIANT1,
-        VARIANT2,
+        Variant1,
+        Variant2,
     }
 
-    #[frozen_abi(digest = "6keb3v7GXLahhL6zoinzCWwSvB3KhmvZMB3tN2mamAm3")]
+    #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
     #[derive(Serialize, AbiExample, AbiEnumVisitor)]
     enum TestTupleVariant {
-        VARIANT1(u8, u16),
-        VARIANT2(u8, u16),
+        Variant1(u8, u16),
+        Variant2(u8, u16),
     }
 
-    #[frozen_abi(digest = "DywMfwKq8HZCbUfTwnemHWMN8LvMZCvipQuLddQ2ywwG")]
+    #[frozen_abi(digest = "4E9gJjvKiETBeZ8dybZPAQ7maaHTHFucmLqgX2m6yrBh")]
     #[derive(Serialize, AbiExample)]
     struct TestVecEnum {
         enums: Vec<TestTupleVariant>,
@@ -642,21 +653,21 @@ mod tests {
             _skipped_test_field: i8,
         }
 
-        #[frozen_abi(digest = "2zvXde11f8sNnFbc9E6ZZeFxV7D2BTVLKEZmNTsCDBpS")]
+        #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
         #[derive(Serialize, AbiExample, AbiEnumVisitor)]
         enum TestEnum {
-            VARIANT1,
-            VARIANT2,
+            Variant1,
+            Variant2,
             #[serde(skip)]
             #[allow(dead_code)]
-            VARIANT3,
+            Variant3,
         }
 
-        #[frozen_abi(digest = "6keb3v7GXLahhL6zoinzCWwSvB3KhmvZMB3tN2mamAm3")]
+        #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
         #[derive(Serialize, AbiExample, AbiEnumVisitor)]
         enum TestTupleVariant {
-            VARIANT1(u8, u16),
-            VARIANT2(u8, u16, #[serde(skip)] u32),
+            Variant1(u8, u16),
+            Variant2(u8, u16, #[serde(skip)] u32),
         }
     }
 }

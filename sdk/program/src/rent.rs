@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! configuration for network rent
 
 #[repr(C)]

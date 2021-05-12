@@ -1,9 +1,10 @@
+#![allow(clippy::integer_arithmetic)]
 use serde::{
     de::{self, Deserializer, SeqAccess, Visitor},
     ser::{self, SerializeTuple, Serializer},
     {Deserialize, Serialize},
 };
-use std::{fmt, marker::PhantomData, mem::size_of};
+use std::{convert::TryFrom, fmt, marker::PhantomData};
 
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
 /// 0x7f, the top bit is set and the remaining value is stored in the next
@@ -22,11 +23,11 @@ impl Serialize for ShortU16 {
         // generate an open bracket.
         let mut seq = serializer.serialize_tuple(1)?;
 
-        let mut rem_len = self.0;
+        let mut rem_val = self.0;
         loop {
-            let mut elem = (rem_len & 0x7f) as u8;
-            rem_len >>= 7;
-            if rem_len == 0 {
+            let mut elem = (rem_val & 0x7f) as u8;
+            rem_val >>= 7;
+            if rem_val == 0 {
                 seq.serialize_element(&elem)?;
                 break;
             } else {
@@ -38,60 +39,109 @@ impl Serialize for ShortU16 {
     }
 }
 
-enum VisitResult {
-    Done(usize, usize),
-    More(usize, usize),
-    Err,
+enum VisitStatus {
+    Done(u16),
+    More(u16),
 }
 
-fn visit_byte(elem: u8, len: usize, size: usize) -> VisitResult {
-    let len = len | (elem as usize & 0x7f) << (size * 7);
-    let size = size + 1;
-    let more = elem as usize & 0x80 == 0x80;
+#[derive(Debug)]
+enum VisitError {
+    TooLong(usize),
+    TooShort(usize),
+    Overflow(u32),
+    Alias,
+    ByteThreeContinues,
+}
 
-    if size > size_of::<u16>() + 1 {
-        VisitResult::Err
-    } else if more {
-        VisitResult::More(len, size)
-    } else {
-        VisitResult::Done(len, size)
+impl VisitError {
+    fn into_de_error<'de, A>(self) -> A::Error
+    where
+        A: SeqAccess<'de>,
+    {
+        match self {
+            VisitError::TooLong(len) => {
+                de::Error::invalid_length(len as usize, &"three or fewer bytes")
+            }
+            VisitError::TooShort(len) => de::Error::invalid_length(len, &"more bytes"),
+            VisitError::Overflow(val) => de::Error::invalid_value(
+                de::Unexpected::Unsigned(val as u64),
+                &"a value in the range [0, 65535]",
+            ),
+            VisitError::Alias => de::Error::invalid_value(
+                de::Unexpected::Other("alias encoding"),
+                &"strict form encoding",
+            ),
+            VisitError::ByteThreeContinues => de::Error::invalid_value(
+                de::Unexpected::Other("continue signal on byte-three"),
+                &"a terminal signal on or before byte-three",
+            ),
+        }
     }
 }
 
-struct ShortLenVisitor;
+type VisitResult = Result<VisitStatus, VisitError>;
 
-impl<'de> Visitor<'de> for ShortLenVisitor {
+const MAX_ENCODING_LENGTH: usize = 3;
+fn visit_byte(elem: u8, val: u16, nth_byte: usize) -> VisitResult {
+    if elem == 0 && nth_byte != 0 {
+        return Err(VisitError::Alias);
+    }
+
+    let val = u32::from(val);
+    let elem = u32::from(elem);
+    let elem_val = elem & 0x7f;
+    let elem_done = (elem & 0x80) == 0;
+
+    if nth_byte >= MAX_ENCODING_LENGTH {
+        return Err(VisitError::TooLong(nth_byte.saturating_add(1)));
+    } else if nth_byte == MAX_ENCODING_LENGTH.saturating_sub(1) && !elem_done {
+        return Err(VisitError::ByteThreeContinues);
+    }
+
+    let shift = u32::try_from(nth_byte)
+        .unwrap_or(std::u32::MAX)
+        .saturating_mul(7);
+    let elem_val = elem_val.checked_shl(shift).unwrap_or(std::u32::MAX);
+
+    let new_val = val | elem_val;
+    let val = u16::try_from(new_val).map_err(|_| VisitError::Overflow(new_val))?;
+
+    if elem_done {
+        Ok(VisitStatus::Done(val))
+    } else {
+        Ok(VisitStatus::More(val))
+    }
+}
+
+struct ShortU16Visitor;
+
+impl<'de> Visitor<'de> for ShortU16Visitor {
     type Value = ShortU16;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a multi-byte length")
+        formatter.write_str("a ShortU16")
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<ShortU16, A::Error>
     where
         A: SeqAccess<'de>,
     {
-        let mut len: usize = 0;
-        let mut size: usize = 0;
-        loop {
-            let elem: u8 = seq
-                .next_element()?
-                .ok_or_else(|| de::Error::invalid_length(size, &self))?;
-
-            match visit_byte(elem, len, size) {
-                VisitResult::Done(l, _) => {
-                    len = l;
-                    break;
-                }
-                VisitResult::More(l, s) => {
-                    len = l;
-                    size = s;
-                }
-                VisitResult::Err => return Err(de::Error::invalid_length(size + 1, &self)),
+        // Decodes an unsigned 16 bit integer one-to-one encoded as follows:
+        // 1 byte  : 0xxxxxxx                   => 00000000 0xxxxxxx :      0 -    127
+        // 2 bytes : 1xxxxxxx 0yyyyyyy          => 00yyyyyy yxxxxxxx :    128 - 16,383
+        // 3 bytes : 1xxxxxxx 1yyyyyyy 000000zz => zzyyyyyy yxxxxxxx : 16,384 - 65,535
+        let mut val: u16 = 0;
+        for nth_byte in 0..MAX_ENCODING_LENGTH {
+            let elem: u8 = seq.next_element()?.ok_or_else(|| {
+                VisitError::TooShort(nth_byte.saturating_add(1)).into_de_error::<A>()
+            })?;
+            match visit_byte(elem, val, nth_byte).map_err(|e| e.into_de_error::<A>())? {
+                VisitStatus::Done(new_val) => return Ok(ShortU16(new_val)),
+                VisitStatus::More(new_val) => val = new_val,
             }
         }
 
-        Ok(ShortU16(len as u16))
+        Err(VisitError::ByteThreeContinues.into_de_error::<A>())
     }
 }
 
@@ -100,7 +150,7 @@ impl<'de> Deserialize<'de> for ShortU16 {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_tuple(3, ShortLenVisitor)
+        deserializer.deserialize_tuple(3, ShortU16Visitor)
     }
 }
 
@@ -200,17 +250,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ShortVec<T> {
 
 /// Return the decoded value and how many bytes it consumed.
 #[allow(clippy::result_unit_err)]
-pub fn decode_len(bytes: &[u8]) -> Result<(usize, usize), ()> {
-    let mut len = 0;
-    let mut size = 0;
-    for byte in bytes.iter() {
-        match visit_byte(*byte, len, size) {
-            VisitResult::More(l, s) => {
-                len = l;
-                size = s;
+pub fn decode_shortu16_len(bytes: &[u8]) -> Result<(usize, usize), ()> {
+    let mut val = 0;
+    for (nth_byte, byte) in bytes.iter().take(MAX_ENCODING_LENGTH).enumerate() {
+        match visit_byte(*byte, val, nth_byte).map_err(|_| ())? {
+            VisitStatus::More(new_val) => val = new_val,
+            VisitStatus::Done(new_val) => {
+                return Ok((usize::from(new_val), nth_byte.saturating_add(1)));
             }
-            VisitResult::Done(len, size) => return Ok((len, size)),
-            VisitResult::Err => return Err(()),
         }
     }
     Err(())
@@ -230,8 +277,8 @@ mod tests {
     fn assert_len_encoding(len: u16, bytes: &[u8]) {
         assert_eq!(encode_len(len), bytes, "unexpected usize encoding");
         assert_eq!(
-            decode_len(bytes).unwrap(),
-            (len as usize, bytes.len()),
+            decode_shortu16_len(bytes).unwrap(),
+            (usize::from(len), bytes.len()),
             "unexpected usize decoding"
         );
     }
@@ -247,10 +294,56 @@ mod tests {
         assert_len_encoding(0xffff, &[0xff, 0xff, 0x03]);
     }
 
+    fn assert_good_deserialized_value(value: u16, bytes: &[u8]) {
+        assert_eq!(value, deserialize::<ShortU16>(bytes).unwrap().0);
+    }
+
+    fn assert_bad_deserialized_value(bytes: &[u8]) {
+        assert!(deserialize::<ShortU16>(bytes).is_err());
+    }
+
     #[test]
-    #[should_panic]
-    fn test_short_vec_decode_zero_len() {
-        decode_len(&[]).unwrap();
+    fn test_deserialize() {
+        assert_good_deserialized_value(0x0000, &[0x00]);
+        assert_good_deserialized_value(0x007f, &[0x7f]);
+        assert_good_deserialized_value(0x0080, &[0x80, 0x01]);
+        assert_good_deserialized_value(0x00ff, &[0xff, 0x01]);
+        assert_good_deserialized_value(0x0100, &[0x80, 0x02]);
+        assert_good_deserialized_value(0x07ff, &[0xff, 0x0f]);
+        assert_good_deserialized_value(0x3fff, &[0xff, 0x7f]);
+        assert_good_deserialized_value(0x4000, &[0x80, 0x80, 0x01]);
+        assert_good_deserialized_value(0xffff, &[0xff, 0xff, 0x03]);
+
+        // aliases
+        // 0x0000
+        assert_bad_deserialized_value(&[0x80, 0x00]);
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x00]);
+        // 0x007f
+        assert_bad_deserialized_value(&[0xff, 0x00]);
+        assert_bad_deserialized_value(&[0xff, 0x80, 0x00]);
+        // 0x0080
+        assert_bad_deserialized_value(&[0x80, 0x81, 0x00]);
+        // 0x00ff
+        assert_bad_deserialized_value(&[0xff, 0x81, 0x00]);
+        // 0x0100
+        assert_bad_deserialized_value(&[0x80, 0x82, 0x00]);
+        // 0x07ff
+        assert_bad_deserialized_value(&[0xff, 0x8f, 0x00]);
+        // 0x3fff
+        assert_bad_deserialized_value(&[0xff, 0xff, 0x00]);
+
+        // too short
+        assert_bad_deserialized_value(&[]);
+        assert_bad_deserialized_value(&[0x80]);
+
+        // too long
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x80, 0x00]);
+
+        // too large
+        // 0x0001_0000
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x04]);
+        // 0x0001_8000
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x06]);
     }
 
     #[test]
@@ -280,15 +373,11 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_len_aliased_values() {
-        let one1 = [0x01];
-        let one2 = [0x81, 0x00];
-        let one3 = [0x81, 0x80, 0x00];
-        let one4 = [0x81, 0x80, 0x80, 0x00];
-
-        assert_eq!(decode_len(&one1).unwrap(), (1, 1));
-        assert_eq!(decode_len(&one2).unwrap(), (1, 2));
-        assert_eq!(decode_len(&one3).unwrap(), (1, 3));
-        assert!(decode_len(&one4).is_err());
+    fn test_short_vec_aliased_length() {
+        let bytes = [
+            0x81, 0x80, 0x00, // 3-byte alias of 1
+            0x00,
+        ];
+        assert!(deserialize::<ShortVec<u8>>(&bytes).is_err());
     }
 }

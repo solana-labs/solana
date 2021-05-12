@@ -8,7 +8,11 @@ use crate::{
     cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     snapshot_packager_service::PendingSnapshotPackage,
 };
-use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
+use rayon::ThreadPool;
+use solana_runtime::{
+    accounts_db,
+    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
@@ -39,9 +43,10 @@ impl AccountsHashVerifier {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
-            .name("solana-accounts-hash".to_string())
+            .name("solana-hash-accounts".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
+                let mut thread_pool_storage = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -49,7 +54,14 @@ impl AccountsHashVerifier {
 
                     match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(accounts_package) => {
-                            Self::process_accounts_package(
+                            if accounts_package.hash_for_testing.is_some()
+                                && thread_pool_storage.is_none()
+                            {
+                                thread_pool_storage =
+                                    Some(accounts_db::make_min_priority_thread_pool());
+                            }
+
+                            Self::process_accounts_package_pre(
                                 accounts_package,
                                 &cluster_info,
                                 &trusted_validators,
@@ -59,6 +71,7 @@ impl AccountsHashVerifier {
                                 &exit,
                                 fault_injection_rate_slots,
                                 snapshot_interval_slots,
+                                thread_pool_storage.as_ref(),
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -72,6 +85,36 @@ impl AccountsHashVerifier {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn process_accounts_package_pre(
+        accounts_package: AccountsPackagePre,
+        cluster_info: &ClusterInfo,
+        trusted_validators: &Option<HashSet<Pubkey>>,
+        halt_on_trusted_validator_accounts_hash_mismatch: bool,
+        pending_snapshot_package: &Option<PendingSnapshotPackage>,
+        hashes: &mut Vec<(Slot, Hash)>,
+        exit: &Arc<AtomicBool>,
+        fault_injection_rate_slots: u64,
+        snapshot_interval_slots: u64,
+        thread_pool: Option<&ThreadPool>,
+    ) {
+        let accounts_package = solana_runtime::snapshot_utils::process_accounts_package_pre(
+            accounts_package,
+            thread_pool,
+        );
+        Self::process_accounts_package(
+            accounts_package,
+            cluster_info,
+            trusted_validators,
+            halt_on_trusted_validator_accounts_hash_mismatch,
+            pending_snapshot_package,
+            hashes,
+            exit,
+            fault_injection_rate_slots,
+            snapshot_interval_slots,
+        );
+    }
+
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
@@ -83,6 +126,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
+        let hash = accounts_package.hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -91,10 +135,10 @@ impl AccountsHashVerifier {
             use solana_sdk::hash::extend_and_hash;
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&accounts_package.hash, &[rand]);
+            let hash = extend_and_hash(&hash, &[rand]);
             hashes.push((accounts_package.slot, hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_package.hash));
+            hashes.push((accounts_package.slot, hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {

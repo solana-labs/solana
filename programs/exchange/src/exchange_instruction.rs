@@ -59,7 +59,7 @@ pub fn account_request(owner: &Pubkey, new: &Pubkey) -> Instruction {
         AccountMeta::new(*owner, true),
         AccountMeta::new(*new, false),
     ];
-    Instruction::new(id(), &ExchangeInstruction::AccountRequest, account_metas)
+    Instruction::new_with_bincode(id(), &ExchangeInstruction::AccountRequest, account_metas)
 }
 
 pub fn transfer_request(
@@ -74,7 +74,7 @@ pub fn transfer_request(
         AccountMeta::new(*to, false),
         AccountMeta::new(*from, false),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &ExchangeInstruction::TransferRequest(token, tokens),
         account_metas,
@@ -95,7 +95,7 @@ pub fn trade_request(
         AccountMeta::new(*trade, false),
         AccountMeta::new(*src_account, false),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &ExchangeInstruction::OrderRequest(OrderRequestInfo {
             side,
@@ -112,7 +112,7 @@ pub fn order_cancellation(owner: &Pubkey, order: &Pubkey) -> Instruction {
         AccountMeta::new(*owner, true),
         AccountMeta::new(*order, false),
     ];
-    Instruction::new(id(), &ExchangeInstruction::OrderCancellation, account_metas)
+    Instruction::new_with_bincode(id(), &ExchangeInstruction::OrderCancellation, account_metas)
 }
 
 pub fn swap_request(
@@ -127,5 +127,5 @@ pub fn swap_request(
         AccountMeta::new(*from_trade, false),
         AccountMeta::new(*profit_account, false),
     ];
-    Instruction::new(id(), &ExchangeInstruction::SwapRequest, account_metas)
+    Instruction::new_with_bincode(id(), &ExchangeInstruction::SwapRequest, account_metas)
 }

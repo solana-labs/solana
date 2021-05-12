@@ -99,3 +99,19 @@ export function wrap(input: string, length: number): string {
   }
   return result.join("\n");
 }
+
+export function localStorageIsAvailable() {
+  const test = "test";
+  try {
+    localStorage.setItem(test, test);
+    localStorage.removeItem(test);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function camelToTitleCase(str: string): string {
+  const result = str.replace(/([A-Z])/g, " $1");
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}

@@ -1,16 +1,17 @@
-use crate::{
-    ledger_error::LedgerError,
-    remote_wallet::{
-        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+use {
+    crate::{
+        ledger_error::LedgerError,
+        locator::Manufacturer,
+        remote_wallet::{RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager},
     },
+    console::Emoji,
+    dialoguer::{theme::ColorfulTheme, Select},
+    log::*,
+    num_traits::FromPrimitive,
+    semver::Version as FirmwareVersion,
+    solana_sdk::{derivation_path::DerivationPath, pubkey::Pubkey, signature::Signature},
+    std::{cmp::min, convert::TryFrom, fmt, sync::Arc},
 };
-use console::Emoji;
-use dialoguer::{theme::ColorfulTheme, Select};
-use log::*;
-use num_traits::FromPrimitive;
-use semver::Version as FirmwareVersion;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use std::{cmp::min, fmt, sync::Arc};
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
@@ -33,8 +34,6 @@ const P2_MORE: u8 = 0x02;
 const MAX_CHUNK_SIZE: usize = 255;
 
 const APDU_SUCCESS_CODE: usize = 0x9000;
-
-const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
@@ -65,6 +64,23 @@ mod commands {
     pub const GET_APP_CONFIGURATION: u8 = 0x04;
     pub const GET_PUBKEY: u8 = 0x05;
     pub const SIGN_MESSAGE: u8 = 0x06;
+}
+
+enum ConfigurationVersion {
+    Deprecated(Vec<u8>),
+    Current(Vec<u8>),
+}
+
+#[derive(Debug)]
+pub enum PubkeyDisplayMode {
+    Short,
+    Long,
+}
+
+#[derive(Debug)]
+pub struct LedgerSettings {
+    pub enable_blind_signing: bool,
+    pub pubkey_display: PubkeyDisplayMode,
 }
 
 /// Ledger Wallet device
@@ -275,26 +291,50 @@ impl LedgerWallet {
     }
 
     fn get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
-        if let Ok(version) = self._send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[], false) {
-            if version.len() != 5 {
+        self.get_configuration_vector().map(|config| match config {
+            ConfigurationVersion::Current(config) => {
+                FirmwareVersion::new(config[2].into(), config[3].into(), config[4].into())
+            }
+            ConfigurationVersion::Deprecated(config) => {
+                FirmwareVersion::new(config[1].into(), config[2].into(), config[3].into())
+            }
+        })
+    }
+
+    pub fn get_settings(&self) -> Result<LedgerSettings, RemoteWalletError> {
+        self.get_configuration_vector().map(|config| match config {
+            ConfigurationVersion::Current(config) => {
+                let enable_blind_signing = config[0] != 0;
+                let pubkey_display = if config[1] == 0 {
+                    PubkeyDisplayMode::Long
+                } else {
+                    PubkeyDisplayMode::Short
+                };
+                LedgerSettings {
+                    enable_blind_signing,
+                    pubkey_display,
+                }
+            }
+            ConfigurationVersion::Deprecated(_) => LedgerSettings {
+                enable_blind_signing: false,
+                pubkey_display: PubkeyDisplayMode::Short,
+            },
+        })
+    }
+
+    fn get_configuration_vector(&self) -> Result<ConfigurationVersion, RemoteWalletError> {
+        if let Ok(config) = self._send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[], false) {
+            if config.len() != 5 {
                 return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
             }
-            Ok(FirmwareVersion::new(
-                version[2].into(),
-                version[3].into(),
-                version[4].into(),
-            ))
+            Ok(ConfigurationVersion::Current(config))
         } else {
-            let version =
+            let config =
                 self._send_apdu(commands::DEPRECATED_GET_APP_CONFIGURATION, 0, 0, &[], true)?;
-            if version.len() != 4 {
+            if config.len() != 4 {
                 return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
             }
-            Ok(FirmwareVersion::new(
-                version[1].into(),
-                version[2].into(),
-                version[3].into(),
-            ))
+            Ok(ConfigurationVersion::Deprecated(config))
         }
     }
 
@@ -324,21 +364,14 @@ impl RemoteWallet for LedgerWallet {
     ) -> Result<RemoteWalletInfo, RemoteWalletError> {
         let manufacturer = dev_info
             .manufacturer_string()
-            .clone()
-            .unwrap_or("Unknown")
-            .to_lowercase()
-            .replace(" ", "-");
+            .and_then(|s| Manufacturer::try_from(s).ok())
+            .unwrap_or_default();
         let model = dev_info
             .product_string()
-            .clone()
             .unwrap_or("Unknown")
             .to_lowercase()
             .replace(" ", "-");
-        let serial = dev_info
-            .serial_number()
-            .clone()
-            .unwrap_or("Unknown")
-            .to_string();
+        let serial = dev_info.serial_number().unwrap_or("Unknown").to_string();
         let host_device_path = dev_info.path().to_string_lossy().to_string();
         let version = self.get_firmware_version()?;
         self.version = version;
@@ -478,20 +511,16 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 
 /// Build the derivation path byte array from a DerivationPath selection
 fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
-    let byte = if derivation_path.change.is_some() {
+    let byte = if derivation_path.change().is_some() {
         4
-    } else if derivation_path.account.is_some() {
+    } else if derivation_path.account().is_some() {
         3
     } else {
         2
     };
     let mut concat_derivation = vec![byte];
-    concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-    if let Some(account) = &derivation_path.account {
-        concat_derivation.extend_from_slice(&account.as_u32().to_be_bytes());
-        if let Some(change) = &derivation_path.change {
-            concat_derivation.extend_from_slice(&change.as_u32().to_be_bytes());
-        }
+    for index in derivation_path.path() {
+        concat_derivation.extend_from_slice(&index.to_bits().to_be_bytes());
     }
     concat_derivation
 }

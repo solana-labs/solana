@@ -6,15 +6,30 @@ import {
   TokenAccountInfo,
   MultisigAccountInfo,
 } from "validators/accounts/token";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
-import { TokenRegistry } from "tokenRegistry";
-import { useCluster } from "providers/cluster";
+import { Cluster, useCluster } from "providers/cluster";
 import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import { BigNumber } from "bignumber.js";
+import { Copyable } from "components/common/Copyable";
+
+const getEthAddress = (link?: string) => {
+  let address = "";
+  if (link) {
+    const extractEth = link.match(/0x[a-fA-F0-9]{40,64}/);
+
+    if (extractEth) {
+      address = extractEth[0];
+    }
+  }
+
+  return address;
+};
 
 export function TokenAccountSection({
   account,
@@ -23,25 +38,29 @@ export function TokenAccountSection({
   account: Account;
   tokenAccount: TokenAccount;
 }) {
+  const { cluster } = useCluster();
+
   try {
     switch (tokenAccount.type) {
       case "mint": {
-        const info = coerce(tokenAccount.info, MintAccountInfo);
+        const info = create(tokenAccount.info, MintAccountInfo);
         return <MintAccountCard account={account} info={info} />;
       }
       case "account": {
-        const info = coerce(tokenAccount.info, TokenAccountInfo);
+        const info = create(tokenAccount.info, TokenAccountInfo);
         return <TokenAccountCard account={account} info={info} />;
       }
       case "multisig": {
-        const info = coerce(tokenAccount.info, MultisigAccountInfo);
+        const info = create(tokenAccount.info, MultisigAccountInfo);
         return <MultisigAccountCard account={account} info={info} />;
       }
     }
   } catch (err) {
-    reportError(err, {
-      address: account.pubkey.toBase58(),
-    });
+    if (cluster !== Cluster.Custom) {
+      reportError(err, {
+        address: account.pubkey.toBase58(),
+      });
+    }
   }
   return <UnknownAccountCard account={account} />;
 }
@@ -53,12 +72,20 @@ function MintAccountCard({
   account: Account;
   info: MintAccountInfo;
 }) {
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(account.pubkey);
 
-  const tokenInfo = TokenRegistry.get(mintAddress, cluster);
+  const tokenInfo = tokenRegistry.get(mintAddress);
+
+  const bridgeContractAddress = getEthAddress(
+    tokenInfo?.extensions?.bridgeContract
+  );
+  const assetContractAddress = getEthAddress(
+    tokenInfo?.extensions?.assetContract
+  );
+
   return (
     <div className="card">
       <div className="card-header">
@@ -88,16 +115,16 @@ function MintAccountCard({
             )}
           </td>
         </tr>
-        {tokenInfo?.website && (
+        {tokenInfo?.extensions?.website && (
           <tr>
             <td>Website</td>
             <td className="text-lg-right">
               <a
                 rel="noopener noreferrer"
                 target="_blank"
-                href={tokenInfo.website}
+                href={tokenInfo.extensions.website}
               >
-                {tokenInfo.website}
+                {tokenInfo.extensions.website}
                 <span className="fe fe-external-link ml-2"></span>
               </a>
             </td>
@@ -129,6 +156,38 @@ function MintAccountCard({
             <td className="text-lg-right">Uninitialized</td>
           </tr>
         )}
+        {tokenInfo?.extensions?.bridgeContract && bridgeContractAddress && (
+          <tr>
+            <td>Bridge Contract</td>
+            <td className="text-lg-right">
+              <Copyable text={bridgeContractAddress}>
+                <a
+                  href={tokenInfo.extensions.bridgeContract}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {bridgeContractAddress}
+                </a>
+              </Copyable>
+            </td>
+          </tr>
+        )}
+        {tokenInfo?.extensions?.assetContract && assetContractAddress && (
+          <tr>
+            <td>Bridged Asset Contract</td>
+            <td className="text-lg-right">
+              <Copyable text={assetContractAddress}>
+                <a
+                  href={tokenInfo.extensions.bridgeContract}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {assetContractAddress}
+                </a>
+              </Copyable>
+            </td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );
@@ -143,8 +202,8 @@ function TokenAccountCard({
 }) {
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
-
-  const label = addressLabel(account.pubkey.toBase58(), cluster);
+  const { tokenRegistry } = useTokenRegistry();
+  const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
 
   let unit, balance;
   if (info.isNative) {
@@ -153,15 +212,13 @@ function TokenAccountCard({
       <>
         ◎
         <span className="text-monospace">
-          {new Intl.NumberFormat("en-US", { maximumFractionDigits: 9 }).format(
-            info.tokenAmount.uiAmount
-          )}
+          {new BigNumber(info.tokenAmount.uiAmountString).toFormat(9)}
         </span>
       </>
     );
   } else {
-    balance = <>{info.tokenAmount.uiAmount}</>;
-    unit = TokenRegistry.get(info.mint.toBase58(), cluster)?.symbol || "tokens";
+    balance = <>{info.tokenAmount.uiAmountString}</>;
+    unit = tokenRegistry.get(info.mint.toBase58())?.symbol || "tokens";
   }
 
   return (
@@ -221,9 +278,9 @@ function TokenAccountCard({
               <>
                 ◎
                 <span className="text-monospace">
-                  {new Intl.NumberFormat("en-US", {
-                    maximumFractionDigits: 9,
-                  }).format(info.rentExemptReserve.uiAmount)}
+                  {new BigNumber(
+                    info.rentExemptReserve.uiAmountString
+                  ).toFormat(9)}
                 </span>
               </>
             </td>

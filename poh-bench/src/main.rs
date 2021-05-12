@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
 use solana_measure::measure::Measure;
@@ -74,7 +75,7 @@ fn main() {
         for _ in 0..iterations {
             assert!(ticks[..num_entries]
                 .verify_cpu_generic(&start_hash)
-                .finish_verify(&ticks[..num_entries]));
+                .finish_verify());
         }
         time.stop();
         println!(
@@ -88,7 +89,7 @@ fn main() {
             for _ in 0..iterations {
                 assert!(ticks[..num_entries]
                     .verify_cpu_x86_simd(&start_hash, 8)
-                    .finish_verify(&ticks[..num_entries]));
+                    .finish_verify());
             }
             time.stop();
             println!(
@@ -103,7 +104,7 @@ fn main() {
             for _ in 0..iterations {
                 assert!(ticks[..num_entries]
                     .verify_cpu_x86_simd(&start_hash, 16)
-                    .finish_verify(&ticks[..num_entries]));
+                    .finish_verify());
             }
             time.stop();
             println!(
@@ -118,8 +119,8 @@ fn main() {
             let recyclers = VerifyRecyclers::default();
             for _ in 0..iterations {
                 assert!(ticks[..num_entries]
-                    .start_verify(&start_hash, recyclers.clone(), true)
-                    .finish_verify(&ticks[..num_entries]));
+                    .start_verify(&start_hash, recyclers.clone())
+                    .finish_verify());
             }
             time.stop();
             println!(

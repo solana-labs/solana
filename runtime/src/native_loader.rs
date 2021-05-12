@@ -6,10 +6,11 @@ use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
+    account::ReadableAccount,
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::keyed_account_at_index,
     native_loader,
     process_instruction::{InvokeContext, LoaderEntrypoint},
     pubkey::Pubkey,
@@ -134,23 +135,29 @@ impl NativeLoader {
     pub fn process_instruction(
         &self,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
-        invoke_context: &dyn InvokeContext,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        let mut keyed_accounts_iter = keyed_accounts.iter();
-        let program = next_keyed_account(&mut keyed_accounts_iter)?;
-        if native_loader::id() != *program_id {
-            error!("Program id mismatch");
-            return Err(InstructionError::IncorrectProgramId);
-        }
-        if program.owner()? != *program_id {
-            error!("Executable account now owned by loader");
-            return Err(InstructionError::IncorrectProgramId);
-        }
+        let (program_id, name_vec) = {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let program = keyed_account_at_index(keyed_accounts, 0)?;
+            if native_loader::id() != *program_id {
+                error!("Program id mismatch");
+                return Err(InstructionError::IncorrectProgramId);
+            }
+            if program.owner()? != *program_id {
+                error!("Executable account now owned by loader");
+                return Err(InstructionError::IncorrectProgramId);
+            }
+            // TODO: Remove these two copies (* deref is also a copy)
+            // Both could be avoided as we know that the first KeyedAccount
+            // still exists even after invoke_context.remove_first_keyed_account() is called
+            (
+                *program.unsigned_key(),
+                &program.try_account_ref()?.data().to_vec(),
+            )
+        };
 
-        let params = keyed_accounts_iter.as_slice();
-        let name_vec = &program.try_account_ref()?.data;
         let name = match str::from_utf8(name_vec) {
             Ok(v) => v,
             Err(e) => {
@@ -163,21 +170,21 @@ impl NativeLoader {
             return Err(NativeLoaderError::InvalidAccountData.into());
         }
         trace!("Call native {:?}", name);
+        invoke_context.remove_first_keyed_account()?;
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
-            unsafe {
-                entrypoint(
-                    program.unsigned_key(),
-                    params,
-                    instruction_data,
-                    invoke_context,
-                )
-            }
+            unsafe { entrypoint(&program_id, instruction_data, invoke_context) }
         } else {
             let entrypoint =
                 Self::get_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;
-            unsafe { entrypoint(program.unsigned_key(), params, instruction_data) }
+            unsafe {
+                entrypoint(
+                    &program_id,
+                    invoke_context.get_keyed_accounts()?,
+                    instruction_data,
+                )
+            }
         }
     }
 }

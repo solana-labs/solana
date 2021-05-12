@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod budget_expr;
 pub mod budget_instruction;
 pub mod budget_processor;

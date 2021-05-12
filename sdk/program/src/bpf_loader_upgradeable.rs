@@ -53,7 +53,7 @@ impl UpgradeableLoaderState {
         })
         .map(|len| len as usize)
         .map_err(|_| InstructionError::InvalidInstructionData)?
-            + program_len)
+        .saturating_add(program_len))
     }
     /// Offset into the ProgramData account's data of the program bits.
     pub fn buffer_data_offset() -> Result<usize, InstructionError> {
@@ -75,7 +75,7 @@ impl UpgradeableLoaderState {
         })
         .map(|len| len as usize)
         .map_err(|_| InstructionError::InvalidInstructionData)?
-            + program_len)
+        .saturating_add(program_len))
     }
     /// Offset into the ProgramData account's data of the program bits.
     pub fn programdata_data_offset() -> Result<usize, InstructionError> {
@@ -87,14 +87,10 @@ impl UpgradeableLoaderState {
 pub fn create_buffer(
     payer_address: &Pubkey,
     buffer_address: &Pubkey,
-    authority_address: Option<&Pubkey>,
+    authority_address: &Pubkey,
     lamports: u64,
     program_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
-    let mut metas = vec![AccountMeta::new(*buffer_address, false)];
-    if let Some(authority_address) = authority_address {
-        metas.push(AccountMeta::new(*authority_address, false));
-    }
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -103,7 +99,14 @@ pub fn create_buffer(
             UpgradeableLoaderState::buffer_len(program_len)? as u64,
             &id(),
         ),
-        Instruction::new(id(), &UpgradeableLoaderInstruction::InitializeBuffer, metas),
+        Instruction::new_with_bincode(
+            id(),
+            &UpgradeableLoaderInstruction::InitializeBuffer,
+            vec![
+                AccountMeta::new(*buffer_address, false),
+                AccountMeta::new_readonly(*authority_address, false),
+            ],
+        ),
     ])
 }
 
@@ -111,21 +114,17 @@ pub fn create_buffer(
 /// buffer account.
 pub fn write(
     buffer_address: &Pubkey,
-    authority_address: Option<&Pubkey>,
+    authority_address: &Pubkey,
     offset: u32,
     bytes: Vec<u8>,
 ) -> Instruction {
-    let mut metas = vec![
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new(*buffer_address, true),
-    ];
-    if let Some(authority_address) = authority_address {
-        metas[1] = AccountMeta::new(*authority_address, true);
-    }
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::Write { offset, bytes },
-        metas,
+        vec![
+            AccountMeta::new(*buffer_address, false),
+            AccountMeta::new_readonly(*authority_address, true),
+        ],
     )
 }
 
@@ -136,23 +135,11 @@ pub fn deploy_with_max_program_len(
     payer_address: &Pubkey,
     program_address: &Pubkey,
     buffer_address: &Pubkey,
-    upgrade_authority_address: Option<&Pubkey>,
+    upgrade_authority_address: &Pubkey,
     program_lamports: u64,
     max_data_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-    let mut metas = vec![
-        AccountMeta::new(*payer_address, true),
-        AccountMeta::new(programdata_address, false),
-        AccountMeta::new(*program_address, false),
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(crate::system_program::id(), false),
-    ];
-    if let Some(address) = upgrade_authority_address {
-        metas.push(AccountMeta::new_readonly(*address, false));
-    }
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -161,10 +148,19 @@ pub fn deploy_with_max_program_len(
             UpgradeableLoaderState::program_len()? as u64,
             &id(),
         ),
-        Instruction::new(
+        Instruction::new_with_bincode(
             id(),
             &UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len },
-            metas,
+            vec![
+                AccountMeta::new(*payer_address, true),
+                AccountMeta::new(programdata_address, false),
+                AccountMeta::new(*program_address, false),
+                AccountMeta::new(*buffer_address, false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
+                AccountMeta::new_readonly(sysvar::clock::id(), false),
+                AccountMeta::new_readonly(crate::system_program::id(), false),
+                AccountMeta::new_readonly(*upgrade_authority_address, true),
+            ],
         ),
     ])
 }
@@ -177,7 +173,7 @@ pub fn upgrade(
     spill_address: &Pubkey,
 ) -> Instruction {
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::Upgrade,
         vec![
@@ -196,20 +192,25 @@ pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
     3 == instruction_data[0]
 }
 
+pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
+    4 == instruction_data[0]
+}
+
 /// Returns the instructions required to set a buffers's authority.
 pub fn set_buffer_authority(
     buffer_address: &Pubkey,
     current_authority_address: &Pubkey,
-    new_authority_address: Option<&Pubkey>,
+    new_authority_address: &Pubkey,
 ) -> Instruction {
-    let mut metas = vec![
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new_readonly(*current_authority_address, true),
-    ];
-    if let Some(address) = new_authority_address {
-        metas.push(AccountMeta::new_readonly(*address, false));
-    }
-    Instruction::new(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+    Instruction::new_with_bincode(
+        id(),
+        &UpgradeableLoaderInstruction::SetAuthority,
+        vec![
+            AccountMeta::new(*buffer_address, false),
+            AccountMeta::new_readonly(*current_authority_address, true),
+            AccountMeta::new_readonly(*new_authority_address, false),
+        ],
+    )
 }
 
 /// Returns the instructions required to set a program's authority.
@@ -227,7 +228,21 @@ pub fn set_upgrade_authority(
     if let Some(address) = new_authority_address {
         metas.push(AccountMeta::new_readonly(*address, false));
     }
-    Instruction::new(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+    Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+}
+
+/// Returns the instructions required to close an account
+pub fn close(
+    close_address: &Pubkey,
+    recipient_address: &Pubkey,
+    authority_address: &Pubkey,
+) -> Instruction {
+    let metas = vec![
+        AccountMeta::new(*close_address, false),
+        AccountMeta::new(*recipient_address, false),
+        AccountMeta::new_readonly(*authority_address, true),
+    ];
+    Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::Close, metas)
 }
 
 #[cfg(test)]
@@ -251,44 +266,82 @@ mod tests {
         );
     }
 
+    fn assert_is_instruction<F>(
+        is_instruction_fn: F,
+        expected_instruction: UpgradeableLoaderInstruction,
+    ) where
+        F: Fn(&[u8]) -> bool,
+    {
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::InitializeBuffer
+        );
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::Write {
+                offset: 0,
+                bytes: vec![],
+            })
+            .unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::Write {
+                offset: _,
+                bytes: _,
+            }
+        );
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                max_data_len: 0,
+            })
+            .unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ }
+        );
+        assert_eq!(expected_result, result);
+
+        let result =
+            is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap());
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Upgrade);
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::SetAuthority
+        );
+        assert_eq!(expected_result, result);
+
+        let result =
+            is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap());
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Close);
+        assert_eq!(expected_result, result);
+    }
+
+    #[test]
+    fn test_is_set_authority_instruction() {
+        assert_is_instruction(
+            is_set_authority_instruction,
+            UpgradeableLoaderInstruction::SetAuthority {},
+        );
+    }
+
     #[test]
     fn test_is_upgrade_instruction() {
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::Write {
-                    offset: 0,
-                    bytes: vec![],
-                })
-                .unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
-                    max_data_len: 0,
-                })
-                .unwrap()
-            )
-        );
-        assert_eq!(
-            true,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap()
-            )
+        assert_is_instruction(
+            is_upgrade_instruction,
+            UpgradeableLoaderInstruction::Upgrade {},
         );
     }
 }

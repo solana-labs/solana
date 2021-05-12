@@ -56,19 +56,6 @@ impl PubSubService {
         let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
         let exit_ = exit.clone();
 
-        // TODO: Once https://github.com/paritytech/jsonrpc/pull/594 lands, use
-        // `ServerBuilder::max_in_buffer_capacity()` and `Server::max_out_buffer_capacity() methods
-        // instead of only `ServerBuilder::max_payload`
-        let max_payload = *[
-            pubsub_config.max_fragment_size,
-            pubsub_config.max_in_buffer_capacity,
-            pubsub_config.max_out_buffer_capacity,
-        ]
-        .iter()
-        .max()
-        .unwrap();
-        info!("rpc_pubsub max_payload: {}", max_payload);
-
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
@@ -84,7 +71,9 @@ impl PubSubService {
                     session
                 })
                 .max_connections(pubsub_config.max_connections)
-                .max_payload(max_payload)
+                .max_payload(pubsub_config.max_fragment_size)
+                .max_in_buffer_capacity(pubsub_config.max_in_buffer_capacity)
+                .max_out_buffer_capacity(pubsub_config.max_out_buffer_capacity)
                 .start(&pubsub_addr);
 
                 if let Err(e) = server {

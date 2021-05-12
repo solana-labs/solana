@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -76,7 +77,7 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
         == stake.stake(
             bank.epoch(),
             Some(
-                &from_account::<StakeHistory>(
+                &from_account::<StakeHistory, _>(
                     &bank.get_account(&sysvar::stake_history::id()).unwrap(),
                 )
                 .unwrap(),
@@ -91,7 +92,7 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
         .stake(
             bank.epoch(),
             Some(
-                &from_account::<StakeHistory>(
+                &from_account::<StakeHistory, _>(
                     &bank.get_account(&sysvar::stake_history::id()).unwrap(),
                 )
                 .unwrap(),

@@ -9,10 +9,6 @@ sudo apt-get install -y libssl-dev --allow-unauthenticated
 sudo apt-get install -y libssl1.1 --allow-unauthenticated
 clang-7 --version
 
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-PATH=$HOME/.cargo/bin:$PATH
-rustup --version
-
 sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
 PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 solana --version
