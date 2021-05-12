@@ -61,7 +61,7 @@ pub trait Signer {
     }
     /// Fallibly gets the implementor's public key
     fn try_pubkey(&self) -> Result<Pubkey, SignerError>;
-    /// Invallibly produces an Ed25519 signature over the provided `message`
+    /// Infallibly produces an Ed25519 signature over the provided `message`
     /// bytes. Returns the all-zeros `Signature` if signing is not possible.
     fn sign_message(&self, message: &[u8]) -> Signature {
         self.try_sign_message(message).unwrap_or_default()
