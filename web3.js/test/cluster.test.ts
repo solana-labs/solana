@@ -10,9 +10,13 @@ describe('Cluster Util', () => {
   });
 
   it('devnet', () => {
-    expect(clusterApiUrl()).to.eq('https://devnet.solana.com');
-    expect(clusterApiUrl('devnet')).to.eq('https://devnet.solana.com');
-    expect(clusterApiUrl('devnet', true)).to.eq('https://devnet.solana.com');
-    expect(clusterApiUrl('devnet', false)).to.eq('http://devnet.solana.com');
+    expect(clusterApiUrl()).to.eq('https://api.devnet.solana.com');
+    expect(clusterApiUrl('devnet')).to.eq('https://api.devnet.solana.com');
+    expect(clusterApiUrl('devnet', true)).to.eq(
+      'https://api.devnet.solana.com',
+    );
+    expect(clusterApiUrl('devnet', false)).to.eq(
+      'http://api.devnet.solana.com',
+    );
   });
 });
