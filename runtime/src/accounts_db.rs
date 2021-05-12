@@ -4962,6 +4962,7 @@ impl AccountsDb {
         let total_processed_slots_across_all_threads = AtomicU64::new(0);
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+        let mut index_time = Measure::start("index");
         slots.par_chunks(chunk_size).for_each(|slots| {
             let mut last_log_update = Instant::now();
             let mut my_last_reported_number_of_processed_slots = 0;
@@ -5045,6 +5046,12 @@ impl AccountsDb {
                 }
             }
         });
+        index_time.stop();
+
+        datapoint_info!(
+            "generate_index",
+            ("accounts_index_us", index_time.as_us(), i64),
+        );
 
         // Need to add these last, otherwise older updates will be cleaned
         for slot in slots {
