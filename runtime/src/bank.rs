@@ -268,8 +268,7 @@ pub struct Builtins {
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
-/// LFU Cache of executors with
-/// max last-used-epoch staleness eviction
+/// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
 struct CachedExecutors {
     max: usize,
