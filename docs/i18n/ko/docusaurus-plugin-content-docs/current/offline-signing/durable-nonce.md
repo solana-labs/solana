@@ -175,8 +175,8 @@ keypair.json</code>
 앨리스는 논스 계정 생성 및 밥에게 보낼 자금이 필요할 것입니다. 앨리스에게 SOL을 에어드랍 하세요.
 
 ```bash
-$ solana airdrop -k alice.json 10
-10 SOL
+$ solana airdrop -k alice.json 1
+1 SOL
 ```
 
 #### 우리가앨리스에 대한 몇 가지 계정이 필요 먼저 앨리스의 비표와
@@ -185,10 +185,10 @@ $ solana airdrop -k alice.json 10
 
 > 시도>,기억`alice.json`는 [거버넌스 기관이 예에서 (# 거버넌스입니다.
 
-```````bash
-F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7``````bash는
-$의 솔라 지불 -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
-```````
+```bash
+$ solana create-nonce-account -k alice.json nonce.json 0.1
+3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
+```
 
 #### - A failed first attempt to pay Bob
 
@@ -196,7 +196,7 @@ $의 솔라 지불 -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94
 
 ```bash
 <code>bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
 [2020-01-02T18 : 48 : 28.462911000Z ERROR solana_cli :: cli] Io (Custom {kind : 기타 오류 : "거래 \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV \ "실패 : 없음"})
 오류 : 이오 (사용자 정의 {종류 : 기타, 오류 : "거래 \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV \ "실패 :
 없음을"})</code>
@@ -211,31 +211,30 @@ $ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx
 ```````bash
 SOL``````bash는
 $ 솔라 거버넌스 - 계정 nonce.json
-1 SOL :균형
+0.1 SOL :균형
 최소밸런스필수 : 0.00136416 SOL의
 거버넌스 :
 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN```
 ```````
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
 #### -성공!
 
-The transaction succeeds! 거래가 성공했습니다!밥은 새 앨리스와 앨리스의 저장 거버넌스의 발전에서 1 SOL을 수신
+The transaction succeeds! 거래가 성공했습니다!밥은 새 앨리스와 앨리스의 저장 거버넌스의 발전에서 0.01 SOL을 수신
 
-````bash
-값```bash는
-$의 솔라 균형 -k bob.json
-1
-````
+```bash
+$ solana balance -k bob.json
+0.01 SOL
+```
 
 ````bash
 거버넌스-권한)```bash는
 $ 솔라 거버넌스 - 계정  JSON
-밸런스: 1 개 SOL
+밸런스: 0.1 개 SOL
 최소균형이 필요합니다 : 0.00136416 SOL의
 거버넌스 :
 ````

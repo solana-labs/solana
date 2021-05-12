@@ -2,18 +2,22 @@
 title: 网页钱包
 ---
 
+## Phantom
+
+[Phantom](https://phantom.app/download) is a non-custodial, chrome extension, Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and beautiful UX. Use invite code DEVDOCS to get access.
+
 ## SolFlare
 
-[SolFlare.com](https://solflare.com/) 是一个社区开发，专门为 Solana 打造的非托管网页钱包。 SolFlare 支持质押账户的创建和管理，并支持用户发送和接收任何类型的 SPL 代币。
+[SolFlare.com](https://solflare.com/) is a community-created non-custodial web wallet that was built specifically for Solana. SolFlare supports the creation and management of stake accounts, and gives users the ability to send and receive any SPL Token.
 
-查看 [SolFlare 钱包使用指南](solflare.md)。
+Check out our [guide for using SolFlare](solflare.md).
 
 ## Sollet
 
-[sollet.io](https://www.sollet.io/) 是一个由 [Project Serum](https://projectserum.com/) 团队开发的非托管网页钱包。 sollet.io 可用于发送和接收 SOL 和任何 SPL 代币。
+[sollet.io](https://www.sollet.io/) is a non-custodial web wallet created by the [Project Serum](https://projectserum.com/) team. sollet.io can be used to send and receive SOL and any SPL Token.
 
 ## MathWallet
 
-[MathWallet](https://mathwallet.org/) 支持通过浏览器插件和网页钱包界面发送和接收 SOL 和 SPL 代币。
+[MathWallet](https://mathwallet.org/) supports wallet addresses for sending and receiving SOL and SPL Tokens through its browser extension and web wallet interface.
 
-_请注意：MathWallet iOS 和 Android 应用尚未支持 SOL 和 SPL 代币_
+_Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_

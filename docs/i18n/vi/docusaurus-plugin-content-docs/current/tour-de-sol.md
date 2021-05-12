@@ -4,8 +4,8 @@ title: Giới thiệu
 
 ## Chào mừng!
 
-Hướng dẫn này chứa thông tin về cách tham gia Tour de SOL của Solana. Câu hỏi? Bình luận? Email ryan@solana.com
+Hướng dẫn này chứa thông tin về cách tham gia Tour de SOL của Solana. Câu hỏi? Bình luận? Keep on reading!
 
-### [Tìm hiểu thêm về Tour de SOL](https://solana.com/tds/)
+### Learn more about Tour de SOL
 
-Nếu bạn chưa đăng ký, trước tiên hãy hoàn thành biểu mẫu tại [https://solana.com/tds/](https://solana.com/tds/).
+If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.

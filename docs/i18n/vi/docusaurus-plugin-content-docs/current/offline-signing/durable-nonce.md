@@ -166,8 +166,8 @@ $ solana-keygen new -o bob.json
 Alice sẽ cần một số tiền để tạo một tài khoản nonce và gửi cho Bob. Airdrop cho cô ấy một số SOL
 
 ```bash
-$ solana airdrop -k alice.json 10
-10 SOL
+$ solana airdrop -k alice.json 1
+1 SOL
 ```
 
 #### - Tạo tài khoản nonce cho Alice
@@ -177,7 +177,7 @@ Bây giờ, Alice cần một tài khoản nonce. Tạo một cái
 > Tại đây, không có [thẩm quyền nonce](#nonce-authority) riêng biệt nào được sử dụng, vì vậy `alice.json` có toàn quyền đối với tài khoản nonce
 
 ```bash
-$ solana create-nonce-account -k alice.json nonce.json 1
+$ solana create-nonce-account -k alice.json nonce.json 0.1
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
 ```
 
@@ -186,7 +186,7 @@ $ solana create-nonce-account -k alice.json nonce.json 1
 Alice cố gắng thanh toán cho Bob, nhưng mất quá nhiều thời gian để ký. Blockhash được chỉ định hết hạn và giao dịch không thành công
 
 ```bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
 [2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 ```
@@ -199,28 +199,28 @@ Alice thử lại giao dịch, lần này chỉ định tài khoản nonce của
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 1 SOL
+balance: 0.1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
 #### - Thành công!
 
-Giao dịch thành công! Bob nhận được 1 SOL từ Alice và nonce được lưu trữ của Alice là một giá trị mới
+Giao dịch thành công! Bob nhận được 0.01 SOL từ Alice và nonce được lưu trữ của Alice là một giá trị mới
 
 ```bash
 $ solana balance -k bob.json
-1 SOL
+0.01 SOL
 ```
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 1 SOL
+balance: 0.1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
 ```

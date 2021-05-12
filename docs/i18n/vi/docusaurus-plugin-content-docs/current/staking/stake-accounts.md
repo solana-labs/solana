@@ -2,7 +2,7 @@
 title: Cấu trúc tài khoản Stake
 ---
 
-Tài khoản stake trên Solana có thể được sử dụng để ủy quyền mã thông báo cho các validator trên mạng để có thể kiếm được phần thưởng cho chủ sở hữu của tài khoản stake. Tài khoản stake được tạo và quản lý khác với địa chỉ ví truyền thống, được gọi là _system account_. Tài khoản hệ thống chỉ có thể gửi và nhận SOL từ các tài khoản khác trên mạng, trong khi tài khoản stake hỗ trợ các hoạt động phức tạp hơn để quản lý ủy quyền mã thông báo.
+Tài khoản stake trên Solana có thể được sử dụng để ủy quyền mã thông báo cho các validator trên mạng để có thể kiếm được phần thưởng cho chủ sở hữu của tài khoản stake. Stake accounts are created and managed differently than a traditional wallet address, known as a _system account_. Tài khoản hệ thống chỉ có thể gửi và nhận SOL từ các tài khoản khác trên mạng, trong khi tài khoản stake hỗ trợ các hoạt động phức tạp hơn để quản lý ủy quyền mã thông báo.
 
 Tài khoản stake trên Solana cũng hoạt động khác so với các tài khoản của các mạng blockchain Proof-of-Stake khác mà bạn đã quen thuộc. Tài liệu này mô tả cấu trúc cao cấp và các chức năng của tài khoản stake Solana.
 
@@ -14,19 +14,19 @@ Lần duy nhất địa chỉ của tài khoản stake có tệp keypair là khi
 
 #### Tìm hiểu các chức trách tài khoản
 
-Một số loại tài khoản nhất định có thể có một hoặc nhiều _signing authorities_ được liên kết với một tài khoản nhất định. Cơ quan tài khoản được sử dụng để ký các giao dịch nhất định cho tài khoản mà cơ quan này kiểm soát. Điều này khác với một số mạng blockchain khác trong đó chủ sở hữu keypair được liên kết với địa chỉ của tài khoản kiểm soát tất cả hoạt động của tài khoản.
+Certain types of accounts may have one or more _signing authorities_ associated with a given account. Cơ quan tài khoản được sử dụng để ký các giao dịch nhất định cho tài khoản mà cơ quan này kiểm soát. Điều này khác với một số mạng blockchain khác trong đó chủ sở hữu keypair được liên kết với địa chỉ của tài khoản kiểm soát tất cả hoạt động của tài khoản.
 
 Mỗi tài khoản stake có hai cơ quan ký tên được chỉ định theo địa chỉ tương ứng của họ, mỗi cơ quan được ủy quyền để thực hiện các hoạt động nhất định trên tài khoản stake.
 
-_stake authority_ được sử dụng để ký giao dịch cho các hoạt động sau:
+The _stake authority_ is used to sign transactions for the following operations:
 
 - Ủy quyền stake
 - Hủy kích hoạt ủy quyền stake
 - Tách tài khoản stake, tạo một tài khoản stake mới với một phần tiền trong tài khoản đầu tiên
-- Hợp nhất hai tài khoản stake không giảm giá trị thành một
+- Merging two stake accounts into one
 - Đặt cơ quan quyền sở hữu stake mới
 
-_withdraw authority_ ký các giao dịch sau:
+The _withdraw authority_ signs transactions for the following:
 
 - Rút stake chưa được ủy quyền vào một địa chỉ ví
 - Đặt thẩm quyền rút tiền mới
@@ -46,28 +46,40 @@ Mỗi tài khoản stake chỉ có thể được sử dụng để ủy quyền
 
 Có thể chỉ định cùng một thẩm quyền stake và rút tiền cho nhiều tài khoản stake.
 
-Hai tài khoản stake không được ủy quyền và có cùng quyền hạn và khóa có thể được hợp nhất thành một tài khoản stake duy nhất.
+#### Merging stake accounts
 
-#### Khởi động và hồi chiêu ủy quyền
+Two stake accounts that have the same authorities and lockup can be merged into a single resulting stake account. A merge is possible between two stakes in the following states with no additional conditions:
 
-Khi một tài khoản stake được ủy quyền, hoặc một ủy quyền bị hủy kích hoạt, hoạt động sẽ không có hiệu lực ngay lập tức.
+- two deactivated stakes
+- an inactive stake into an activating stake during its activation epoch
 
-Việc ủy ​​quyền hoặc hủy kích hoạt mất vài [epochs](../terminology.md#epoch) để hoàn thành, với một phần nhỏ ủy quyền trở nên hoạt động hoặc không hoạt động ở mỗi ranh giới kỷ nguyên sau khi giao dịch chứa các hướng dẫn đã được gửi đến cụm.
+For the following cases, the voter pubkey and vote credits observed must match:
 
-Ngoài ra còn có giới hạn về tổng số stake có thể được ủy quyền hoặc ngừng hoạt động trong một kỷ nguyên duy nhất, để ngăn chặn những thay đổi lớn đột ngột về stake trên toàn mạng. Vì khởi động và thời gian hồi chiêu phụ thuộc vào hành vi của những người tham gia mạng khác, nên rất khó dự đoán thời gian chính xác của chúng. Thông tin chi tiết về thời gian khởi động và thời gian hồi chiêu có thể xem [tại đây](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
+- two activated stakes
+- two activating accounts that share an activation epoch, during the activation epoch
 
-#### Khóa
+All other combinations of stake states will fail to merge, including all "transient" states, where a stake is activating or deactivating with a non-zero effective stake.
 
-Tài khoản stake có thể bị khóa để ngăn không cho các mã thông báo họ nắm giữ bị rút trước khi đạt đến một ngày hoặc kỷ nguyên cụ thể. Trong khi bị khóa, tài khoản stake vẫn có thể được ủy quyền, không được ủy quyền hoặc chia tách, và các quyền hạn về stake và rút tiền của nó có thể thực hiện như bình thường. Không được phép rút tiền vào địa chỉ ví.
+#### Delegation Warmup and Cooldown
 
-Khóa chỉ có thể được thêm vào khi tài khoản tiền cược được tạo lần đầu tiên, nhưng nó có thể được sửa đổi sau đó, bởi _lockup authority_ hoặc _custodian_, địa chỉ của nó cũng được đặt khi tài khoản được tạo.
+When a stake account is delegated, or a delegation is deactivated, the operation does not take effect immediately.
 
-#### Hủy Tài Khoản Stake
+A delegation or deactivation takes several [epochs](../terminology.md#epoch) to complete, with a fraction of the delegation becoming active or inactive at each epoch boundary after the transaction containing the instructions has been submitted to the cluster.
 
-Giống như các loại tài khoản khác trên mạng Solana, tài khoản stake có số dư là 0 SOL sẽ không còn được theo dõi. Nếu một tài khoản stake không được ủy quyền và tất cả các mã thông báo trong đó được rút đến một địa chỉ ví, thì tài khoản tại địa chỉ đó sẽ bị phá hủy và sẽ cần được tạo lại theo cách thủ công để sử dụng lại địa chỉ đó.
+There is also a limit on how much total stake can become delegated or deactivated in a single epoch, to prevent large sudden changes in stake across the network as a whole. Since warmup and cooldown are dependent on the behavior of other network participants, their exact duration is difficult to predict. Details on the warmup and cooldown timing can be found [here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
-#### Xem Tài Khoản Stake
+#### Lockups
 
-Bạn có thể xem chi tiết tài khoản stake trên Solana Explorer bằng cách sao chép và dán địa chỉ tài khoản vào thanh tìm kiếm.
+Stake accounts can have a lockup which prevents the tokens they hold from being withdrawn before a particular date or epoch has been reached. While locked up, the stake account can still be delegated, un-delegated, or split, and its stake and withdraw authorities can be changed as normal. Only withdrawal into a wallet address is not allowed.
+
+A lockup can only be added when a stake account is first created, but it can be modified later, by the _lockup authority_ or _custodian_, the address of which is also set when the account is created.
+
+#### Destroying a Stake Account
+
+Like other types of accounts on the Solana network, a stake account that has a balance of 0 SOL is no longer tracked. If a stake account is not delegated and all of the tokens it contains are withdrawn to a wallet address, the account at that address is effectively destroyed, and will need to be manually re-created for the address to be used again.
+
+#### Viewing Stake Accounts
+
+Stake account details can be viewed on the Solana Explorer by copying and pasting an account address into the search bar.
 
 - http://explorer.solana.com/accounts

@@ -51,7 +51,6 @@ let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 
 ```text
 let mut validator_config = ValidatorConfig::default();
-validator_config.rpc_config.enable_validator_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,

@@ -99,7 +99,7 @@ Khả năng này là cần thiết cho nhiều ứng dụng DeFi vì chúng yêu
 
 1. Cho phép các chương trình kiểm soát các địa chỉ cụ thể, được gọi là địa chỉ chương trình, theo cách mà không người dùng bên ngoài nào có thể tạo ra các giao dịch hợp lệ với chữ ký cho các địa chỉ đó.
 
-2. Cho phép các chương trình ký chương trình cho các địa chỉ chương trình có trong hướng dẫn được gọi thông qua [Lời mời chương trình chéo](#cross-program-invocations).
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Với hai điều kiện trên, người dùng có thể chuyển một cách an toàn hoặc chỉ định quyền hạn của nội dung trên chuỗi cho các địa chỉ chương trình và sau đó chương trình có thể chỉ định quyền hạn đó ở nơi khác theo quyết định của mình.
 
@@ -109,14 +109,14 @@ Một địa chỉ Chương trình không nằm trên đường cong ed25519 và
 
 ### Địa chỉ chương trình được tạo dựa trên-hàm băm
 
-Địa chỉ chương trình có nguồn gốc xác định từ một tập hợp các hạt giống và một id chương trình bằng cách sử dụng một hàm băm có khả năng chống hình ảnh trước 256-bit. Địa chỉ chương trình không được nằm trên đường cong ed25519 để đảm bảo không có private key liên quan. Trong quá trình tạo, một lỗi sẽ được trả về nếu địa chỉ được tìm thấy nằm trên đường cong. Có khoảng 50/50 thay đổi về điều này xảy ra đối với một bộ sưu tập hạt giống và id chương trình nhất định. Nếu điều này xảy ra, một tập hợp hạt giống khác hoặc một hạt giống (hạt giống 8 bit bổ sung) có thể được sử dụng để tìm địa chỉ chương trình hợp lệ ngoài đường cong.
+Địa chỉ chương trình có nguồn gốc xác định từ một tập hợp các hạt giống và một id chương trình bằng cách sử dụng một hàm băm có khả năng chống hình ảnh trước 256-bit. Địa chỉ chương trình không được nằm trên đường cong ed25519 để đảm bảo không có private key liên quan. Trong quá trình tạo, một lỗi sẽ được trả về nếu địa chỉ được tìm thấy nằm trên đường cong. There is about a 50/50 chance of this happening for a given collection of seeds and program id. Nếu điều này xảy ra, một tập hợp hạt giống khác hoặc một hạt giống (hạt giống 8 bit bổ sung) có thể được sử dụng để tìm địa chỉ chương trình hợp lệ ngoài đường cong.
 
-Địa chỉ chương trình xác định cho các chương trình tuân theo một đường dẫn dẫn xuất tương tự như Tài khoản được tạo với `SystemInstruction::CreateAccountWithSeed` nó được triển khai với `system_instruction::create_address_with_seed`.
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 Để tham khảo, cách triển khai như sau:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,9 +167,8 @@ Các chương trình có thể sử dụng cùng một chức năng để tạo 
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ Thời gian chạy sẽ gọi nội bộ `create_program_address`, và so sánh 
 
 ## Ví dụ
 
-Tham khảo [Phát triển với Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) và [Phát triển với C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) cho các ví dụ về cách sử dụng lệnh gọi chương trình chéo.
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

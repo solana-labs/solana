@@ -37,7 +37,10 @@ Post something like the following to #announcements (adjusting the text as appro
 >
 > We've released v1.1.12 and are ready to get testnet back up again.
 >
-> Steps: 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Preferred method, start from your local ledger with:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. Preferred method, start from your local ledger with:
 >
 > ```bash
 > solana-validator

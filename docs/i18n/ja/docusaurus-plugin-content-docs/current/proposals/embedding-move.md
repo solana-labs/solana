@@ -1,5 +1,5 @@
 ---
-title: Move言語の埋め込み
+title: Embedding the Move Language
 ---
 
 ## 問題

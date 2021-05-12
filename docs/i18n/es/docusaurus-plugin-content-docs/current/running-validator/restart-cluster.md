@@ -16,7 +16,7 @@ Llame a esta ranura `SLOT_X`
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 ```
 
-El directorio ledger ahora debe contener el nuevo snapshot. `solana-ledger-tool create-snapshot` también mostrará la nueva versión fragmentada, y el valor hash bancario, llame a esto NEW_SHRED_VERSION y NEW_BANK_HASH respectivamente.
+El directorio ledger ahora debe contener el nuevo snapshot. `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 Ajuste los argumentos de su validador:
 
@@ -37,7 +37,10 @@ Publica algo como lo siguiente en #anuncios (ajustando el texto según sea aprop
 >
 > Hemos lanzado la versión 1.1.12 y estamos listos para hacer una copia de seguridad de testnet de nuevo.
 >
-> Pasos: 1. Instalar la versión v1.1.12: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Método preferido, empieza desde tu ledger local con:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. Método preferido, empieza desde tu ledger local con:
 >
 > ```bash
 > solana-validator

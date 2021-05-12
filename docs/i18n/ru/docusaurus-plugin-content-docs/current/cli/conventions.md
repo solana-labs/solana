@@ -32,12 +32,12 @@ solana-keygen pubkey <KEYPAIR>
 
 #### Бумажный кошелек
 
-В бумажном кошельке кейворд безопасно происходит от мнемонических слов и опциональной ключевой фразы, которую вы ввели при создании кошелька. Чтобы использовать бумажный кошелек с парой ключей везде, где текст `<KEYPAIR>` отображается в примерах или справочных документах, введите слово `ASK` и программа попросит ввести ваши ключи, когда вы запускаете команду.
+В бумажном кошельке кейворд безопасно происходит от мнемонических слов и опциональной ключевой фразы, которую вы ввели при создании кошелька. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 Чтобы отобразить адрес кошелька бумажного кошелька:
 
 ```bash
-solana-keygen pubkey
+solana-keygen pubkey prompt://
 ```
 
 #### Файловый системный кошелек

@@ -4,8 +4,8 @@ title: Introducción
 
 ## Bienvenido!
 
-Esta guía contiene información sobre cómo participar en el Tour de SOL de Solana. ¿Preguntas? ¿Comentarios? Email ryan@solana.com
+Esta guía contiene información sobre cómo participar en el Tour de SOL de Solana. ¿Preguntas? ¿Comentarios? Keep on reading!
 
-### [Más información sobre Tour de SOL](https://solana.com/tds/)
+### Learn more about Tour de SOL
 
-Si aún no se ha registrado, complete el formulario en [https://solana.com/tds/](https://solana.com/tds/) primero.
+If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.

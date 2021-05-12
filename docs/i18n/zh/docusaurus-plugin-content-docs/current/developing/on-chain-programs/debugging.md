@@ -1,72 +1,72 @@
 ---
-title: "调试"
+title: "Debugging"
 ---
 
-Solana 程序在链上运行，因此在链外调试可能会很困难。 为了使调试程序更容易，开发人员可以编写单元测试以通过 Solana 运行时直接测试其程序的执行情况，或者运行允许 RPC 客户端与其程序进行交互的本地集群。
+Solana programs run on-chain, so debugging them in the wild can be challenging. To make debugging programs easier, developers can write unit tests that directly test their program's execution via the Solana runtime, or run a local cluster that will allow RPC clients to interact with their program.
 
-## 运行单元测试 {#running-unit-tests}
+## Running unit tests
 
-- [用 Rust 进行测试](developing-rust.md#how-to-test)
-- [用 C 进行测试](developing-c.md#how-to-test)
+- [Testing with Rust](developing-rust.md#how-to-test)
+- [Testing with C](developing-c.md#how-to-test)
 
-## 记录 {#logging}
+## Logging
 
-在程序执行期间，运行时，程序日志状态和错误消息均会出现。
+During program execution both the runtime and the program log status and error messages.
 
-有关如何从程序登录的信息，请参阅特定语言的文档：
+For information about how to log from a program see the language specific documentation:
 
-- [从 Rust 程序记录日志](developing-rust.md#logging)
-- [从 C 程序记录日志](developing-c.md#logging)
+- [Logging from a Rust program](developing-rust.md#logging)
+- [Logging from a C program](developing-c.md#logging)
 
-运行本地集群时，只要通过`RUST_LOG`日志掩码启用了日志，日志就会写入 stdout。 从程序开发的角度来看，仅关注运行时和程序日志，而不关注其余的集群日志会有所帮助。 为了专注于程序特定的信息，建议使用以下日志掩码：
+When running a local cluster the logs are written to stdout as long as they are enabled via the `RUST_LOG` log mask. From the perspective of program development it is helpful to focus on just the runtime and program logs and not the rest of the cluster logs. To focus in on program specific information the following log mask is recommended:
 
 `export RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=info,solana_bpf_loader=debug,solana_rbpf=debug`
 
-直接来自程序(而不是 runtime) 的日志消息将以以下形式显示：
+Log messages coming directly from the program (not the runtime) will be displayed in the form:
 
 `Program log: <user defined message>`
 
-## 错误处理 {#error-handling}
+## Error Handling
 
-可以通过事务错误传达的信息量是有限的，但是有很多可能的失败点。 以下是可能的故障点，有关预期发生哪些错误以及在何处获取更多信息的信息：
+The amount of information that can be communicated via a transaction error is limited but there are many points of possible failures. The following are possible failure points and information about what errors to expect and where to get more information:
 
-- BPF 加载程序可能无法解析程序，这应该不会发生，因为加载程序已经对程序的帐户数据进行了*最终处理*。
-  - `InstructionError::InvalidAccountData`将作为交易错误的一部分返回。
-- BPF 加载程序可能无法设置程序的执行环境
-  - `InstructionError::Custom(0x0b9f_0001)`将作为交易错误的一部分返回。 "0x0b9f_0001"是[`VirtualMachineCreationFailed`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44)的十六进制表示形式。
-- BPF 加载程序可能在程序执行过程中检测到致命错误(紧急情况，内存冲突，系统调用错误等)。
-  - `InstructionError::Custom(0x0b9f_0002)`将作为交易错误的一部分返回。 "0x0b9f_0002"是[`VirtualMachineFailedToRunProgram`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L46)的十六进制表示。
-- 程序本身可能返回错误
-  - `InstructionError::Custom(<user defined value>)`将被返回。 “用户定义的值”不得与任何[内置运行时程序错误](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/program_error.rs#L87)相冲突 。 程序通常使用枚举类型来定义从零开始的错误代码，因此它们不会冲突。
+- The BPF loader may fail to parse the program, this should not happen since the loader has already _finalized_ the program's account data.
+  - `InstructionError::InvalidAccountData` will be returned as part of the transaction error.
+- The BPF loader may fail to setup the program's execution environment
+  - `InstructionError::Custom(0x0b9f_0001)` will be returned as part of the transaction error. "0x0b9f_0001" is the hexadecimal representation of [`VirtualMachineCreationFailed`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44).
+- The BPF loader may have detected a fatal error during program executions (things like panics, memory violations, system call errors, etc...)
+  - `InstructionError::Custom(0x0b9f_0002)` will be returned as part of the transaction error. "0x0b9f_0002" is the hexadecimal representation of [`VirtualMachineFailedToRunProgram`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L46).
+- The program itself may return an error
+  - `InstructionError::Custom(<user defined value>)` will be returned. The "user defined value" must not conflict with any of the [builtin runtime program errors](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/program_error.rs#L87). Programs typically use enumeration types to define error codes starting at zero so they won't conflict.
 
-如果出现`VirtualMachineFailedToRunProgram`错误，则将有关失败原因的详细信息写入[程序的执行日志](debugging.md#logging)。
+In the case of `VirtualMachineFailedToRunProgram` errors, more information about the specifics of what failed are written to the [program's execution logs](debugging.md#logging).
 
-例如，涉及堆栈的访问冲突将如下所示：
+For example, an access violation involving the stack will look something like this:
 
-`BPF程序4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM失败：out of bounds memory store (insn #615), addr 0x200001e38/8`
+`BPF program 4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM failed: out of bounds memory store (insn #615), addr 0x200001e38/8`
 
-## 监控计算预算消耗 {#monitoring-compute-budget-consumption}
+## Monitoring Compute Budget Consumption
 
-程序可以记录停止程序执行之前将允许的剩余计算单元数。 程序可以使用这些日志来包装希望分析的操作。
+The program can log the remaining number of compute units it will be allowed before program execution is halted. Programs can use these logs to wrap operations they wish to profile.
 
-- [从 Rust 程序记录剩余的计算单元](developing-rust.md#compute-budget)
-- [从 C 程序记录剩余的计算单元](developing-c.md#compute-budget)
+- [Log the remaining compute units from a Rust program](developing-rust.md#compute-budget)
+- [Log the remaining compute units from a C program](developing-c.md#compute-budget)
 
-有关更多信息，请参见[计算预算](developing/programming-model/runtime.md#compute-budget)。
+See [compute budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
-## ELF 转储 {#elf-dump}
+## ELF Dump
 
-可以将 BPF 共享对象的内部信息转储到文本文件中，以更深入地了解程序的组成及其在运行时的工作方式。
+The BPF shared object internals can be dumped to a text file to gain more insight into a program's composition and what it may be doing at runtime.
 
-- [创建 Rust 程序的转储文件](developing-rust.md#elf-dump)
-- [创建 C 程序的转储文件](developing-c.md#elf-dump)
+- [Create a dump file of a Rust program](developing-rust.md#elf-dump)
+- [Create a dump file of a C program](developing-c.md#elf-dump)
 
-## 指令追踪 {#instruction-tracing}
+## Instruction Tracing
 
-在执行期间，可以将运行时 BPF 解释器配置为记录每个执行的 BPF 指令的跟踪消息。 对于诸如精确指出导致内存访问冲突的运行时上下文之类的事情，这可能非常有用。
+During execution the runtime BPF interpreter can be configured to log a trace message for each BPF instruction executed. This can be very helpful for things like pin-pointing the runtime context leading up to a memory access violation.
 
-跟踪日志与[ELF 转储](#elf-dump)一起可以提供更多参考(尽管跟踪会产生很多信息)。
+The trace logs together with the [ELF dump](#elf-dump) can provide a lot of insight (though the traces produce a lot of information).
 
-要在本地集群中打开 BPF 解释器跟踪消息，请将`RUST_LOG`中的`solana_rbpf`级别配置为`trace`。 例如：
+To turn on BPF interpreter trace messages in a local cluster configure the `solana_rbpf` level in `RUST_LOG` to `trace`. For example:
 
 `export RUST_LOG=solana_rbpf=trace`

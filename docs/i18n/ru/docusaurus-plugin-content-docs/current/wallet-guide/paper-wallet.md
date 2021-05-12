@@ -68,10 +68,10 @@ solana-keygen new --help
 
 ### Извлечение публичного ключа
 
-Публичный ключ может быть извлечен из мнемо-фразы и пароля, если последний был использован. Это полезно для использования мнемо-фраз сгенерированных оффлайн, чтобы извлечь настоящий публичный ключ. Команда `solana-keygen pubkey ASK` поможет вам узнать публичный ключ, используя мнемо-фразу, включая зашифрованную паролем.
+Публичный ключ может быть извлечен из мнемо-фразы и пароля, если последний был использован. This is useful for using an offline-generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through how to use your seed phrase (and a passphrase if you chose to use one) as a signer with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 > Заметьте, что вы можете потенциально использовать различные пароли для одной и той же seed фразы. Каждый уникальный пароль создает разную ключ-пару.
@@ -79,10 +79,10 @@ solana-keygen pubkey ASK
 Интсрументы `solana-keygen` используют тот же стандарт BIP39 со стандартным набором английских слов, который используется для генерации мнемонических фраз. Если ваша исходная мнемо-фраза была сгенерирована с помощью других инструментов, которые используют другой стандарт, вы все равно можете использовать `solana-keygen`, но вам нужно будет передать аргумент `--skip-seed-phrase-validation`, чтобы отменить проверку на валидность соответствие стандарту BIP39.
 
 ```bash
-solana-keygen pubkey ASK --skip-seed-phrase-validation
+solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
-После ввода мнемо-фразы с `solana-keygen pubkey ASK` консоль отобразит строку в кодировке base-58. Это _адрес кошелька_, ассоциированный с вашей мнемо-фразой.
+After entering your seed phrase with `solana-keygen pubkey prompt://` the console will display a string of base-58 character. This is the base _wallet address_ associated with your seed phrase.
 
 > Скопируйте полученный адрес, например на USB-накопитель, для легкого использования на сетевых компьютерах
 
@@ -94,15 +94,33 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 solana-keygen pubkey --help
 ```
 
+### Hierarchical Derivation
+
+The solana-cli supports [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) hierarchical derivation of private keys from your seed phrase and passphrase by adding either the `?key=` query string or the `?full-path=` query string.
+
+By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
+
+```bash
+solana-keygen pubkey prompt://?key=0/1
+```
+
+To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
+```
+
+Because Solana uses Ed25519 keypairs, as per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all derivation-path indexes will be promoted to hardened indexes -- eg. `?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are included in the query-string input.
+
 ## Проверка ключ-пары
 
 Чтобы убдиться, что вы владеете приватным ключом от какого либо адреса, используйте команду `solana-keygen verify`:
 
 ```bash
-solana-keygen verify <PUBKEY> ASK
+solana-keygen verify <PUBKEY> prompt://
 ```
 
-где `<PUBKEY>` заменяется на адрес кошелька, а ключевое слово `ASK` говорит команде, чтобы попросить вас о вводе мнемо-фразы с клавиатуры. Обратите внимание, что по соображениям безопасности, ваша мнемо-фраза не будет отображаться на экране по её ввода. После ввода вашей мнемонической фразы команда выдаст «Success», если данный адресс соответствует ключ-паре, созданной из исходной мнемо-фразы, и «Failed» в противном случае.
+where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://` tells the command to prompt you for the keypair's seed phrase; `key` and `full-path` query-strings accepted. Note that for security reasons, your seed phrase will not be displayed as you type. After entering your seed phrase, the command will output "Success" if the given public key matches the keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Проверка баланса аккаунта
 

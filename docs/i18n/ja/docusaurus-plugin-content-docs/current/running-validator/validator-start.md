@@ -27,7 +27,7 @@ solanaトランザクション数
 以下のコマンドを実行して、ゴシップネットワークに参加し、クラスタ内の他のノードを表示してみてください。
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -45,7 +45,7 @@ CUDA がインストール\(Linux-only currently\) された GPU が搭載され
 
 Solana のレポには、システム設定を調整してパフォーマンスを最適化するためのデーモンが含まれています(すなわち、OS の UDP バッファとファイルマッピングの制限を増やすことで)。
 
-この daemon(`solana-sys-tuner`) は、Solana のバイナリリリースに含まれています。 最新の推奨設定を適用するには、ソフトウェアのアップグレード後にバリデータを再起動する*前*に daemon を再起動してください。
+この daemon(`solana-sys-tuner`) は、Solana のバイナリリリースに含まれています。 Restart it, _before_ restarting your validator, after each software upgrade to ensure that the latest recommended settings are applied.
 
 実行するには:
 
@@ -78,7 +78,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 
@@ -89,13 +89,13 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 追加
 
 ```
-LimitNOFILE=500000
+LimitNOFILE=700000
 ```
 
 systemd サービスファイルの `[Service]` セクションに、 それ以外の場合は追加する
 
 ```
-DefaultLimitNOFILE=500000
+DefaultLimitNOFILE=700000
 ```
 
 `etc/systemd/system.conf`の`[Manager]`セクションに追加します。
@@ -107,7 +107,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 
@@ -159,120 +159,127 @@ solana-keygen pubkey ASK
 solana-keygen grind --starts-with e1v1s:1
 ```
 
-要求された文字列によっては、マッチを見つけるのに数日かかることがあります。
+You may request that the generated vanity keypair be expressed as a seed phrase which allows recovery of the keypair from the seed phrase and an optionally supplied passphrase (note that this is significantly slower than grinding without a mnemonic):
+
+```bash
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
+```
+
+Depending on the string requested, it may take days to find a match...
 
 ---
 
-バリデータの ID キーペアは、ネットワーク上であなたのバリデータを一意に識別するものです。 **この情報をバックアップしておくことは非常に重要です。**
+Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-この情報をバックアップしておかないと、万が一バリデータにアクセスできなくなったときに、それを復元することができなくなります。 そうなると、あなたの SOL の割り当ても失われてしまいます。
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
 
-バリデータを識別するキーペアをバックアップするには、 ** "validator-keypair.json" ファイルまたはシードフレーズを安全な場所にバックアップします。**
+To back-up your validator identify keypair, **back-up your "validator-keypair.json” file or your seed phrase to a secure location.**
 
 ## 追加の Solana CLI 設定
 
-これでキーペアができたので、以下のすべてのコマンドでバリデータのキーペアを使用するように Solana の設定を行います。
+Now that you have a keypair, set the solana configuration to use your validator keypair for all following commands:
 
 ```bash
 solana config set --keypair ~/validator-keypair.json
 ```
 
-次の出力が表示されます。
+You should see the following output:
 
 ```text
-ウォレット設定を更新しました: /home/solana/.config/solana/wallet/config.yml
+Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 * url: http://devnet.solana.com
 * keypair: /home/solana/validator-keypair.json
 ```
 
 ## エアドロと& バリデータ残高の確認
 
-開始するにはトークンをいくつかドロップしてください:
+Airdrop yourself some SOL to get started:
 
 ```bash
-10SOLをエアドロップ
+solana airdrop 1
 ```
 
-エアドロップは"Devnet"と"Testnet"でのみ利用可能であることに注意してください。 どちらも 1 リクエストにつき 10SOL までとなります。
+Note that airdrops are only available on Devnet and Testnet. Both are limited to 1 SOL per request.
 
-現在の残高を表示するには:
+To view your current balance:
 
 ```text
 solana balance
 ```
 
-または詳細を確認するには:
+Or to see in finer detail:
 
 ```text
 solana balance --lamports
 ```
 
-SOL とラムポートの [の違いについては、こちら](../introduction.md#what-are-sols)をご覧ください。
+Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
 ## 投票アカウントを作成
 
-まだ行っていない場合は、投票アカウントのキーペアを作成し、ネットワーク上に 投票アカウントを作成してください。 このステップを完了した場合は、Solana ランタイムディレクトリに “vote-account-keypair.json” が表示されます。
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
 solana-keygen new -o ~/vote-account-keypair.json
 ```
 
-以下のコマンドは、すべてのデフォルトオプションを使用して、ブロックチェーン に投票アカウントを作成するために使用できます。
+The following command can be used to create your vote account on the blockchain with all the default options:
 
 ```bash
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
-[投票アカウントの作成と管理](vote-accounts.md) についての詳細をご覧ください。
+Read more about [creating and managing a vote account](vote-accounts.md).
 
 ## 信頼されたバリデータ
 
-他のバリデータノードを知っていて信頼している場合は、コマンドラインで`solana-validator`の`--trusted-validator <PUBKEY>`引数で指定できます。 引数 `--trusted-validator<PUBKEY1> --trusted-validator <PUBKEY2>`を繰り返すことで、複数のバリデータを指定することができます。 これには 2 つの効果があり、1 つはバリデータが` --no-untrusted-rpc` で起動しているときに、ジェネシスデータとスナップショットデータをダウンロードする際に、信頼されているノードのセットにのみ問い合わせを行うことです。 もうひとつは、`--halt-on-trusted-validator-hash-mismatch`オプションとの組み合わせで、gossip 上の他の信頼されたノードのアカウント状態全体の merkle ルートハッシュを監視し、ハッシュに不一致があった場合には、バリデータが不正な状態値を投票したり処理したりするのを防ぐために、バリデータはノードを停止するというものです。 現時点では、バリデータがハッシュを公開するスロットはスナップショットの間隔と連動しています。 この機能を有効にするためには、信頼するセット内のすべてのバリデータの スナップショット間隔を同じにするか、その倍数にする必要があります。
+If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>` argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option, it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch, the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted set should be set to the same snapshot interval value or multiples of the same.
 
-悪意のあるスナップショット状態のダウンロードやアカウント状態の乖離を防ぐために、これらのオプションを使用することを強くお勧めします。
+It is highly recommended you use these options to prevent malicious snapshot state download or account state divergence.
 
 ## バリデータに接続
 
-クラスタに接続するには、次を実行します。
+Connect to the cluster by running:
 
 ```bash
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
-バリデータのログを強制的にコンソールに出力するには`--log -`引数を追加します。
+To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
-> 注: [ペーパーウォレットのシードフレーズ](./wallet-guide/paper-wallet.md)には、`--identity`および/または`--authorized-voter`のキーペアを指定します。 これらを使用するには、`solana-validator --identity ASK ... --authorized-voter ASK ...`のようにそれぞれの引数を渡すと、シードフレーズとオプションのパスフレーズを入力するように促されます。
+The ledger will be placed in the `ledger/` directory by default, use the `--ledger` argument to specify a different location.
 
-バリデータがネットワークに接続されていることを、新しいターミナルを開いて実行して確認します。
+> 注: [ペーパーウォレットのシードフレーズ](./wallet-guide/paper-wallet.md)には、`--identity`および/または`--authorized-voter`のキーペアを指定します。 To use these, pass the respective argument as `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be prompted to enter your seed phrases and optional passphrase.
+
+Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
-バリデータが接続されていれば、その公開キーと IP アドレスがリストに表示されます。
+If your validator is connected, its public key and IP address will appear in the list.
 
 ### ローカルネットワークポート割り当ての制御
 
-デフォルトでは、バリデータは 8000-10000 の範囲で利用可能なネットワークポートを動的に選択しますが、 `--dynamic-port-range` でオーバーライドすることもできます。 たとえば、`solana-validator --dynamic-port-range 11000-11010 ...` とすると、バリデータの対象をポート "11000-11010" に制限します。
+By default the validator will dynamically select available network ports in the 8000-10000 range, and may be overridden with `--dynamic-port-range`. For example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict the validator to ports 11000-11010.
 
 ### ディスク領域を節約するための台帳サイズの制限
 
-`--limit-ledger-size`パラメータでは、ノードがディスク上に保持する台帳の数を[shred](./terminology.md#shred)で指定できます。 このパラメータを指定しなかった場合、バリデータはディスクの空き容量がなくなるまで台帳全体を保持します。
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space.
 
-デフォルト値では、台帳のディスク使用量を 500GB 未満に抑えようとします。 必要に応じて` --limit-ledger-size` に引数を追加することで、ディスク使用量の増減を要求できます。 `solana-validator --help` で `--limit-ledger-size` で使用されるデフォルトの制限値を確認してください。 カスタムリミット値を選択する方法の詳細は [こちら ](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26) で確認してください。
+The default value attempts to keep the ledger disk usage under 500GB. More or less disk usage may be requested by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`. More information about selecting a custom limit value is [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### システムユニット
 
-バリデータを"systemd"ユニットとして実行することは、バックグラウンドでの実行を管理する簡単な方法のひとつです。
+Running the validator as a systemd unit is one easy way to manage running in the background.
 
-あなたのマシンに`solと`いうユーザーがいると仮定して、`/etc/systemd/system/sol.service`というファイルを以下のように作成します。
+Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with the following:
 
 ```
 [Unit]
@@ -286,7 +293,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -295,9 +302,9 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-ここで、`/home/sol/bin/validator.sh`を作成し、希望する`solana-validator`のコマンドラインを含めます。 `/home/sol/bin/validator.sh`を手動で実行すると、期待通りにバリデータが起動することを確認します。 `chmod +x /home/sol/bin/validator.sh `で実行可能にすることを忘れないでください。
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator` command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
-サービスを開始するには以下のようにしてください。
+Start the service with:
 
 ```bash
 $ sudo systemctl enable --now sol
@@ -307,19 +314,21 @@ $ sudo systemctl enable --now sol
 
 #### ログ出力チューニング
 
-バリデータがログに出力するメッセージは、環境変数`RUST_LOG`で制御できます。 詳細は [ドキュメント](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) の `env_logger` Rust crate を参照してください。
+The messages that a validator emits to the log can be controlled by the `RUST_LOG` environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for the `env_logger` Rust crate.
 
-ログの出力を減らすと、後で問題が発生したときにデバッグが難しくなることに注意してください。 チームにサポートを求める場合は、サポートを提供する前に、変更を元に戻して問題を再現する必要があります。
+Note that if logging output is reduced, this may make it difficult to debug issues encountered later. Should support be sought from the team, any changes will need to be reverted and the issue reproduced before help can be provided.
 
 #### ログローテーション
 
-`--log ~/solana-validator.log `で指定されるバリデータのログファイルは、時間の経過とともに非常に大きくなることがあるので、ログローテーションを設定することをお勧めします。
+The validator log file, as specified by `--log ~/solana-validator.log`, can get very large over time and it's recommended that log rotation be configured.
 
-バリデータは`USR1`シグナルを受け取ると再オープンします。これはログローテーションを有効にするための基本的なプリミティブです。
+The validator will re-open its when it receives the `USR1` signal, which is the basic primitive that enables log rotation.
+
+If the validator is being started by a wrapper shell script, it is important to launch the process with `exec` (`exec solana-validator ...`) when using logrotate. This will prevent the `USR1` signal from being sent to the script's process instead of the validator's, which will kill them both.
 
 #### ログローテーションの使用
 
-`logrotate`の設定例です。バリデータが"systemd"の`sol.service`というサービスとして動作していると仮定し、"/home/sol/solana-validator.log"にログファイルを書き込みます。
+An example setup for the `logrotate`, which assumes that the validator is running as a systemd service called `sol.service` and writes a log file at /home/sol/solana-validator.log:
 
 ```bash
 # Setup log rotation
@@ -340,41 +349,41 @@ systemctl restart logrotate.service
 
 ### ポートチェックを無効にして再起動を高速化
 
-バリデータが正常に動作するようになったら、`solana-validator `のコマンドラインに `--no-port-check `フラグを追加することで、バリデータの再起動にかかる時間を短縮することができます。
+Once your validator is operating normally, you can reduce the time it takes to restart your validator by adding the `--no-port-check` flag to your `solana-validator` command-line.
 
 ### スナップショット圧縮を無効にして CPU 使用率を削減
 
-他のバリデータにスナップショットを提供しない場合は、スナップショット圧縮を無効にして CPU 負荷を軽減することができますが、その場合はローカルのスナップショットストレージのディスク使用量が多少増えます。
+If you are not serving snapshots to other validators, snapshot compression can be disabled to reduce CPU load at the expense of slightly more disk usage for local snapshot storage.
 
-`solana-validator `のコマンドライン引数に` -snapshot-compression none` 引数を追加して、バリデータを再起動します。
+Add the `--snapshot-compression none` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### SSD の消耗を抑えるために、アカウントデータベースにスワップにスピルオーバーするラムディスクを使用します。
 
 If your machine has plenty of RAM, a tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold the accounts database
 
-"tmpfs"を使うときは、定期的に"tmpfs"の容量が足りなくならないように、"swap"も設定しておく必要があります。
+When using tmpfs it's essential to also configure swap on your machine as well to avoid running out of tmpfs space periodically.
 
-"300GB の tmpfs パーティション"と" 250GB のスワップパーティション"の使用を推奨します。
+A 300GB tmpfs partition is recommended, with an accompanying 250GB swap partition.
 
-設定例:
+Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. `"/etc/fstab"`に`tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0`という行を追加して、300GB の tmpfs パーティションを追加します(バリデータがユーザー"sol"で動作していることを想定しています)。 **注："/etc/fstab"の編集を誤ると、マシンが起動しなくなる可能性があります**。
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab` (assuming your validator is running under the user "sol"). **注："/etc/fstab"の編集を誤ると、マシンが起動しなくなる可能性があります**。
 3. 少なくとも 250GB のスワップ領域を作成します
 
-- この後の説明で`SWAPDEV`の代わりに使用するデバイスを選びます。 理想的には、高速ディスク上の 250GB 以上のフリーディスクパーティションを選択してください。 もしない場合は、`sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`でスワップファイルを作成し、`sudo chmod 0600 /swapfile` でパーミッションを設定し、`/swapfile `を以下の説明で` SWAPDEV` として使用します。
-- `sudo mkswap SWAPDEV `でスワップとして使用するためにデバイスをフォーマットします。
+- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions. Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+- Format the device for usage as swap with `sudo mkswap SWAPDEV`
 
-4. `"etc/fstab"` に "`SWAPDEV swap swap defaults 0 0"` を含むスワップファイルを追加します。
-5. `"sudo swapon -a"` でスワップを有効にし、`"sudo mount /mnt/solana-accounts/"` で "tmpfs" をマウントします。
-6. `"free -g"` でスワップが有効であること、`"mount"` で "tmpfs" がマウントされていることを確認します。
+4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
+5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
+6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
-ここで、`solana-validator` のコマンドライン引数に` --accounts /mnt/solana-accounts` 引数を追加し、バリデータを再起動します。
+Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### アカウントインデックス
 
-クラスタの人口勘定科目の数が増えるにつれて、 口座データ RPC は、[`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) や [SPL-token-specific request](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) --のように、口座セット全体をスキャンします。 バリデータがこれらのリクエストをサポートする必要がある場合は、 `--account-index `パラメータを使用して 1 つ以上のメモリ内アカウントインデックスを有効にすることができます。 これは、アカウントを key フィールドでインデックス化することで RPC パフォーマンスを大幅に向上させるものです。 現在サポートしているパラメータ値は次のとおりです。
+As the number of populated accounts on the cluster grows, account-data RPC requests that scan the entire account set -- like [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- may perform poorly. If your validator needs to support any of these requests, you can use the `--account-index` parameter to activate one or more in-memory account indexes that significantly improve RPC performance by indexing accounts by the key field. Currently supports the following parameter values:
 
-- `program-id`: それぞれの口座が所有するプログラムによってインデックスされます; [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
-- `spl-token-mint`: トークン Mint でインデックスされた各 SPL トークンアカウント; [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), および [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts) によって使用される。
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
 - `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.

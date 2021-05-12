@@ -16,7 +16,7 @@ Gọi slot này `SLOT_X`
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 ```
 
-Thư mục sổ cái bây giờ sẽ chứa ảnh chụp nhanh mới. `solana-ledger-tool create-snapshot` cũng sẽ xuất ra phiên bản shred mới và giá trị hàm băm ngân hàng, gọi là NEW_SHRED_VERSION and NEW_BANK_HASH.
+Thư mục sổ cái bây giờ sẽ chứa ảnh chụp nhanh mới. `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 Điều chỉnh các đối số validator của bạn:
 
@@ -37,7 +37,10 @@ Xác nhận với nhật ký rằng validator đã khởi động và hiện đa
 >
 > Chúng tôi đã phát hành v1.1.12 và sẵn sàng khôi phục lại testnet.
 >
-> Các bước: 1. Cài đặt bản phát hành v1.1.12: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Phương pháp ưa thích, bắt đầu từ sổ cái cục bộ của bạn với:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. Phương pháp ưa thích, bắt đầu từ sổ cái cục bộ của bạn với:
 >
 > ```bash
 > solana-validator

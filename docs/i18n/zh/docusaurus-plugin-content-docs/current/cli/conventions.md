@@ -32,12 +32,12 @@ solana-keygen pubkey <KEYPAIR>
 
 #### 纸钱包
 
-在纸质钱包中，密钥对源自助记词和你在钱包创建时输入的可选密码。 若要让纸钱包密钥在任意地方显示 `<KEYPAIR>` 文本在示例或帮助文档中，请输入单词 `ASK`，然后程序会强制您在运行命令时输入种子单词。
+在纸质钱包中，密钥对源自助记词和你在钱包创建时输入的可选密码。 To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 显示纸钱包的钱包地址：
 
 ```bash
-solana-keygen pubkey
+solana-keygen pubkey prompt://
 ```
 
 #### 文件系统钱包

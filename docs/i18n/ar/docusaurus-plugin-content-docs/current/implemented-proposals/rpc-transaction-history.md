@@ -57,7 +57,7 @@
 
 يحتوي هذا الجدول على المُعاملات التي تُؤثر على عنوان مُعين.
 
-مفتاح الصف (row key) هو `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits> `. بيانات الصف (row data) مضغوطة بهيكلة `TransactionByAddrInfo`.
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. بيانات الصف (row data) مضغوطة بهيكلة `TransactionByAddrInfo`.
 
 إن الحصول على إطراء الشخص للفُتحة (Slot) يسمح بإدراج الفُتحات التي تضمن أن الفُتحة الأحدث مع المُعاملات التي تؤثر على العنوان سيتم إدراجها دائمًا أولاً.
 

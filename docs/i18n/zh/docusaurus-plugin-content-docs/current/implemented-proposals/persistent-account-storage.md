@@ -4,9 +4,9 @@ title: 持久账户存储
 
 ## 持久账户存储
 
-账户集代表了验证节点处理过的所有交易的当前计算状态。 每个验证节点都需要维护这整个集合。 网络提出的每一个区块都代表着对这个集合的改变，由于每个区块都是一个潜在的回滚点，所以改变需要是可逆的。
+The set of accounts represent the current computed state of all the transactions that have been processed by a validator. 每个验证节点都需要维护这整个集合。 Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
 
-NVME 等持久性存储比 DDR 便宜 20 到 40 倍。 持久性存储的问题是，写和读的性能比 DDR 慢很多，必须注意数据的读写方式。 读取和写入都可以在多个存储驱动器之间分割，并行访问。 本设计提出了一种数据结构，允许存储的并发读取和并发写入。 写入通过使用 AppendVec 数据结构进行优化，允许单个写入者进行追加，同时允许多个并发读取者访问。 账户索引维护一个指针，指向每次分叉追加账户的位置，从而消除了对状态的显式检查点的需求。
+NVME 等持久性存储比 DDR 便宜 20 到 40 倍。 The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
 
 ## AppendVec
 
@@ -55,37 +55,25 @@ pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 - 从索引中删除任何修剪过的分叉。 任何剩余的比根号低的分叉都可以被认为是根号。
 - 扫描索引，将任何旧的根迁移到新的索引中。 任何比新根数低的剩余分叉都可以在以后删除。
 
-## 只写附录
+## Garbage collection
 
-所有对账户的更新都是以纯追加更新的方式进行的。 每一次账户更新，AppendVec 中都会存储一个新版本。
+As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
 
-可以通过在一个分叉中返回一个已经存储的账户的可变引用来优化单个分叉内的更新。 银行已经跟踪账户的并发访问，并保证对特定账户分叉的写与对该分叉中的账户的读不会同时发生。 为了支持这个操作，AppendVec 应该实现这个函数。
+To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
 
-```text
-fn get_mut(&self, index: u64) -> &mut T;
-```
+The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
 
-该 API 允许对`index`的内存区域进行并发的可变更访问。 它依靠银行保证对该索引的独家访问。
+## Index Recovery
 
-## 垃圾收集
+Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
 
-随着账户的更新，它们会移动到 AppendVec 的末尾。 一旦容量用完，可以创建一个新的 AppendVec，并将更新的内容存储在那里。 最终，对旧的 AppendVec 的引用将消失，因为所有的账户都已更新，旧的 AppendVec 可以被删除。
+To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
 
-为了加快这个过程，可以将最近没有更新的账户移到新的 AppendVec 的前面。 这种形式的垃圾收集可以在不需要对任何数据结构进行独占锁的情况下完成，除了索引更新。
+## Snapshots
 
-垃圾收集的初始实现是，一旦 AppendVec 中的所有账户成为陈旧版本，它就会被重用。 账户一旦被追加，就不会被更新或移动。
+To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
 
-## 索引回收
-
-在追加过程中，每个银行线程都有对账户的独占访问权，因为在数据提交之前，账户锁不能被释放。 但是在独立的 AppendVec 文件之间没有明确的写入顺序。 为了创建一个顺序，索引维护了一个原子写版本计数器。 每一次对 AppendVec 的追加都会在 AppendVec 中账户的条目中记录该追加的索引写版本号。
-
-为了恢复索引，所有的 AppendVec 文件可以以任何顺序读取，并且每次分叉的最新写版本应该存储在索引中。
-
-## 快照
-
-要进行快照，需要将 AppendVec 中的底层内存映射文件刷新到磁盘。 索引也可以写到磁盘上。
-
-## 性能
+## Performance
 
 - 只进行追加写入的速度很快。 SSD 和 NVME，以及所有操作系统级别的内核数据结构，都允许在 PCI 或 NVMe 带宽允许的情况下以最快的速度运行追加(2,700 MB/s)。
 - 每个重放和银行线程都会同时写入自己的 AppendVec。

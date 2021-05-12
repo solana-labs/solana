@@ -1,5 +1,5 @@
 ---
-title: Incorporación del lenguaje Mover
+title: Embedding the Move Language
 ---
 
 ## Problema

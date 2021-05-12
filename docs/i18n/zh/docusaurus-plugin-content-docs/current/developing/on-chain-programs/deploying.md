@@ -1,11 +1,11 @@
 ---
-title: "部署"
+title: "Deploying"
 ---
 
-![SDK 工具](/img/sdk-tools.svg)
+![SDK tools](/img/sdk-tools.svg)
 
-如上图所示，程序作者创建了一个程序，将它编译成包含 BFF 字节代码的 ELF 共享对象，然后包含一笔特殊的 _deploy_ 交易，将其上传到 Solana 集群。 群集通过一个 _program ID_ 将其提供给客户端。 程序 ID 是部署时指定的 _地址_，用于在后续交易中引用程序。
+As shown in the diagram above, a program author creates a program, compiles it to an ELF shared object containing BPF bytecode, and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is an _address_ specified when deploying and is used to reference the program in subsequent transactions.
 
-一旦部署成功，持有程序的账户将被标记为可执行，并且其账户数据变得永久不可篡改。 如果程序需要更改(功能、补丁等...)，新程序必须部署到一个新程序 ID。
+Upon a successful deployment the account that holds the program is marked executable and its account data become permanently immutable. If any changes are required to the program (features, patches, etc...) the new program must be deployed to a new program ID.
 
-Solana 命令行接口支持部署程序，更多信息请见 [`deploy`](cli/usage.md#deploy-program) 命令行使用 文档。
+The Solana command line interface supports deploying programs, for more information see the [`deploy`](cli/usage.md#deploy-program) command line usage documentation.

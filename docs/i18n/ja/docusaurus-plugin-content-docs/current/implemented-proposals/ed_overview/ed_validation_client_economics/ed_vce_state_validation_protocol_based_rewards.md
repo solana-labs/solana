@@ -20,42 +20,42 @@ title: インフレスケジュール
 
 最初の要素はプロトコルパラメータのみの関数であり(つまり、特定のエポックにおけるバリデータの行動に依存しない)、早期の参加を促し、明確な金銭的安定性を提供し、ネットワーク内の最適なセキュリティを提供するように設計されたグローバルな検証報酬スケジュールを実現します。
 
-*インフレスケジュール*がソラナ経済に与える影響を理解するための第一歩として、現在調査中のインフレ・スケジュールのパラメータの範囲を考慮して、長期的なトークン発行額の上限と下限をシミュレーションしてみました。
+As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 特に：
 
-- _初期インフレーション率_: 7-9%
-- _ディスインフレ率_: -14-16%
-- _長期インフレ率_: 1-2%
+- _Initial Inflation Rate_: 7-9%
+- _Dis-inflation Rate_: -14-16%
+- _Long-term Inflation Rate_: 1-2%
 
 これらの範囲を使用して、多くの可能なインフレーションスケジュールをシミュレートすることで、時間の経過とともにインフレを調べることができます。
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-上記のグラフでは、各パラメータの貢献度を示すために、範囲の平均値が識別されます。 これらのシミュレートされた *Inflation Schedules*から、トークンの発行範囲を時間の経過とともに投影することもできます。
+上記のグラフでは、各パラメータの貢献度を示すために、範囲の平均値が識別されます。 From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-最後に、先に述べた追加のパラメータ、_% of Staked SOL_: を導入すると、Staked SOL の*Staked Yield*を推定することができます。
+Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 
-この場合、*Staked SOL の%*は推定しなければならないパラメータであるため(*Inflation Schedule*パラメータとは異なります) 特定の*Inflation Schedule*パラメータを使用して、S*taked SOL の%*の範囲を検討する方が簡単です 以下の例では、上記で検討したパラメータ範囲の中央を選択しています。
+In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. 以下の例では、上記で検討したパラメータ範囲の中央を選択しています。
 
-- _長期インフレ率_: 8%
-- _ディスインフレ率_: -15%
-- _長期インフレ率_: 1.5%
+- _Initial Inflation Rate_: 8%
+- _Dis-inflation Rate_: -15%
+- _Long-term Inflation Rate_: 1.5%
 
-*% of Staked SOL*の値は 60%～ 90%となっているが、これは投資家や検証者のコミュニティからのフィードバックや、同等の Proof-of-Stake プロトコルで観測された結果に基づいて、我々が観測する可能性のある範囲をカバーしていると考えています。
+The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-上記の図は、*インフレスケジュール*が指定されている場合に、ステーカーが Solana ネットワーク上で期待する*Staked Yield*の例を示しています これは理想的な*Staked Yield*であり、バリデータの稼働率が報酬に与える影響やバリデータの手数料、潜在的な歩留まりの低下、潜在的なスラッシュの発生などは無視されています。 さらに、*ステーキング SOL の％割合*のうち、*インフレスケジュール*によって設定された経済的インセンティブによって動的に変化する部分を無視しています。
+Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
 
 ### 調整されたステーキング利率
 
-ステーキングトークンからの収益の可能性を完全に評価するためには、ステーキング*トークンの希釈化*とそのステーキングイールドへの影響を考慮する必要があります。 このため、*調整された staking yield*を、インフレ発行の分配によるステーキングされたトークンの小数のトークン供給所有権の変化と定義します。 つまり、 インフレーションの正の希薄化効果です。
+A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. つまり、 インフレーションの正の希薄化効果です。
 
-_調整されたステーキング利回り_ を、ネットワーク上のインフレ率とステークトークンの関数として調べることができます。 様々なステーキングの分数についてプロットされています:
+We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. 様々なステーキングの分数についてプロットされています:
 
 ![](/img/p_ex_staked_dilution.png)

@@ -70,7 +70,7 @@ log_pubkey_units : 100 인 경우 ,
 
 프로그램이 실행됨에 따라 컴퓨팅 예산이 점진적으로 소비되므로 총 예산 소비는 수행하는 작업의 다양한 비용의 조합이됩니다.
 
-런타임에 프로그램은 남아있는 컴퓨팅 예산의 양을 기록 할 수 있습니다. 자세한 내용은 \[debugging\] (developing / deployed-programs / debugging.md # monitoring-compute-budget-consumption)을 참조하십시오.
+런타임에 프로그램은 남아있는 컴퓨팅 예산의 양을 기록 할 수 있습니다. See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 예산 값은 기능 사용을 조건으로합니다. 계산 예산의 \[new\] (https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) 함수를 살펴보십시오. 예산 구성 방법. 현재 예산 값을 결정하려면 \[features\] (runtime.md # features)의 작동 방식과 사용중인 클러스터에서 활성화 된 기능에 대한 이해가 필요합니다.
 

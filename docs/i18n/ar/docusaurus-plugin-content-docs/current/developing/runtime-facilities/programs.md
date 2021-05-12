@@ -2,78 +2,59 @@
 title: "Native Programs"
 ---
 
-Solana contains a small handful of native programs, which are required to run
-validator nodes. Unlike third-party programs, the native programs are part of
-the validator implementation and can be upgraded as part of cluster upgrades.
-Upgrades may occur to add features, fix bugs, or improve performance. Interface
-changes to individual instructions should rarely, if ever, occur. Instead, when
-change is needed, new instructions are added and previous ones are marked
-deprecated. Apps can upgrade on their own timeline without concern of breakages
-across upgrades.
+Solana contains a small handful of native programs, which are required to run validator nodes. Unlike third-party programs, the native programs are part of the validator implementation and can be upgraded as part of cluster upgrades. قد تحدث الترقيات لإضافة ميزات أو إصلاح الأخطاء أو تحسين الأداء. نادرًا ما تحدث تغييرات في الواجهة للتعليمات الفردية. بدلاً من ذلك، عند الحاجة إلى التغيير، تتم إضافة إرشادات جديدة ويتم وضع علامة على الإرشادات السابقة كمُتَجاهلة. يُمكن ترقية التطبيقات وفقًا للجدول الزمني الخاص بها دون القلق من حدوث أعطال أثناء الترقيات.
 
-For each native program the program id and description each supported
-instruction is provided. A transaction can mix and match instructions from different
-programs, as well include instructions from on-chain programs.
+For each native program the program id and description each supported instruction is provided. A transaction can mix and match instructions from different programs, as well include instructions from on-chain programs.
 
-## System Program
+## برنامج النظام (System Program)
 
-Create new accounts, allocate account data, assign accounts to owning programs,
-transfer lamports from System Program owned accounts and pay transacation fees.
+Create new accounts, allocate account data, assign accounts to owning programs, transfer lamports from System Program owned accounts and pay transacation fees.
 
-- Program id: `11111111111111111111111111111111`
-- Instructions: [SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
+- مُعرف البرنامج: `11111111111111111111111111111111111111111111`
+- التعليمات: تعليمات النظام [SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
 
-## Config Program
+## إعدادات البرنامج (Config Program)
 
-Add configuration data to the chain and the list of public keys that are permitted to modify it
+إضافة الإعدادات إلى الشبكة وقائمة المفاتيح العمومية (public keys) المسموح لها بتعديلها
 
-- Program id: `Config1111111111111111111111111111111111111`
-- Instructions: [config_instruction](https://docs.rs/solana-config-program/VERSION_FOR_DOCS_RS/solana_config_program/config_instruction/index.html)
+- مُعرف البرنامج: `11111111111111111111111111111111111111111111`
+- التعليمات: إعدادات النظام: [config_instruction](https://docs.rs/solana-config-program/VERSION_FOR_DOCS_RS/solana_config_program/config_instruction/index.html)
 
-Unlike the other programs, the Config program does not define any individual
-instructions. It has just one implicit instruction, a "store" instruction. Its
-instruction data is a set of keys that gate access to the account, and the
-data to store in it.
+على خلاف البرامج الأخرى، لا تحدد إعدادات البرنامج (Config Program) أي تعليمات فردية. يحتوي على تعليمات ضمنية واحدة فقط، تعليمات "مخزن" ("store"). بيانات التعليمات الخاصة به هي مجموعة من المفاتيح التي تسمح بالوصول إلى الحساب والبيانات لتخزينها فيه.
 
-## Stake Program
+## برنامج إثبات الحِصَّة أو التَّحْصِيص (Stake Program)
 
-Create and manage accounts representing stake and rewards for delegations to
-validators.
+Create and manage accounts representing stake and rewards for delegations to validators.
 
-- Program id: `Stake11111111111111111111111111111111111111`
-- Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
+- مُعرف البرنامج: `11111111111111111111111111111111111111111111`
+- التعليمات: تعليمات إثبات الحِصَّة أو التَّحْصِيص [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
 
-## Vote Program
+## برنامج التصويت (Vote Program)
 
 Create and manage accounts that track validator voting state and rewards.
 
-- Program id: `Vote111111111111111111111111111111111111111`
-- Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
+- مُعرف البرنامج: `11111111111111111111111111111111111111111111`
+- التعليمات: تعليمات التصويت [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
-## BPF Loader
+## مُحمِّل BPF أو (BPF Loader)
 
 Deploys, upgrades, and executes programs on the chain.
 
 - Program id: `BPFLoaderUpgradeab1e11111111111111111111111`
-- Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_upgradeable_instruction/enum.UpgradeableLoaderInstruction.html)
+- التعليمات: تعليمات المُحمِّل [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_upgradeable_instruction/enum.UpgradeableLoaderInstruction.html)
 
-The BPF Upgradeable Loader marks itself as "owner" of the executable and
-program-data accounts it creates to store your program. When a user invokes an
-instruction via a program id, the Solana runtime will load both your the program
-and its owner, the BPF Upgradeable Loader. The runtime then passes your program
-to the BPF Upgradeable Loader to process the instruction.
+The BPF Upgradeable Loader marks itself as "owner" of the executable and program-data accounts it creates to store your program. When a user invokes an instruction via a program id, the Solana runtime will load both your the program and its owner, the BPF Upgradeable Loader. The runtime then passes your program to the BPF Upgradeable Loader to process the instruction.
 
 [More information about deployment](cli/deploy-a-program.md)
 
-## Secp256k1 Program
+## برنامج Secp256k1
 
-Verify secp256k1 public key recovery operations (ecrecover).
+تحقق من عمليات إستعادة المفتاح العمومي (public key) المُسَمَّى secp256k1 عن طريق (ecrecover).
 
-- Program id: `KeccakSecp256k11111111111111111111111111111`
-- Instructions: [new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/1a658c7f31e1e0d2d39d9efbc0e929350e2c2bcb/sdk/src/secp256k1_instruction.rs#L31)
+- مُعرف البرنامج: `11111111111111111111111111111111111111111111`
+- التعليمات: [new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/1a658c7f31e1e0d2d39d9efbc0e929350e2c2bcb/sdk/src/secp256k1_instruction.rs#L31)
 
-The secp256k1 program processes an instruction which takes in as the first byte
-a count of the following struct serialized in the instruction data:
+يُعالج برنامج secp256k1 تعليمة (instruction) تأخذ في إعتبارها الـ byte الأول كبداية تعداد من البنية التالية المُتسلسلة في بيانات التعليمات:
 
 ```
 struct Secp256k1SignatureOffsets {
@@ -87,7 +68,7 @@ struct Secp256k1SignatureOffsets {
 }
 ```
 
-Pseudo code of the operation:
+كود رمز العملية (Pseudo code of the operation):
 
 ```
 process_instruction() {
@@ -108,16 +89,10 @@ process_instruction() {
 }
 ```
 
-This allows the user to specify any instruction data in the transaction for
-signature and message data. By specifying a special instructions sysvar, one can
-also receive data from the transaction itself.
+يسمح هذا للمُستخدم بتحديد أي بيانات تعليمات في المُعاملة للتوقيع وبيانات الرسائل. عن طريق تحديد نظام التعليمات الخاصة، يمكن للمرء أيضا أن يتلقى البيانات من المُعاملة نفسها. من خلال تحديد تعليمات sysvar خاصة، يُمكن أيضا تلقي بيانات من المُعاملة نفسها.
 
-Cost of the transaction will count the number of signatures to verify multiplied
-by the signature cost verify multiplier.
+تكلفة المُعاملة سوف تحسب عدد توقيعات التَحَقُّق ضارب مُضاعفة تكلفة التوقيع للتَحَقُّق.
 
-### Optimization notes
+### مُلاحظات التحسين (Optimization notes)
 
-The operation will have to take place after (at least partial) deserialization,
-but all inputs come from the transaction data itself, this allows it to be
-relatively easy to execute in parallel to transaction processing and PoH
-verification.
+يجب أن تتم العملية بعد إلغاء التسلسل (جزئيًا على الأقل)، ولكن جميع المُدخلات (entries) تأتي من بيانات المُعاملة نفسها، مما يتيح سهولة التنفيذ نسبيًا بالتوازي مع مُعالجة المُعاملات والتحقق من الـ PoH.

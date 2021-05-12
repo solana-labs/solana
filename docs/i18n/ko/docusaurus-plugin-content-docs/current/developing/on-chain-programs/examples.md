@@ -4,58 +4,46 @@ title: "Examples"
 
 ## Helloworld
 
-Hello World is a project that demonstrates how to use the Solana Javascript API
-and both Rust and C programs to build, deploy, and interact with programs on the
-Solana blockchain.
+Hello World는 Solana Javascript API와 Rust 및 C 프로그램을 사용하여 Solana 블록체인에서 프로그램을 빌드, 배포 및 상호 작용하는 방법을 보여주는 프로젝트입니다.
 
-The project comprises of:
+프로젝트는 다음으로 구성 됩니다.-온 체인 hello world 프로그램 -계정에 "hello"를 보내고 "hello"가 전송 된 횟수를 되돌릴 수있는 클라이언트
 
 - An on-chain hello world program
-- A client that can send a "hello" to an account and get back the number of
-  times "hello" has been sent
+- A client that can send a "hello" to an account and get back the number of times "hello" has been sent
 
-### Build and Run
+### 빌드 및 실행
 
-First fetch the latest version of the example code:
+먼저 최신 버전의 예제 코드를 가져옵니다
 
 ```bash
-$ git clone https://github.com/solana-labs/example-helloworld.git
-$ cd example-helloworld
+.<code>bash
+$ git clone https://github.com/ 솔라나 - 랩 / break.git
+$ CD를
+나누기</code>다음으로,
 ```
 
-Next, follow the steps in the git repository's
-[README](https://github.com/solana-labs/example-helloworld/blob/master/README.md).
+다음으로,
 
 ## Break
 
-[Break](https://break.solana.com/) is a React app that gives users a visceral
-feeling for just how fast and high-performance the Solana network really is. Can
-you _break_ the Solana blockchain? During a 15 second play-though, each click of
-a button or keystroke sends a new transaction to the cluster. Smash the keyboard
-as fast as you can and watch your transactions get finalized in real time while
-the network takes it all in stride!
+\[Break\] (https://break.solana.com/)은 Solana 네트워크가 실제로 얼마나 빠르고 고성능인지 사용자에게 본능적 인 느낌을주는 React 앱입니다. Solana 블록체인을 _break_ 할 수 있습니까? 15 초 동안 플레이하는 동안 버튼이나 키 입력을 누를 때마다 새 트랜잭션이 클러스터로 전송됩니다. 가능한 한 빨리 키보드를 부수고 네트워크가 모든 것을 처리하는 동안 거래가 실시간으로 완료되는 것을 지켜보십시오!
 
-Break can be played on our Devnet, Testnet and Mainnet Beta networks. Plays are
-free on Devnet and Testnet, where the session is funded by a network faucet. On
-Mainnet Beta, users pay to play 0.08 SOL per game. The session account can be
-funded by a local keystore wallet or by scanning a QR code from Trust Wallet to
-transfer the tokens.
+Break는 Devnet, Testnet 및 Mainnet Beta 네트워크에서 재생할 수 있습니다. 세션은 네트워크 수도꼭지로 자금을 조달하는 Devnet 및 Testnet에서 무료로 플레이 할 수 있습니다. 메인 넷 베타에서 사용자는 게임당 0.08 SOL을 플레이하기 위해 지불합니다. 세션 계정은 로컬 키 스토어 지갑이나 트러스트 월렛에서 QR 코드를 스캔하여 토큰을 전송하여 자금을 조달 할 수 있습니다.
 
 [Click here to play Break](https://break.solana.com/)
 
-### Build and Run
+### 빌드 및 실행
 
-First fetch the latest version of the example code:
+먼저 최신 버전을 가져옵니다. 예제 코드의
 
 ```bash
 $ git clone https://github.com/solana-labs/break.git
 $ cd break
 ```
 
-Next, follow the steps in the git repository's
-[README](https://github.com/solana-labs/break/blob/master/README.md).
+\[Break를 플레이하려면 여기를 클릭하세요\] (https://break.solana.com/)
 
-## Language Specific
+## 언어 별
 
 - [Rust](developing-rust.md#examples)
 - [C](developing-c.md#examples)

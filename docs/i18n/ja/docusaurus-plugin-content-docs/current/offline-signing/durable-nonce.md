@@ -166,8 +166,8 @@ $ solana-keygen new -o bob.json
 "アリス"は、nonce アカウントを作成し、"ボブ"に送金するためにいくつかの資金が必要になります。 SOL をエアドロップしましょう。
 
 ```bash
-$ solana airdrop -k alice.json 10
-10 SOL
+$ solana airdrop -k alice.json 1
+1 SOL
 ```
 
 #### - アリスの nonce アカウントを作成しよう。
@@ -177,7 +177,7 @@ $ solana airdrop -k alice.json 10
 > ここでは、個別の [nonce authority](#nonce-authority) が使用されていないため、 `alice.json` は nonce アカウントに対する完全な権限を持ちます。
 
 ```bash
-$ solana create-nonce-account -k alice.json nonce.json 1
+$ solana create-nonce-account -k alice.json nonce.json 0.1
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
 ```
 
@@ -186,7 +186,7 @@ $ solana create-nonce-account -k alice.json nonce.json 1
 "アリス"は"ボブ"に支払おうとしますが、署名するのに時間がかかりすぎます。 指定されたブロックハッシュの有効期限が切れると、トランザクションが失敗します
 
 ```bash
-$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 0.01
 [2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 ```
@@ -199,28 +199,28 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 1 SOL
+balance: 0.1 SOL
 minimum balance required: 0.0013646 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
 
 ```bash
-$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce.json bob.json 1
-HR1368UKHVZyenMH7yVz5sBAijV6XAPeWbEXEGVYQorRMcoijeNabzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 0.01
+HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
 #### - 成功！
 
-トランザクションは成功しました！ "ボブ"は"アリス"と"アリスの貯蔵庫"から 1 つの SOL を受け取ります nonce は新しい値に進みます
+トランザクションは成功しました！ "ボブ"は"アリス"と"アリスの貯蔵庫"から 0.01 つの SOL を受け取ります nonce は新しい値に進みます
 
 ```bash
 $ solana balance -k bob.json
-1 SOL
+0.01 SOL
 ```
 
 ```bash
 $ solana nonce-account nonce.json
-balance: 1 SOL
+balance: 0.1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
 ```

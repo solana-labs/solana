@@ -1,14 +1,14 @@
 ---
-title: "构建程序"
+title: "Native Programs"
 ---
 
-Solana 包含少量内置程序，这些程序是运行验证程序节点所必需的。 与第三方程序不同，内置程序是验证程序实现的一部分，可以作为群集升级的一部分进行升级。 可能会进行升级以添加功能，修复错误或提高性能。 个别指令的界面更改很少（如果有的话）发生。 相反，当需要更改时，将添加新指令，并且将先前的指令标记为已弃用。 应用程序可以在自己的时间表上进行升级，而无需担心升级过程中的中断。
+Solana contains a small handful of native programs, which are required to run validator nodes. Unlike third-party programs, the native programs are part of the validator implementation and can be upgraded as part of cluster upgrades. 可能会进行升级以添加功能，修复错误或提高性能。 个别指令的界面更改很少（如果有的话）发生。 相反，当需要更改时，将添加新指令，并且将先前的指令标记为已弃用。 应用程序可以在自己的时间表上进行升级，而无需担心升级过程中的中断。
 
-对于每个内置程序，将提供每个支持的指令的程序 ID 和说明。 事务可以混合和匹配来自不同程序的指令，也可以包括来自已部署程序的指令。
+For each native program the program id and description each supported instruction is provided. A transaction can mix and match instructions from different programs, as well include instructions from on-chain programs.
 
 ## 系统程序
 
-创建帐户并在它们之间转移 Lamport
+Create new accounts, allocate account data, assign accounts to owning programs, transfer lamports from System Program owned accounts and pay transacation fees.
 
 - 程序 ID：`11111111111111111111111111111111`
 - 说明：[SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
@@ -24,33 +24,35 @@ Solana 包含少量内置程序，这些程序是运行验证程序节点所必�
 
 ## 权益计划
 
-创建权益账户并将其委托给验证者
+Create and manage accounts representing stake and rewards for delegations to validators.
 
 - 程序 ID：`Stake11111111111111111111111111111111111111`
 - 说明： [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
 
 ## 投票程序
 
-创建投票账户并对区块进行投票
+Create and manage accounts that track validator voting state and rewards.
 
 - 程序 ID：`Vote111111111111111111111111111111111111111`
 - 说明：[VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
 ## BPF 加载程序
 
-将程序添加到链中并执行它们。
+Deploys, upgrades, and executes programs on the chain.
 
-- 程序 ID：`BPFLoader11111111111111111111111111111111111`
-- 说明：[LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
+- Program id: `BPFLoaderUpgradeab1e11111111111111111111111`
+- 说明：[LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_upgradeable_instruction/enum.UpgradeableLoaderInstruction.html)
 
-BPF 加载程序将其自身标记为它创建的用于存储程序的可执行帐户的“所有者”。 当用户通过程序 ID 调用指令时，Solana 运行时将同时加载您的可执行帐户及其所有者 BPF Loader。 然后，运行时将您的程序传递给 BPF 加载程序以处理指令。
+The BPF Upgradeable Loader marks itself as "owner" of the executable and program-data accounts it creates to store your program. When a user invokes an instruction via a program id, the Solana runtime will load both your the program and its owner, the BPF Upgradeable Loader. The runtime then passes your program to the BPF Upgradeable Loader to process the instruction.
+
+[More information about deployment](cli/deploy-a-program.md)
 
 ## Secp256k1 程序
 
 验证 secp256k1 公钥恢复操作(ecrecover)。
 
 - 程序 ID：`KeccakSecp256k11111111111111111111111111111111`
-- 说明：[new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/c1f3f9d27b5f9534f9a37704bae1d690d4335b6b/programs/secp256k1/src/lib.rs#L18)
+- 说明：[new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/1a658c7f31e1e0d2d39d9efbc0e929350e2c2bcb/sdk/src/secp256k1_instruction.rs#L31)
 
 Secp256k1 程序处理一条指令，该指令将在指令数据中序列化的以下结构的计数作为第一个字节：
 

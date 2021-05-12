@@ -6,7 +6,7 @@ title: "Аккаунты"
 
 Если программе необходимо хранить состояние между транзакциями, она делает это с помощью _аккаунтов_. Аккаунты похожи на файлы в операционных системах, таких как Linux. Как и файл, аккаунт может содержать произвольные данные и что данные сохраняются сверх срока службы программы. Также как и файл, аккаунт включает в себя метаданные, которые говорит о том, кому разрешен доступ к данным и каким образом.
 
-В отличие от файла, аккаунт содержит метаданные за время жизни файла. Это время жизни выражается в "токенах", который является рядом дробных родных токенов, называемых _лэмпортами_. Аккаунты хранятся в памяти валидатора и платят ["аренду"](#rent), чтобы остаться там. Каждый валидатор периодически сканирует все аккаунты и собирает аренду. Любой аккаунт, который падает на нулевые лэмпорты, очищается. Аккаунты также могут быть помечены [освобожденные от аренды](#rent-exemption), если они содержат достаточно количества лэмпортов.
+В отличие от файла, аккаунт содержит метаданные за время жизни файла. Это время жизни выражается в "токенах", который является рядом дробных родных токенов, называемых _лэмпортами_. Аккаунты хранятся в памяти валидатора и платят ["аренду"](#rent), чтобы остаться там. Каждый валидатор периодически сканирует все аккаунты и собирает аренду. Любой аккаунт, который падает на нулевые лэмпорты, очищается. Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 Так же как пользователь Linux использует путь для поиска файла, клиент Solana использует _адрес_ для поиска аккаунта. Адрес является 256-битным публичным ключом.
 
@@ -33,6 +33,18 @@ title: "Аккаунты"
 ## Владение программами и их распределение
 
 Создаваемый аккаунт инициализирован для _владения_ встроенной программой под названием Системная программа и называется _системным аккаунтом_ соответственно. Аккаунт включает в себя метаданных "владельца". Владелец - это идентификатор программы. Время выполнения предоставляет программе доступ на запись аккаунта, если ее идентификатор соответствует владельцу. В случае системной программы среда выполнения позволяет клиентам передавать лэмпорты и, что важно, _назначать_ владельца аккаунта, что означает смену владельца на другой id программы. Если аккаунт не принадлежит программе, программе разрешено только читать ее данные и пополнить счет.
+
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
 
 ## Аренда
 
@@ -88,3 +100,14 @@ Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fe
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

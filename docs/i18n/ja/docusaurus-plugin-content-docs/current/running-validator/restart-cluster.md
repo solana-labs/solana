@@ -16,7 +16,7 @@
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 ```
 
-台帳ディレクトリに新しいスナップショットが含まれるようになりました。 `solana-ledger-tool create-snapshot` は新しいシュレッドバージョンを出力し、銀行のハッシュ値を出力します。 この "NEW_SHRED_VERSION と NEW_BANK_HASH"をそれぞれ呼び出します。
+台帳ディレクトリに新しいスナップショットが含まれるようになりました。 `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 バリデータの引数を調整してください：
 
@@ -37,7 +37,10 @@ $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 >
 > "v1.1.12"をリリースし、テストネットを再開する準備が整いました。
 >
-> Steps: 1. "v1.1.12" リリースをインストール: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. 推奨される方法は、 あなたのローカル台帳から以下を開始します:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. 推奨される方法は、 あなたのローカル台帳から以下を開始します:
 >
 > ```bash
 > solana-validator

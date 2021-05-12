@@ -2,9 +2,7 @@
 title: Solana Cluster RPC Endpoints
 ---
 
-Solana maintains dedicated api nodes to fulfill [JSON-RPC](developing/clients/jsonrpc-api.md)
-requests for each public cluster, and third parties may as well. Here are the
-public RPC endpoints currently available and recommended for each public cluster:
+Solana maintains dedicated api nodes to fulfill [JSON-RPC](developing/clients/jsonrpc-api.md) requests for each public cluster, and third parties may as well. Here are the public RPC endpoints currently available and recommended for each public cluster:
 
 ## Devnet
 

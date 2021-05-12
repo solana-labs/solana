@@ -6,13 +6,43 @@ title: نقاط نهاية RPC مجموعة Solana
 
 ## شبكة المُطوِّرين (Devnet)
 
+#### Endpoint
+
 - `https://devnet.solana.com` - عُقدة واجهة برمجة التطبيقات (api node) واحدة مُستضافة من قِبَل Solana؛ محدود السعر
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB
 
 ## الشبكة التجريبية (tesnet)
 
-- `https://testnet.solana.com` - عُقدة واجهة برمجة التطبيقات (api node) واحدة مُستضافة من قِبَل Solana؛ محدود السعر
+#### Endpoint
+
+- `https://testnet.solana.com` - single Solana-hosted api node; rate-limited
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB
 
 ## الشبكة التجريبية الرئيسية (mainnet beta)
 
-- `https://api.mainnet-beta.solana.com` - مجموعة عُقدة واجهة برمجة التطبيقات (api node) المُستضافة من قِبَل Solana، مدعومة بمُوازن التحميل (load balancer)؛ محدود السعر
-- `https://solana-api.projectserum.com` عُقدة واجهة برمجة التطبيقات (api node) المُستضافة قِبَل من مشروع Serum
+#### Endpoints
+
+- `https://api.mainnet-beta.solana.com` - Solana-hosted api node cluster, backed by a load balancer; rate-limited
+- `https://solana-api.projectserum.com` - Project Serum-hosted api node
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB

@@ -1,22 +1,20 @@
 ---
-title: 報酬
+title: Compensation
 ---
 
-## 報酬計算 <a id="how-are-rewards-calculated"></a>
+## Compensation Calculation
 
-報酬は、[このフォーラムの投稿](https://forums.solana.com/t/tour-de-sol-stage-1-preliminary-compensation-design/79)と[このスプレッドシート](https://docs.google.com/spreadsheets/d/11puBSw2THdO4wU-uyDEic-D03jg4ZAooVpcZU0w_4gI/edit#gid=218406032)に記載されている報酬設計に従って計算されます。
+Compensation will be calculated according to the compensation design described in [this forum post](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132).
 
-追加の報酬の詳細については、 [TOUR DE SOL 　 PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) の “2\(f\) Tour de Sol Details”を参照してください。
+Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for additional compensation details.
 
-## 報酬を受け取るための要件 <a id="what-are-the-requirements-to-receive-rewards"></a>
+## 報酬を受け取るための要件
 
-参加者は、Tour de SOL 参加契約書に署名し、CoinList のプラットフォームで個人としての KYC/AML を通過し、"W-8 BEN"または"W-9 tax form"\(居住地により異なる\) を記入した上でツアーに参加する必要があります。 参加者は、登録完了後に開始されるすべてのステージに参加することができます。 最終的な登録日は、ステージごとに発表されます。
+Participants must have signed the Tour de SOL participation agreement, passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form \(depending on your residency\) prior to participating in the Tour.
 
-最後に、参加者はソラナの標準的な[トークン契約](https://drive.google.com/open?id=1O4cEUZzeSNoVcncbHcEegAqPgjT-7hcy)に署名する必要があります。 トークンアグリーメントは、リワードの発行日前にソラナ社から提供されます。
+A participant may participate in any and all stages that begin after they complete registration. The final registrations dates will be announced publicly on a stage-by-stage basis.
 
-リワードの受け取りに関する詳細は、[TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)の “2\(i\) & 2\(j\) Tour de Sol Details”をご参照ください。
-
-## 課税の影響 <a id="what-are-the-tax-implications-of-the-rewards"></a>
+## 課税の影響
 
 参加者は、Solana とサービス契約を締結し、サービスに関連する裁量的な報酬を得ています。 参加者は会社の正社員とはみなされないため、Solana は"W-9"および"W-8 BEN"フォームを収集し、該当する場合は税務報告義務をサポートします。 Solana は、参加者が潜在的な税務上の影響を理解するために、税理士に相談することをお勧めします。
 

@@ -100,7 +100,7 @@ This capability is necessary for many DeFi applications since they require asset
 
 1. 프로그램이 프로그램 주소라고하는 특정 주소를 제어하도록 허용하여 외부 사용자가 해당 주소에 대한 서명을 사용하여 유효한 트랜잭션을 생성 할 수 없도록합니다.
 
-2. 프로그램이 \[Cross-Program Invocations\] (# cross-program-invocations)를 통해 호출 된 명령어에있는 프로그램 주소에 대해 프로그래밍 방식으로 서명하도록 허용합니다.
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 -일치하는 입찰과 요청 주문간에 자산을 전송하는 분산형 거래소.
 
@@ -110,23 +110,27 @@ This capability is necessary for many DeFi applications since they require asset
 
 ### 해시 기반 생성 프로그램 주소
 
-프로그램 주소는 256 비트 사전 이미지 방지 해시 함수를 사용하여 시드 및 프로그램 ID 모음에서 결정적으로 파생됩니다. 프로그램 주소는 관련 개인 키가 없는지 확인하기 위해 ed25519 곡선에 있지 않아야합니다. 생성 중에 주소가 곡선에있는 것으로 확인되면 오류가 반환됩니다. 주어진 시드 및 프로그램 ID 모음에 대해 약 50/50 변경이 발생합니다. 이것이 발생하면 다른 시드 세트 또는 시드 범프 (추가 8 비트 시드)를 사용하여 곡선에서 유효한 프로그램 주소를 찾을 수 있습니다.
+프로그램 주소는 256 비트 사전 이미지 방지 해시 함수를 사용하여 시드 및 프로그램 ID 모음에서 결정적으로 파생됩니다. 프로그램 주소는 관련 개인 키가 없는지 확인하기 위해 ed25519 곡선에 있지 않아야합니다. 생성 중에 주소가 곡선에있는 것으로 확인되면 오류가 반환됩니다. There is about a 50/50 chance of this happening for a given collection of seeds and program id. 이것이 발생하면 다른 시드 세트 또는 시드 범프 (추가 8 비트 시드)를 사용하여 곡선에서 유효한 프로그램 주소를 찾을 수 있습니다.
 
-프로그램 파생 주소 :
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 두 가지 조건이 주어지면 사용자는 온 체인 자산의 권한을 프로그램 주소로 안전하게 이전하거나 할당 할 수 있으며 프로그램은 재량에 따라 해당 권한을 다른 곳에서 할당 할 수 있습니다.
 
-````rust,ignore
-, ignore
-pub fn create_address_with_seed (
-    .```rustbase : & Pubkey,
-    seed : & str,
-    program_id : & Pubkey,
-)-&#062; Result &#060;Pubkey, SystemError&#062; {
-    if seed.len ()&#062; MAX_ADDRESS_SEED_LEN {
-        return Err (SystemError :: MaxSeedLengthExceeded);
+```rust,ignore
+pub fn create_with_seed(
+    base: &Pubkey,
+    seed: &str,
+    program_id: &Pubkey,
+) -> Result<Pubkey, SystemError> {
+    if seed.len() > MAX_ADDRESS_SEED_LEN {
+        return Err(SystemError::MaxSeedLengthExceeded);
     }
-````
+
+    Ok(Pubkey::new(
+        hashv(&[base.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
+    ))
+}
+```
 
 프로그램은 임의의 수의 주소를 결정적으로 파생 할 수 있습니다. 씨앗을 사용하여. 이러한 시드는 주소가 사용되는 방식을 상징적으로 식별 할 수 있습니다.
 
@@ -165,15 +169,14 @@ let message = Message :: new (vec! [
 프로그램은 동일한 기능을 사용하여 동일한 주소를 생성 할 수 있습니다. 아래 함수에서 프로그램은 마치 트랜잭션에 서명 할 개인 키가있는 것처럼 프로그램 주소에서 'token_instruction :: transfer'를 발행합니다.
 
 ```rust,ignore
-fn transfer_one_token_from_escrow (
-    program_id : & Pubkey,
-    keyed_accounts : & [KeyedAccount]
-)-> Result <()> {
+fn transfer_one_token_from_escrow(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    // User supplies the destination
+    let alice_pubkey = keyed_accounts[1].unsigned_key();
 
-    // 사용자가 목적지 제공
-    let alice_pubkey = keyed_accounts [1] .unsigned_key ();
-
-    // 에스크로 pubkey를 결정적으로 도출합니다.
+    // Deterministically derive the escrow pubkey.
     let escrow_pubkey = create_program_address (& [& [ "escrow"]], program_id);
 
     // 전송 명령 생성
@@ -183,7 +186,7 @@ fn transfer_one_token_from_escrow (
     실행중인 프로그램 ID와 제공된 키워드.
     // 파생 주소가 명령에 서명 된 것으로 표시된 키와 일치하면
     // 해당 키는 서명 된 것으로 허용됩니다.
-    invoke_signed (& instruction, & [& [ "escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +198,4 @@ fn transfer_one_token_from_escrow (
 
 ## Examples
 
-클라이언트는`create_program_address` 함수를 사용하여 대상 주소를 생성 할 수 있습니다.
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

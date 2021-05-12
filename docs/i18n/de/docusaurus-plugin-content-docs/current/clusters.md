@@ -4,8 +4,7 @@ title: Solana Clusters
 
 Solana maintains several different clusters with different purposes.
 
-Before you begin make sure you have first
-[installed the Solana command line tools](cli/install-solana-cli-tools.md)
+Before you begin make sure you have first [installed the Solana command line tools](cli/install-solana-cli-tools.md)
 
 Explorers:
 
@@ -14,8 +13,7 @@ Explorers:
 
 ## Devnet
 
-- Devnet serves as a playground for anyone who wants to take Solana for a
-  test drive, as a user, token holder, app developer, or validator.
+- Devnet serves as a playground for anyone who wants to take Solana for a test drive, as a user, token holder, app developer, or validator.
 - Application developers should target Devnet.
 - Potential validators should first target Devnet.
 - Key differences between Devnet and Mainnet Beta:
@@ -59,17 +57,12 @@ The `--trusted-validator`s is operated by Solana
 
 ## Testnet
 
-- Testnet is where we stress test recent release features on a live
-  cluster, particularly focused on network performance, stability and validator
-  behavior.
-- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
-  encourage malicious behavior and attacks on the network to help us find and
-  squash bugs or network vulnerabilities.
+- Testnet is where we stress test recent release features on a live cluster, particularly focused on network performance, stability and validator behavior.
+- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we encourage malicious behavior and attacks on the network to help us find and squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
 - Testnet may be subject to ledger resets.
 - Testnet includes a token faucet for airdrops for application testing
-- Testnet typically runs a newer software release than both Devnet and
-  Mainnet Beta
+- Testnet typically runs a newer software release than both Devnet and Mainnet Beta
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
 
@@ -114,15 +107,11 @@ The identity of the `--trusted-validator`s are:
 
 ## Mainnet Beta
 
-A permissionless, persistent cluster for early token holders and launch partners.
-Currently, rewards and inflation are disabled.
+A permissionless, persistent cluster for early token holders and launch partners. Currently, rewards and inflation are disabled.
 
 - Tokens that are issued on Mainnet Beta are **real** SOL
-- If you have paid money to purchase/be issued tokens, such as through our
-  CoinList auction, these tokens will be transferred on Mainnet Beta.
-  - Note: If you are using a non-command-line wallet such as
-    [Solflare](wallet-guide/solflare.md),
-    the wallet will always be connecting to Mainnet Beta.
+- If you have paid money to purchase/be issued tokens, such as through our CoinList auction, these tokens will be transferred on Mainnet Beta.
+  - Note: If you are using a non-command-line wallet such as [Solflare](wallet-guide/solflare.md), the wallet will always be connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 

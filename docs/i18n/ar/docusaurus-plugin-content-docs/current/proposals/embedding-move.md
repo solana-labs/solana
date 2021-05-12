@@ -1,5 +1,5 @@
 ---
-title: اللغة البرمجية Move أو Embedding the Move Langauge
+title: Embedding the Move Language
 ---
 
 ## المُشكَل (Problem)

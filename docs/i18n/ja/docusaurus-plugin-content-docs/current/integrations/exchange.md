@@ -297,7 +297,7 @@ Solana クラスタに同期転送を送信すると、クラスタによって�
 Solana のコマンドラインツールは、 `solana transfer`のトランザクションを"生成"、"送信"、および"確認"する簡単なコマンドを提供します。 デフォルトでは、このメソッドはクラスタによってトランザクションが完了するまで待機し、"stderr" の進捗状況を追跡します。 トランザクションが失敗した場合、トランザクションエラーが報告されます。
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) は、"JS エコシステム"に似たアプローチを提供します。 `SystemProgram` を使用して、転送トランザクションを構築し。`sendAndConfirmTransaction`メソッドを使用して送信します。
@@ -317,7 +317,7 @@ solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localho
 コマンドラインツールでは、非同期に転送を行うために`--no-wait`引数を渡し、`--blockhash`引数で最近の"Blockhash"を含めます。
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> -url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 トランザクションを手動でビルド、署名、シリアライズすることもできます。 そして、JSON-RPC [`sendTransaction` エンドポイント](developing/clients/jsonrpc-api.md#sendtransaction) を使用してクラスタにオフにします。
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### ブロックハッシュの有効期限
 
-[`getFees`エンドポイント](developing/clients/jsonrpc-api.md#getfees)または`solana fees`を使用して出金取引の最新のブロックハッシュを要求すると、その応答にはブロックハッシュが有効となる最後のスロットである`lastValidSlot`が含まれます。 クラスタスロットは、[ `getSlot`クエリ](developing/clients/jsonrpc-api.md#getslot)で確認することができます。クラスタスロットが`lastValidSlot`よりも大きくなると、そのブロックハッシュを使用した引き出しトランザクションは決して成功しないはずです。
-
-特定のブロックハッシュが [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) リクエストをパラメータとして送信することで、有効であるかどうかをダブルチェックすることもできます。 レスポンス値が NULL の場合、ブロックハッシュは失効しており、出金トランザクションは決して成功しません。
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### 引き出しのためのユーザーが提供するアカウントアドレスの検証
 
 出金は元に戻すことができないため、ユーザーの資金が誤って失われるのを防ぐために、出金を承認する前に、ユーザーが提供したアカウントのアドレスを検証するのは良い方法かもしれません。
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 Solana の通常のアカウントのアドレスは、256 ビットの"ed25519 公開キー"を"Base58"でエンコードした文字列です。 すべてのビットパターンが"ed25519 曲線"の有効な公開キーであるとは限らないため、ユーザーが提供するアカウントアドレスが少なくとも正しい"ed25519 公開キー"であることを保証することが可能です。
 
@@ -435,7 +449,7 @@ SPL Token のワークフローは、ネイティブの SOL トークンのワ�
 
 ### Token Mints
 
-SPL トークンの各*タイプ*は、*ミント*アカウントを作成することで宣言されます。 このアカウントには、供給量や小数点以下の数、造幣局を管理する様々な権限など、トークンの特徴を表すメタデータが保存されています。 それぞれの SPL トークンのアカウントは、関連するミントを参照し、そのタイプの SPL トークンとのみやり取りすることができます。
+Each _type_ of SPL Token is declared by creating a _mint_ account. このアカウントには、供給量や小数点以下の数、造幣局を管理する様々な権限など、トークンの特徴を表すメタデータが保存されています。 それぞれの SPL トークンのアカウントは、関連するミントを参照し、そのタイプの SPL トークンとのみやり取りすることができます。
 
 ### `spl-token` CLI ツールのインストール
 
@@ -557,8 +571,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### 凍結権限
 
-法規制の遵守のため、SPL トークンの発行者は任意で、そのミントに関連して作られた全ての口座に対して"凍結権限"を持つことができます。 これにより、特定のアカウントの資産を自由に[凍結](https://spl.solana.com/token#freezing-accounts)し、解凍されるまでそのアカウントを使用できなくすることができます。 この機能を使用している場合、"凍結権限者の公開キー"は SPL トークンのミントアカウントに登録されます。
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. これにより、特定のアカウントの資産を自由に[凍結](https://spl.solana.com/token#freezing-accounts)し、解凍されるまでそのアカウントを使用できなくすることができます。 この機能を使用している場合、"凍結権限者の公開キー"は SPL トークンのミントアカウントに登録されます。
 
 ## インテグレーションのテスト
 
-"mainnet-beta"の本番環境に移行する前に、必ず Solana の devnet および testnet[クラスタ](../clusters.md)でワークフロー全体をテストしてください。 "devnet"は最もオープンで柔軟性が高く、初期の開発に適しており、"testnet"はより現実的なクラスタ構成を提供します。 "devnet"と"testnet"はどちらも蛇口をサポートしており、`"solana airdrop 10"`を実行すると、開発やテスト用に"devnet"または"testnet"の SOL を入手することができます。
+"mainnet-beta"の本番環境に移行する前に、必ず Solana の devnet および testnet[クラスタ](../clusters.md)でワークフロー全体をテストしてください。 "devnet"は最もオープンで柔軟性が高く、初期の開発に適しており、"testnet"はより現実的なクラスタ構成を提供します。 Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

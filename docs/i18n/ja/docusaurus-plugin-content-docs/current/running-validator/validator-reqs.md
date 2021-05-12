@@ -2,63 +2,62 @@
 title: バリデーター要件
 ---
 
-## ハードウェア
+## Minimum SOL requirements
 
-- CPU の推奨事項
-  - コア数が最大の CPU をお勧めします。 AMD Threadripper または Intel Server \(Xeon\) CPU で問題ありません。
-  - 並列化用のコア数がインテルに比べて多いので、"AMD Threadripper"をお勧めします。
-  - "Threadripper"は、同等の Intel 部品と比較して、コア単価の利点と PCIe レーンの数が多いこともあります。 PoH \(Proof of History\) は sha256 に基づいており、"Threadripper" は "sha256" ハードウェア命令もサポートしています。
-- SSD サイズと I/O スタイル \(SATA vs NVMe/M.2\) のバリデータに対応
-  - 最小例 - Samsung 860 Evo 2TB
-  - ミッドレンジの例 - Samsung 860 Evo 4TB
-  - ハイエンドの例 - Samsung 860 Evo 4TB
-- GPU
-  - CPU のみのノードはアイドリングネットワークに追いつくことができるかもしれませんが、トランザクションスループットが向上すると GPU が必要になります。
-  - どのような GPU ですか?
-    - 私たちは、"Nvidia チューリング"と"ボルタファミリー GPU"をお勧めします 1660ti〜2080ti シリーズコンシューマー GPU または Tesla シリーズサーバー GPU。
-    - 現在 OpenCL はサポートしていないため、AMD GPU はサポートしていません。 OpenCL に移植するための報奨金が用意されています。 興味ありますか？ [GitHub をチェックしてください。](https://github.com/solana-labs/solana)
-- 消費電力
-  - "AMD Threadripper 3950x" と "2x 2080Ti GPU" を実行しているバリデータノードのおおよその消費電力は 800-1000W です。
+There is no strict minimum amount of SOL required to run a validator on Solana.
 
-### 事前設定されたセットアップ
+However in order to participate in consensus, a vote account is required which has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote transaction for each block the validator agrees with, which can cost up to 1.1 SOL per day.
 
-以下は、ロー、ミディアム、ハイエンドの機械の仕様についての推奨事項です。
+## Hardware Recommendations
 
-|                           | ローエンド          | ミディアムエンド       | ハイエンド             | ノート                                                                                            |
-| :------------------------ | :------------------ | :--------------------- | :--------------------- | :------------------------------------------------------------------------------------------------ |
-| CPU                       | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | 可能な限り多くの"PCIe レーン"と"m.2 スロット"を備えた 10Gb 対応のマザーボードを考えてみましょう。 |
-| RAM                       | 32GB                | 64GB                   | 128GB                  |                                                                                                   |
-| Ledger Drive              | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | あるいは同等の SSD                                                                                |
-| アカウントのドライブ\(s\) | 該当なし            | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                                   |
-| GPU                       | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Linux プラットフォームでは、任意の数の cuda 対応 GPU がサポートされています。                     |
+- CPU
+  - 12 cores / 24 threads, or more
+  - 2.8GHz, or faster
+  - AVX2 instruction support (to use official release binaries, self-compile otherwise)
+  - Support for AVX512f and/or SHA-NI instructions is helpful
+  - The AMD Threadripper Zen3 series is popular with the validator community
+- RAM
+  - 128GB, or more
+  - Motherboard with 256GB capacity suggested
+- Disk
+  - PCIe Gen3 x4 NVME SSD, or better
+  - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
+  - Ledger: 1TB or larger. High TBW suggested
+  - OS: (Optional) 500GB, or larger. SATA OK
+  - The OS may be installed on the ledger disk, though testing has shown better performance with the ledger on its own disk
+  - Accounts and ledger _can_ be stored on the same disk, however due to high IOPS, this is not recommended
+  - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
+- GPUs
+  - Not strictly necessary at this time
+  - Motherboard and power supply speced to add one or more high-end GPUs in the future suggested
 
-## クラウドプラットフォーム上の仮想マシン
+## Virtual machines on Cloud Platforms
 
-クラウドコンピューティングプラットフォーム上でバリデータを実行することもできますが、 長期的には費用対効果が低いでしょう。
+While you can run a validator on a cloud computing platform, it may not be cost-efficient over the long term.
 
-しかし、自分の内部で使用するために、投票しない api ノードを VM インスタンス上で動かすのは便利かもしれません。 このユースケースには、Solana で構築された取引所やサービスが含まれます。
+However, it may be convenient to run non-voting api nodes on VM instances for your own internal usage. This use case includes exchanges and services built on Solana.
 
-実際、公式の"mainnet-beta API"ノードは、現在(2020 年 10 月)、運用上の利便性を考慮して、GCE `n1-standard-32`(32 vCPU、120 GB メモリ) インスタンスと 2048 GB SSD で運用されています。
+In fact, the mainnet-beta validators operated by the team are currently (Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with 2048 GB SSD for operational convenience.
 
-他のクラウドプラットフォームの場合は、同様のスペックのインスタンスタイプを選択してください。
+For other cloud platforms, select instance types with similar specs.
 
-また、特に"staked validator"を動作させる場合、イグレスのインターネットトラフィックの使用量が多くなる可能性がありますのでご注意ください。
+Also note that egress internet traffic usage may turn out to be high, especially for the case of running staked validators.
 
 ## Docker
 
-ライブクラスタ(mainnet-beta を含む) 用のバリデータを Docker 内で実行することは推奨されておらず、一般的にサポートされていません。 これは、特別な設定をしない限り、一般的な Docker のコンテナ化によるオーバーヘッドと、その結果としてのパフォーマンスの低下を懸念してのことです。
+Running validator for live clusters (including mainnet-beta) inside Docker is not recommended and generally not supported. This is due to concerns of general Docker's containerzation overhead and resultant performance degradation unless specially configured.
 
-私たちは docker を開発目的でのみ使用しています。
+We use Docker only for development purposes. Docker Hub contains images for all releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
-## ソフトウェア
+## Software
 
-- 私たちは Ubuntu 18.04 で構築し、実行しています。 一部のユーザーは Ubuntu 16.04 での実行時に問題が発生しています。
+- We build and run on Ubuntu 20.04.
 - 現在の Solana ソフトウェアのリリースについては、["Solana のインストール"](../cli/install-solana-cli-tools.md)をご覧ください。
 
-NAT トラバーサルの問題を避けるため、使用するマシンが住宅地の NAT の後ろにないことを確認してください。 クラウドホストのマシンが最適です。 **P ポート 8000 ～ 10000 がインターネットのインバウンドおよびアウトバウンドトラフィックに対してブロックされていないことを確認してください。**住宅地のネットワークに関するポートフォワーディングの詳細については、[このドキュメント](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf)を参照してください。
+Be sure to ensure that the machine used is not behind a residential NAT to avoid NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.** For more information on port forwarding with regards to residential networks, see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
-"Linux x86_64"ではビルド済みのバイナリが用意されています\(Ubuntu 18.04 recommended\)。 "MacOS"や"WSL"をお使いの方は、ソースからのビルドも可能です。
+Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\). MacOS or WSL users may build from source.
 
-## GPU 要件
+## GPU Requirements
 
-システム上の GPU を利用するには、CUDA が必要です。 提供されている Solana のリリースバイナリは、Ubuntu 18.04 で[CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive)を使用してビルドされています。 お使いのマシンが異なる CUDA バージョンを使用している場合は、ソースから再構築する必要があります。
+CUDA is required to make use of the GPU on your system. The provided Solana release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using a different CUDA version then you will need to rebuild from source.

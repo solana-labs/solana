@@ -2,63 +2,62 @@
 title: 验证节点要求
 ---
 
-## 硬件
+## Minimum SOL requirements
 
-- CPU 推荐
-  - 我们建议使用尽可能多的内核。 AMD Threadripper 或 Intel 服务器\(Xeon\) CPU 都很好。
-  - 我们建议您使用 AMD Threadripper，因为与英特尔相比，您可以获得更多的并行内核。
-  - 与同等的英特尔产品相比，Threadripper 还具有每核成本优势和更多的 PCIe 通道。 PoH\(历史证明\) 基于 sha256，并且 Threadripper 还支持 sha256 硬件指令。
-- 验证节点的 SSD 规则 I/O 样式\(SATA vs NVMe/M.2\)
-  - 最低配置示例 - Samsung 860 Evo 2TB
-  - 中等配置示例 - Samsung 860 Evo 4TB
-  - 高端配置示例 - Samsung 860 Evo 4TB
-- GPU
-  - 虽然纯 CPU 的节点可能能够跟上初始的空闲网络，但是一旦事务吞吐量增加，就将需要 GPU。
-  - 什么类型的 GPU ？
-    - 我们建议使用 Nvidia Turing 和 volta 系列 GPU（从 1660ti 到 2080ti 系列用户级 GPU 或 Tesla 系列服务器 GPU）。
-    - 我们目前不支持 OpenCL，因此不支持 AMD GPU。 我们对移植 Solana 到 OpenCL 设有一项奖励。 有兴趣？ [请查看我们的 GitHub。](https://github.com/solana-labs/solana)
-- 电源消耗
-  - 运行 AMD Threadripper 3950x 和 2x 2080Ti GPU 的验证器节点，其功耗大约为 800-1000W。
+There is no strict minimum amount of SOL required to run a validator on Solana.
 
-### 预配置设置
+However in order to participate in consensus, a vote account is required which has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote transaction for each block the validator agrees with, which can cost up to 1.1 SOL per day.
 
-以下是我们关于低、中、高端机器规格的建议：
+## Hardware Recommendations
 
-|               | 低端配置            | 中等配置               | 高端配置               | 注意事项                                                                |
-| :------------ | :------------------ | :--------------------- | :--------------------- | :---------------------------------------------------------------------- |
-| CPU           | AMD Ryzen 3950x     | AMD Threadripper 3960x | AMD Threadripper 3990x | 考虑设立一个能够使用 10Gb 的主板，尽可能多地配备 PCIe 通道和 m.2 插槽。 |
-| RAM           | 32GB                | 64GB                   | 128GB                  |                                                                         |
-| Ledger 驱动器 | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | 或等效的 SSD                                                            |
-| 账户驱动\(s\) | 无                  | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                         |
-| GPU           | Nvidia 1660ti       | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Linux 平台支持的任何 Cuda 的 GPU。                                      |
+- CPU
+  - 12 cores / 24 threads, or more
+  - 2.8GHz, or faster
+  - AVX2 instruction support (to use official release binaries, self-compile otherwise)
+  - Support for AVX512f and/or SHA-NI instructions is helpful
+  - The AMD Threadripper Zen3 series is popular with the validator community
+- RAM
+  - 128GB, or more
+  - Motherboard with 256GB capacity suggested
+- Disk
+  - PCIe Gen3 x4 NVME SSD, or better
+  - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
+  - Ledger: 1TB or larger. High TBW suggested
+  - OS: (Optional) 500GB, or larger. SATA OK
+  - The OS may be installed on the ledger disk, though testing has shown better performance with the ledger on its own disk
+  - Accounts and ledger _can_ be stored on the same disk, however due to high IOPS, this is not recommended
+  - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
+- GPUs
+  - Not strictly necessary at this time
+  - Motherboard and power supply speced to add one or more high-end GPUs in the future suggested
 
-## 云平台虚拟机
+## Virtual machines on Cloud Platforms
 
-虽然您可以在云计算平台上运行验证节点，但从长远来看它可能并不具有成本效益。
+While you can run a validator on a cloud computing platform, it may not be cost-efficient over the long term.
 
-但是，在 VM 实例上运行非投票 api 节点，来供您自己内部使用可能会很方便。 该用例包括在 Solana 上构建的交易所和服务。
+However, it may be convenient to run non-voting api nodes on VM instances for your own internal usage. This use case includes exchanges and services built on Solana.
 
-实际上，官方 mainnet-beta API 节点当前(2020 年 10 月) 在具有 2048 GB SSD 的 GCE `n1-standard-32`(32 vCPU，120 GB 内存) 实例上运行。
+In fact, the mainnet-beta validators operated by the team are currently (Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with 2048 GB SSD for operational convenience.
 
-对于其他云平台，请选择具有类似规格的实例类型。
+For other cloud platforms, select instance types with similar specs.
 
-并且还要注意，出口互联网流量使用可能会很高，尤其是运行质押验证程序的情况。
+Also note that egress internet traffic usage may turn out to be high, especially for the case of running staked validators.
 
 ## Docker
 
-我们不建议在 Docker 内部为活动集群(包括 mainnet-beta) 运行验证程序，并且通常也不支持这个功能。 除非特别配置，否则这是由于担心一般 docker 的容器化开销和导致的性能下降。
+Running validator for live clusters (including mainnet-beta) inside Docker is not recommended and generally not supported. This is due to concerns of general Docker's containerzation overhead and resultant performance degradation unless specially configured.
 
-我们仅将 docker 用于开发目的。
+We use Docker only for development purposes. Docker Hub contains images for all releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
-## 软件设置
+## Software
 
-- 我们在 Ubuntu 04/18 上进行开发和运行。 在 Ubuntu 04/16 上运行时，某些用户会遇到一些问题
+- We build and run on Ubuntu 20.04.
 - 请参阅 [安装 Solana](../cli/install-solana-cli-tools.md) 以获取当前的 Solana 软件版本。
 
-请确保所使用的计算机不在本地 NAT 后面，以避免 NAT 遍历问题。 云托管的机器效果最好。 **请确保 8000 到 10000 的 IP 端口没有被禁止，来让网络实现进出通信。** 关于寄宿网络端口转发的更多信息，请参阅 [这个文档](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf)。
+Be sure to ensure that the machine used is not behind a residential NAT to avoid NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.** For more information on port forwarding with regards to residential networks, see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
-预构建的二进制文件是在 Linux x86_64 \(推荐 Ubuntu 18.04\)。 MacOS 或 WSL 用户可以从源代码构建。
+Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\). MacOS or WSL users may build from source.
 
-## GPU 要求
+## GPU Requirements
 
-要在您的系统上使用 GPU，必须使用 CUDA。 发布的 Solana 二进制文件是通过 [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive) 在 Ubuntu 18.04 上构建的。 如果您的机器使用了不同的 CUDA，那么您将需要从源代码进行重建。
+CUDA is required to make use of the GPU on your system. The provided Solana release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using a different CUDA version then you will need to rebuild from source.

@@ -4,6 +4,14 @@ title: モバイルアプリウォレット
 
 ソラナは複数のサードパーティ製アプリでサポートされており、初めての方や暗号化ウォレットの使用経験のある方には馴染みのある体験を提供してくれると思います。
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## トラストウォレット
 
 [トラストウォレット](https://trustwallet.com/)は、iOS とアンドロイドで利用可能なアプリで、SOL トークンの送受信が可能です。

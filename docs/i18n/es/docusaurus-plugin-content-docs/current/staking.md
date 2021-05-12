@@ -4,7 +4,7 @@ title: Staking en Solana
 
 _Nota antes de leer: Todas las referencias a incrementos de valores son en términos absolutos con respecto al balance de SOL. Este documento no hace ninguna sugerencia sobre el valor monetario de SOL en ningún momento._
 
-Hacer stake de tus tokens SOL en Solana es la mejor manera en que puedes ayudar a asegurar la red de blockchain más eficiente del mundo, y [gana recompensas](implemented-proposals/staking-rewards.md) por hacerlo! Las recompensas de inflación y red _NO_ están activadas actualmente en la red Beta Mainnet de Solana, pero pueden estar habilitadas en el futuro.
+Hacer stake de tus tokens SOL en Solana es la mejor manera en que puedes ayudar a asegurar la red de blockchain más eficiente del mundo, y [gana recompensas](implemented-proposals/staking-rewards.md) por hacerlo!
 
 Solana es una red de prueba de participación (PoS) con delegaciones, lo que significa que cualquiera que posea tokens SOL puede elegir delegar algunos de sus SOL a uno o más validadores, quienes procesan las transacciones y ejecutan la red.
 
@@ -14,13 +14,11 @@ Cuanto más participación tenga un validador en su poder, más a menudo este va
 
 Los validadores incurren en costos ejecutando y manteniendo sus sistemas, y esto se transmite a los delegados en forma de una comisión cobrada como un porcentaje de las recompensas ganadas. Esta comisión es conocida como una _comisión_. A medida que los validadores ganan más recompensas, se les delega más stake, pueden competir entre sí para ofrecer la comisión más baja para sus servicios, con el fin de atraer más participación delegada.
 
-Hay un riesgo de pérdida de tokens al hacer stake, a través de un proceso conocido como _slashing_. El slashing _NO_ esta habilitado actualmente en la red Mainnet Beta de Solana pero es posible que se habilite en el futuro. El slashing involucra la eliminación y destrucción automática de una porción de la participación delegada de un validador en respuesta al comportamiento malicioso intencional, tales como crear transacciones no válidas o censurar ciertos tipos de transacciones o participantes en la red. Si un validador es Cortado, todos los poseedores de fichas que han delegado la participación en el validador perderán una porción de su delegación. Si bien esto significa una pérdida inmediata para el titular de tokens, también es una pérdida de recompensas futuras para el validador debido a su reducción total de delegación.
+Hay un riesgo de pérdida de tokens al hacer stake, a través de un proceso conocido como _slashing_. Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+Si un validador es Cortado, todos los poseedores de fichas que han delegado la participación en el validador perderán una porción de su delegación. Si bien esto significa una pérdida inmediata para el titular de tokens, también es una pérdida de recompensas futuras para el validador debido a su reducción total de delegación. More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 Este es el objetivo de las recompensas de la red y el slashing, alinear los incentivos financieros de ambos validadores y de los poseedores de token, lo que a su vez ayuda a mantener la red segura, robusta y con el mejor rendimiento posible.
-
-_Nota: Las recompensas de red para los stakers y validadores no están habilitadas actualmente en la Mainnet Beta._
-
-_Nota: El slashing no está activado en la Beta de Mainnet en este momento._
 
 ## ¿Cómo puedo hacer Stake de mis fichas SOL?
 
@@ -33,6 +31,10 @@ Las operaciones de stake son soportadas por las siguientes soluciones de cartera
 - SolFlare.com junto con un archivo keystore o un Ledger Nano. Echa un vistazo a nuestra guía [para usar SolFlare](wallet-guide/solflare.md) para más detalles.
 
 - Las herramientas de línea de comandos de Solana pueden realizar todas las operaciones de stake junto con un monedero de archivos de pares de claves generado por la CLI, un monedero de papel o con un Ledger Nano conectado. [comandos de staking utilizando las herramientas de línea de comandos de Solana](cli/delegate-stake.md).
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.
 
 #### Crear una cuenta Stake
 

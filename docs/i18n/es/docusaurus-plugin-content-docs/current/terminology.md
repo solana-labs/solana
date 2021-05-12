@@ -136,7 +136,7 @@ El rol de un [validador](terminology.md#validator) cuando está adjuntando [entr
 
 ## programación de líder
 
-Una secuencia de [validador](terminology.md#validator) [claves públicas](terminology.md#public-key). El clúster utiliza el programa de líder para determinar qué validador es el [líder](terminology.md#leader) en cualquier momento.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). El clúster utiliza el programa de líder para determinar qué validador es el [líder](terminology.md#leader) en cualquier momento.
 
 ## ledger
 
@@ -214,90 +214,98 @@ Una fracción de un bloque [](terminology.md#block), la unidad más pequeña env
 
 Una firma ed25519 de 64 bytes de R (32-bytes) y S (32-bytes). Con el requisito de que R es un punto Edwards empaquetado no de orden pequeño y S es un escalar en el rango de 0 <= S < L. Este requisito asegura que no haya maleabilidad de la firma. Cada transacción debe tener al menos una firma para [cuenta de comisión](terminology#fee-account). Por lo tanto, la primera firma en la transacción puede ser tratada como [Id de transactón](terminology.md#transaction-id)
 
-## ranura
+## skipped slot
 
-El periodo de tiempo durante el cual un líder [](terminology.md#leader) ingiere transacciones y produce un [bloque](terminology.md#block).
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
-## contrato inteligente
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
-Un conjunto de restricciones que una vez satisfechas, indican a un programa que algunas actualizaciones de cuenta predefinidas están permitidas.
+## slot
+
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
+
+## smart contract
+
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
 ## sol
 
-El [token nativo](terminology.md#native-token) rastreado por un [cluster](terminology.md#cluster) reconocido por la empresa Solana.
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
 ## stake
 
-Las fichas pierden al clúster [](terminology.md#cluster) si el comportamiento del validador [malicioso](terminology.md#validator) del validador puede ser probado.
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
-## supermayoría
+## supermajority
 
-2/3 de un clúster [](terminology.md#cluster).
+2/3 of a [cluster](terminology.md#cluster).
 
 ## sysvar
 
-Una cuenta [sintética](terminology.md#account) proporcionada por el tiempo de ejecución para permitir a los programas acceder al estado de red como la altura actual de tick, recompensas [puntos](terminology.md#point) valores, etc.
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
-## cliente delgado
+## thin client
 
-Un tipo de [cliente](terminology.md#client) que confía en él se comunica con un clúster [válido](terminology.md#cluster).
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
 ## tick
 
-Un ledger [](terminology.md#entry) que calcula la duración del reloj de pantalla.
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
-## altura del tick
+## tick height
 
-El Nth [tick](terminology.md#tick) en el ledger [](terminology.md#ledger).
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
 ## token
 
-Un miembro escaso y fungible de un conjunto de fichas.
+A scarce, fungible member of a set of tokens.
 
 ## tps
 
-[Transacciones](terminology.md#transaction) por segundo.
+[Transactions](terminology.md#transaction) per second.
 
-## transacción
+## transaction
 
-Una o más [instrucciones](terminology.md#instruction) firmadas por el cliente [](terminology.md#client) usando uno o más [keypairs](terminology.md#keypair) y ejecutadas atómicamente con solo dos resultados posibles: éxito o fallo.
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
-## id de transacción
+## transaction id
 
-La primera [firma](terminology.md#signature) en una [transacción](terminology.md#transaction), el cual puede ser usado para identificar la transacción de forma única a través de la completa [mayúscula](terminology.md#ledger).
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
-## confirmaciones de transacción
+## transaction confirmations
 
-El número de [bloques confirmados](terminology.md#confirmed-block) desde que la transacción fue aceptada en el [ledger](terminology.md#ledger). Una transacción es finalizada cuando su bloque se convierte en un [root](terminology.md#root).
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## entrada de transacciones
+## transactions entry
 
-Un conjunto de [transacciones](terminology.md#transaction) que pueden ejecutarse en paralelo.
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
-## validador
+## validator
 
-Un participante completo en el clúster [](terminology.md#cluster) responsable de validar el [ledger](terminology.md#ledger) y producir nuevos [bloques](terminology.md#block).
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 
-Vea [verifiable delay function](terminology.md#verifiable-delay-function).
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## función de retraso verificable
+## verifiable delay function
 
-Una función que toma una cantidad fija de tiempo para ejecutar que produce una prueba de que corrió, que luego se puede verificar en menos tiempo del que se tardó en producir.
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
-## voto
+## vote
 
-Ver [ledger vote](terminology.md#ledger-vote).
+See [ledger vote](terminology.md#ledger-vote).
 
-## voto de crédito
+## vote credit
 
-Una recompensa para [validadores](terminology.md#validator). Un crédito de voto se otorga a un validador en su cuenta de voto cuando el validador alcanza un [root](terminology.md#root).
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
-## billetera
+## wallet
 
-Una colección de [keypairs](terminology.md#keypair).
+A collection of [keypairs](terminology.md#keypair).
 
-## período warmup
+## warmup period
 
-Algún número de [epochs](terminology.md#epoch) after [stake](terminology.md#stake) ha sido delegada mientras se vuelve progresivamente efectiva. Durante este período, el stake se considera "activandose". Más información sobre: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

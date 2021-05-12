@@ -2,37 +2,30 @@
 title: Deploy a Program
 ---
 
-Developers can deploy on-chain [programs](terminology.md#program) (often called
-smart contracts elsewhere) with the Solana tools.
+Developers can deploy on-chain [programs](terminology.md#program) (often called smart contracts elsewhere) with the Solana tools.
 
-To learn about developing and executing programs on Solana, start with the
-[overview](developing/programming-model/overview.md) and then dig into the
-details of [on-chain programs](developing/on-chain-programs/overview.md).
+To learn about developing and executing programs on Solana, start with the [overview](developing/programming-model/overview.md) and then dig into the details of [on-chain programs](developing/on-chain-programs/overview.md).
 
-To deploy a program, use the Solana tools to interact with the on-chain loader
-to:
+To deploy a program, use the Solana tools to interact with the on-chain loader to:
 
 - Initialize a program account
 - Upload the program's shared object to the program account's data buffer
 - Verify the uploaded program
 - Finalize the program by marking the program account executable.
 
-Once deployed, anyone can execute the program by sending transactions that
-reference it to the cluster.
+Once deployed, anyone can execute the program by sending transactions that reference it to the cluster.
 
 ## Usage
 
 ### Deploy a program
 
-To deploy a program, you will need the location of the program's shared object
-(the program binary .so)
+To deploy a program, you will need the location of the program's shared object (the program binary .so)
 
 ```bash
 solana program deploy <PROGRAM_FILEPATH>
 ```
 
-Successful deployment will return the program id of the deployed program, for
-example:
+Successful deployment will return the program id of the deployed program, for example:
 
 ```bash
 Program Id: 3KS2k14CmtnuVv2fvYcvdrNgC94Y11WETBpMUGgXyWZL
@@ -44,13 +37,9 @@ Specify the keypair in the deploy command to deploy to a specific program id:
 solana program deploy --program-id <KEYPAIR_FILEPATH> <PROGRAM_FILEPATH>
 ```
 
-If the program id is not specified on the command line the tools will first look
-for a keypair file matching the `<PROGRAM_FILEPATH>`, or internally generate a
-new keypair.
+If the program id is not specified on the command line the tools will first look for a keypair file matching the `<PROGRAM_FILEPATH>`, or internally generate a new keypair.
 
-A matching program keypair file is in the same directory as the program's shared
-object, and named <PROGRAM_NAME>-keypair.json. Matching program keypairs are
-generated automatically by the program build tools:
+A matching program keypair file is in the same directory as the program's shared object, and named <PROGRAM_NAME>-keypair.json. Matching program keypairs are generated automatically by the program build tools:
 
 ```bash
 ./path-to-program/program.so
@@ -76,21 +65,16 @@ Last Deployed In Slot: 63890568
 Data Length: 5216 (0x1460) bytes
 ```
 
-- `Program Id` is the address that can be referenced in an instruction's
-  `program_id` field when invoking a program.
+- `Program Id` is the address that can be referenced in an instruction's `program_id` field when invoking a program.
 - `Owner`: The loader this program was deployed with.
-- `ProgramData Address` is the account associated with the program account that
-  holds the program's data (shared object).
+- `ProgramData Address` is the account associated with the program account that holds the program's data (shared object).
 - `Authority` is the program's upgrade authority.
 - `Last Deployed In Slot` is the slot in which the program was last deployed.
-- `Data Length` is the size of the space reserved for deployments. The actual
-  space used by the currently deployed program may be less.
+- `Data Length` is the size of the space reserved for deployments. The actual space used by the currently deployed program may be less.
 
 ### Redeploy a program
 
-A program can be redeployed to the same address to facilitate rapid development,
-bug fixes, or upgrades. Matching keypair files are generated once so that
-redeployments will be to the same program address.
+A program can be redeployed to the same address to facilitate rapid development, bug fixes, or upgrades. Matching keypair files are generated once so that redeployments will be to the same program address.
 
 The command looks the same as the deployment command:
 
@@ -98,31 +82,19 @@ The command looks the same as the deployment command:
 solana program deploy <PROGRAM_FILEPATH>
 ```
 
-By default, programs are deployed to accounts that are twice the size of the
-original deployment. Doing so leaves room for program growth in future
-redeployments. But, if the initially deployed program is very small (like a
-simple helloworld program) and then later grows substantially, the redeployment
-may fail. To avoid this, specify a `max_len` that is at least the size (in
-bytes) that the program is expected to become (plus some wiggle room).
+By default, programs are deployed to accounts that are twice the size of the original deployment. Doing so leaves room for program growth in future redeployments. But, if the initially deployed program is very small (like a simple helloworld program) and then later grows substantially, the redeployment may fail. To avoid this, specify a `max_len` that is at least the size (in bytes) that the program is expected to become (plus some wiggle room).
 
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 ```
 
-Note that program accounts are required to be
-[rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the
-`max-len` is fixed after initial deployment, so any SOL in the program accounts
-is locked up permanently.
+Note that program accounts are required to be [rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the `max-len` is fixed after initial deployment, so any SOL in the program accounts is locked up permanently.
 
 ### Resuming a failed deploy
 
-If program deployment fails, there will be a hanging intermediate buffer account
-that contains a non-zero balance. In order to recoup that balance you may
-resume a failed deployment by providing the same intermediate buffer to a new
-call to `deploy`.
+If program deployment fails, there will be a hanging intermediate buffer account that contains a non-zero balance. In order to recoup that balance you may resume a failed deployment by providing the same intermediate buffer to a new call to `deploy`.
 
-Deployment failures will print an error message specifying the seed phrase
-needed to recover the generated intermediate buffer's keypair:
+Deployment failures will print an error message specifying the seed phrase needed to recover the generated intermediate buffer's keypair:
 
 ```
 ==================================================================================
@@ -155,13 +127,9 @@ solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
 
 ### Closing buffer accounts and reclaiming their lamports
 
-If deployment fails there will be a left over buffer account that holds
-lamports. The buffer account can either be used to [resume a
-deploy](#resuming-a-failed-deploy) or closed. When closed, the full balance of
-the buffer account will be transferred to the recipient's account.
+If deployment fails there will be a left over buffer account that holds lamports. The buffer account can either be used to [resume a deploy](#resuming-a-failed-deploy) or closed. When closed, the full balance of the buffer account will be transferred to the recipient's account.
 
-The buffer account's authority must be present to close a buffer account, to
-list all the open buffer accounts that match the default authority:
+The buffer account's authority must be present to close a buffer account, to list all the open buffer accounts that match the default authority:
 
 ```bash
 solana program show --buffers
@@ -205,10 +173,7 @@ solana program show --buffers --all
 
 ### Set a program's upgrade authority
 
-The program's upgrade authority must to be present to deploy a program. If no
-authority is specified during program deployment, the default keypair is used as
-the authority. This is why redeploying a program in the steps above didn't
-require an authority to be explicitly specified.
+The program's upgrade authority must to be present to deploy a program. If no authority is specified during program deployment, the default keypair is used as the authority. This is why redeploying a program in the steps above didn't require an authority to be explicitly specified.
 
 The authority can be specified during deployment:
 
@@ -230,8 +195,7 @@ solana program set-upgrade-authority <PROGRAM_ADDRESS> --upgrade-authority <UPGR
 
 ### Immutable programs
 
-A program can be marked immutable, which prevents all further redeployments, by
-specifying the `--final` flag during deployment:
+A program can be marked immutable, which prevents all further redeployments, by specifying the `--final` flag during deployment:
 
 ```bash
 solana program deploy <PROGRAM_FILEPATH> --final
@@ -243,15 +207,13 @@ Or anytime after:
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --final
 ```
 
-`solana program deploy ...` utilizes Solana's upgradeable loader, but there is
-another way to deploy immutable programs using the original on-chain loader:
+`solana program deploy ...` utilizes Solana's upgradeable loader, but there is another way to deploy immutable programs using the original on-chain loader:
 
 ```bash
 solana deploy <PROGRAM_FILEPATH>
 ```
 
-Programs deployed with `solana deploy ...` are not redeployable and are not
-compatible with the `solana program ...` commands.
+Programs deployed with `solana deploy ...` are not redeployable and are not compatible with the `solana program ...` commands.
 
 ### Dumping a program to a file
 
@@ -261,13 +223,7 @@ The deployed program may be dumped back to a local file:
 solana program dump <ACCOUNT_ADDRESS> <OUTPUT_FILEPATH>
 ```
 
-The dumped file will be in the same as what was deployed, so in the case of a
-shared object, the dumped file will be a fully functional shared object. Note
-that the `dump` command dumps the entire data space, which means the output file
-will have trailing zeros after the shared object's data up to `max_len`.
-Sometimes it is useful to dump and compare a program to ensure it matches a
-known program binary. The original program file can be zero-extended, hashed,
-and compared to the hash of the dumped file.
+The dumped file will be in the same as what was deployed, so in the case of a shared object, the dumped file will be a fully functional shared object. Note that the `dump` command dumps the entire data space, which means the output file will have trailing zeros after the shared object's data up to `max_len`. Sometimes it is useful to dump and compare a program to ensure it matches a known program binary. The original program file can be zero-extended, hashed, and compared to the hash of the dumped file.
 
 ```bash
 $ solana dump <ACCOUNT_ADDRESS> dump.so
@@ -278,10 +234,7 @@ $ sha256sum extended.so dump.so
 
 ### Using an intermediary Buffer account
 
-Instead of deploying directly to the program account, the program can be written
-to an intermediary buffer account. Intermediary accounts can useful for things
-like multi-entity governed programs where the governing members fist verify the
-intermediary buffer contents and then vote to allow an upgrade using it.
+Instead of deploying directly to the program account, the program can be written to an intermediary buffer account. Intermediary accounts can useful for things like multi-entity governed programs where the governing members fist verify the intermediary buffer contents and then vote to allow an upgrade using it.
 
 ```bash
 solana program write-buffer <PROGRAM_FILEPATH>
@@ -293,11 +246,9 @@ Buffer accounts support authorities like program accounts:
 solana program set-buffer-authority <BUFFER_ADDRESS> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
 ```
 
-One exception is that buffer accounts cannot be marked immutable like program
-accounts can, so they don't support `--final`.
+One exception is that buffer accounts cannot be marked immutable like program accounts can, so they don't support `--final`.
 
-The buffer account, once entirely written, can be passed to `deploy` to deploy
-the program:
+The buffer account, once entirely written, can be passed to `deploy` to deploy the program:
 
 ```bash
 solana program deploy --program-id <PROGRAM_ADDRESS> --buffer <BUFFER_ADDRESS>

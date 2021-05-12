@@ -70,7 +70,7 @@ Sau đó, chương trình
 
 Vì ngân sách tính toán được tiêu thụ tăng dần khi chương trình thực hiện nên tổng mức tiêu thụ ngân sách sẽ là sự kết hợp của các chi phí khác nhau của các hoạt động mà chương trình thực hiện.
 
-Trong thời gian chạy, một chương trình có thể ghi lại số lượng ngân sách tính toán còn lại. Xem gỡ lỗi để biết thêm thông tin. Xem [gỡ lỗi](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) để biết thêm thông tin.
+Trong thời gian chạy, một chương trình có thể ghi lại số lượng ngân sách tính toán còn lại. Xem gỡ lỗi để biết thêm thông tin. See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 Giá trị ngân sách có điều kiện đối với việc kích hoạt tính năng, hãy xem chức năng [ mới của ngân sách tính toán ](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) để tìm hiểu cách ngân sách được xây dựng. Cần có hiểu biết về cách hoạt động của các [tính năng](runtime.md#features) và những tính năng nào được bật trên cụm đang được sử dụng để xác định giá trị của ngân sách hiện tại.
 

@@ -70,60 +70,61 @@ pub enum TestInstruction {
 생성 된 생성자 :
 
 ```rust,ignore
-/// 램프 포트 전송
+/// Transfer lamports
 ///
-/// *`from_account`-`[WRITABLE, SIGNER]`자금 계정
-/// *`to_account`-`[WRITABLE]`수신자 계정
-pub fn transfer (from_account : Pubkey, to_account : Pubkey, lamports : u64)-> Instruction {
-    let account_metas = vec! [
-        AccountMeta :: new (from_pubkey, true),
-        AccountMeta :: new (to_pubkey, false),
+/// * `from_account` - `[WRITABLE, SIGNER]` Funding account
+/// * `to_account` - `[WRITABLE]` Recipient account
+pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(from_pubkey, true),
+        AccountMeta::new(to_pubkey, false),
     ];
-    명령 :: new (
-        test_program :: id (),
-        & SystemInstruction :: Transfer {lamports},
+    Instruction::new_with_bincode(
+        test_program::id(),
+        &SystemInstruction::Transfer { lamports },
         account_metas,
     )
 }
 
-/// M / N 필수 서명 제공
+/// Provide M of N required signatures
 ///
-/// *`data_account`-`[WRITABLE]`데이터 계정
-/// *`signers`-(다중)`[SIGNER]`서명자
-pub fn multisig (data_account : Pubkey, signers : & [Pubkey])-> Instruction {
-    let mut account_metas = vec! [
-        AccountMeta :: new (nonce_pubkey, false),
+/// * `data_account` - `[WRITABLE]` Data account
+/// * `signers` - (Multiple) `[SIGNER]` Signers
+pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(nonce_pubkey, false),
     ];
-    for pubkey in signers.iter () {
-        account_metas.push (AccountMeta :: new_readonly (pubkey, true));
+    for pubkey in signers.iter() {
+        account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
-    명령 :: new (
-        test_program :: id (),
-        & TestInstruction :: Multisig,
+    Instruction::new_with_bincode(
+        test_program::id(),
+        &TestInstruction::Multisig,
         account_metas,
     )
 }
 
-/// 저장된 nonce를 사용하여 후속 작업으로 바꿉니다. ///
-/// * nonce_account-`[WRITABLE, SIGNER]`Nonce 계정
-/// * recent_blockhashes_sysvar-`[]`RecentBlockhashes sysvar
-/// * nonce_authority-(선택 사항)`[SIGNER]`Nonce 권한
-pub fn advance_nonce_account (
-    nonce_account : Pubkey,
-    recent_blockhashes_sysvar : Pubkey,
-    nonce_authority : Option <Pubkey>,
-)-> 명령어 {
-    let mut account_metas = vec! [
-        AccountMeta :: new (nonce_account, false),
-        AccountMeta :: new_readonly (recent_blockhashes_sysvar, false),
+/// Consumes a stored nonce, replacing it with a successor
+///
+/// * nonce_account - `[WRITABLE, SIGNER]` Nonce account
+/// * recent_blockhashes_sysvar - `[]` RecentBlockhashes sysvar
+/// * nonce_authority - (Optional) `[SIGNER]` Nonce authority
+pub fn advance_nonce_account(
+    nonce_account: Pubkey,
+    recent_blockhashes_sysvar: Pubkey,
+    nonce_authority: Option<Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(nonce_account, false),
+        AccountMeta::new_readonly(recent_blockhashes_sysvar, false),
     ];
-    if let Some (pubkey) = authorized_pubkey {
-        account_metas.push (AccountMeta :: new_readonly * nonce_authority, true));
+    if let Some(pubkey) = authorized_pubkey {
+        account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
-    명령 :: new (
-        test_program :: id (),
-        & TestInstruction :: AdvanceNonceAccount,
+    Instruction::new_with_bincode(
+        test_program::id(),
+        &TestInstruction::AdvanceNonceAccount,
         account_metas,
     )
 }

@@ -1,121 +1,81 @@
 ---
-title: Sysvar Cluster Data
+title: بيانات مجموعة Sysvar
 ---
 
-Solana exposes a variety of cluster state data to programs via
-[`sysvar`](terminology.md#sysvar) accounts. These accounts are populated at
-known addresses published along with the account layouts in the
-[`solana-program`
-crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
-and outlined below.
+تعرض Solana مجموعة متنوعة من بيانات حالة المجموعة (cluster) للبرامج من خلال حسابات [`sysvar`](terminology.md#sysvar). هذه الحسابات مأهولة في عناوين معروفة منشورة جنبا إلى جنب مع مخططات الحساب في [`برنامج-solana`صندق](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html)، والمُبينة أدناه.
 
-To include sysvar data in program operations, pass the sysvar account address in
-the list of accounts in a transaction. The account can be read in your
-instruction processor like any other account. Access to sysvars accounts is
-always _readonly_.
+لتضمين بيانات sysvar في عمليات البرنامج، قم بتمرير عنوان حساب sysvar في قائمة الحسابات في المعاملة. يمكن قراءة الحساب في معالج التعليمات الخاص بك مثل أي حساب آخر. Access to sysvars accounts is always _readonly_.
 
-## Clock
+## الساعة (Clock)
 
-The Clock sysvar contains data on cluster time, including the current slot,
-epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
+يحتوي نظام ساعة sysvar على بيانات عن وقت المجموعة (cluster)، بما في ذلك الفتحة (slot) الحالية، الفترة (epoch) والختم الزمني (Timestamp) المُقدر لساعة حائط Unix. يتم تحديثه في كل فتحة (slot).
 
-- Address: `SysvarC1ock11111111111111111111111111111111`
-- Layout: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
-- Fields:
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
+- الحقول (Fields):
 
-  - `slot`: the current slot
-  - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch. In the first slot of an epoch, this timestamp is identical to the `unix_timestamp` (below).
-  - `epoch`: the current epoch
-  - `leader_schedule_epoch`: the most recent epoch for which the leader schedule has already been generated
-  - `unix_timestamp`: the Unix timestamp of this slot.
+  - `فتحة`: الفتحة (slot) الحالية
+  - `epoch_start_timestamp`: الختم الزمني (Timestamp) للفتحة الأولى في هذه الفترة (epoch). في الفتحة (slot) الأولى من الفترة (epoch)، هذا الختم الزمني (Timestamp) مطابق `unix_timestamp` (أدناه).
+  - `الفترة`: الفترة (epoch) الحالية
+  - `Lead_schedule_epoch`: آخر فترة (epoch) تم فيها إنشاء جدول القائد (leader schedule)
+  - `unix_timestamp`: الختم الزمني (Timestamp) لهذه الفتحة (slot).
 
-  Each slot has an estimated duration based on Proof of History. But in reality,
-  slots may elapse faster and slower than this estimate. As a result, the Unix
-  timestamp of a slot is generated based on oracle input from voting validators.
-  This timestamp is calculated as the stake-weighted median of timestamp
-  estimates provided by votes, bounded by the expected time elapsed since the
-  start of the epoch.
+  لكل فتحة (slot) مدة تقديرية تستند إلى إثبات التاريخ (Proof of History). لكن في الواقع، الفتحات (slots) قد تنقضي أسرع وأبطأ من هذا التقدير. نتيجة لذلك، يتم إنشاء الختم الزمني (Timestamp) لـ Unix من الفتحة (slot) إستنادًا إلى مُدخلات oracle من مُدققي التصويت (voting validators). يتم حساب هذا الختم الزمني (Timestamp) كمتوسط مرجح حسب الحِصَة (stake-weighted) لتقديرات الأختام الزمنية (Timestamps) المقدمة من الأصوات، مقيدة بالوقت المتوقع الذي إنقضى منذ بدء الفترة (epoch).
 
-  More explicitly: for each slot, the most recent vote timestamp provided by
-  each validator is used to generate a timestamp estimate for the current slot
-  (the elapsed slots since the vote timestamp are assumed to be
-  Bank::ns_per_slot). Each timestamp estimate is associated with the stake
-  delegated to that vote account to create a distribution of timestamps by
-  stake. The median timestamp is used as the `unix_timestamp`, unless the
-  elapsed time since the `epoch_start_timestamp` has deviated from the expected
-  elapsed time by more than 25%.
+  على نحو أكثر وضوحا: لكل فتحة (slot)، آخر وقت للتصويت مقدم من كل مدقق يستخدم لإنشاء تقدير زمني للفتحة الحالية (الفتحات التي انقضت منذ الافتراض أن الوقت للتصويت هو Bank::ns_per_slot). بشكل أكثر وضوحًا: بالنسبة لكل (slot)، يتم إستخدام أحدث ختم زمني (Timestamp) للتصويت الأخير الذي تم توفيره بواسطة كل مدقق (validator) لتوليد تقدير ختم زمني (Timestamp) للفتحة (slot) الحالية (يُفترض أن تكون الفتحات المنقضية منذ الختم الزمني للتصويت Bank:: ns_per_slot). كل تقدير للختم الزمني (Timestamp) مرتبط بالحِصَة (stake) المفوضة إلى حساب التصويت (vote account) لإنشاء توزيع الأختام الزمنية (Timestamps) حسب الحِصَة (stake). يستخدم الوسط الختم الزمني (Timestamp) كـ `unix_timestamp`، ما لم ينحرف الوقت منذ `epoch_start_timestamp` عن الوقت المتوقع بأكثر من 25%.
 
-## EpochSchedule
+## جدول الفترة (EpochSchedule)
 
-The EpochSchedule sysvar contains epoch scheduling constants that are set in
-genesis, and enables calculating the number of slots in a given epoch, the epoch
-for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
+The EpochSchedule sysvar contains epoch scheduling constants that are set in genesis, and enables calculating the number of slots in a given epoch, the epoch for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
 
-- Address: `SysvarEpochSchedu1e111111111111111111111111`
-- Layout:
-  [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: جدول الفترة [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
 
-## Fees
+## الرسوم (Fees)
 
-The Fees sysvar contains the fee calculator for the current slot. It is updated
-every slot, based on the fee-rate governor.
+تحتوي رسوم sysvar على آلة حاسبة الرسوم للفتحة (Slot) الحالية. يتم تحديث كل فتحة (Slot) إستنادا إلى مُحافظ مُعدل الرسوم (fee-rate governor).
 
-- Address: `SysvarFees111111111111111111111111111111111`
-- Layout:
-  [Fees](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/fees/struct.Fees.html)
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: الرسوم [Fees](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/fees/struct.Fees.html)
 
-## Instructions
+## التعليمات (Instructions)
 
-The Instructions sysvar contains the serialized instructions in a Message while
-that Message is being processed. This allows program instructions to reference
-other instructions in the same transaction. Read more information on
-[instruction introspection](implemented-proposals/instruction_introspection.md).
+يحتوي نظام التعليمات sysvar على التعليمات المتسلسلة في رسالة بينما يتم معالجة هذه الرسالة. يسمح هذا لتعليمات البرنامج بالرجوع إلى تعليمات أخرى في نفس المعاملة. إقرأ المزيد من المعلومات عن البحث الذاتي في التعليمات [instruction introspection](implemented-proposals/instruction_introspection.md).
 
-- Address: `Sysvar1nstructions1111111111111111111111111`
-- Layout:
-  [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: التعليمات [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
 
-## RecentBlockhashes
+## تجزئة الكتلة الحديثة (RecentBlockhash)
 
-The RecentBlockhashes sysvar contains the active recent blockhashes as well as
-their associated fee calculators. It is updated every slot.
+يحتوي متغير النظام (system variable أو sysvar) المسمى RecentBlockhashes على تجزئة الكتلة (blockhashes) الحديثة بالإضافة إلى آلة حاسبة الرسوم المرتبطة بها. يتم تحديثه في كل فتحة (slot).
 
-- Address: `SysvarRecentB1ockHashes11111111111111111111`
-- Layout:
-  [RecentBlockhashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/recent_blockhashes/struct.RecentBlockhashes.html)
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: تجزئة الكتلة الحديثة [RecentBlockhashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/recent_blockhashes/struct.RecentBlockhashes.html)
 
-## Rent
+## التأجير (Rent)
 
-The Rent sysvar contains the rental rate. Currently, the rate is static and set
-in genesis. The Rent burn percentage is modified by manual feature activation.
+يحتوي إيجار مُتغير النظام (Rent sysvar) على مُعدل الإيجار. في الوقت الحالي، المُعدل ثابت ومُحَدَّدَ في مرحلة التكوين (genesis). يتم تعديل نسبة حرق الإيجار من خلال تفعيل الميزة اليدوية.
 
-- Address: `SysvarRent111111111111111111111111111111111`
-- Layout:
-  [Rent](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/rent/struct.Rent.html)
+- العنوان: `SysvarRent111111111111111111111111111111111`
+- التخطيط: الإيجار [Rent](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/rent/struct.Rent.html)
 
-## SlotHashes
+## تجزئات الفُتحة (SlotHashes)
 
-The SlotHashes sysvar contains the most recent hashes of the slot's parent
-banks. It is updated every slot.
+يحتوي مُتغير النظام (sysvar) المُسَمَّى تجزئات الفُتحة (SlotHashes) على أحدث تجزئات للبنوك الأصلية للفُتحة (slot). يتم تحديثه في كل فُتحة (slot).
 
-- Address: `SysvarS1otHashes111111111111111111111111111`
-- Layout:
-  [SlotHashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_hashes/struct.SlotHashes.html)
+- العنوان: `SysvarS1otHashes111111111111111111111111111`
+- التخطيط: تجزئات الفُتحة [SlotHashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_hashes/struct.SlotHashes.html)
 
-## SlotHistory
+## تاريخ الفُتحة (SlotHistory)
 
-The SlotHistory sysvar contains a bitvector of slots present over the last
-epoch. It is updated every slot.
+مُتغير النظام (sysvar) المُسَمَّى تاريخ الفُتحة (SlotHistory) يحتوي على مقطع من الفُتحات (slots) الموجودة على آخر فترة (epoch). يتم تحديثه في كل فتحة (slot).
 
-- Address: `SysvarS1otHistory11111111111111111111111111`
-- Layout:
-  [SlotHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_history/struct.SlotHistory.html)
+- العنوان: `SysvarS1otHistory11111111111111111111111111`
+- التخطيط: تاريخ الفتحة [SlotHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_history/struct.SlotHistory.html)
 
-## StakeHistory
+## تاريخ الحِصَّة (StakeHistory)
 
-The StakeHistory sysvar contains the history of cluster-wide stake activations
-and de-activations per epoch. It is updated at the start of every epoch.
+يحتوي متغير النظام (system variable أو sysvar) المسمى تاريخ الحِصَّة (StakeHistory) على تاريخ تنشيط الحِصَّة (Stake) على نطاق المجموعة (cluster-wide) وإلغاء التنشيط لكل فترة (epoch). ويجري تحديثها في بداية كل فترة (epoch).
 
-- Address: `SysvarStakeHistory1111111111111111111111111`
-- Layout:
-  [StakeHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/stake_history/struct.StakeHistory.html)
+- العنوان: `SysvarC1ock11111111111111111111111111111111111111111111111111111111`
+- التخطيط: تاريخ الحصة [StakeHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/stake_history/struct.StakeHistory.html)

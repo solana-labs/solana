@@ -90,9 +90,9 @@ El par de claves _vote authority_ sólo puede cambiarse en los límites de la é
 
 1. Ejecuta `solana epoch-info`. Si no queda mucho tiempo en la época actual, considere la posibilidad de esperar a la siguiente época para que su validador tenga tiempo suficiente para reiniciar y ponerse al día.
 2. Crear el nuevo keypair de autoridad de votación, `solana-keygen new -o ~/new-vote-authority.json`.
-3. Determinar el keypair actual de _vote authority_ ejecutando `solana vote-account ~/vote-account-keypair.json`. Puede ser la cuenta de identidad del validador (por defecto) o algún otro keypair. Los siguientes pasos asumen que `~/validator-keypair.json` es ese keypair.
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. Puede ser la cuenta de identidad del validador (por defecto) o algún otro keypair. Los siguientes pasos asumen que `~/validator-keypair.json` es ese keypair.
 4. Ejecute `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. Está previsto que la nueva autoridad de votación se active a partir de la próxima época.
-5. `solana-validator` debe reiniciarse ahora con los pares de claves de autoridad de voto antiguos y nuevos, para que pueda realizar la transición sin problemas en la siguiente época. Añadir los dos argumentos al reiniciar: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
+5. `solana-validator` debe reiniciarse ahora con los pares de claves de autoridad de voto antiguos y nuevos, para que pueda realizar la transición sin problemas en la siguiente época. Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. Después de que el clúster alcance la siguiente época, elimine el argumento `--authorized-voter ~/validator-keypair.json` y reinicie `solana-validator`, ya que el antiguo keypair de autoridad de voto ya no es necesario.
 
 ### Cuenta de voto de Retirada autorizada

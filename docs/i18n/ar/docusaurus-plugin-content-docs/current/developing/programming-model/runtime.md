@@ -70,7 +70,7 @@ log_pubkey_units: 100,
 
 نظرًا لإستهلاك الميزانية المحسوبة بشكل متزايد أثناء تنفيذ البرنامج، فإن إجمالي إستهلاك الميزانية سيكون مزيجًا من التكاليف المختلفة للعمليات التي يقوم بها.
 
-قد يُسجل البرنامج في وقت التشغيل المقدار المتبقي من الميزانية المحسوبة. راجع تصحيح الأخطاء [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) لمزيد من المعلومات.
+قد يُسجل البرنامج في وقت التشغيل المقدار المتبقي من الميزانية المحسوبة. See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 قيم الميزانية مشروطة بتمكين الميزة، ألق نظرة على وظيفة حوسبة الميزانية [new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) لمعرفة كيفية إنشاء الميزانية. يلزم فهم كيفية عمل الميزات [features](runtime.md#features) التي يتم تنشيطها في المجموعة (cluster) المُستخدمة لتحديد قِيَم الميزانية الحالية.
 

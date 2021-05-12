@@ -79,7 +79,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
 
 しかし、いくつかのメタデータを除いて、署名された投票自体は現在どこにも保存されていませんので、必要に応じて取得することはできません。 これらの投票はおそらく"Rocksdb"データベースに保存され、投票のスロット、投票のバンクハッシュ、投票を担当する"vote account pubkey"を表すキー`(Slot, Hash, Pubkey)`でインデックス化される必要があります。
 
-既存の署名サブスクライブロジックを拡張することで、トランザクションメルクルプルーフと楽観的確認プルーフを合わせて RPC 経由でサブスクライバーに提供することができます。 楽観的な確認が検出された場合、"SingleGossip"確認レベルをサブスクライブしているクライアントには既に通知されており、上記の 2 つの証明も返すべきであることを示すフラグを提供することができます。
+既存の署名サブスクライブロジックを拡張することで、トランザクションメルクルプルーフと楽観的確認プルーフを合わせて RPC 経由でサブスクライバーに提供することができます。 Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 楽観的に`B`を確認することは、`B`のすべての祖先ブロックも楽観的に確認されることを意味し、すべてのブロックが楽観的に確認されるわけではないことに注意することが重要です。
 

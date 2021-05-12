@@ -6,7 +6,7 @@ title: "Tài khoản"
 
 Nếu chương trình cần lưu trữ trạng thái giữa các giao dịch, chương trình sẽ sử dụng các _tài khoản_. Tài khoản tương tự như các tệp trong hệ điều hành như Linux. Giống như một tệp, tài khoản có thể giữ dữ liệu tùy ý và dữ liệu đó tồn tại ngoài vòng đời của chương trình. Cũng giống như tệp, tài khoản bao gồm siêu dữ liệu thời gian chạy cho biết ai được phép truy cập dữ liệu và cách thức.
 
-Không giống như một tệp, tài khoản bao gồm siêu dữ liệu cho thời gian tồn tại của tệp. Thời gian tồn tại đó được biểu thị bằng các "mã thông báo", là một số mã thông báo gốc theo phân số, được gọi là các _lamport_. Các tài khoản được giữ trong bộ nhớ của validator và trả tiền ["thuê"](#rent) để ở đó. Mỗi validator định kỳ quét tất cả các tài khoản và thu tiền thuê. Bất kỳ tài khoản nào giảm xuống 0 lamport sẽ bị xóa. Các tài khoản cũng có thể được đánh dấu là [miễn-tiền thuê](#rent-exemption) nếu chúng có chứa đủ số lượng lamport.
+Không giống như một tệp, tài khoản bao gồm siêu dữ liệu cho thời gian tồn tại của tệp. Thời gian tồn tại đó được biểu thị bằng các "mã thông báo", là một số mã thông báo gốc theo phân số, được gọi là các _lamport_. Các tài khoản được giữ trong bộ nhớ của validator và trả tiền ["thuê"](#rent) để ở đó. Mỗi validator định kỳ quét tất cả các tài khoản và thu tiền thuê. Bất kỳ tài khoản nào giảm xuống 0 lamport sẽ bị xóa. Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 Giống như cách người dùng Linux sử dụng đường dẫn để tra cứu tệp, một khách hàng Solana sử dụng một _địa chỉ_ để tra cứu tài khoản. Địa chỉ là một public key 256 bit.
 
@@ -33,6 +33,18 @@ Các tài khoản chưa từng được tạo qua chương trình hệ thống c
 ## Quyền sở hữu và chuyển nhượng cho các chương trình
 
 Một tài khoản đã tạo được khởi tạo thành _sở hữu_ bởi một chương trình tích hợp có tên là Chương trình hệ thống và được gọi là _tài khoản hệ thống_. Tài khoản bao gồm siêu dữ liệu của "chủ sở hữu". Chủ sở hữu là một id chương trình. Thời gian chạy cấp cho chương trình quyền truy cập ghi vào tài khoản nếu id của nó khớp với chủ sở hữu. Đối với trường hợp của chương trình Hệ thống, thời gian chạy cho phép khách hàng chuyển các cổng và quan trọng là _chỉ định_ quyền sở hữu tài khoản, nghĩa là thay đổi chủ sở hữu thành id chương trình khác. Nếu một tài khoản không thuộc sở hữu của một chương trình, chương trình chỉ được phép đọc dữ liệu của nó và ghi có vào tài khoản.
+
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
 
 ## Thuê
 
@@ -88,3 +100,14 @@ Ví dụ: một chương trình thực thi có kích thước 15,000 byte yêu c
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

@@ -90,9 +90,9 @@ _vote authorization_ keypair는 epoch 경계에서만 변경할 수 있으며 �
 
 1. 1.`solana epoch-info`를 실행합니다. 현재 에포크에 남은 시간이 많지 않다면 다음 에포크를 기다리는 것을 고려하여 밸리데이터이 다시 시작하고 따라 잡을 수 있도록 충분한 시간을 확보하십시오.
 2. 새 투표 권한 키 쌍`solana-keygen new -o ~ / new-vote-authority.json`을 만듭니다.
-3. 3.`solana을 실행하여 현재 _vote Authority_ keypair를 확인합니다 vote-account ~ / vote-account-keypair.json`. 유효성 검사기의 ID 계정 (기본값) 또는 다른 키 쌍일 수 있습니다. 다음 단계에서는`~ / validator-keypair.json`이 해당 키 쌍이라고 가정합니다.
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. 유효성 검사기의 ID 계정 (기본값) 또는 다른 키 쌍일 수 있습니다. 다음 단계에서는`~ / validator-keypair.json`이 해당 키 쌍이라고 가정합니다.
 4. 4.`solana vote-authorize-voter ~ / vote-account-keypair.json ~ / validator-keypair.json ~ / new-vote-authority.json`을 실행합니다. 새로운 투표 권한은 다음 세대부터 활성화 될 예정입니다.
-5. 5.`solana-validator`는 이제 이전 및 새 투표 권한 키 쌍으로 다시 시작해야 다음 시대에 원활하게 전환 할 수 있습니다. 다시 시작할 때 두 개의 인수를 추가합니다.`--authorized-voter ~ / validator-keypair.json --authorized -voter ~ / new-vote-authority.json`
+5. 5.`solana-validator`는 이제 이전 및 새 투표 권한 키 쌍으로 다시 시작해야 다음 시대에 원활하게 전환 할 수 있습니다. Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. 클러스터가 다음 세대에 도달하면`-를 제거합니다. 이전 투표 권한 키 쌍이 더 이상 필요하지 않으므로 authorized-voter ~ / validator-keypair.json` 인수를 사용하고`solana-validator`를 다시 시작하십시오.
 
 ### 투표 계정 승인 인출 자

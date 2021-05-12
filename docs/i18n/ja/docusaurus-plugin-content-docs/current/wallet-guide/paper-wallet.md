@@ -68,10 +68,10 @@ solana-keygen new --help
 
 ### 公開キーの派生方法
 
-公開キーはシードフレーズとパスフレーズから派生することができます。 使用する場合はパスフレーズを使用します。 これは、オフラインで生成されたシードフレーズを使って、有効な公開キーを導出する場合に便利です。 `solana-keygen pubkey` コマンドは、シードフレーズとパスフレーズを入力して を実行します。
+公開キーはシードフレーズとパスフレーズから派生することができます。 使用する場合はパスフレーズを使用します。 This is useful for using an offline-generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through how to use your seed phrase (and a passphrase if you chose to use one) as a signer with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 > 同じシードフレーズに異なるパスフレーズを使用する可能性があることに注意してください。 固有のパスフレーズごとに、異なるキーペアが生成されます。
@@ -79,10 +79,10 @@ solana-keygen pubkey ASK
 `solana-keygen` ツールはシードフレーズを生成するために同じ BIP39 標準の英単語リストを使用します。 異なる単語リストを使用する他のツールでシードフレーズを生成した場合、`solana-keygen`を使用することはできますが、`--skip-seed-phrase-validation`引数を渡して、この検証を省略する必要があります。
 
 ```bash
-solana-keygen pubkey ASK --skip-seed-phrase-validation
+solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
-`solana-keygen pubkey ASK` でシードフレーズを入力すると、コンソール は "base-58" 文字列を表示します。 これはシードフレーズに関連付けられている _ウォレットアドレス_ です。
+After entering your seed phrase with `solana-keygen pubkey prompt://` the console will display a string of base-58 character. This is the base _wallet address_ associated with your seed phrase.
 
 > 派生したアドレスを USB メモリにコピーして、ネットワーク上のコンピュータで簡単に利用できるようにします。
 
@@ -94,15 +94,33 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 solana-keygen pubkey --help
 ```
 
+### Hierarchical Derivation
+
+The solana-cli supports [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) hierarchical derivation of private keys from your seed phrase and passphrase by adding either the `?key=` query string or the `?full-path=` query string.
+
+By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
+
+```bash
+solana-keygen pubkey prompt://?key=0/1
+```
+
+To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
+```
+
+Because Solana uses Ed25519 keypairs, as per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all derivation-path indexes will be promoted to hardened indexes -- eg. `?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are included in the query-string input.
+
 ## キーペアを確認
 
 ペーパーウォレットのアドレスの秘密キーを管理していることを確認するには、`solana-keygen verify`を使用します。
 
 ```bash
-solana-keygen verify <PUBKEY> ASK
+solana-keygen verify <PUBKEY> prompt://
 ```
 
-`<PUBKEY>` がウォレットアドレスに置き換えられ、 `ASK` がキーペアのシードフレーズを要求するように コマンドに指示します。 セキュリティ上の理由によりシードフレーズは入力中に表示されません。 シードフレーズを入力した後、与えられた公開キーがシードフレーズから生成されたキーペアと一致すれば"Success"、そうでなければ"Failed"と出力されます。
+where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://` tells the command to prompt you for the keypair's seed phrase; `key` and `full-path` query-strings accepted. Note that for security reasons, your seed phrase will not be displayed as you type. After entering your seed phrase, the command will output "Success" if the given public key matches the keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## アカウント残高の確認
 

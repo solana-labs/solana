@@ -99,7 +99,7 @@ mod acme {
 
 1. السماح للبرامج بالتحكم في عناوين مُحددة، تُسمى عناوين البرامج، بحيث لا يمكن لأي مُستخدم خارجي إنشاء مُعاملات صالحة بتوقيعات تلك العناوين.
 
-2. السماح للبرامج بالتوقيع برمجيًا لعناوين البرامج الموجودة في الإرشادات التي يتم إستدعاؤها عبر الدعوات عبر البرامج [Cross-Program Invocations](#cross-program-invocations).
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 بالنظر إلى الشرطين، يمكن للمُستخدمين نقل أو تعيين سلطة الأصول على الشبكة (on-chain) بشكل آمن لعناوين البرامج ويمكن للبرنامج بعد ذلك تعيين هذه السلطة في مكان آخر وفقًا لتقديره.
 
@@ -109,14 +109,14 @@ mod acme {
 
 ### عناوين البرامج التي تم إنشاؤها على أساس التجزئة (Hash-based generated program addresses)
 
-يتم إشتقاق عناوين البرنامج بشكل حاسم من مجموعة البذور (seeds) ومُعرف البرنامج (program id) بإستخدام وظيفة تجزئة 256-bit مُقاومة للصور المُسبقًة (256-bit pre-image resistant hash function). يجب ألا يقع عنوان البرنامج على منحنى ed25519 لضمان عدم وجود مفتاح خاص (private key) مُرتبط به. أثناء التوليد، سيتم إرجاع خطأ إذا تم العثور على العنوان على المُنحنى. يحدث تغيير بنسبة 50/50 لمجموعة مُعينة من البذور (seeds) ومُعرف البرنامج (program id). في حالة حدوث ذلك، يُمكن إستخدام مجموعة مُختلفة من البذور (seeds) أو نتوء البذور (بذرة 8 bit إضافية) للعثور على عنوان برنامج صالح خارج المُنحنى.
+يتم إشتقاق عناوين البرنامج بشكل حاسم من مجموعة البذور (seeds) ومُعرف البرنامج (program id) بإستخدام وظيفة تجزئة 256-bit مُقاومة للصور المُسبقًة (256-bit pre-image resistant hash function). يجب ألا يقع عنوان البرنامج على منحنى ed25519 لضمان عدم وجود مفتاح خاص (private key) مُرتبط به. أثناء التوليد، سيتم إرجاع خطأ إذا تم العثور على العنوان على المُنحنى. There is about a 50/50 chance of this happening for a given collection of seeds and program id. في حالة حدوث ذلك، يُمكن إستخدام مجموعة مُختلفة من البذور (seeds) أو نتوء البذور (بذرة 8 bit إضافية) للعثور على عنوان برنامج صالح خارج المُنحنى.
 
-تتبع عناوين البرامج الحتمية للبرامج مسار إشتقاق مُشابهًا للحسابات التي تم إنشاؤها بإستخدام `SystemInstruction::CreateAccountWithSeed` والتي يتم تنفيذها بـ `system_instruction::create_address_with_seed`.
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 للإشارة فإن التنفيذ يتم على النحو التالي:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,9 +167,8 @@ client.send_and_confirm_message(&[&alice_keypair], &message);
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])؟
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ fn transfer_one_token_from_escrow(
 
 ## أمثلة
 
-يُرجى الرجوع إلى [Developing with Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) و [Developing with C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) للحصول على أمثلة لكيفية إستخدام الإستدعاءات عبر البرامج (Cross-Program Invocations).
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

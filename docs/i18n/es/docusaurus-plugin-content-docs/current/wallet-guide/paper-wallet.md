@@ -68,10 +68,10 @@ solana-keygen nuevo --help
 
 ### Derivación de la clave pública
 
-Las claves públicas pueden derivarse de una frase semilla y una frase de contraseña si se decide utilizar una. Esto es útil para usar una frase semilla generada fuera de línea para derivar una clave pública válida. El comando `solana-keygen pubkey` te guiará para que introduzcas tu frase inicial y una frase de contraseña si decides utilizarla.
+Las claves públicas pueden derivarse de una frase semilla y una frase de contraseña si se decide utilizar una. This is useful for using an offline-generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through how to use your seed phrase (and a passphrase if you chose to use one) as a signer with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-pubkey de solana-keygen
+solana-keygen pubkey prompt://
 ```
 
 > Tenga en cuenta que podría utilizar diferentes frases de acceso para la misma frase de inicio. Cada contraseña única producirá un keypair diferente.
@@ -79,10 +79,10 @@ pubkey de solana-keygen
 La herramienta `solana-keygen` utiliza la misma lista de palabras estándar en inglés BIP39 que para generar frases de semilla. Si su frase semilla fue generada con otra herramienta que utiliza una lista de palabras diferente, puede seguir utilizando `solana-keygen`, pero tendrá que pasar el argumento `--skip-seed-phrase-validation` y renunciar a esta validación.
 
 ```bash
-pubkey de solana-keygen --skip-seed-phrase-validation
+solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
-After entering your seed phrase with `solana-keygen pubkey ASK` the console will display a string of base-58 character. Esta es la _dirección de la billetera_ asociada a su frase semilla.
+After entering your seed phrase with `solana-keygen pubkey prompt://` the console will display a string of base-58 character. This is the base _wallet address_ associated with your seed phrase.
 
 > Copiar la dirección derivada en una memoria USB para facilitar su uso en ordenadores en red
 
@@ -94,15 +94,33 @@ Para detalles de uso completo ejecutar:
 solana-keygen nuevo --help
 ```
 
+### Hierarchical Derivation
+
+The solana-cli supports [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) hierarchical derivation of private keys from your seed phrase and passphrase by adding either the `?key=` query string or the `?full-path=` query string.
+
+By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
+
+```bash
+solana-keygen pubkey prompt://?key=0/1
+```
+
+To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
+```
+
+Because Solana uses Ed25519 keypairs, as per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all derivation-path indexes will be promoted to hardened indexes -- eg. `?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are included in the query-string input.
+
 ## Verificando el keypair
 
 Para verificar que controlas la clave privada de una dirección de monedero de papel, utiliza `solana-keygen verify`:
 
 ```bash
-verificación solana-keygen <PUBKEY> ASK
+solana-keygen verify <PUBKEY> prompt://
 ```
 
-donde `<PUBKEY>` se reemplaza con la dirección del monedero y la palabra clave `ASK` le dice al comando que le pida la frase semilla del keypair. Tenga en cuenta que por razones de seguridad, su frase de semilla no se mostrará a medida que escribe. Después de introducir su frase de semilla, el comando mostrará "Éxito" si la clave pública dada coincide con el par de claves generado a partir de su frase de semilla, y "Failed" de otra manera.
+where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://` tells the command to prompt you for the keypair's seed phrase; `key` and `full-path` query-strings accepted. Note that for security reasons, your seed phrase will not be displayed as you type. After entering your seed phrase, the command will output "Success" if the given public key matches the keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Comprobando el saldo de una cuenta
 

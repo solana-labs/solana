@@ -1,5 +1,5 @@
 ---
-title: 이동 언어 포함
+title: Embedding the Move Language
 ---
 
 ## 문제

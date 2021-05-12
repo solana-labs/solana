@@ -87,7 +87,7 @@ pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Inst
         AccountMeta::new(from_pubkey, true),
         AccountMeta::new(to_pubkey, false),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         test_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
@@ -106,7 +106,7 @@ pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
         account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         test_program::id(),
         &TestInstruction::Multisig,
         account_metas,
@@ -130,7 +130,7 @@ pub fn advance_nonce_account(
     if let Some(pubkey) = authorized_pubkey {
         account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
-    Instruction::new(
+    Instruction::new_with_bincode(
         test_program::id(),
         &TestInstruction::AdvanceNonceAccount,
         account_metas,

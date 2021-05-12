@@ -90,9 +90,9 @@ Commission は、 [vote-update-comment](../cli/usage.md#solana-vote-update-commi
 
 1. `solana エポック情報` を実行します。 現在のエポックにあまり時間が残っていない場合は、次のエポックまで待って、バリデータが再起動して追いつくのに十分な時間を確保することを検討します。
 2. 新しい投票権限キーペアを作成します。 `solana-keygen new -o ~/new-vote-authority.json`。
-3. 現在の _投票権限_ キーペアを指定するには、 `solana vote-account ~/vote-account-keypair.json` を実行します。 バリデーターの ID アカウント (デフォルト) またはその他のキーペアである可能性があります。 以下の手順は、 `~/validator-keypair.json` がそのキーペアであると仮定します。
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. バリデーターの ID アカウント (デフォルト) またはその他のキーペアである可能性があります。 以下の手順は、 `~/validator-keypair.json` がそのキーペアであると仮定します。
 4. `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. 新しい投票権限は、次の時点からアクティブになる予定です。
-5. `solana-validator` を古い投票と新しい投票で再起動する必要があります。 次の時点でスムーズに移行できるようにしました 再起動時に 2 つの引数を追加: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
+5. `solana-validator` を古い投票と新しい投票で再起動する必要があります。 次の時点でスムーズに移行できるようにしました Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. クラスタが次のエポックに達した後、`--authorized-voter ~/validator-keypair.json`引数を削除して`solana-validator`を再起動すると、古い投票権キーペアが必要なくなります。
 
 ### 承認されたアカウントに投票します

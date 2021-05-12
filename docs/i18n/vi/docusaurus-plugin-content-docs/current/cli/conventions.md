@@ -32,12 +32,12 @@ Dưới đây, chúng tôi chỉ ra cách giải quyết những gì bạn nên 
 
 #### Ví giấy
 
-Trong ví giấy, keypair có nguồn gốc an toàn từ words và cụm mật khẩu tùy chọn mà bạn đã nhập khi tạo ví. Để sử dụng keypair ví giấy ở bất kỳ đâu mà `<KEYPAIR>` được hiển thị trong các ví dụ hoặc các tài liệu trợ giúp, hãy nhập `ASK` và chương trình sẽ nhắc bạn nhập words khi bạn chạy lệnh.
+Trong ví giấy, keypair có nguồn gốc an toàn từ words và cụm mật khẩu tùy chọn mà bạn đã nhập khi tạo ví. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 Để hiển thị địa chỉ ví của Ví giấy:
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 #### Ví Hệ thống tệp

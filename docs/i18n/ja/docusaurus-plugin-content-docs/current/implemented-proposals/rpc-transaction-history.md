@@ -57,7 +57,7 @@ RPC には、少なくとも 6 ヶ月分の取引履歴を提供する必要が�
 
 このテーブルには、指定されたアドレスに影響を与えるトランザクションが含まれています。
 
-行キーは `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>` です。 行データは `TransactionByAddrInfo` 構造体を圧縮したものです。
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. 行データは `TransactionByAddrInfo` 構造体を圧縮したものです。
 
 スロットの 1 の補数を取ることでスロットのリスト化が可能になり、アドレスに影響を与えるトランザクションを持つ最新のスロットが常に最初に表示されるようになります。
 

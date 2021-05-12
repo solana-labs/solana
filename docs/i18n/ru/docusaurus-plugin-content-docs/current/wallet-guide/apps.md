@@ -4,6 +4,14 @@ title: Кошельки для мобильных приложений
 
 Solana поддерживается несколькими сторонними приложениями, которые должны обеспечить знакомый опыт для большинства людей, которые новички или имеют опыт использования криптовалютных кошельков.
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## Trust Wallet
 
 [ Trust Wallet ](https://trustwallet.com/) - это приложение, доступное для iOS и Android, которое можно использовать для отправки и получения токенов SOL.

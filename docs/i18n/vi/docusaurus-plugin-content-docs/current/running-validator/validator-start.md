@@ -27,7 +27,7 @@ Xem [bảng điều khiển số liệu](https://metrics.solana.com:3000/d/monit
 Hãy thử chạy lệnh sau để tham gia mạng gossip và xem tất cả các node khác trong cụm:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -45,7 +45,7 @@ Khi validator của bạn được khởi động, hãy tìm thông báo nhật 
 
 Kho lưu trữ solana bao gồm một daemon để điều chỉnh cài đặt hệ thống nhằm tối ưu hóa hiệu suất (cụ thể là bằng cách tăng bộ đệm UDP hệ điều hành và giới hạn ánh xạ tệp).
 
-Daemon (`solana-sys-tuner`) được bao gồm trong bản phát hành nhị phân solana. Khởi động lại nó, _trước khi_ khởi động lại validator của bạn, sau mỗi lần nâng cấp phần mềm để đảm bảo rằng các cài đặt được đề xuất mới nhất được áp dụng.
+Daemon (`solana-sys-tuner`) được bao gồm trong bản phát hành nhị phân solana. Restart it, _before_ restarting your validator, after each software upgrade to ensure that the latest recommended settings are applied.
 
 Để chạy nó:
 
@@ -78,7 +78,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 
@@ -89,13 +89,13 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 Thêm
 
 ```
-LimitNOFILE=500000
+LimitNOFILE=700000
 ```
 
 vào phần `[Service]` của tệp dịch vụ systemd của bạn, nếu bạn sử dụng, nếu không, hãy thêm
 
 ```
-DefaultLimitNOFILE=500000
+DefaultLimitNOFILE=700000
 ```
 
 vào phần `[Manager]` của `/etc/systemd/system.conf`.
@@ -107,7 +107,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 
@@ -159,25 +159,31 @@ Bạn có thể tạo một keypair tùy chỉnh bằng cách sử dụng solana
 solana-keygen grind --starts-with e1v1s:1
 ```
 
-Tùy thuộc vào chuỗi được yêu cầu, có thể mất nhiều ngày để tìm thấy một kết quả phù hợp...
+You may request that the generated vanity keypair be expressed as a seed phrase which allows recovery of the keypair from the seed phrase and an optionally supplied passphrase (note that this is significantly slower than grinding without a mnemonic):
+
+```bash
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
+```
+
+Depending on the string requested, it may take days to find a match...
 
 ---
 
-Keypair nhận dạng validator của bạn xác định duy nhất validator của bạn trong mạng. **Điều quan trọng là phải sao lưu thông tin này.**
+Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-Nếu bạn không sao lưu thông tin này, bạn SẼ KHÔNG CÓ KHẢ NĂNG PHỤC HỒI VALIDATOR CỦA BẠN nếu bạn mất quyền truy cập vào nó. Nếu điều này xảy ra, BẠN SẼ MẤT SỰ CẤP QUYỀN CHO SOL.
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
 
-Để sao lưu validator của bạn xác định keypair, **hãy sao lưu tệp "validator-keypair.json” hoặc cụm từ hạt giống của bạn vào một vị trí an toàn.**
+To back-up your validator identify keypair, **back-up your "validator-keypair.json” file or your seed phrase to a secure location.**
 
 ## Thêm cấu hình Solana CLI
 
-Bây giờ bạn đã có một keypair, hãy đặt cấu hình solana để sử dụng keypair validator của bạn cho tất cả các lệnh sau:
+Now that you have a keypair, set the solana configuration to use your validator keypair for all following commands:
 
 ```bash
 solana config set --keypair ~/validator-keypair.json
 ```
 
-Bạn sẽ thấy kết quả sau:
+You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
@@ -187,92 +193,93 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 
 ## Airdrop & Kiểm tra số dư của Validator
 
-Airdrop cho mình một số SOL để bắt đầu:
+Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 10
+solana airdrop 1
 ```
 
-Lưu ý rằng airdrop chỉ khả dụng trên Devnet và Testnet. Cả hai đều được giới hạn ở 10 SOL cho mỗi yêu cầu.
+Note that airdrops are only available on Devnet and Testnet. Both are limited to 1 SOL per request.
 
-Để xem số dư hiện tại của bạn:
+To view your current balance:
 
 ```text
 solana balance
 ```
 
-Hoặc xem chi tiết hơn:
+Or to see in finer detail:
 
 ```text
 solana balance --lamports
 ```
 
-Đọc thêm [sự khác biệt giữa SOL và các lamport ở đây.](../introduction.md#what-are-sols).
+Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
 ## Tạo Tài khoản Bỏ phiếu
 
-Nếu bạn chưa làm như vậy, hãy tạo keypair tài khoản bỏ phiếu và tạo tài khoản bỏ phiếu trên mạng. Nếu bạn đã hoàn thành bước này, bạn sẽ thấy “vote-account-keypair.json” trong thư mục thời gian chạy Solana của mình:
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
 solana-keygen new -o ~/vote-account-keypair.json
 ```
 
-Lệnh sau có thể được sử dụng để tạo tài khoản bỏ phiếu của bạn trên blockchain với tất cả các tùy chọn mặc định:
+The following command can be used to create your vote account on the blockchain with all the default options:
 
 ```bash
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
-Đọc thêm về [cách tạo và quản lý tài khoản bỏ phiếu ](vote-accounts.md).
+Read more about [creating and managing a vote account](vote-accounts.md).
 
 ## Các validator đáng tin cậy
 
-Nếu bạn biết và tin tưởng các node validator khác, bạn có thể chỉ định điều này trên dòng lệnh với code>--trusted-validator &lt;PUBKEY&gt;</code> đối số là `solana-validator`. Bạn có thể chỉ định nhiều cái bằng cách lặp lại đối số `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. Điều này có hai tác dụng, một là khi validator khởi động bằng `--no-untrusted-rpc`, nó sẽ chỉ yêu cầu tập hợp các node đáng tin cậy đó để tải xuống dữ liệu nguồn gốc và ảnh chụp nhanh. Khác là kết hợp với tùy chọn `--halt-on-trusted-validator-hash-mismatch`, nó sẽ theo dõi hàm băm gốc merkle của toàn bộ trạng thái tài khoản của các node đáng tin cậy khác trên gossip và nếu các hàm băm tạo ra bất kỳ sự không khớp nào, validator sẽ tạm dừng node để ngăn validator bỏ phiếu hoặc xử lý các giá trị trạng thái có khả năng không chính xác. Hiện tại, slot mà validator xuất bản hàm băm được gắn với khoảng thời gian chụp nhanh. Để tính năng hoạt động hiệu quả, tất cả các validator trong tập hợp tin cậy phải được đặt thành cùng một giá trị khoảng thời gian chụp nhanh hoặc bội số của cùng một giá trị.
+If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>` argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option, it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch, the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted set should be set to the same snapshot interval value or multiples of the same.
 
-Chúng tôi khuyên bạn nên sử dụng các tùy chọn này để ngăn chặn tải xuống trạng thái ảnh chụp nhanh độc hại hoặc phân kỳ trạng thái tài khoản.
+It is highly recommended you use these options to prevent malicious snapshot state download or account state divergence.
 
 ## Kết nối validator của bạn
 
-Kết nối với cụm bằng cách chạy:
+Connect to the cluster by running:
 
 ```bash
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
-Để buộc validator đăng nhập vào bảng điều khiển, hãy thêm đối số `--log -`, nếu không, validator sẽ tự động đăng nhập vào một tệp.
+To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
-> Lưu ý: Bạn có thể sử dụng [cụm từ hạt giống ví giấy](../wallet-guide/paper-wallet.md) cho `--identity` và /hoặc keypair `--authorized-voter`. Để sử dụng chúng, hãy chuyển đối số tương ứng dưới dạng `solana-validator --identity ASK ... --authorized-voter ASK ...` và bạn sẽ được nhắc nhập các cụm từ hạt giống và cụm mật khẩu tùy chọn của bạn.
+The ledger will be placed in the `ledger/` directory by default, use the `--ledger` argument to specify a different location.
 
-Xác nhận validator của bạn được kết nối với mạng bằng cách mở một thiết bị đầu cuối mới và chạy:
+> Lưu ý: Bạn có thể sử dụng [cụm từ hạt giống ví giấy](../wallet-guide/paper-wallet.md) cho `--identity` và /hoặc keypair `--authorized-voter`. To use these, pass the respective argument as `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be prompted to enter your seed phrases and optional passphrase.
+
+Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
-Nếu validator của bạn được kết nối, public key và địa chỉ IP của nó sẽ xuất hiện trong danh sách.
+If your validator is connected, its public key and IP address will appear in the list.
 
 ### Kiểm soát phân bổ cổng mạng cục bộ
 
-Theo mặc định, validator sẽ tự động chọn các cổng mạng có sẵn trong phạm vi 8000-10000 và có thể bị ghi đè bằng `--dynamic-port-range`. Ví dụ, `solana-validator --dynamic-port-range 11000-11010 ...` sẽ hạn chế validator cho các cổng 11000-11010.
+By default the validator will dynamically select available network ports in the 8000-10000 range, and may be overridden with `--dynamic-port-range`. For example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict the validator to ports 11000-11010.
 
 ### Giới hạn kích thước sổ cái để tiết kiệm dung lượng ổ đĩa cứng
 
-Tham số `--limit-ledger-size` cho phép bạn chỉ định bao nhiêu sổ cái [shreds](../terminology.md#shred) node của bạn được giữ lại trên ổ đĩa cứng. Nếu bạn không bao gồm tham số này, validator sẽ giữ toàn bộ sổ cái cho đến khi hết dung lượng ổ đĩa cứng.
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space.
 
-Giá trị mặc định cố gắng duy trì mức sử dụng ổ đĩa cứng sổ cái dưới 500GB. Có thể yêu cầu sử dụng ổ đĩa cứng nhiều hơn hoặc ít hơn bằng cách thêm đối số vào `--limit-ledger-size` nếu muốn. Kiểm tra `solana-validator --help` giá trị giới hạn mặc định được sử dụng bởi `--limit-ledger-size`. Thông tin thêm về việc chọn giá trị giới hạn tùy chỉnh [có sẵn tại đây](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+The default value attempts to keep the ledger disk usage under 500GB. More or less disk usage may be requested by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`. More information about selecting a custom limit value is [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Đơn vị Systemd
 
-Chạy validator dưới dạng đơn vị systemd là một cách dễ dàng để quản lý việc chạy trong nền.
+Running the validator as a systemd unit is one easy way to manage running in the background.
 
-Giả sử bạn có người dùng có tên được gọi bằng `sol` trên máy của mình, hãy tạo tệp `/etc/systemd/system/sol.service` bằng cách sau:
+Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with the following:
 
 ```
 [Unit]
@@ -286,7 +293,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -295,9 +302,9 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Bây giờ hãy tạo `/home/sol/bin/validator.sh` để bao gồm dòng lệnh `solana-validator` mong muốn. Đảm bảo rằng việc chạy `/home/sol/bin/validator.sh` bằng cách thủ công sẽ khởi động validator như mong đợi. Đừng quên đánh dấu nó có thể thực thi bằng `chmod +x /home/sol/bin/validator.sh`
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator` command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
-Bắt đầu dịch vụ với:
+Start the service with:
 
 ```bash
 $ sudo systemctl enable --now sol
@@ -307,19 +314,21 @@ $ sudo systemctl enable --now sol
 
 #### Điều chỉnh đầu ra nhật ký
 
-Các tin nhắn mà validator gửi tới nhật ký có thể được kiểm soát bởi `RUST_LOG` biến môi trường. Thông tin chi tiết có thể tìm thấy trong [tài liệu](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) về thùng Rust `env_logger`.
+The messages that a validator emits to the log can be controlled by the `RUST_LOG` environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for the `env_logger` Rust crate.
 
-Lưu ý rằng nếu sản lượng ghi nhật ký bị giảm, điều này có thể gây khó khăn cho việc gỡ lỗi các vấn đề gặp phải sau này. Nếu nhóm tìm kiếm sự hỗ trợ, mọi thay đổi sẽ cần phải được hoàn nguyên và tái tạo sự cố trước khi có thể cung cấp trợ giúp.
+Note that if logging output is reduced, this may make it difficult to debug issues encountered later. Should support be sought from the team, any changes will need to be reverted and the issue reproduced before help can be provided.
 
 #### Xoay vòng nhật ký
 
-Tệp nhật ký validator, như được chỉ định bởi `--log ~/solana-validator.log`, có thể rất lớn theo thời gian và bạn nên định cấu hình xoay vòng nhật ký.
+The validator log file, as specified by `--log ~/solana-validator.log`, can get very large over time and it's recommended that log rotation be configured.
 
-Trình xác thực sẽ mở lại khi nhận được tín hiệu `USR1`, đây là là nguyên thủy cơ bản cho phép xoay vòng nhật ký.
+The validator will re-open its when it receives the `USR1` signal, which is the basic primitive that enables log rotation.
+
+If the validator is being started by a wrapper shell script, it is important to launch the process with `exec` (`exec solana-validator ...`) when using logrotate. This will prevent the `USR1` signal from being sent to the script's process instead of the validator's, which will kill them both.
 
 #### Sử dụng logrotate
 
-Một ví dụ thiết lập cho `logrotate`, giả định rằng validator đang chạy dưới dạng dịch vụ systemd được gọi là `sol.service` và ghi tệp nhật ký tại /home/sol/solana-validator.log:
+An example setup for the `logrotate`, which assumes that the validator is running as a systemd service called `sol.service` and writes a log file at /home/sol/solana-validator.log:
 
 ```bash
 # Setup log rotation
@@ -340,41 +349,41 @@ systemctl restart logrotate.service
 
 ### Tắt kiểm tra cổng để tăng tốc độ khởi động lại
 
-Khi validator của bạn đang hoạt động bình thường, bạn có thể giảm thời gian khởi động lại trình xác thực của bạn bằng cách thêm cờ `--no-port-check` vào dòng lệnh `solana-validator` của mình.
+Once your validator is operating normally, you can reduce the time it takes to restart your validator by adding the `--no-port-check` flag to your `solana-validator` command-line.
 
 ### Tắt tính năng nén ảnh chụp nhanh để giảm mức sử dụng CPU
 
-Nếu bạn không cung cấp ảnh chụp nhanh cho các validator khác, thì tính năng nén ảnh chụp nhanh có thể bị vô hiệu hóa để giảm tải CPU với chi phí sử dụng ổ đĩa cứng nhiều hơn một chút cho lưu trữ ảnh chụp nhanh cục bộ.
+If you are not serving snapshots to other validators, snapshot compression can be disabled to reduce CPU load at the expense of slightly more disk usage for local snapshot storage.
 
-Thêm đối số `--snapshot-compression none` vào các đối số `solana-validator` dòng lệnh của bạn và khởi động lại validator.
+Add the `--snapshot-compression none` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### Sử dụng ramdisk có spill-over trao đổi cho cơ sở dữ liệu tài khoản để giảm hao mòn SSD
 
-Nếu máy của bạn có nhiều RAM, ramdisk tmpfs ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) có thể được sử dụng để chứa cơ sở dữ liệu tài khoản
+If your machine has plenty of RAM, a tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold the accounts database
 
-Khi sử dụng tmpfs, bạn cũng cần định cấu hình hoán đổi trên máy của mình để tránh hết dung lượng tmpfs theo định kỳ.
+When using tmpfs it's essential to also configure swap on your machine as well to avoid running out of tmpfs space periodically.
 
-Nên sử dụng phân vùng tmpfs 300GB, với phân vùng hoán đổi 250GB đi kèm.
+A 300GB tmpfs partition is recommended, with an accompanying 250GB swap partition.
 
-Cấu hình ví dụ:
+Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. Thêm parition 300GB tmpfs bằng cách thêm một dòng mới chứa `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` vào `/etc/fstab` (giả sử validator của bạn đang chạy dưới tư cách người dùng "sol"). **CẨN THẬN: Nếu bạn chỉnh sửa sai /etc/fstab, máy của bạn có thể không khởi động được nữa**
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab` (assuming your validator is running under the user "sol"). **CẨN THẬN: Nếu bạn chỉnh sửa sai /etc/fstab, máy của bạn có thể không khởi động được nữa**
 3. Tạo ít nhất 250GB không gian hoán đổi
 
-- Chọn một thiết bị để sử dụng thay cho `SWAPDEV` cho phần còn lại của các hướng dẫn này. Lý tưởng nhất là chọn phân vùng ổ đĩa cứng trống có dung lượng 250GB trở lên trên ổ đĩa nhanh. Nếu không có sẵn, hãy tạo tệp hoán đổi với `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, đặt quyền của nó bằng `sudo chmod 0600 /swapfile` và sử dụng `/swapfile` làm `SWAPDEV` cho phần còn lại của những hướng dẫn này
-- Định dạng thiết bị để sử dụng dưới dạng trao đổi với `sudo mkswap SWAPDEV`
+- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions. Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+- Format the device for usage as swap with `sudo mkswap SWAPDEV`
 
-4. Thêm tệp hoán đổi vào `/etc/fstab` với một dòng mới chứa `SWAPDEV swap swap defaults 0 0`
-5. Bật tính năng hoán đổi với `sudo swapon -a` và gắn kết các tmpfs với `sudo mount /mnt/solana-accounts/`
-6. Xác nhận hoán đổi đang hoạt động với `free -g` và tmpfs được gắn với `mount`
+4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
+5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
+6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
-Bây giờ, hãy thêm đối số `--accounts /mnt/solana-accounts` vào các đối số dòng lệnh `solana-validator` của bạn và khởi động lại validator.
+Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### Lập chỉ mục tài khoản
 
-Khi số lượng tài khoản phổ biến trên cụm tăng lên, RPC dữ liệu tài khoản yêu cầu quét toàn bộ tập tài khoản -- như [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) và [Các yêu cầu cụ thể về mã thông báo SPL](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- có thể hoạt động kém. Nếu validator của bạn cần hỗ trợ bất kỳ yêu cầu nào trong số này, bạn có thể sử dụng tham số `--account-index` để kích hoạt một hoặc nhiều chỉ mục tài khoản trong bộ nhớ giúp cải thiện đáng kể hiệu suất RPC bằng cách lập chỉ mục tài khoản theo trường khóa. Hiện đang hỗ trợ các giá trị tham số sau:
+As the number of populated accounts on the cluster grows, account-data RPC requests that scan the entire account set -- like [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- may perform poorly. If your validator needs to support any of these requests, you can use the `--account-index` parameter to activate one or more in-memory account indexes that significantly improve RPC performance by indexing accounts by the key field. Currently supports the following parameter values:
 
-- `program-id` mỗi tài khoản được lập chỉ mục bởi chương trình riêng của nó; được sử dụng bởi [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
-- `spl-token-mint`: mỗi tài khoản mã thông báo SPL được lập chỉ mục bởi mã thông báo Mint của nó; được sử dụng bởi [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), và [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
-- `spl-token-owner`: mỗi tài khoản mã thông báo SPL được lập chỉ mục bởi địa chỉ chủ sở hữu mã thông báo; được sử dụng bởi [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), và [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) các yêu cầu bao gồm bộ lọc chủ sở hữu mã thông báo spl.
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.

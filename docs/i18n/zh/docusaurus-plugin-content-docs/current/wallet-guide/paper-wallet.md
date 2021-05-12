@@ -68,10 +68,10 @@ solana-keygen new --help
 
 ### 公钥派生
 
-如果您选择使用公钥，则可以从助记词和密码派生公钥。 这对于使用离线生成的助记词来导出有效公钥非常有用。 `solana-keygen pubkey` 命令将引导您输入助记词和密码（如果您有设置的话）。
+如果您选择使用公钥，则可以从助记词和密码派生公钥。 This is useful for using an offline-generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through how to use your seed phrase (and a passphrase if you chose to use one) as a signer with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 > 请注意，对于相同的助记词，您可能会使用不同的密码。 每个唯一的密码将产生不同的密钥对。
@@ -79,10 +79,10 @@ solana-keygen pubkey ASK
 `solana-keygen` 工具与生成助记词的 BIP39 标准的英文单词列表是一样的。 如果您的助记词是通过另一个工具生成，您仍然可以使用 `solana-keygen` 命令，但需要通过 `--skip-seed-spoe-valide-` 参数并放弃验证。
 
 ```bash
-solana-keygen pubkey ASK --skip-seed-phrase-validation
+solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
-使用 `solana-keygen pubkey ASK` 输入您的助记词以后，控制台将显示一个 base-58 字符串。 这就是与助记词相关联的 _钱包地址_。
+After entering your seed phrase with `solana-keygen pubkey prompt://` the console will display a string of base-58 character. This is the base _wallet address_ associated with your seed phrase.
 
 > 复制派生地址到 USB 以便网络计算机使用
 
@@ -94,15 +94,33 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 solana-keygen pubkey --help
 ```
 
+### Hierarchical Derivation
+
+The solana-cli supports [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) hierarchical derivation of private keys from your seed phrase and passphrase by adding either the `?key=` query string or the `?full-path=` query string.
+
+By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
+
+```bash
+solana-keygen pubkey prompt://?key=0/1
+```
+
+To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
+```
+
+Because Solana uses Ed25519 keypairs, as per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all derivation-path indexes will be promoted to hardened indexes -- eg. `?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are included in the query-string input.
+
 ## 验证密钥对
 
 如需要验证您控制纸钱包地址的私钥，请使用 `solana-keygen verify` 命令：
 
 ```bash
-solana-keygen verify <PUBKEY> ASK
+solana-keygen verify <PUBKEY> prompt://
 ```
 
-其中 `<PUBKEY>` 替换为钱包地址，他们的关键字 `ASK` 让命令行提示您使用密钥对的助记词。 请注意，出于安全原因，在您输入助记词的时候，它们不会显示出来。 输入您的助记词后， 如果给定的公钥匹配助记词生成的密钥，命令将输出“成功”，否则将输出“失败”。
+where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://` tells the command to prompt you for the keypair's seed phrase; `key` and `full-path` query-strings accepted. Note that for security reasons, your seed phrase will not be displayed as you type. After entering your seed phrase, the command will output "Success" if the given public key matches the keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## 检查账户余额
 

@@ -2,17 +2,12 @@
 title: Offline Transaction Signing
 ---
 
-Some security models require keeping signing keys, and thus the signing
-process, separated from transaction creation and network broadcast. Examples
-include:
+Some security models require keeping signing keys, and thus the signing process, separated from transaction creation and network broadcast. Examples include:
 
-- Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](cli/usage.md#multiple-witnesses)
-- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
-  signing device
+- Collecting signatures from geographically disparate signers in a [multi-signature scheme](cli/usage.md#multiple-witnesses)
+- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>) signing device
 
-This document describes using Solana's CLI to separately sign and submit a
-transaction.
+This document describes using Solana's CLI to separately sign and submit a transaction.
 
 ## Commands Supporting Offline Signing
 
@@ -31,15 +26,8 @@ At present, the following commands support offline signing:
 
 To sign a transaction offline, pass the following arguments on the command line
 
-1. `--sign-only`, prevents the client from submitting the signed transaction
-   to the network. Instead, the pubkey/signature pairs are printed to stdout.
-2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to
-   fill the transaction's `recent_blockhash` field. This serves a number of
-   purposes, namely:
-   _ Eliminates the need to connect to the network and query a recent blockhash
-   via RPC
-   _ Enables the signers to coordinate the blockhash in a multiple-signature
-   scheme
+1. `--sign-only`, prevents the client from submitting the signed transaction to the network. Instead, the pubkey/signature pairs are printed to stdout.
+2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to fill the transaction's `recent_blockhash` field. This serves a number of purposes, namely: _ Eliminates the need to connect to the network and query a recent blockhash via RPC _ Enables the signers to coordinate the blockhash in a multiple-signature scheme
 
 ### Example: Offline Signing a Payment
 
@@ -63,13 +51,10 @@ Signers (Pubkey=Signature):
 
 ## Submitting Offline Signed Transactions to the Network
 
-To submit a transaction that has been signed offline to the network, pass the
-following arguments on the command line
+To submit a transaction that has been signed offline to the network, pass the following arguments on the command line
 
 1. `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
-2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
-   includes the pubkey/signature pairs directly in the transaction rather than
-   signing it with any local keypair(s)
+2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This includes the pubkey/signature pairs directly in the transaction rather than signing it with any local keypair(s)
 
 ### Example: Submitting an Offline Signed Payment
 
@@ -89,10 +74,7 @@ Output
 
 ## Offline Signing Over Multiple Sessions
 
-Offline signing can also take place over multiple sessions. In this scenario,
-pass the absent signer's public key for each role. All pubkeys that were specified,
-but no signature was generated for will be listed as absent in the offline signing
-output
+Offline signing can also take place over multiple sessions. In this scenario, pass the absent signer's public key for each role. All pubkeys that were specified, but no signature was generated for will be listed as absent in the offline signing output
 
 ### Example: Transfer with Two Offline Signing Sessions
 
@@ -155,8 +137,4 @@ ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTH
 
 ## Buying More Time to Sign
 
-Typically a Solana transaction must be signed and accepted by the network within
-a number of slots from the blockhash in its `recent_blockhash` field (~2min at
-the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
-need.
+Typically a Solana transaction must be signed and accepted by the network within a number of slots from the blockhash in its `recent_blockhash` field (~2min at the time of this writing). If your signing procedure takes longer than this, a [Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you need.

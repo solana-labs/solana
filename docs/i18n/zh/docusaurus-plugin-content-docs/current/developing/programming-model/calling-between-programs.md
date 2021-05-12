@@ -99,7 +99,7 @@ Solana 的运行时内置了`invoke()`，它负责通过指令的`program_id`字
 
 1. 允许程序控制特定的地址（称为程序地址），以使任何外部用户都无法生成带有这些地址签名的有效交易。
 
-2. 允许程序以编程方式签名通过[跨程序调用](#cross-program-invocations)调用的指令中存在的程序地址。
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 在这两个条件下，用户可以安全地将链上资产的权限转移或分配给程序地址，然后程序可以自行决定在其他地方分配该权限。
 
@@ -109,14 +109,14 @@ Solana 的运行时内置了`invoke()`，它负责通过指令的`program_id`字
 
 ### 基于哈希的生成程序地址
 
-程序地址是使用 256 位抗映像前哈希函数从种子和程序 ID 的集合中确定性地得出的。 程序地址一定不能位于 ed25519 曲线上，以确保没有关联的私钥。 如果发现地址位于曲线上，则在生成过程中将返回错误。 对于给定的种子和程序 ID 集合，这种情况大约发生 50/50 的变化。 如果发生这种情况，可以使用另一组种子或种子凹凸(附加的 8 位种子) 来查找曲线外的有效程序地址。
+程序地址是使用 256 位抗映像前哈希函数从种子和程序 ID 的集合中确定性地得出的。 程序地址一定不能位于 ed25519 曲线上，以确保没有关联的私钥。 如果发现地址位于曲线上，则在生成过程中将返回错误。 There is about a 50/50 chance of this happening for a given collection of seeds and program id. 如果发生这种情况，可以使用另一组种子或种子凹凸(附加的 8 位种子) 来查找曲线外的有效程序地址。
 
-程序的确定性程序地址遵循与使用`system_instruction::create_address_with_seed`实现的用`SystemInstruction::CreateAccountWithSeed`创建的帐户类似的派生路径。
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 作为参考，该实现如下：
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,13 +167,12 @@ client.send_and_confirm_message(&[&alice_keypair], &message);
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
-    //用户提供目的地
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
-    //确定性派生托管公钥。
+    // Deterministically derive the escrow pubkey.
     let escrow_pubkey = create_program_address(&[&["escrow"]], program_id);
 
     //创建转移指令
@@ -183,7 +182,7 @@ let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
     //执行程序ID和提供的关键字。
     //如果派生地址与指令中标记为已签名的键匹配
     //然后该密钥被接受为已签名。
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
 
 ## 示例
 
-请参阅 [使用 Rust 开发](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples)和 [使用 C 开发](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples)以获取有关如何使用跨程序调用的示例。
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

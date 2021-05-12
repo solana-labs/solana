@@ -17,14 +17,14 @@ title: トークンを送受信しよう
 まず、 _airdrop_ 自身が devnet でトークンをプレイします。
 
 ```bash
-solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 テキスト `<RECIPIENT_ACCOUNT_ADDRESS>` をベース 58 でエンコードされた公開キー/ウォレットアドレスに置き換えます。
 
 #### 残高を確認しよう
 
-アカウントの残高を確認してエアドロップが成功したことを確認します。 `10 SOL` を出力する必要があります。
+アカウントの残高を確認してエアドロップが成功したことを確認します。 `1 SOL` を出力する必要があります。
 
 ```bash
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -51,7 +51,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 次に、それらを転送することによってエアドロップされたトークンを所有していることを証明します。 Solana クラスターは、トランザクション内の送信者の公開鍵に対応する秘密鍵ペアを使用してトランザクションに署名した場合にのみ、転送を受け付けます。
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 -url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 ここで、<`<KEYPAIR>`を 1 つ目のウォレットのキーペアへのパスに置き換え、`<RECIPIENT_ACCOUNT_ADDRESS>`を 2 つ目のウォレットのアドレスに置き換えます。
@@ -78,12 +78,12 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SOL to my wallet's address/pubkey
-Requesting airdrop of 10 SOL from 35.233.193.70:9900
-10 SOL
+$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
+Requesting airdrop of 1 SOL from 35.233.193.70:9900
+1 SOL
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
-10 SOL
+1 SOL
 
 $ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
 Generating a new keypair
@@ -94,14 +94,14 @@ pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # Here is
 新しいキーペアを回復するために、シードフレーズを保存してください。
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL  # The sending account has slightly less than 5 SOL remaining due to the 0.000005 SOL transaction fee payment
+0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-5 SOL  # The second wallet has now received the 5 SOL transfer from the first wallet
+0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
 
 ```
 

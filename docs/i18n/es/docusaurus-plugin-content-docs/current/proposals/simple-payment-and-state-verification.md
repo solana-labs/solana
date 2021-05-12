@@ -79,7 +79,7 @@ Cada voto es una transacción firmada que incluye el hash bancario del bloque po
 
 Sin embargo, aparte de algunos metadatos, los votos firmados en sí mismos no se almacenan actualmente en ninguna parte, por lo que no se pueden recuperar a petición. Estos votos probablemente necesitan ser persistidos en la base de datos Rocksdb, indexados por una clave `(Slot, Hash, Pubkey)` que representa la ranura del voto, el hash del banco del voto, y la pubkey de la cuenta del voto responsable del mismo.
 
-Juntos, el merkle de la transacción y las pruebas de confirmación optimistas pueden proporcionarse a través de RPC a los suscriptores mediante la ampliación de la lógica de suscripción de firmas existente. Los clientes que se suscriben al nivel de confirmación "SingleGossip" ya son notificados cuando se detecta una confirmación optimista, se puede proporcionar una bandera para señalar que las dos pruebas anteriores también deben ser devueltas.
+Juntos, el merkle de la transacción y las pruebas de confirmación optimistas pueden proporcionarse a través de RPC a los suscriptores mediante la ampliación de la lógica de suscripción de firmas existente. Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 Es importante tener en cuenta que la confirmación optimista de `B` también implica que todos los bloques antecesores de `B` también están confirmados de forma optimista, y también que no todos los bloques serán confirmados de forma optimista.
 

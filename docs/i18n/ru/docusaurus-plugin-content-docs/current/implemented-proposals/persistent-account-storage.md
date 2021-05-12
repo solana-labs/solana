@@ -4,9 +4,9 @@ title: Постоянное хранилище аккаунтов
 
 ## Постоянное хранилище аккаунтов
 
-Набор аккаунтов представляет текущее вычисленное состояние всех транзакций, которые были обработаны валидатором. Каждый валидатор должен поддерживать весь этот набор. Каждый блок, предложенный сетью, представляет собой изменение этого набора, и поскольку каждый блок является потенциальной точкой отката, изменения должны быть обратимыми.
+The set of accounts represent the current computed state of all the transactions that have been processed by a validator. Каждый валидатор должен поддерживать весь этот набор. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
 
-Постоянные хранилища, такие как NVME, в 20-40 раз дешевле, чем DDR. Проблема с постоянным хранилищем заключается в том, что производительность записи и чтения намного ниже, чем у DDR, и необходимо внимательно следить за тем, как данные читаются или записываются. И чтение, и запись могут быть разделены между несколькими накопителями и запрашиваться параллельно. Этот дизайн предлагает структуру данных, которая допускает одновременное чтение и одновременную запись в хранилище. Операции записи оптимизируются с помощью структуры данных AppendVec, которая позволяет получать один доступ для записи, обеспечивая доступ множеству одновременных читателей. Индекс аккаунтов поддерживает указатель на точку, где аккаунт был добавлен в каждый форк, тем самым устраняя необходимость в явном чекпоинте состояния.
+Постоянные хранилища, такие как NVME, в 20-40 раз дешевле, чем DDR. The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
 
 ## AppendVec
 
@@ -55,37 +55,25 @@ pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 - Удаление из индекса всех обрезанных форков. Любые оставшиеся форки короче, чем кореневой, можно считать корневыми.
 - Перенос любого старого корневого форка в новый после сканирования индексов. Любые оставшиеся форки короче нового корневого форка могут быть удалены позже.
 
-## Запись только с добавлением
+## Garbage collection
 
-Все обновления в аккаунтах происходят только путем добавления новых записей. Новая версия для каждого обновления аккаунта хранится в AppendVec.
+As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
 
-Можно оптимизировать обновления в пределах одного форка, возвращая изменяемую ссылку на уже сохраненную учетную запись в форке. Bank уже отслеживает одновременный доступ к аккаунтам и гарантирует, что одновременная записи в конкретный аккаунт и чтение из него не произойдут в одном форке. Для поддержки этой операции AppendVec должен реализовать эту функцию:
+To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
 
-```text
-fn get_mut(&self, index: u64) -> &mut T;
-```
+The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
 
-Это API позволяет одновременный смешанный доступ в регион пямяти по `индексу`. Оно полагается на Bank, чтобы гарантировать эксклюзивный доступ к данному индексу.
+## Index Recovery
 
-## Сборка мусра
+Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
 
-Когда учетные записи обновляются, они перемещаются в конец AppendVec. Когда вместимость исчерпана, можно создать новый AppendVec и хранить в нем обновления. В конце концов ссылки на более старый AppendVec исчезнут, потому что все учетные записи были обновлены, а старый AppendVec могут быть удалены.
+To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
 
-Чтобы ускорить этот процесс, можно переместить Аккаунты, которые не обновлялись недавно, в начало нового AppendVec. Эта форма сборки мусора может выполняться без необходимости блокировки любой из структур данных, за исключением обновления индекса.
+## Snapshots
 
-Первоначальная реализация сборки мусора заключается в том, что после того, как все учетные записи в AppendVec становятся устаревшими версиями, он используется повторно. После добавления учетные записи не обновляются и не перемещаются.
+To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
 
-## Восстановление индекса
-
-Каждый поток Bank имеет эксклюзивный доступ к аккаунтам во время добавления, поскольку блокировки аккаунтов не могут быть сняты до тех пор, пока данные не будут зафиксированы. Но явного порядка для записи между отдельными файлами AppendVec не существует. Для создания порядка индекс поддерживает атомарный счетчик версий записи. Каждое дополнение к AppendVec записывает номер версии записи индекса для этого добавления в записи для Account в AppendVec.
-
-Для записи индексов, все файлы AppendVec могут читаться в любом порядке, и последняя записанная версия для каждого форка должна храниться в индексе.
-
-## Снепшоты
-
-Для создания снепшота основные файлы с отображением памяти в AppendVec должны быть сброшены на диск. Индекс также можно записать на диск.
-
-## Производительность
+## Performance
 
 - Запись только с добавлением является достаточно быстрой. SSD и NVME, а также все структуры данных ядра уровня ОС позволяют приложениям работать с такой скоростью, которую позволяет пропускная способность PCI или NVMe \(2,700 МБ/с\).
 - Каждый воспроизводящий и банковский поток записывают параллельно в свои собственные AppendVec файлы.

@@ -70,7 +70,7 @@ log_pubkey_units: 100,
 
 計算機予算は、プログラムの実行に伴って段階的に消費されるため、予算の総消費量は、プログラムが実行する操作の様々なコストの組み合わせとなります。
 
-プログラムの実行時には、計算バジェットがどれだけ残っているかを記録することができます。 詳細は [ の予算](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption) を参照してください。
+プログラムの実行時には、計算バジェットがどれだけ残っているかを記録することができます。 See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 予算値は機能の有効化に条件付きです。 budget's [new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) 関数を見て、予算がどのように構成されているかを調べてみましょう。 [の機能](runtime.md#features) の仕組みと、 クラスタで有効になっている機能を理解するには、現在の予算の値を決定する必要があります。
 

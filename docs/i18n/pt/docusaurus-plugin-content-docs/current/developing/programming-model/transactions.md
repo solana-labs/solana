@@ -52,7 +52,7 @@ An account address is 32-bytes of arbitrary data. When the address requires a di
 
 Each [instruction](terminology.md#instruction) specifies a single program, a subset of the transaction's accounts that should be passed to the program, and a data byte array that is passed to the program. The program interprets the data array and operates on the accounts specified by the instructions. The program can return successfully, or with an error code. An error return causes the entire transaction to fail immediately.
 
-Program's typically provide helper functions to construct instruction they support. For example, the system program provides the following Rust helper to construct a [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) instruction:
+Programs typically provide helper functions to construct instructions they support. For example, the system program provides the following Rust helper to construct a [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) instruction:
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 The instruction's [program id](terminology.md#program-id) specifies which program will process this instruction. The program's account's owner specifies which loader should be used to load and execute the program and the data contains information about how the runtime should execute the program.
 
-In the case of [deployed BPF programs](developing/deployed-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-Unlike deployed programs, [builtins](developing/builtins/programs.md) are handled differently in that they are built directly into the Solana runtime.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### Accounts
 
@@ -101,6 +101,14 @@ Each instruction caries a general purpose byte array that is passed to the progr
 Programs are free to specify how information is encoded into the instruction data byte array. The choice of how data is encoded should take into account the overhead of decoding since that step is performed by the program on-chain. It's been observed that some common encodings (Rust's bincode for example) are very inefficient.
 
 The [Solana Program Library's Token program](https://github.com/solana-labs/solana-program-library/tree/master/token) gives one example of how instruction data can be encoded efficiently, but note that this method only supports fixed sized types. Token utilizes the [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) trait to encode/decode instruction data for both token instructions as well as token account states.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## Signatures
 

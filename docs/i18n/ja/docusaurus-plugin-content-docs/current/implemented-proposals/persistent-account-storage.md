@@ -4,9 +4,9 @@ title: 永続的なアカウントストレージ
 
 ## 永続的なアカウントストレージ
 
-アカウントのセットは、あるバリデータが処理したすべてのトランザクションの 現在の計算状態を表します。 各バリデータはこのセット全体を管理する必要があります。 ネットワークが提案する各ブロックはこのセットに対する変更を意味し、各ブロックはロールバックポイントとなる可能性があるため、変更は可逆的である必要があります。
+The set of accounts represent the current computed state of all the transactions that have been processed by a validator. 各バリデータはこのセット全体を管理する必要があります。 Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
 
-"NVME"のようなパーシステントストレージは"DDR"に比べて、20〜40 倍も安価です。 パーシステントストレージの問題点は、書き込みと読み出しのパフォーマンスが"DDR"よりもはるかに遅く、データの読み書きに注意を払わなければならないことです。 読み書きともに、複数のストレージドライブに分割して並行してアクセスすることができます。 この設計では、ストレージの同時読み取りと同時書き込みを可能にするデータ構造を提案しています。 書き込みは、AppendVec データ構造を使用して最適化されています。このデータ構造では 1 人のライターが追加を行い、同時に多数のリーダがアクセスできるようになっています。 "accounts インデックス"はフォークごとにアカウントが追加された場所へのポインタを維持するため、状態の明示的なチェックポイントを必要としません。
+"NVME"のようなパーシステントストレージは"DDR"に比べて、20〜40 倍も安価です。 The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
 
 ## AppendVec
 
@@ -55,37 +55,25 @@ pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 - 剪定されたフォークをインデックスから削除します。 残っているフォークのうちルートよりも数が少ないものは、ルートとみなすことができます。
 - インデックスをスキャンして、古いルートを新しいものに移行します。 新しいルートよりも下位のフォークが残っていれば、後で削除することができます。
 
-## 追加のみの書き込み
+## Garbage collection
 
-アカウントの更新はすべて"Append-only"の更新として発生します。 アカウントの更新ごとに新しいバージョンが、"AppendVec"に格納されます。
+As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
 
-既に保存されているアカウントのフォークに "mutable reference"を返すことで、単一のフォーク内での更新を最適化することが可能です。 Bank はすでにアカウントの同時アクセスを追跡しており、特定のアカウントのフォークへの書き込みがそのフォークのアカウントへの読み込みと同時に行われないことを保証しています。 この操作をサポートするために、"AppendVec"はこの関数を実装する必要があります。
+To speed up this process, it's possible to move Accounts that have not been recently updated to the front of a new AppendVec. This form of garbage collection can be done without requiring exclusive locks to any of the data structures except for the index update.
 
-```text
-fn get_mut(&self, index: u64) -> &mut T;
-```
+The initial implementation for garbage collection is that once all the accounts in an AppendVec become stale versions, it gets reused. The accounts are not updated or moved around once appended.
 
-この API では、`インデックス`のメモリ領域への変異可能なアクセスを同時に行うことができます。 そのインデックスへの排他的アクセスを保証するために、"Bank"に依存しています。
+## Index Recovery
 
-## ガベージコレクション
+Each bank thread has exclusive access to the accounts during append, since the accounts locks cannot be released until the data is committed. But there is no explicit order of writes between the separate AppendVec files. To create an ordering, the index maintains an atomic write version counter. Each append to the AppendVec records the index write version number for that append in the entry for the Account in the AppendVec.
 
-アカウントが更新されると、"AppendVec"の最後に移動します。 容量がなくなると新しい"AppendVec"が作成され、アップデートはそこに保存されます。 最終的にはすべてのアカウントが更新されたので、古い"AppendVec"への参照はなくなり、古い"AppendVec"は削除できます。
+To recover the index, all the AppendVec files can be read in any order, and the latest write version for every fork should be stored in the index.
 
-このプロセスを早めるために、最近更新されていないアカウントを新しい"AppendVec"の前に移動させることができます。 この形式のガベージコレクションは、インデックスの更新以外のデータ構造に排他的ロックを必要とせずに行うことができます。
+## Snapshots
 
-ガベージコレクションの初期の実装では、"AppendVec"内のすべてのアカウントが古いバージョンになったら、それを再利用します。 アペンドされたアカウントは更新されず、移動もしません。
+To snapshot, the underlying memory-mapped files in the AppendVec need to be flushed to disk. The index can be written out to disk as well.
 
-## インデックスのリカバリ
-
-各 Bank のスレッドはデータがコミットされるまでアカウントのロックを解除できないため、アペンド中はアカウントに排他的にアクセスできます。 しかし、別々の AppendVec ファイルの間には書き込みの明示的な順序はありません。 順番を作るためにインデックスは、アトミックな書き込みバージョンカウンタを維持します。 "AppendVec"に追加するたびに、"AppendVec"のアカウントのエントリに、その追加分のインデックスの書き込みバージョン番号が記録されます。
-
-インデックスを回復するには、すべての"AppendVec"ファイルをどのような順番でも読み取ることができ、すべてのフォークの最新の書き込みバージョンをインデックスに保存する必要があります。
-
-## スナップショット
-
-スナップショットを行うためには、"AppendVec"内の基礎となるメモリマップドファイルをディスクにフラッシュする必要があります。 インデックスも同様にディスクに書き出すことができます。
-
-## パフォーマンス
+## Performance
 
 - アペンドのみの書き込みも高速です。 SSD や NVME、そして OS レベルのカーネルデータ構造のおかげで、PCI や NVMe の帯域幅が許す限り、アペンドを高速に実行することができます \(2,700 MB/s\)。
 - "リプレイ"と"バンキング"の各スレッドは、それぞれの"AppendVec"に同時に書き込みを行います。

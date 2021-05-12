@@ -2,7 +2,7 @@
 title: 质押账户结构
 ---
 
-Solana 上的质押账户可用于将代币委托给网络上的验证节点，从而有可能为质押账户的所有者赚取奖励。 质押账户的创建和管理与传统的钱包地址（称为*系统账户*）不同。 系统帐户只能从网络上的其他帐户发送和接收 SOL，而质押帐户需要管理代币委托等更复杂的操作。
+Solana 上的质押账户可用于将代币委托给网络上的验证节点，从而有可能为质押账户的所有者赚取奖励。 Stake accounts are created and managed differently than a traditional wallet address, known as a _system account_. 系统帐户只能从网络上的其他帐户发送和接收 SOL，而质押帐户需要管理代币委托等更复杂的操作。
 
 Solana 上的质押账户的运作方式也可能与您可能熟悉的其他权益证明区块链网络不同。 本文档描述了 Solana 质押账户的高级结构和功能。
 
@@ -14,19 +14,19 @@ Solana 上的质押账户的运作方式也可能与您可能熟悉的其他权�
 
 #### 理解帐户授权
 
-某些类型的帐户可能具有与给定帐户相关联的一个或多个*签名授权*。 帐户授权用于为其控制的帐户签署某些交易。 这与其他一些区块链网络不同，在其他区块链网络中，与账户地址关联的密钥对的持有者控制着账户的所有活动。
+Certain types of accounts may have one or more _signing authorities_ associated with a given account. 帐户授权用于为其控制的帐户签署某些交易。 这与其他一些区块链网络不同，在其他区块链网络中，与账户地址关联的密钥对的持有者控制着账户的所有活动。
 
 每个质押账户都有两个由其各自地址指定的签名授权，每个授权均被授权对质押账户执行某些操作。
 
-*质押授权*用于签署以下操作的交易：
+The _stake authority_ is used to sign transactions for the following operations:
 
 - 委托质押
 - 停用质押委托
 - 分割质押账户，创建一个新的质押账户，其中第一个账户中有一部分资金
-- 将两个未授权的质押账户合并为一个
+- Merging two stake accounts into one
 - 设置新的质押授权
 
-*提款授权*对以下各项交易签名：
+The _withdraw authority_ signs transactions for the following:
 
 - 将未委托的质押提取到钱包地址中
 - 设置新的提款权限
@@ -46,28 +46,40 @@ Solana 上的质押账户的运作方式也可能与您可能熟悉的其他权�
 
 可以将相同的质押和提款授权分配给多个质押账户。
 
-可以将两个未委托的，具有相同权限和锁定的质押账户合并为一个质押账户。
+#### Merging stake accounts
 
-#### 委托预热和冷却
+Two stake accounts that have the same authorities and lockup can be merged into a single resulting stake account. A merge is possible between two stakes in the following states with no additional conditions:
 
-当委托质押帐户或取消委托时，该操作不会立即生效。
+- two deactivated stakes
+- an inactive stake into an activating stake during its activation epoch
 
-委托或停用会花费几个[epoch](../terminology.md#epoch)，在将包含指令的交易提交给集群之后，一部分委托在每个 epoch 边界处变为活动或非活动状态。
+For the following cases, the voter pubkey and vote credits observed must match:
 
-在单个 epoch 内可以委托或取消激活的总质押数也有限制，以防止整个网络上的质押发生突然的大变化。 由于预热和冷却取决于其他网络参与者的行为，因此它们的确切持续时间很难预测。 关于预热和冷却时间的详细信息请参看 [这里](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)。
+- two activated stakes
+- two activating accounts that share an activation epoch, during the activation epoch
 
-#### 锁定
+All other combinations of stake states will fail to merge, including all "transient" states, where a stake is activating or deactivating with a non-zero effective stake.
 
-质押账户可以进行锁定，以防止持有的代币在到达特定日期或时代之前被提取。 账户锁定后，仍可以委托，解除授权，或拆分质押帐户，并且可以正常更改其质押和提取权限。 只有提现到钱包地址是不允许的。
+#### Delegation Warmup and Cooldown
 
-锁定只能在首次创建质押账户时添加，以后可以由*锁定权限*或*托管人*对其进行修改，而锁定地址也将在创建账户时进行设置。
+When a stake account is delegated, or a delegation is deactivated, the operation does not take effect immediately.
 
-#### 销毁质押账户
+A delegation or deactivation takes several [epochs](../terminology.md#epoch) to complete, with a fraction of the delegation becoming active or inactive at each epoch boundary after the transaction containing the instructions has been submitted to the cluster.
 
-与 Solana 网络上的其他类型的帐户一样，网络不再跟踪余额为零的 SOL 质押帐户。 如果未委托一个质押账户，并且其中包含的所有代币都被提取到一个钱包地址，则该地址上的账户将被有效销毁，并且需要手动重新创建该地址才能再次被使用。
+There is also a limit on how much total stake can become delegated or deactivated in a single epoch, to prevent large sudden changes in stake across the network as a whole. Since warmup and cooldown are dependent on the behavior of other network participants, their exact duration is difficult to predict. Details on the warmup and cooldown timing can be found [here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
-#### 查看质押账户
+#### Lockups
 
-通过将帐户地址复制并粘贴到搜索栏中，可以在 Solana 浏览器上查看质押帐户详细信息。
+Stake accounts can have a lockup which prevents the tokens they hold from being withdrawn before a particular date or epoch has been reached. While locked up, the stake account can still be delegated, un-delegated, or split, and its stake and withdraw authorities can be changed as normal. Only withdrawal into a wallet address is not allowed.
+
+A lockup can only be added when a stake account is first created, but it can be modified later, by the _lockup authority_ or _custodian_, the address of which is also set when the account is created.
+
+#### Destroying a Stake Account
+
+Like other types of accounts on the Solana network, a stake account that has a balance of 0 SOL is no longer tracked. If a stake account is not delegated and all of the tokens it contains are withdrawn to a wallet address, the account at that address is effectively destroyed, and will need to be manually re-created for the address to be used again.
+
+#### Viewing Stake Accounts
+
+Stake account details can be viewed on the Solana Explorer by copying and pasting an account address into the search bar.
 
 - http://explorer.solana.com/accounts

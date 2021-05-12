@@ -6,7 +6,7 @@ title: "账户"
 
 如果程序需要在交易之间存储状态，则可以使用*accounts*进行存储。 帐户类似于 Linux 等操作系统中的文件。 就像文件一样，帐户可以保存任意数据，并且该数据会在程序的生存期内持续存在。 帐户也像文件一样，包含元数据，该元数据告诉运行时允许谁访问数据以及如何访问数据。
 
-与文件不同，该帐户包含文件生存期内的元数据。 该存在时间用“代币”表示，即称为*lamports*的许多局部原生代币。 帐户保存在验证节点的内存中，并支付[“rent”](#rent)留在那里。 每个验证节点都会定期扫描所有帐户并收取租金。 任何掉落到零零花的账户都将被清除。 如果帐户包含足够数量的 Lamport，也可以标记为[rent-exempt](#rent-exemption)。
+与文件不同，该帐户包含文件生存期内的元数据。 该存在时间用“代币”表示，即称为*lamports*的许多局部原生代币。 帐户保存在验证节点的内存中，并支付[“rent”](#rent)留在那里。 每个验证节点都会定期扫描所有帐户并收取租金。 任何掉落到零零花的账户都将被清除。 Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 与 Linux 用户使用路径查找文件的方式相同，Solana 客户端使用*address*查找帐户。 该地址是一个 256 位公共密钥。
 
@@ -34,7 +34,19 @@ title: "账户"
 
 创建的帐户由称为 System 程序的内置程序初始化为*owned*，并适当地称为*system account*。 帐户包含“所有者”元数据。 所有者是一个程序 ID。 如果运行时的 ID 与所有者匹配，则运行时将授予该程序对该帐户的写访问权限。 对于 System 程序，运行时允许客户端转移 Lamport，并且重要的是*转移*帐户所有权，这意味着将所有者更改为其他程序 ID。 如果某个帐户不属于某个程序，则仅允许该程序读取其数据并将该帐户记入贷方。
 
-## 承租
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
+
+## 出租
 
 使帐户在 Solana 上保持活动状态会产生称为*rent*的存储成本，因为集群必须积极维护数据以处理其上的任何将来的事务。 这与比特币和以太坊不同，在比特币和以太坊中，存储帐户不会产生任何费用。
 
@@ -88,3 +100,14 @@ title: "账户"
 ```text
 105,290,880=19.055441478439427(手续费率)*(128+15_000)(包括元数据的帐户大小)*((365.25/2)*2)(以2年为周期)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

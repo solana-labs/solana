@@ -4,7 +4,7 @@ title: 命令のイントロスペクション
 
 ## 問題
 
-スマートコントラクトプログラムの中には、特定の Message に別の Instruction が存在することを確認したいものがあります。 (例として"secp256k1_instruction"を参照してください)。
+スマートコントラクトプログラムの中には、特定の Message に別の Instruction が存在することを確認したいものがあります。 (See secp256k1_instruction for an example).
 
 ## 解決策
 

@@ -16,7 +16,7 @@
 $ solana-ledger-tool -l 원장 생성-스냅 샷 SLOT_X 원장 --hard-fork SLOT_X
 ```
 
-이제 원장 디렉토리에 새 스냅 샷이 포함되어야합니다. `solana-ledger-tool create-snapshot`은 또한 새 파쇄 버전과 뱅크 해시 값을 출력하며이를 각각 NEW \ \_SHRED \ \_VERSION 및 NEW \ \_BANK \ \_HASH라고합니다.
+이제 원장 디렉토리에 새 스냅 샷이 포함되어야합니다. `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 밸리데이터의 인수를 조정하십시오.
 
@@ -37,7 +37,10 @@ announcements에 다음과 같이 게시합니다 (텍스트를 적절하게 조
 >
 > v1.1.12를 출시했으며 테스트 넷을 다시 백업 할 준비가되었습니다.
 >
-> 단계 : 1. v1.1.12 릴리스를 설치합니다 : https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. 선호하는 방법은 다음과 같이 로컬 원장에서 시작합니다.
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. 선호하는 방법은 다음과 같이 로컬 원장에서 시작합니다.
 >
 > ```bash
 > solana-validator

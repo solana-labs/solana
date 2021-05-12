@@ -4,8 +4,7 @@ title: Create a validator public key
 
 In order to participate you need to first register. See [Registration info](../registration/how-to-register.md).
 
-In order to obtain your allotment of SOL you need to publish your
-validator's identity public key under your keybase.io account.
+In order to obtain your allotment of SOL you need to publish your validator's identity public key under your keybase.io account.
 
 ## **Generate Keypair**
 

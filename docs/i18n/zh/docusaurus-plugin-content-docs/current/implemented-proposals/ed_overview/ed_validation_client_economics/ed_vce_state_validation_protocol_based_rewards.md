@@ -20,42 +20,42 @@ title: 通货膨胀规划
 
 第一个因素仅是协议参数的函数\(即独立于验证节点在给定纪元中的行为\)，其结果是设计了一个膨胀时间表，以激励早期参与，提供明确的货币稳定性，并在网络中提供最佳的安全性。
 
-作为理解*通胀计划*对 Solana 经济的第一个影响，我们模拟了在当前研究的通胀时间表参数范围内，代币发行随时间推移可能出现的上下限范围。
+As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 具体而言：
 
-- _初始通货膨胀率_: 7-9%
-- _通货膨胀率降低比例_: -14-16%
-- _长期通货膨胀率_: 1-2%
+- _Initial Inflation Rate_: 7-9%
+- _Dis-inflation Rate_: -14-16%
+- _Long-term Inflation Rate_: 1-2%
 
 使用这些范围来模拟一些可能的通货膨胀表，我们可以探索一段时间内的通货膨胀：
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-在上图中，确定了范围的平均值，以说明每个参数的贡献。 从这些模拟的*通货膨胀表*中，我们还可以推算出一段时间内代币发行的范围。
+在上图中，确定了范围的平均值，以说明每个参数的贡献。 From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-最后，如果我们引入一个额外的参数，也就是之前讨论过的*质押 SOL 百分比*，我们就可以估算出质押 SOL 的*质押收益*。
+Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}} CONTEXT
 
-在这种情况下，由于*质押 SOL 百分比*是一个必须估计的参数(不同于*通胀表*参数)，所以使用具体的*通胀表*参数，探索*质押 SOL 百分比*的范围比较容易。 在下面的例子，我们选择了上面探讨的参数范围的中间值：
+In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. 在下面的例子，我们选择了上面探讨的参数范围的中间值：
 
-- _初始通货膨胀率_: 8%
-- _通货膨胀率降低比例_: -15%
-- _长期通货膨胀率_: 1.5%
+- _Initial Inflation Rate_: 8%
+- _Dis-inflation Rate_: -15%
+- _Long-term Inflation Rate_: 1.5%
 
-根据投资者和验证节点社区的反馈，以及在类似权益证明协议中观察到的情况，*质押 SOL 百分比*的范围在 60%-90%之间，我们认为这涵盖了我们预期观察到的可能范围。
+The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-同样，上面显示的是 Solana 网络的一个例子，在指定的*通货膨胀时间表*下，一个质押者可能会期望随着时间的推移而获得的*质押收益*。 这是一个理想化的*质押收益*，因为它忽略了验证节点正常运行时间对奖励的影响，验证节点佣金，潜在的收益率节流和潜在的罚没事件。 此外，它还忽略了*质押 SOL 百分比*是动态设计的——它的经济激励由*通货膨胀表*设置。
+Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
 
 ### 调整后的质押收益
 
-质押代币潜力盈利的完整评估应考虑到质押*代币稀释*及其对质押收益率的影响。 为此，我们将*调整后的质押收益*定义为：由于通货膨胀发行量的分布而导致的质押代币在流通量占比的变化。 即 通货膨胀的正向稀释效应。
+A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. 即 通货膨胀的正向稀释效应。
 
-我们可以将*调整后的质押收益*作为通货膨胀率和网络上的质押代币百分比的函数来考察。 我们可以在这里看到各种质押占比的情况。
+We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. 我们可以在这里看到各种质押占比的情况。
 
 ![](/img/p_ex_staked_dilution.png)

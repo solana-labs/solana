@@ -4,8 +4,8 @@ title: はじめに
 
 ## ようこそ！
 
-このガイドには、Solana の Tour de SOL に参加する方法についての情報が含まれています。 質問がありますか？ コメントはありますか？ Email ryan@solana.com
+このガイドには、Solana の Tour de SOL に参加する方法についての情報が含まれています。 質問がありますか？ コメントはありますか？ Keep on reading!
 
-### [Tour de SOL についての詳細](https://solana.com/tds/)
+### Learn more about Tour de SOL
 
-まだ登録されていない方は、["https://solana.com/tds"](https://solana.com/tds/)のフォームをご利用ください。
+If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.

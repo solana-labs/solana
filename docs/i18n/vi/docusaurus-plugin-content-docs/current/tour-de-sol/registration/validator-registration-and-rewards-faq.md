@@ -14,40 +14,36 @@ Vui lòng xem phần “1 Đủ điều kiện; Yêu cầu KYC ”của [ĐIỀU
 
 ## Tôi có cần phải hoàn thành quy trình KYC/AML để tham gia không?
 
-Có. Hoàn thành quy trình KYC/AML là bắt buộc. Nếu bạn không hoàn thành quy trình trước Giai đoạn 1 của Tour de SOL, bạn không thể tham gia Tour de SOL.
-
-Chúng tôi đã hợp tác với Coinlist để quản lý quy trình KYC/AML Tour de Sol. Bạn có thể xem <a [hướng dẫn quy trình tại đây](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) và [ hoàn thành quá trình của bạn ở đây](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
+Có. Hoàn thành quy trình KYC/AML là bắt buộc.
 
 ## Tôi có trách nhiệm gì với tư cách là người tham gia Tour de Sol?
 
-Vui lòng xem phần “2 c Chi tiết Tour de SOL” trong [ĐIỀU KHOẢN THAM GIA TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) để biết thêm chi tiết.
+Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-### Nhiệm vụ “50% hoạt động trong thời gian sự kiện Tour” được tính như thế nào?
+## How is the “90% of the active Tour event time” responsibility calculated?
 
-Để đủ điều kiện nhận phần thưởng trong một giai đoạn nhất định, validator phải gửi phiếu bầu trong &gt;= 50% slot của giai đoạn đó.
+To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
 
-Nếu validator không thể gửi &gt;= 50% phiếu bầu cho một giai đoạn và vẫn cho rằng họ sẽ nhận được giải thưởng cho giai đoạn đó, họ có thể kiến ​​nghị Solana xem xét lại.
+## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
 
-## Có mối quan hệ giữa mã thông báo testnet Tour de Sol và mã thông báo Solana mainnet không?
+No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-Không. Vui lòng xem phần "2d Chi tiết Tour de SOL" của href="https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view">ĐIỀU KHOẢN THAM GIA TOUR DE SOL</a> để biết chi tiết.
+## Can a validator be disqualified from the Tour de Sol?
 
-## Validator có thể bị loại khỏi Tour de Sol không?
+Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
 
-Có. Người xác nhận sẽ bị loại khỏi Tour de SOL nếu họ có những hành vi bị cấm và/hoặc không cung cấp mức dịch vụ tối thiểu được mô tả trong câu hỏi \#4 ở trên.
+Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
 
-Vui lòng xem thêm Phần “4 Hành vi bị Cấm” của [ĐIỀU KHOẢN THAM GIA TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) để biết thêm chi tiết về các hành vi bị cấm.
-
-### Các câu hỏi khác liên quan đến Hành vi bị Cấm:
+### More questions related to Prohibited Conduct:
 
 #### Như đã đề cập trong phần “4 Hành vi bị Cấm”, ví dụ về việc cung cấp Dịch vụ Tour từ một khu vực pháp lý khác với khu vực pháp lý nơi cư trú của tôi là gì? Điều này có nghĩa là máy chủ của tôi phải nằm trong khu vực sinh sống của tôi?
 
-Không. Máy chủ có thể ở các khu vực pháp lý khác, khác với nơi cư trú của người tham gia. Bằng cách ký vào [ĐIỀU KHOẢN THAM GIA TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view), người tham gia đã tuyên bố rằng họ đang cung cấp dịch vụ của họ từ Hoa Kỳ nếu họ cư trú ở đó hoặc từ bên ngoài Hoa Kỳ nếu họ không cư trú trong Hoa Kỳ.
+No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
 
-## Phần thưởng được tính như thế nào?
+## How are rewards calculated?
 
-Vui lòng xem [Phần thưởng](rewards.md) để biết thêm chi tiết
+Please see the [Rewards section](rewards.md) for details
 
-## Làm thế nào chúng ta biết được thông tin nào chúng ta có thể và không thể chia sẻ công khai?
+## How will we know what information we can and cannot share publicly?
 
-Vui lòng xem [Bảo mật](confidentiality.md).
+Please see [Confidentiality](confidentiality.md).

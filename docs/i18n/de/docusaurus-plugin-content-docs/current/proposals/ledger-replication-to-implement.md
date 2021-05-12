@@ -2,13 +2,7 @@
 title: Ledger Replication
 ---
 
-Note: this ledger replication solution was partially implemented, but not
-completed. The partial implementation was removed by
-https://github.com/solana-labs/solana/pull/9992 in order to prevent the security
-risk of unused code. The first part of this design document reflects the
-once-implemented parts of ledger replication. The
-[second part of this document](#ledger-replication-not-implemented) describes the
-parts of the solution never implemented.
+Note: this ledger replication solution was partially implemented, but not completed. The partial implementation was removed by https://github.com/solana-labs/solana/pull/9992 in order to prevent the security risk of unused code. The first part of this design document reflects the once-implemented parts of ledger replication. The [second part of this document](#ledger-replication-not-implemented) describes the parts of the solution never implemented.
 
 ## Proof of Replication
 

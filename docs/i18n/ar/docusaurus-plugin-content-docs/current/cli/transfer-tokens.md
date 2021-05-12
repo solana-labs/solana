@@ -17,14 +17,14 @@ title: إرسال واستقبال الرموز المميزة
 أولا، قُم بإرسال بتوزيع حر _airdrop_ لنفسك على شبكة المُطوِّرين (Devnet).
 
 ```bash
-solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 حيث تستبدل النص `<RECIPIENT_ACCOUNT_ADDRESS>` المفتاح العمومي (public key) / عنوان المحفظة (wallet address) المُرمّز base58.
 
 #### تحقق من رصيدك
 
-تأكد من نجاح التوزيع الحر (airdrop) بالتَحَقُّق من رصيد الحساب. يجب أن تكون النتيجة `10 SOL`:
+تأكد من نجاح التوزيع الحر (airdrop) بالتَحَقُّق من رصيد الحساب. يجب أن تكون النتيجة `1 SOL`:
 
 ```bash
 رصيد solana <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -51,7 +51,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 بعد ذلك، أثبت أنك تملك الرموز التي تم إرسالها بالتوزيع الحر (airdropped) وذلك عن طريق نقلها. لن تقبل مجموعة Solana التحويل إلا إذا قُمت بالتوقيع على المُعاملة بإستخدام زوج المفاتيح (keypair) الخاص المُطابق للمفتاح العمومي (public key) للقُرسَل إليه في القُعاملة.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 حيث تستبدل زوج المفاتيح `<KEYPAIR>` بالمسار إلى زوج المفاتيح (keypair) في محفظتك الأولى، وقُم بإستبدال عنوان حساب المُسْتَلِم `<RECIPIENT_ACCOUNT_ADDRESS>` بعنوان محفظتك الثانية.
@@ -78,12 +78,12 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SOL to my wallet's address/pubkey
-Requesting airdrop of 10 SOL from 35.233.193.70:9900
-10 SOL
+$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
+Requesting airdrop of 1 SOL from 35.233.193.70:9900
+1 SOL
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
-10 SOL
+1 SOL
 
 $ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
 Generating a new keypair
@@ -95,14 +95,14 @@ Save this seed phrase to recover your new keypair:
 clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL  # The sending account has slightly less than 5 SOL remaining due to the 0.000005 SOL transaction fee payment
+0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-5 SOL  # The second wallet has now received the 5 SOL transfer from the first wallet
+0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
 
 ```
 

@@ -99,7 +99,7 @@ Program derived address:
 
 1. Allow programs to control specific addresses, called program addresses, in such a way that no external user can generate valid transactions with signatures for those addresses.
 
-2. Allow programs to programmatically sign for programa addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Given the two conditions, users can securely transfer or assign the authority of on-chain assets to program addresses and the program can then assign that authority elsewhere at its discretion.
 
@@ -109,14 +109,14 @@ A Program address does not lie on the ed25519 curve and therefore has no valid p
 
 ### Hash-based generated program addresses
 
-Program addresses are deterministically derived from a collection of seeds and a program id using a 256-bit pre-image resistant hash function. Program address must not lie on the ed25519 curve to ensure there is no associated private key. During generation an error will be returned if the address is found to lie on the curve. There is about a 50/50 change of this happening for a given collection of seeds and program id. If this occurs a different set of seeds or a seed bump (additional 8 bit seed) can be used to find a valid program address off the curve.
+Program addresses are deterministically derived from a collection of seeds and a program id using a 256-bit pre-image resistant hash function. Program address must not lie on the ed25519 curve to ensure there is no associated private key. During generation an error will be returned if the address is found to lie on the curve. There is about a 50/50 chance of this happening for a given collection of seeds and program id. If this occurs a different set of seeds or a seed bump (additional 8 bit seed) can be used to find a valid program address off the curve.
 
-Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `system_instruction::create_address_with_seed`.
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 For reference that implementation is as follows:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,9 +167,8 @@ Programs can use the same function to generate the same address. In the function
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ The runtime will internally call `create_program_address`, and compare the resul
 
 ## Examples
 
-Refer to [Developing with Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) and [Developing with C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) for examples of how to use cross-program invocation.
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

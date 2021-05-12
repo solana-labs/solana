@@ -41,7 +41,18 @@ https://api.mainnet-beta.solana.com</code>
 ##### '예 solana` 명령 라인
 
 ```bash
-export SOLANA_METRICS_CONFIG = "host = https : //metrics.solana.com : 8086, db = mainnet-beta, u = mainnet-beta_write, p = password "
+$ solana-validator \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
+    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
+    --no-untrusted-rpc \
+    --ledger ledger \
+    --rpc-port 8899 \
+    --dynamic-port-range 8000-8010 \
+    --entrypoint entrypoint.devnet.solana.com:8001 \
+    --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
+    --wal-recovery-mode skip_any_corrupted_record \
+    --limit-ledger-size
 ```
 
 예시`solana` 명령 줄
@@ -74,34 +85,27 @@ https://testnet.solana.com```#####
 ##### 예`솔라나 - validator` 명령
 
 ```bash
-줄<code>bash는
-$ 솔라 -validator \
-    --identity ~ / 검증 - keypair.json \
-    --vote-계정 ~ / 투표-계정 keypair.json \
-    --trusted - 검증 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
-    --trusted - 검증 GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
-    --trusted - 검증의 DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
-    --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
+$ solana-validator \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
+    --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
+    --trusted-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
+    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
+    --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --no-untrusted-rpc \
-    --ledger ~ / validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
-    --private-rpc \
     --dynamic-port-range 8000-8010 \
-    - 진입 점 t entrypoint.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint4.mainnet- beta.solana.com:8001 \
-    --entrypoint entrypoint5.mainnet-beta.solana.com:8001 \
-    --expected - 창세기 해시 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
-    --wal 복구 모드 skip_any_corrupted_record \
-    --limit 원장
-크기의</code>
+    --entrypoint entrypoint.testnet.solana.com:8001 \
+    --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
+    --wal-recovery-mode skip_any_corrupted_record \
+    --limit-ledger-size
 ```
 
 4 개의`--trusted-validator`는 모두 Solana에서 운영합니다.
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana .COM (솔라) -`ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - 브레이크 RPC 노드 (솔라) -`Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - CERTUS 하나 -`9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - 너 한테 | 스테이킹
-- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - Break RPC node (Solana)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Foundation (testnet.solana.com)
+- `7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY` - Solana Foundation (Break RPC node)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
@@ -130,23 +134,26 @@ solana config set --url https://api.mainnet-beta.solana.com
 ##### 실시 예 솔라-validator` 명령 -
 
 ```bash
-라인<code>bash는
-$의 솔라 - 검증 \
-    --identity ~ / 검증 - keypair.json \
-    --vote-계정 ~ / 투표-계정 keypair.json \
-    --trusted - 검증 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --trusted - 검증의 ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
-    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
-    --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsg kv \
+$ solana-validator \
+    --identity ~/validator-keypair.json \
+    --vote-account ~/vote-account-keypair.json \
+    --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
+    --trusted-validator GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
+    --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
+    --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --no-untrusted-rpc \
-    --ledger ~ / validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
+    --private-rpc \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.testnet.solana.com:8001 \
-    --expected - 기원 - 해시 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    --wal 복구 모드 skip_any_corrupted_record \
-    --limit 원장
-크기</code>은`--trusted
+    --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint4.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint5.mainnet-beta.solana.com:8001 \
+    --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
+    --wal-recovery-mode skip_any_corrupted_record \
+    --limit-ledger-size
 ```
 
 validator`s의 ID는 다음과 같습니다 :

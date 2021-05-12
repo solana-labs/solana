@@ -32,12 +32,12 @@ solana-keygen pubkey <KEYPAIR>
 
 #### المحفظة الورقية (Paper Wallet)
 
-في المحفظة الورقية، يتم إشتقاق زوج المفاتيح (keypair) بشكل آمن من كلمات الإستِرداد (seed words) و عبارة كلمة المرور (passphrase) الإختيارية التي أدخلتها عند إنشاء المحفظة. لإستخدام محفظة ورقية لزوج المفاتيح (keypair) في أي مكان `<KEYPAIR>` يظهر النص في أمثلة أو مُستندات المُساعدة، أدخل الكلمة `ASK` وسيُطالبك البرنامج بإدخال كلمات الإستِرداد (seed words) الخاصة بك عند تشغيل الأمر.
+في المحفظة الورقية، يتم إشتقاق زوج المفاتيح (keypair) بشكل آمن من كلمات الإستِرداد (seed words) و عبارة كلمة المرور (passphrase) الإختيارية التي أدخلتها عند إنشاء المحفظة. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 لعرض عنوان المحفظة لمحفظة ورقية (Paper Wallet):
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 #### محفظة نظام الملفات (File System Wallet)

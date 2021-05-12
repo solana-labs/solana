@@ -6,7 +6,7 @@ title: "アカウント"
 
 プログラムがトランザクション間の状態を保存する必要がある場合は、*アカウント*を使って保存します。 アカウントは、Linux などのオペレーティング・システムにおけるファイルに似ています。 ファイルと同様に、アカウントは任意のデータを保持することができ、そのデータはプログラムの寿命を超えて持続します。 また、ファイルと同様に、アカウントにはメタデータが含まれており、ランタイムは誰がどのようにデータにアクセスすることを許可されているかを知ることができます。
 
-ファイルとは異なり、アカウントにはファイルのライフタイムのメタデータが含まれています。 その寿命は「トークン」という単位で表され、これは*ランポート*と呼ばれる小数のネイティブトークンの数です。 アカウントはバリデータのメモリに保持され、そこに留まるために["家賃"](#rent) を支払います。 各バリデータは定期的にすべてのアカウントをスキャンし、賃料を徴収します。 ランポートが 0 になったアカウントはパージされます。 アカウントに十分な数のランポートが含まれていれば、[家賃を免除](#rent-exemption)することもできます。
+ファイルとは異なり、アカウントにはファイルのライフタイムのメタデータが含まれています。 その寿命は「トークン」という単位で表され、これは*ランポート*と呼ばれる小数のネイティブトークンの数です。 アカウントはバリデータのメモリに保持され、そこに留まるために["家賃"](#rent) を支払います。 各バリデータは定期的にすべてのアカウントをスキャンし、賃料を徴収します。 ランポートが 0 になったアカウントはパージされます。 Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 Linux ユーザーがパスを使ってファイルを検索するのと同じように、Solana クライアントは*アドレス*を使ってアカウントを検索します。 このアドレスは、256 ビットの公開キーです。
 
@@ -33,6 +33,18 @@ Transactions can [indicate](transactions.md#message-header-format) that some of 
 ## プログラムのオーナーシップと割り当て
 
 作成されたアカウントは、システムプログラムと呼ばれる組み込みプログラムが*所有する*ように初期化され、それを適確に*システムアカウント*と呼びます。 アカウントには「オーナー」のメタデータが含まれています。 所有者はプログラム id です。 ランタイムは、プログラムの id が所有者と一致した場合に、そのアカウントへの書き込みアクセスを許可します。 システムプログラムの場合、ランタイムはクライアントがランポートを転送することを可能にし、重要なことに \_\_ アカウントの所有権を割り当てます。 所有者を別のプログラム id に変更することです アカウントがプログラムによって所有されていない場合、プログラムはそのデータの読み取りとアカウントのクレジットのみが許可されます。
+
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
 
 ## Rent
 
@@ -88,3 +100,14 @@ Solana でアカウントを存続させるには、クラスターがデータ�
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

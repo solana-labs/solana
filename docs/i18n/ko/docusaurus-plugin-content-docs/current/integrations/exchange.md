@@ -77,13 +77,13 @@ solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 
 검사기는 다른 모든 Solana 유효성 검사기의 인바운드 트래픽을 위해 다양한 UDP 및 TCP 포트를 열어야합니다. 이것이 가장 효율적인 작동 모드이며 강력하게 권장되지만 다른 Solana 유효성 검사기의 인바운드 트래픽 만 요구하도록 유효성 검사기를 제한 할 수 있습니다.
 
-먼저`--restricted-repair-only-mode` 인수를 추가합니다. 이렇게하면 유효성 검사기가 나머지 유효성 검사기로부터 푸시를받지 않고 대신 블록에 대해 계속해서 다른 유효성 검사기를 폴링해야하는 제한된 모드에서 작동하게됩니다. 밸리데이터는 _ Gossip _ 및 _ ServeR _ ( "serve repair") 포트를 사용하는 다른 밸리데이터에게만 UDP 패킷을 전송하고 _ Gossip _ 및 _ Repair _ 포트에서 UDP 패킷 만 수신합니다.
+먼저`--restricted-repair-only-mode` 인수를 추가합니다. 이렇게하면 유효성 검사기가 나머지 유효성 검사기로부터 푸시를받지 않고 대신 블록에 대해 계속해서 다른 유효성 검사기를 폴링해야하는 제한된 모드에서 작동하게됩니다. The validator will only transmit UDP packets to other validators using the _Gossip_ and _ServeR_ ("serve repair") ports, and only receive UDP packets on its _Gossip_ and _Repair_ ports.
 
-Gossip _ 포트는 양방향이며 유효성 검사기가 나머지 클러스터와 계속 연락 할 수 있도록합니다. 이제 Turbine이 비활성화되었으므로 유효성 검사기는 _ ServeR _에서 네트워크의 나머지 부분에서 새 블록을 얻기위한 수리 요청을 전송합니다. 그러면 귀하의 밸리데이터은 다른 밸리데이터으로부터 _ Repair \* 포트에 대한 수리 응답을 받게됩니다.
+The _Gossip_ port is bi-directional and allows your validator to remain in contact with the rest of the cluster. Your validator transmits on the _ServeR_ to make repair requests to obtaining new blocks from the rest of the network, since Turbine is now disabled. Your validator will then receive repair responses on the _Repair_ port from other validators.
 
 유효성 검사기를 하나 이상의 유효성 검사기에서 요청하는 블록으로 만 제한하려면 먼저 해당 유효성 검사기에 대한 ID pubkey를 결정하고 각 PUBKEY에 대해`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` 인수를 추가합니다. 이로 인해 유효성 검사기가 추가하는 각 유효성 검사기에서 리소스가 소모되므로 대상 유효성 검사기와상의 한 후에 만이 작업을 아껴서 수행하십시오.
 
-이제 유효성 검사기는 명시 적으로 나열된 유효성 검사기와 _ Gossip _, _ Repair _ 및 _ ServeR _ 포트에서만 통신해야합니다.
+Your validator should now only be communicating with the explicitly listed validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
 
 ## 입금 계정 설정
 
@@ -205,7 +205,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ### 주소 내역
 
-특정 주소의 거래 내역을 조회 할 수도 있습니다. 이것은 일반적으로 모든 슬롯에서 모든 입금 주소를 추적하는 실행 가능한 방법은 아니지만, 특정 기간 동안 몇 개의 계정을 검사하는 데 유용 할 수 있습니다.
+특정 주소의 거래 내역을 조회 할 수도 있습니다. This is generally _not_ a viable method for tracking all your deposit addresses over all slots, but may be useful for examining a few accounts for a specific period of time.
 
 - Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) request to the api node:
 
@@ -285,7 +285,7 @@ Sending a synchronous transfer to the Solana cluster allows you to easily ensure
 Solana의 명령 줄 도구는 전송 트랜잭션을 생성, 제출 및 확인하는 간단한 명령 'solana transfer'를 제공합니다. 기본적으로이 메서드는 트랜잭션이 클러스터에 의해 완료 될 때까지 stderr에서 진행률을 대기하고 추적합니다. 트랜잭션이 실패하면 트랜잭션 오류를보고합니다.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build a transfer transaction, and submit it using the `sendAndConfirmTransaction` method.
@@ -305,7 +305,7 @@ spl-token create-account <TOKEN_MINT_ADDRESS>소유
 In the command-line tool, pass the `--no-wait` argument to send a transfer asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 Solana 클러스터에 동기 전송을 전송하면 전송이 성공적이고 클러스터에 의해 완료되었는지 쉽게 확인할 수 있습니다.
@@ -321,13 +321,27 @@ Get the status of a batch of transactions using the [`getSignatureStatuses` JSON
 
 #### Blockhash Expiration
 
-[`getFees` 엔드 포인트를 사용하여 출금 트랜잭션에 대한 최근 블록 해시를 요청할 때] ( development / clients / jsonrpc-api.md # getfees) 또는 'solana fee'의 경우 응답에는 blockhash가 유효한 마지막 슬롯 인 'lastValidSlot'이 포함됩니다. [`getSlot` 쿼리] (developing / clients / jsonrpc-api.md # getslot);로 클러스터 슬롯을 확인할 수 있습니다. 클러스터 슬롯이`lastValidSlot`보다 크면 해당 블록 해시를 사용하는 인출 트랜잭션이 성공해서는 안됩니다.
-
-또한 blockhash를 매개 변수로 사용하여 [`getFeeCalculatorForBlockhash`] (developing / clients / jsonrpc-api.md # getfeecalculatorforblockhash) 요청을 전송하여 특정 blockhash가 여전히 유효한지 다시 확인할 수 있습니다. 응답 값이 null이면 블록 해시가 만료되고 인출 트랜잭션이 성공해서는 안됩니다.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### Validating User-supplied Account Addresses for Withdrawals
 
 인출은 되돌릴 수 없으므로 사용자 자금의 우발적 인 손실을 방지하기 위해 인출을 승인하기 전에 사용자가 제공 한 계정 주소를 확인하는 것이 좋습니다.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 Solana의 일반 계정 주소는 256 비트 ed25519 공개 키의 Base58 인코딩 문자열입니다. 모든 비트 패턴이 ed25519 곡선에 대해 유효한 공개 키가 아니므로 사용자가 제공 한 계정 주소가 최소한 올바른 ed25519 공개 키인지 확인할 수 있습니다.
 
@@ -396,7 +410,7 @@ SPL 토큰 워크 플로는 네이티브 SOL 토큰의 워크 플로와 비슷�
 
 ### Token Mints
 
-SPL 토큰의 각 * 유형 *은 _ mint _ 계정을 생성하여 선언됩니다. 이 계정은 공급, 소수 자릿수 및 민트를 제어하는 ​​다양한 권한과 같은 토큰 기능을 설명하는 메타 데이터를 저장합니다. 각 SPL 토큰 계정은 관련 민트를 참조하며 해당 유형의 SPL 토큰과 만 상호 작용할 수 있습니다.
+Each _type_ of SPL Token is declared by creating a _mint_ account. 이 계정은 공급, 소수 자릿수 및 민트를 제어하는 ​​다양한 권한과 같은 토큰 기능을 설명하는 메타 데이터를 저장합니다. 각 SPL 토큰 계정은 관련 민트를 참조하며 해당 유형의 SPL 토큰과 만 상호 작용할 수 있습니다.
 
 ### # 예제
 
@@ -482,7 +496,7 @@ The recipient address however can be a normal wallet account. If an associated t
 $ spl-token transfer --fund-recipient <교환 토큰 계정> <인출 금액> <인출 주소>
 ```
 
-#### Example
+#### 예제 :
 
 ```
 #### Example
@@ -514,8 +528,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### Freeze Authority
 
-규정 준수를 위해 SPL 토큰 발행 기관은 민트와 관련하여 생성 된 모든 계정에 대해 "권한 동결"을 선택적으로 보유하도록 선택할 수 있습니다. 이렇게하면 주어진 계정의 자산을 마음대로 \[고정\] (https://spl.solana.com/token#freezing-accounts)하여 해동 될 때까지 계정을 사용할 수 없게됩니다. 이 기능이 사용 중이면 동결 기관의 pubkey가 SPL 토큰의 민트 계정에 등록됩니다.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. 이렇게하면 주어진 계정의 자산을 마음대로 \[고정\] (https://spl.solana.com/token#freezing-accounts)하여 해동 될 때까지 계정을 사용할 수 없게됩니다. 이 기능이 사용 중이면 동결 기관의 pubkey가 SPL 토큰의 민트 계정에 등록됩니다.
 
 ## 통합
 
-테스트 메인 넷 베타에서 프로덕션으로 이동하기 전에 Solana devnet 및 testnet \[clusters\] (../ clusters.md)에서 전체 워크 플로를 테스트해야합니다. Devnet은 가장 개방적이고 유연하며 초기 개발에 이상적이며 testnet은보다 현실적인 클러스터 구성을 제공합니다. devnet과 testnet은 모두 수도꼭지를 지원하고`solana airdrop 10`을 실행하여 개발 및 테스트를위한 devnet 또는 testnet SOL을 얻습니다.
+테스트 메인 넷 베타에서 프로덕션으로 이동하기 전에 Solana devnet 및 testnet \[clusters\] (../ clusters.md)에서 전체 워크 플로를 테스트해야합니다. Devnet은 가장 개방적이고 유연하며 초기 개발에 이상적이며 testnet은보다 현실적인 클러스터 구성을 제공합니다. Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

@@ -4,7 +4,7 @@ title: Staking on Solana
 
 _読む前に注意: 値の増加への参照は、SOL のバランスに関して絶対的な 条件になります。 この文書では、SOL の金銭的価値については提案されません。_
 
-Solana で SOL トークンをステーキングすることは、世界で 最高性能のブロックチェーンネットワークを保護する最良の方法です。 [報酬](implemented-proposals/staking-rewards.md) を獲得しましょう！ インフレーションとネットワーク報酬は現在 \*\* Solana の メインネットベータネットワークで有効になっていませんが、将来有効になる可能性があります。
+Solana で SOL トークンをステーキングすることは、世界で 最高性能のブロックチェーンネットワークを保護する最良の方法です。 [報酬](implemented-proposals/staking-rewards.md) を獲得しましょう！
 
 Solana はデリゲーションを伴うプルーフ・オブ・ステーク(PoS) ネットワークです。 つまり、 SOL トークン保有者は誰でもバリデーターにデリゲートすることができます。
 
@@ -14,13 +14,11 @@ Solana はデリゲーションを伴うプルーフ・オブ・ステーク(PoS
 
 バリデータは、システムの運営・管理にコストをかけており、そのコストは、獲得した報酬の一定割合として徴収される手数料という形で、デリゲーターに還元されます。 この手数料は*コミッション*と呼ばれています。 バリデータは、より多くの報酬を得るほど、より多くのステーキングを委任されることになるので、より多くのステーキングを委任してもらうために、バリデータ同士が競争して最低の手数料を提供することがあります。
 
-_slashing_ と呼ばれるプロセスを通じて、ステーキング時にトークンが失われるリスクがあります。 インフレーションとネットワーク報酬は現在 \*\* Solana の メインネットベータネットワークで有効になっていませんが、将来有効になる可能性があります。 スラッシングとは、バリデータの委任された権利の一部を自動的に削除・破壊することです。 スラッシュとは、無効な取引を行ったり、特定の種類の取引やネットワーク参加者を検閲するなどの意図的に悪意のある行為を行った場合に、検証者が委任したステークの一部を自動的に削除・破棄することをいいます。 バリデータが切断された場合、そのバリデータにステーキングを委任していたトークン保有者はすべて、その委任を失います。 バリデータにステーキングを委任していたトークン保有者は、その委任の一部を失います。 これは、トークン保有者にとっては即時の損失を意味しますが トークン保有者にとっては即時的な損失となりますが、検証者にとっては総委任数が減ることで将来的な報酬の損失となります。
+_slashing_ と呼ばれるプロセスを通じて、ステーキング時にトークンが失われるリスクがあります。 Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+バリデータが切断された場合、そのバリデータにステーキングを委任していたトークン保有者はすべて、その委任を失います。 バリデータにステーキングを委任していたトークン保有者は、その委任の一部を失います。 これは、トークン保有者にとっては即時の損失を意味しますが トークン保有者にとっては即時的な損失となりますが、検証者にとっては総委任数が減ることで将来的な報酬の損失となります。 More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 ネットワークのリワードとスラッシングの目的は、バリデータとトークン保有者の両方の金銭的なインセンティブを調整することであり、それによってネットワークの安全性、堅牢性、パフォーマンスを最大限に維持することができます。
-
-_注：現在、Mainnet ベータ版では、ステーカーとバリデータのネットワークリワードは有効になっていません。_
-
-_注: 現時点では、Mainnet Beta でスラッシングは有効になっていません。　_
 
 ## SOL トークンをステーキングするにはどうすればよいですか?
 
@@ -33,6 +31,10 @@ Solana でトークンをステーキングするためには、まず、ステ�
 - SolFlare.com はキーストアファイルまたは Ledger Nano と連携しています。 詳細は SolFlare [の](wallet-guide/solflare.md) をご覧ください。
 
 - Solana のコマンドラインツールは、CLI で生成されたキーペアファイルのウォレット、ペーパーウォレット、または接続された Ledger Nano と組み合わせて、すべてのステーキング操作を行うことができます。 [Solana コマンドラインツール](cli/delegate-stake.md) を使用して、ステーキングコマンドを実行します。
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.
 
 #### ステーキングアカウントを作成しよう
 

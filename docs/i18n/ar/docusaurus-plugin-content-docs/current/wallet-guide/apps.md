@@ -4,6 +4,14 @@ title: محافظ تطبيق الهاتف
 
 تعد Solana مدعومة بتطبيقات متعددة من طرف ثالث والتي ينبغي أن توفر تجربة مألوفة لمعظم الناس الجدد أو ذوي الخبرة في استخدام محافظ العملات المشفرة.
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## محفظة ترست (Trust Wallet)
 
 محفظة [Trust Wallet](https://trustwallet.com/) هي عبارة عن تطبيق متاح لأجهزة الآيفون والأندرويد ويمكن إستخدامه لإرسال وإستقبال رموز SOL.

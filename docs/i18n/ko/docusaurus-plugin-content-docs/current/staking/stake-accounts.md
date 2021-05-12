@@ -2,7 +2,7 @@
 title: 스테이킹 계정 구조
 ---
 
-Solana의 스테이킹 계정을 사용하여 토큰을 네트워크의 밸리데이터에게 위임하여 스테이킹 계정 소유자에 대한 보상을받을 수 있습니다. 스테이킹 계정은 * 시스템 계정 *으로 알려진 기존 지갑 주소와 다르게 생성되고 관리됩니다. 시스템 계정은 네트워크의 다른 계정에서만 SOL을 보내고받을 수있는 반면, 스테이킹 계정은 토큰 위임을 관리하는 데 필요한 더 복잡한 작업을 지원합니다.
+Solana의 스테이킹 계정을 사용하여 토큰을 네트워크의 밸리데이터에게 위임하여 스테이킹 계정 소유자에 대한 보상을받을 수 있습니다. Stake accounts are created and managed differently than a traditional wallet address, known as a _system account_. 시스템 계정은 네트워크의 다른 계정에서만 SOL을 보내고받을 수있는 반면, 스테이킹 계정은 토큰 위임을 관리하는 데 필요한 더 복잡한 작업을 지원합니다.
 
 Solana의 스테이킹 계정은 익숙한 다른 Proof-of-Stake 블록체인 네트워크와는 다르게 작동합니다. 이 문서는 Solana 스테이킹 계정의 높은 수준의 구조와 기능을 설명합니다.
 
@@ -14,7 +14,7 @@ Solana의 스테이킹 계정은 익숙한 다른 Proof-of-Stake 블록체인 �
 
 #### 계정 권한 이해
 
-특정 유형의 계정에는 특정 계정과 관련된 하나 이상의 * 서명 기관 *이있을 수 있습니다. 계정 권한은 제어하는 ​​계정에 대한 특정 거래에 서명하는 데 사용됩니다. 이것은 계정의 주소와 관련된 키 쌍의 소유자가 모든 계정의 활동을 제어하는 ​​다른 블록체인 네트워크와 다릅니다.
+Certain types of accounts may have one or more _signing authorities_ associated with a given account. 계정 권한은 제어하는 ​​계정에 대한 특정 거래에 서명하는 데 사용됩니다. 이것은 계정의 주소와 관련된 키 쌍의 소유자가 모든 계정의 활동을 제어하는 ​​다른 블록체인 네트워크와 다릅니다.
 
 각 스테이킹 계정에는 각각의 주소로 지정된 두 개의 서명 권한이 있으며, 각각은 스테이킹 계정에서 특정 작업을 수행 할 권한이 있습니다.
 
@@ -23,10 +23,10 @@ The _stake authority_ is used to sign transactions for the following operations:
 - Delegating stake
 - Deactivating the stake delegation
 - Splitting the stake account, creating a new stake account with a portion of the funds in the first account
-- Merging two undelegated stake accounts into one
+- Merging two stake accounts into one
 - Setting a new stake authority
 
-인출 권한 키 쌍은 스테이킹 계정의 토큰을 청산하는 데 필요하므로 계정에 대한 더 많은 제어 권한을 보유하며 스테이킹 권한 키 쌍이 분실되거나 손상 될 경우 스테이킹 권한을 재설정하는 데 사용할 수 있습니다.
+The _withdraw authority_ signs transactions for the following:
 
 - Withdrawing un-delegated stake into a wallet address
 - Setting a new withdraw authority
@@ -46,17 +46,29 @@ The withdraw authority keypair holds more control over the account as it is need
 
 스테이킹 계정이 위임되거나 위임이 비활성화되면 작업이 즉시 적용되지 않습니다.
 
-위임 또는 비활성화는 완료하는 데 여러 \[epochs\] (../ terminology.md # epoch)가 필요하며, 명령이 포함 된 트랜잭션이 클러스터에 제출 된 후 위임의 일부가 각 Epoch 경계에서 활성화되거나 비활성화됩니다.
+#### Merging stake accounts
 
-#### 위임 워밍업 및 쿨 다운
+Two stake accounts that have the same authorities and lockup can be merged into a single resulting stake account. A merge is possible between two stakes in the following states with no additional conditions:
+
+- two deactivated stakes
+- an inactive stake into an activating stake during its activation epoch
+
+For the following cases, the voter pubkey and vote credits observed must match:
+
+- two activated stakes
+- two activating accounts that share an activation epoch, during the activation epoch
+
+All other combinations of stake states will fail to merge, including all "transient" states, where a stake is activating or deactivating with a non-zero effective stake.
+
+#### Delegation Warmup and Cooldown
 
 When a stake account is delegated, or a delegation is deactivated, the operation does not take effect immediately.
 
-스테이킹 계정은 특정 날짜 또는 시대에 도달하기 전에 보유하고있는 토큰이 인출되는 것을 방지하는 락업을 가질 수 있습니다.
+A delegation or deactivation takes several [epochs](../terminology.md#epoch) to complete, with a fraction of the delegation becoming active or inactive at each epoch boundary after the transaction containing the instructions has been submitted to the cluster.
 
-또한 네트워크 전체에서 지분이 갑작스럽게 크게 변경되는 것을 방지하기 위해 단일 에포크에서 총 지분이 얼마나 위임되거나 비활성화 될 수 있는지에 대한 제한이 있습니다. 워밍업 및 쿨 다운은 다른 네트워크 참여자의 행동에 따라 달라 지므로 정확한 기간을 예측하기가 어렵습니다. 준비 및 쿨 다운 타이밍에 대한 자세한 내용은 \[여기\] (../ cluster / stake-delegation-and-rewards.md # stake-warmup-cooldown-withdrawal)에서 확인할 수 있습니다.
+There is also a limit on how much total stake can become delegated or deactivated in a single epoch, to prevent large sudden changes in stake across the network as a whole. Since warmup and cooldown are dependent on the behavior of other network participants, their exact duration is difficult to predict. Details on the warmup and cooldown timing can be found [here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
-#### 락업
+#### Lockups
 
 Stake accounts can have a lockup which prevents the tokens they hold from being withdrawn before a particular date or epoch has been reached. While locked up, the stake account can still be delegated, un-delegated, or split, and its stake and withdraw authorities can be changed as normal. Only withdrawal into a wallet address is not allowed.
 

@@ -2,13 +2,7 @@
 title: Manage Stake Accounts
 ---
 
-If you want to delegate stake to many different validators, you will need
-to create a separate stake account for each. If you follow the convention
-of creating the first stake account at seed "0", the second at "1", the
-third at "2", and so on, then the `solana-stake-accounts` tool will allow
-you to operate on all accounts with single invocations. You can use it to
-sum up the balances of all accounts, move accounts to a new wallet, or set
-new authorities.
+If you want to delegate stake to many different validators, you will need to create a separate stake account for each. If you follow the convention of creating the first stake account at seed "0", the second at "1", the third at "2", and so on, then the `solana-stake-accounts` tool will allow you to operate on all accounts with single invocations. You can use it to sum up the balances of all accounts, move accounts to a new wallet, or set new authorities.
 
 ## Usage
 
@@ -67,8 +61,7 @@ solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --fee-payer <KEYPAIR>
 ```
 
-To atomically rebase and authorize each stake account, use the 'move'
-command:
+To atomically rebase and authorize each stake account, use the 'move' command:
 
 ```bash
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \

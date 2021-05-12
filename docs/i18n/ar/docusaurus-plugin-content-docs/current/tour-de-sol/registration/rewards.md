@@ -1,22 +1,20 @@
 ---
-title: المُكافآت (Rewards)
+title: Compensation
 ---
 
-## طريقة حساب المُكافأة <a id="how-are-rewards-calculated"></a>
+## Compensation Calculation
 
-سيتم إحتساب المُكافآت وفقًا لتصميم التعويض المُوضح في المُداخلة في المقال في هذا المنتدى [this forum post](https://forums.solana.com/t/tour-de-sol-stage-1-preliminary-compensation-design/79) وجدول البيانات هذا [this spreadsheet](https://docs.google.com/spreadsheets/d/11puBSw2THdO4wU-uyDEic-D03jg4ZAooVpcZU0w_4gI/edit#gid=218406032).
+Compensation will be calculated according to the compensation design described in [this forum post](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132).
 
-يرجى أيضًا الإطلاع على القسم "2\(f\) تفاصيل Tour de Sol" من شروط المُشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على تفاصيل المُكافآت الإضافية.
+Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for additional compensation details.
 
-## مُتطلبات الحصول على المكافآت <a id="what-are-the-requirements-to-receive-rewards"></a>
+## مُتطلبات الحصول على المكافآت
 
-يجب أن يكون المُشاركون قد وقعوا إتفاقية المُشاركة في Tour de SOL، وإجتازوا KYC / AML كفرد عبر منصة CoinList، وكذلك ملؤوا نموذج W-8 BEN أو W-9 الضريبي \ (إعتمادًا على إقامتك\) قبل المُشاركة في الجولة. يجوز للمُشارك المُشاركة في أي وجميع المراحل التي تبدأ بعد إكمال التسجيل. سيتم الإعلان عن مواعيد التسجيل النهائية علنًا على أساس كل مرحلة على حدة.
+Participants must have signed the Tour de SOL participation agreement, passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form \(depending on your residency\) prior to participating in the Tour.
 
-أخيرًا ، يجب على المُشاركين التوقيع على معيار Solana لإتفاقية الرمز [Token Agreement](https://drive.google.com/open?id=1O4cEUZzeSNoVcncbHcEegAqPgjT-7hcy). سيتم توفير إتفاقية الرمز (Token Agreement) من قبل Solana قبل تاريخ إصدار المُكافآت.
+A participant may participate in any and all stages that begin after they complete registration. The final registrations dates will be announced publicly on a stage-by-stage basis.
 
-يُرجى أيضًا الإطلاع على الأقسام “2\(i\) & 2\(j\) لتفاصيل Tour de Sol" من شروط المشاركة في [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على تفاصيل إضافية تتعلق بتلقي المُكافآت.
-
-## الآثار المُتَرَتِّبة على الضرائب (Tax Implications) <a id="what-are-the-tax-implications-of-the-rewards"></a>
+## Tax Implications
 
 يدخل المُشاركون في إتفاقية خدمة مع Solana مُقابل تعويض تقديري مُرتبط بالخدمات. لا يُعتبرون مُوظفين بدوام كامل في الشركة، وبالتالي فإن Solana تجمع نماذج W-9 و W-8 BEN من أجل دعم إلتزامات إعداد التقارير الضريبية، إن وجدت. تُوصي Solana المُشاركين بالتشاور مع مُحاسب ضرائب لفهم أي آثار ضريبية مُحتملة.
 

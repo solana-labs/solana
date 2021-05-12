@@ -57,7 +57,7 @@ Los datos de fila son una estructura `StoredConfirmedBlock`.
 
 Esta tabla contiene las transacciones que afectan a una dirección determinada.
 
-La clave de fila es `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. Los datos de fila son una estructura `StoredConfirmedBlock`.
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. Los datos de fila son una estructura `StoredConfirmedBlock`.
 
 Asumir el complemento de la ranura permite listar ranuras asegura que la ranura más reciente con transacciones que afectan a una dirección siempre se muestre primero.
 

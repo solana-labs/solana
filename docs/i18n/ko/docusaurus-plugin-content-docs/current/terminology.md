@@ -138,7 +138,7 @@ When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common
 
 ## 리더 스케줄
 
-일련의 [ 유효성 검사기 ](terminology.md#validator) [ 공개 키 ](terminology.md#public-key). 클러스터는 리더 일정을 사용하여 어떤 검증자가 [ 리더 ](terminology.md#leader)인지 언제든지 결정합니다.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). 클러스터는 리더 일정을 사용하여 어떤 검증자가 [ 리더 ](terminology.md#leader)인지 언제든지 결정합니다.
 
 ## 원장
 
@@ -216,90 +216,98 @@ When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common
 
 R (32 바이트) 및 S (32 바이트)의 64 바이트 ed25519 서명입니다. R은 작은 순서가 아닌 패킹 된 Edwards 점이고 S는 0 <= S <L 범위의 스칼라 여야한다는 요구 사항이 있습니다.이 요구 사항은 서명 가단성을 보장하지 않습니다. 각 거래에는 [ 수수료 계정 ](terminology#fee-account)에 대한 서명이 하나 이상 있어야합니다. 따라서 트랜잭션의 첫 번째 서명은 [ 트랜잭션 ID ](terminology.md#transaction-id)로 처리 될 수 있습니다.
 
+## skipped slot
+
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+
 ## slot
 
-The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-## 스마트 컨트랙트
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
 
-일단 충족되면 미리 정의 된 계정 업데이트가 허용됨을 프로그램에 알리는 일련의 제약 조건입니다.
+## smart contract
+
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
 ## sol
 
-Solana 회사에서 인정하는 [ 클러스터 ](terminology.md#cluster)에서 추적하는 [ 네이티브 토큰 ](terminology.md#native-token)입니다.
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
-## 지분
+## stake
 
-악의적 인 [ 검증 자 ](terminology.md#validator) 동작이 입증 될 수있는 경우 토큰은 [ 클러스터 ](terminology.md#cluster)에 몰수됩니다.
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
 ## supermajority
 
-[ 클러스터 ](terminology.md#cluster)의 2/3.
+2/3 of a [cluster](terminology.md#cluster).
 
 ## sysvar
 
-프로그램이 현재 틱 높이, 보상 [ 포인트와 같은 네트워크 상태에 액세스 할 수 있도록 런타임에서 제공하는 합성 [ 계정 ](terminology.md#account) ](terminology.md#point) 값 등
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
 ## thin client
 
-유효한 [ 클러스터 ](terminology.md#cluster)와 통신하고 있음을 신뢰하는 [ 클라이언트 ](terminology.md#client) 유형입니다.
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
 ## tick
 
-벽시계 기간을 추정하는 원장 [ 항목 ](terminology.md#entry)입니다.
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
 ## tick height
 
-[ 원장 ](terminology.md#ledger)의 N 번째 [ 틱 ](terminology.md#tick)입니다.
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
-## 토큰 토큰
+## token
 
-토큰 세트의 희귀하고 대체 가능한 구성원입니다.
+A scarce, fungible member of a set of tokens.
 
 ## tps
 
-초당 [ 거래 ](terminology.md#transaction).
+[Transactions](terminology.md#transaction) per second.
 
 ## transaction
 
-하나 이상의 <a href="terminology를 사용하여 [ 클라이언트 ](terminology.md#client)가 서명 한 하나 이상의 [ 안내 ](terminology.md#instruction) .md # keypair "> 키쌍 </a>을 생성하고 성공 또는 실패라는 두 가지 가능한 결과 만 원자 적으로 실행합니다.
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
 ## transaction id
 
-[ 트랜잭션 ](terminology.md#transaction)의 첫 번째 [ 서명 ](terminology.md#signature)으로, 전체에서 트랜잭션을 고유하게 식별하는 데 사용할 수 있습니다. [ 원장 ](terminology.md#ledger)을 작성합니다.
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
 ## transaction confirmations
 
-[ 원장 ](terminology.md#ledger)에서 거래가 수락 된 이후 [ 확인 된 차단 ](terminology.md#confirmed-block) 수입니다. 블록이 [ 루트 ](terminology.md#root)가되면 거래가 완료됩니다.
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## 트랜잭션 항목
+## transactions entry
 
-병렬로 실행될 수있는 [ 트랜잭션 ](terminology.md#transaction) 세트입니다.
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
 ## validator
 
-[ 원장 ](terminology.md#ledger)의 유효성을 검사하고 새 <a href=를 생성하는 작업을 담당하는 [ 클러스터 ](terminology.md#cluster)의 전체 참여자 "terminology.md # block"> 차단 </a>.
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 
-[ 확인 가능한 지연 함수 ](terminology.md#verifiable-delay-function)를 참조하세요.
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## 검증 가능한 지연 기능
+## verifiable delay function
 
-실행에 고정 된 시간이 걸리는 함수로, 실행 된 증명을 생성하고 생성하는 데 걸리는 시간보다 짧은 시간에 확인할 수 있습니다.
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
 ## vote
 
-[ 원장 투표 ](terminology.md#ledger-vote)를 참조하세요.
+See [ledger vote](terminology.md#ledger-vote).
 
-## 투표 크레딧
+## vote credit
 
-[ 검증 자 ](terminology.md#validator)에 대한 보상 집계입니다. 검증자가 [ 루트 ](terminology.md#root)에 도달하면 투표 계정의 검증 자에게 투표 크레딧이 부여됩니다.
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
 ## wallet
 
-[ 키 쌍 ](terminology.md#keypair) 모음입니다.
+A collection of [keypairs](terminology.md#keypair).
 
-## 워밍업 기간
+## warmup period
 
-[ 스테이크 ](terminology.md#stake) 후 일부 [ 에포크 ](terminology.md#epoch)가 위임되었지만 점진적으로 효력이 발생합니다. 이 기간 동안 스테이킹는 "활성화"된 것으로 간주됩니다. 추가 정보 : [ 준비 및 쿨 다운 ](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

@@ -1,122 +1,85 @@
 ---
-title: "Developing with C"
+title: "Desarrollando con C"
 ---
 
-Solana supports writing on-chain programs using the C and C++ programming
-languages.
+Solana soporta la escritura de programas en cadena utilizando los lenguajes de programación C y C++.
 
-## Project Layout
+## Diseño del proyecto
 
-C projects are laid out as follows:
+Los proyectos C están diseñados de la siguiente manera:
 
 ```
 /src/<program name>
 /makefile
 ```
 
-The `makefile` should contain the following:
+El `makefile` debe contener lo siguiente:
 
 ```bash
 OUT_DIR := <path to place to resulting shared object>
 include ~/.local/share/solana/install/active_release/bin/sdk/bpf/c/bpf.mk
 ```
 
-The bpf-sdk may not be in the exact place specified above but if you setup your
-environment per [How to Build](#how-to-build) then it should be.
+El bpf-sdk puede no estar en el lugar exacto especificado arriba, pero si configuras tu entorno por [Cómo construir](#how-to-build) entonces debería ser.
 
-Take a look at
-[helloworld](https://github.com/solana-labs/example-helloworld/tree/master/src/program-c)
-for an example of a C program.
+Echa un vistazo a [helloworld](https://github.com/solana-labs/example-helloworld/tree/master/src/program-c) para un ejemplo de un programa C.
 
-## How to Build
+## Cómo construir
 
-First setup the environment:
+Primero configura el entorno:
 
-- Install the latest Rust stable from https://rustup.rs
-- Install the latest Solana command-line tools from
-  https://docs.solana.com/cli/install-solana-cli-tools
+- Instalar la última versión estable de Rust desde https://rustup.rs
+- Instale las últimas herramientas de línea de comandos de Solana desde https://docs.solana.com/cli/install-solana-cli-tools
 
-Then build using make:
+Luego construye usando make:
 
 ```bash
 make -C <program directory>
 ```
 
-## How to Test
+## Cómo probarlo
 
-Solana uses the [Criterion](https://github.com/Snaipe/Criterion) test framework
-and tests are executed each time the program is built [How to
-Build](#how-to-build)].
+Solana utiliza el [framework de pruebas](https://github.com/Snaipe/Criterion) Criterión y las pruebas se ejecutan cada vez que el programa se construye [Cómo Construir](#how-to-build)].
 
-To add tests, create a new file next to your source file named `test_<program name>.c` and populate it with criterion test cases. For an example see the
-[helloworld C
-tests](https://github.com/solana-labs/example-helloworld/blob/master/src/program-c/src/helloworld/test_helloworld.c)
-or the [Criterion docs](https://criterion.readthedocs.io/en/master) for
-information on how to write a test case.
+Para añadir pruebas, crea un nuevo archivo junto a tu archivo de origen llamado `test_<program name>.c` y rellenalo con casos de prueba de criterio. Para un ejemplo, vea la [helloworld C pruebas](https://github.com/solana-labs/example-helloworld/blob/master/src/program-c/src/helloworld/test_helloworld.c) o la [documentación Criterion](https://criterion.readthedocs.io/en/master) para información sobre cómo escribir un caso de prueba.
 
-## Program Entrypoint
+## Entrypoint del programa
 
-Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program. Solana supports multiple [versions of the BPF
-loader](overview.md#versions) and the entrypoints may vary between them.
-Programs must be written for and deployed to the same loader. For more details
-see the [overview](overview#loaders).
+Los programas exportan un símbolo de punto de entrada conocido que el tiempo de ejecución de Solana busca y llama al invocar un programa. Solana soporta múltiples [versiones del cargador BPF](overview.md#versions) y los puntos de entrada pueden variar entre ellos. Los programas deben escribirse para el mismo cargador y desplegarse en él. Para más detalles vea el [resumen](overview#loaders).
 
-Currently there are two supported loaders [BPF
-Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
-and [BPF loader
-deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+Actualmente hay dos cargadores soportados [BPF cargador](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17) y [cargador BPF obsoleto](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
 
-They both have the same raw entrypoint definition, the following is the raw
-symbol that the runtime looks up and calls:
+Ambos tienen la misma definición de punto de entrada en bruto, el siguiente es el símbolo en bruto que el tiempo de ejecución busca y llama:
 
 ```c
 extern uint64_t entrypoint(const uint8_t *input)
 ```
 
-This entrypoint takes a generic byte array which contains the serialized program
-parameters (program id, accounts, instruction data, etc...). To deserialize the
-parameters each loader contains its own [helper function](#Serialization).
+Este punto de entrada toma una matriz de bytes genérica que contiene los parámetros del programa (id de programa, cuentas, datos de instrucción, etc...). Para deserializar los parámetros que cada cargador contiene su propia función [helper](#Serialization).
 
-Refer to [helloworld's use of the
-entrypoint](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L37)
-as an example of how things fit together.
+Consulte [el uso del punto de entrada por parte de Helloworld](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L37) como ejemplo de cómo encajan las cosas.
 
-### Serialization
+### Serialización
 
-Refer to [helloworld's use of the deserialization
-function](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L43).
+Consulte [el uso de la función de deserialización por parte de Helloworld de deserialización](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L43).
 
-Each loader provides a helper function that deserializes the program's input
-parameters into C types:
+Cada cargador proporciona una función de ayuda que deserializa los parámetros de entrada del programa en tipos C:
 
-- [BPF Loader
-  deserialization](https://github.com/solana-labs/solana/blob/d2ee9db2143859fa5dc26b15ee6da9c25cc0429c/sdk/bpf/c/inc/solana_sdk.h#L304)
-- [BPF Loader deprecated
-  deserialization](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/deserialize_deprecated.h#L25)
+- [Deserialización del cargador BPF](https://github.com/solana-labs/solana/blob/d2ee9db2143859fa5dc26b15ee6da9c25cc0429c/sdk/bpf/c/inc/solana_sdk.h#L304)
+- [Deserialización obsoleta de BPF Loader](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/deserialize_deprecated.h#L25)
 
-Some programs may want to perform deserialzaiton themselves and they can by
-providing their own implementation of the [raw entrypoint](#program-entrypoint).
-Take note that the provided deserialization functions retain references back to
-the serialized byte array for variables that the program is allowed to modify
-(lamports, account data). The reason for this is that upon return the loader
-will read those modifications so they may be committed. If a program implements
-their own deserialization function they need to ensure that any modifications
-the program wishes to commit must be written back into the input byte array.
+Algunos programas pueden querer realizar la deserialzaiton ellos mismos y pueden hacerlo proporcionando su propia implementación del [punto de entrada crudo](#program-entrypoint). Tenga en cuenta que las funciones de deserialización proporcionadas conservan las referencias a la matriz de bytes serializada para las variables que el programa está autorizado a modificar (lamports, datos de la cuenta). La razón de esto es que al devolver el cargador leerá esas modificaciones para que puedan ser confirmadas. Si un programa implementa su propia función de deserialización necesita asegurarse de que cualquier modificación que el programa desee realizar debe ser escrita de nuevo en la matriz de bytes de entrada.
 
-Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
+Los detalles sobre cómo el cargador serializa las entradas del programa se pueden encontrar en los documentos [Serialización de parámetros de entrada](overview.md#input-parameter-serialization).
 
-## Data Types
+## Tipos de datos
 
-The loader's deserialization helper function populates the
-[SolParameters](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L276)
-structure:
+La función de ayuda de deserialización del cargador llena la estructura [SolParámetros](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L276):
 
 ```c
 /**
  * Structure that the program's entrypoint input data is deserialized into.
- */
+ /
 typedef struct {
   SolAccountInfo* ka; /** Pointer to an array of SolAccountInfo, must already
                           point to an array of SolAccountInfos */
@@ -127,76 +90,44 @@ typedef struct {
 } SolParameters;
 ```
 
-'ka' is an ordered array of the accounts referenced by the instruction and
-represented as a
-[SolAccountInfo](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L173)
-structures. An account's place in the array signifies its meaning, for example,
-when transferring lamports an instruction may define the first account as the
-source and the second as the destination.
+'ka' es una matriz ordenada de las cuentas referenciadas por la instrucción y representada como un [SolAccountInfo](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L173) estructuras. El lugar que ocupa una cuenta en la matriz significa su significado, por ejemplo, al transferir lamports una instrucción puede definir la primera cuenta como origen y la segunda como destino.
 
-The members of the `SolAccountInfo` structure are read-only except for
-`lamports` and `data`. Both may be modified by the program in accordance with
-the [runtime enforcement
-policy](developing/programming-model/accounts.md#policy). When an instruction
-reference the same account multiple times there may be duplicate
-`SolAccountInfo` entries in the array but they both point back to the original
-input byte array. A program should handle these case delicately to avoid
-overlapping read/writes to the same buffer. If a program implements their own
-deserialization function care should be taken to handle duplicate accounts
-appropriately.
+Los miembros de la estructura `SolAccountInfo` son de solo lectura excepto los `lamports` y `datos`. Ambos pueden ser modificados por el programa de acuerdo con la [política de ejecución](developing/programming-model/accounts.md#policy). Cuando una instrucción hace referencia a la misma cuenta varias veces puede haber entradas `SolAccountInfo` duplicadas en la matriz pero ambas apuntan de nuevo a la matriz de bytes de entrada original. Un programa debería manejar estos casos con delicadeza para evitar que se superpongan lecturas/escrituras al mismo búfer. Si un programa implementa su propia función de deserialización debe tomarse cuidado para manejar las cuentas duplicadas apropiadamente.
 
-`data` is the general purpose byte array from the [instruction's instruction
-data](developing/programming-model/transactions.md#instruction-data) being
-processed.
+`data` es la matriz de bytes de propósito general de la [datos de la instrucción](developing/programming-model/transactions.md#instruction-data) que se está procesando.
 
-`program_id` is the public key of the currently executing program.
+`program_id` es la clave pública del programa en ejecución.
 
 ## Heap
 
-C programs can allocate memory via the system call
-[`calloc`](https://github.com/solana-labs/solana/blob/c3d2d2134c93001566e1e56f691582f379b5ae55/sdk/bpf/c/inc/solana_sdk.h#L245)
-or implement their own heap on top of the 32KB heap region starting at virtual
-address x300000000. The heap region is also used by `calloc` so if a program
-implements their own heap it should not also call `calloc`.
+Los programas C pueden asignar memoria a través de la llamada al sistema [`calloc`](https://github.com/solana-labs/solana/blob/c3d2d2134c93001566e1e56f691582f379b5ae55/sdk/bpf/c/inc/solana_sdk.h#L245) o implementar su propio heap sobre la región del heap de 32KB comenzando en la dirección virtual x3000000. La región del heap también es utilizada por `calloc` por lo que si un programa implementa su propio heap no debería llamar también a `calloc`.
 
-## Logging
+## Ingresando
 
-The runtime provides two system calls that take data and log it to the program
-logs.
+El tiempo de ejecución proporciona dos llamadas del sistema que toman datos y lo registran en los registros del programa.
 
 - [`sol_log(const char*)`](https://github.com/solana-labs/solana/blob/d2ee9db2143859fa5dc26b15ee6da9c25cc0429c/sdk/bpf/c/inc/solana_sdk.h#L128)
 - [`sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)`](https://github.com/solana-labs/solana/blob/d2ee9db2143859fa5dc26b15ee6da9c25cc0429c/sdk/bpf/c/inc/solana_sdk.h#L134)
 
-The [debugging](debugging.md#logging) section has more information about working
-with program logs.
+La sección [depuración](debugging.md#logging) tiene más información sobre cómo trabajar con los registros del programa.
 
-## Compute Budget
+## Calcular presupuesto
 
-Use the system call
-[`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/bpf/c/inc/solana_sdk.h#L140)
-to log a message containing the remaining number of compute units the program
-may consume before execution is halted
+Utilice la llamada del sistema [`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/bpf/c/inc/solana_sdk.h#L140) para registrar un mensaje conteniendo el número restante de unidades de computación que el programa puede consumir antes de detener la ejecución
 
-See [compute budget](developing/programming-model/runtime.md#compute-budget)
-for more information.
+See [compute budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
 ## ELF Dump
 
-The BPF shared object internals can be dumped to a text file to gain more
-insight into a program's composition and what it may be doing at runtime. The
-dump will contain both the ELF information as well as a list of all the symbols
-and the instructions that implement them. Some of the BPF loader's error log
-messages will reference specific instruction numbers where the error occurred.
-These references can be looked up in the ELF dump to identify the offending
-instruction and its context.
+Los internos de los objetos compartidos de BPF pueden volcarse a un archivo de texto para obtener más información sobre la composición de un programa y lo que puede estar haciendo en tiempo de ejecución. El dump contendrá tanto la información ELF como una lista de todos los símbolos y las instrucciones que los implementan. Algunos de los mensajes de registro de errores del cargador BPF harán referencia a los números de instrucción específicos en los que se produjo el error. Estas referencias pueden buscarse en el volcado del ELF para identificar la instrucción infractora y su contexto.
 
-To create a dump file:
+Para crear un archivo dump:
 
 ```bash
 $ cd <program directory>
 $ make dump_<program name>
 ```
 
-## Examples
+## Ejemplos
 
-The [Solana Program Library github](https://github.com/solana-labs/solana-program-library/tree/master/examples/c) repo contains a collection of C examples
+El repositorio de la biblioteca de programas de [Solana](https://github.com/solana-labs/solana-program-library/tree/master/examples/c) contiene una colección de ejemplos de C

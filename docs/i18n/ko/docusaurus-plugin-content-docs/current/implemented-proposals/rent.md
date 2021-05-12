@@ -40,13 +40,13 @@ Solana의 계정은 계정 잔액 \ (`Account :: lamports` \)와는 별도로 �
 
 ### 현재 디자인 근거
 
-앞의 디자인 하에서, 잔존하고, 연락을받지 않으며, 임대료를 지불 할 필요가없는 계정을 갖는 것은 불가능합니다. 계정은 임대 면제, sysvar 및 실행 가능한 계정을 제외하고 항상 각 세대에 대해 정확히 한 번 임대료를 지불합니다.
+앞의 디자인 하에서, 잔존하고, 연락을받지 않으며, 임대료를 지불 할 필요가없는 계정을 갖는 것은 불가능합니다. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-이것은 의도 된 디자인 선택입니다. 그렇지 않으면 임대료를 부당하게 수익을 올릴 수있는 사람 (당시 리더)의 'Noop'지시로 무단 임대료 징수를 촉발하거나 예상되는 임대료 변동을 감안하여 임대료를 절약 할 수 있습니다.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-이 선택의 또 다른 부작용으로,이 정기적 인 임대료 징수는 유효하게 유효하지 않은 계정을 냉장 보관에 저장하지 않도록하고 저장 비용을 절감합니다. 이는 계정 소유자에게 불리하며 거래가 더 오래 지연 될 수 있습니다. 반대로 이는 악의적 인 사용자가 상당한 양의 가비지 계정을 쌓아 유효성 검사자에게 부담을주는 것을 방지합니다.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-이 설계의 전반적인 결과로 모든 계정은 동일한 성능 특성을 가진 밸리데이터의 작업 세트로 동일하게 저장되며 균일 한 임대 가격 구조를 곧바로 반영합니다.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### 임시 수금징수
 

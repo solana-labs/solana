@@ -4,7 +4,7 @@ title: Staking de Solana
 
 _Nota antes de ler: Todas as referências a aumentos em valores são em termos absolutos de em relação ao balanço de SOL. Este documento não faz nenhuma sugestão sobre o valor monetário da SOL a qualquer momento._
 
-Faça Staking de seus tokens de SOL no Solana é a melhor maneira que você pode ajudar a proteger a rede blockchain do mundo com maior desempenho de, e [receba recompensas](implemented-proposals/staking-rewards.md) por isso! Inflação e recompensas de rede _NÃO_ atualmente estão ativadas na rede Beta principal de Solana, mas podem ser ativadas no futuro.
+Faça Staking de seus tokens de SOL no Solana é a melhor maneira que você pode ajudar a proteger a rede blockchain do mundo com maior desempenho de, e [receba recompensas](implemented-proposals/staking-rewards.md) por isso!
 
 Solana é uma rede Proof-of-Stake (PoS) com delegações, o que significa que qualquer um que tenha tokens SOL pode optar por delegar alguns de seus SOL para um ou mais validadores, que processam transações e executam a rede.
 
@@ -12,15 +12,13 @@ Participação de delegação é um modelo financeiro de partilha de risco que p
 
 Quanto mais stake um validador delegou a eles, mais frequentemente esse validador é escolhido para escrever novas transações para o ledger. Quanto mais transações o validador escreve, mais recompensas eles e seus delegados ganham. Validadores que configuram seus sistemas para ser capaz de processar mais transações de cada vez não só ganham proporcionalmente mais recompensas por isso, eles também mantêm a rede rodando o mais rápido e suavemente possível.
 
-Validadores incorrem em custos, executando e mantendo seus sistemas, e isso é passado para os delegados, sob a forma de uma taxa recebida em relação a porcentagem de recompensas recebidas. Esta taxa é conhecida como uma comissão de \*\*. À medida que os validadores ganham mais recompensas, a participação é delegada a eles, eles podem competir uns com os outros para oferecer a comissão mais baixa por seus serviços, a fim de atrair mais participações delegadas.
+Validadores incorrem em custos, executando e mantendo seus sistemas, e isso é passado para os delegados, sob a forma de uma taxa recebida em relação a porcentagem de recompensas recebidas. Esta taxa é conhecida como uma comissão de \_\_. À medida que os validadores ganham mais recompensas, a participação é delegada a eles, eles podem competir uns com os outros para oferecer a comissão mais baixa por seus serviços, a fim de atrair mais participações delegadas.
 
-Há um risco de perda de tokens quando staking, através de um processo conhecido como _cortando_. Inflação e recompensas de rede _NÃO_ atualmente estão ativadas na rede Beta principal de Solana, mas podem ser ativadas no futuro. Cortar envolve a remoção e destruição automática de de uma porção da participação delegada de um validador na resposta ao comportamento malicioso intencional, tais como criar transações inválidas ou censurar certos tipos de transações ou participantes da rede. Se um validador for cortado, todos os titulares de tokens que delegaram participação para aquele validador perderão uma porção de sua delegação. Enquanto isso significa uma perda imediata para o titular do token, também é uma perda de futuras recompensas para o validador devido a sua delegação total reduzida.
+Há um risco de perda de tokens quando staking, através de um processo conhecido como _cortando_. Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+Se um validador for cortado, todos os titulares de tokens que delegaram participação para aquele validador perderão uma porção de sua delegação. Enquanto isso significa uma perda imediata para o titular do token, também é uma perda de futuras recompensas para o validador devido a sua delegação total reduzida. More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 É o objetivo das recompensas da rede e do corte para alinhar os incentivos financeiros dos validadores e dos seus titulares, o que, por sua vez, ajuda a manter a rede segura, robusta e performando no seu melhor.
-
-_Nota: Recompensas de rede para participantes e validadores não estão atualmente ativadas no Beta Principal._
-
-_Nota: O Slashing não está ativado no Mainnet Beta neste momento._
 
 ## Como faço para fazer deploy dos meus tokens de SOL?
 
@@ -33,6 +31,10 @@ Operações de staking são suportadas pelas seguintes soluções de carteira:
 - SolFlare.com em conjunto com um arquivo keystore ou um Ledger Nano. Confira nosso [guia para usar o SolFlare](wallet-guide/solflare.md) para detalhes.
 
 - Ferramentas de linha de comando Solana podem executar todas as operações de staking em conjunto com uma carteira de arquivo de keypair gerada por CLI, uma carteira de papel, ou com um Ledger Nano conectado. [Comandos de presença usando as Ferramentas de Linha de Comando Solana,](cli/delegate-stake.md).
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.
 
 #### Criar uma Conta Stake
 

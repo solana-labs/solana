@@ -16,7 +16,7 @@
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 ```
 
-Каталог ledger теперь должен содержать новый снимок. `solana-ledger-tool create-snapshot` также выведет новую shred version, а значение bank hash вызовет NEW_SHRED_VERSION и NEW_BANK_HASH соответственно.
+Каталог ledger теперь должен содержать новый снимок. `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 Исправьте аргументы вашего валидатора:
 
@@ -37,7 +37,10 @@ $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 >
 > We've released v1.1.12 and are ready to get testnet back up again.
 >
-> Steps: 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Preferred method, start from your local ledger with:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. Preferred method, start from your local ledger with:
 >
 > ```bash
 > solana-validator

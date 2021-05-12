@@ -4,6 +4,14 @@ title: 移动应用钱包
 
 Solana 得到了多个第三方应用的支持，它们为大多数新手或加密钱包用户提供熟悉的体验。
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## Trust Wallet
 
 [Trust Wallet](https://trustwallet.com/) 是一款适用于 iOS 和 Android 的应用，可用于发送和接收 SOL 代币。

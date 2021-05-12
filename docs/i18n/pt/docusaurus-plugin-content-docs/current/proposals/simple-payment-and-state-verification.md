@@ -79,7 +79,7 @@ Each vote is a signed transaction that includes the bank hash of the block the v
 
 However other than some metadata, the signed votes themselves are not currently stored anywhere, so they can't be retrieved on demand. These votes probably need to be persisted in Rocksdb database, indexed by a key `(Slot, Hash, Pubkey)` which represents the slot of the vote, bank hash of the vote, and vote account pubkey responsible for the vote.
 
-Together, the transaction merkle and optimistic confirmation proofs can be provided over RPC to subscribers by extending the existing signature subscrption logic. Clients who subscribe to the "SingleGossip" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
+Together, the transaction merkle and optimistic confirmation proofs can be provided over RPC to subscribers by extending the existing signature subscrption logic. Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 It is important to note that optimistcally confirming `B` also implies that all ancestor blocks of `B` are also optimistically confirmed, and also that not all blocks will be optimistically confirmed.
 

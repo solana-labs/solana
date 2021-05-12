@@ -52,7 +52,7 @@ title: "المُعاملات (Transactions)"
 
 تُحدد كل تعليمة [instruction](terminology.md#instruction) برنامجًا واحدًا، ومجموعة فرعية من حسابات المُعاملة التي يجب تمريرها إلى البرنامج، ومصفوفة بيانات الـ byte التي يتم تمريرها إلى البرنامج. يفسر البرنامج مصفوفة البيانات ويعمل على الحسابات المُحددة في التعليمات. يمكن للبرنامج الإرجاع بنجاح، أو برمز رسالة خطأ. يُؤدي إرجاع الخطأ إلى فشل المُعاملة بالكامل على الفور.
 
-يُوفر البرنامج عادةً وظائف مُساعدة لبناء التعليمات التي يدعمونها. على سبيل المثال، يُوفر برنامج النظام مساعد Rust التالي لإنشاء تعليمة [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
+Programs typically provide helper functions to construct instructions they support. على سبيل المثال، يُوفر برنامج النظام مساعد Rust التالي لإنشاء تعليمة [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 يُحدد مُعرف البرنامج [program id](terminology.md#program-id) الخاص بالإرشادات البرنامج الذي سيُعالج هذه التعليمة. يُحدد مالك حساب البرنامج المُحمّل (Loader) الذي يجب إستخدامه لتحميل البرنامج وتنفيذه وتحتوي البيانات على معلومات حول كيفية تنفيذ وقت التشغيل للبرنامج.
 
-في حالة برامج BPF المنشورة [deployed BPF programs](developing/deployed-programs/overview.md)، يكون المالك هو مُحمّل BPF وبيانات الحساب تحتفظ بالـ bytecode الخاص بالـ BPF. يتم تمييز حسابات البرنامج بشكل دائم على أنها قابلة للتنفيذ بواسطة المُحمّل (Loader) بمجرد نشرها بنجاح. سيرفض وقت التشغيل المُعاملات التي حدد البرامج غير القابلة للتنفيذ.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-على عكس البرامج التي تم نشرها، يتم التعامل مع [builtins](developing/builtins/programs.md) بشكل مُختلف من حيث أنها مُدمجة مُباشرة في وقت تشغيل Solana.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### الحسابات (Accounts)
 
@@ -101,6 +101,14 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 البرامج حرة في تحديد كيفية تشفير المعلومات في مصفوفة بيانات byte التعليمات. يجب أن يأخذ إختيار كيفية تشفير البيانات في الإعتبار النفقات العامة لفك الترميز منذ أن يتم تنفيذ هذه الخطوة بواسطة البرنامج على الشبكة (on-chain). لقد لوحظ أن بعض الترميزات الشائعة (على سبيل المثال Rust's bincode) غير فعالة للغاية.
 
 يُعطي [Solana Program Library's Token program](https://github.com/solana-labs/solana-program-library/tree/master/token) مثالاً واحدًا على كيفية تشفير بيانات التعليمات بكفاءة، لكن لاحظ أن هذه الطريقة تدعم فقط الأنواع ذات الحجم الثابت. يُستخدم الرمز السمة [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) لترميز / فك تشفير بيانات التعليمات لكل من تعليمات الرمز وكذلك حالات حساب الرمز.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## التوقيعات (Signatures)
 

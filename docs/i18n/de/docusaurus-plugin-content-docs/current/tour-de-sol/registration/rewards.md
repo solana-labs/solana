@@ -10,13 +10,9 @@ Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PAR
 
 ## Requirements to Receive Rewards
 
-Participants must have signed the Tour de SOL participation agreement,
-passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form
-\(depending on your residency\) prior to participating in the Tour.
+Participants must have signed the Tour de SOL participation agreement, passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form \(depending on your residency\) prior to participating in the Tour.
 
-A participant may participate in any and all stages that begin after they
-complete registration. The final registrations dates will be announced
-publicly on a stage-by-stage basis.
+A participant may participate in any and all stages that begin after they complete registration. The final registrations dates will be announced publicly on a stage-by-stage basis.
 
 ## Tax Implications
 

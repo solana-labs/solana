@@ -90,9 +90,9 @@ Keypair của _cơ quan bỏ phiếu_ chỉ có thể được thay đổi ở r
 
 1. Chạy `solana epoch-info`. Nếu thời gian còn lại trong kỷ nguyên hiện tại không còn nhiều, hãy cân nhắc đợi kỷ nguyên tiếp theo để cho phép validator của bạn có nhiều thời gian khởi động lại và bắt kịp.
 2. Tạo keypair cơ quan bỏ phiếu mới `solana-keygen new -o ~/new-vote-authority.json`.
-3. Xác định keypair _cơ quan bỏ phiếu_ hiện tại bằng cách chạy `solana vote-account ~/vote-account-keypair.json`. Nó có thể là tài khoản danh tính của validator (mặc định) hoặc một số keypair khác. Các bước sau giả định rằng `~/validator-keypair.json` là keypair.
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. Nó có thể là tài khoản danh tính của validator (mặc định) hoặc một số keypair khác. Các bước sau giả định rằng `~/validator-keypair.json` là keypair.
 4. Chạy `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. Cơ quan bỏ phiếu mới dự kiến ​​sẽ hoạt động bắt đầu từ kỷ nguyên tiếp theo.
-5. `solana-validator` bây giờ cần được khởi động lại với keypair cơ quan bỏ phiếu cũ và mới, để nó có thể chuyển đổi suôn sẻ vào kỷ nguyên tiếp theo. Thêm hai đối số khi khởi động lại: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
+5. `solana-validator` bây giờ cần được khởi động lại với keypair cơ quan bỏ phiếu cũ và mới, để nó có thể chuyển đổi suôn sẻ vào kỷ nguyên tiếp theo. Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. Sau khi cụm đạt đến kỷ nguyên tiếp theo, hãy loại bỏ đối số `--authorized-voter ~/validator-keypair.json` và khởi động lại `solana-validator`, vì keypair của cơ quan bỏ phiếu cũ không còn được yêu cầu nữa.
 
 ### Bỏ phiếu cho người rút tiền được ủy quyền của tài khoản

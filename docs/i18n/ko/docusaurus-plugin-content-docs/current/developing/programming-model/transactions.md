@@ -52,26 +52,26 @@ compact-u16은 16 비트의 다중 바이트 인코딩입니다. 첫 번째 바�
 
 각 \[instruction\] (terminology.md # instruction)은 단일 프로그램, 프로그램에 전달되어야하는 트랜잭션 계정의 하위 집합 및 프로그램에 전달되는 데이터 바이트 배열을 지정합니다. 이 프로그램은 데이터 배열을 해석하고 지침에 지정된 계정에서 작동합니다. 프로그램이 성공적으로 또는 오류 코드를 반환 할 수 있습니다. 오류 반환으로 인해 전체 트랜잭션이 즉시 실패합니다.
 
-프로그램은 일반적으로 지원하는 명령을 구성하는 도우미 기능을 제공합니다. 예를 들어, 시스템 프로그램은 [`SystemInstruction :: CreateAccount`] (https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs # L63) 명령 :
+Programs typically provide helper functions to construct instructions they support. 예를 들어, 시스템 프로그램은 [`SystemInstruction :: CreateAccount`] (https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs # L63) 명령 :
 
 ```rust
-pub fn create_account (
-    from_pubkey : & Pubkey,
-    to_pubkey : & Pubkey,
-    lamports : u64,
-    space : u64,
-    owner : & Pubkey,
-)-> Instruction {
-    let account_metas = vec! [
-        AccountMeta :: new (* from_pubkey, true),
-        AccountMeta :: new (* to_pubkey, true),
+pub fn create_account(
+    from_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+    space: u64,
+    owner: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction :: new (
-        system_program :: id (),
-        & SystemInstruction :: CreateAccount {
+    Instruction::new_with_bincode(
+        system_program::id(),
+        &SystemInstruction::CreateAccount {
             lamports,
             space,
-            owner : * owner,
+            owner: *owner,
         },
         account_metas,
     )
@@ -86,9 +86,9 @@ https://github.com/solana -labs / solana / blob / 6606590b8132e56dab9e60b3f7d20b
 
 명령어의 \[프로그램 ID\] (terminology.md # program-id)는이 명령어를 처리 할 프로그램을 지정합니다. 프로그램의 계정 소유자는 프로그램을로드하고 실행하는 데 사용할 로더를 지정하며 데이터에는 런타임이 프로그램을 실행하는 방법에 대한 정보가 포함됩니다.
 
-\[배포 된 BPF 프로그램\] (developing / deployed-programs / overview.md)의 경우 소유자는 BPF 로더이고 계정 데이터는 BPF 바이트 코드를 보유합니다. 프로그램 계정은 성공적으로 배포되면 로더에 의해 영구적으로 실행 가능한 것으로 표시됩니다. 런타임은 실행 불가능한 프로그램을 지정하는 트랜잭션을 거부합니다.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-배포 된 프로그램과 달리 \[builtins\] (developing / builtins / programs.md)는 Solana 런타임에 직접 빌드된다는 점에서 다르게 처리됩니다.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### 계정
 
@@ -101,6 +101,14 @@ https://github.com/solana -labs / solana / blob / 6606590b8132e56dab9e60b3f7d20b
 프로그램은 정보가 명령어 데이터 바이트 배열로 인코딩되는 방법을 자유롭게 지정할 수 있습니다. 데이터가 인코딩되는 방법을 선택할 때 디코딩 오버 헤드를 고려해야합니다. 해당 단계는 온 체인 프로그램에 의해 수행되기 때문입니다. 일부 일반적인 인코딩 (예 : Rust의 bincode)은 매우 비효율적 인 것으로 관찰되었습니다.
 
 \[Solana 프로그램 라이브러리의 토큰 프로그램\] (https://github.com/solana-labs/solana-program-library/tree/master/token)은 명령 데이터를 효율적으로 인코딩 할 수있는 방법에 대한 한 가지 예를 제공하지만이 방법에 유의하십시오. 토큰은 \[Pack\] (https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) 특성을 활용하여 토큰 명령과 토큰 모두에 대한 명령 데이터를 인코딩 / 디코딩합니다. 계정 상태.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## 서명
 

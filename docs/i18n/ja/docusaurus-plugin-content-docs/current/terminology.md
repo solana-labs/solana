@@ -136,7 +136,7 @@ Solana クラスタと対話するフロントエンドアプリケーション�
 
 ## リーダスケジュール
 
-[バリデータ](terminology.md#validator)の[公開キー](terminology.md#public-key)のシーケンス。 クラスタは、リーダスケジュールを使用して、どのバリデータが [リーダ](terminology.md#leader) であるかを決定します。
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). クラスタは、リーダスケジュールを使用して、どのバリデータが [リーダ](terminology.md#leader) であるかを決定します。
 
 ## 台帳
 
@@ -214,90 +214,98 @@ Solana クラスタと対話するフロントエンドアプリケーション�
 
 R (32 バイト) と S (32 バイト) の 64 バイトの ed25519 署名。 R は小さな次数でないエドワーズポイントであり、S は 0<＝ S< L の範囲内であるという要件を持ちます。この要件により、署名の可鍛性が確保されます。 各トランザクションには、 [手数料アカウント](terminology#fee-account)に少なくとも 1 つの署名が必要です。 したがって、トランザクション内の最初の署名は [transacton id](terminology.md#transaction-id) として扱うことができます。
 
-## スロット
+## skipped slot
 
-[リーダー](terminology.md#leader) がトランザクションを取り込んで [ブロック](terminology.md#block) を生成する期間
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
-## スマートコントラクト
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
-一旦満たされると、事前に定義されたアカウントの更新が許可されることをプログラムに通知するセットのこと。
+## slot
+
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
+
+## smart contract
+
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
 ## sol
 
-Solana によって認識された [クラスタ](terminology.md#native-token) によって追跡された [ネイティブトークン](terminology.md#cluster)。
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
-## ステーキング
+## stake
 
-悪意のある [バリデーター](terminology.md#cluster) の振る舞いが証明されれば、 [クラスター](terminology.md#validator) にトークンが失われます。
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
-## スーパーマジョリティ
+## supermajority
 
-[クラスタ](terminology.md#cluster)の 2/3。
+2/3 of a [cluster](terminology.md#cluster).
 
-## システムバー
+## sysvar
 
-ランタイムによって提供される合成[アカウント](terminology.md#account)のことで、プログラムが現在の目安の高さや[ポイント](terminology.md#point)の値などのネットワーク状態にアクセスできるようにすることが出来ます。
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
-## シンクライアント
+## thin client
 
-有効な [クラスタ](terminology.md#client) を指していることを確認できる [クライアント](terminology.md#cluster) の一種。
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
-## ティック
+## tick
 
-ウォールクロックの長さを推定する台帳 [項目](terminology.md#entry)。
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
-## ティックの高さ
+## tick height
 
-[台帳](terminology.md#ledger)の N 番目の[目盛り](terminology.md#tick)。
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
-## トークン
+## token
 
-希少性は高いが代替可能なトークンセットのこと。
+A scarce, fungible member of a set of tokens.
 
 ## tps
 
-[トランザクション](terminology.md#transaction) / 秒。
+[Transactions](terminology.md#transaction) per second.
 
-## トランザクション
+## transaction
 
-1 つまたは複数の [手順](terminology.md#instruction) [クライアント](terminology.md#client) によって署名された [キーペア](terminology.md#keypair) と、成功または失敗の 2 つの可能な結果のみでアトミックに実行されます。
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
-## トランザクション ID
+## transaction id
 
-最初の[署名](teminology.md#signature)は、[トランザクション](teminology.md#transaction)の中にあるもので、完全な[台帳 r](teminology.md#ledger)の中でトランザクションを一意に識別するために使用することができます。
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
-## トランザクション確認
+## transaction confirmations
 
-トランザクションが[台帳](terminology.md#ledger)に受理されてから[確認されたブロック数](terminology.md#confirmed-block)のこと。 ブロックが[ルート](terminology.md#root)になった時点でトランザクションが確定します。
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## トランザクションエントリ
+## transactions entry
 
-並列実行される [トランザクション](terminology.md#transaction) のセット。
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
-## バリデータ
+## validator
 
-[クラスター](terminology.md#cluster) に完全な参加者が、 [台帳](terminology.md#ledger) の検証と新しい [ブロック](terminology.md#block) の生成を担当します。
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 
-[verifiable delay function](terminology.md#verifiable-delay-function) を参照。
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## 確認可能な遅延関数
+## verifiable delay function
 
-実行に一定の時間を要する関数のことで、生成に要した時間よりも短い時間で検証することが出来ます。
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
-## 投票
+## vote
 
-[ledger vote](terminology.md#ledger-vote) をご覧ください。
+See [ledger vote](terminology.md#ledger-vote).
 
-## 投票クレジット
+## vote credit
 
-[バリデーター](terminology.md#validator) の報酬集計。 バリデータが [ルート](terminology.md#root)に達したとき、投票クレジットはその投票アカウントのバリデータに与えられます。
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
-## ウォレット
+## wallet
 
-[キーペア](terminology.md#keypair)のコレクション。
+A collection of [keypairs](terminology.md#keypair).
 
-## ウォームアップ期間
+## warmup period
 
-[ステーキング](terminology.md#epoch) 後の [エポック](terminology.md#stake) の数が委任され、次第に有効になります。 この期間中、ステーキングは"activating"と見なされます。 詳細情報: [ウォームアップとクールダウン](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

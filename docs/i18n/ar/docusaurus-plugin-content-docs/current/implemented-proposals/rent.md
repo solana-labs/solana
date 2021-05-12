@@ -40,13 +40,13 @@ title: تأجير
 
 ### الأساس المنطقي للتصميم الحالي
 
-في إطار التصميم السابق، ليس من الممكن الحصول على حسابات تتباطأ، لا تُلمس أبداً، ولا يتوجب عليها دفع الإيجار. تدفع الحسابات الإيجار دائماً ومرة واحدة لكل فترة، بإستثناء الحسابات المُعفاة من الإيجار، وحسابات مُتغير النظام أو sysvar والحسابات القابلة للتنفيذ.
+في إطار التصميم السابق، ليس من الممكن الحصول على حسابات تتباطأ، لا تُلمس أبداً، ولا يتوجب عليها دفع الإيجار. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-هذا هو خيار التصميم المقصود. خلاف ذلك، سيكون من الممكن إثارة عملية جمع الإيجار غير المرخصة لها بتوجيه من `Noop` من أي شخص قد يربح الإيجار بشكل غير منصف (زعيم أو leader في الوقت الحاضر) أو توفير الإيجار بالنظر إلى تقلب تكاليف الإيجار المتوقعة.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-وكأثر جانبي آخر لهذا الإختيار، يلاحظ أيضا أن التحصيل الدوري للإيجارات يجبر المددق فعليا على عدم تخزين الحسابات القديمة في مخزن بارد أو cold storage على نحو متفائل وعلى توفير تكلفة التخزين، وهو أمر ليس في صالح مالكي الحسابات وقد يتسبب في توقف المعاملات معهم لفترة أطول من الآخرين. على الجانب الآخر، يمنع هذا المستخدمين المخادعين من تكديس كمية كبيرة من الحسابات الغير ضرورية، وهو ما يثقل كاهل المدققين أو الvalidators.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-كنتيجة عامة لهذا التصميم، يتم تخزين جميع الحسابات بالتساوي كمجموعة عمل للمدقق لها نفس خصائص الأداء، ويعكس بشكل مباشر الهيكل الموحد لتسعير الإيجار.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### المجموعة المخصصة
 

@@ -40,13 +40,13 @@ Solana 上的帐户可能处于所有者控制的状态 \(`Account::data`\) 该�
 
 ### 当前设计依据
 
-根据前面的设计，不可能有帐户处于遗漏、不会交互或者不支付租金的状态。 除了免租金、系统服务和可执行账户，其他账户在每个 epoch 都需要支付一次租金。
+根据前面的设计，不可能有帐户处于遗漏、不会交互或者不支付租金的状态。 Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-这就是设计上的考虑。 否则， 如果任何人可能不公平地获得租金(当前的领导者) 或因预期的浮动租金费用去节省费用，就有可能通过 `Noop` 指令启动未经授权的租金收取。
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-这个设计还有另一个副作用：我们注意到这种定期收取租金的做法有效地迫使验证节点不将陈旧帐户变成冷存储，从而节省储存费用，这一点不利于账户所有者，可能导致他们的交易停顿时间比其他人更长。 但是在另一方面，它防止了恶意用户累积大量垃圾帐户，加重验证节点的负担。
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-该设计的总体思路为：所有账户具有相同的性能特征，作为验证节点的工作集存储起来，直观地反映出统一的租金定价结构。
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### 特别收藏
 

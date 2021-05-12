@@ -70,7 +70,7 @@ log_pubkey_units: 100,
 
 由于计算预算在程序执行时会逐渐消耗，因此总预算消耗将是其执行的各种操作成本的组合。
 
-在运行时，程序可以记录剩余多少计算预算。 有关更多信息，请参见[debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption)。
+在运行时，程序可以记录剩余多少计算预算。 See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 预算值取决于功能启用，请查看计算预算的[new](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97)函数列出预算的编制方式。 需要了解[功能](runtime.md#features)的工作方式以及正在使用的群集上启用的功能才能确定当前预算的值。
 

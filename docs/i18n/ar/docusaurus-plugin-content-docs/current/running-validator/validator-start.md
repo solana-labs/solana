@@ -27,7 +27,7 @@ solana transaction-count
 حاول تشغيل الأمر التالي للإنضمام إلى شبكة القيل والقال (gossip) وعرض جميع العُقد (nodes) الأخرى في المجموعة (cluster):
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -45,7 +45,7 @@ solana-gossip spy --entrypoint devnet.solana.com:8001
 
 يتضمن solana repo برنامجًا خفيًا لضبط إعدادات النظام لتحسين الأداء (أي عن طريق زيادة المخزن المُؤقت (buffer) لنظام التشغيل UDP وحدود تعيين الملفات).
 
-تم تضمين الـ daemon أو البرنامج الخفي (`solana-sys-tuner`) في إصدار solana الثنائي (solana binary release). أعد تشغيله، قبل _before_ إعادة تشغيل المُدقّق (validator) الخاص بك، بعد كل ترقية للبرنامج للتأكد من تطبيق أحدث الإعدادات المُوصى بها.
+تم تضمين الـ daemon أو البرنامج الخفي (`solana-sys-tuner`) في إصدار solana الثنائي (solana binary release). Restart it, _before_ restarting your validator, after each software upgrade to ensure that the latest recommended settings are applied.
 
 لتشغيله:
 
@@ -78,7 +78,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 
@@ -89,13 +89,13 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 إضافة
 
 ```
-LimitNOFILE=500000
+LimitNOFILE=700000
 ```
 
 إلى قسم `[Service]` من ملف خدمة systemd الخاص بك، إذا كنت تستخدم واحدًا، فقُم بإضافة
 
 ```
-DefaultLimitNOFILE=500000
+DefaultLimitNOFILE=700000
 ```
 
 إلى قسم `[Manager]` من `/etc/systemd/system.conf`.
@@ -107,7 +107,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 
@@ -159,25 +159,31 @@ solana-keygen pubkey ASK
 solana-keygen grind --starts-with e1v1s:1
 ```
 
-إعتمادًا على السلسلة المطلوبة، قد يستغرق الأمر أيامًا للعثور على تطابق...
+You may request that the generated vanity keypair be expressed as a seed phrase which allows recovery of the keypair from the seed phrase and an optionally supplied passphrase (note that this is significantly slower than grinding without a mnemonic):
+
+```bash
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
+```
+
+Depending on the string requested, it may take days to find a match...
 
 ---
 
-يُعرّف زوج زوج مفاتيح الهوية (identity keypair) المُدقّق (validator) الخاص بك بشكل فريد داخل الشبكة. من الأهمية بمكان إجراء نسخ إحتياطي لهذه المعلومات **It is crucial to back-up this information.**
+Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-إذا لم تقم بعمل نسخة إحتياطية من هذه المعلومات، فلن تكون قادرًا على إسترداد المُدقّق (validator) الخاص بك إذا فقدت الوصول إليها. إذا حدث هذا، فستفقد حِصَّتك من عملات SOL أيضًا.
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
 
-لعمل نسخة إحتياطية من زوج مفاتيح الهوية (identity keypair) للمُدقّق (validator) الخاص بك، قُم بعمل نسخة إحتياطية من ملفك أو كلمات الإسترداد (seed phrase) في مكان آمن **back-up your "validator-keypair.json” file or your seed phrase to a secure location.**
+To back-up your validator identify keypair, **back-up your "validator-keypair.json” file or your seed phrase to a secure location.**
 
 ## المزيد من إعدادات Solana CLI
 
-الآن بعد أن أصبح لديك زوج مفاتيح (keypair)، قُم بضبط إعدادات solana لاستخدام زوج مفاتيح (keypair) المُدقّق (validator) الخاص بك لجميع الأوامر (commands) التالية:
+Now that you have a keypair, set the solana configuration to use your validator keypair for all following commands:
 
 ```bash
 solana config set --keypair ~/validator-keypair.json
 ```
 
-يجب أن ترى الناتج التالي:
+You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
@@ -187,92 +193,93 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 
 ## توزيع حر & تحقق من رصيد المُدقّق (validator) الخاص بك
 
-أرسل لنفسك (Airdrop) بعضًا من عملات SOL للبدأ:
+Airdrop yourself some SOL to get started:
 
 ```bash
-توزيع حر (airdrop) لـ Solana لعدد 10 من عملة Sol
+solana airdrop 1
 ```
 
-خُذ في الإعتبار أن أن التوزيع الحر (Airdrop) مُتاح فقط على شبكة المُطورين (Devnet) و الشبكة التجريبية (testnet). كلاهما مُقيد بعدد 10 من عملة SOL لكل طلب.
+Note that airdrops are only available on Devnet and Testnet. Both are limited to 1 SOL per request.
 
-لعرض رصيدك الحالي:
+To view your current balance:
 
 ```text
 solana balance
 ```
 
-أو لرؤية بتفاصيل أدق:
+Or to see in finer detail:
 
 ```text
 solana balance --lamports
 ```
 
-إقرأ المزيد عن الـ الفرق بين SOL و lamports هنا [difference between SOL and lamports here](../introduction.md#what-are-sols).
+Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
 ## إنشاء حساب تصويت (Create Vote Account)
 
-إذا لم تكن قد قُمت بذلك بالفعل، فأنشئ زوج مفاتيح حساب التصويت (vote-account keypair) وأنشئ حساب تصويت على الشبكة. إذا كنت قد أكملت هذه الخطوة، يجب أن ترى "voice-account-keypair.json" في دليل وقت تشغيل Solana:
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
 solana-keygen new -o ~/vote-account-keypair.json
 ```
 
-يُمكن إستخدام الأمر التالي لإنشاء حساب تصويت على البلوكشاين مع جميع الخيارات الإفتراضية:
+The following command can be used to create your vote account on the blockchain with all the default options:
 
 ```bash
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
-إقرأ المزيد عن إنشاء وإدارة حساب تصويت [creating and managing a vote account](vote-accounts.md).
+Read more about [creating and managing a vote account](vote-accounts.md).
 
 ## المُدقّقون الموثقون (Trusted validators)
 
-إذا كنت تعرف وتثق في عُقد المُدقّقين (validator nodes) الأخرى، يُمكنك تحديد ذلك في سطر الأوامر (command line) بإستخدام الرقم `--trusted-validator <PUBKEY>` argument to `solana-validator`. يُمكنك تحديد العديد بتكرار الوسيطة `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. هذا له تأثيران، أحدهما عندما يقوم المُدقّق (validator) ببدأ الإشتغال أو التمهيد (booting) بإستخدام `--no-untrusted-rpc`، سيطلب فقط تلك المجموعة من العُقد (nodes) الموثوقة لتنزيل بيانات مرحلة التكوين (Genesis) واللقطة (snapshot). جزئية أخرى وهي أنه بالإقتران مع الخيار `--halt-on-trusted-validator-hash-mismatch`، فإنه سيُراقب تجزئة جذر Merkle لحالة الحسابات الكاملة للعُقد (nodes) الموثوقة الأخرى على القيل والقال (gossip) وإذا كانت التجزئات تنتج أي عدم تطابق، فسيقوم المُدقّق (validator) بإيقاف العُقدة (node) لمنع المُدقّق من التصويت أو مُعالجة قِيم حالة (state values) يُحتمل أن تكون غير صحيحة. في الوقت الحالي، فإن الفُتحة (Slot) التي ينشر المُدقّق (validator) التجزئة عليها مُرتبطة بفاصل اللقطة (snapshot interval). لكي تكون الميزة فعالة، يجب تعيين جميع المُدقّقين (validators) في المجموعة الموثوقة على نفس قيمة الفاصل الزمني للقطة (snapshot) أو مُضاعفاتها.
+If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>` argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option, it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch, the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted set should be set to the same snapshot interval value or multiples of the same.
 
-يُوصى بشدة بإستخدام هذه الخيارات لمنع تنزيل حالة اللقطة (snapshot) الخبيثة أو تباعد حالة الحساب.
+It is highly recommended you use these options to prevent malicious snapshot state download or account state divergence.
 
 ## قُم ببتوصيل المُدقّق (validator) الخاص بك
 
-قُم بالإتصال بالمجموعة (cluster) عن طريق تشغيل الأمر البرمجي:
+Connect to the cluster by running:
 
 ```bash
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
-لفرض تسجيل المُدقّق (validator) إلى وحدة التحكم، أضف وسيطة `--log -`، وإلا فسيقوم المُدقّق (validator) بتسجيل الدخول تلقائيًا إلى ملف.
+To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
-> ملاحظة: يمكنك إستخدام ملف كلمات إستِرداد المحفظة الورقية [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your `--identity` and/or `--authorized-voter` keypairs. لإستخدامها، قُم بتمرير الوسيطة المُعنية كـ `solana-validator --identity ASK ... --authorized-voter ASK ...` وسيُطلب منك كلمات الإستِرداد وكلمة المرور الإختيارية.
+The ledger will be placed in the `ledger/` directory by default, use the `--ledger` argument to specify a different location.
 
-قُم بتأكيد إتصال المُدقّق (validator) الخاص بك بالشبكة عن طريق فتح محطة طرفية جديدة وتشغيل:
+> ملاحظة: يمكنك إستخدام ملف كلمات إستِرداد المحفظة الورقية [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your `--identity` and/or `--authorized-voter` keypairs. To use these, pass the respective argument as `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be prompted to enter your seed phrases and optional passphrase.
+
+Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
-إذا كان المُدقّق (validator) الخاص بك مُتصلاً، فسيظهر مفتاحه العمومي (public key) وعنوان الـ IP الخاص به في القائمة.
+If your validator is connected, its public key and IP address will appear in the list.
 
 ### التحكم في تخصيص منفذ (port) الشبكة المحلية
 
-بشكل إفتراضي، سيُحدد المُدقّق (validator) ديناميكيًا منافذ (ports) الشبكة المُتاحة في النطاق 8000-10000، ويُمكن تجاوزها بـ `--dynamic-port-range`. على سبيل المثال، سوف يُقيِّد `solana-validator --dynamic-port-range 11000-11010 ...` المُدقّق (validator) على المنافذ 11000-11010.
+By default the validator will dynamically select available network ports in the 8000-10000 range, and may be overridden with `--dynamic-port-range`. For example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict the validator to ports 11000-11010.
 
 ### تحديد حجم دفتر الأستاذ (ledger) للحفاظ على مساحة القرص
 
-تسمح لك المُعلمة `--limit-ledger-size` بتحديد عدد قِطَع [shreds](../terminology.md#shred) دفتر الأستاذ الذي تحتفظ به العُقدة (node) على القرص. إذا لم تقم بتضمين هذه المُعلِّمة (parameter)، فسوف يحتفظ المُدقّق (validator) بدفتر الأستاذ (ledger) بالكامل حتى نفاد مساحة القرص.
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space.
 
-تُحاول القيمة الافتراضية إبقاء إستخدام قرص دفتر الأستاذ (ledger) أقل من 500GB. قد يتم طلب إستخدام أكثر أو أقل للقرص عن طريق إضافة وسيطة إلى `--limit-ledger-size` إذا رغبت في ذلك. تحقق من `solana-validator --help` لقيمة الحد الإفتراضية المُستخدمة بواسطة `--limit-ledger-size`. مزيد من المعلومات حول إختيار قيمة حد مُخصصة هي موجودة هنا [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+The default value attempts to keep the ledger disk usage under 500GB. More or less disk usage may be requested by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`. More information about selecting a custom limit value is [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### وحدة النظام (Systemd Unit)
 
-يعد تشغيل المُدقّق (validator) كوحدة systemd هي طريقة سهلة لإدارة التشغيل في الخلفية.
+Running the validator as a systemd unit is one easy way to manage running in the background.
 
-على افتراض أن لديك مستخدم يسمى `sol` على جهازك، قم بإنشاء الملف `/etc/systemd/system/sol.service` من خلال ما يلي:
+Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with the following:
 
 ```
 [Unit]
@@ -286,7 +293,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -295,9 +302,9 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-الآن قُم بإنشاء `/home/sol/bin/validator.sh` لتضمين سطر الأوامر `solana-validator` المطلوب. تأكد من أن تشغيل `/home/sol/bin/validator.sh` يبدأ المُدقّق (validator) يدويًا كما هو مُتوقع. لا تنسى وضع علامة قابل للتنفيذ (executable) بـ `chmod +x /home/sol/bin/validator.sh`
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator` command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
-إبدأ الخدمة بـ:
+Start the service with:
 
 ```bash
 $ sudo systemctl enable --now sol
@@ -307,19 +314,21 @@ $ sudo systemctl enable --now sol
 
 #### ضبط إخراج السجل (Log output tuning)
 
-يُمكن التحكم في الرسائل التي يُرسلها المُدقّق (validator) إلى السجل بواسطة مُتغير البيئة `RUST_LOG`. يُمكن العثور على التفاصيل في [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) لـ `env_logger` صندوق Rust.
+The messages that a validator emits to the log can be controlled by the `RUST_LOG` environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for the `env_logger` Rust crate.
 
-لاحظ أنه إذا تم تقليل مُخرجات الضبط (logging output)، فقد يُؤدي ذلك إلى صعوبة تصحيح المُشكلات التي ستتم مُواجهتها لاحقًا. في حالة طلب الدعم من الفريق، يجب التراجع عن أي تغييرات وإعادة إنتاج المُشكلة قبل تقديم المُساعدة.
+Note that if logging output is reduced, this may make it difficult to debug issues encountered later. Should support be sought from the team, any changes will need to be reverted and the issue reproduced before help can be provided.
 
 #### تدوير السجل (Log rotation)
 
-يُمكن أن يصبح ملف سجل المُدقّق (validator)، كما هو مُحدد بواسطة `--log ~/solana-validator.log`، كبيرًا جدًا بمرور الوقت ويُوصى بتكوين تدوير السجل.
+The validator log file, as specified by `--log ~/solana-validator.log`, can get very large over time and it's recommended that log rotation be configured.
 
-سيُعيد المُدقّق (validator) فتحه عندما يتلقى إشارة `USR1`، وهي الإشارة الأساسية التي تُتيح تدوير السجل (log rotation).
+The validator will re-open its when it receives the `USR1` signal, which is the basic primitive that enables log rotation.
+
+If the validator is being started by a wrapper shell script, it is important to launch the process with `exec` (`exec solana-validator ...`) when using logrotate. This will prevent the `USR1` signal from being sent to the script's process instead of the validator's, which will kill them both.
 
 #### بإستخدام تدوير السجل (Using logrotate)
 
-مثال على إعداد `logrotate`، والذي يفترض أن المُدقّق (validator) يعمل كخدمة systemd تُسمى `sol.service` ويكتب ملف سجل على /home/sol/solana-validator.log:
+An example setup for the `logrotate`, which assumes that the validator is running as a systemd service called `sol.service` and writes a log file at /home/sol/solana-validator.log:
 
 ```bash
 # Setup log rotation
@@ -340,41 +349,41 @@ systemctl restart logrotate.service
 
 ### تعطيل عمليات فحص المنفذ (port) لتسريع عمليات إعادة التشغيل
 
-بمجرد أن يعمل المُدقّق (validator) بشكل طبيعي، يُمكنك تقليل الوقت المُستغرق لإعادة تشغيل المُدقّق (validator) عن طريق إضافة علامة `--no-port-check` إلى سطر أوامر `solana-validator`.
+Once your validator is operating normally, you can reduce the time it takes to restart your validator by adding the `--no-port-check` flag to your `solana-validator` command-line.
 
 ### تعطيل ضغط اللقطة (snapshot) لتقليل إستخدام وحدة المُعالجة المركزية (CPU)
 
-إذا كنت لا تقدم اللقطات (snapshots) إلى جهات المُدقّقين (validators) الأخرى، فيُمكن تعطيل ضغط اللقطة (snapshot) لتقليل حِمل وحدة المُعالجة المركزية (CPU) على حساب إستخدام القرص بشكل أكبر قليلاً لتخزين اللقطات (snapshots) المحلية.
+If you are not serving snapshots to other validators, snapshot compression can be disabled to reduce CPU load at the expense of slightly more disk usage for local snapshot storage.
 
-أضف الوسيطة `--snapshot-compression none` إلى وسيطات سطر الأوامر `solana-validator` وأعد تشغيل المُدقّق (validator).
+Add the `--snapshot-compression none` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### إستخدام ramdisk مع الإمتداد والإنتشار إلى المُبادلة (spill-over into swap) لقاعدة بيانات الحسابات لتقليل تآكل أقراص الحالة الصلبة (SSD)
 
-إذا كان جهازك يحتوي على الكثير من ذاكرة الوصول العشوائ (RAM)، فيُمكن إستخدام tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) للإحتفاظ بقاعدة بيانات الحسابات
+If your machine has plenty of RAM, a tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold the accounts database
 
-عند إستخدام tmpfs، من الضروري أيضًا تكوين المُبادلة على جهازك أيضًا لتجنب نفاد مساحة tmpfs بشكل دوري.
+When using tmpfs it's essential to also configure swap on your machine as well to avoid running out of tmpfs space periodically.
 
-يُوصى بإستخدام قسم tmpfs بسِعة 300GB، مع قسم مُبادلة مُصاحب بسِعة 250GB.
+A 300GB tmpfs partition is recommended, with an accompanying 250GB swap partition.
 
-مثال الإعدادات (Example configuration):
+Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. أضف قسمًا بحجم 300GB لـ tmpfs عن طريق إضافة سطر جديد يحتوي على `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` إلى `/etc/fstab` (على إفتراض أن المُدقّق الخاص بك يعمل تحت المُستخدم "sol"). **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab` (assuming your validator is running under the user "sol"). **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
 3. قم بإنشاء 250GB على الأقل من مساحة التبديل
 
-- إختر جهازًا لإستخدامه بدلاً من `SWAPDEV` لبقية هذه التعليمات. من الناحية المثالية، حدد قسمًا مجانيًا للقرص بحجم 250GB أو أكبر على قرص سريع. إذا لم يكن أحدهما مُتاحًا، فقُم بإنشاء ملف مُبادلة بـ `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`، وقُم بضبط أذوناته على `sudo chmod 0600 /swapfile` وإستخدم `/swapfile` كـ `SWAPDEV` لبقية هذه التعليمات
-- قم بتهيئة الجهاز (Format) للإستخدام كمُبادلة مع `sudo mkswap SWAPDEV`
+- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions. Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+- Format the device for usage as swap with `sudo mkswap SWAPDEV`
 
-4. أضف ملف المُبادلة إلى `/etc/fstab` بسطر جديد يحتوي على `SWAPDEV swap swap defaults 0 0`
-5. قُم بتمكين التبديل بـ `sudo swapon -a` وقم بتركيب tmpfs بـ `sudo mount /mnt/solana-accounts/`
-6. تأكد من أن المُبادلة نشطة مع `free -g` وأن tmpfs مُثبت بـ `mount`
+4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
+5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
+6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
-أضف الآن الوسيطة `--accounts /mnt/solana-accounts` إلى وسيطات سطر الأوامر `solana-validator` وأعد تشغيل المُدقّق (validator).
+Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### فهرسة الحساب (Account indexing)
 
-نظرًا لتزايد عدد الحسابات المأهولة في المجموعة، فإن طلبات RPC لبيانات الحساب التي تفحص مجموعة الحساب بالكامل مثل -- الحصول على حسابات البرنامج [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) و الطلبات المُحَدَّدَة للرمز [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- قد يكون أداؤها ضعيفًا. إذا إحتاج المُدقّق (validator) الخاص بك إلى دعم أي من هذه الطلبات، فيُمكنك إستخدام المُعلمة `--account-index` لتنشيط فهرس حساب واحد أو أكثر في الذاكرة يعمل على تحسين أداء RPC بشكل ملحوظ عن طريق فهرسة الحسابات (indexing accounts) حسب حقل المفتاح. يدعم حاليًا قيم المُعلِّمات (parameters) التالية:
+As the number of populated accounts on the cluster grows, account-data RPC requests that scan the entire account set -- like [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- may perform poorly. If your validator needs to support any of these requests, you can use the `--account-index` parameter to activate one or more in-memory account indexes that significantly improve RPC performance by indexing accounts by the key field. Currently supports the following parameter values:
 
-- مُعرف البرنامج `program-id`: كل حساب مُفهرس بواسطة البرنامج الخاص به؛ يستخدمه [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
-- سَكّ الرمز `spl-token-mint`: كل حساب رمز لـ SPL مُفهرس بواسطة رمز السَّكّ (Mint) الخاص به؛ يستخدمه للحصول على حسابات الرمز المميز عن طريق التفويض [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) و الحصول على أكبر حسابات الرمز [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
-- `spl-token-owner`: كل حساب رمز SPL مُفهرس بواسطة عنوان مالك الرمز؛ مُستخدم بواسطة طلبات الحصول على حسابات الرمز حسب المالك [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner) و الحصول على حسابات البرنامج [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) التي تتضمن فلتر spl-token-owner.
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.

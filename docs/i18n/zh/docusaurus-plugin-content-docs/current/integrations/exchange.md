@@ -297,7 +297,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 Solana 的命令行工具提供了一个用于生成、提交和确认转账交易的简单命令， `solana transfer`。 默认情况下，该方法将等待并跟踪 stderr 的进度，直到集群确认了某笔交易。 如果交易失败，它将报告任何类型的交易错误。
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) 为 JS 生态提供了类似的方法。 使用 `SystemProgram` 创造一笔转账交易，然后使用 `sendAndConfirmTransaction` 方法提交。
@@ -317,7 +317,7 @@ solana fees --url http://localhost:8899
 在命令行工具中，通过 `--no-wait` 参数发送异步传输，使用 `--blockhash` 参数包含您最近的区块哈希：
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 您也可以手动化生成、签名和序列化一笔交易，然后用 JSON-RPC [`发送交易` 端点](developing/clients/jsonrpc-api.md#sendtransaction) 将它关闭到某个集群。
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### 区块哈希过期
 
-当您使用 [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) 或 `solana fees` 请求您提款交易最近的区块哈希，响应将包括 `lastValidSlot`，有效区块哈希的最后一个插槽。 您可以使用 [`getSlot` query](developing/clients/jsonrpc-api.md#getslot) 检查集群插槽；一旦集群槽大于`lastValidSlot`，那么使用该区块哈希的提现交易永远不会成功。
-
-您也可以通过发送一个以区块哈希作为参数 [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) 的请求，来再次确认某个区块哈希是否仍然有效。 如果响应值为空，那么该区块哈希已经过期，提现请求就一定不会成功。
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### 验证用户提供的提款账户地址
 
 由于提款是不可逆过程，因此最好在提款确认之前对用户提供的帐户地址进行验证，以防止用户资产意外丢失。
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 Solana 的普通账户地址是一个 256 位 ed25519 公钥的 Base58 编码字符串。 并非所有位图案都是 ed25519 曲线的有效公共密钥， 这样可以确保用户提供的帐户地址至少是正确的 ed25519 公钥。
 
@@ -435,7 +449,7 @@ SPL 代币的工作流程类似于原生 SOL 代币，但本节将讨论它们�
 
 ### 代币铸造
 
-每种 _类型_ 的 SPL 代币都是由一个 _铸造_ 账号所产生。 该帐户存储了代币功能的元数据，如供应量、小数点数和对铸造的多种权限。 每个 SPL Token 帐户引用与它铸造相关的字段，并且只能与该种类型的 SPL 代币交互。
+Each _type_ of SPL Token is declared by creating a _mint_ account. 该帐户存储了代币功能的元数据，如供应量、小数点数和对铸造的多种权限。 每个 SPL Token 帐户引用与它铸造相关的字段，并且只能与该种类型的 SPL 代币交互。
 
 ### 安装 `spl-token` CLI 工具
 
@@ -557,8 +571,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### 冻结权限
 
-出于法规合规性原因，SPL 代币发行实体可以为与铸造相关联的所有帐户选择保留“冻结权限”。 这允许他们按照需要将一个给定帐户的资产 [冻结](https://spl.solana.com/token#freezing-accounts)，直到解冻以后才能使用。 如果开放该功能，冻结权限的公钥将在 SPL 代币的铸造账户中注册。
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. 这允许他们按照需要将一个给定帐户的资产 [冻结](https://spl.solana.com/token#freezing-accounts)，直到解冻以后才能使用。 如果开放该功能，冻结权限的公钥将在 SPL 代币的铸造账户中注册。
 
 ## 测试集成
 
-请务必先在 Solana devnet 和 testnet [clusters](../clusters.md) 测试完整的工作流，然后再迁移到 mainnet-beta 上。 Devnet 是最开放和最灵活、最理想的初始开发方式，而 testnet 提供了更现实的集群配置。 Devnet 和 testnet 都有一个水龙头，您可以通过运行 `solana airdrop 10` 获取一些用来开发和测试的 devnet 或 testnet 的 SOL 代币。
+请务必先在 Solana devnet 和 testnet [clusters](../clusters.md) 测试完整的工作流，然后再迁移到 mainnet-beta 上。 Devnet 是最开放和最灵活、最理想的初始开发方式，而 testnet 提供了更现实的集群配置。 Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

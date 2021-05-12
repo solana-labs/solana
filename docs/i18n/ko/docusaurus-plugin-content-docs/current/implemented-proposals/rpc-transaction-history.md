@@ -57,7 +57,7 @@ BigTable 인스턴스는 모든 트랜잭션 데이터를 보관하는 데 사�
 
 이 테이블에는 주어진 주소에 영향을주는 트랜잭션이 포함되어 있습니다.
 
-행 키는`<base58 address> / <slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`입니다. 행 데이터는 압축 된`TransactionByAddrInfo` 구조체입니다.
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. 행 데이터는 압축 된`TransactionByAddrInfo` 구조체입니다.
 
 슬롯의 칭찬을 받으면 슬롯 목록을 허용하면 주소에 영향을 미치는 트랜잭션이있는 최신 슬롯이 항상 먼저 나열됩니다.
 

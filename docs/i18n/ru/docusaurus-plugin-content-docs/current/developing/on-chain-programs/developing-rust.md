@@ -1,14 +1,12 @@
 ---
-title: "Developing with Rust"
+title: "Разработка на Rust"
 ---
 
-Solana supports writing on-chain programs using the
-[Rust](https://www.rust-lang.org/) programming language.
+Solana поддерживает написание on-chain программ, на языке программирования [Rust](https://www.rust-lang.org/).
 
-## Project Layout
+## Макет проекта
 
-Solana Rust programs follow the typical [Rust project
-layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
+Программы Solana на Rust соответствуют типовой [ структуре проекта Rust](https://doc.rust-lang.org/cargo/guide/project-layout.html):
 
 ```
 /inc/
@@ -16,169 +14,111 @@ layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
 /Cargo.toml
 ```
 
-But must also include:
+Однако также должны включать:
 
 ```
 /Xargo.toml
 ```
 
-Which must contain:
+Который должен содержать:
 
 ```
 [target.bpfel-unknown-unknown.dependencies.std]
 features = []
 ```
 
-Solana Rust programs may depend directly on each other in order to gain access
-to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations).
-When doing so it's important to not pull in the dependent program's entrypoint
-symbols because they may conflict with the program's own. To avoid this,
-programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
-to exclude the entrypoint.
+Solana Rust programs may depend directly on each other in order to gain access to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations). При этом очень важно не подтягивать в зависимые программы символы точек входа из зависимостей, поскольку они могут конфликтовать с собственными символами программы. To avoid this, programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use to exclude the entrypoint.
 
-- [Define the
-  feature](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/Cargo.toml#L12)
-- [Exclude the
-  entrypoint](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/src/lib.rs#L12)
+- [Определение свойства](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/Cargo.toml#L12)
+- [Исключение точки входа](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/src/lib.rs#L12)
 
-Then when other programs include this program as a dependency, they should do so
-using the `exclude_entrypoint` feature.
+Затем если программы включают другую программу как зависимость, то это должно быть реализовано с помощью `exclude_entrypoint` функционал.
 
-- [Include without
-  entrypoint](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token-swap/program/Cargo.toml#L19)
+- [Включение без точки входа](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token-swap/program/Cargo.toml#L19)
 
-## Project Dependencies
+## Зависимости проекта
 
-At a minimum, Solana Rust programs must pull in the
-[solana-program](https://crates.io/crates/solana-program) crate.
+Как минимум, программы для Solana на Rust должны включать пакет [solana-program](https://crates.io/crates/solana-program).
 
-Solana BPF programs have some [restrictions](#restrictions) that may prevent the
-inclusion of some crates as dependencies or require special handling.
+Программы Solana BPF имеют некоторые [ограничения](#restrictions), которые могут помешать включению определенных пакетов в качестве зависимостей или требовать специальной обработки.
 
-For example:
+Например:
 
-- Crates that require the architecture be a subset of the ones supported by the
-  official toolchain. There is no workaround for this unless that crate is
-  forked and BPF added to that those architecture checks.
-- Crates may depend on `rand` which is not supported in Solana's deterministic
-  program environment. To include a `rand` dependent crate refer to [Depending
-  on Rand](#depending-on-rand).
-- Crates may overflow the stack even if the stack overflowing code isn't
-  included in the program itself. For more information refer to
-  [Stack](overview.md#stack).
+- Пакеты, которые требуют создания архитектуры входящей в подмножество официально поддерживаемых инструментов. Для них нет обхода ограничений зависимостей, если только этот пакет не является форком и BPF добавлен к требованиям их архитектуры.
+- Пакеты Rust могут зависеть от `rand`, который не поддерживаются в детерминированной программной среде Solana. Для включения пакета `rand` в зависимости программы обратитесь к материалу [Depending on Rand](#depending-on-rand).
+- Пакеты Rust могут переполнить стек даже в том случае, если код, переполняющий стек, не включен в саму программу непосредственно. За дополнительной информацией обратитесь к [Stack](overview.md#stack).
 
-## How to Build
+## Как собрать проект
 
-First setup the environment:
+Сначала настройте окружение:
 
-- Install the latest Rust stable from https://rustup.rs/
-- Install the latest Solana command-line tools from
-  https://docs.solana.com/cli/install-solana-cli-tools
+- Установите последнюю версию Rust stable с https://rustup.rs/
+- Установите новейшие инструменты командной строки Solana из https://docs.solana.com/cli/install-solana-cli-tools
 
-The normal cargo build is available for building programs against your host
-machine which can be used for unit testing:
+Доступна нормальная сборка программ с cargo, а ваша хост-машина может быть использована для модульного тестирования:
 
 ```bash
 $ cargo build
 ```
 
-To build a specific program, such as SPL Token, for the Solana BPF target which
-can be deployed to the cluster:
+Для правильной сборки специфических on-chain программ, например таких как SPL токены для Solana BPF, способных разворачиваться в кластере, используйте:
 
 ```bash
 $ cd <the program directory>
 $ cargo build-bpf
 ```
 
-## How to Test
+## Как тестировать
 
-Solana programs can be unit tested via the traditional `cargo test` mechanism by
-exercising program functions directly.
+Программы Solana могут быть протестированы с помощью обычного механизма `cargo test` путем непосредственной проверки программных функций.
 
-To help facilitate testing in an environment that more closely matches a live
-cluster, developers can use the
-[`program-test`](https://crates.io/crates/solana-program-test) crate. The
-`program-test` crate starts up a local instance of the runtime and allows tests
-to send multiple transactions while keeping state for the duration of the test.
+Чтобы облегчить тестирование в среде, которая более тесно соответствует среде реального кластера, разработчики могут использовать пакет [`program-test`](https://crates.io/crates/solana-program-test). Пакет `program-tes` crate запускает локальный экземпляр рантайма и позволяет тестам отправлять несколько транзакций при сохранении состояния в течение теста.
 
-For more information the [test in sysvar
-example](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/sysvar/tests/functional.rs)
-shows how an instruction containing syavar account is sent and processed by the
-program.
+Для получения дополнительной информации пример [test in sysvar example](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/sysvar/tests/functional.rs) демонстрирует, как инструкция, содержащая аккаунт syavar, отправляется и обрабатывается программой.
 
-## Program Entrypoint
+## Точка входа программы
 
-Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program. Solana supports multiple [versions of the BPF
-loader](overview.md#versions) and the entrypoints may vary between them.
-Programs must be written for and deployed to the same loader. For more details
-see the [overview](overview#loaders).
+Программы экспортируют известный символ точки входа, который просматривает рантайм Solana, и вызывает при вызове программы. Solana поддерживает несколько [версий загрузчика BPF](overview.md#versions) и точки входа программ могут быть различными для разных загрузчиков. Программы должны быть написаны и предназначены для развертывания в один тот же загрузчик. Для получения дополнительной информации смотрите [обзор загрузчиков](overview#loaders).
 
-Currently there are two supported loaders [BPF
-Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
-and [BPF loader
-deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+На данный момент существуют два поддерживаемых загрузчика [BPF Загрузчик](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17) и [Устаревший BPF загрузчик](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
 
-They both have the same raw entrypoint definition, the following is the raw
-symbol that the runtime looks up and calls:
+Оба они имеют одно и то же определение точки входа, то есть необработанный символ, который видит и вызывает рантам:
 
 ```rust
 #[no_mangle]
 pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64;
 ```
 
-This entrypoint takes a generic byte array which contains the serialized program
-parameters (program id, accounts, instruction data, etc...). To deserialize the
-parameters each loader contains its own wrapper macro that exports the raw
-entrypoint, deserializes the parameters, calls a user defined instruction
-processing function, and returns the results.
+Эта точка берет общий байтовый массив, который содержит сериализованные параметры программы (идентификатор программы, аккаунты, данные инструкции и т. д.). Чтобы десериализовать параметры каждый загрузчик содержит свой собственный макрос который экспортирует исходную точку входа, дезактивирует параметры, вызывает определенную пользователем инструкцию, обрабатывает функцию и возвращает результаты.
 
-You can find the entrypoint macros here:
+Макрос точки входа находится здесь:
 
-- [BPF Loader's entrypoint
-  macro](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L46)
-- [BPF Loader deprecated's entrypoint
-  macro](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L37)
+- [Макрос BPF загрузчика](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L46)
+- [Макрос устаревшего BPF загрузчика](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L37)
 
-The program defined instruction processing function that the entrypoint macros
-call must be of this form:
+Программа определила функцию обработки инструкций, для которой вызов макроса точки входа должен иметь следующую форму:
 
 ```rust
 pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
 ```
 
-Refer to [helloworld's use of the
-entrypoint](https://github.com/solana-labs/example-helloworld/blob/c1a7247d87cd045f574ed49aec5d160aefc45cf2/src/program-rust/src/lib.rs#L15)
-as an example of how things fit together.
+Обратитесь к [использованию точки входа из примера helloworld ](https://github.com/solana-labs/example-helloworld/blob/c1a7247d87cd045f574ed49aec5d160aefc45cf2/src/program-rust/src/lib.rs#L15) в качестве примера того, как это все может работать вместе.
 
-### Parameter Deserialization
+### Десериализация параметров
 
-Each loader provides a helper function that deserializes the program's input
-parameters into Rust types. The entrypoint macros automatically calls the
-deserialization helper:
+Каждый загрузчик предоставляет вспомогательную функцию, которая десериализирует входные параметры программы в типы Rust. Макрос точки входа автоматически вызывает вспомогательную функцию для десериализации:
 
-- [BPF Loader
-  deserialization](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L104)
-- [BPF Loader deprecated
-  deserialization](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L56)
+- [Десериализация в загрузчике BPF](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L104)
+- [Десериализация в устаревшем BPF загрузчике](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L56)
 
-Some programs may want to perform deserialization themselves and they can by
-providing their own implementation of the [raw entrypoint](#program-entrypoint).
-Take note that the provided deserialization functions retain references back to
-the serialized byte array for variables that the program is allowed to modify
-(lamports, account data). The reason for this is that upon return the loader
-will read those modifications so they may be committed. If a program implements
-their own deserialization function they need to ensure that any modifications
-the program wishes to commit be written back into the input byte array.
+Некоторые программы могут иметь собственную модель десериализации, для чего необходимо имплементировать собственную точку входа [raw entrypoint](#program-entrypoint). Обратите внимание, что функции десериализации сохраняют ссылки на сериализованный массив байтов для переменных, которые программа может изменять (балансы, данные аккаунта). Причиной этого является то, что после возврата загрузчик прочитает эти изменения, чтобы они могли быть приняты. Если программа реализует свою собственную функцию десериализации, то она должна удостовериться в том, что любые изменения программы могут быть записаны обратно в входной массив байтов.
 
-Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
+Подробности о том, как сериализует ввод программы в документацию [Сериализация параметров ввода](overview.md#input-parameter-serialization).
 
-### Data Types
+### Типы данных
 
-The loader's entrypoint macros call the program defined instruction processor
-function with the following parameters:
+В точке входа загрузчика макросы вызывают программный процессор инструкции со следующими параметрами:
 
 ```rust
 program_id: &Pubkey,
@@ -186,48 +126,27 @@ accounts: &[AccountInfo],
 instruction_data: &[u8]
 ```
 
-The program id is the public key of the currently executing program.
+Идентификатор программы является публичным ключом исполняемой программы.
 
-The accounts is an ordered slice of the accounts referenced by the instruction
-and represented as an
-[AccountInfo](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/account_info.rs#L10)
-structures. An account's place in the array signifies its meaning, for example,
-when transferring lamports an instruction may define the first account as the
-source and the second as the destination.
+Аккаунты, в данном контексте, - это упорядоченый слайс аккаунтов на которые ссылается инструкция и представлены как структуры [AccountInfo](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/account_info.rs#L10). Местоположение аккаунта в массиве отражает его значение, например, при передаче баланса инструкция может определить первый аккаунт как источник, а второй - как место назначения.
 
-The members of the `AccountInfo` structure are read-only except for `lamports`
-and `data`. Both may be modified by the program in accordance with the [runtime
-enforcement policy](developing/programming-model/accounts.md#policy). Both of
-these members are protected by the Rust `RefCell` construct, so they must be
-borrowed to read or write to them. The reason for this is they both point back
-to the original input byte array, but there may be multiple entries in the
-accounts slice that point to the same account. Using `RefCell` ensures that the
-program does not accidentally perform overlapping read/writes to the same
-underlying data via multiple `AccountInfo` structures. If a program implements
-their own deserialization function care should be taken to handle duplicate
-accounts appropriately.
+Элементы структуры `AccountInfo` доступны только для чтения, за исключением `lamports` и `data`. Оба могут быть изменены программой в соответствии с [политикой выполнения рантайма](developing/programming-model/accounts. md#policy). Эти члены защищены конструкцией Rust `RefCell`, поэтому они должны быть заимствованы для чтения или записи к ним. Причиной этого является то, что они оба возвращают оригинальный входной массив байтов, но могут быть несколько записей в аккаунтах, которые указывают на один и тот же аккаунт. Использование `RefCell` гарантирует, что программа не выполняет случайно перекрывающиеся чтение/запись в те же самые базовые данные через несколько структур `AccountInfo`. Если программа реализует свою функцию десериализации, то она также должна соответствующим образом обрабатывать дубликаты аккаунтов.
 
-The instruction data is the general purpose byte array from the [instruction's
-instruction data](developing/programming-model/transactions.md#instruction-data)
-being processed.
+Данные инструкции представляют собой массив байтов [собственных данных инструкции](developing/programming-model/transactions.md#instruction-data).
 
-## Heap
+## Куча
 
-Rust programs implement the heap directly by defining a custom
-[`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
+Программы Rust реализуют кучу через пользовательский [`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
 
-Programs may implement their own `global_allocator` based on its specific needs.
-Refer to the [custom heap example](#examples) for more information.
+Программы могут реализовывать собственные `global_allocator` на основе своих специфических потребностей. Обратитесь к [кастомный пример кучи](#examples) для получения дополнительной информации.
 
-## Restrictions
+## Ограничения Rust
 
-On-chain Rust programs support most of Rust's libstd, libcore, and liballoc, as
-well as many 3rd party crates.
+On-chain программы Rust поддерживают основной функционал языка - libstd, libcore, и liballoc, а так же большинство сторонних пакетов.
 
-There are some limitations since these programs run in a resource-constrained,
-single-threaded environment, and must be deterministic:
+Есть некоторые ограничения, поскольку эти программы работают в однопоточной среде с ограниченными ресурсами и должны быть детерминированными:
 
-- No access to
+- Нет доступа к
   - `rand`
   - `std::fs`
   - `std::net`
@@ -239,27 +158,17 @@ single-threaded environment, and must be deterministic:
   - `std::task`
   - `std::thread`
   - `std::time`
-- Limited access to:
+- Ограниченный доступ к:
   - `std::hash`
   - `std::os`
-- Bincode is extremely computationally expensive in both cycles and call depth
-  and should be avoided
-- String formatting should be avoided since it is also computationally
-  expensive.
-- No support for `println!`, `print!`, the Solana [logging helpers](#logging)
-  should be used instead.
-- The runtime enforces a limit on the number of instructions a program can
-  execute during the processing of one instruction. See
-  [computation budget](developing/programming-model/runtime.md#compute-budget) for more
-  information.
+- Использовать Bincode чрезвычайно дорого в плане вычислительной производительности в течении обоих циклов и глубины вызова - поэтому этого стоит избегать
+- Форматирование строк следует избегать, так как оно также вычислительно дорого.
+- Нет поддержки инструкций `println!`, `print!`, вместо этого следует использовать [вспомогательные логгеры Solana](#logging).
+- Рантайм лимитирует на количество инструкций, которое программа может выполнить в процессе обработки одной инструкции. See [computation budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
-## Depending on Rand
+## Rand зависимость в Rust
 
-Programs are constrained to run deterministically, so random numbers are not
-available. Sometimes a program may depend on a crate that depends itself on
-`rand` even if the program does not use any of the random number functionality.
-If a program depends on `rand`, the compilation will fail because there is no
-`get-random` support for Solana. The error will typically look like this:
+Детерминированный запуск программ ограничен, поэтому работа со случайными числами недоступна. Иногда программа может зависеть от пакета, который зависит от `rand` даже если программа не использует функции случайного числа. Если программа зависит от `rand`, то компиляция не будет выполнена, так как у Solana нет поддержки `get-random`. Ошибка обычно будет выглядеть так:
 
 ```
 error: target is not supported, for more information see: https://docs.rs/getrandom/#unsupported-targets
@@ -272,46 +181,39 @@ error: target is not supported, for more information see: https://docs.rs/getran
     | |___________^
 ```
 
-To work around this dependency issue, add the following dependency to the
-program's `Cargo.toml`:
+Чтобы обойти это ограничение, добавьте следующую зависимость в `Cargo.toml`:
 
 ```
 getrandom = { version = "0.1.14", features = ["dummy"] }
 ```
 
-## Logging
+## Логирование
 
-Rust's `println!` macro is computationally expensive and not supported. Instead
-the helper macro
-[`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)
-is provided.
+Макрос Rust `println!` требует большого вычислительного ресурса и не поддерживается. Вместо этого предоставляется вспомогательный макрос [`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33).
 
-`msg!` has two forms:
+`msg!` имеет две формы:
 
 ```rust
 msg!("A string");
 ```
 
-or
+или
 
 ```rust
 msg!(0_64, 1_64, 2_64, 3_64, 4_64);
 ```
 
-Both forms output the results to the program logs. If a program so wishes they
-can emulate `println!` by using `format!`:
+Обе выводят результат в логи программы. При желании программа может эмулировать `println!` используя `format!`:
 
 ```rust
 msg!("Some variable: {:?}", variable);
 ```
 
-The [debugging](debugging.md#logging) section has more information about working
-with program logs the [Rust examples](#examples) contains a logging example.
+В разделе [отладка](debugging.md#logging) содержится дополнительная информация о работе с логом программы [Примеры Rust](#examples) содержит пример логирования.
 
-## Panicking
+## Макросы Rust panic и assert
 
-Rust's `panic!`, `assert!`, and internal panic results are printed to the
-[program logs](debugging.md#logging) by default.
+`panic!`, `assert!`, а так же их вывод печатаются в [логи программы](debugging.md#logging) по умолчанию.
 
 ```
 INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
@@ -323,12 +225,11 @@ INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 uni
 INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
-### Custom Panic Handler
+### Пользовательский Обработчик Паники
 
-Programs can override the default panic handler by providing their own
-implementation.
+Программы могут переопределить обработчик паники по умолчанию, предоставив собственную реализацию.
 
-First define the `custom-panic` feature in the program's `Cargo.toml`
+Сначала определите функцию `custom-panic` в `Cargo.toml`
 
 ```toml
 [features]
@@ -336,7 +237,7 @@ default = ["custom-panic"]
 custom-panic = []
 ```
 
-Then provide a custom implementation of the panic handler:
+Затем предоставьте пользовательскую реализацию обработчика паники:
 
 ```rust
 #[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
@@ -347,17 +248,9 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 }
 ```
 
-In the above snippit, the default implementation is shown, but developers may
-replace that with something that better suits their needs.
+В примере выше показана реализация по умолчанию, но разработчики могут заменить этот код на другой, более удовлетворяющий их потребности.
 
-One of the side effects of supporting full panic messages by default is that
-programs incur the cost of pulling in more of Rust's `libstd` implementation
-into program's shared object. Typical programs will already be pulling in a
-fair amount of `libstd` and may not notice much of an increase in the shared
-object size. But programs that explicitly attempt to be very small by avoiding
-`libstd` may take a significant impact (~25kb). To eliminate that impact,
-programs can provide their own custom panic handler with an empty
-implementation.
+Одним из побочных эффектов поддержки полных сообщений паники по умолчанию является то, что программы затрачивают на реализацию больше чем на реализацию `libstd` в общем объекте программы. Типовые программы, как правило итак используют `libstd` и могут не почувствовать значительного увеличения размера общего объекта. Но на программы, которые явно пытаются быть очень маленькими, избегая реализации `libstd`, его включение может существенно повлиять (~25kb) на размер программы в памяти. Чтобы устранить это влияние, программы могут обеспечить свой собственный пользовательский обработчик с пустой реализацией.
 
 ```rust
 #[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
@@ -367,35 +260,23 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 }
 ```
 
-## Compute Budget
+## Бюджет Вычислений
 
-Use the system call
-[`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102)
-to log a message containing the remaining number of compute units the program
-may consume before execution is halted
+Используйте системный вызов [`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102) для получения сообщения, содержащего оставшееся количество вычислительных единиц, которое программа может потратить до остановки выполнения
 
-See [compute budget](developing/programming-model/runtime.md#compute-budget)
-for more information.
+See [compute budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
-## ELF Dump
+## Дамп ELF
 
-The BPF shared object internals can be dumped to a text file to gain more
-insight into a program's composition and what it may be doing at runtime. The
-dump will contain both the ELF information as well as a list of all the symbols
-and the instructions that implement them. Some of the BPF loader's error log
-messages will reference specific instruction numbers where the error occurred.
-These references can be looked up in the ELF dump to identify the offending
-instruction and its context.
+Содержимое общего объекта BPF может быть сохранено в формате текстового файла чтобы углубиться больше в композицию программы и ее поведение в рантайме. Дамп будет содержать информацию ELF, а также список всех символов и инструкций, которые их реализуют. Некоторые из сообщений лога ошибок BPF будут ссылаться на конкретные номера инструкций, где произошла ошибка. Эти ссылки можно посмотреть в дампе ELF, чтобы определить нарушающие инструкции и их контекст.
 
-To create a dump file:
+Для создания файла дампа:
 
 ```bash
 $ cd <program directory>
 $ cargo build-bpf --dump
 ```
 
-## Examples
+## Примеры
 
-The [Solana Program Library
-github](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)
-repo contains a collection of Rust examples.
+Репозитарий github [Solana Program Library ](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust) содержит коллекцию примеров программ на Rust.

@@ -27,7 +27,7 @@ View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-t
 Try running following command to join the gossip network and view all the other nodes in the cluster:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -78,7 +78,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 
@@ -89,13 +89,13 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 Add
 
 ```
-LimitNOFILE=500000
+LimitNOFILE=700000
 ```
 
 to the `[Service]` section of your systemd service file, if you use one, otherwise add
 
 ```
-DefaultLimitNOFILE=500000
+DefaultLimitNOFILE=700000
 ```
 
 to the `[Manager]` section of `/etc/systemd/system.conf`.
@@ -107,7 +107,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 
@@ -159,6 +159,12 @@ You can generate a custom vanity keypair using solana-keygen. For instance:
 solana-keygen grind --starts-with e1v1s:1
 ```
 
+You may request that the generated vanity keypair be expressed as a seed phrase which allows recovery of the keypair from the seed phrase and an optionally supplied passphrase (note that this is significantly slower than grinding without a mnemonic):
+
+```bash
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
+```
+
 Depending on the string requested, it may take days to find a match...
 
 ---
@@ -190,10 +196,10 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 10
+solana airdrop 1
 ```
 
-Note that airdrops are only available on Devnet and Testnet. Both are limited to 10 SOL per request.
+Note that airdrops are only available on Devnet and Testnet. Both are limited to 1 SOL per request.
 
 To view your current balance:
 
@@ -239,21 +245,22 @@ Connect to the cluster by running:
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
+The ledger will be placed in the `ledger/` directory by default, use the `--ledger` argument to specify a different location.
+
 > Note: You can use a [paper wallet seed phrase](../wallet-guide/paper-wallet.md) for your `--identity` and/or `--authorized-voter` keypairs. To use these, pass the respective argument as `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.
@@ -286,7 +293,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -316,6 +323,8 @@ Note that if logging output is reduced, this may make it difficult to debug issu
 The validator log file, as specified by `--log ~/solana-validator.log`, can get very large over time and it's recommended that log rotation be configured.
 
 The validator will re-open its when it receives the `USR1` signal, which is the basic primitive that enables log rotation.
+
+If the validator is being started by a wrapper shell script, it is important to launch the process with `exec` (`exec solana-validator ...`) when using logrotate. This will prevent the `USR1` signal from being sent to the script's process instead of the validator's, which will kill them both.
 
 #### Using logrotate
 

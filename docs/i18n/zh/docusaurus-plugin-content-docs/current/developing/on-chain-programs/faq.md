@@ -1,61 +1,61 @@
 ---
-title: "常见问题解答"
+title: "FAQ"
 ---
 
-在编写或与 Solana 程序进行交互时，经常会遇到一些常见的问题或困难。 以下是有助于回答这些问题的资源。
+When writing or interacting with Solana programs, there are common questions or challenges that often come up. Below are resources to help answer these questions.
 
-如果还没有解决您的问题，那么 Solana[#developers](https://discord.gg/RxeGBH)Discord 频道是一个不错的资源。
+If not addressed here, the Solana [#developers](https://discord.gg/RxeGBH) Discord channel is a great resource.
 
-## `CallDepth`错误
+## `CallDepth` error
 
-此错误意味着跨程序调用超出了允许的调用深度。
+This error means that that cross-program invocation exceeded the allowed invocation call depth.
 
-请参见[跨程序调用调用深度](developing/programming-model/calling-between-programs.md#call-depth)
+See [cross-program invocation Call Depth](developing/programming-model/calling-between-programs.md#call-depth)
 
-## `CallDepthExceeded`错误
+## `CallDepthExceeded` error
 
-此错误表示已超出 BPF 堆栈深度。
+This error means the BPF stack depth was exceeded.
 
-请参阅[通话深度](overview.md#call-depth)
+See [call depth](overview.md#call-depth)
 
-## 计算约束
+## Computational constraints
 
-请参见[计算约束](developing/programming-model/runtime.md#compute-budget)
+See [computational constraints](developing/programming-model/runtime.md#compute-budget)
 
-## 浮动 Rust 类型
+## Float Rust types
 
-请参见[浮动支持](overview.md#float-support)
+See [float support](overview.md#float-support)
 
-## Heap 大小
+## Heap size
 
-请参见[heap](overview.md#heap)
+See [heap](overview.md#heap)
 
-## 无效账户数据
+## InvalidAccountData
 
-该程序错误的发生可能有很多原因。 通常，这是由于在指令中的错误位置或与正在执行的指令不兼容的帐户向程序传递了程序不期望的帐户所致。
+This program error can happen for a lot of reasons. Usually, it's caused by passing an account to the program that the program is not expecting, either in the wrong position in the instruction or an account not compatible with the instruction being executed.
 
-当执行跨程序指令而忘记提供您正在调用的程序的帐户时，程序的实现也可能导致此错误。
+An implementation of a program might also cause this error when performing a cross-program instruction and forgetting to provide the account for the program that you are calling.
 
-## 无效指示数据
+## InvalidInstructionData
 
-尝试反序列化指令时，可能会发生此程序错误，请检查传入的结构是否与指令完全匹配。 字段之间可能会有一些填充。 如果程序实现了 Rust 的`Pack`特性，则尝试打包和解压缩指令类型`T`以确定程序期望的确切编码：
+This program error can occur while trying to deserialize the instruction, check that the structure passed in matches exactly the instruction. There may be some padding between fields. If the program implements the Rust `Pack` trait then try packing and unpacking the instruction type `T` to determine the exact encoding the program expects:
 
 https://github.com/solana-labs/solana/blob/v1.4/sdk/program/src/program_pack.rs
 
 ## MissingRequiredSignature
 
-有些说明要求帐户必须是签名者；如果预计将对帐户进行签名但未签名，则返回此错误。
+Some instructions require the account to be a signer; this error is returned if an account is expected to be signed but is not.
 
-当执行需要签名程序地址的跨程序调用时，程序的实现也可能会导致此错误，但是传递的签名者种子将传递给[`invoke_signed`](developing/programming-model/calling-between-programs.md)与用于创建程序地址[`create_program_address`](developing/programming-model/calling-between-programs.md#program-derived-addresses)的签名者种子不匹配。
+An implementation of a program might also cause this error when performing a cross-program invocation that requires a signed program address, but the passed signer seeds passed to [`invoke_signed`](developing/programming-model/calling-between-programs.md) don't match the signer seeds used to create the program address [`create_program_address`](developing/programming-model/calling-between-programs.md#program-derived-addresses).
 
-## `rand` Rust 依赖导致编译失败
+## `rand` Rust dependency causes compilation failure
 
-请参见[Rust 项目依赖项](developing-rust.md#project-dependencies)
+See [Rust Project Dependencies](developing-rust.md#project-dependencies)
 
-## Rust 限制
+## Rust restrictions
 
-请参见[Rust 限制](developing-rust.md#restrictions)
+See [Rust restrictions](developing-rust.md#restrictions)
 
-## 堆栈大小
+## Stack size
 
-请参见[stack](overview.md#stack)
+See [stack](overview.md#stack)

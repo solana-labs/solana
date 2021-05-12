@@ -29,9 +29,7 @@ Similarly, here we see the _Total Current Supply_ of SOL [MM] over time, assumin
 
 Setting aside validator uptime and commissions, the expected Staking Yield and Adjusted Staking Yield metrics are then primarily a function of the % of total SOL staked on the network. Therefore we can we can model _Staking Yield_, if we introduce an additional parameter _% of Staked SOL_:
 
-$$
-\%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
-$$
+$$ \%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}} $$
 
 This parameter must be estimated because it is a dynamic property of the token holders and staking incentives. The values of _% of Staked SOL_ presented here range from $60\% - 90\%$, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 

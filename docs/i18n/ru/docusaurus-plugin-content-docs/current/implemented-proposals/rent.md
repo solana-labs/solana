@@ -40,13 +40,13 @@ title: Аренда
 
 ### Обоснование текущего дизайна
 
-В соответствии с предыдущим планом НЕ возможно иметь аккаунты, которые остаются, никогда не касаются и никогда не должны платить арендную плату. Счета всегда платят арендную плату ровно один раз для каждой эпохи, за исключением аккаунтов без арендной платы, sysvar и исполняемых файлов.
+В соответствии с предыдущим планом НЕ возможно иметь аккаунты, которые остаются, никогда не касаются и никогда не должны платить арендную плату. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-Это преднамеренный выбор дизайна. В противном случае можно было бы инициировать несанкционированный сбор арендной платы с помощью инструкции `Noop` любым, кто может получить несправедливую прибыль от арендной платы (лидер на данный момент) или сэкономить арендную плату с учетом ожидаемых колебаний арендной платы.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-В качестве еще одного побочного эффекта этого выбора также обратите внимание, что этот периодический сбор арендной платы эффективно вынуждает валидатор оптимистично не хранить устаревшие аккаунты в холодном хранилище и экономить стоимость хранения, что неблагоприятно для владельцев аккаунтов и может привести к задержке транзакций на них дольше. чем другие. С другой стороны, это не позволяет злоумышленникам накапливать значительное количество мусорных учетных записей, что обременяет валидаторов.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-Как общее следствие этого дизайна, все учетные записи одинаково хранятся как рабочий набор валидатора с одинаковыми характеристиками производительности, что прямо отражает единую структуру ценообразования арендной платы.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### Ad-hoc коллекция
 

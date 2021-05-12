@@ -6,13 +6,43 @@ Solana 维护专用的 API 节点来完成 [JSON RPC](developing/clients/jsonrpc
 
 ## Devnet（开发者网络）
 
+#### Endpoint
+
 - `https://devnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB
 
 ## Testnet（测试网）
 
-- `https://testnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
+#### Endpoint
+
+- `https://testnet.solana.com` - single Solana-hosted api node; rate-limited
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB
 
 ## Mainnet Beta（主网 Beta）
 
-- `https://api.mainnet-beta.solana.com` - Solana 托管的 api 节点集群，由负载平衡器支持；限定频率
-- `https://solana-api.projectserum.com` - Project Serum 托管的 api 节点
+#### Endpoints
+
+- `https://api.mainnet-beta.solana.com` - Solana-hosted api node cluster, backed by a load balancer; rate-limited
+- `https://solana-api.projectserum.com` - Project Serum-hosted api node
+
+#### Rate Limits
+
+- Maximum number of requests per 10 seconds per IP: 100
+- Maximum number of requests per 10 seconds per IP for a single RPC: 40
+- Maximum current connections per IP: 40
+- Maximum connection rate per 10 seconds per IP: 40
+- Maximum amount of data per 30 second: 100 MB

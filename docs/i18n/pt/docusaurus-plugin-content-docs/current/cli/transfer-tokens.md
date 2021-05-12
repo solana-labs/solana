@@ -17,14 +17,14 @@ Este exemplo de teste usa nosso Testnet de Desenvolvedor, chamado devnet. Tokens
 Primeiro, _airdrop_ você mesmo joga tokens no devnet.
 
 ```bash
-solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 onde você substitui o texto `<RECIPIENT_ACCOUNT_ADDRESS>` com seu codificado em base58 chave pública/ endereço carteira.
 
 #### Verifique seu saldo
 
-Confirme se o Airdrop foi bem sucedido e verifique o saldo da conta. Ele deve retornar `10 SOL`:
+Confirme se o Airdrop foi bem sucedido e verifique o saldo da conta. Ele deve retornar `1 SOL`:
 
 ```bash
 solana airdrop <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -51,7 +51,7 @@ Você também pode criar uma segunda (ou mais) carteira de qualquer tipo: [paper
 Em seguida, prove que você tem os tokens do airdrop, transferindo. O cluster Solana só aceitará a transferência se você assinar a transação com o par de chaves privadas correspondendo à chave pública do remetente no transação.
 
 ```bash
-transferência de solana --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 onde você substitui `<KEYPAIR>` pelo caminho para um par de chaves em sua primeira carteira, e substitua `<RECIPIENT_ACCOUNT_ADDRESS>` pelo endereço de sua segunda carteira.
@@ -76,33 +76,33 @@ pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK # Aqui está o endereço da
 ==========================================================================================
 Salve esta semente para recuperar seu novo keypair:
 largura no concerto com chover eterno de tag spy guard # Se isso for uma verdadeira valente, nunca compartilhe estas palavras na internet como essa!
-======================================================================
+==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Provisório 10 SOL para o endereço da minha carteira/pubkey
-Solicitando uma propulsão de 10 SOL de 35.233.193. 0:9900
-10 SOL
+$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
+Requesting airdrop of 1 SOL from 35.233.193.70:9900
+1 SOL
 
-$ solana balanceado DYw8jCTfwHNRJhhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Verificar o saldo do endereço
-10 SOL
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
+1 SOL
 
-$ solana-keygen new --no-outfile # Criando uma segunda carteira, uma paper wallet
-Gerando um novo par de chaves
-Para maior segurança, digite uma senha (vazia para nenhuma frase-passagem):
+$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
+Generating a new keypair
+For added security, enter a passphrase (empty for no passphrase):
 ====================================================================
-pubkey: 7S3P4HxJpyyigGzodYwtCxZyUQe9JiBMHyRWXArAaKv # Aqui está o endereço do segundo, Paper, carteira.
+pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # Here is the address of the second, paper, wallet.
 ====================================================================
 Salve esta frase de semente para recuperar o seu novo par chave:
 primo de pânico machucado sobre a carga da costa engaja-se e ganhe o amor # Se esta for uma carteira real, nunca compartilhe essas palavras na internet como essa!
-================================================================
+====================================================================
 
-$ transferência solana --de my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet. son # Transferindo tokens para o endereço público da carteira de papel
-3gmXvykAd1nCQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z # Esta é a assinatura de transação
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
-$ saldo DYw8jCTfwHNRJhhmFcbXvVVDqWMEVFBX6ZKUmG5CNSKK --url https://devnet. olana.com
-4.999995 SOL # A conta de envio tem um pouco menos de 5 SOL restando por causa do 0. 00005 SOL pagamento da taxa de transação
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
-$ balanço solana 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet. olana.com
-5 SOL # A segunda carteira já recebeu a transferência de 5 SOL da primeira carteira
+$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
+0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
 
 ```
 

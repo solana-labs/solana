@@ -36,14 +36,7 @@ The rate of return (aka _interest_) earned on SOL staked on the network. It is o
   - There may be future consideration for an additional split of inflation issuance with the introduction of _Archivers_ into the economy. _Archivers_ are network participants who provide a decentralized storage service and should also be incentivized with token distribution from inflation issuances for this service. - Similarly, early designs specified a fixed percentage of inflationary issuance to be delivered to the Foundation treasury for operational expenses and future grants. However, inflation will be launching without any portion allocated to the Foundation.
 - _Staking yield_ can be calculated from the _Inflation Schedule_ along with the fraction of the _Total Current Supply_ that is staked at any given time. The explicit relationship is given by:
 
-$$
-\begin{aligned}
-\text{Staking Yield} =~&\text{Inflation Rate}\times\text{Validator Uptime}~\times \\
-&\left( 1 - \text{Validator Fee} \right) \times \left( \frac{1}{\%~\text{SOL Staked}} \right) \\
-\text{where:}\\
-\%~\text{SOL Staked} &= \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
-\end{aligned}
-$$
+$$ \begin{aligned} \text{Staking Yield} =~&\text{Inflation Rate}\times\text{Validator Uptime}~\times \\ &\left( 1 - \text{Validator Fee} \right) \times \left( \frac{1}{\%~\text{SOL Staked}} \right) \\ \text{where:}\\ \%~\text{SOL Staked} &= \frac{\text{Total SOL Staked}}{\text{Total Current Supply}} \end{aligned} $$
 
 ### Token Dilution [%]
 

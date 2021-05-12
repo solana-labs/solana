@@ -52,7 +52,7 @@ Compact-u16 là một mã hóa nhiều byte gồm 16 bit. Byte đầu tiên ch�
 
 Mỗi [chỉ dẫn](terminology.md#instruction) chỉ định một chương trình duy nhất, một tập hợp con các tài khoản của giao dịch sẽ được chuyển cho chương trình và một mảng byte dữ liệu được chuyển cho chương trình. Chương trình diễn giải mảng dữ liệu và hoạt động trên các tài khoản được chỉ định bởi hướng dẫn. Chương trình có thể trả về thành công hoặc có mã lỗi. Trả về lỗi khiến toàn bộ giao dịch không thành công ngay lập tức.
 
-Chương trình thường cung cấp các chức năng trợ giúp để xây dựng hướng dẫn mà chúng hỗ trợ. Ví dụ: chương trình hệ thống cung cấp trình trợ giúp Rust sau đây để xây dựng một chỉ dẫn [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
+Programs typically provide helper functions to construct instructions they support. Ví dụ: chương trình hệ thống cung cấp trình trợ giúp Rust sau đây để xây dựng một chỉ dẫn [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 [id chương trình](terminology.md#program-id) của hướng dẫn chỉ định chương trình nào sẽ xử lý chỉ dẫn này. Chủ sở hữu tài khoản của chương trình chỉ định trình tải nào nên được sử dụng để tải và thực thi chương trình và dữ liệu chứa thông tin về cách thời gian chạy sẽ thực thi chương trình.
 
-Trong trường hợp [chương trình BPF đã triển khai](developing/deployed-programs/overview.md), chủ sở hữu là Bộ tải BPF và dữ liệu tài khoản giữ mã byte BPF. Tài khoản chương trình được trình tải đánh dấu vĩnh viễn là có thể thực thi sau khi chúng được triển khai thành công. Thời gian chạy sẽ từ chối các giao dịch chỉ định các chương trình không thực thi được.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-Không giống như các chương trình đã triển khai, các [builtins](developing/builtins/programs.md) được xử lý khác nhau ở chỗ chúng được xây dựng trực tiếp vào thời gian chạy Solana.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### Tài khoản
 
@@ -101,6 +101,14 @@ Mỗi lệnh chứa một mảng byte mục đích chung được chuyển đế
 Các chương trình miễn phí chỉ định cách thông tin được mã hóa thành mảng byte dữ liệu hướng dẫn. Việc lựa chọn cách mã hóa dữ liệu nên tính đến chi phí giải mã vì bước đó được thực hiện bởi chương trình trên chuỗi. Người ta quan sát thấy rằng một số mã hóa phổ biến (ví dụ: mã bincode của Rust) rất kém hiệu quả.
 
 [Solana Program Library's Token program](https://github.com/solana-labs/solana-program-library/tree/master/token) đưa ra một ví dụ về cách dữ liệu hướng dẫn có thể được mã hóa một cách hiệu quả, nhưng lưu ý rằng phương pháp này chỉ hỗ trợ các loại có kích thước cố định. Mã thông báo sử dụng [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) đặc điểm để mã hóa/giải mã dữ liệu hướng dẫn cho cả lệnh mã thông báo cũng như trạng thái tài khoản mã thông báo.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## Chữ ký
 

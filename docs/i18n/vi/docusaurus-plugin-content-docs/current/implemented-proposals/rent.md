@@ -40,13 +40,13 @@ Cuối cùng, việc thu tiền thuê xảy ra theo các cập nhật tài kho�
 
 ### Cơ sở lý luận về thiết kế hiện tại
 
-Theo thiết kế trước đây, KHÔNG THỂ có các tài khoản kéo dài, không bị động đến và không phải trả tiền thuê. Các tài khoản luôn được trả tiền thuê chính xác một lần cho mỗi kỷ nguyên, ngoại trừ các tài khoản được miễn tiền thuê, tài khoản sysvar và tài khoản thực thi.
+Theo thiết kế trước đây, KHÔNG THỂ có các tài khoản kéo dài, không bị động đến và không phải trả tiền thuê. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-Đây là sự lựa chọn thiết kế dự định. Nếu không, có thể kích hoạt thu tiền thuê trái phép với sự hướng dẫn của `Noop` bởi bất kỳ ai có thể trục lợi tiền thuê ( leader của thời điểm này) hoặc tiết kiệm tiền thuê với chi phí thuê dao động dự kiến.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-Một tác dụng phụ khác của lựa chọn này, cũng lưu ý rằng việc thu tiền thuê định kỳ này buộc validator không lưu trữ các tài khoản cũ vào kho lạnh một cách lạc quan và tiết kiệm chi phí lưu trữ, điều này gây bất lợi cho chủ sở hữu tài khoản và có thể khiến các giao dịch trên đó bị đình trệ lâu hơn hơn những cái khác. Mặt khác, điều này ngăn người dùng độc hại nhồi nhét một lượng lớn tài khoản rác, tạo gánh nặng cho các validator.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-Như kết quả tổng thể của thiết kế này, tất cả các tài khoản được lưu trữ như nhau dưới dạng hoạt động của validator với các đặc điểm hoạt động giống nhau, phản ánh thẳng thắn cấu trúc định giá tiền thuê đã thống nhất.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### Bộ sưu tập đặc biệt
 

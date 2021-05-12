@@ -17,14 +17,14 @@ title: Отправка и получение токенов
 Во-первых, _airdrop_ вы немного играете на devnet.
 
 ```bash
-solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 , где Вы замените текст `<RECIPIENT_ACCOUNT_ADDRESS>` на Ваш base58-закодированный публичный ключ/адрес кошелька.
 
 #### Проверьте свой баланс
 
-Подтвердите, что airdrop был успешно зачислен на баланс аккаунта. Он должен вывести `10 SOL`:
+Подтвердите, что airdrop был успешно зачислен на баланс аккаунта. Он должен вывести `1 SOL`:
 
 ```bash
 solana airdrop <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -51,7 +51,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 Далее докажите, что Вы владеете токенами, передавая их. Кластер Solana принимает перевод только в том случае, если Вы подпишете транзакцию с приватным ключом, соответствующим публичному ключу отправителя в транзакции.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 где вы заменили `<KEYPAIR>` на путь к клавиатуре в Вашем первом кошельке, и замените `<RECIPIENT_ACCOUNT_ADDRESS>` адресом Вашего второго кошелька.
@@ -76,33 +76,33 @@ pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK # Вот адрес пер�
 ================================================== ========================
 Сохраните эту исходную фразу, чтобы восстановить новую пару ключей:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch # Если бы это был настоящий кошелек, никогда не делитесь этими словами в Интернете вот так!
-============================================================================
+==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Airdropping 10 SOL на адрес моего кошелька / pubkey
-Запрос airdrop 10 SOL из 35.233.193. 0:9900
-10 SOL
+$ solana airdrop 1 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 1 SOL to my wallet's address/pubkey
+Requesting airdrop of 1 SOL from 35.233.193.70:9900
+1 SOL
 
-$ $ solana balance ДИw8jCTfwHNRJhmFcbXvDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana. om # Проверьте баланс адреса
-10 SOL
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
+1 SOL
 
-$ solana-keygen new --no-outfile # Создание второго кошелька, бумажный кошелёк
-Создание новой клавиатуры
-для дополнительной безопасности, введите парольную фразу (пустая без парольной фразы):
-==========================================================
-pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv # Здесь адрес второй, бумага, кошелёк.
+$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
+Generating a new keypair
+For added security, enter a passphrase (empty for no passphrase):
+====================================================================
+pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # Here is the address of the second, paper, wallet.
 ============================================================================
 Сохрани эту исходную фразу, чтобы восстановить Ваш новый тип:
 clump panic cousin hurt coast charge engage fall eager urge win love   # # Если бы это был настоящий кошелёк, никогда не делитесь этими словами в Интернете так!
-==========================================================================
+====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet. son # Передача токенов на публичный адрес бумажного кошелька
-3gmXvykAd1nCQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z # Это подпись транзакции
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
-$ solana balance DYw8jCTfwHNRJhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL # Отправляющий счёт имеет несколько меньше 5 SOL из-за 0.00005 Оплаченной комиссии SOL
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+0.499995 SOL  # The sending account has slightly less than 0.5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-5 SOL # Второй кошелёк теперь получил перевод 5 SOL с первого кошелька
+0.5 SOL  # The second wallet has now received the 0.5 SOL transfer from the first wallet
 
 ```
 

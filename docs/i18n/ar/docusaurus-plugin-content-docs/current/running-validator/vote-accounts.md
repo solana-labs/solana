@@ -90,9 +90,9 @@ title: إدارة حساب التصويت (Vote Account Management)
 
 1. قُم بتشغيل `solana epoch-info`. إذا لم يكن هناك الكثير من الوقت المُتبقي في الفترة (epoch) الحالية، ففكر في إنتظار الفترة (epoch) التالية للسماح للمُدقّق (validator) الخاص بك بوقت كافٍ لإعادة التشغيل واللحاق بالركب.
 2. إنشاء زوج مفاتيح السلطة (authority keypair) التصويت الجديد `solana-keygen new -o ~/new-vote-authority.json`.
-3. تحديد زوج مفاتيح سلطة التصويت _vote authority_ الحالي بتشغيل `solana vote-account ~/vote-account-keypair.json`. قد يكون حساب هوية المُدقّق (validator) (الإفتراضي) أو بعض أزواج المفاتيح (keypair) الأخرى. تفترض الخطوات التالية أن `~/validator-keypair.json` هو زوج المفاتيح (keypair) هذا.
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. قد يكون حساب هوية المُدقّق (validator) (الإفتراضي) أو بعض أزواج المفاتيح (keypair) الأخرى. تفترض الخطوات التالية أن `~/validator-keypair.json` هو زوج المفاتيح (keypair) هذا.
 4. قُم بتشغيل `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`. من المُقرر أن تُصبح سلطة التصويت الجديدة نشطة إعتبارًا من الفترة (epoch) التالية.
-5. يحتاج `solana-validator` الآن إلى إعادة التشغيل بإستخدام زوج مفاتيح سلطة التصويت (vote authority keypairs) القديمة والجديدة، حتى يتمكن من الإنتقال بسلاسة في الفترة (epoch) التالية. قُم بإضافة الوسيطتين عند إعادة التشغيل: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
+5. يحتاج `solana-validator` الآن إلى إعادة التشغيل بإستخدام زوج مفاتيح سلطة التصويت (vote authority keypairs) القديمة والجديدة، حتى يتمكن من الإنتقال بسلاسة في الفترة (epoch) التالية. Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. بعد وصول المجموعة إلى المرحلة التالية، قُم بإزالة الوسيطة `--authorized-voter ~/validator-keypair.json` وأعد تشغيل `solana-validator`، حيث لم يعد زوج مفاتيح سلطة التصويت (vote authority keypairs) القديم مطلوبًا.
 
 ### ساحب حساب التصويت المُصرح (Vote Account Authorized Withdrawer)

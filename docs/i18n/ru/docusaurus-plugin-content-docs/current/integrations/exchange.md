@@ -297,7 +297,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 Инструменты командной строки Solana предоставляют такую команду: `solana transfer` генерирует, отправляет на API ноду и проверяет состояние транзакции. По-умолчанию, эта команда ждет и следит за прогрессом выполнения в потоке вывода ошибок stderr до тех пор, пока транзакция не будет подтверждена кластером. Если транзакция завершится неудачей, метод сообщит, передав в поток полученную ошибку.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) предоставляет похожий подход для экосистемы JS. Используйте `SystemProgram` для генерации транзакции, а `sendAndConfirmTransaction` для её отправки в сеть.
@@ -317,7 +317,7 @@ solana fees --url http://localhost:8899
 В инструментах командной строки используйте `--no-wait` аргумент, чтобы отправить транзакцию асинхронно, и включить значение последнего blockhashe в аргумент `--blockhash`:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 Конечно, вы также можете собрать, подписать и сериализовать транзакцию вручную, а затем отправить её в кластер, используя JSON-RPC [ендпоинт `sendTransaction`](developing/clients/jsonrpc-api.md#sendtransaction).
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Срок валидности Blockhash
 
-Когда вы запрашиваете последний blockhash для генерации транзакции, используя например [`getFees` эндпоинт](developing/clients/jsonrpc-api.md#getfees) или команду `solana fees`, ответ будет включать в себя строку `lastValidSlot` - последний слот, в котором полученный blockhash будет ещё валидным. Текущий слот можно узнать с помощью [запроса `getSlot`](developing/clients/jsonrpc-api.md#getslot); как только слот кластера будет больше чем `lastValidSlot`, транзакция использующая значение blockhash никогда не будет выполнена.
-
-Вы также можете удостовериться в том, не истёк ли срок валидности конкретного значения blockhash, отправив запрос [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) и указав в качестве параметра интересующий хэш блока иначе blockhash. Если значение ответа равно null, срок валидности blockhash истек, и транзакция вывода никогда не завершиться успешно.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### Проверка пользовательских аккаунтов для вывода средств
 
 Поскольку снятие средств необратимо, может быть хорошей практикой проверить указанный пользователем адрес учетной записи прежде чем санкционировать снятия, чтобы предотвратить случайную потерю средств пользователя.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 Адрес типичного аккаунта Solana является строкой в кодировке Base58 c 256-битным публичным ключом стандарта Ed25519. Не все битовые комбинации являются валидными публичными ключами в схеме Ed25519, что дает возможность проверить предоставляемый пользователем адрес хотя бы на соответствие стандарту Ed25519.
 
@@ -435,7 +449,7 @@ public class PubkeyValidator
 
 ### Выпуск токенов
 
-Каждый _тип_ SPL токена объявляется путём создания _эмитент_ аккаунта. В этом аккаунте хранятся метаданные, описывающие функции токенов, такие как эмиссия, количество знаков после запятой и адреса аккаунтов с правом контроля над эмитентом. Каждый SPL токен ссылается на связанный с ним эмитент аккаунт и может взаимодействовать только с токенами такого же типа.
+Each _type_ of SPL Token is declared by creating a _mint_ account. В этом аккаунте хранятся метаданные, описывающие функции токенов, такие как эмиссия, количество знаков после запятой и адреса аккаунтов с правом контроля над эмитентом. Каждый SPL токен ссылается на связанный с ним эмитент аккаунт и может взаимодействовать только с токенами такого же типа.
 
 ### Установка CLI инструмента `spl-token`
 
@@ -477,7 +491,7 @@ spl-token-cli 2.0.1
 spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
-#### Пример
+#### Образец
 
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
@@ -502,7 +516,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
-#### Пример
+#### Образец
 
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -521,7 +535,7 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
-#### Пример
+#### Образец
 
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -557,8 +571,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### Заморозка аккаунтов
 
-С целью удовлетворения требований регуляции, эмитент аккаунт SPL токенов может опционально зарегистрировать регулирующий аккаунт, который способен заморозить любой счет ассоциированный с текущим эмитентом. Это позволяет по желанию [замораживать](https://spl.solana.com/token#freezing-accounts) средства, принадлежащие ассоциированному аккаунту, делая его непригодным для использования до тех пор, пока они не будут вновь разморожены. Если эта функция используется, публичный ключ регулирующего аккаунта, будет зарегистрирован в эмитент аккаунте выбранного SPL токена.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. Это позволяет по желанию [замораживать](https://spl.solana.com/token#freezing-accounts) средства, принадлежащие ассоциированному аккаунту, делая его непригодным для использования до тех пор, пока они не будут вновь разморожены. Если эта функция используется, публичный ключ регулирующего аккаунта, будет зарегистрирован в эмитент аккаунте выбранного SPL токена.
 
 ## Тестирование интеграции
 
-Обязательно протестируйте все ваши процессы на [кластерах](../clusters.md) Devnet и Testnet прежде чем переносить их в кластер Mainnet-Beta. Devnet является наиболее открытым и гибким, и идеально подходит для начальной разработки, в то время как Testnet предлагает конфигурацию кластера приближенную к основной сети. Оба кластера, и Devnet и Testnet, поддерживают выдачу тестовых монет для тестрирования и разработки; используйте команду `solana airdrop 10` доступную в инструментах командной строки.
+Обязательно протестируйте все ваши процессы на [кластерах](../clusters.md) Devnet и Testnet прежде чем переносить их в кластер Mainnet-Beta. Devnet является наиболее открытым и гибким, и идеально подходит для начальной разработки, в то время как Testnet предлагает конфигурацию кластера приближенную к основной сети. Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

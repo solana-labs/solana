@@ -136,7 +136,7 @@ off-chain служба, которая действует как храните�
 
 ## график лидера
 
-Последовательность проверки [](terminology.md#validator) [публичных ключей](terminology.md#public-key). Кластер использует график лидера, чтобы определить, какой валидатор является [лидером](terminology.md#leader) в любой момент времени.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). Кластер использует график лидера, чтобы определить, какой валидатор является [лидером](terminology.md#leader) в любой момент времени.
 
 ## реестр
 
@@ -214,90 +214,98 @@ off-chain служба, которая действует как храните�
 
 64-байтовая ed25519 подпись R (32-байт) и S (32-байт). С требованием о том, что R является упакованной точкой Edwards, не маленьким порядком и S является скалярным диапазоном 0 <= S < L. Это требование гарантирует, что подпись не будет признана. Каждая транзакция должна иметь по крайней мере одну подпись для [счета комиссии](terminology#fee-account). Таким образом, первая подпись в транзакции может рассматриваться как [трансактоновый id](terminology.md#transaction-id)
 
-## слот
+## skipped slot
 
-Период времени, за который лидер [](terminology.md#leader) проглотит транзакции и производит [блок](terminology.md#block).
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
-## смарт-контракт
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
-Набор ограничений, которые, будучи удовлетворенными, сигнализируют программе о том, что разрешены некоторые предопределенные обновления учетной записи.
+## slot
+
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
+
+## smart contract
+
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
 ## sol
 
-[родной токен](terminology.md#native-token) отслеживается [кластером](terminology.md#cluster), признанным компанией Solana.
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
-## ставка
+## stake
 
-Токены, исключающие [кластер](terminology.md#cluster), если может быть доказано злонамеренное поведение [валидатора](terminology.md#validator).
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
-## супербольшинство
+## supermajority
 
-2/3 из [кластера](terminology.md#cluster).
+2/3 of a [cluster](terminology.md#cluster).
 
 ## sysvar
 
-Синтетическая [аккаунта](terminology.md#account) предоставленная во время выполнения для предоставления программам доступа к состоянию сети, например текущая высота тика, награды [очков](terminology.md#point) и т.д.
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
-## тонкий клиент
+## thin client
 
-Тип [клиента](terminology.md#client), который может проверить правильность указания [кластера](terminology.md#cluster).
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
-## тик
+## tick
 
-Ledger [записи](terminology.md#entry), которая показывает длительность времени.
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
-## высота тика
+## tick height
 
-Девятый [тик](terminology.md#tick) в [реестре](terminology.md#ledger).
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
-## токен
+## token
 
-Редкая взаимозаменяемая часть набора токенов.
+A scarce, fungible member of a set of tokens.
 
-## твс
+## tps
 
-[Транзакций](terminology.md#transaction) в секунду.
+[Transactions](terminology.md#transaction) per second.
 
-## транзакция
+## transaction
 
-Одна или более [инструкций](terminology.md#instruction) подписанных [клиентом](terminology.md#client) с использованием одного или более [ключей](terminology.md#keypair) и выполненных атомарно с двумя возможными результатами: успех или неудачу.
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
-## id транзакции
+## transaction id
 
-Первая [подпись](terminology.md#signature) в [транзакции](terminology.md#transaction), которая может быть использована для уникальной идентификации транзакции в полном [реестре](terminology.md#ledger).
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
-## подтверждения транзакций
+## transaction confirmations
 
-Число подтвержденных блоков [](terminology.md#confirmed-block), поскольку транзакция была принята в [реестр](terminology.md#ledger). Транзакция завершается после того, как ее блок станет [корневым блоком](terminology.md#root).
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## проводка транзакций
+## transactions entry
 
-Набор транзакций [](terminology.md#transaction), которые могут выполняться параллельно.
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
-## валидаторы
+## validator
 
-Полноценный участник в [кластере](terminology.md#cluster) ответственный за проверку [реестра](terminology.md#ledger) и создание новых [блоков](terminology.md#block).
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
-## ПФЗ
+## VDF
 
-См. [проверяемую функцию задержки](terminology.md#verifiable-delay-function).
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## проверяемая функция задержки
+## verifiable delay function
 
-Функция, для выполнения которой требуется фиксированное количество времени, которая создает доказательство того, что она выполнялась, которое затем может быть проверено за меньшее время, чем потребовалось для создания.
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
-## голос
+## vote
 
-См. [голос в реестре](terminology.md#ledger-vote).
+See [ledger vote](terminology.md#ledger-vote).
 
-## голосовать за кредит
+## vote credit
 
-Награда [валидаторов](terminology.md#validator). Голосование засчитывается валидатору в его учетной записи голосования, когда валидатор достигает [корня](terminology.md#root).
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
-## кошелек
+## wallet
 
-Коллекция [пары ключей](terminology.md#keypair).
+A collection of [keypairs](terminology.md#keypair).
 
-## период разогрева
+## warmup period
 
-Некоторое количество [эпох](terminology.md#epoch) после того, как [стейк](terminology.md#stake) был деактивирован, пока он постепенно становится доступен для снятия. В течение этого периода ставка считается "дезактивированной". Больше информации о: [разогреве и ожидании](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

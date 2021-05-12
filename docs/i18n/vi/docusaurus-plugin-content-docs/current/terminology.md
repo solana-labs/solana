@@ -136,7 +136,7 @@ Vai trò của [validator](terminology.md#validator) khi nó thêm [các mục n
 
 ## lịch trình leader
 
-Một chuỗi [các public key](terminology.md#public-key) của [validator](terminology.md#validator)/. Cụm sử dụng lịch trình leader để xác định validator nào là [leader](terminology.md#leader) tại bất kỳ lúc nào.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). Cụm sử dụng lịch trình leader để xác định validator nào là [leader](terminology.md#leader) tại bất kỳ lúc nào.
 
 ## sổ cái
 
@@ -214,90 +214,98 @@ Một phần nhỏ của một [khối](terminology.md#block); đơn vị nhỏ 
 
 Chữ ký ed25519 64 byte của R (32 byte) và S (32 byte). Với yêu cầu R là điểm Edwards được đóng gói không có bậc nhỏ và S là đại lượng vô hướng trong khoảng 0 <= S < L. Yêu cầu này đảm bảo không có tính dễ uốn chữ ký. Mỗi giao dịch phải có ít nhất một chữ ký cho [ phí tài khoản](terminology#fee-account). Do đó, chữ ký đầu tiên trong giao dịch có thể được coi là [id giao dịch](terminology.md#transaction-id)
 
+## skipped slot
+
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+
 ## slot
 
-Khoảng thời gian mà [leader](terminology.md#leader) nhập các giao dịch và tạo ra một [khối](terminology.md#block).
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-## hợp đồng thông minh
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
 
-Một tập hợp các ràng buộc khi đã thỏa mãn, báo hiệu cho một chương trình rằng một số bản cập nhật tài khoản được xác định trước được cho phép.
+## smart contract
+
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
 ## sol
 
-[Mã thông báo gốc](terminology.md#native-token) được theo dõi bởi một [cụm](terminology.md#cluster) được công ty Solana công nhận.
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
 ## stake
 
-Mã thông báo sẽ bị loại bỏ đối với [cụm](terminology.md#cluster) nếu hành vi [validator](terminology.md#validator) độc hại có thể được chứng minh.
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
-## siêu đa số
+## supermajority
 
-2/3 của một [cụm](terminology.md#cluster).
+2/3 of a [cluster](terminology.md#cluster).
 
 ## sysvar
 
-Một [tài khoản](terminology.md#account) tổng hợp được cung cấp bởi thời gian chạy để cho phép các chương trình truy cập trạng thái mạng như chiều cao đánh dấu hiện tại, các giá trị [điểm](terminology.md#point) thưởng, v.v.
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
-## khách hàng mỏng
+## thin client
 
-Một kiểu [khách hàng](terminology.md#client) tin cậy rằng nó đang giao tiếp với một [cụm](terminology.md#cluster) hợp lệ.
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
-## đánh dấu
+## tick
 
-Một [mục nhập](terminology.md#entry) sổ cái ước tính thời lượng wallclock.
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
-## chiều cao đánh dấu
+## tick height
 
-Đánh dấu/a> thứ N trong [sổ cái](terminology.md#ledger).</p>
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
-## mã thông báo
+## token
 
-Một khan hiếm, thành viên có thể thay thế của một tập hợp các mã thông báo.
+A scarce, fungible member of a set of tokens.
 
 ## tps
 
-[Giao dịch](terminology.md#transaction) mỗi giây.
+[Transactions](terminology.md#transaction) per second.
 
-## giao dịch
+## transaction
 
-Một hoặc nhiều [hướng dẫn](terminology.md#instruction) được ký bởi [khách hàng](terminology.md#client) bằng một hoặc nhiều [keypair](terminology.md#keypair) và được thực thi nguyên tử chỉ với hai kết quả có thể xảy ra: thành công hoặc thất bại.
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
-## id giao dịch
+## transaction id
 
-[chữ ký](terminology.md#signature) đầu tiên trong [giao dịch](terminology.md#transaction), có thể được sử dụng để xác định duy nhất giao dịch trên [sổ cái](terminology.md#ledger) hoàn chỉnh.
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
-## xác nhận giao dịch
+## transaction confirmations
 
-Số lượng [khối được xác nhận](terminology.md#confirmed-block) kể từ khi giao dịch được chấp nhận trên [sổ cái](terminology.md#ledger). Giao dịch được hoàn tất khi khối của nó trở thành [gốc](terminology.md#root).
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## nhập giao dịch
+## transactions entry
 
-Một tập hợp các [giao dịch](terminology.md#transaction) có thể được thực hiện song song.
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
-## người xác thực
+## validator
 
-Người tham gia đầy đủ trong [ cụm ](terminology.md#cluster) chịu trách nhiệm xác thực [ sổ cái ](terminology.md#ledger) và tạo các [khối](terminology.md#block).
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 
-Xem [chức năng trì hoãn có thể xác minh](terminology.md#verifiable-delay-function).
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## chức năng trì hoãn có thể xác minh
+## verifiable delay function
 
-Một hàm cần một khoảng thời gian cố định để thực thi tạo ra bằng chứng rằng nó đã chạy, sau đó có thể được xác minh trong thời gian ngắn hơn so với thời gian tạo ra.
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
-## phiếu bầu
+## vote
 
-Xem [bỏ phiếu sổ cái](terminology.md#ledger-vote).
+See [ledger vote](terminology.md#ledger-vote).
 
-## phiếu tín dụng
+## vote credit
 
-Một kiểm đếm phần thưởng cho các [validator](terminology.md#validator). Tín dụng biểu quyết được trao cho một validator trong tài khoản bỏ phiếu của họ khi validator đạt được [gốc](terminology.md#root).
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
-## ví
+## wallet
 
-Một bộ sưu tập các [keypair](terminology.md#keypair).
+A collection of [keypairs](terminology.md#keypair).
 
-## thời kỳ ấm lên
+## warmup period
 
-Một số [kỷ nguyên](terminology.md#epoch) sau khi [stake](terminology.md#stake) đã được ủy quyền trong khi nó dần dần có hiệu lực. Trong thời gian này, tiền stake được coi là "kích hoạt". Thông tin thêm về: [khởi động và thời gian hồi chiêu](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

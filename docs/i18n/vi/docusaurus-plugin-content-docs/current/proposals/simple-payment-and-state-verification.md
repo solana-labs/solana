@@ -79,7 +79,7 @@ Mỗi phiếu bầu là một giao dịch đã ký bao gồm hàm băm ngân hà
 
 Tuy nhiên, khác với một số siêu dữ liệu, bản thân các phiếu bầu đã ký hiện không được lưu trữ ở bất kỳ đâu, vì vậy không thể truy xuất chúng theo yêu cầu. Các phiếu bầu này có lẽ cần được lưu giữ trong cơ sở dữ liệu Rocksdb, được lập chỉ mục bởi một khóa `(Slot, Hash, Pubkey)` đại diện cho slot của phiếu bầu, hàm băm ngân hàng của phiếu bầu và tài khoản bỏ phiếu pubkey chịu trách nhiệm cho phiếu bầu.
 
-Cùng với nhau, giao dịch merkle và các bằng chứng xác nhận lạc quan có thể được cung cấp qua RPC cho người đăng ký bằng cách mở rộng logic đăng ký chữ ký hiện có. Khách hàng đăng ký mức xác nhận "SingleGossip" đã được thông báo khi xác nhận lạc quan được phát hiện, một cờ có thể được cung cấp để báo hiệu hai bằng chứng ở trên cũng sẽ được trả lại.
+Cùng với nhau, giao dịch merkle và các bằng chứng xác nhận lạc quan có thể được cung cấp qua RPC cho người đăng ký bằng cách mở rộng logic đăng ký chữ ký hiện có. Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 Điều quan trọng cần lưu ý là việc xác nhận một cách lạc quan `B` cũng ngụ ý rằng tất cả các khối tổ tiên của `B` cũng được xác nhận một cách lạc quan và cũng không phải tất cả các khối đều sẽ được xác nhận một cách lạc quan.
 

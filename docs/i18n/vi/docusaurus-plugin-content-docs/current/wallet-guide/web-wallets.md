@@ -2,18 +2,22 @@
 title: Ví Web
 ---
 
+## Phantom
+
+[Phantom](https://phantom.app/download) is a non-custodial, chrome extension, Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and beautiful UX. Use invite code DEVDOCS to get access.
+
 ## SolFlare
 
-[SolFlare.com](https://solflare.com/) là một ví web không giám sát do cộng đồng tạo ra, được xây dựng dành riêng cho Solana. SolFlare hỗ trợ việc tạo và quản lý các tài khoản stake, đồng thời cung cấp cho người dùng khả năng gửi và nhận bất kỳ Mã thông báo SPL nào.
+[SolFlare.com](https://solflare.com/) is a community-created non-custodial web wallet that was built specifically for Solana. SolFlare supports the creation and management of stake accounts, and gives users the ability to send and receive any SPL Token.
 
-Xem [hướng dẫn sử dụng SolFlare](solflare.md) của chúng tôi.
+Check out our [guide for using SolFlare](solflare.md).
 
 ## Sollet
 
-[sollet.io](https://www.sollet.io/) là một ví web không giám sát được tạo bởi nhóm [Project Serum](https://projectserum.com/). sollet.io có thể được sử dụng để gửi và nhận SOL và bất kỳ mã thông báo SPL nào.
+[sollet.io](https://www.sollet.io/) is a non-custodial web wallet created by the [Project Serum](https://projectserum.com/) team. sollet.io can be used to send and receive SOL and any SPL Token.
 
 ## MathWallet
 
-[MathWallet](https://mathwallet.org/) hỗ trợ địa chỉ ví để gửi và nhận mã thông báo SOL và SPL thông qua tiện ích mở rộng trình duyệt và giao diện ví web.
+[MathWallet](https://mathwallet.org/) supports wallet addresses for sending and receiving SOL and SPL Tokens through its browser extension and web wallet interface.
 
-_Lưu ý: Ứng dụng MathWallet iOS và Android chưa hỗ trợ Mã thông báo SOL và SPL_
+_Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_

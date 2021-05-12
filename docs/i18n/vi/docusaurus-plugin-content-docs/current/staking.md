@@ -4,7 +4,7 @@ title: Staking trên Solana
 
 _Lưu ý trước khi đọc: Tất cả các tham chiếu đến sự gia tăng giá trị là tuyệt đối liên quan đến sự cân bằng của SOL. Tài liệu này không đưa ra gợi ý về giá trị tiền tệ của SOL tại bất kỳ thời điểm nào._
 
-Staking mã thông báo SOL của bạn trên Solana là cách tốt nhất bạn có thể giúp bảo mật mạng blockchain hoạt động cao nhất, và [earn rewards](implemented-proposals/staking-rewards.md) khi làm như vậy! Phần thưởng mạng và lạm phát hiện KHÔNG được kích hoạt trên mạng Mainnet Beta của Solana, nhưng có thể được kích hoạt trong tương lai.
+Staking mã thông báo SOL của bạn trên Solana là cách tốt nhất bạn có thể giúp bảo mật mạng blockchain hoạt động cao nhất, và [earn rewards](implemented-proposals/staking-rewards.md) khi làm như vậy!
 
 Solana là mạng Proof-of-Stake (PoS) với các ủy quyền, có nghĩa là chủ sở hữu nắm giữ mã thông báo SOL có thể ủy quyền SOL của họ cho một hoặc nhiều validator, người xử lý giao dịch và điều hành mạng.
 
@@ -14,13 +14,11 @@ Một validator càng được ủy quyền nhiều stake, thì validator này c
 
 Các validator phải chịu chi phí bằng cách vận hành và bảo trì hệ thống của họ và điều này được chuyển cho người ủy quyền dưới hình thức thu phí theo phần trăm phần thưởng kiếm được. Phí này được gọi là _commission_. Khi các validator kiếm được nhiều phần thưởng hơn thì số lượng ủy thác stake được giao cho họ càng nhiều hơn, và họ có thể cạnh tranh với nhau để đưa ra mức hoa hồng thấp nhất cho các dịch vụ của họ, nhằm thu hút nhiều ủy quyền stake hơn.
 
-Có nguy cơ mất mã thông báo khi staking, thông qua một quá trình được gọi là _slashing_. Slashing hiện _NOT_ được bật trên mạng Mainnet Beta của Solana, nhưng có thể được kích hoạt trong tương lai. Slashing tự động xóa và phá hủy một phần stake được ủy quyền cho validator để phản ứng với hành vi cố ý gây hại, chẳng hạn như tạo giao dịch không hợp lệ hoặc kiểm duyệt một số loại giao dịch hoặc người tham gia mạng. Nếu validator bị slashing, thì những người đã ủy quyền stake cho validator đó sẽ mất lợi nhuận của họ. Có nghĩa là sẽ tổn thất ngay lập tức cho người đã ủy quyền cho họ, và cũng là mất phần thưởng trong tương lai cho validator đó do số lượng người ủy quyền stake cho họ bị giảm sút.
+Có nguy cơ mất mã thông báo khi staking, thông qua một quá trình được gọi là _slashing_. Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+Nếu validator bị slashing, thì những người đã ủy quyền stake cho validator đó sẽ mất lợi nhuận của họ. Có nghĩa là sẽ tổn thất ngay lập tức cho người đã ủy quyền cho họ, và cũng là mất phần thưởng trong tương lai cho validator đó do số lượng người ủy quyền stake cho họ bị giảm sút. More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 Đó là tiêu chí của phần thưởng mạng và slashing để để điều chỉnh các ưu đãi tài chính của cả validator và người nắm giữ mã thông báo, từ đó giúp giữ cho mạng an toàn, mạnh mẽ và hoạt động tốt nhất.
-
-_Lưu ý: Phần thưởng mạng cho những người tham gia stake và các validator hiện không được kích hoạt trên Mainnet Beta._
-
-_Lưu ý: Hiện tại, tính năng slashing chưa được kích hoạt trên Mainnet Beta._
 
 ## Làm cách nào để stake mã thông báo SOL của tôi?
 
@@ -33,6 +31,10 @@ Các hoạt động staking được hỗ trợ bởi các ví sau:
 - SolFlare.com kết hợp với tệp Keystore hoặc Ledger Nano. Hãy xem [guide to using SolFlare](wallet-guide/solflare.md) chúng tôi để biết thêm chi tiết.
 
 - Các công cụ dòng lệnh Solana có thể thực hiện tất cả các hoạt động stake cùng với ví file keypair do CLI tạo, ví giấy hoặc với Ledger Nano. [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.
 
 #### Tạo Tài Khoản Stake
 

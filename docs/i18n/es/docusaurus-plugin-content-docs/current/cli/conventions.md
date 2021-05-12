@@ -32,12 +32,12 @@ A continuación, mostramos cómo resolver lo que debe poner en `<KEYPAIR>` depen
 
 #### Billetera de papel
 
-En una Billetera de papel, el keypair se deriva de forma segura de las palabras de semilla y contraseña opcional que introdujo cuando se creó la Billetera. Para usar un keypair de una billetera de papel en cualquier lugar el texto `<KEYPAIR>` se muestra en ejemplos o documentos de ayuda, introduce la palabra `ASK` y el programa te pedirá que introduzcas tus palabras de semilla cuando ejecutes el comando.
+En una Billetera de papel, el keypair se deriva de forma segura de las palabras de semilla y contraseña opcional que introdujo cuando se creó la Billetera. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 Para mostrar la dirección de la billetera de una billetera de papel:
 
 ```bash
-pubkey de solana-keygen
+solana-keygen pubkey prompt://
 ```
 
 #### Cartera del Sistema de Archivos

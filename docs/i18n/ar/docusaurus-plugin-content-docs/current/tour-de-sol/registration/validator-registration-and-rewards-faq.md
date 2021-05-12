@@ -14,40 +14,36 @@ title: الأسئلة الشائعة حول التسجيل (Registration FAQ)
 
 ## هل يجب أن أكمل عملية KYC/AML للمُشاركة؟
 
-نعم. إكمال عملية KYC/AML إلزامي. إذا لم تُكمل العملية قبل المرحلة 1 من Tour de SOL، لا يُمكنك المُشاركة في Tour de SOL.
-
-لقد عقدنا شراكة مع منصة Coinlist لإدارة عملية Tour de Sol KYC/AML. يُمكنك إيجاد خطوات القيام بالعملية هنا [walk-through of the process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) وإكمال عمليتك هنا [complete your process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
+نعم. إكمال عملية KYC/AML إلزامي.
 
 ## ما هي مسؤولياتي كمُشارك في جولة Tour de Sol؟
 
-يُرجى الإطلاع على قسم "تفاصيل 2c Tour de SOL" الخاص بشروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على التفاصيل.
+Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-### كيف يتم حساب مسؤولية "50% من وقت حدث الجولة النشطة"؟
+## How is the “90% of the active Tour event time” responsibility calculated?
 
-لكي تكون مُؤهلاً للحصول على مُكافآت في مرحلة مُعينة، يجب على المُدقّق (validator) إرسال الأصوات في &gt;= 50% من فُتحات (slots) تلك المرحلة.
+To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
 
-إذا كان المُدقّق (validator) غير قادر على إرسال &gt;= 50% من الأصوات لمرحلة ما ومازال يشعر بأنه يجب أن يحصل على جوائز لتلك المرحلة، فيُمكنه تقديم طلب إلتماس إلى Solana لإعادة النظر.
+## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
 
-## هل هناك علاقة بين الرموز Tour de Sol في الشبكة التجريبية (testnet) و شبكة Solana التجريبية الرئيسية (Solana Mainnet Beta)؟
+No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-لا. يُرجى الإطلاع على قسم "تفاصيل 2d Tour de SOL" من شروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على التفاصيل.
+## Can a validator be disqualified from the Tour de Sol?
 
-## هل يُمكن استبعاد المُدقّق (validator) من Tour de Sol؟
+Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
 
-نعم. يتم إستبعاد المُدقّق (validator) من Tour de SOL إذا شارك في سلوك محظور و / أو فشل في توفير الحد الأدنى من مُستوى الخدمات المُوضح في السؤال \#4 أعلاه.
+Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
 
-يُرجى أيضًا الإطلاع على القسم "4 السلوك المحظور" (Prohibited Conduct) من من بشروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) للحصول على وصف أكثر تفصيلاً للسلوك المحظور.
-
-### مزيد من الأسئلة المُتعلقة بالسلوك المحظور (Prohibited Conduct):
+### More questions related to Prohibited Conduct:
 
 #### كما هو مُشار إليه في القسم "4 السلوك المحظور" (Prohibited Conduct)، ما الذي يُمكن أن يكون مثالًا على تقديم خدمات الـ Tour من مكان إقامة مُخالف لمكان إقامتي الأصلي؟ هل هذا يعني أن الخادم الخاص بي يجب أن يكون مُطابقا لمكان إقامتي؟
 
-لا. يُمكن أن تكون الخوادم في أماكن إقامة أخرى تختلف عن مكان إقامة المُشارك. من خلال التوقيع على شروط المُشاركة [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)، يمتثل المُشارك إلى أنه يُقدم خدماته من الولايات المُتحدة إذا كانوا يقيمون هناك أو من خارج الولايات المُتحدة إذا لم يكونوا مُقيمين داخل الولايات المُتحدة.
+No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
 
-## كيف يتم حساب المكافآت؟
+## How are rewards calculated?
 
-الرجاء مراجعة قسم المُكافآت [Rewards section](rewards.md) للحصول على التفاصيل
+Please see the [Rewards section](rewards.md) for details
 
-## كيف سنعرف ما هي المعلومات التي يُمكننا وما لا يُمكننا مُشاركتها علنًا؟
+## How will we know what information we can and cannot share publicly?
 
-يُرجى مُراجعة الخُصوصية [Confidentiality](confidentiality.md).
+Please see [Confidentiality](confidentiality.md).

@@ -6,7 +6,7 @@ title: "Accounts"
 
 트랜잭션 간 상태 저장 프로그램이 트랜잭션 간 상태를 저장해야하는 경우 *accounts*를 사용합니다. 계정은 Linux와 같은 운영 체제의 파일과 유사합니다. 파일과 마찬가지로 계정은 임의의 데이터를 보유 할 수 있으며 해당 데이터는 프로그램의 수명 이후에도 유지됩니다. 또한 파일과 마찬가지로 계정에는 데이터에 액세스 할 수있는 사용자와 방법을 런타임에 알려주는 메타 데이터가 포함됩니다.
 
-파일과 달리 계정에는 파일 수명 동안의 메타 데이터가 포함됩니다. 그 수명은 *lamports*라고하는 소수의 네이티브 토큰 인 "토큰"으로 표현됩니다. 계정은 밸리데이터 메모리에 보관되며 \[ "임대료"\] (# 임대료)를 지불하여 거기에 머물러 있습니다. 각 밸리데이터은 주기적으로 모든 계정을 스캔하고 임대료를 징수합니다. 램프 포트가 0으로 떨어지는 모든 계정은 제거됩니다. 또한 충분한 수의 램프 포트가 포함 된 계정은 \[rent-exempt\] (# rent-exmption)로 표시 할 수 있습니다.
+파일과 달리 계정에는 파일 수명 동안의 메타 데이터가 포함됩니다. 그 수명은 *lamports*라고하는 소수의 네이티브 토큰 인 "토큰"으로 표현됩니다. 계정은 밸리데이터 메모리에 보관되며 \[ "임대료"\] (# 임대료)를 지불하여 거기에 머물러 있습니다. 각 밸리데이터은 주기적으로 모든 계정을 스캔하고 임대료를 징수합니다. 램프 포트가 0으로 떨어지는 모든 계정은 제거됩니다. Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 Linux 사용자가 경로를 사용하여 파일을 찾는 것과 같은 방식으로 Solana 클라이언트는 *address*를 사용하여 계정을 찾습니다. 주소는 256 비트 공개 키입니다.
 
@@ -34,7 +34,19 @@ Linux 사용자가 경로를 사용하여 파일을 찾는 것과 같은 방식�
 
 대한생성 된 계정은 시스템 프로그램이라는 기본 제공 프로그램에 의해 * 소유 *되도록 초기화되며 * 시스템 계정 *이라고합니다. 계정에는 "소유자"메타 데이터가 포함됩니다. 소유자는 프로그램 ID입니다. 런타임은 ID가 소유자와 일치하는 경우 프로그램에 계정에 대한 쓰기 액세스 권한을 부여합니다. 시스템 프로그램의 경우 런타임을 통해 클라이언트는 램프 포트 및 중요한 _assign_ 계정 소유권을 전송할 수 있습니다. 이는 소유자를 다른 프로그램 ID로 변경하는 것을 의미합니다. 계정이 프로그램 소유가 아닌 경우 프로그램은 데이터를 읽고 계정에 크레딧을 제공하는 것만 허용됩니다.
 
-## 임대
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
+
+## Rent
 
 Solana의유지 계정은 클러스터가 향후 트랜잭션을 처리하기 위해 데이터를 적극적으로 유지해야하기 때문에 *rent*라는 스토리지 비용이 발생합니다. 이것은 계정을 저장하는 데 비용이 발생하지 않는 Bitcoin 및 Ethereum과 다릅니다.
 
@@ -91,3 +103,14 @@ Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fe
 합니다
 .<code>text 105,290,880 = 19.055441478439427 (수수료) * (128 + 15_000) (계정 크기 메타 데이터 포함) * ((365.25 / 2) * 2) (2 년 후 에포크)</code>
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

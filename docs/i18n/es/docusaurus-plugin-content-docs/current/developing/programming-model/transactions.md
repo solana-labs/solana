@@ -52,7 +52,7 @@ Una dirección de cuenta es de 32 bytes de datos arbitrarios. Cuando la direcci�
 
 Cada instrucción [](terminology.md#instruction) especifica un solo programa, un subconjunto de las cuentas de la transacción que debe ser pasado al programa, y una matriz de bytes de datos que se pasa al programa. El programa interpreta la matriz de datos y opera con las cuentas especificadas por las instrucciones. El programa puede retornar con éxito, o con un código de error. Un retorno de error provoca que la transacción entera falle inmediatamente.
 
-Normalmente el programa proporciona funciones de ayuda para construir instrucciones que soportan. Por ejemplo, el programa de sistema proporciona el siguiente ayudante de Rust para construir un [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) instrucción:
+Programs typically provide helper functions to construct instructions they support. Por ejemplo, el programa de sistema proporciona el siguiente ayudante de Rust para construir un [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) instrucción:
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 El [identificador de programa](terminology.md#program-id) de la instrucción especifica qué programa procesará esta instrucción. El propietario de la cuenta del programa especifica qué cargador debe usarse para cargar y ejecutar el programa y los datos contienen información sobre cómo el tiempo de ejecución debe ejecutar el programa.
 
-En el caso de [programas desplegados](developing/deployed-programs/overview.md), el propietario es el cargador BPF y los datos de la cuenta guardan el bytecode BPF. Las cuentas del programa son permanentemente marcadas como ejecutables por el cargador una vez que estén desplegadas correctamente. El tiempo de ejecución rechazará las transacciones que especifican programas que no son ejecutables.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-A diferencia de los programas desplegados, [las construcciones](developing/builtins/programs.md) son manejadas de forma diferente en que están construidas directamente en el tiempo de ejecución de Solana.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### Cuentas
 
@@ -101,6 +101,14 @@ Cada instrucción contiene una matriz de bytes de propósito general que se pasa
 Los programas son libres de especificar cómo se codifica la información en la matriz de bytes de datos de instrucción. La elección de cómo se codifican los datos debe tener en cuenta la sobrecarga de la decodificación, ya que ese paso lo realiza el programa en la cadena. Se ha observado que algunas codificaciones comunes (bincode de Rust, por ejemplo) son muy ineficientes.
 
 El programa [Solana Program Library's Token ](https://github.com/solana-labs/solana-program-library/tree/master/token) da un ejemplo de cómo los datos de instrucciones pueden codificarse eficientemente, pero tenga en cuenta que este método sólo soporta tipos de tamaño fijo. Token utiliza el rasgo [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) para codificar/decodificar los datos de las instrucciones de los tokens, así como los estados de las cuentas de los tokens.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## Firmas
 

@@ -2,31 +2,23 @@
 title: Staking
 ---
 
-**By default your validator will have no stake.** This means it will be
-ineligible to become leader.
+**By default your validator will have no stake.** This means it will be ineligible to become leader.
 
 ## Monitoring Catch Up
 
-To delegate stake, first make sure your validator is running and has caught up
-to the cluster. It may take some time to catch up after your validator boots.
-Use the `catchup` command to monitor your validator through this process:
+To delegate stake, first make sure your validator is running and has caught up to the cluster. It may take some time to catch up after your validator boots. Use the `catchup` command to monitor your validator through this process:
 
 ```bash
 solana catchup ~/validator-keypair.json
 ```
 
-Until your validator has caught up, it will not be able to vote successfully and
-stake cannot be delegated to it.
+Until your validator has caught up, it will not be able to vote successfully and stake cannot be delegated to it.
 
-Also if you find the cluster's slot advancing faster than yours, you will likely
-never catch up. This typically implies some kind of networking issue between
-your validator and the rest of the cluster.
+Also if you find the cluster's slot advancing faster than yours, you will likely never catch up. This typically implies some kind of networking issue between your validator and the rest of the cluster.
 
 ## Create Stake Keypair
 
-If you haven’t already done so, create a staking keypair. If you have completed
-this step, you should see the “validator-stake-keypair.json” in your Solana
-runtime directory.
+If you haven’t already done so, create a staking keypair. If you have completed this step, you should see the “validator-stake-keypair.json” in your Solana runtime directory.
 
 ```bash
 solana-keygen new -o ~/validator-stake-keypair.json
@@ -48,39 +40,25 @@ solana delegate-stake ~/validator-stake-keypair.json ~/vote-account-keypair.json
 
 > Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
 
-Stakes can be re-delegated to another node at any time with the same command,
-but only one re-delegation is permitted per epoch:
+Stakes can be re-delegated to another node at any time with the same command, but only one re-delegation is permitted per epoch:
 
 ```bash
 solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-keypair.json
 ```
 
-Assuming the node is voting, now you're up and running and generating validator
-rewards. Rewards are paid automatically on epoch boundaries.
+Assuming the node is voting, now you're up and running and generating validator rewards. Rewards are paid automatically on epoch boundaries.
 
-The rewards lamports earned are split between your stake account and the vote
-account according to the commission rate set in the vote account. Rewards can
-only be earned while the validator is up and running. Further, once staked, the
-validator becomes an important part of the network. In order to safely remove a
-validator from the network, first deactivate its stake.
+The rewards lamports earned are split between your stake account and the vote account according to the commission rate set in the vote account. Rewards can only be earned while the validator is up and running. Further, once staked, the validator becomes an important part of the network. In order to safely remove a validator from the network, first deactivate its stake.
 
-At the end of each slot, a validator is expected to send a vote transaction.
-These vote transactions are paid for by lamports from a validator's identity
-account.
+At the end of each slot, a validator is expected to send a vote transaction. These vote transactions are paid for by lamports from a validator's identity account.
 
-This is a normal transaction so the standard transaction fee will apply. The
-transaction fee range is defined by the genesis block. The actual fee will
-fluctuate based on transaction load. You can determine the current fee via the
-[RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash)
-before submitting a transaction.
+This is a normal transaction so the standard transaction fee will apply. The transaction fee range is defined by the genesis block. The actual fee will fluctuate based on transaction load. You can determine the current fee via the [RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash) before submitting a transaction.
 
 Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).
 
 ## Validator Stake Warm-up
 
-To combat various attacks on consensus, new stake delegations are subject to
-a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
-period.
+To combat various attacks on consensus, new stake delegations are subject to a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown) period.
 
 Monitor a validator's stake during warmup by:
 
@@ -114,19 +92,12 @@ Helpful JSON-RPC methods:
 
 ## Deactivating Stake
 
-Before detaching your validator from the cluster, you should deactivate the
-stake that was previously delegated by running:
+Before detaching your validator from the cluster, you should deactivate the stake that was previously delegated by running:
 
 ```bash
 solana deactivate-stake ~/validator-stake-keypair.json
 ```
 
-Stake is not deactivated immediately and instead cools down in a similar fashion
-as stake warm up. Your validator should remain attached to the cluster while
-the stake is cooling down. While cooling down, your stake will continue to earn
-rewards. Only after stake cooldown is it safe to turn off your validator or
-withdraw it from the network. Cooldown may take several epochs to complete,
-depending on active stake and the size of your stake.
+Stake is not deactivated immediately and instead cools down in a similar fashion as stake warm up. Your validator should remain attached to the cluster while the stake is cooling down. While cooling down, your stake will continue to earn rewards. Only after stake cooldown is it safe to turn off your validator or withdraw it from the network. Cooldown may take several epochs to complete, depending on active stake and the size of your stake.
 
-Note that a stake account may only be used once, so after deactivation, use the
-cli's `withdraw-stake` command to recover the previously staked lamports.
+Note that a stake account may only be used once, so after deactivation, use the cli's `withdraw-stake` command to recover the previously staked lamports.

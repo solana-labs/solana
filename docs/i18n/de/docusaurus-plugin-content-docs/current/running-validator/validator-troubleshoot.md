@@ -2,8 +2,7 @@
 title: Troubleshooting
 ---
 
-There is a **\#validator-support** Discord channel available to reach other
-testnet participants, [https://discord.gg/pquxPsq](https://discord.gg/pquxPsq).
+There is a **\#validator-support** Discord channel available to reach other testnet participants, [https://discord.gg/pquxPsq](https://discord.gg/pquxPsq).
 
 ## Useful Links & Discussion
 

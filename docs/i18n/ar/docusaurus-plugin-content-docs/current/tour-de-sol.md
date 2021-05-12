@@ -4,8 +4,8 @@ title: مُقدمة
 
 ## أهلا بك!
 
-يحتوي هذا الدليل على معلومات عن كيفية المُشاركة في Tour de SOL (جولة للتعرف على SOL) الخاص بـ Solana. أية أسئلة؟ أية تعليقات؟ أرسل بريد إلكتروني إلى ryan@solana.com
+يحتوي هذا الدليل على معلومات عن كيفية المُشاركة في Tour de SOL (جولة للتعرف على SOL) الخاص بـ Solana. أية أسئلة؟ أية تعليقات؟ Keep on reading!
 
-### [تعرف على المزيد حول Tour de SOL الخاص بـ Solana](https://solana.com/tds/)
+### Learn more about Tour de SOL
 
-إذا لم تقُم بالتسجيل بعد، إملأ النموذج في [https://solana.com/tds/](https://solana.com/tds/) أولا.
+If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.

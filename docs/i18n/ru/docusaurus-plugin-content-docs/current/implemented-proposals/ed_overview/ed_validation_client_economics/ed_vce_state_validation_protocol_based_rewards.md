@@ -20,42 +20,42 @@ title: График инфляции
 
 Первый фактор является функцией только параметров протокола \ (т. Е. Не зависит от поведения валидатора в данную эпоху \) и приводит к графику инфляции, предназначенному для стимулирования раннего участия, обеспечения четкой денежно-кредитной стабильности и обеспечения оптимальной безопасности в сети.
 
-В качестве первого шага к пониманию влияния _ Графика инфляции _ на экономику Solana мы смоделировали верхний и нижний диапазоны того, как выпуск токенов с течением времени может выглядеть с учетом текущие диапазоны исследуемых параметров Графика инфляции.
+As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 В частности:
 
-- _Начальная скорость инфляции_: 7-9%
-- - Уровень снижения инфляции \*: -14–16%
-- _Уровень долгосрочной инфляции _: 1-2%
+- _Initial Inflation Rate_: 7-9%
+- _Dis-inflation Rate_: -14-16%
+- _Long-term Inflation Rate_: 1-2%
 
 Используя эти диапазоны для моделирования ряда возможных графиков инфляции, мы можем исследовать инфляцию во времени:
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-На приведенном выше графике указаны средние значения диапазона, чтобы проиллюстрировать вклад каждого параметра. На основе этих смоделированных _ графиков инфляции _ мы также можем спрогнозировать диапазоны выпуска токенов с течением времени.
+На приведенном выше графике указаны средние значения диапазона, чтобы проиллюстрировать вклад каждого параметра. From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-Наконец, мы можем оценить _ Ставку доходности _ по ставке SOL, если мы введем дополнительный параметр, обсуждавшийся ранее, _% от ставки SOL _:
+Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 
-В этом случае, поскольку _ставка SOL _ является параметром, который необходимо оценить (в отличие от параметров _ График инфляции _), проще использовать определенные параметры* График инфляции * и изучить диапазон _% от ставки SOL _. Для примера ниже мы выбрали середину исследуемых выше диапазонов параметров:
+In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. Для примера ниже мы выбрали середину исследуемых выше диапазонов параметров:
 
-- _Начальная скорость инфляции_: 8%
-- - Уровень снижения инфляции \*: -15–%
-- _Уровень долгосрочной инфляции _: 1.5%
+- _Initial Inflation Rate_: 8%
+- _Dis-inflation Rate_: -15%
+- _Long-term Inflation Rate_: 1.5%
 
-Значения _% Staked SOL _ варьируются от 60% до 90%, что, по нашему мнению, охватывает вероятный диапазон, который мы ожидаем наблюдать, на основе отзывов от сообществ инвесторов и валидаторов. а также то, что наблюдается в сопоставимых протоколах Proof-of-Stake.
+The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-Повторим еще раз, выше показан пример _выгоды от стейка _ которую стейкер может ожидать со временем в сети Solana c точно определенным _графиком инфляции_. Это идеализированный _ Ставка доходности _, поскольку он не учитывает влияние времени безотказной работы валидатора на вознаграждения, комиссию валидатора, потенциальное ограничение доходности и потенциальные инциденты с резким сокращением. Кроме того, он игнорирует тот факт, что _% Ставка SOL _ является динамическим по замыслу - экономические стимулы, установленные этим _ Графиком инфляции _.
+Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
 
 ### Скорректированная доходность стейкинга
 
-Полная оценка потенциального дохода от стекинг-токенов должна учитывать стейкинг _ разведение токенов _ и его влияние на доходность стейкинга. Для этого мы определяем _ скорректированную доходность стейкинга _ как изменение доли владения поставленными токенами из-за распределения инфляции. То есть позитивное стимулирующее воздействие инфляции.
+A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. То есть позитивное стимулирующее воздействие инфляции.
 
-Мы можем рассмотреть скорректированный _доходность на ставку_ как функцию темпов инфляции и процент разбитых токенов сети. Здесь мы можем увидеть график для различных долей ставок:
+We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. Здесь мы можем увидеть график для различных долей ставок:
 
 ![](/img/p_ex_staked_dilution.png)

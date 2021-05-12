@@ -40,13 +40,13 @@ Por último, la recaudación de alquileres se realiza de acuerdo con las actuali
 
 ### Justificación del diseño actual
 
-Con el diseño anterior, NO es posible tener cuentas que permanezcan, que nunca se toquen y que nunca tengan que pagar la renta. Las cuentas siempre pagan la renta exactamente una vez por cada época, excepto las cuentas exentas de renta, sysvar y ejecutables.
+Con el diseño anterior, NO es posible tener cuentas que permanezcan, que nunca se toquen y que nunca tengan que pagar la renta. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-Se trata de una elección de diseño. De lo contrario, sería posible desencadenar el cobro de la renta sin autorización con la instrucción `Noop` por parte de cualquiera que pueda beneficiarse injustamente de la renta (un líder en este momento) o ahorrarse la renta dada la fluctuación prevista del coste del alquiler.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-Como otro efecto secundario de esta elección, también hay que tener en cuenta que esta recogida periódica de rentas obliga efectivamente al validador a no almacenar las cuentas antiguas en un almacén frío de forma óptima y ahorrar el coste de almacenamiento, lo que es desfavorable para los propietarios de las cuentas y puede hacer que las transacciones en ellas se paralicen durante más tiempo que las demás. Por otro lado, esto evita que los usuarios malintencionados acumulen una cantidad importante de cuentas basura, lo que supone una carga para los validadores.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-Como consecuencia general de este diseño, todas las cuentas se almacenan por igual como conjunto de trabajo del validador con las mismas características de rendimiento, reflejando directamente la estructura de precios de alquiler uniforme.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### Colección Ad-hoc
 

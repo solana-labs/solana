@@ -16,7 +16,7 @@
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --硬分叉 SLOT_X
 ```
 
-现在，账本目录应包含一个新的快照。 `solana-ledger-tool-create-snapshot` 也会输出新的碎片版本和 bank 哈希值，分别调用 NEW_SHRED_VERSION 和 NEW_BANK_HASH。
+现在，账本目录应包含一个新的快照。 `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 调整验证节点的参数：
 
@@ -37,7 +37,10 @@ $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --硬分叉 SLOT_X
 >
 > We've released v1.1.12 and are ready to get testnet back up again.
 >
-> Steps: 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Preferred method, start from your local ledger with:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. Preferred method, start from your local ledger with:
 >
 > ```bash
 > solana-validator

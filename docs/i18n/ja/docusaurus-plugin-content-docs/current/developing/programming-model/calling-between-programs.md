@@ -99,7 +99,7 @@ mod acme {
 
 1. プログラムは、プログラム・アドレスと呼ばれる特定のアドレスを、外部のユーザがそのアドレスに対する署名を用いて有効なトランザクションを生成できないように制御することができます。
 
-2. [クロスプログラムインヴォケーション](#cross-program-invocations)で呼び出される命令の中に存在するプログラムアドレスに対して、プログラムがプログラム的に署名できるようにします。
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 この 2 つの条件を満たせば、ユーザーはチェーン上の資産の権限をプログラムのアドレスに安全に移転・譲渡することができ、プログラムはその権限を自分の判断で別の場所に割り当てることができます。
 
@@ -109,14 +109,14 @@ mod acme {
 
 ### ハッシュベースの生成されたプログラムアドレス
 
-プログラムアドレスは、256 ビットの耐残像性ハッシュ関数を用いて、シードの集合とプログラム ID から決定論的に導き出されます。 プログラムアドレスは，関連する秘密キーが存在しないことを保証するため，"ed25519 曲線上"にあってはなりません。 与えられ生成中にアドレスが曲線上にあることが判明した場合は、エラーが返されます。 この現象が起こる確率は、ある種のシードとプログラム ID の組み合わせでは、およそ半々です。 このような場合には、別のシードセットやシードバンプ(追加の 8 ビットシード) を使用して、有効なプログラムアドレスを曲線の外に見つけることができます。
+プログラムアドレスは、256 ビットの耐残像性ハッシュ関数を用いて、シードの集合とプログラム ID から決定論的に導き出されます。 プログラムアドレスは，関連する秘密キーが存在しないことを保証するため，"ed25519 曲線上"にあってはなりません。 与えられ生成中にアドレスが曲線上にあることが判明した場合は、エラーが返されます。 There is about a 50/50 chance of this happening for a given collection of seeds and program id. このような場合には、別のシードセットやシードバンプ(追加の 8 ビットシード) を使用して、有効なプログラムアドレスを曲線の外に見つけることができます。
 
-プログラム用の決定論的プログラムアドレスは、`SystemInstruction::CreateAccountWithSeed` で作成された Account と同様の派生経路をたどりますが、これは `system_instruction::create_address_with_seed`で実装されています。
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 参考までにその実装は以下の通りです。
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,9 +167,8 @@ client.send_and_confirm_message(&[&alice_keypair], &message);
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ fn transfer_one_token_from_escrow(
 
 ## 例:
 
-クロスプログラム呼び出しの使用方法の例については、 [ Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) と [C ](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples)を使用した開発 を参照してください。
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

@@ -4,7 +4,7 @@ title: "用Rust开发"
 
 Solana 支持使用[Rust](https://www.rust-lang.org/) 编程语言编写链上的程序。
 
-## 项目布局 {#project-layout}
+## 项目布局
 
 Solana Rust 程序遵循典型的[Rust 项目布局](https://doc.rust-lang.org/cargo/guide/project-layout.html)：
 
@@ -27,7 +27,7 @@ Solana Rust 程序遵循典型的[Rust 项目布局](https://doc.rust-lang.org/c
 features = []
 ```
 
-Solana Rust 程序可能会直接依赖于对方，以便在进行 [交叉程序调用](developing/programming-model/calling-between-programs.md#cross-program-invocations)时获得指令协助。 这样做时，重要的是不要拉入依赖程序的入口点符号，因为它们可能与程序本身的符号冲突。 为避免这种情况，程序应在 `Cargo.toml` 中定义一个 `exclude_entrypoint`功能，并使用它来排除入口点。
+Solana Rust programs may depend directly on each other in order to gain access to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations). 这样做时，重要的是不要拉入依赖程序的入口点符号，因为它们可能与程序本身的符号冲突。 To avoid this, programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use to exclude the entrypoint.
 
 - [定义特性](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/Cargo.toml#L12)
 - [排除入口点](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/src/lib.rs#L12)
@@ -36,11 +36,11 @@ Solana Rust 程序可能会直接依赖于对方，以便在进行 [交叉程序
 
 - [不将入口点包含在内](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token-swap/program/Cargo.toml#L19)
 
-## 项目依赖关系 {#project-dependencies}
+## 项目依赖关系
 
 至少，Solana Rust 程序必须引入[solana-program](https://crates.io/crates/solana-program)。
 
-Solana BPF 程序具有某些[限制](#Restrictions)，可能会阻止将某些箱体作为依赖项包含进来或需要特殊处理。
+Solana BPF 程序具有某些[限制](#restrictions)，可能会阻止将某些箱体作为依赖项包含进来或需要特殊处理。
 
 例如：
 
@@ -48,7 +48,7 @@ Solana BPF 程序具有某些[限制](#Restrictions)，可能会阻止将某些�
 - 箱体可能取决于 Solana 确定性程序环境中不支持的`rand`。 要包含`rand`相关的箱体，请参考[在 Rand 开发](#depending-on-rand)。
 - 即使程序本身未包含堆栈溢出代码，箱体也可能会使堆栈溢出。 有关的更多信息，请参见[Stack](overview.md#stack)。
 
-## 如何开发 {#how-to-build}
+## 如何开发
 
 首先设置环境：
 
@@ -68,7 +68,7 @@ $ cd <the program directory>
 $ cargo build-bpf
 ```
 
-## 如何测试 {#how-to-test}
+## 如何测试
 
 通过直接行使程序功能，可以通过传统的`cargo test`机制对 Solana 程序进行单元测试。
 
@@ -76,7 +76,7 @@ $ cargo build-bpf
 
 有关更多信息，请参见[在 sysvar 示例中测试](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/sysvar/tests/functional.rs)，来学习如何包含一条指令 syavar 帐户由程序发送和处理。
 
-## 程序入口点 {#project-entrypoint}
+## 程序入口点
 
 程序导出一个已知的入口点符号，在调用程序时，Solana 运行时将查找并调用该入口点符号。 Solana 支持多个[BPF 加载程序版本](overview.md#versions)，它们之间的入口点可能会有所不同。 程序必须为相同的加载器编写并部署。 有关更多详细信息，请参见[概览](overview#loaders)。
 
@@ -105,7 +105,7 @@ pub type ProcessInstruction =
 
 请参阅 [使用入口点的简单实例](https://github.com/solana-labs/example-helloworld/blob/c1a7247d87cd045f574ed49aec5d160aefc45cf2/src/program-rust/src/lib.rs#L15)，来看看它们是如何配合使用的。
 
-### 参数反序列化 {#parameter-deserialization}
+### 参数反序列化
 
 每个加载程序都提供一个帮助程序功能，该功能将程序的输入参数反序列化为 Rust 类型。 入口点宏会自动调用反序列化帮助器：
 
@@ -116,7 +116,7 @@ pub type ProcessInstruction =
 
 有关加载程序如何序列化程序输入的详细信息，请参见[Input Parameter Serialization](overview.md#input-parameter-serialization)文档。
 
-### 数据类型 {#data-types}
+### 数据类型
 
 加载程序的入口点宏使用以下参数调用程序定义的指令处理器功能：
 
@@ -134,13 +134,13 @@ instruction_data: &[u8]
 
 指令数据是正在处理的[指令的指令数据](developing/programming-model/transactions.md#instruction-data)中的通用字节数组。
 
-## 堆（Heap）{#heap}
+## 堆（Heap）
 
 Rust 程序通过定义自定义[`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)直接实现堆。
 
 程序可以根据其特定需求实现自己的`global_allocator`。 相关的更多信息，请参考[自定义 heap 示例](#examples)。
 
-## 限制 {#restrictions}
+## 限制
 
 链上 Rust 程序支持 Rust 的大多数 libstd，libcore 和 liballoc，以及许多第三方包装箱。
 
@@ -164,9 +164,9 @@ Rust 程序通过定义自定义[`global_allocator`](https://github.com/solana-l
 - 二进制代码在周期和调用深度上在计算上都非常昂贵，应该尽量避免。
 - 应该避免字符串格式化，因为它在计算上也很昂贵。
 - 不支持 `println!`，`print!`，应该使用 Solana [logging helpers](#logging)。
-- 运行时对程序在一条指令的处理过程中可以执行的指令数施加了限制。 相关的更多信息，请参见[计算预算](developing/programming-model/runtime.md#compute-budget)。
+- 运行时对程序在一条指令的处理过程中可以执行的指令数施加了限制。 See [computation budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
-## 在 Rand 开发 {#depending-on-rand}
+## 在 Rand 开发
 
 程序必须确定性地运行，因此不能使用随机数。 有时，即使程序不使用任何随机数功能，程序也可能依赖于自己的`rand`。 如果程序依赖于`rand`，则编译将失败，因为对 Solana 没有对`get-random`进行支持。 报错通常如下所示：
 
@@ -187,7 +187,7 @@ error: target is not supported, for more information see: https://docs.rs/getran
 getrandom = { version = "0.1.14", features = ["dummy"] }
 ```
 
-## 日志 {#logging}
+## 记录
 
 Rust 的`println`宏在计算上很昂贵，不被支持。 而是提供了辅助宏[`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)。
 
@@ -211,7 +211,7 @@ msg!("Some variable: {:?}", variable);
 
 [debugging](debugging.md#logging)章节提供了有关使用程序日志的更多信息，[Rust 示例](#examples)包含一个日志记录示例。
 
-## 恐慌（Panicking）{#panicking}
+## 恐慌（Panicking）
 
 默认情况下，Rust 的`panic!`、`assert!`和内部恐慌结果被打印到[程序日志](debugging.md#logging)。
 
@@ -225,7 +225,7 @@ INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 uni
 INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
-### 自定义恐慌处理器 {#custom-panic-handler}
+### 自定义恐慌处理器
 
 程序可以通过提供自己的实现来覆盖默认的紧急处理程序。
 
@@ -260,13 +260,13 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 }
 ```
 
-## 计算预算 {#compute-budget}
+## 计算预算
 
 使用系统调用[`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102)]记录包含剩余编号的消息暂停执行之前程序可能消耗的计算单元数。
 
-相关的更多信息，请参见[计算预算](developing/programming-model/runtime.md#compute-budget)。
+See [compute budget](developing/programming-model/runtime.md#compute-budget) for more information.
 
-## ELF 转储 {#elf-dump}
+## ELF 转储
 
 可以将 BPF 共享对象的内部信息转储到文本文件中，以更深入地了解程序的组成及其在运行时的工作方式。 转储将包含 ELF 信息以及所有符号和实现它们的指令的列表。 一些 BPF 加载程序的错误日志消息将引用发生错误的特定指令号。 可以在 ELF 转储中查找这些引用，以标识有问题的指令及其上下文。
 
@@ -277,6 +277,6 @@ $ cd <program directory>
 $ cargo build-bpf --dump
 ```
 
-## 示例 {#examples}
+## 示例：
 
 [Solana 程序库 github](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)代码库包含了 Rust 例子集合。

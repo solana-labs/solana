@@ -20,42 +20,42 @@ title: جدول التضخم (Inflation Schedule)
 
 العامل الأول هو وظيفة مُعلمات البروتوكول فقط \ (أي بغض النظر عن سلوك المُدقّق (validator) في فترة (epoch) مُعينة \) وينتج عنه جدول تضخم مُصمم لتحفيز المشاركة المُبكرة، وتوفيرإاستقرار نقدي واضح وتوفير الأمان الأمثل في الشبكة.
 
-كخطوة أولى لفهم تأثير _Inflation Schedule_ على إقتصاد Solana، قمنا بمحاكاة النطاقين العلوي والسفلي لما قد يبدو عليه إصدار الرمز بمرور الوقت في النطاقات الحالية لمُعلمات جدول التضخم قيد الدراسة.
+As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 تحديدا:
 
-- مُعدل التضخم الأولي _Initial Inflation Rate_: 7-9%
-- مُعدل تخفيض التضخم _Dis-inflation Rate_: -14-16%
-- مُعدل التضخم الطويل المدى _Long-term Inflation Rate_: 1-2%
+- _Initial Inflation Rate_: 7-9%
+- _Dis-inflation Rate_: -14-16%
+- _Long-term Inflation Rate_: 1-2%
 
 بإستخدام هذه النطاقات لمُحاكاة عدد من جداول التضخم المُحتملة، يُمكننا إستكشاف التضخم بمرور الوقت:
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-في الرسم البياني الوارد أعلاه، تُحدد القيم المُتوسطة للنطاق لتوضيح مُساهمة كل مُعلِّمة (parameter). من هذه المحاكاة _Inflation Schedules_، يُمكننا أيضًا توقع نطاقات لإصدار الرمز بمرور الوقت.
+في الرسم البياني الوارد أعلاه، تُحدد القيم المُتوسطة للنطاق لتوضيح مُساهمة كل مُعلِّمة (parameter). From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-أخيرًا يمكننا تقدير العائد _Staked Yield_ على عملات SOL التي يتم تحْصِيصها أو المُحَصَّصة (staked)، إذا قدمنا مُعلمة (parameter) إضافية، تمت مُناقشتها مُسبقًا، _% of Staked SOL_:
+Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
 
 %~\tنص{SOL Staked} = \frac{\tنص{Total SOL Staked}}{\tنص{Total Current Supply}}
 
-في هذه الحالة، نظرًا لأن _% of Staked SOL_ عبارة عن مُعلمة (parameter) يجب تقديرها (على عكس مُعلمات _Inflation Schedule_) ، فمن الأسهل إستخدام مُعلمات جدول التضخم _Inflation Schedule_ وإستكشاف نطاق _% of Staked SOL_. على سبيل المثال أدناه، إخترنا مُنتصف نطاقات المُعلمة (parameter) المُستكشفة أعلاه:
+In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. على سبيل المثال أدناه، إخترنا مُنتصف نطاقات المُعلمة (parameter) المُستكشفة أعلاه:
 
-- مُعدل التضخم الأولي _Initial Inflation Rate_: 8%
-- مُعدل تخفيض التضخم _Dis-inflation Rate_: -15%
-- مُعدل التضخم الطويل المدى _Long-term Inflation Rate_: 1.5%
+- _Initial Inflation Rate_: 8%
+- _Dis-inflation Rate_: -15%
+- _Long-term Inflation Rate_: 1.5%
 
-تتراوح قيم _% of Staked SOL_ من 60٪ إلى 90٪، والتي نشعر أنها تغطي النطاق المُحتمل الذي نتوقع مُراقبته، بناءً على التعليقات الواردة من مُجتمعات المُستثمرين والمُدققين (validators) بالإضافة إلى ما يتم مُلاحظته في بروتوكولات إثبات الحِصَّة (Proof-of-Stake) المُماثلة.
+The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-مرة أخرى، يوضح ما سبق مثال عائد إثبات الحِصَّة أو التحصيص _Staked Yield_ قد يتوقعه صاحب الحساب بمرور الوقت على شبكة Solana مع جدول التضخم _Inflation Schedule_ كما هو مُحدد. يُعد إثبات الحِصَّة أو التحصيص هذا _Staked Yield_ مثاليًا لأنه يتجاهل تأثير وقت تشغيل المُدقق (validator) على المُكافآت وعمولات المُدقق والإختناق المُحتمل للعائد (yield throttling) وحوادث الإقتطاع (slashing) المُحتملة. كما أنه يتجاهل أن _% of Staked SOL_ ديناميكي حسب التصميم - الحوافز الإقتصادية التي تم إعدادها بواسطة _Inflation Schedule_.
+Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
 
 ### عائد إثبات الحِصَّة أو التحصيص المُعدّل (Adjusted Staking Yield)
 
-يجب أن يأخذ التقييم الكامل للربح المُحتمل من الرموز في الحسبان تخفيف الرمز _Token Dilution_ وتأثيره على حصيلة عائد إثبات الحِصَّة أو التحصيص (Staking Yield). لهذا ، نحدد عائد إثبات الحِصَّة أو التحصيص المُعدّل _adjusted staking yield_ كتغيير في ملكية العرض الجزئي للرموز بسبب توزيع إصدار التضخم. بمعنى آخر. • الآثار المُخففة الإيجابية للتضخم.
+A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. بمعنى آخر. • الآثار المُخففة الإيجابية للتضخم.
 
-يمكننا فحص عائد إثبات الحِصَّة أو التحصيص _adjusted staking yield_ كدالة لمُعدل التضخم والنسبة المئوية للرموز المُجمعة على الشبكة. يُمكننا أن نرى هذا المُخطط لكسور إثبات حِصَّة أو تحصيص (staking) مُختلفة هنا:
+We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. يُمكننا أن نرى هذا المُخطط لكسور إثبات حِصَّة أو تحصيص (staking) مُختلفة هنا:
 
 ![](/img/p_ex_staked_dilution.png)

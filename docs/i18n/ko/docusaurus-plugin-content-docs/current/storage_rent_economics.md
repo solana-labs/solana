@@ -2,16 +2,16 @@
 title: Storage Rent Economics
 ---
 
-Each transaction that is submitted to the Solana ledger imposes costs. Transaction fees paid by the submitter, and collected by a validator, in theory, account for the acute, transactional, costs of validating and adding that data to the ledger. Unaccounted in this process is the mid-term storage of active ledger state, necessarily maintained by the rotating validator set. This type of storage imposes costs not only to validators but also to the broader network as active state grows so does data transmission and validation overhead. To account for these costs, we describe here our preliminary design and implementation of storage rent.
+Solana 원장에 제출되는 각 거래에는 비용이 부과됩니다. 제출자가 지불하고 밸리데이터가 수집 한 거래 수수료는 이론적으로 해당 데이터를 검증하고 원장에 추가하는 데 드는 급격한 거래 비용을 설명합니다. 이 프로세스에서 설명되지 않은 것은 활성 원장 상태의 중간 저장이며, 반드시 순환 밸리데이터 세트에 의해 유지됩니다. 이러한 유형의 스토리지는 데이터 전송 및 검증 오버 헤드와 마찬가지로 활성 상태가 증가함에 따라 밸리데이터뿐만 아니라 더 넓은 네트워크에도 비용을 부과합니다. 이러한 비용을 설명하기 위해 여기에서 스토리지 임대의 예비 설계 및 구현에 대해 설명합니다.
 
-Storage rent can be paid via one of two methods:
+보관 임대료는 다음 두 가지 방법 중 하나로 지불 할 수 있습니다.
 
-Method 1: Set it and forget it
+방법 1 : 설정하고 잊어 버리기
 
-With this approach, accounts with two-years worth of rent deposits secured are exempt from network rent charges. By maintaining this minimum-balance, the broader network benefits from reduced liquidity and the account holder can trust that their `Account::data` will be retained for continual access/usage.
+이 방법을 사용하면 2 년치의 임대 보증금을 확보 한 계정은 네트워크 임대료에서 면제됩니다. 이 최소 잔액을 유지함으로써 더 넓은 네트워크는 유동성 감소의 이점을 누리고 계정 보유자는 'Account :: data'가 지속적인 액세스 / 사용을 위해 유지 될 것이라고 신뢰할 수 있습니다.
 
-Method 2: Pay per byte
+방법 2 : 바이트 당 지불
 
-If an account has less than two-years worth of deposited rent the network charges rent on a per-epoch basis, in credit for the next epoch. This rent is deducted at a rate specified in genesis, in lamports per kilobyte-year.
+계정에 예치 된 임대료가 2 년 미만인 경우 네트워크는 다음 세대에 대한 크레딧으로 세대당 임대료를 부과합니다. 이 임대료는 킬로바이트 / 년당 램프 포트로 제네시스에 지정된 요율로 공제됩니다.
 
 For information on the technical implementation details of this design, see the [Rent](implemented-proposals/rent.md) section.

@@ -1,5 +1,5 @@
 ---
-title: Nhúng ngôn ngữ Move
+title: Embedding the Move Language
 ---
 
 ## Sự cố

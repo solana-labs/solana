@@ -57,7 +57,7 @@ Dữ liệu hàng là một cấu trúc `StoredConfirmedBlock` được nén.
 
 Bảng này chứa các giao dịch ảnh hưởng đến một địa chỉ nhất định.
 
-Khóa hàng là `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. Dữ liệu hàng là một cấu trúc `TransactionByAddrInfo` được nén.
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. Dữ liệu hàng là một cấu trúc `TransactionByAddrInfo` được nén.
 
 Nhận được lời khen ngợi của một người về các slot cho phép danh sách các slot đảm bảo rằng slot mới nhất có các giao dịch ảnh hưởng đến địa chỉ sẽ luôn được liệt kê đầu tiên.
 

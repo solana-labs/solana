@@ -40,24 +40,11 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 ## Calculating the required FEC rate
 
-Turbine relies on retransmission of packets between validators. Due to
-retransmission, any network wide packet loss is compounded, and the
-probability of the packet failing to reach its destination increases
-on each hop. The FEC rate needs to take into account the network wide
-packet loss, and the propagation depth.
+Turbine relies on retransmission of packets between validators. Due to retransmission, any network wide packet loss is compounded, and the probability of the packet failing to reach its destination increases on each hop. The FEC rate needs to take into account the network wide packet loss, and the propagation depth.
 
-A shred group is the set of data and coding packets that can be used
-to reconstruct each other. Each shred group has a chance of failure,
-based on the likelyhood of the number of packets failing that exceeds
-the FEC rate. If a validator fails to reconstruct the shred group,
-then the block cannot be reconstructed, and the validator has to rely
-on repair to fixup the blocks.
+A shred group is the set of data and coding packets that can be used to reconstruct each other. Each shred group has a chance of failure, based on the likelyhood of the number of packets failing that exceeds the FEC rate. If a validator fails to reconstruct the shred group, then the block cannot be reconstructed, and the validator has to rely on repair to fixup the blocks.
 
-The probability of the shred group failing can be computed using the
-binomial distribution. If the FEC rate is `16:4`, then the group size
-is 20, and at least 4 of the shreds must fail for the group to fail.
-Which is equal to the sum of the probability of 4 or more trails failing
-out of 20.
+The probability of the shred group failing can be computed using the binomial distribution. If the FEC rate is `16:4`, then the group size is 20, and at least 4 of the shreds must fail for the group to fail. Which is equal to the sum of the probability of 4 or more trails failing out of 20.
 
 Probability of a block succeeding in turbine:
 

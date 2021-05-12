@@ -4,6 +4,14 @@ title: 모바일 앱 지갑
 
 Solana는 암호화 지갑 사용에 익숙하거나 경험이 많은 대부분의 사람들에게 친숙한 경험을 제공해야하는 여러 타사 앱에서 지원됩니다.
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## 트러스트 월렛
 
 \[Trust Wallet\] (https://trustwallet.com/)은 iOS 및 Android에서 사용할 수있는 앱으로 SOL 토큰을주고받는 데 사용할 수 있습니다.
@@ -23,4 +31,4 @@ _Note: Trust Wallet does not support stake accounts or staking operations_
 
 \[Coin98\] (https://coin98.app/)은 iOS 및 Android에서 사용할 수있는 앱으로 SOL 토큰을주고받는 데 사용할 수 있습니다.
 
-**참고 : Coin98은 스테이킹 계정 또는 스테이킹 작업을 지원하지 않습니다 \***
+_\*참고 : Coin98은 스테이킹 계정 또는 스테이킹 작업을 지원하지 않습니다 \*\*_

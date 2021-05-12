@@ -70,7 +70,7 @@ Entonces el programa
 
 Dado que el presupuesto de computación se consume de forma incremental a medida que el programa se ejecuta, el consumo total del presupuesto será una combinación de los distintos costes de las operaciones que realiza.
 
-En tiempo de ejecución, un programa puede registrar la cantidad de presupuesto de cómputo que queda. Consulte [debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption). para obtener más información.
+En tiempo de ejecución, un programa puede registrar la cantidad de presupuesto de cómputo que queda. See [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption) for more information.
 
 Los valores del presupuesto están condicionados a la habilitación de la característica, eche un vistazo a la función [nueva](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/src/process_instruction.rs#L97) del presupuesto para saber cómo se construye el presupuesto. Para determinar los valores del presupuesto actual es necesario conocer cómo funcionan las [características](runtime.md#features) y qué características están activadas en el clúster que se está utilizando.
 

@@ -4,7 +4,7 @@ title: Staking on Solana
 
 _읽기 전 참고 사항 : 값의 증가에 대한 모든 언급은 SOL의 균형과 관련하여 절대적인 용어입니다. 이 문서는 SOL의 금전적 가치에 대해 어떠한 제안도하지 않습니다._
 
-Solana에 SOL 토큰을 스테이 킹하는 것은 전 세계를 보호 할 수있는 가장 좋은 방법입니다. 최고 성능의 블록 체인 네트워크 그렇게하면 [ 리워드를 받으세요 ](implemented-proposals/staking-rewards.md)! 인플레이션 및 네트워크 보상은 현재 Solana에서 활성화되지 \* 아닙니다 </ em>. 메인 넷 베타 네트워크이지만 향후 활성화 될 수 있습니다.</p>
+Solana에 SOL 토큰을 스테이 킹하는 것은 전 세계를 보호 할 수있는 가장 좋은 방법입니다. 최고 성능의 블록 체인 네트워크 그렇게하면 [ 리워드를 받으세요 ](implemented-proposals/staking-rewards.md)!
 
 Solana는 위임이있는 PoS (Proof-of-Stake) 네트워크입니다. 즉, SOL 토큰을 보유한 사람은 누구나 자신의 SOL 중 일부를 트랜잭션을 처리하고 네트워크를 운영하는 하나 이상의 밸리데이터에게 위임 할 수 있습니다.
 
@@ -12,15 +12,13 @@ Solana는 위임이있는 PoS (Proof-of-Stake) 네트워크입니다. 즉, SOL �
 
 밸리데이터이 그들에게 위임 한 지분이 많을수록이 밸리데이터은 원장에 새로운 거래를 작성하기 위해 더 자주 선택됩니다. 밸리데이터이 더 많은 트랜잭션을 작성할수록 더 많은 보상을 받게됩니다. 한 번에 더 많은 트랜잭션을 처리 할 수 ​​있도록 시스템을 구성하는 밸리데이터은 이에 대해 비례 적으로 더 많은 보상을받을뿐만 아니라 가능한 한 빠르고 원활하게 네트워크를 계속 실행합니다.
 
-밸리데이터은 시스템을 실행하고 유지 관리함으로써 비용이 발생하며, 이는 획득 한 보상의 비율로 수집 된 수수료 형태로 위임자에게 전달됩니다. 이 수수료를 \* 커미션 </ em>이라고합니다. 밸리데이터이 더 많은 보상을받을수록 더 많은 지분이 위임 될수록 더 많은 위임 지분을 유치하기 위해 서로 경쟁하여 서비스에 대해 가장 낮은 수수료를 제공 할 수 있습니다.</p>
+밸리데이터은 시스템을 실행하고 유지 관리함으로써 비용이 발생하며, 이는 획득 한 보상의 비율로 수집 된 수수료 형태로 위임자에게 전달됩니다. This fee is known as a _commission_. 밸리데이터이 더 많은 보상을받을수록 더 많은 지분이 위임 될수록 더 많은 위임 지분을 유치하기 위해 서로 경쟁하여 서비스에 대해 가장 낮은 수수료를 제공 할 수 있습니다.
 
-스테이 킹시 다음과 같은 프로세스를 통해 토큰 손실 위험이 있습니다. _ 슬래시 </ em>. 슬래 싱은 현재 Solana의 메인 넷 베타에서 활성화되지 _ 아닙니다 </ em>. 네트워크이지만 나중에 활성화 될 수 있습니다. 슬래싱은 유효하지 않은 거래 생성 또는 특정 유형의 거래 또는 네트워크 참여자를 검열하는 것과 같은 고의적 인 악의적 행위에 대응하여 밸리데이터의 위임 지분 일부를 자동으로 제거 및 파괴하는 것을 포함합니다. 밸리데이터이 슬래시되면 해당 밸리데이터에게 지분을 위임 한 모든 토큰 보유자는 위임의 일부를 잃게됩니다. 이는 토큰 보유자에게 즉각적인 손실을 의미하지만, 전체 위임 감소로 인한 밸리데이터의 향후 보상 손실이기도합니다.</p>
+There is a risk of loss of tokens when staking, through a process known as _slashing_. Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+밸리데이터이 슬래시되면 해당 밸리데이터에게 지분을 위임 한 모든 토큰 보유자는 위임의 일부를 잃게됩니다. 이는 토큰 보유자에게 즉각적인 손실을 의미하지만, 전체 위임 감소로 인한 밸리데이터의 향후 보상 손실이기도합니다. More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 밸리데이터과 토큰 보유자의 재정적 인센티브를 조정하는 것이 네트워크 보상 및 슬래싱의 목표이며, 이는 네트워크를 안전하고 견고하며 최상의 성능으로 유지하는 데 도움이됩니다.
-
-_참고 : 스테이커와 밸리데이터을위한 네트워크 보상은 현재._
-
-**메인 넷 베타에서 활성화되어 있지 않습니다\* 참고 :메인 넷 베타에서는 슬래싱이 활성화되어 있지 않습니다.**
 
 ## SOL 토큰을 어떻게합니까?
 
@@ -31,8 +29,14 @@ Solana에 토큰을 스테이킹하려면 먼저 일부 SOL을 스테이킹을 �
 작업은 다음 지갑 솔루션에 의해 지원됩니다.
 
 - 스테이킹-SolFlare.com과 키 스토어 파일 또는 Ledger Nano. 자세한 내용은
-  SolFlare 사용 가이드 </ 0>를 확인하세요.</p></li>
-  - -Solana 명령 줄 도구는 CLI 생성 키 쌍 파일 지갑, 종이 지갑 또는 연결된 Ledger Nano와 함께 모든 지분 작업을 수행 할 수 있습니다. \[Solana 명령 줄 도구를 사용한 스테이킹 명령\] (cli / delegate-stake.md).</ul>
+
+SolFlare 사용 가이드 </ 0>를 확인하세요.</p></li>
+
+- -Solana 명령 줄 도구는 CLI 생성 키 쌍 파일 지갑, 종이 지갑 또는 연결된 Ledger Nano와 함께 모든 지분 작업을 수행 할 수 있습니다. \[Solana 명령 줄 도구를 사용한 스테이킹 명령\] (cli / delegate-stake.md).
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.</ul>
 
 #### 스테이킹 계정 생성
 

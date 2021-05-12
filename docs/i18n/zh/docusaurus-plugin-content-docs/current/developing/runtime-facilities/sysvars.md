@@ -4,7 +4,7 @@ title: Sysvar群集数据
 
 Solana 通过[`sysvar`](terminology.md#sysvar)帐户向程序公开了各种群集状态数据。 这些帐户填充在[`solana-program`开发工具](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html)中发布的已知地址以及帐户布局中，并在下面概述。
 
-要将 sysvar 数据包括在程序操作中，请在事务处理的帐户列表中传递 sysvar 帐户地址。 可以像其他任何帐户一样在您的指令处理器中读取该帐户。 始终以*只读方式*访问 sysvars 帐户。
+要将 sysvar 数据包括在程序操作中，请在事务处理的帐户列表中传递 sysvar 帐户地址。 可以像其他任何帐户一样在您的指令处理器中读取该帐户。 Access to sysvars accounts is always _readonly_.
 
 ## 时钟
 
@@ -26,7 +26,7 @@ Clock sysvar 包含有关群集时间的数据，包括当前时间段，时期�
 
 ## Epoch 时间表
 
-这时间段表 sysvar 包含在创世中设置的时间段常量，并允许计算给定时间段中的时隙数，给定时隙的时间段等。(注意：时间段时间表与[`leader时间表不同`](terminology.md#leader-schedule))
+The EpochSchedule sysvar contains epoch scheduling constants that are set in genesis, and enables calculating the number of slots in a given epoch, the epoch for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
 
 - 地址：`SysvarEpochSchedu1e111111111111111111111111`
 - 布局：[EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
@@ -43,7 +43,7 @@ Fees sysvar 包含当前广告位的费用计算器。 它会根据费用调节�
 指令 sysvar 在处理消息时在消息中包含序列化的指令。 这允许程序指令引用同一事务中的其他指令。 阅读有关[指令自省](implemented-proposals/instruction_introspection.md)的更多信息。
 
 - 地址：`` Sysvar1nstructions1111111111111111111111111` ``
-- 布局：[指令](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/type.Instructions.html)
+- 布局：[指令](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
 
 ## 最近的区块散列值
 

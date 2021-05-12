@@ -1,121 +1,81 @@
 ---
-title: Sysvar Cluster Data
+title: Данные Sysvar Cluster
 ---
 
-Solana exposes a variety of cluster state data to programs via
-[`sysvar`](terminology.md#sysvar) accounts. These accounts are populated at
-known addresses published along with the account layouts in the
-[`solana-program`
-crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
-and outlined below.
+Solana предоставляет различные данные о состоянии кластера программам через [`sysvar`](terminology.md#sysvar) аккаунты. Эти учетные записи заполняются на известных адресов, опубликованных вместе с макетами учетной записи [`solana-program` crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html), и излагается ниже.
 
-To include sysvar data in program operations, pass the sysvar account address in
-the list of accounts in a transaction. The account can be read in your
-instruction processor like any other account. Access to sysvars accounts is
-always _readonly_.
+Чтобы включить данные sysvar в программные операции, отправьте адрес учетной записи sysvar в список аккаунтов в транзакции. Учетная запись может быть прочитана в процессоре инструкций, как и в любой другой учетной записи. Access to sysvars accounts is always _readonly_.
 
-## Clock
+## Часы
 
-The Clock sysvar contains data on cluster time, including the current slot,
-epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
+В sysvar Clock содержатся данные о времени кластера, включая текущий слот, epoch, и оценочные значения таймера Unix часов. Он обновляется каждый слот.
 
-- Address: `SysvarC1ock11111111111111111111111111111111`
-- Layout: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
-- Fields:
+- Адрес: `SysvarC1ock1111111111111111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
+- Поля:
 
-  - `slot`: the current slot
-  - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch. In the first slot of an epoch, this timestamp is identical to the `unix_timestamp` (below).
-  - `epoch`: the current epoch
-  - `leader_schedule_epoch`: the most recent epoch for which the leader schedule has already been generated
-  - `unix_timestamp`: the Unix timestamp of this slot.
+  - `слот`: текущий слот
+  - `epoch_start_timestamp`: метка времени Unix первого слота в этой эпохе. В первом слоте эпохи, эта метка времени идентична `unix_timestamp` (ниже).
+  - `эпоха`: текущая эпоха
+  - `leader_schedule_epoch`: последняя эпоха, для которой лидер уже создан
+  - `unix_timestamp`: метка времени Unix этого слота.
 
-  Each slot has an estimated duration based on Proof of History. But in reality,
-  slots may elapse faster and slower than this estimate. As a result, the Unix
-  timestamp of a slot is generated based on oracle input from voting validators.
-  This timestamp is calculated as the stake-weighted median of timestamp
-  estimates provided by votes, bounded by the expected time elapsed since the
-  start of the epoch.
+  Каждая ячейка имеет оценочную длительность на основе Proof of History. Но в действительности, слотов могут пройти быстрее и медленнее, чем эта оценка. В результате Unix сгенерирована временная метка слота на основе ввода оракула от валидаторов голосов. Эта отметка времени рассчитывается как медиана, взвешенная по цене цены и времени оценки, представленные голосами, ограниченный ожидаемым временем с момента начала эпохи.
 
-  More explicitly: for each slot, the most recent vote timestamp provided by
-  each validator is used to generate a timestamp estimate for the current slot
-  (the elapsed slots since the vote timestamp are assumed to be
-  Bank::ns_per_slot). Each timestamp estimate is associated with the stake
-  delegated to that vote account to create a distribution of timestamps by
-  stake. The median timestamp is used as the `unix_timestamp`, unless the
-  elapsed time since the `epoch_start_timestamp` has deviated from the expected
-  elapsed time by more than 25%.
+  Более явно: для каждого слота, самая последняя отметка времени голосования, предоставленная каждым валидатором используется для генерации временной отметки за текущий слот (устаревшие слоты, поскольку временная метка считается Банк::ns_per_slot). Каждая оценочная отметка времени связана с долей делегирована этому счету голосования, чтобы создать распределение временных меток по долю. Медиана временная метка используется в качестве `unix_timestamp`, если не прошло времени с тех пор, как `epoch_start_timestamp` отклонился от ожидаемого просроченного времени более чем на 25%.
 
 ## EpochSchedule
 
-The EpochSchedule sysvar contains epoch scheduling constants that are set in
-genesis, and enables calculating the number of slots in a given epoch, the epoch
-for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
+The EpochSchedule sysvar contains epoch scheduling constants that are set in genesis, and enables calculating the number of slots in a given epoch, the epoch for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
 
-- Address: `SysvarEpochSchedu1e111111111111111111111111`
-- Layout:
-  [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
+- Адрес: `SysvarEpochSchedu1e1111111111111111111111`
+- Макет: [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
 
-## Fees
+## Комиссия
 
-The Fees sysvar contains the fee calculator for the current slot. It is updated
-every slot, based on the fee-rate governor.
+Системная переменная Fees содержит калькулятор комиссий для текущего слота. Он обновляется каждый слот, основываясь на правильном уровне комиссий.
 
-- Address: `SysvarFees111111111111111111111111111111111`
-- Layout:
-  [Fees](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/fees/struct.Fees.html)
+- Адрес: `SysvarFees1111111111111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/fees/struct.Fees.html)
 
-## Instructions
+## Инструкции
 
-The Instructions sysvar contains the serialized instructions in a Message while
-that Message is being processed. This allows program instructions to reference
-other instructions in the same transaction. Read more information on
-[instruction introspection](implemented-proposals/instruction_introspection.md).
+Инструкции sysvar содержат серийные инструкции в сообщении, пока, что сообщение обрабатывается. Это позволяет руководству программы ссылаться на другие инструкции в той же транзакции. Подробнее об Интроспективности [инструкции](implemented-proposals/instruction_introspection.md).
 
-- Address: `Sysvar1nstructions1111111111111111111111111`
-- Layout:
-  [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
+- Адрес: `Sysvar1nstructions11111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
 
-## RecentBlockhashes
+## Недавние хэши
 
-The RecentBlockhashes sysvar contains the active recent blockhashes as well as
-their associated fee calculators. It is updated every slot.
+Системная переменная RecentBlockhashes содержит активные недавние хэши блоков, а также связанные с ними калькуляторы комиссий. Он обновляется каждый слот.
 
-- Address: `SysvarRecentB1ockHashes11111111111111111111`
-- Layout:
-  [RecentBlockhashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/recent_blockhashes/struct.RecentBlockhashes.html)
+- Адрес: `SysvarRecentB1ockHashes111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/recent_blockhashes/struct.RecentBlockhashes.html)
 
-## Rent
+## Аренда
 
-The Rent sysvar contains the rental rate. Currently, the rate is static and set
-in genesis. The Rent burn percentage is modified by manual feature activation.
+В Rent sysvar есть арендная ставка. В настоящее время частота статична и установлена в генезе. Процент сгорания аренды изменяется с помощью ручной активации.
 
-- Address: `SysvarRent111111111111111111111111111111111`
-- Layout:
-  [Rent](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/rent/struct.Rent.html)
+- Адрес: `SysvarRent11111111111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/rent/struct.Rent.html)
 
 ## SlotHashes
 
-The SlotHashes sysvar contains the most recent hashes of the slot's parent
-banks. It is updated every slot.
+Sysvar SlotHashes содержит последние хэши родительского слота банков. Он обновляется каждый слот.
 
-- Address: `SysvarS1otHashes111111111111111111111111111`
-- Layout:
-  [SlotHashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_hashes/struct.SlotHashes.html)
+- Адрес: `SysvarS1otHashes11111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_hashes/struct.SlotHashes.html)
 
 ## SlotHistory
 
-The SlotHistory sysvar contains a bitvector of slots present over the last
-epoch. It is updated every slot.
+Sysvar SlotHistory содержит битвектор слотов, присутствующих за последнюю эпоху. Он обновляется каждый слот.
 
-- Address: `SysvarS1otHistory11111111111111111111111111`
-- Layout:
-  [SlotHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_history/struct.SlotHistory.html)
+- Адрес: `SysvarS1otHistory111111111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_history/struct.SlotHistory.html)
 
 ## StakeHistory
 
-The StakeHistory sysvar contains the history of cluster-wide stake activations
-and de-activations per epoch. It is updated at the start of every epoch.
+В системе StakeHistory содержится история активаций по всему кластеру и деактиваций по каждому эпоху. Он обновляется в начале каждой эпохи.
 
-- Address: `SysvarStakeHistory1111111111111111111111111`
-- Layout:
-  [StakeHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/stake_history/struct.StakeHistory.html)
+- Адрес: `SysvarStakeHistory1111111111111111111`
+- Макет: [Часы](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/stake_history/struct.StakeHistory.html)

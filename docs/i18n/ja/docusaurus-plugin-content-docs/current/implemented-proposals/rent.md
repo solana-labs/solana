@@ -40,13 +40,13 @@ Solana のアカウントは、アカウントの残高とは別に、オーナ�
 
 ### 現在の設計理論値
 
-これまでの設計では、ダラダラと手を付けずに、賃料も払わずに済むようなアカウントはあり得ません。 アカウントは、"賃貸料免除"、"sysvar"および"実行可能なアカウント"を除き、各時点で常に賃料を正確に 1 回支払います。
+これまでの設計では、ダラダラと手を付けずに、賃料も払わずに済むようなアカウントはあり得ません。 Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-これは意図された設計の選択です。 そうでなければ、 賃料(現時点ではリーダ) を不当に利益を上げたり、与えられた賃料を節約したりする可能性がある人は誰でも `Noop` 指示で不正な賃料回収を引き起こすことが可能です。
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-この選択のもう一つの副作用として、定期的に賃料を徴収することで、バリデータは古いアカウントを最適な方法でコールドストレージに保存せず、ストレージコストを節約することを余儀なくされることにも注意してください。 逆に言えば、悪意のあるユーザーが大量のゴミアカウントを積み上げてバリデータに負担をかけることを防ぐことができます。
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-このデザインの全体的な結果として、すべてのアカウントはバリデータのワーキングセットとして同じパフォーマンス特性で保存され、均一なレンタル価格構造をストレートに反映しています。
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### アドホックコレクション
 

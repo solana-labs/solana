@@ -4,6 +4,14 @@ title: Aplicaciones móviles de billeteras
 
 Solana está soportada por múltiples aplicaciones de terceros que deberían proporcionar una experiencia familiar para la mayoría de las personas que son nuevas o experimentadas con el uso de criptomonedas.
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## Trust Wallet
 
 [Trust Wallet](https://trustwallet.com/) es una aplicación disponible para iOS y Android y puede utilizarse para enviar y recibir tokens SOL.

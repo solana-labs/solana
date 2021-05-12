@@ -2,25 +2,15 @@
 title: Send and Receive Tokens
 ---
 
-This page decribes how to receive and send SOL tokens using the command line
-tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
-a [file system wallet](../wallet-guide/file-system-wallet.md), or a
-[hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
-you have created a wallet and have access to its address (pubkey) and the
-signing keypair. Check out our
-[conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
+This page decribes how to receive and send SOL tokens using the command line tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md), a [file system wallet](../wallet-guide/file-system-wallet.md), or a [hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure you have created a wallet and have access to its address (pubkey) and the signing keypair. Check out our [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
 
 ## Testing your Wallet
 
-Before sharing your public key with others, you may want to first ensure the
-key is valid and that you indeed hold the corresponding private key.
+Before sharing your public key with others, you may want to first ensure the key is valid and that you indeed hold the corresponding private key.
 
-In this example, we will create a second wallet in addition to your first wallet,
-and then transfer some tokens to it. This will confirm that you can send and
-receive tokens on your wallet type of choice.
+In this example, we will create a second wallet in addition to your first wallet, and then transfer some tokens to it. This will confirm that you can send and receive tokens on your wallet type of choice.
 
-This test example uses our Developer Testnet, called devnet. Tokens issued
-on devnet have **no** value, so don't worry if you lose them.
+This test example uses our Developer Testnet, called devnet. Tokens issued on devnet have **no** value, so don't worry if you lose them.
 
 #### Airdrop some tokens to get started
 
@@ -30,13 +20,11 @@ First, _airdrop_ yourself some play tokens on the devnet.
 solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
-public key/wallet address.
+where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded public key/wallet address.
 
 #### Check your balance
 
-Confirm the airdrop was successful by checking the account's balance.
-It should output `1 SOL`:
+Confirm the airdrop was successful by checking the account's balance. It should output `1 SOL`:
 
 ```bash
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -44,39 +32,29 @@ solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 
 #### Create a second wallet address
 
-We will need a new address to receive our tokens. Create a second
-keypair and record its pubkey:
+We will need a new address to receive our tokens. Create a second keypair and record its pubkey:
 
 ```bash
 solana-keygen new --no-passphrase --no-outfile
 ```
 
-The output will contain the address after the text `pubkey:`. Copy the
-address. We will use it in the next step.
+The output will contain the address after the text `pubkey:`. Copy the address. We will use it in the next step.
 
 ```text
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
-You can also create a second (or more) wallet of any type:
-[paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses),
-[file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
+You can also create a second (or more) wallet of any type: [paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses), [file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses), or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 
 #### Transfer tokens from your first wallet to the second address
 
-Next, prove that you own the airdropped tokens by transferring them.
-The Solana cluster will only accept the transfer if you sign the transaction
-with the private keypair corresponding to the sender's public key in the
-transaction.
+Next, prove that you own the airdropped tokens by transferring them. The Solana cluster will only accept the transfer if you sign the transaction with the private keypair corresponding to the sender's public key in the transaction.
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 0.5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
-where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
-and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the address of your second
-wallet.
+where you replace `<KEYPAIR>` with the path to a keypair in your first wallet, and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the address of your second wallet.
 
 Confirm the updated balances with `solana balance`:
 
@@ -84,8 +62,7 @@ Confirm the updated balances with `solana balance`:
 solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
-where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
-recipient's public key.
+where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the recipient's public key.
 
 #### Full example of test transfer
 
@@ -131,21 +108,11 @@ $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devn
 
 ## Receive Tokens
 
-To receive tokens, you will need an address for others to send tokens to. In
-Solana, the wallet address is the public key of a keypair. There are a variety
-of techniques for generating keypairs. The method you choose will depend on how
-you choose to store keypairs. Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallet-guide/cli.md).
-Once completed, you should have a public key
-for each keypair you generated. The public key is a long string of base58
-characters. Its length varies from 32 to 44 characters.
+To receive tokens, you will need an address for others to send tokens to. In Solana, the wallet address is the public key of a keypair. There are a variety of techniques for generating keypairs. The method you choose will depend on how you choose to store keypairs. Keypairs are stored in wallets. Before receiving tokens, you will need to [create a wallet](../wallet-guide/cli.md). Once completed, you should have a public key for each keypair you generated. The public key is a long string of base58 characters. Its length varies from 32 to 44 characters.
 
 ## Send Tokens
 
-If you already hold SOL and want to send tokens to someone, you will need
-a path to your keypair, their base58-encoded public key, and a number of
-tokens to transfer. Once you have that collected, you can transfer tokens
-with the `solana transfer` command:
+If you already hold SOL and want to send tokens to someone, you will need a path to your keypair, their base58-encoded public key, and a number of tokens to transfer. Once you have that collected, you can transfer tokens with the `solana transfer` command:
 
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>

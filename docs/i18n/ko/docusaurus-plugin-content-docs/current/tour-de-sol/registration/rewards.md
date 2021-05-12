@@ -1,22 +1,20 @@
 ---
-title: 보상
+title: Compensation
 ---
 
-## 보상 계산 <a id="how-are-rewards-calculated"></a>
+## Compensation Calculation
 
-보상은 \[이 포럼 게시물\] (https://forums.solana.com/t/tour-de-sol-stage-1-preliminary-compensation-design/79) 및 \[this 포럼 게시물]에 설명 된 보상 설계에 따라 계산됩니다. 스프레드 시트\] (https://docs.google.com/spreadsheets/d/11puBSw2THdO4wU-uyDEic-D03jg4ZAooVpcZU0w_4gI/edit#gid=218406032).
+Compensation will be calculated according to the compensation design described in [this forum post](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132).
 
-추가 보상에 대한 자세한 내용은 \[TOUR DE SOL 참여 약관\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)의 '2 \ (f \) Tour de Sol 세부 정보'섹션을 참조하세요.
+Please also see section “2\(f\) Tour de Sol Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for additional compensation details.
 
-## 리워드 수령 요건 <a id="what-are-the-requirements-to-receive-rewards"></a>
+## 리워드 수령 요건
 
-참가자는 Tour de SOL 참가 컨트랙트에 서명하고 CoinList의 플랫폼을 통해 개인으로 KYC / AML을 통과하고 참가하기 전에 W-8 BEN 또는 W-9 세금 양식 \ (거주지에 따라 다름)을 작성해야합니다. 참가자는 등록 완료 후 시작되는 모든 단계에 참여할 수 있습니다. 최종 등록 날짜는 단계별로 공개적으로 발표됩니다.
+Participants must have signed the Tour de SOL participation agreement, passed KYC/AML , as well as filled out the W-8 BEN or W-9 tax form \(depending on your residency\) prior to participating in the Tour.
 
-마지막으로 참가자는 Solana의 표준 \[토큰 컨트랙트\] (https://drive.google.com/open?id=1O4cEUZzeSNoVcncbHcEegAqPgjT-7hcy)에 서명해야합니다. 토큰 컨트랙트은 보상 발행일 이전에 Solana에 의해 제공됩니다.
+A participant may participate in any and all stages that begin after they complete registration. The final registrations dates will be announced publicly on a stage-by-stage basis.
 
-\[TOUR DE SOL 참여 약관\] (https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view)의 '2 \ (i \) & 2 \ (j \) Tour de Sol 세부 정보'섹션도 참조하세요. )를 참조하십시오.
-
-## 세금 관련 <a id="what-are-the-tax-implications-of-the-rewards"></a>
+## 세금 관련
 
 참가자는 서비스와 관련된 임의 보상으로 Solana와 서비스 컨트랙트을 체결합니다. 그들은 회사의 정규직 직원으로 간주되지 않으므로 Solana는 해당되는 경우 세금 신고 의무를 지원하기 위해 W-9 및 W-8 BEN 양식을 수집하고 있습니다. Solana는 참가자들이 잠재적 인 세금 영향을 이해하기 위해 세무사와 상담 할 것을 권장합니다.
 

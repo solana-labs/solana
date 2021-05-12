@@ -297,7 +297,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 تُوفر أداة سطر الأوامر (command-line tool) في Solana أمرًا بسيطًا، `solana transfer`، لإنشاء مُعاملات التحويل وإرسالها وتأكيدها. من المُفترض، ستنتظر هذه الطريقة وتتبع التقدم على stderr حتى يتم الإنتهاء من المُعاملة بواسطة المجموعة (cluster). إذا فشلت المُعاملة، فسوف تُبلغ عن أي أخطاء في المُعاملة.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 يُقدم [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) نهجًا مُشابهًا للنظام البيئي JS. إستخدم برنامج النظام `SystemProgram` لإنشاء مُعاملة تحويل وإرسالها بإستخدام طريقة إرسال وتأكيد المُعاملة `sendAndConfirmTransaction`.
@@ -317,7 +317,7 @@ solana fees --url http://localhost:8899
 في أداة سطر الأوامر (command-line tool)، مرر الوسيطة `--no-wait` لإرسال تحويل بشكل غير مُتزامن، وقم بتضمين تجزئة الكتلة (blockhash) الحديثة مع الوسيطة `--blockhash`:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 يُمكنك أيضًا إنشاء المُعاملة وتوقيعها وتسلسلها يدويًا، وإطلاقها على المجموعة (cluster) بإستخدام JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### إنتهاء صلاحية تجزئة الكتلة (Blockhash Expiration)
 
-عندما تطلب تجزئة الكتلة (blockhash) الحديثة لمُعاملة لعملية السحب الخاصة بك بإستخدام طلب الحصول على الرسوم [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) أو طلب رسوم `solana fees`، ستتضمن الإستجابة آخر فُتحة صالحة `lastValidSlot`، وهي الفُتحة الأخيرة التي ستكون تجزئة الكتلة (blockhash) فيها صالحة. يُمكنك التحقق من فُتحة (Slot) المجموعة (cluster) بإستخدام طلب الإستعلام عن الفُتحة [`getSlot` query](developing/clients/jsonrpc-api.md#getslot)؛ بمجرد أن تكون فُتحة (Slot) المجموعة (cluster) أكبر من آخر فُتحة صالحة `lastValidSlot`، يجب ألا تنجح مُعاملة السحب بإستخدام تجزئة الكتلة (blockhash) أبدًا.
-
-يُمكنك أيضًا التحقق مما إذا كانت تجزئة كتلة (blockhash) مُعينة لا تزال صالحة عن طريق إرسال طلب الحصول على حاسبة الرسوم لتجزئة الكتلة [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) بإستخدام تجزئة الكتلة كمُعلِّمة. إذا كانت قيمة الإستجابة فارغة، فستنتهي صلاحية تجزئة الكتلة (blockhash)، ويجب ألا تنجح مُعاملة السحب أبدًا.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### التحقق من صحة عناوين الحساب التي يُوفرها المُستخدم لعمليات السحب
 
 نظرًا لأن عمليات السحب لا يُمكن التراجع عنها، فقد يكون من المُمارسات الجيدة التحقق من صحة عنوان الحساب المُقدم من المُستخدم قبل الإذن بالسحب من أجل منع الخسارة العرضية لأموال المُستخدم.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 عنوان الحساب العادي في Solana هو سلسلة مفتاح العمومي مُرمّزة Base58 من ed25519 256-bit. ليست كل أنماط الـ bit هي مفاتيح عامة صالحة لمنحنى ed25519، لذلك من المُمكن التأكد من أن عناوين الحساب التي يُوفرها المُستخدم هي المفاتيح العامة الصحيحة ed25519 على الأقل.
 
@@ -435,7 +449,7 @@ public class PubkeyValidator
 
 ### سَكّ الرموز (Token Mints)
 
-يتم التصريح عن كل نوع _type_ من رمز بصيغة SPL من خلال إنشاء حساب سَكّ _mint_. يُخزن هذا الحساب البيانات الوصفية التي تصف ميزات الرمز مثل العرض وعدد الكسور العشرية والسلطات المُختلفة التي تتحكم في السك عملية (mint). يُشير كل حساب رمز بصيغة SPL إلى السَكّ (mint) المُرتبط به وقد يتفاعل فقط مع رموز بصيغة SPL من هذا النوع.
+Each _type_ of SPL Token is declared by creating a _mint_ account. يُخزن هذا الحساب البيانات الوصفية التي تصف ميزات الرمز مثل العرض وعدد الكسور العشرية والسلطات المُختلفة التي تتحكم في السك عملية (mint). يُشير كل حساب رمز بصيغة SPL إلى السَكّ (mint) المُرتبط به وقد يتفاعل فقط مع رموز بصيغة SPL من هذا النوع.
 
 ### تثبيت أداة `spl-token` الخاصة بـ CLI
 
@@ -521,7 +535,7 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
-#### مثال
+#### مثال (Example)
 
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -557,8 +571,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### سلطة التجميد (Freeze Authority)
 
-لأسباب تتعلق بالمتثال التنظيمي، يجوز لكيان إصدار الرمز بصيغة SPL إختياريا الإحتفاظ بـ "سلطة التجميد" على جميع الحسابات التي تم إنشاؤها بالإشتراك الـ mint الخاصة بها. هذا يسمح لهم بتجميد [freeze](https://spl.solana.com/token#freezing-accounts) الأصول في حساب مُعين حسب الرغبة، مما يجعل الحساب غير قابل للإستخدام حتى يتم فك تجميده. إذا كانت هذه الميزة قيد الإستخدام، فسيتم تسجيل المفتاح العمومي (pubkey) التابع لسلطة التجميد في حساب الرمز بصيغة SPL الخاص بالـ mint.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. هذا يسمح لهم بتجميد [freeze](https://spl.solana.com/token#freezing-accounts) الأصول في حساب مُعين حسب الرغبة، مما يجعل الحساب غير قابل للإستخدام حتى يتم فك تجميده. إذا كانت هذه الميزة قيد الإستخدام، فسيتم تسجيل المفتاح العمومي (pubkey) التابع لسلطة التجميد في حساب الرمز بصيغة SPL الخاص بالـ mint.
 
 ## إختبار التكامل (Testing the Integration)
 
-تأكد من إختبار سير العمل الكامل الخاص بك على شبكتي Solana التجريبية (testnet) وشبكة المُطورين (Devnet) بـ [clusters](../clusters.md) قبل الإنتقال إلى الإنتاج على الشبكة التجريبية الرئيسية (Mainnet Beta). شبكة المُطورين (Devnet) هي الأكثر إنفتاحًا ومرونة، وهي مثالية للتطوير الأولي، بينما توفر الشبكة التجريبية (testnet) إعدادات أكثر واقعية للمجموعة (cluster). تدعم كل من شبكة المُطورين (Devnet) و الشبكة التجريبية (testnet) الصنبور (faucet)، قُم بتشغيل التوزيع الحر `solana airdrop 10` للحصول على بعض عملات SOL شبكة المُطورين (Devnet) و الشبكة التجريبية (testnet) للتطوير والإختبار.
+تأكد من إختبار سير العمل الكامل الخاص بك على شبكتي Solana التجريبية (testnet) وشبكة المُطورين (Devnet) بـ [clusters](../clusters.md) قبل الإنتقال إلى الإنتاج على الشبكة التجريبية الرئيسية (Mainnet Beta). شبكة المُطورين (Devnet) هي الأكثر إنفتاحًا ومرونة، وهي مثالية للتطوير الأولي، بينما توفر الشبكة التجريبية (testnet) إعدادات أكثر واقعية للمجموعة (cluster). Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

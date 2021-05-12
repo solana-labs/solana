@@ -33,7 +33,7 @@ EOF "
 발리 노드, 클러스터가 트랜잭션의 수를 가져 오는하여 시스템에 액세스 할 수 있는지 전성 검사를 장착하기 전에
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -87,7 +87,7 @@ EOF"
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 
@@ -98,15 +98,14 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 LimitNOFILE
 
 ```
-500000NOFILE
-EOF
+LimitNOFILE=700000
 ```
 
 vm.max_map_count = 500000 EOF를
 
-````
-추가```DefaultLimitNOFILE
-````
+```
+DefaultLimitNOFILE=700000
+```
 
 "``````bash는 sudo는 sysctl을 -p
 
@@ -120,7 +119,7 @@ $ sudo를 systemctl --now 사용하도록 설정
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 
@@ -172,25 +171,31 @@ solana-keygen을 사용하여 사용자 지정 베니 티 키 쌍을 생성 할 
 solana-keygen grind --starts-with e1v1s:1
 ```
 
-bash는 솔라-keygen은 새로운 -o ~ / 검증 - keypair.json```신원
+You may request that the generated vanity keypair be expressed as a seed phrase which allows recovery of the keypair from the seed phrase and an optionally supplied passphrase (note that this is significantly slower than grinding without a mnemonic):
+
+```bash
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
+```
+
+Depending on the string requested, it may take days to find a match...
 
 ---
 
-당신의 검증 정체성 키 쌍은 고유 검사기를 식별 네트워크 내에서. **It is crucial to back-up this information.**
+Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-하지 않으면 액세스 권한을 잃어 버리면 유효성 검사기를 복구 할 수 없습니다. 이런 일이 발생하면 SOL 할당도 잃게됩니다.
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
 
-`bash solana새로운 --no-OUTFILE을 -keygen`대응의
+To back-up your validator identify keypair, **back-up your "validator-keypair.json” file or your seed phrase to a secure location.**
 
 ## 신뢰할 수있는 유효성 검사기
 
-신원 공개 키는 현재 실행하여 볼 수
+Now that you have a keypair, set the solana configuration to use your validator keypair for all following commands:
 
 ```bash
 solana config set --keypair ~/validator-keypair.json
 ```
 
-`bash solana새로운 --no-OUTFILE을 -keygen`대응의
+You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
@@ -200,13 +205,13 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 
 ## Connect Your Validator 다음
 
-신원 공개 키는 현재 실행하여 볼 수
+Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 10
+solana airdrop 1
 ```
 
-Note that airdrops are only available on Devnet and Testnet. Both are limited to 10 SOL per request.
+Note that airdrops are only available on Devnet and Testnet. Both are limited to 1 SOL per request.
 
 To view your current balance:
 
@@ -214,23 +219,23 @@ To view your current balance:
 solana balance
 ```
 
-미세한 자세히 볼 수 있습니다
+Or to see in finer detail:
 
 ```text
 solana balance --lamports
 ```
 
-들어`배쉬 솔라 나 - Keygen은이 갈기 --starts-와 e1v1s : 1`문자열이
+Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
 ## ## 로그 출력 조정
 
-만약 아직 수행하지 않은 경우 투표 계정 키 쌍을 만들고 네트워크에서 투표 계정을 만듭니다. 이 단계를 완료 한 경우에, 당신은 당신의 솔라 런타임 디렉토리에 "투표-계정 keypair.json"을 참조한다
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
 solana-keygen new -o ~/vote-account-keypair.json
 ```
 
-들어`배쉬 솔라나 - Keygen은이 갈기 --starts-와 e1v1s : 1`문자열이
+The following command can be used to create your vote account on the blockchain with all the default options:
 
 ```bash
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
@@ -240,9 +245,9 @@ Read more about [creating and managing a vote account](vote-accounts.md).
 
 ## Trusted validators
 
-다른 유효성 검사기 노드를 알고 신뢰하는 경우 명령 줄에서`--trusted-validator <PUBKEY>`인수를 사용하여`solana-validator`에 지정할 수 있습니다. `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`인수를 반복하여 여러 항목을 지정할 수 있습니다. 하나는 유효성 검사기가`--no-untrusted-rpc`로 부팅 할 때 생성 및 스냅 샷 데이터를 다운로드하기 위해 신뢰할 수있는 노드 집합 만 요청하는 것입니다. 또 다른 하나는`--halt-on-trusted-validator-hash-mismatch` 옵션과 함께 가십에있는 다른 신뢰할 수있는 노드의 전체 계정 상태에 대한 머클 루트 해시를 모니터링하고 해시가 불일치를 생성하는 경우, 유효성 검사기는 유효성 검사기가 투표하거나 잠재적으로 잘못된 상태 값을 처리하는 것을 방지하기 위해 노드를 중지합니다. 현재 유효성 검사기가 해시를 게시하는 슬롯은 스냅 샷 간격과 연결되어 있습니다. 기능이 유효하려면 신뢰할 수있는 집합의 모든 유효성 검사기가 동일한 스냅 샷 간격 값 또는 동일한 값의 배수로 설정되어야합니다.
+If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>` argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`. This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option, it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch, the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted set should be set to the same snapshot interval value or multiples of the same.
 
-악의적인 스냅샷 상태 다운로드 및 계정 상태 분산 예방을 위해 해당 옵션들을 활용하길 매우 권장합니다.
+It is highly recommended you use these options to prevent malicious snapshot state download or account state divergence.
 
 ## Connect Your Validator
 
@@ -252,40 +257,41 @@ Connect to the cluster by running:
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
-It is highly recommended you use these options to prevent malicious snapshot state download or account state divergence.
+To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
-> 참고 :`--identity` 및 / 또는`--authorized-voter` 키 쌍에 \[종이 지갑 시드 문구\] (../ wallet-guide / paper-wallet.md)를 사용할 수 있습니다. 이를 사용하려면 해당 인수를`solana-validator --identity ASK ... --authorized-voter ASK ...`로 전달하면 시드 구문과 선택적 암호를 입력하라는 메시지가 표시됩니다.
+The ledger will be placed in the `ledger/` directory by default, use the `--ledger` argument to specify a different location.
 
-새 터미널을 열고 실행하여 네트워크에 연결하여 유효성을 확인 :
+> 참고 :`--identity` 및 / 또는`--authorized-voter` 키 쌍에 \[종이 지갑 시드 문구\] (../ wallet-guide / paper-wallet.md)를 사용할 수 있습니다. To use these, pass the respective argument as `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be prompted to enter your seed phrases and optional passphrase.
+
+Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
-:`bash는 솔라 설정 세트 --keypair ~ / 검증 - keypair.json`당신은
+If your validator is connected, its public key and IP address will appear in the list.
 
 ### 로컬 네트워크 포트 할당 제어
 
-기본적으로 유효성 검사기는 8000-10000 범위에서 사용 가능한 네트워크 포트를 동적으로 선택하며`--dynamic-port-range`로 재정의 할 수 있습니다. 예를 들어`solana-validator --dynamic-port-range 11000-11010 ...`은 유효성 검사기를 포트 11000-11010으로 제한합니다.
+By default the validator will dynamically select available network ports in the 8000-10000 range, and may be overridden with `--dynamic-port-range`. For example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict the validator to ports 11000-11010.
 
 ### 디스크 공간을 절약하기 위해 원장 크기 제한
 
-`--limit-ledger-size` 매개 변수를 사용하면 노드가 디스크에 보유하는 원장 \[shreds\] (../ terminology.md # shred) 수를 지정할 수 있습니다. 이 매개 변수를 포함하지 않으면 유효성 검사기는 디스크 공간이 부족해질 때까지 전체 원장을 유지합니다.
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space.
 
-기본값은 원장 디스크 사용량을 500GB 미만으로 유지하려고합니다. 원하는 경우`--limit-ledger-size`에 인수를 추가하여 디스크 사용량을 더 많이 또는 더 적게 요청할 수 있습니다. `--limit-ledger-size`에서 사용하는 기본 제한 값은`solana-validator --help`를 확인하세요. 맞춤 제한 값 선택에 대한 자세한 내용은 \[여기\] (https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26)를 참조하세요.
+The default value attempts to keep the ledger disk usage under 500GB. More or less disk usage may be requested by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`. More information about selecting a custom limit value is [available here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Systemd Unit
 
-현재 잔액을 보려면
+Running the validator as a systemd unit is one easy way to manage running in the background.
 
-:..`텍스트 솔라 균형을`또는
+Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with the following:
 
 ```
 [Unit]
@@ -299,7 +305,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -308,35 +314,38 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator` command-line. / 홈 / 솔 / 빈 / validator.sh`원하는`solana-validator`명령 줄을 포함합니다.`/ home / sol / bin / validator.sh`를 실행하여 예상대로 유효성 검사기를 수동으로 시작하는지 확인합니다.chmod를 + X / 홈 / 솔 / 빈 / validator.sh`'와 그것을 실행 표시하는 것을 잊지 마세요 / 홈 / 솔 / 빈 / validator.sh`원하는`solana-validator`명령 줄을 포함합니다.`/ home / sol / bin / validator.sh`를 실행하여 예상대로 밸리데이터를 수동으로 시작하는지 확인합니다.chmod를 + X / 홈 / 솔 / 빈 / validator.sh`'와 그것을 실행 표시하는 것을 잊지 마세요 Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator` command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
-:..`텍스트 솔라 균형을`또는
+Start the service with:
 
-````bash
-```bash는
-sudo는 systemctl 데몬
-````
+```bash
+$ sudo systemctl enable --now sol
+```
 
 ### 스냅 샷 압축을 비활성화하여 CPU 사용량 줄이기
 
 #### 사용 logrotate
 
-유효성 검사기가 로그에 내보내는 메시지는`RUST_LOG` 환경 변수로 제어 할 수 있습니다. 자세한 내용은`env_logger` Rust 상자에 대한 \[문서\] (https://docs.rs/env_logger/latest/env_logger/#enabling-logging)에서 찾을 수 있습니다.
+The messages that a validator emits to the log can be controlled by the `RUST_LOG` environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for the `env_logger` Rust crate.
 
-로깅 출력이 감소하면 나중에 발생하는 문제를 디버깅하기 어려울 수 있습니다. 팀에서 지원을 받으려면 모든 변경 사항을 되돌리고 문제를 재현해야 도움을받을 수 있습니다.
+Note that if logging output is reduced, this may make it difficult to debug issues encountered later. Should support be sought from the team, any changes will need to be reverted and the issue reproduced before help can be provided.
 
 #### 로그 회전
 
-:`bash는 솔라-keygen은 새로운 -o ~ / 투표-계정 keypair.json`다음을
+The validator log file, as specified by `--log ~/solana-validator.log`, can get very large over time and it's recommended that log rotation be configured.
 
-명령은 모든 기본 옵션으로 blockchain에 투표 계정을 생성 할 수 있습니다
+The validator will re-open its when it receives the `USR1` signal, which is the basic primitive that enables log rotation.
+
+If the validator is being started by a wrapper shell script, it is important to launch the process with `exec` (`exec solana-validator ...`) when using logrotate. This will prevent the `USR1` signal from being sent to the script's process instead of the validator's, which will kill them both.
 
 #### Using logrotate
 
-:`bash는 솔라-keygen은 새로운 -o ~ / 투표-계정 keypair.json`다음을
+An example setup for the `logrotate`, which assumes that the validator is running as a systemd service called `sol.service` and writes a log file at /home/sol/solana-validator.log:
 
 ```bash
-cat&#062; logrotate.sol &#060;&#060; EOF
+# Setup log rotation
+
+cat > logrotate.sol <<EOF
 /home/sol/solana-validator.log {
   rotate 7
   daily
@@ -346,47 +355,47 @@ cat&#062; logrotate.sol &#060;&#060; EOF
   endscript
 }
 EOF
-sudo cp logrotate.sol / etc / logrotate.d / 졸
-systemctl를 다시 시작
+sudo cp logrotate.sol /etc/logrotate.d/sol
+systemctl restart logrotate.service
 ```
 
 ### SSD 마모를 줄이기 위해 계정 데이터베이스를 스왑으로 스왑으로 램 디스크를 사용
 
-명령은 모든 기본 옵션으로 blockchain에 투표 계정을 생성 할 수 있습니다
+Once your validator is operating normally, you can reduce the time it takes to restart your validator by adding the `--no-port-check` flag to your `solana-validator` command-line.
 
 ### 계정 인덱싱
 
-:`bash는생성-투표-계정 솔라 ~ / 투표-계정 keypair.json ~ / 검증 - keypair.json`읽기보다
+If you are not serving snapshots to other validators, snapshot compression can be disabled to reduce CPU load at the expense of slightly more disk usage for local snapshot storage.
 
-약 \[투표 계정 생성 및 관리\] (vote-accounts.md).
+Add the `--snapshot-compression none` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
-다른 밸리데이터에 스냅 샷을 제공하지 않는 경우 스냅 샷 압축을 비활성화하여 로컬 스냅 샷 저장소에 대한 디스크 사용량이 약간 더 늘어나는 대신 CPU로드를 줄일 수 있습니다.
+If your machine has plenty of RAM, a tmpfs ramdisk ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold the accounts database
 
-악의적 인 스냅 샷 상태 다운로드 또는 계정 상태 차이를 방지하려면 이러한 옵션을 사용하는 것이 좋습니다.
+When using tmpfs it's essential to also configure swap on your machine as well to avoid running out of tmpfs space periodically.
 
-을 실행하여 클러스터에 연결하십시오 :
+A 300GB tmpfs partition is recommended, with an accompanying 250GB swap partition.
 
-`bash solana-validator \ --identity ~ / validator-keypair.json \ --vote-account ~ / vote-account-keypair.json \ --ledger ~ / 검증 원장 \ --rpc 포트 8899 \ --entrypoint devnet.solana.com:8001 \ --limit 원장 크기 \ --log ~ / 솔라나 - validator.log`받는
+Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. 구성 예 : 1.`sudo mkdir / mnt / solana-accounts` 2.`tmpfs 포함하는 새 줄을 추가하여 300GB tmpfs 파티션을 추가 / mnt / solana-accounts tmpfs rw, size = 300G, user = sol 0 0`을합니다. `/ etc / fstab` (밸리데이터가 "sol"사용자로 실행되고 있다고 가정). **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab` (assuming your validator is running under the user "sol"). **CAREFUL: If you incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space
 
-- 최소 250GB의 스왑 공간을 만듭니다 .-이 지침의 나머지 부분에서`SWAPDEV` 대신 사용할 장치를 선택합니다. 빠른 디스크에서 250GB 이상의 여유 디스크 파티션을 선택하는 것이 가장 좋습니다. 사용할 수없는 경우`sudo dd if = / dev / zero of = / swapfile bs = 1MiB count = 250KiB`로 스왑 파일을 만들고`sudo chmod 0600 / swapfile`로 권한을 설정하고`/ swapfile`을 다음과 같이 사용합니다. 이 지침의 나머지 부분에 대해`SWAPDEV` -`sudo mkswap SWAPDEV`를 사용하여 스왑으로 사용할 장치를 포맷합니다.fstab`4.`SWAPDEV 스왑 스왑 기본값 0 0`을 포함하는 새 줄을 사용하여`/ etc /에 스왑 파일을 추가합니다.
+- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions. Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
 - Format the device for usage as swap with `sudo mkswap SWAPDEV`
 
 4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
-5. 5 .`sudo swapon -a`로 스왑을 활성화하고`sudo mount / mnt / solana-accounts /`로 tmpfs를 마운트합니다.
-6. 6.`free -g`로 스왑이 활성화되고`mount`로 tmpfs가 마운트되었는지 확인
+5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
+6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
-250GB 스왑 파티션과 함께 300GB tmpfs 파티션을 권장합니다.
+Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator` command-line arguments and restart the validator.
 
 ### Account indexing
 
-클러스터에 채워진 계정 수가 증가함에 따라 [`getProgramAccounts`] (developing / clients / jsonrpc-api.md # getprogramaccounts) 및 \[ SPL-token-specific requests\] (developing / clients / jsonrpc-api.md # gettokenaccountsbydelegate)-성능이 좋지 않을 수 있습니다. 유효성 검사기가 이러한 요청을 지원해야하는 경우`--account-index` 매개 변수를 사용하여 키 필드로 계정을 색인화하여 RPC 성능을 크게 향상시키는 하나 이상의 메모리 내 계정 색인을 활성화 할 수 있습니다. 현재 다음 매개 변수 값을 지원합니다.
+As the number of populated accounts on the cluster grows, account-data RPC requests that scan the entire account set -- like [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) -- may perform poorly. If your validator needs to support any of these requests, you can use the `--account-index` parameter to activate one or more in-memory account indexes that significantly improve RPC performance by indexing accounts by the key field. Currently supports the following parameter values:
 
-- URL : http://devnet.solana.com \*이키 쌍 :`/home/solana/validator-keypair.json
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
 - `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
-- \[getTokenAccountsByDelegate\] (developing / clients / jsonrpc-api.md # gettokenaccountsbydelegate) 및 \[getTokenLargestAccounts\] (developing / clients / jsonrpc-api.md # gettokenlargestaccounts) 에서 사용-`spl-token-owner` : 색인이 생성 된 각 SPL 토큰 계정 토큰 소유자 주소로; spl-token-owner 필터를 포함하는 \[getTokenAccountsByOwner\] (developing / clients / jsonrpc-api.md # gettokenaccountsbyowner) 및 [`getProgramAccounts`] (developing / clients / jsonrpc-api.md # getprogramaccounts) 요청에서 사용됩니다.
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.

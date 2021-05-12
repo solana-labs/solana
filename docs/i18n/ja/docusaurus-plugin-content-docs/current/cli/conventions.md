@@ -32,12 +32,12 @@ solana-keygen pubkey <KEYPAIR>
 
 #### ペーパーウォレット
 
-ペーパーウォレットでは、ウォレットの作成時に入力したシードワードとオプションのパスフレーズからキーペアを安全に導き出します。 ペーパーウォレットを使うには keypair サンプルやヘルプドキュメントで `<KEYPAIR>` のテキストが表示されている場所であればどこでも、`"ASK"` という単語を入力しておけば、コマンドを実行したときにプログラムがシードワードの入力を促してくれます。
+ペーパーウォレットでは、ウォレットの作成時に入力したシードワードとオプションのパスフレーズからキーペアを安全に導き出します。 To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 ペーパーウォレットのウォレットアドレスを表示するには:
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 #### ファイルシステムウォレット

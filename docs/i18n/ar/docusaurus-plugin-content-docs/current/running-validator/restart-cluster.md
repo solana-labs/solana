@@ -16,7 +16,7 @@
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 ```
 
-يجب أن يحتوي دليل دفتر الأستاذ (ledger) الآن على اللقطة (snapshot) الجديدة. ستقوم أداة `solana-ledger-tool create-snapshot` أيضًا بإخراج الإصدار الجديد القِطَعة (Shred), وقيمة تجزئة البنك (bank hash)، قُم بإستدعاء هذا NEW \ \_SHRED \ \_VERSION و NEW \ \_BANK \ \_HASH على التوالي.
+يجب أن يحتوي دليل دفتر الأستاذ (ledger) الآن على اللقطة (snapshot) الجديدة. `solana-ledger-tool create-snapshot` will also output the new shred version, and bank hash value, call this NEW_SHRED_VERSION and NEW_BANK_HASH respectively.
 
 قُم بضبط حجج المُدقّق (validator):
 
@@ -37,7 +37,10 @@ $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
 >
 > لقد قمنا بإصدار النسخة v1.1.12 ومُستعدون لإستعادة الشبكة التجريبية مرة أخرى (We've released v1.1.12 and are ready to get testnet back up again).
 >
-> الخطوات: 1. قُم بتثبيت الإصدار v1.1.12: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. الطريقة المُفضلة، إبدأ من دفتر الأستاذ (ledger) المحلي بـ:
+> Steps:
+>
+> 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12
+> 2. a. الطريقة المُفضلة، إبدأ من دفتر الأستاذ (ledger) المحلي بـ:
 >
 > ```bash
 > solana-validator

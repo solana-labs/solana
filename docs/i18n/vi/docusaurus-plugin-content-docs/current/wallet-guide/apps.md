@@ -4,6 +4,14 @@ title: Ví ứng dụng di động
 
 Solana được hỗ trợ bởi nhiều ứng dụng của bên thứ ba, mang lại trải nghiệm quen thuộc cho hầu hết những người mới hoặc đã có kinh nghiệm sử dụng ví tiền điện tử.
 
+## Exodus
+
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## Trust Wallet
 
 [Trust Wallet](https://trustwallet.com/) là một ứng dụng có sẵn cho iOS và Android và được sử dụng để gửi và nhận mã thông báo SOL.

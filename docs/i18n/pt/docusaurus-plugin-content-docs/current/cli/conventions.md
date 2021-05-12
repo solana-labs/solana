@@ -32,12 +32,12 @@ Below, we show how to resolve what you should put in `<KEYPAIR>` depending on yo
 
 #### Paper Wallet
 
-In a paper wallet, the keypair is securely derived from the seed words and optional passphrase you entered when the wallet was create. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the word `ASK` and the program will prompt you to enter your seed words when you run the command.
+In a paper wallet, the keypair is securely derived from the seed words and optional passphrase you entered when the wallet was create. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 To display the wallet address of a Paper Wallet:
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 #### File System Wallet

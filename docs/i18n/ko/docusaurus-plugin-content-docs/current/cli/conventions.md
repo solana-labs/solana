@@ -32,12 +32,12 @@ solana-keygen pubkey <KEYPAIR>
 
 #### 종이 지갑
 
-종이 지갑에서 키 쌍은 시드 단어와 지갑을 만들 때 입력한 암호로부터 안전하게 파생됩니다. 종이 지갑을 사용하려면 `<KEYPAIR>` 텍스트가 예시 또는 도움 문서에 나온 텍스트여야합니다. `ASK`라는 단어를 입력하면 프로그램이 명령을 실행할 때 시드 단어를 입력하라는 메시지를 표시합니다.
+종이 지갑에서 키 쌍은 시드 단어와 지갑을 만들 때 입력한 암호로부터 안전하게 파생됩니다. To use a paper wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help documents, enter the uri scheme `prompt://` and the program will prompt you to enter your seed words when you run the command.
 
 다음 명령어로 종이 지갑의 지갑 주소를 표시합니다:
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey prompt://
 ```
 
 #### 파일 시스템 지갑

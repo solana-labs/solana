@@ -2,7 +2,7 @@
 title: Estructura de Cuenta Stake
 ---
 
-Una cuenta stake en Solana puede ser usada para delegar tokens a validadores en la red para potencialmente ganar recompensas por el dueño de la cuenta de stake. Las cuentas de stake se crean y gestionan de forma diferente a una dirección de billetera tradicional, conocida como _cuenta del sistema_. Una cuenta del sistema sólo puede enviar y recibir SOL de otras cuentas de la red, mientras que una cuenta de stake apoya operaciones más complejas necesarias para gestionar una delegación de tokens.
+Una cuenta stake en Solana puede ser usada para delegar tokens a validadores en la red para potencialmente ganar recompensas por el dueño de la cuenta de stake. Stake accounts are created and managed differently than a traditional wallet address, known as a _system account_. Una cuenta del sistema sólo puede enviar y recibir SOL de otras cuentas de la red, mientras que una cuenta de stake apoya operaciones más complejas necesarias para gestionar una delegación de tokens.
 
 Las cuentas de Stake en Solana también funcionan de forma diferente a las de otras redes de blockchain de Prueba-de-Stake con las que puede estar familiarizado. Este documento describe la estructura de alto nivel y las funciones de una cuenta stake de Solana.
 
@@ -14,19 +14,19 @@ La única vez que la dirección de una cuenta de stake tiene un archivo de par d
 
 #### Entendiendo las autoridades de las cuentas
 
-Ciertos tipos de cuentas pueden tener una o más _autoridades de firma_ asociadas con una cuenta determinada. Se utiliza una autoridad de una cuenta para firmar ciertas transacciones para la cuenta que controla. Esto es diferente de otras redes de blockchain donde el titular del keypair asociado con la dirección de la cuenta controla toda la actividad de la cuenta.
+Certain types of accounts may have one or more _signing authorities_ associated with a given account. Se utiliza una autoridad de una cuenta para firmar ciertas transacciones para la cuenta que controla. Esto es diferente de otras redes de blockchain donde el titular del keypair asociado con la dirección de la cuenta controla toda la actividad de la cuenta.
 
 Cada cuenta de stake tiene dos autoridades de firma especificadas por su respectiva dirección, cada una de las cuales está autorizada a realizar determinadas operaciones en la cuenta de stake.
 
-La _autoridad de participación_ se utiliza para firmar transacciones para las siguientes operaciones:
+The _stake authority_ is used to sign transactions for the following operations:
 
 - Delegando Stake
 - Desactivando la delegación de stake
 - Dividiendo la cuenta del monto, creando una nueva cuenta con una porción de los fondos en la primera cuenta
-- Combinar dos cuentas de stake no delegadas en una
+- Merging two stake accounts into one
 - Establecer una nueva autoridad de stake
 
-La autoridad de retiro \*\* firma transacciones para lo siguiente:
+The _withdraw authority_ signs transactions for the following:
 
 - Retirar el stake no delegado en una dirección de billetera
 - Establecer una nueva autoridad de retiro
@@ -46,28 +46,40 @@ Esto puede lograrse creando varias cuentas de stake a partir de una dirección d
 
 Las mismas autoridades de stake y retiro pueden asignarse a múltiples cuentas de stake.
 
-Dos cuentas de stake que no están delegadas y que tienen las mismas autoridades y que bloquean pueden fusionarse en una sola cuenta de stake resultante.
+#### Merging stake accounts
 
-#### Calentamiento y enfriamiento de la delegación
+Two stake accounts that have the same authorities and lockup can be merged into a single resulting stake account. A merge is possible between two stakes in the following states with no additional conditions:
 
-Cuando se delega una cuenta de stake o se desactiva una delegación, la operación no tiene efecto inmediatamente.
+- two deactivated stakes
+- an inactive stake into an activating stake during its activation epoch
 
-Una delegación o desactivación tarda varias [épocas](../terminology.md#epoch) para completar, con una fracción de la delegación volviéndose activa o inactiva en cada límite de época después de que la transacción que contiene las instrucciones haya sido enviada al clúster.
+For the following cases, the voter pubkey and vote credits observed must match:
 
-También hay un límite en la cantidad total de stake que puede delegarse o desactivarse en una sola época, para evitar grandes cambios repentinos en el stake en el conjunto de la red. Como el calentamiento y el enfriamiento dependen del comportamiento de otros participantes en la red, su duración exacta es difícil de predecir. Los detalles sobre el tiempo de calentamiento y enfriamiento se pueden encontrar [aquí](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
+- two activated stakes
+- two activating accounts that share an activation epoch, during the activation epoch
 
-#### Bloqueos
+All other combinations of stake states will fail to merge, including all "transient" states, where a stake is activating or deactivating with a non-zero effective stake.
 
-Las cuentas de stake pueden tener un bloqueo que impida retirar los tokens que poseen antes de que se alcance una fecha o época determinada. Mientras se bloquea, la cuenta de stake aún puede ser delegada, no delegada, o dividida, y las autoridades de su stake y retiro pueden cambiarse normalmente. Sólo retiro a una dirección de billetera no está permitido.
+#### Delegation Warmup and Cooldown
 
-Un bloqueo solo puede ser añadido cuando se crea por primera vez una cuenta de stake, pero puede ser modificado más tarde por la _autoridad de bloqueo_ o _custodio_, la dirección de la cual también se establece cuando se crea la cuenta.
+When a stake account is delegated, or a delegation is deactivated, the operation does not take effect immediately.
 
-#### Destruyendo una cuenta Stake
+A delegation or deactivation takes several [epochs](../terminology.md#epoch) to complete, with a fraction of the delegation becoming active or inactive at each epoch boundary after the transaction containing the instructions has been submitted to the cluster.
 
-Al igual que otros tipos de cuentas en la red Solana, ya no se rastrea una cuenta de stake que tiene un saldo de 0 SOL. Si una cuenta de stake no está delegada y todos los tokens que contiene se retiran a una dirección de billetera, la cuenta en esa dirección es efectivamente destruida, y tendrá que ser recreada manualmente para que la dirección sea utilizada de nuevo.
+There is also a limit on how much total stake can become delegated or deactivated in a single epoch, to prevent large sudden changes in stake across the network as a whole. Since warmup and cooldown are dependent on the behavior of other network participants, their exact duration is difficult to predict. Details on the warmup and cooldown timing can be found [here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
-#### Viendo cuentas Stake
+#### Lockups
 
-Los detalles de la cuenta pueden verse en el Explorador Solana copiando y pegando una dirección de cuenta en la barra de búsqueda.
+Stake accounts can have a lockup which prevents the tokens they hold from being withdrawn before a particular date or epoch has been reached. While locked up, the stake account can still be delegated, un-delegated, or split, and its stake and withdraw authorities can be changed as normal. Only withdrawal into a wallet address is not allowed.
+
+A lockup can only be added when a stake account is first created, but it can be modified later, by the _lockup authority_ or _custodian_, the address of which is also set when the account is created.
+
+#### Destroying a Stake Account
+
+Like other types of accounts on the Solana network, a stake account that has a balance of 0 SOL is no longer tracked. If a stake account is not delegated and all of the tokens it contains are withdrawn to a wallet address, the account at that address is effectively destroyed, and will need to be manually re-created for the address to be used again.
+
+#### Viewing Stake Accounts
+
+Stake account details can be viewed on the Solana Explorer by copying and pasting an account address into the search bar.
 
 - http://explorer.solana.com/accounts

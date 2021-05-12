@@ -45,13 +45,11 @@ VoteState is the current state of all the votes the validator has submitted to t
 
 Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
 
-- `account[0]` - RW - The VoteState.
-  `VoteState::authorized_voter` or `authorized_withdrawer` is set to `Pubkey`.
+- `account[0]` - RW - The VoteState. `VoteState::authorized_voter` or `authorized_withdrawer` is set to `Pubkey`.
 
 ### VoteInstruction::Vote\(Vote\)
 
-- `account[0]` - RW - The VoteState.
-  `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](../implemented-proposals/tower-bft.md).
+- `account[0]` - RW - The VoteState. `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](../implemented-proposals/tower-bft.md).
 - `account[1]` - RO - `sysvar::slot_hashes` A list of some N most recent slots and their hashes for the vote to be verified against.
 - `account[2]` - RO - `sysvar::clock` The current network time, expressed in slots, epochs.
 
@@ -98,8 +96,7 @@ Updates the account with a new authorized staker or withdrawer, according to the
 
 ### StakeInstruction::Deactivate
 
-A staker may wish to withdraw from the network. To do so he must first deactivate his stake, and wait for cooldown.
-The transaction must be signed by the stake's `authorized_staker`.
+A staker may wish to withdraw from the network. To do so he must first deactivate his stake, and wait for cooldown. The transaction must be signed by the stake's `authorized_staker`.
 
 - `account[0]` - RW - The StakeState::Stake instance that is deactivating.
 - `account[1]` - R - sysvar::clock account from the Bank that carries current epoch.

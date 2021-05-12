@@ -79,7 +79,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
 
 مع ذلك، بخلاف بعض البيانات الوصفية (metadata)، فإن الأصوات المُوقعة نفسها لا يتم تخزينها حاليًا في أي مكان، لذا لا يُمكن إسترجاعها عند الطلب. ربما تحتاج هذه الأصوات إلى الإستمرار في قاعدة بيانات Rocksdb، المُفهرسة بواسطة مفتاح `(Slot, Hash, Pubkey)` الذي يُمثل فُتحة (slot) التصويت، وتجزئة البنك (bank hash) للتصويت، والمفتاح العمومي (pubkey) لحساب التصويت المسؤول عن التصويت.
 
-معًا، يُمكن تقديم دليل المُعاملة وإثباتات التأكيد المُتفائل (optimistic confirmation proofs) عبر RPC للمُشتركين من خلال توسيع منطق الإشتراك الحالي للتوقيع. يتم بالفعل إخطار العملاء الذين إشتركوا في مُستوى التأكيد "SingleGossip" عند مُكتشاف تأكيد مُتفائل، ويُمكن أيضًا تقديم علامة للإشارة إلى الإثباتات أعلاه.
+معًا، يُمكن تقديم دليل المُعاملة وإثباتات التأكيد المُتفائل (optimistic confirmation proofs) عبر RPC للمُشتركين من خلال توسيع منطق الإشتراك الحالي للتوقيع. Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 من المهم أن نُلاحظ أن التأكيد المُتفائل لـ `B` يعني أيضًا أن جميع كتل (blocks) السلف المُشترك من `B` تم تأكيدها أيضًا بشكل مُتفائل، وأيضًا أنه لن يتم تأكيد جميع الكتل (blocks) بشكل مُتفائل.
 

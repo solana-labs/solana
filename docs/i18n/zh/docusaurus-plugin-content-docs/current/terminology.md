@@ -136,7 +136,7 @@ title: 术语
 
 ## 领导者时间表（leader schedule）
 
-[验证节点](terminology.md#validator)的[公钥](terminology.md#public-key)序列。 集群使用领导者时间表来随时确定哪个验证者作为[领导者](terminology.md#leader)。
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). 集群使用领导者时间表来随时确定哪个验证者作为[领导者](terminology.md#leader)。
 
 ## 账本（ledger）
 
@@ -214,90 +214,98 @@ title: 术语
 
 R(32 字节) 和 S(32 字节) 的 64 字节 ed25519 签名。 要求 R 为不小于小数的压缩 Edwards 点，而 S 为 0 <= S < L 范围内的标量。此要求确保不具有签名延展性。 每笔交易必须至少有一个用于[费用账户](terminology#fee-account)的签名。 因此，交易中的第一个签名可以被视为[交易 ID](terminology.md#transaction-id)。
 
-## 插槽（slot）
+## skipped slot
 
-[领导者](terminology.md#leader)提交交易并产生[区块](terminology.md#block)的时间段。
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
-## 智能合约（smart contract）
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
-一组约束一旦满足，就会向程序发出信号，通知它们允许某些预定义的帐户更新。
+## slot
 
-## sol 代币
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-由 Solana 公司认可的[集群](terminology.md#cluster)跟踪的[原生代币](terminology.md#native-token)。
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
 
-## 质押（stake）
+## smart contract
 
-如果可以证明恶意[验证节点](terminology.md#validator)的行为，代币将被没收给[集群](terminology.md#cluster)。
+A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
 
-## 绝大多数（supermajority）
+## sol
 
-[群集](terminology.md#cluster)的 2/3。
+The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
 
-## 系统变量（sysvar）
+## stake
 
-Runtime 提供的合成[帐户](terminology.md#account)，允许程序访问网络状态，例如当前滴答高度，奖励[积分](terminology.md#point)值等。
+Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
-## 轻客户端（thin client）
+## supermajority
 
-一种信任它正在与有效的[集群](terminology.md#cluster)通信的[客户端](terminology.md#client)类型。
+2/3 of a [cluster](terminology.md#cluster).
 
-## 滴答（tick）
+## sysvar
 
-估算壁钟持续时间的账本[条目](terminology.md#entry)。
+A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
 
-## 滴答高度（tick height）
+## thin client
 
-[账本](terminology.md#ledger) 第 N 次 [滴答](terminology.md#tick)。
+A type of [client](terminology.md#client) that trusts it is communicating with a valid [cluster](terminology.md#cluster).
 
-## 代号（token）
+## tick
 
-一组稀有、可替代的代币。
+A ledger [entry](terminology.md#entry) that estimates wallclock duration.
 
-## 每秒交易次数（tps）
+## tick height
 
-每秒 [交易](terminology.md#transaction) 的次数。
+The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
-## 交易（transaction）
+## token
 
-由 [客户端](terminology.md#client) 使用一个或多个 [密钥对](terminology.md#keypair)签名的一个或多个 [指令](terminology.md#instruction)，并在只有两个可能的结果的情况下自动执行：成功或失败。
+A scarce, fungible member of a set of tokens.
 
-## 交易 id
+## tps
 
-[交易](terminology.md#transaction)中的第一个[签名](terminology.md#signature)，可用于在整个[账本](terminology.md#ledger)中唯一地标识交易。
+[Transactions](terminology.md#transaction) per second.
 
-## 交易确认（transaction confirmations）
+## transaction
 
-自从交易被接受到[账本](terminology.md#ledger)以来[已确认的区块数](terminology.md#confirmed-block)。 交易在该区块成为[根](terminology.md#root)时完成。
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
-## 交易条目（transactions entry）
+## transaction id
 
-一组可以并行执行的 [交易](terminology.md#transaction)。
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
-## 验证节点（validator）
+## transaction confirmations
 
-[群集](terminology.md#cluster)的全程参与者，负责验证[账本](terminology.md#ledger)并产生新的[区块](terminology.md#block)。
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
-## 可验证延迟方程（VDF）
+## transactions entry
 
-请参考 [可验证延迟方程](terminology.md#verifiable-delay-function)。
+A set of [transactions](terminology.md#transaction) that may be executed in parallel.
 
-## 可验证延迟方程（verifiable delay function）
+## validator
 
-一个需要花费固定时间执行的函数，它会产生一个运行证明，然后可以在比生产所花费的时间更少的时间内对其进行验证。
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
-## 投票（vote）
+## VDF
 
-请参考 [账本投票](terminology.md#ledger-vote)。
+See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## 投票积分（vote credit）
+## verifiable delay function
 
-[验证程序](terminology.md#validator) 获得的奖励。 当验证节点达到 [根](terminology.md#root) 时，将投票积分授予其投票帐户中的验证节点。
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
-## 钱包（wallet）
+## vote
 
-[密钥对](terminology.md#keypair) 的集合。
+See [ledger vote](terminology.md#ledger-vote).
 
-## 预热期（warmup period）
+## vote credit
 
-[质押](terminology.md#stake)已经委托并开始逐渐生效过程中的一些[epoch](terminology.md#epoch)。 在此期间，质押被认为是“激活”的。 相关的更多信息请参考：[预热和冷却](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)。
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+
+## wallet
+
+A collection of [keypairs](terminology.md#keypair).
+
+## warmup period
+
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)

@@ -90,9 +90,9 @@ title: 投票帐户管理
 
 1. 运行`solana epoch-info`。 如果当前 epoch 中没有剩余时间，请考虑等待下一个时，以使您的验证节点有足够的时间重新启动并跟上。
 2. 创建新的投票授权密钥对，即`solana-keygen new -o ~/new-vote-authority.json`。
-3. 对于当前的*vote authority*密钥对，可通过运行`solana vote-account ~/vote-account-keypair.json`来确定。 它可能是验证节点的身份帐户(默认) 或其他一些密钥对。 以下步骤假定 `~/validator-keypair.json` 是该密钥对。
+3. Determine the current _vote authority_ keypair by running `solana vote-account ~/vote-account-keypair.json`. 它可能是验证节点的身份帐户(默认) 或其他一些密钥对。 以下步骤假定 `~/validator-keypair.json` 是该密钥对。
 4. 运行`solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`。 新的投票授权计划在下一个 epoch 开始生效。
-5. 现在需要用旧的和新的投票授权密钥对重新启动`solana-validator`，以便它可以在下一个 epoch 平稳过渡。 在重新启动时添加两个参数：`--authorized-voter ~/validator-keypair.json， --authorized-voter ~/new-vote-authority.json`
+5. 现在需要用旧的和新的投票授权密钥对重新启动`solana-validator`，以便它可以在下一个 epoch 平稳过渡。 Add the two arguments on restart: `--authorized-voter ~/validator-keypair.json --authorized-voter ~/new-vote-authority.json`
 6. 集群到达下一个 epoch 后，请删除`--authorized-voter ~/validator-keypair.json`参数，并重新启动`Solana-validator`，因为不再需要旧的投票授权密钥对。
 
 ### 投票帐户授权提款人

@@ -4,8 +4,8 @@ title: Вступление
 
 ## Добро пожаловать!
 
-Это руководство содержит информацию о том, как принять участие в Solana's Tour de SOL. Вопросы? Комментарии? Почта ryan@solana.com
+Это руководство содержит информацию о том, как принять участие в Solana's Tour de SOL. Вопросы? Комментарии? Keep on reading!
 
-### [Узнайте больше о Tour de SOL](https://solana.com/tds/)
+### Learn more about Tour de SOL
 
-Если вы ещё не зарегистрировались, сначала заполните форму на [https://solana.com/tds/](https://solana.com/tds/).
+If you haven't registered yet, complete the form at [https://solana.com/validator-registration/](https://solana.com/validator-registration/) first.

@@ -8,4 +8,4 @@ title: 运行验证节点的要求
 
 ## 软件
 
-- 我们在 Ubuntu 04/18 上进行开发和运行。 在 Ubuntu 04/16 上运行时，某些用户会遇到一些问题
+- We build and run on Ubuntu 20.04

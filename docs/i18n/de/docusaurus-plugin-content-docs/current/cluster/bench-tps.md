@@ -24,8 +24,7 @@ git checkout $TAG
 
 ### Configuration Setup
 
-Ensure important programs such as the vote program are built before any nodes are started. Note that we are using the release build here for good performance.
-If you want the debug build, use just `cargo build` and omit the `NDEBUG=1` part of the command.
+Ensure important programs such as the vote program are built before any nodes are started. Note that we are using the release build here for good performance. If you want the debug build, use just `cargo build` and omit the `NDEBUG=1` part of the command.
 
 ```bash
 cargo build --release

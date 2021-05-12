@@ -51,13 +51,12 @@ let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 
 ```text
 let mut validator_config = ValidatorConfig::default();
-validator_config.config.enable_validator_exit = true;
-let local = LocalCluster::new_config(
+let local = LocalCluster::new_with_config(
                 num_nodes,
-                10_00,
+                10_000,
                 100,
                 &validator_config
-);
+                );
 ```
 
 ## 新しいテストを設計する方法

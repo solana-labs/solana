@@ -57,7 +57,7 @@ BigTable 有一个 gRPC 端点，可以使用[tonic](https://crates.io/crates/cr
 
 该表包含了影响给定地址的事务。
 
-行的键是`<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`。 行数据是一个压缩的`TransactionByAddrInfo`结构。
+The row key is `<base58 address>/<slot-id-one's-compliment-hex-slot-0-prefixed-to-16-digits>`. 行数据是一个压缩的`TransactionByAddrInfo`结构。
 
 取插槽的一的补码允许列出插槽，确保最新的插槽与影响地址的事务总是会先列出。
 

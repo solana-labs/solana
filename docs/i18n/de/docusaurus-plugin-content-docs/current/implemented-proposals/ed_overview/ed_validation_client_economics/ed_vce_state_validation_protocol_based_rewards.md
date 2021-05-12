@@ -32,8 +32,7 @@ Using these ranges to simulate a number of possible Inflation Schedules, we can 
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-In the above graph, the average values of the range are identified to illustrate the contribution of each parameter.
-From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
+In the above graph, the average values of the range are identified to illustrate the contribution of each parameter. From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 

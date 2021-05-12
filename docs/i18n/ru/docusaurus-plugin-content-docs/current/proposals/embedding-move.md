@@ -1,5 +1,5 @@
 ---
-title: Встраивание языка Перемещения
+title: Embedding the Move Language
 ---
 
 ## Проблематика

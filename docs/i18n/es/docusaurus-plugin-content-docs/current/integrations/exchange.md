@@ -83,7 +83,7 @@ El puerto de _Gossip_ es bidireccional y permite a su validador permanecer en co
 
 Para restringir aún más el validador a solo solicitar bloques de uno o más validadores, primero determina el pubkey de identidad para ese validador y añade los argumentos `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` para cada PUBKEY. Esto hará que su validador sea un drenaje de recursos en cada validador que añada, así que por favor haga esto con moderación y sólo después de consultar con el validador de destino.
 
-Tu validador sólo debería comunicarse ahora con los validadores listados explícitamente y sólo en el gossip \**, *Reparar* y *ServeR\* puertos.
+Tu validador sólo debería comunicarse ahora con los validadores listados explícitamente y sólo en el gossip \__, \_Reparar_ y _ServeR_ puertos.
 
 ## Configurar Cuentas de Depósitos
 
@@ -298,7 +298,7 @@ Enviar una transferencia sincrónica al clúster de Solana le permite asegurar f
 La herramienta de línea de comandos de Solana ofrece un comando simple, `transferencia solana`, para generar, enviar y confirmar transacciones de transferencia. Por defecto, este método esperará y rastreará el progreso en stderr hasta que la transacción haya sido finalizada por el clúster. Si la transacción falla, informará de cualquier error de transacción.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 La [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) ofrece un enfoque similar para el ecosistema JS. Utilice el `System Program` para construir una transacción de transferencia, y enviarla usando el método `sendAndConfirmTransaction`.
@@ -318,7 +318,7 @@ solana fees --url http://localhost:8899
 En la herramienta de línea de comandos, pasa el argumento `--no-wait` para enviar una transferencia de forma asíncrona, e incluya su blockhash reciente con el argumento `--blockhash`:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 También puedes construir, firmar y serializar la transacción manualmente, y dispararla a el clúster utilizando el punto final JSON-RPC [`sendTransaction`endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
@@ -361,13 +361,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Caducidad de Blockhash
 
-Cuando solicite un blockhash reciente para su transacción de retiro usando el endpoint [`getFees`](developing/clients/jsonrpc-api.md#getfees) o `solana fees`, la respuesta incluirá el último espacio `ValidSlot`, el último espacio en el que el blockhash será válido. Puede comprobar el contenedor de clúster con una consulta [`getSlot`](developing/clients/jsonrpc-api.md#getslot); una vez que la ranura de clúster sea mayor que `último Slot`, la transacción de retiro usando ese blockhash nunca debería tener éxito.
-
-También puede verificar si un blockhash en particular sigue siendo válido enviando un [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) solicitud con el blockhash como parámetro. Si el valor de la respuesta es nulo, el blockhash caduca y la transacción de retiro nunca debería tener éxito.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### Validar las direcciones de la cuenta suministradas por el usuario para los Retiros
 
 Como los retiros son irreversibles, puede ser una buena práctica validar una dirección de cuenta proporcionada por el usuario antes de autorizar un retiro para prevenir la pérdida accidental de fondos del usuario.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 La dirección de una cuenta normal en Solana es una cadena codificada en Base58 de una clave pública de ed25519 de 256 bits. No todos los patrones de bits son claves públicas válidas para la curva ed25519, por lo que es posible asegurar que las direcciones de la cuenta proporcionadas por el usuario sean al menos correctas ed25519 claves públicas.
 
@@ -436,7 +450,7 @@ El flujo de trabajo SPL Token es similar al de los token SOL nativos, pero hay u
 
 ### Token Mints
 
-Cada _tipo_ de token SPL se declara creando una cuenta de _menta_. Esta cuenta almacena metadatos que describen características como la suministración, el número de decimales y varias autoridades con control sobre la mint. Cada cuenta SPL Token hace referencia a su menta asociada y solo puede interactuar con las fichas SPL de ese tipo.
+Each _type_ of SPL Token is declared by creating a _mint_ account. Esta cuenta almacena metadatos que describen características como la suministración, el número de decimales y varias autoridades con control sobre la mint. Cada cuenta SPL Token hace referencia a su menta asociada y solo puede interactuar con las fichas SPL de ese tipo.
 
 ### Instalando la herramienta CLI `spl-token`
 
@@ -521,7 +535,7 @@ Sin embargo, la dirección del destinatario puede ser una cuenta normal de carte
 transferencia spl-token <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
-#### Ejemplo
+#### Ejemplos
 
 ```
 Transferencia de spl-token 6B199xxzw3PkAm25hGJpj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -557,8 +571,8 @@ $ transferencia spl-token --fund-recipient <exchange token account> <withdrawal 
 
 #### Congelar Autoridad
 
-Por razones de cumplimiento normativo, una entidad emisora de Fichas SPL puede optar por mantener la "Autoridad de Congelación" sobre todas las cuentas creadas en asociación con su ceca. Esto les permite [congelar](https://spl.solana.com/token#freezing-accounts) los activos de una cuenta determinada a voluntad, haciendo que la cuenta no se pueda utilizar hasta que se descongele. Si esta función está en uso, el pubkey de la autoridad congelada se registrará en la cuenta del SPL Token.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. Esto les permite [congelar](https://spl.solana.com/token#freezing-accounts) los activos de una cuenta determinada a voluntad, haciendo que la cuenta no se pueda utilizar hasta que se descongele. Si esta función está en uso, el pubkey de la autoridad congelada se registrará en la cuenta del SPL Token.
 
 ## Probando la integración
 
-Asegúrese de probar su flujo de trabajo completo en Solana devnet y testnet [clusters](../clusters.md) antes de pasar a producción en mainnet-beta. Devnet es el más abierto y flexible, e ideal para el desarrollo inicial, mientras que testnet ofrece una configuración de clúster más realista. Tanto devnet como testnet soportan una faucet, ejecute `solana airdrop 10` para obtener algunos SOL devnet o testnet para el desarrollo y las pruebas.
+Asegúrese de probar su flujo de trabajo completo en Solana devnet y testnet [clusters](../clusters.md) antes de pasar a producción en mainnet-beta. Devnet es el más abierto y flexible, e ideal para el desarrollo inicial, mientras que testnet ofrece una configuración de clúster más realista. Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

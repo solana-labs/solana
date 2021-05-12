@@ -77,7 +77,7 @@ Không chuyển thông số `--no-snapshot-fetch` vào lần khởi động đ�
 
 Validator yêu cầu các cổng UDP và TCP khác nhau phải mở cho lưu lượng đến từ tất cả các vadidator Solana khác. Mặc dù đây là phương thức hoạt động hiệu quả nhất và rất được khuyến khích nhưng có thể hạn chế, validator chỉ yêu cầu lưu lượng truy cập đến từ một validator Solana khác.
 
-Đầu tiên hãy thêm đối số `--restricted-repair-only-mode`. Điều này sẽ khiến validator hoạt động ở chế độ hạn chế, nơi nó sẽ không nhận được các cú hích từ phần còn lại của các validator và thay vào đó sẽ cần liên tục thăm dò các validator khác cho các khối. Validator sẽ chỉ truyền các gói UDP đến các validator khác bằng cách sử dụng các cổng _Gossip_ và _ServeR_ ("phục vụ sửa chữa")* và chỉ nhận các gói UDP trên các cổng *Gossip* và *Repair\*.</p>
+Đầu tiên hãy thêm đối số `--restricted-repair-only-mode`. Điều này sẽ khiến validator hoạt động ở chế độ hạn chế, nơi nó sẽ không nhận được các cú hích từ phần còn lại của các validator và thay vào đó sẽ cần liên tục thăm dò các validator khác cho các khối. Validator sẽ chỉ truyền các gói UDP đến các validator khác bằng cách sử dụng các cổng _Gossip_ và _ServeR_ ("phục vụ sửa chữa")_ và chỉ nhận các gói UDP trên các cổng \_Gossip_ và _Repair_.</p>
 
 Cổng _Gossip_ là hai chiều và cho phép validator của bạn tiếp tục liên lạc với phần còn lại của cụm. Validator của bạn truyền trên _ServeR_ để thực hiện các yêu cầu sửa chữa nhằm lấy các khối mới từ phần còn lại của mạng, vì Turbine hiện đã bị vô hiệu hóa. Validator của bạn sau đó sẽ nhận được phản hồi sửa chữa trên cổng _Sửa chữa_ từ các validator khác.
 
@@ -297,7 +297,7 @@ Gửi chuyển giao đồng bộ đến cụm Solana cho phép bạn dễ dàng 
 Công cụ dòng lệnh của Solana cung cấp một lệnh đơn giản, `solana transfer`, để tạo, gửi và xác nhận các giao dịch chuyển khoản. Theo mặc định, phương pháp này sẽ chờ đợi và theo dõi tiến trình trên stderr cho đến khi giao dịch được hoàn thành bởi cụm. Nếu giao dịch thất bại, nó sẽ thông báo lỗi của bất kì giao dịch nào.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) cung cấp cách tiếp cận tương tự cho hệ sinh thái JS. Sử dụng `SystemProgram` để tạo một giao dịch chuyển và gửi nó bằng phương thức này `sendAndConfirmTransaction`.
@@ -317,7 +317,7 @@ solana fees --url http://localhost:8899
 Trong công cụ dòng lệnh, hãy chuyển đối số `--no-wait` để gửi chuyển một cách không đồng bộ và bao gồm blockhash gần đây của bạn với đối số `--blockhash`:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 Bạn cũng có thể xây dựng, ký và tuần tự hóa giao dịch theo cách thủ công và kích hoạt nó vào cụm bằng cách sử dụng JSON-RPC [`sendTransaction`điểm cuối](developing/clients/jsonrpc-api.md#sendtransaction).
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Hết hạn Blockhash
 
-Khi bạn yêu cầu một blockhash gần đây cho giao dịch rút tiền của mình bằng cách sử dụng [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) hoặc `solana fees`, phản hồi sẽ bao gồm `lastValidSlot`, slot cuối cùng trong đó blockhash sẽ có giá trị. Bạn có thể kiểm tra slot cụm bằng [`getSlot` truy vấn ](developing/clients/jsonrpc-api.md#getslot); một khi slot cụm lớn hơn `lastValidSlot`, giao dịch rút tiền bằng cách sử dụng blockhash đó sẽ không bao giờ thành công.
-
-Bạn cũng có thể kiểm tra kỹ xem một blockhash cụ thể có còn hợp lệ hay không bằng cách gửi [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) yêu cầu với blockhash làm thông số. Nếu giá trị phản hồi là null, blockhash đã hết hạn và giao dịch rút tiền sử dụng blockhash đó sẽ không bao giờ thành công.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### Xác thực địa chỉ tài khoản do người dùng cung cấp để rút tiền
 
 Vì việc rút tiền là không thể thay đổi, nên có thể là một thực tiễn tốt để xác thực địa chỉ tài khoản do người dùng cung cấp trước khi cho phép rút tiền để ngăn chặn việc vô tình làm mất tiền của người dùng.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 Địa chỉ của một tài khoản thông thường trong Solana là một chuỗi được mã hóa Base58 của một public key 256-bit ed25519. Không phải tất cả các mẫu bit đều là public key hợp lệ cho đường cong ed25519, vì vậy có thể đảm bảo địa chỉ tài khoản do người dùng cung cấp ít nhất là khóa công khai ed25519 chính xác.
 
@@ -435,7 +449,7 @@ Quy trình làm việc của Mã thông báo SPL tương tự như quy trình c�
 
 ### Mã thông báo Đúc
 
-Mỗi _loại_ của Mã thông báo SPL được khai báo bằng cách tạo tài khoản _đúc_. Tài khoản này lưu trữ siêu dữ liệu mô tả các tính năng của mã thông báo như nguồn cung cấp, số lượng số thập phân và các cơ quan chức năng khác nhau có quyền kiểm soát đối với việc đúc tiền. Mỗi tài khoản Mã thông báo SPL tham chiếu đến cơ sở liên kết của nó và chỉ có thể tương tác với Mã thông báo SPL thuộc loại đó.
+Each _type_ of SPL Token is declared by creating a _mint_ account. Tài khoản này lưu trữ siêu dữ liệu mô tả các tính năng của mã thông báo như nguồn cung cấp, số lượng số thập phân và các cơ quan chức năng khác nhau có quyền kiểm soát đối với việc đúc tiền. Mỗi tài khoản Mã thông báo SPL tham chiếu đến cơ sở liên kết của nó và chỉ có thể tương tác với Mã thông báo SPL thuộc loại đó.
 
 ### Cài đặt Công cụ CLI `spl-token`
 
@@ -557,8 +571,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 
 #### Cơ quan đóng băng
 
-Vì lý do tuân thủ quy định, pháp nhân phát hành Mã thông báo SPL có thể tùy chọn chọn giữ "Cơ quan đóng băng" trên tất cả các tài khoản được tạo liên quan đến đúc tiền của nó. Điều này cho phép họ [đóng băng](https://spl.solana.com/token#freezing-accounts) tài sản trong một tài khoản nhất định theo ý muốn, khiến tài khoản không thể sử dụng được cho đến khi tan băng. Nếu tính năng này được sử dụng, pubkey của cơ quan đóng băng sẽ được đăng ký trong tài khoản đúc tiền của Mã thông báo SPL.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. Điều này cho phép họ [đóng băng](https://spl.solana.com/token#freezing-accounts) tài sản trong một tài khoản nhất định theo ý muốn, khiến tài khoản không thể sử dụng được cho đến khi tan băng. Nếu tính năng này được sử dụng, pubkey của cơ quan đóng băng sẽ được đăng ký trong tài khoản đúc tiền của Mã thông báo SPL.
 
 ## Kiểm tra Tích hợp
 
-Đảm bảo kiểm tra toàn bộ quy trình làm việc của bạn trên [các cụm](../clusters.md) mạng dev và testnet Solana trước khi chuyển sang sản xuất trên mainnet-beta. Devnet là phần mềm mở và linh hoạt nhất, lý tưởng cho sự phát triển ban đầu, trong khi testnet cung cấp cấu hình cụm thực tế hơn. Cả devnet và testnet đều hỗ trợ một vòi, hãy chạy `solana airdrop 10` để nhận một số SOL của devnet hoặc testnet để phát triển và thử nghiệm.
+Đảm bảo kiểm tra toàn bộ quy trình làm việc của bạn trên [các cụm](../clusters.md) mạng dev và testnet Solana trước khi chuyển sang sản xuất trên mainnet-beta. Devnet là phần mềm mở và linh hoạt nhất, lý tưởng cho sự phát triển ban đầu, trong khi testnet cung cấp cấu hình cụm thực tế hơn. Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.

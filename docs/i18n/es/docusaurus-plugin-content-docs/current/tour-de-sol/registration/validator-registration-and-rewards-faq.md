@@ -14,40 +14,36 @@ Consulte la sección "1 elegibilidad; Requisitos de KYC" de [TERMINOS DE PARTICI
 
 ## ¿Tengo que completar el proceso KYC/AML para participar?
 
-Si. Completar el proceso KYC/AML es obligatorio. Si no completa el proceso antes de la Etapa 1 del Tour de SOL, no podrá participar en el Tour de SOL.
-
-Nos hemos asociado con Coinlist para gestionar el proceso Tour de Sol KYC/AML. Puedes encontrar un [recorrido del proceso aquí](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) y [completar tu proceso aquí](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
+Si. Completar el proceso KYC/AML es obligatorio.
 
 ## ¿Cuáles son mis responsabilidades como participante del Tour de Sol?
 
-Consulte la sección "2c Tour de SOL Details" de [TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) para más detalles.
+Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-### ¿Cómo se calcula el “50% de la duración del evento activo”?
+## How is the “90% of the active Tour event time” responsibility calculated?
 
-Para ser elegible para recibir recompensas en una etapa determinada, un validador debe presentar votos en &gt;= 50% de las ranuras de esa etapa.
+To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
 
-Si un validador no puede enviar &gt;= 50% de los votos para una etapa y todavía siente que debe recibir premios para esa etapa. pueden pedir a Solana que lo reconsidere.
+## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
 
-## ¿Existe una relación entre los tokens del Tour de Sol testnet y los tokens de Solana mainnet?
+No. Please see section ”2d Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-No. Consulte la sección "2d Tour de SOL Details" de [TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) para más detalles.
+## Can a validator be disqualified from the Tour de Sol?
 
-## ¿Puede un validador ser descalificado del Tour de Sol?
+Yes. A validator be disqualified from the Tour de SOL if they engage in prohibited conduct and/or fails to provide the minimum level of services described in question \#4 above.
 
-Si. Un validador será descalificado del Tour de SOL si se comprometen con conductas prohibidas y/o no proporcionan el nivel mínimo de servicios descritos en cuestión \#4 arriba.
+Please also see Section “4 Prohibited Conduct” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for a more detailed description of prohibited conduct.
 
-Consulte también la sección “4 Conducta Prohibida” de [TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) para una descripción más detallada de las conductas prohibidas.
-
-### Más cuestiones relacionadas con las conductas prohibidas:
+### More questions related to Prohibited Conduct:
 
 #### Como se menciona en la sección "4 Conductas prohibidas", ¿cuál sería un ejemplo de prestación de servicios al Tour desde una jurisdicción distinta a la de mi residencia? ¿Significa esto que mi servidor tiene que residir en la jurisdicción de mi residencia?
 
-No. Los servidores pueden estar en otras jurisdicciones distintas a la residencia de un participante. Al firmar los [TERMINOS DE PARTICIPACIÓN DEL TOUR DE SOL](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) el participante ha representado que están prestando sus servicios desde los Estados Unidos si residen allí o desde fuera de los Estados Unidos si no residen dentro de los Estados Unidos.
+No. Servers can be in other jurisdictions that differ from a participant’s residency. By signing the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) the participant has represented that they are delivering their services from the US if they reside there or from outside the US if they are not residing within the US.
 
-## ¿Cómo se calculan las recompensas?
+## How are rewards calculated?
 
-Consulte la sección [de recompensas](rewards.md) para más detalles
+Please see the [Rewards section](rewards.md) for details
 
-## ¿Cómo sabremos qué información podemos y no podemos compartir públicamente?
+## How will we know what information we can and cannot share publicly?
 
-Consulte [Confidencialidad](confidentiality.md).
+Please see [Confidentiality](confidentiality.md).

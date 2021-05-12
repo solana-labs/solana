@@ -1,5 +1,5 @@
 ---
-title: Adjusted Staking Yield
+title: Скорректированная доходность стейкинга
 ---
 
 ### Token Dilution
@@ -19,36 +19,22 @@ Of initial interest, however, is the _dilution of **un-staked** tokens_, or $D_{
 This can be seen by explicitly calculating un-staked dilution as $D_{us}$. The un-staked proportion of the token pool at time $t$ is $P_{us}(t_{N})$ and $I_{t}$ is the incremental inflation rate applied between any two consecutive time points. $SOL_{us}(t)$ and $SOL_{total}(t)$ is the amount of un-staked and total SOL on the network, respectively, at time $t$. Therefore $P_{us}(t) = SOL_{us}(t)/SOL_{total}(t)$.
 
 $$
-\begin{aligned}
-	D_{us} &= \left( \frac{P_{us}(t_{1}) - P_{us}(t_{0})}{P_{us}(t_{0})} \right)\\
-		&= \left( \frac{ \left( \frac{SOL_{us}(t_{2})}{SOL_{total}(t_{2})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
+\begin{aligned} D_{us} &= \left( \frac{P_{us}(t_{1}) - P_{us}(t_{0})}{P_{us}(t_{0})} \right)\\ &= \left( \frac{ \left( \frac{SOL_{us}(t_{2})}{SOL_{total}(t_{2})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
 
 \end{aligned}
 $$
 
 However, because inflation issuance only increases the total amount and the un-staked supply doesn't change:
 
-$$
-\begin{aligned}
-	SOL_{us}(t_2) &= SOL_{us}(t_1)\\
-	SOL_{total}(t_2) &= SOL_{total}(t_1)\times (1 + I_{t_1})\\
-\end{aligned}
-$$
+$$ \begin{aligned} SOL*{us}(t_2) &= SOL*{us}(t*1)\\ SOL*{total}(t*2) &= SOL*{total}(t*1)\times (1 + I*{t_1})\\ \end{aligned} $$
 
 So $D_{us}$ becomes:
 
-$$
-\begin{aligned}
-	D_{us} &= \left( \frac{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})\times (1 + I_{1})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
-	D_{us} &= \frac{1}{(1 + I_{1})} - 1\\
-\end{aligned}
-$$
+$$ \begin{aligned} D*{us} &= \left( \frac{ \left( \frac{SOL*{us}(t*{1})}{SOL*{total}(t*{1})\times (1 + I*{1})} \right) - \left( \frac{SOL*{us}(t*{1})}{SOL*{total}(t*{1})} \right)}{ \left( \frac{SOL*{us}(t*{1})}{SOL*{total}(t*{1})} \right) } \right)\\ D*{us} &= \frac{1}{(1 + I*{1})} - 1\\ \end{aligned} $$
 
 Or generally, dilution for un-staked tokens over any time frame undergoing inflation $I$:
 
-$$
-D_{us} = -\frac{I}{I + 1} \\
-$$
+$$ D\_{us} = -\frac{I}{I + 1} \\ $$
 
 So as guessed, this dilution is independent of the total proportion of staked tokens and only depends on inflation rate. This can be seen with our example _Inflation Schedule_ here:
 
@@ -60,54 +46,31 @@ We can do a similar calculation to determine the _dilution_ of staked token hold
 
 To see the functional form, we calculate, $Y_{adj}$, or the _Adjusted Staked Yield_ (to be compared to _D\_{us}_ the dilution of un-staked tokens above), where $P_{s}(t)$ is the staked proportion of token pool at time $t$ and $I_{t}$ is the incremental inflation rate applied between any two consecutive time points. The definition of $Y_{adj}$ is therefore:
 
-$$
-	Y_{adj} = \frac{P_s(t_2) - P_s(t_1)}{P_s(t_1)}\\
-$$
+$$ Y\_{adj} = \frac{P_s(t_2) - P_s(t_1)}{P_s(t_1)}\\ $$
 
 As seen in the plot above, the proportion of staked tokens increases with inflation issuance. Letting $SOL_s(t)$ and $SOL_{\text{total}}(t)$ represent the amount of staked and total SOL at time $t$ respectively:
 
-$$
-	P_s(t_2) = \frac{SOL_s(t_1) + SOL_{\text{total}}(t_1)\times I(t_1)}{SOL_{\text{total}}(t_1)\times (1 + I(t_1))}\\
-$$
+$$ P*s(t_2) = \frac{SOL_s(t_1) + SOL*{\text{total}}(t*1)\times I(t_1)}{SOL*{\text{total}}(t_1)\times (1 + I(t_1))}\\ $$
 
 Where $SOL_{\text{total}}(t_1)\times I(t_1)$ is the additional inflation issuance added to the staked token pool. Now we can write $Y_{adj}$ in common terms $t_1 = t$:
 
-$$
-\begin{aligned}
-Y_{adj} &= \frac{\frac{SOL_s(t) + SOL_{\text{total}}(t)\times I(t)}{SOL_{\text{total}}(t)\times (1 + I(t))} - \frac{SOL_s(t)}{SOL_{\text{total}}(t)} }{ \frac{SOL_s(t)}{SOL_{\text{total}}(t)} }  \\
-	&= \frac{ SOL_{\text{total}}(t)\times (SOL_s(t) + SOL_{\text{total}}(t)\times I(t)) }{ SOL_s(t)\times SOL_{\text{total}}\times (1 + I(t)) } -1 \\
-\end{aligned}
-$$
+$$ \begin{aligned} Y*{adj} &= \frac{\frac{SOL_s(t) + SOL*{\text{total}}(t)\times I(t)}{SOL*{\text{total}}(t)\times (1 + I(t))} - \frac{SOL_s(t)}{SOL*{\text{total}}(t)} }{ \frac{SOL*s(t)}{SOL*{\text{total}}(t)} } \\ &= \frac{ SOL*{\text{total}}(t)\times (SOL_s(t) + SOL*{\text{total}}(t)\times I(t)) }{ SOL*s(t)\times SOL*{\text{total}}\times (1 + I(t)) } -1 \\ \end{aligned} $$
 
 which simplifies to:
 
-$$
-Y_{adj} =  \frac{ 1 + I(t)/P_s(t) }{ 1 + I(t) } - 1\\
-$$
+$$ Y\_{adj} = \frac{ 1 + I(t)/P_s(t) }{ 1 + I(t) } - 1\\ $$
 
-So we see that the _Adjusted Staked Yield_ a function of the inflation rate and the percent of staked tokens on the network. We can see this plotted for various staking fractions here:
+So we see that the _Adjusted Staked Yield_ a function of the inflation rate and the percent of staked tokens on the network. Здесь мы можем увидеть график для различных долей ставок:
 
 ![p_ex_adjusted_staked_yields](/img/p_ex_adjusted_staked_yields.png)
 
 It is also clear that in all cases, dilution of un-staked tokens $>$ adjusted staked yield (i.e. dilution of staked tokens). Explicitly we can look at the _relative dilution of un-staked tokens to staked tokens:_ $D_{us}/Y_{adj}$. Here the relationship to inflation drops out and the relative dilution, i.e. the impact of staking tokens vs not staking tokens, is purely a function of the % of the total token supply staked. From above
 
-$$
-\begin{aligned}
-Y_{adj} &=  \frac{ 1 + I/P_s }{ 1 + I } - 1,~\text{and}\\
-D_{us} &= -\frac{I}{I + 1},~\text{so} \\
-\frac{D_{us}}{Y_{adj}} &= \frac{ \frac{I}{I + 1} }{ \frac{ 1 + I/P_s }{ 1 + I } - 1 } \\
-\end{aligned}
-$$
+$$ \begin{aligned} Y*{adj} &= \frac{ 1 + I/P_s }{ 1 + I } - 1,~\text{and}\\ D*{us} &= -\frac{I}{I + 1},~\text{so} \\ \frac{D*{us}}{Y*{adj}} &= \frac{ \frac{I}{I + 1} }{ \frac{ 1 + I/P_s }{ 1 + I } - 1 } \\ \end{aligned} $$
 
 which simplifies as,
 
-$$
-	\begin{aligned}
-	\frac{D_{us}}{Y_{adj}} &= \frac{ I }{ 1 + \frac{I}{P_s} - (1 + I)}\\
-	&= \frac{ I }{ \frac{I}{P_s} - I}\\
-	\frac{D_{us}}{Y_{adj}}&= \frac{ P_s }{ 1 - P_s}\\
-	\end{aligned}
-$$
+$$ \begin{aligned} \frac{D*{us}}{Y*{adj}} &= \frac{ I }{ 1 + \frac{I}{P*s} - (1 + I)}\\ &= \frac{ I }{ \frac{I}{P_s} - I}\\ \frac{D*{us}}{Y\_{adj}}&= \frac{ P_s }{ 1 - P_s}\\ \end{aligned} $$
 
 Where we can see a primary dependence of the relative dilution of un-staked tokens to staked tokens is on the function of the proportion of total tokens staked. As shown above, the proportion of total tokens staked changes over time (i.e. $P_s = P_s(t)$ due to the re-staking of inflation issuance thus we see relative dilution grow over time as:
 

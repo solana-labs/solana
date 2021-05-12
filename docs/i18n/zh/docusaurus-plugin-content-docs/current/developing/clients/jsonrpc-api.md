@@ -18,15 +18,13 @@ Solana 节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范�
 
 - [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 - [getBalance](jsonrpc-api.md#getbalance)
+- [getBlock](jsonrpc-api.md#getblock)
+- [getBlockProduction](jsonrpc-api.md#getblockproduction)
 - [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
+- [getBlocks](jsonrpc-api.md#getblocks)
+- [getBlocksWithLimit](jsonrpc-api.md#getblockswithlimit)
 - [getBlockTime](jsonrpc-api.md#getblocktime)
 - [getClusterNodes](jsonrpc-api.md#getclusternodes)
-- [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
-- [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
-- [getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit)
-- [getConfirmedSignaturesForAddress](jsonrpc-api.md#getconfirmedsignaturesforaddress)
-- [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
-- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 - [getEpochInfo](jsonrpc-api.md#getepochinfo)
 - [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 - [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
@@ -38,18 +36,29 @@ Solana 节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范�
 - [getIdentity](jsonrpc-api.md#getidentity)
 - [getInflationGovernor](jsonrpc-api.md#getinflationgovernor)
 - [getInflationRate](jsonrpc-api.md#getinflationrate)
+- [getInflationReward](jsonrpc-api.md#getinflationreward)
 - [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
 - [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
+- [getMaxRetransmitSlot](jsonrpc-api.md#getmaxretransmitslot)
+- [getMaxShredInsertSlot](jsonrpc-api.md#getmaxshredinsertslot)
 - [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 - [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 - [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 - [getRecentPerformanceSamples](jsonrpc-api.md#getrecentperformancesamples)
+- [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress)
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 - [getSlot](jsonrpc-api.md#getslot)
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
+- [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
+- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
+- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
+- [getTransaction](jsonrpc-api.md#gettransaction)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -57,8 +66,6 @@ Solana 节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范�
 - [requestAirdrop](jsonrpc-api.md#requestairdrop)
 - [sendTransaction](jsonrpc-api.md#sendtransaction)
 - [simulateTransaction](jsonrpc-api.md#simulatetransaction)
-- [setLogFilter](jsonrpc-api.md#setlogfilter)
-- [validatorExit](jsonrpc-api.md#validatorexit)
 - [Subscription](jsonrpc-api.md#subscription-websocket)
   - [accountSubscribe](jsonrpc-api.md#accountsubscribe)
   - [accountUnsubscribe](jsonrpc-api.md#accountunsubscribe)
@@ -71,15 +78,13 @@ Solana 节点使用[JSON-RPC 2.0](https://www.jsonrpc.org/specification)规范�
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
 
-## 不稳定的方法
+### Deprecated Methods
 
-不稳定的方法可能会在补丁程序发行版中发生重大更改，并且可能永久不受支持。
-
-- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
-- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
-- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
-- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
-- [getTokenSupply](jsonrpc-api.md#gettokensupply)
+- [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
+- [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
+- [getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit)
+- [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
+- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 
 ## 请求格式
 
@@ -126,15 +131,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 客户可以按照承诺的降序排列(从最高确定到最低确定)：
 
-- `"max"` - 节点将查询由集群的绝大多数确认为已达到最大锁定的最新块，这意味着集群已将该块识别为已完成
-- `"root"` - 节点将查询该节点上已达到最大锁定的最新块，这意味着该节点已将该块识别为已完成
-- `"singleGossip"` - 节点将查询由集群的多数投票的最新区块。
+- `"finalized"` - the node will query the most recent block confirmed by supermajority of the cluster as having reached maximum lockout, meaning the cluster has recognized this block as finalized
+- `"confirmed"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
   - 它融合了八卦和重播的选票。
   - 它不计算该区块后代的票数，而仅对该区块的直接票数进行计数。
   - 此确认级别还支持 1.3 版及更高版本中的“乐观确认”保证。
-- `"recent"` - 节点将查询其最近的块。 注意，该区块可能不完整。
+- `"processed"` - the node will query its most recent block. 注意，该区块可能不完整。
 
-为了连续处理许多相关的事务，建议使用`"singleGossip"`承诺，以平衡速度和回滚安全性。 为了安全起见，建议使用`"max"`承诺。
+For processing many dependent transactions in series, it's recommended to use `"confirmed"` commitment, which balances speed with rollback safety. For total safety, it's recommended to use`"finalized"` commitment.
 
 #### 示例：
 
@@ -149,7 +153,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     "params": [
       "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",
       {
-        "commitment": "max"
+        "commitment": "finalized"
       }
     ]
   }
@@ -158,7 +162,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 默认情况：
 
-如果未提供承诺配置，则该节点将默认为`max`承诺
+If commitment configuration is not provided, the node will default to `"finalized"` commitment
 
 只有查询库状态的方法才接受承诺参数。 它们在下面的 API 参考中指出。
 
@@ -171,9 +175,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ## 健康检查
 
-尽管不是 JSON RPC API，但 RPC HTTP 端点上的`GET / health`提供了一种健康检查机制，供负载平衡器或其他网络基础结构使用。 根据以下条件，此请求将始终返回带有 "ok" 或 "behind" 正文的 HTTP 200 OK 响应：
+尽管不是 JSON RPC API，但 RPC HTTP 端点上的`GET / health`提供了一种健康检查机制，供负载平衡器或其他网络基础结构使用。 This request will always return a HTTP 200 OK response with a body of "ok", "behind" or "unknown" based on the following conditions:
 
-1. 如果向`solana-validator`提供了一个或多个`--trusted-validator`参数，则当节点位于最高可信验证器的`HEALTH_CHECK_SLOT_DISTANCE`插槽内时，返回 "ok"，否则返回 "behind"。
+1. If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator, otherwise "behind". "unknown" is returned when no slot information from trusted validators is not yet available.
 2. 如果未提供受信任的验证器，则始终返回 "ok"。
 
 ## JSON RPC API 引用
@@ -187,7 +191,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - 要查询的帐户的公钥，以 base-58 编码的字符串
 - `<object>` -(可选)包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(_很慢_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的 Account 数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
+  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(_很慢_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 129 个字节的帐户数据。 "base64" 将为任何大小的 Account 数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
   - (可选) `dataSlice：<object>` - 使用提供的`offset：<usize>` 和`length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
 
 #### 结果：
@@ -330,6 +334,311 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+### getBlock
+
+返回账本中已确认区块的身份和交易信息
+
+#### 参数：
+
+- `<u64>` - 作为 u64 整数
+- `<object>` -(可选) 包含以下可选字段的配置对象：
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". 如果参数未提供，默认编码为“json”。 "jsonParsed"编码尝试使用针对特定程序的教学解析器返回在 `transaction.message.instruction` 列表中更易读和更明确的数据。 如果“jsonParsed”是请求的，但无法找到解析器，则该指令返回到正则 JSON 编码(`帐户`, `数据`和 `程序 ID 索引` 字段).
+  - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
+  - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### 结果：
+
+结果字段将是具有以下字段的对象：
+
+- `<null>` - 如果指定的区块未确认
+- `<object>` - 如果区块得到确认，则具有以下字段的对象：
+  - `blockhash: <string>` - 该区块的区块哈希作为基准-58 编码字符串
+  - `previousBlockhash: <string>` - 该区块的父级区块哈希，以 base-58 编码的字符串；如果由于账本清理而导致父块不可用，则此字段将返回“11111111111111111111111111111111”
+  - `parentSlot: <u64>` - 该区块的父级插槽索引
+  - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
+    - `transaction: <object|[string,encoding]>` - [交易](#transaction-structure) 对象，采用 JSON 格式或已编码的二进制数据，具体取决于编码参数
+    - `meta: <object>` - 交易状态元数据对象，包含`null`或：
+      - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+      - `fee: <u64>` - 该交易收取的费用，以 u64 整数表示
+      - `preBalances: <array>` - 处理交易之前的 u64 帐户余额数组
+      - `postBalances: <array>` - 处理交易后的 u64 帐户余额数组
+      - `innerInstructions: <array|undefined>` -[内部指令](#inner-instructions-structure)的列表，如果在此事务处理期间尚未启用内部指令记录，则将其省略
+      - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `logMessages: <array>` - 字符串日志消息的数组；如果在此事务期间尚未启用日志消息记录，则将其省略
+      - DEPRECATED: `status: <object>` - 交易状态
+        - `"Ok": <null>` - 交易成功
+        - `"Err": <ERR>` - 事务失败，出现 TransactionError
+  - `signatures: <array>` - present if "signatures" are requested for transaction details; an array of signatures strings, corresponding to the transaction order in the block
+  - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+    - `pubkey: <string>` - 接收奖励的帐户的公钥，以 base-58 编码的字符串
+    - `lamports: <i64>`- 帐户贷记或借记的奖励灯饰的数量，作为 i64
+    - `postBalance: <u64>` - 应用奖励后以 Lamports 为单位的帐户余额
+    - `rewardType: <string|undefined>` - 奖励类型：“费用”，“租金”，“投票”，“赌注”
+  - `blockTime: <i64 | null>` - 估计的生产时间，以 Unix 时间戳记(自 Unix 时代以来的秒数)。 如果不可用，则返回 null
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getBlock","params":[430, {"encoding": "json","transactionDetails":"full","rewards":false}]}
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "logMessages": [],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "postTokenBalances": [],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
+          "preTokenBalances": [],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": {
+          "message": {
+            "accountKeys": [
+              "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+              "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+              "SysvarS1otHashes111111111111111111111111111",
+              "SysvarC1ock11111111111111111111111111111111",
+              "Vote111111111111111111111111111111111111111"
+            ],
+            "header": {
+              "numReadonlySignedAccounts": 0,
+              "numReadonlyUnsignedAccounts": 3,
+              "numRequiredSignatures": 1
+            },
+            "instructions": [
+              {
+                "accounts": [1, 2, 3, 0],
+                "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+                "programIdIndex": 4
+              }
+            ],
+            "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+          },
+          "signatures": [
+            "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+          ]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getBlock","params":[430, "base64"]}
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "rewards": [],
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "logMessages": [],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "postTokenBalances": [],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
+          "preTokenBalances": [],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": [
+          "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+          "base64"
+        ]
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+#### 交易结构
+
+交易与其他区块链上的交易有很大不同。 请务必阅读[交易解剖](developing/programming-model/transactions.md)，以了解 Solana 上的交易。
+
+交易的 JSON 结构定义如下：
+
+- `signatures: <array[string]>` - 应用于交易的以 base-58 编码的签名的列表。 该列表的长度始终为`message.header.numRequiredSignatures`，并且不为空。 索引`i”`处的签名对应于`message.account_keys`中索引`i`处的公钥。 第一个用作[交易 ID](../../terminology.md#transaction-id)。
+- `message: <object>` - 定义交易的内容。
+  - `accountKeys: <array[string]>` - 交易使用的 base-58 编码公共密钥列表，包括指令和签名。 第一个`message.header.numRequiredSignatures`公钥必须对交易进行签名。
+  - `header: <object>` - 详细说明交易所需的帐户类型和签名。
+    - `numRequiredSignatures: <number>` - 使交易有效所需的签名总数。 签名必须与`message.account_keys`的第一个`numRequiredSignatures`匹配。
+    - `numReadonlySignedAccounts: <number>` - 签名密钥的最后一个`numReadonlySignedAccounts`是只读帐户。 程序可以处理多个事务，这些事务在单个 PoH 条目中加载只读帐户，但不允许贷记或借记 Lamport 或修改帐户数据。 顺序评估针对同一读写帐户的交易。
+    - `numReadonlyUnsignedAccounts: <number>` - 未签名密钥的最后一个`numReadonlyUnsignedAccounts`是只读帐户。
+  - `recentBlockhash: <string>` - 账本中最近区块的基数为 58 的编码哈希，用于防止交易重复并延长交易寿命。
+  - `instructions: <array[object]>` - 程序指令的列表，如果全部成功，这些指令将依次执行并在一次原子事务中提交。
+    - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
+    - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
+    - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
+
+#### 内部指令结构
+
+Solana 运行时记录在事务处理期间调用的跨程序指令，并使这些程序可用，以提高每个事务指令在链上执行的内容的透明度。 调用的指令按原始事务处理指令分组，并按处理顺序列出。
+
+内部指令的 JSON 结构定义为以下结构中的对象列表：
+
+- `index: number` - 内部指令源自的(一个或多个) 交易指令的索引
+- `instructions: <array[object]>` - 内部程序指令的有序列表，在单个事务指令期间被调用。
+  - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
+  - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
+  - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
+
+#### Token Balances Structure
+
+The JSON structure of token balances is defined as a list of objects in the following structure:
+
+- `accountIndex: <number>` - Index of the account in which the token balance is provided for.
+- `mint: <string>` - Pubkey of the token's mint.
+- `uiTokenAmount: <object>` -
+  - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
+  - `decimals: <number>` - Number of decimals configured for token's mint.
+  - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
+  - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
+
+### getBlockProduction
+
+Returns recent block production information from the current or previous epoch.
+
+#### 参数：
+
+- `<object>` -(可选) 包含以下可选字段的配置对象：
+  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `range: <object>` - Slot range to return block production for. 如果未提供参数，则默认为当前 epoch。
+    - `firstSlot: <u64>` - first slot to return block production information for (inclusive)
+    - (optional) `lastSlot: <u64>` - last slot to return block production information for (inclusive). If parameter not provided, defaults to the highest slot
+  - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
+
+#### 结果：
+
+结果是一个 RpcResponse JSON 对象，其`值`等于：
+
+- `<object>`
+  - `byIdentity: <object>` - a dictionary of validator identities, as base-58 encoded strings. Value is a two element array containing the number of leader slots and the number of blocks produced.
+  - `range: <object>` - Block production slot range
+    - `firstSlot: <u64>` - first slot of the block production information (inclusive)
+    - `lastSlot: <u64>` - last slot of block production information (inclusive)
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockProduction"}
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 9887
+    },
+    "value": {
+      "byIdentity": {
+        "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr": [9888, 9886]
+      },
+      "range": {
+        "firstSlot": 0,
+        "lastSlot": 9887
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getBlockProduction",
+    "params": [
+      {
+        "identity": "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr",
+        "range": {
+          "firstSlot": 40,
+          "lastSlot": 50
+        }
+      }
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 10102
+    },
+    "value": {
+      "byIdentity": {
+        "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr": [11, 11]
+      },
+      "range": {
+        "firstSlot": 50,
+        "lastSlot": 40
+      }
+    }
+  },
+  "id": 1
+}
+```
+
 ### getBlockCommitment
 
 返回特定区块的承诺
@@ -373,13 +682,71 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+### getBlocks
+
+返回两个插槽之间已确认区块的列表
+
+#### 参数：
+
+- `<u64>` - start_slot，作为 u64 整数
+- `<u64>` - (可选) end_slot，作为 u64 整数
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### 结果：
+
+结果字段将是一个 u64 整数数组，其中列出了在`start_slot`和`end_slot`之间（如果提供）或最近确认的块（包括首尾）之间的已确认块。 允许的最大范围是 500,000 个插槽。
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getBlocks","params":[5, 10]}
+'
+```
+
+结果：
+
+```json
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
+```
+
+### getBlocksWithLimit
+
+返回从给定插槽开始的已确认块的列表
+
+#### 参数：
+
+- `<u64>` -start_slot，作为 u64 整数
+- `<u64>` - 限制，如 u64 整数
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### 结果：
+
+结果字段将是一个 u64 整数数组，其中列出了已确认的块（从`start_slot`开始），最多到`limit`个块（包括上限）。
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getBlocksWithLimit","params":[5, 3]}
+'
+```
+
+结果：
+
+```json
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
+```
+
 ### getBlockTime
 
-返回已确认块的估计生产时间。
+Returns the estimated production time of a block.
 
 每个验证者通过向特定块的投票间歇性地添加时间戳，定期将其 UTC 时间报告给账本。 根据记录在账本上的一组最近区块中的 Vote 时间戳的权益加权平均值计算请求区块的时间。
-
-从快照引导或限制账本大小(通过清除旧插槽) 引导的节点将返回其最低根+ `TIMESTAMP_SLOT_RANGE`以下的块的空时间戳。 对拥有此历史数据感兴趣的用户必须查询根据起源建立的节点，并保留整个账本。
 
 #### 参数：
 
@@ -452,505 +819,17 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-### getConfirmedBlock
-
-返回账本中已确认区块的身份和交易信息
-
-#### 参数：
-
-- `<u64>` - 作为 u64 整数
-- `<string>` - 为每个返回的交易编码，或者是"json", "jsonParsed", "base58"(_慢_), "base64"。 如果参数未提供，默认编码为“json”。 "jsonParsed"编码尝试使用针对特定程序的教学解析器返回在 `transaction.message.instruction` 列表中更易读和更明确的数据。 如果“jsonParsed”是请求的，但无法找到解析器，则该指令返回到正则 JSON 编码(`帐户`, `数据`和 `程序 ID 索引` 字段).
-
-#### 结果：
-
-结果字段将是具有以下字段的对象：
-
-- `<null>` - 如果指定的区块未确认
-- `<object>` - 如果区块得到确认，则具有以下字段的对象：
-  - `blockhash: <string>` - 该区块的区块哈希作为基准-58 编码字符串
-  - `previousBlockhash: <string>` - 该区块的父级区块哈希，以 base-58 编码的字符串；如果由于账本清理而导致父块不可用，则此字段将返回“11111111111111111111111111111111”
-  - `parentSlot: <u64>` - 该区块的父级插槽索引
-  - `transactions: <array>` - 包含以下内容的 JSON 对象数组：
-    - `transaction: <object|[string,encoding]>` - [交易](#transaction-structure) 对象，采用 JSON 格式或已编码的二进制数据，具体取决于编码参数
-    - `meta: <object>` - 交易状态元数据对象，包含`null`或：
-      - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-      - `fee: <u64>` - 该交易收取的费用，以 u64 整数表示
-      - `preBalances: <array>` - 处理交易之前的 u64 帐户余额数组
-      - `postBalances: <array>` - 处理交易后的 u64 帐户余额数组
-      - `innerInstructions: <array|undefined>` -[内部指令](#inner-instructions-structure)的列表，如果在此事务处理期间尚未启用内部指令记录，则将其省略
-      - `logMessages: <array>` - 字符串日志消息的数组；如果在此事务期间尚未启用日志消息记录，则将其省略
-      - DEPRECATED: `status: <object>` - 交易状态
-        - `"Ok": <null>` - 交易成功
-        - `"Err": <ERR>` - 事务失败，出现 TransactionError
-  - `rewards: <array>` - 包含以下内容的 JSON 对象数组：
-    - `pubkey: <string>` - 接收奖励的帐户的公钥，以 base-58 编码的字符串
-    - `lamports: <i64>`- 帐户贷记或借记的奖励灯饰的数量，作为 i64
-    - `postBalance: <u64>` - 应用奖励后以 Lamports 为单位的帐户余额
-    - `rewardType: <string|undefined>` - 奖励类型：“费用”，“租金”，“投票”，“赌注”
-  - `blockTime: <i64 | null>` - 估计的生产时间，以 Unix 时间戳记(自 Unix 时代以来的秒数)。 如果不可用，则返回 null
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "blockTime": null,
-    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
-    "parentSlot": 429,
-    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
-    "rewards": [],
-    "transactions": [
-      {
-        "meta": {
-          "err": null,
-          "fee": 5000,
-          "innerInstructions": [],
-          "logMessages": [],
-          "postBalances": [499998932500, 26858640, 1, 1, 1],
-          "preBalances": [499998937500, 26858640, 1, 1, 1],
-          "status": {
-            "Ok": null
-          }
-        },
-        "transaction": {
-          "message": {
-            "accountKeys": [
-              "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
-              "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
-              "SysvarS1otHashes111111111111111111111111111",
-              "SysvarC1ock11111111111111111111111111111111",
-              "Vote111111111111111111111111111111111111111"
-            ],
-            "header": {
-              "numReadonlySignedAccounts": 0,
-              "numReadonlyUnsignedAccounts": 3,
-              "numRequiredSignatures": 1
-            },
-            "instructions": [
-              {
-                "accounts": [1, 2, 3, 0],
-                "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
-                "programIdIndex": 4
-              }
-            ],
-            "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
-          },
-          "signatures": [
-            "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
-          ]
-        }
-      }
-    ]
-  },
-  "id": 1
-}
-```
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "blockTime": null,
-    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
-    "parentSlot": 429,
-    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
-    "rewards": [],
-    "transactions": [
-      {
-        "meta": {
-          "err": null,
-          "fee": 5000,
-          "innerInstructions": [],
-          "logMessages": [],
-          "postBalances": [499998932500, 26858640, 1, 1, 1],
-          "preBalances": [499998937500, 26858640, 1, 1, 1],
-          "status": {
-            "Ok": null
-          }
-        },
-        "transaction": [
-          "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
-          "base64"
-        ]
-      }
-    ]
-  },
-  "id": 1
-}
-```
-
-#### 交易结构
-
-交易与其他区块链上的交易有很大不同。 请务必阅读[交易解剖](developing/programming-model/transactions.md)，以了解 Solana 上的交易。
-
-交易的 JSON 结构定义如下：
-
-- `signatures: <array[string]>` - 应用于交易的以 base-58 编码的签名的列表。 该列表的长度始终为`message.header.numRequiredSignatures`，并且不为空。 索引`i”`处的签名对应于`message.account_keys`中索引`i`处的公钥。 第一个用作[交易 ID](../../terminology.md#transaction-id)。
-- `message: <object>` - 定义交易的内容。
-  - `accountKeys: <array[string]>` - 交易使用的 base-58 编码公共密钥列表，包括指令和签名。 第一个`message.header.numRequiredSignatures`公钥必须对交易进行签名。
-  - `header: <object>` - 详细说明交易所需的帐户类型和签名。
-    - `numRequiredSignatures: <number>` - 使交易有效所需的签名总数。 签名必须与`message.account_keys`的第一个`numRequiredSignatures`匹配。
-    - `numReadonlySignedAccounts: <number>` - 签名密钥的最后一个`numReadonlySignedAccounts`是只读帐户。 程序可以处理多个事务，这些事务在单个 PoH 条目中加载只读帐户，但不允许贷记或借记 Lamport 或修改帐户数据。 顺序评估针对同一读写帐户的交易。
-    - `numReadonlyUnsignedAccounts: <number>` - 未签名密钥的最后一个`numReadonlyUnsignedAccounts`是只读帐户。
-  - `recentBlockhash: <string>` - 账本中最近区块的基数为 58 的编码哈希，用于防止交易重复并延长交易寿命。
-  - `instructions: <array[object]>` - 程序指令的列表，如果全部成功，这些指令将依次执行并在一次原子事务中提交。
-    - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
-    - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
-    - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
-
-#### 内部指令结构
-
-Solana 运行时记录在事务处理期间调用的跨程序指令，并使这些程序可用，以提高每个事务指令在链上执行的内容的透明度。 调用的指令按原始事务处理指令分组，并按处理顺序列出。
-
-内部指令的 JSON 结构定义为以下结构中的对象列表：
-
-- `index: number` - 内部指令源自的(一个或多个) 交易指令的索引
-- `instructions: <array[object]>` - 内部程序指令的有序列表，在单个事务指令期间被调用。
-  - `programIdIndex: <number>` - 在`message.accountKeys`数组中的索引，指示执行该指令的程序帐户。
-  - `accounts: <array[number]>` - `message.accountKeys`数组中的有序索引列表，指示要传递给程序的帐号。
-  - `data: <string>` - 程序输入的数据以 base-58 字符串编码。
-
-### getConfirmedBlocks
-
-返回两个插槽之间已确认区块的列表
-
-#### 参数：
-
-- `<u64>` - start_slot，作为 u64 整数
-- `<u64>` - (可选) end_slot，作为 u64 整数
-
-#### 结果：
-
-结果字段将是一个 u64 整数数组，其中列出了在`start_slot`和`end_slot`之间（如果提供）或最近确认的块（包括首尾）之间的已确认块。 允许的最大范围是 500,000 个插槽。
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
-'
-```
-
-结果：
-
-```json
-{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
-```
-
-### getConfirmedBlocksWithLimit
-
-返回从给定插槽开始的已确认块的列表
-
-#### 参数：
-
-- `<u64>` -start_slot，作为 u64 整数
-- `<u64>` - 限制，如 u64 整数
-
-#### 结果：
-
-结果字段将是一个 u64 整数数组，其中列出了已确认的块（从`start_slot`开始），最多到`limit`个块（包括上限）。
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
-'
-```
-
-结果：
-
-```json
-{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
-```
-
-### getConfirmedSignaturesForAddress
-
-**不推荐使用：请改用 getConfirmedSignaturesForAddress2**
-
-返回指定槽位范围内涉及地址的事务的所有已确认签名的列表。 允许的最大范围是 10,000 个插槽
-
-#### 参数：
-
-- `<string>` - 帐户地址为 base-58 编码的字符串
-- `<u64>` - 起始插槽（包含在内）
-- `<u64>` -末端插槽（包含在内）
-
-#### 结果：
-
-结果字段将是以下内容的数组：
-
-- `<string>` - 交易签名为以 base-58 编码的字符串
-
-签名将根据其在其中确认的插槽进行排序，从最低到最高
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getConfirmedSignaturesForAddress",
-    "params": [
-      "6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC",
-      0,
-      100
-    ]
-  }
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": [
-    "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
-    "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
-    "4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"
-  ],
-  "id": 1
-}
-```
-
-### getConfirmedSignaturesForAddress2
-
-从提供的签名或最近确认的块中返回涉及时间在后的地址的交易的确认签名
-
-#### 参数：
-
-- `<string>` - 帐户地址为 base-58 编码的字符串
-- `<object>` - (可选) 包含以下字段的配置对象：
-  - `limit: <number>` - (可选) 要返回的最大交易签名 (1 到 1,000 之间，默认值：1,000)。
-  - `before: <string>` -(可选) 从此事务签名开始向后搜索。 如果未提供，则从最大已确认最大块的顶部开始搜索。
-  - `until: <string>` - (可选) 搜索直到此交易签名，如果在达到限制之前被发现。
-
-#### 结果：
-
-结果字段将是交易签名信息的数组，按从新到旧的顺序排列：
-
-- `<object>`
-  - `signature: <string>` - 交易签名为以 base-58 编码的字符串
-  - `slot: <u64>` - 包含交易区块的插槽
-  - `err: <object | null>` - 如果事务失败，则返回错误；如果事务成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-  - `memo: <string |null>` - 与交易关联的备忘录，如果没有备忘录，则为 null
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getConfirmedSignaturesForAddress2",
-    "params": [
-      "Vote111111111111111111111111111111111111111",
-      {
-        "limit": 1
-      }
-    ]
-  }
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": [
-    {
-      "err": null,
-      "memo": null,
-      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
-      "slot": 114
-    }
-  ],
-  "id": 1
-}
-```
-
-### getConfirmedTransaction
-
-返回已确认交易的交易详细信息
-
-#### 参数：
-
-- `<string>` - 交易签名，以 base-58 编码的字符串，N 编码尝试使用特定于程序的指令解析器来返回`transaction.message.instructions`列表中更多的人性化和显式的数据。 如果请求“jsonParsed”但找不到解析器，则该指令将退回到常规 JSON 编码(`帐户`，`数据`和`programIdIndex`字段)。
-- `<string>` -(可选) 用于返回的事务的编码，可以是“ json”，“ jsonParsed”，“ base58”(_ slow _)或“ base64”。 如果未提供参数，则默认编码为 JSON。
-
-#### 结果：
-
-- `<null>` - 如果未找到交易或未确认
-- `<object>` - 如果区块得到确认，则具有以下字段的对象：
-  - `slot: <u64>` - 处理该交易记录的插槽
-  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) 对象，采用 JSON 格式或已编码的二进制数据，具体取决于编码参数
-  - `meta: <object | null>` - 交易状态元数据对象：
-    - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-    - `fee: <u64>` - 此交易收取的费用，以 u64 整数表示
-    - `preBalances: <array>` - 处理交易之前的 u64 帐户余额数组
-    - `postBalances: <array>` - 处理交易后的 u64 帐户余额数组
-    - `innerInstructions: <array|undefined>` -[内部指令](#inner-instructions-structure)列表，如果在此交易处理期间尚未启用内部指令记录，则将其省略
-    - `logMessages: <array>` - 字符串日志消息的数组；如果在此交易期间尚未启用日志消息记录，则将其省略
-    - DEPRECATED: `status: <object>` - 交易状态
-      - `"Ok": <null>` - 交易成功
-      - `"Err": <ERR>` - 交易失败，出现 TransactionError
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getConfirmedTransaction",
-    "params": [
-      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
-      "json"
-    ]
-  }
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "meta": {
-      "err": null,
-      "fee": 5000,
-      "innerInstructions": [],
-      "postBalances": [499998932500, 26858640, 1, 1, 1],
-      "preBalances": [499998937500, 26858640, 1, 1, 1],
-      "status": {
-        "Ok": null
-      }
-    },
-    "slot": 430,
-    "transaction": {
-      "message": {
-        "accountKeys": [
-          "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
-          "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
-          "SysvarS1otHashes111111111111111111111111111",
-          "SysvarC1ock11111111111111111111111111111111",
-          "Vote111111111111111111111111111111111111111"
-        ],
-        "header": {
-          "numReadonlySignedAccounts": 0,
-          "numReadonlyUnsignedAccounts": 3,
-          "numRequiredSignatures": 1
-        },
-        "instructions": [
-          {
-            "accounts": [1, 2, 3, 0],
-            "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
-            "programIdIndex": 4
-          }
-        ],
-        "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
-      },
-      "signatures": [
-        "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
-      ]
-    }
-  },
-  "id": 1
-}
-```
-
-#### 示例:
-
-请求：
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getConfirmedTransaction",
-    "params": [
-      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
-      "base64"
-    ]
-  }
-'
-```
-
-结果：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "meta": {
-      "err": null,
-      "fee": 5000,
-      "innerInstructions": [],
-      "postBalances": [499998932500, 26858640, 1, 1, 1],
-      "preBalances": [499998937500, 26858640, 1, 1, 1],
-      "status": {
-        "Ok": null
-      }
-    },
-    "slot": 430,
-    "transaction": [
-      "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
-      "base64"
-    ]
-  },
-  "id": 1
-}
-```
-
 ### getEpochInfo
 
 返回当前 epoch 的信息
 
 #### 参数：
 
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
-结果字段具有以下字段的对象：
+结果字段将是具有以下字段的对象：
 
 - `absoluteSlot: <u64>`，当前插槽
 - `块高度： <u64>`，当前区块高度
@@ -994,7 +873,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果字段具有以下字段的对象：
+结果字段将是具有以下字段的对象：
 
 - `slotsPerEpoch: <u64>`，每个时期的最大插槽数
 - `leaderScheduleSlotOffset：<u64>`，在某个时期开始之前的槽数，以计算该时期的领导者时间表
@@ -1002,7 +881,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `firstNormalEpoch：<u64>`，第一个正常长度的时期，log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
 - `firstNormalSlot：<u64>`，MINIMUM_SLOTS_PER_EPOCH \ \*(2.pow(firstNormalEpoch)-1)
 
-#### 例子：
+#### 示例:
 
 请求：
 
@@ -1028,7 +907,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-### 获取费用计算器对于 Blockhash
+### getFeeCalculatorForBlockhash
 
 返回与查询区块哈希关联的费用计算器，如果区块哈希已过期，则返回`null`
 
@@ -1039,13 +918,13 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-结果将是一个 RpcResponse JSON 对象，其 `value` 等于：
+结果是一个 RpcResponse JSON 对象，其`值`等于：
 
 - `<null>` - 如果查询 blockhash 已过期
 - `<object>` - 否则为 JSON 对象，其中包含：
   - `feeCalculator：<object>`，`FeeCalculator`对象描述了在查询的区块哈希中的集群费率
 
-#### 例子：
+#### 示例:
 
 请求：
 
@@ -1087,7 +966,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-没有
+无
 
 #### 结果：
 
@@ -1099,7 +978,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `targetLamportsPerSignature：<u64>`，集群所需的费率
 - `targetSignaturesPerSlot：<u64>`，集群所需的签名率
 
-#### 例子：
+#### 示例:
 
 请求：
 
@@ -1146,7 +1025,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `blockhash：<string>` - 以 base-58 编码的 Hash 字符串
 - `feeCalculator：<object>` - FeeCalculator 对象，此区块哈希的费用明细表
-- `lastValidSlot：<u64>` - 区块哈希有效的最后一个插槽
+- `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
 
 #### 示例:
 
@@ -1339,7 +1218,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
@@ -1347,7 +1226,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `initial：<f64>`，从时间 0 开始的初始通胀百分比
 - `terminal：<f64>`，终端通胀百分比
-- `taper：<f64>`，每年降低通货膨胀率
+- `taper：<f64>`，每年降低通货膨胀率. Rate reduction is derived using the target slot time in genesis config
 - `foundation：<f64>`，分配给基金会的总通货膨胀百分比
 - `foundationTerm：<f64>`，基础池通货膨胀的持续时间，以年为单位
 
@@ -1420,9 +1299,65 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+### getInflationReward
+
+Returns the inflation reward for a list of addresses for an epoch
+
+#### 参数：
+
+- `<array>` - An array of addresses to query, as base-58 encoded strings
+
+* `<object>` -(可选) 包含以下可选字段的配置对象：
+  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `epoch: <u64>` - An epoch for which the reward occurs. If omitted, the previous epoch will be used
+
+#### Results
+
+The result field will be a JSON array with the following fields:
+
+- `epoch: <u64>`, epoch for which reward occured
+- `effectiveSlot: <u64>`, the slot in which the rewards are effective
+- `amount: <u64>`, reward amount in lamports
+- `postBalance: <u64>`, post balance of the account in lamports
+
+#### 示例：
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getInflationReward",
+    "params": [
+       ["6dmNQ5jwLeLk5REvio1JcMshcbvkYMwy26sJ8pbkvStu", "BGsqMegLpV6n6Ve146sSX2dTjUMj3M92HnU8BbNRMhF2"], 2
+    ]
+  }
+'
+```
+
+响应：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "amount": 2500,
+      "effectiveSlot": 224,
+      "epoch": 2,
+      "postBalance": 499999442500
+    },
+    null
+  ],
+  "id": 1
+}
+```
+
 ### getLargestAccounts
 
-按 Lamport 余额返回 20 个最大帐户
+Returns the 20 largest accounts, by lamport balance (results may be cached up to two hours)
 
 #### 参数：
 
@@ -1543,12 +1478,14 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 参数：
 
 - `<u64>` -(可选) 获取与提供的插槽相对应的时代的领导者时间表。 如果未指定，则获取当前时期的领导者时间表
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` -(可选) 包含以下字段的配置对象：
+  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
 
 #### 结果：
 
 - `<null>` - 如果未找到请求的 epoch
-- `<object>` - 否则，结果字段将是领导者公钥(以 Base-58 编码的字符串) 及其对应的领导者插槽索引作为值的字典(索引相对于所请求 epoch 中的第一个插槽)
+- `<object>` - otherwise, the result field will be a dictionary of validator identities, as base-58 encoded strings, and their corresponding leader slot indices as values (indices are relative to the first slot in the requested epoch)
 
 #### 示例:
 
@@ -1577,6 +1514,91 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getLeaderSchedule",
+    "params": [
+      null,
+      {
+        "identity": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+      }
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+      57, 58, 59, 60, 61, 62, 63
+    ]
+  },
+  "id": 1
+}
+```
+
+### getMaxRetransmitSlot
+
+Get the max slot seen from retransmit stage.
+
+#### 结果：
+
+- `<u64>` - 插槽
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getMaxRetransmitSlot"}
+'
+```
+
+结果：
+
+```json
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
+```
+
+### getMaxShredInsertSlot
+
+Get the max slot seen from after shred insert.
+
+#### 结果：
+
+- `<u64>` - 插槽
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getMaxShredInsertSlot"}
+'
+```
+
+结果：
+
+```json
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
+```
+
 ### getMinimumBalanceForRentExemption
 
 返回免除帐户租金所需的最低余额。
@@ -1584,7 +1606,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 #### 参数：
 
 - `<usize>` - 帐户数据长度
-- `<object>` - (可选的) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
@@ -1614,23 +1636,23 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `<array>` - 要查询的公钥数组，以 base-58 编码的字符串
 - `<object>` -(可选) 包含以下可选字段的配置对象：
-  - (可选)[承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_慢一点_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
-  - (可选) `dataSlice：<object>` - 使用提供的 `offset：<usize>` 和 `length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
+  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(_很慢_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" is limited to Account data of less than 129 bytes. "base64" 将为任何大小的 Account 数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
+  - (可选) `dataSlice：<object>` - 使用提供的`offset：<usize>` 和`length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
 
 #### 结果：
 
-结果将是一个 RpcResponse JSON 对象，其`值`等于：
+结果是一个 RpcResponse JSON 对象，其`值`等于：
 
 数组：
 
 - `<null>` - 如果该 Pubkey 上的帐户不存在
 - `<object>` - 否则为 JSON 对象，其中包含：
-  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-  - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
-  - `data：<[string，encoding] | object>`，与帐户关联的数据，可以是编码的二进制数据，也可以是 JSON 格式的 `{<program>: <state>}`，具体取决于编码参数
-  - `executable：<bool>`，布尔值，指示帐户是否包含程序(并且严格为只读)
-  - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+  - `lamports: <u64>`，分配给此帐户的 Lamport 数量，以 u64 表示
+  - `owner: <string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
+  - `data: <[string, encoding]|object>`，与帐户关联的数据，可以是编码的二进制数据，也可以是 JSON 格式的`{<program>: <state>}`，具体取决于编码参数
+  - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
+  - `rentEpoch: <u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
 
@@ -1753,8 +1775,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<string>` - 程序的发布密钥，以 base-58 编码的字符串
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding<string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" 仅限于少于 128 个字节的帐户数据。 "base64" 将为任何大小的帐户数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了"jsonParsed"，但找不到解析器，则该字段回退为 "base64" 编码，当 `data` 字段为 `<string>` 类型时可以检测到。
-  - (可选)`dataSlice：<object>` - 使用提供的 `offset: <usize>` 和 `length: <usize>` 字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
+  - `encoding：<string>` - 帐户数据的编码，可以是"base58"(_很慢_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "base58" is limited to Account data of less than 129 bytes. "base64" 将为任何大小的 Account 数据返回 base64 编码的数据。 "base64+zstd" 使用 [Zstandard](https://facebook.github.io/zstd/) 压缩帐户数据，并对结果进行 base64 编码。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求了 "jsonParsed"，但找不到解析器，则该字段回退为"base64"编码，当`data`字段为`<string>`类型时可以检测到。
+  - (可选) `dataSlice：<object>` - 使用提供的`offset：<usize>` 和`length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
   - (可选)`filters：<array>` - 使用各种 [filter objects](jsonrpc-api.md#filters) 过滤结果；帐户必须满足所有过滤条件，才能包含在结果中
 
 ##### 过滤器：
@@ -1762,7 +1784,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `memcmp：<object>` - 比较提供的一系列字节和程序帐户数据的特定偏移量。 栏位：
 
   - `offset：<usize>` - 进入计划帐户数据的偏移量以开始比较
-  - `bytes：<string>` - 要匹配的数据，以 base-58 编码的字符串
+  - `bytes: <string>` - data to match, as base-58 encoded string and limited to less than 129 bytes
 
 - `dataSize：<u64>` - 比较程序帐户数据长度与提供的数据大小
 
@@ -1772,10 +1794,10 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 - `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
 - `account：<object>` - 一个 JSON 对象，具有以下子字段：
-  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
+  - `lamports: <u64>`，分配给此帐户的 Lamport 数量，以 u64 表示
   - `owner：<string>`，此帐户已分配给程序的 base-58 编码程序的 Pubkey `data：<[string，encoding] | object>`，与帐户相关联的数据，可以是编码的二进制数据或 JSON 格式为 `{<program>: <state>}`，具体取决于编码参数
-  - `executable：<bool>`，布尔值，指示帐户是否包含程序(并且严格为只读)
-  - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+  - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
+  - `rentEpoch: <u64>`，此帐户下一次将要欠租金的时期，即 u64
 
 #### 示例:
 
@@ -1865,7 +1887,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 参数：
 
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
@@ -1880,7 +1902,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 请求：
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
 '
 ```
@@ -2007,6 +2029,68 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+### getSignaturesForAddress
+
+从提供的签名或最近确认的块中返回涉及时间在后的地址的交易的确认签名
+
+#### 参数：
+
+- `<string>` - 帐户地址为 base-58 编码的字符串
+- `<object>` - (可选) 包含以下字段的配置对象：
+  - `limit: <number>` - (可选) 要返回的最大交易签名 (1 到 1,000 之间，默认值：1,000)。
+  - `before: <string>` -(可选) 从此事务签名开始向后搜索。 如果未提供，则从最大已确认最大块的顶部开始搜索。
+  - `until: <string>` - (可选) 搜索直到此交易签名，如果在达到限制之前被发现。
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### 结果：
+
+结果字段将是交易签名信息的数组，按从新到旧的顺序排列：
+
+- `<object>`
+  - `signature: <string>` - 交易签名为以 base-58 编码的字符串
+  - `slot: <u64>` - 包含交易区块的插槽
+  - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `memo: <string |null>` - 与交易关联的备忘录，如果没有备忘录，则为 null
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+
+#### 示例:
+
+请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getSignaturesForAddress",
+    "params": [
+      "Vote111111111111111111111111111111111111111",
+      {
+        "limit": 1
+      }
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "err": null,
+      "memo": null,
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 114,
+      "blockTime": null
+    }
+  ],
+  "id": 1
+}
+```
+
 ### getSignatureStatuses
 
 返回签名列表的状态。 除非包括`searchTransactionHistory`配置参数，否则此方法仅搜索签名的最新状态缓存，该缓存会保留所有活动插槽以及` MAX_RECENT_BLOCKHASHES`根目录插槽的状态。
@@ -2029,11 +2113,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 - `<object>`
   - `slot：<u64>` - 交易处理的插槽
   - ` confirmations：<usize | null>` - 自签名确认以来的块数，如果已植根则为 null，并由集群的绝大多数决定
-  - `err：<object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `err: <object | null>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   - `confirmationStatus：<string | null>` - 交易的集群确认状态； `processed`，` confirmed` 或 `finalized`。 有关乐观确认的更多信息，请参见 [承诺](jsonrpc-api.md#configuring-state-commitment)。
-  - 弃用：` status：<object>` - 交易状态
-    - `"Ok"：<null>` - 交易成功
-    - `"Err"：<ERR>` - 交易失败，出现 TransactionError
+  - DEPRECATED: `status: <object>` - 交易状态
+    - `"Ok": <null>` - 交易成功
+    - `"Err": <ERR>` - 事务失败，出现 TransactionError
 
 #### 示例:
 
@@ -2129,7 +2213,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getSlot
 
-返回节点正在处理的当前插槽
+Returns the current slot the node is processing
 
 #### 参数：
 
@@ -2137,11 +2221,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 结果：
 
-- `<u64>` - 当前插槽
+- `<u64>` - Current slot
 
 #### 示例:
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2149,7 +2233,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": 1234, "id": 1 }
@@ -2157,17 +2241,17 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getSlotLeader
 
-返回当前的插槽领导
+Returns the current slot leader
 
-#### 参数：
+#### Parameters:
 
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### 结果：
+#### Results:
 
-- `<string>` - 节点身份 Pubkey 作为 base-58 编码的字符串
+- `<string>` - Node identity Pubkey as base-58 encoded string
 
-#### 示例:
+#### Example:
 
 请求：
 
@@ -2187,28 +2271,76 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
-### getStakeActivation
+### getSlotLeaders
 
-返回权益账户的 epoch 激活信息
+Returns the slot leaders for a given slot range
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 要查询的股份账户的公钥，以 base-58 编码的字符串
-- `<object>` - (可选) 包含以下可选字段的配置对象：
-  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - (可选)`epoch：<u64>` - 用于计算激活详细信息的时期。 如果未提供参数，则默认为当前 epoch。
+- `<u64>` - Start slot, as u64 integer
+- `<u64>` - Limit, as u64 integer
 
-#### 结果：
+#### Results:
 
-结果将是具有以下字段的 JSON 对象：
+- `<array<string>>` - Node identity public keys as base-58 encoded strings
 
-- `state：<string` - 股份账户的激活状态，其中之一：`active`，`inactive`，`activating`，`deactivating`
-- `active：<u64>` - 时期有效的股份
-- `inactive：<u64>` - 在新时期无效的股份
+#### Example:
 
-#### 示例:
+If the current slot is #99, query the next 10 leaders with the following request:
 
 请求：
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSlotLeaders", "params":[100, 10]}
+'
+```
+
+结果：
+
+The first leader returned is the leader for slot #100:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP",
+    "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP"
+  ],
+  "id": 1
+}
+```
+
+### getStakeActivation
+
+Returns epoch activation information for a stake account
+
+#### Parameters:
+
+- `<string>` - Pubkey of stake account to query, as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+
+#### Results:
+
+The result will be a JSON object with the following fields:
+
+- `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
+- `active: <u64>` - stake active during the epoch
+- `inactive: <u64>` - stake inactive during the epoch
+
+#### Example:
+
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2216,7 +2348,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2228,7 +2360,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### 示例:
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2262,24 +2394,24 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getSupply
 
-返回有关当前电源的信息。
+Returns information about the current supply.
 
 #### 参数：
 
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `total：<u64>` - Lamports 的总供应量
-- ` circulating：<u64>` - 以 lamports 的循环供应
-- ` nonCirculating：<u64>` - 以 lamports 的的非循环供应
-- `nonCirculatingAccounts：<array>` - 非流通账户的账户地址数组，作为字符串
+- `total: <u64>` - Total supply in lamports
+- `circulating: <u64>` - Circulating supply in lamports
+- `nonCirculating: <u64>` - Non-circulating supply in lamports
+- `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings
 
 #### 示例:
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2287,7 +2419,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2314,24 +2446,25 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountBalance
 
-返回 SPL 令牌帐户的代币余额。 **UNSTABLE**
+Returns the token balance of an SPL Token account.
 
 #### 参数：
 
-- `<string>` - 要查询的代币帐户的公钥，以 base-58 编码的字符串
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<string>` - Pubkey of Token account to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount：<f64>` - 余额，使用薄荷规定的小数
-- `amount：<string>` - 不带小数的原始余额，u64 的字符串表示形式
-- `decimals：<u8>` - 小数点右边的以 10 为基数的数字
+- `amount: <string>` - the raw balance without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the balance as a string, using mint-prescribed decimals
 
-#### 示例:
+#### 示例：
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2339,7 +2472,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2349,9 +2482,10 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "slot": 1114
     },
     "value": {
-      "uiAmount": 98.64,
       "amount": "9864",
-      "decimals": 2
+      "decimals": 2,
+      "uiAmount": 98.64,
+      "uiAmountString": "98.64"
     },
     "id": 1
   }
@@ -2360,32 +2494,32 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountsByDelegate
 
-通过批准的代表返回所有 SPL 令牌帐户。 **UNSTABLE**
+Returns all SPL Token accounts by approved Delegate.
 
 #### 参数：
 
-- `<string>` - 要查询的帐户委托人的公钥，以 base-58 编码的字符串
-- `<object>` - 可以：
-  - `mint：<string>` - 特定令牌 Mint 的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
-  - `programId：<string>` - 拥有帐户的 Token 程序 ID 的 Pubkey，以 base-58 编码的字符串
-- `<object>` - (可选) 包含以下可选字段的配置对象：
-  - (可选)[承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_慢一点_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
-  - (可选) `dataSlice：<object>` - 使用提供的 `offset: <usize>` 和 `length: <usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
+- `<string>` - Pubkey of account delegate to query, as base-58 encoded string
+- `<object>` - Either:
+  - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于 JSON 对象的数组，其中将包含：
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
 
-- `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
-- `account：<object>` - 一个 JSON 对象，具有以下子字段：
-  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-  - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
-  - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是 JSON 格式的 `{<program>: <state>}`
-  - `executable: <bool>`，布尔值，指示帐户是否包含程序 \(并且严格为只读\)
-  - ` rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+- `pubkey: <string>` - the account Pubkey as base-58 encoded string
+- `account: <object>` - a JSON object, with the following sub fields:
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### 示例:
+#### 示例：
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2424,8 +2558,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
             "info": {
               "tokenAmount": {
                 "amount": "1",
+                "decimals": 1,
                 "uiAmount": 0.1,
-                "decimals": 1
+                "uiAmountString": "0.1"
               },
               "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
               "delegatedAmount": 1,
@@ -2449,30 +2584,30 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenAccountsByOwner
 
-按代币所有者返回所有 SPL 代币帐户。 **UNSTABLE**
+Returns all SPL Token accounts by token owner.
 
 #### 参数：
 
-- `<string>` - 要查询的帐户所有者的公钥，以 base-58 编码的字符串
-- `<object>` - 可以：
-  - `mint：<string>` - 特定代币 Mint 的发布密钥，用于将帐户限制为以 base-58 编码的字符串；或者
-  - `programId：<string>` - 拥有帐户的 Token 程序 ID 的 Pubkey，以 base-58 编码的字符串
-- `<object>` - (可选) 包含以下可选字段的配置对象：
-  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed"，但找不到特定帐户的有效铸造，则该帐户将从结果中滤除。
-  - (可选) `dataSlice：<object>` - 使用提供的 `offset：<usize>` 和 `length：<usize>`字段限制返回的帐户数据；仅适用于 "base58"，"base64" 或 "base64+zstd" 编码。
+- `<string>` - Pubkey of account owner to query, as base-58 encoded string
+- `<object>` - Either:
+  - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于 JSON 对象的数组，其中将包含：
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
 
-- `pubkey：<string>` - 帐户 Pubkey 作为以 Base-58 为底的编码字符串
-- `account：<object>` - 一个 JSON 对象，具有以下子字段：
-  - `lamports：<u64>`，分配给此帐户的 lamport 数量，以 u64 表示
-  - `owner：<string>`，此帐户已分配给该程序的 base-58 编码的 Pubkey
-  - `data：<object>`，与帐户关联的令牌状态数据，可以是编码的二进制数据，也可以是 JSON 格式的 `{<program>: <state>}`
-  - `executable: <bool>`，布尔值，指示帐户是否包含程序\(并且严格为只读\)
-  - `rentEpoch：<u64>`，此帐户下一次将要欠租金的时期，即 u64
+- `pubkey: <string>` - the account Pubkey as base-58 encoded string
+- `account: <object>` - a JSON object, with the following sub fields:
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### 示例:
 
@@ -2495,7 +2630,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2513,8 +2648,9 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
             "info": {
               "tokenAmount": {
                 "amount": "1",
+                "decimals": 1,
                 "uiAmount": 0.1,
-                "decimals": 1
+                "uiAmountString": "0.1"
               },
               "delegate": null,
               "delegatedAmount": 1,
@@ -2538,23 +2674,24 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenLargestAccounts
 
-返回特殊的 SPL Token 类型的 20 个最大账户。 **UNSTABLE**
+Returns the 20 largest accounts of a particular SPL Token type.
 
 #### 参数：
 
-- `<string>` - 要查询的代币 Mint 的公钥，以 base-58 编码的字符串
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<string>` - Pubkey of token Mint to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象数组：
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
 
-- `address：<string>` - 代币帐户的地址
-- `uiAmount：<f64>` - 代币账户余额，使用薄荷规定的小数
-- `amount：<string>` - 不带小数的原始令牌帐户余额，是 u64 的字符串表示形式
-- `decimals：<u8>` - 小数点右边的以 10 为基数的数字
+- `address: <string>` - the address of the token account
+- `amount: <string>` - the raw token account balance without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the token account balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the token account balance as a string, using mint-prescribed decimals
 
-#### 示例：
+#### 示例:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2562,7 +2699,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2576,13 +2713,15 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "address": "FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r",
         "amount": "771",
         "decimals": 2,
-        "uiAmount": 7.71
+        "uiAmount": 7.71,
+        "uiAmountString": "7.71"
       },
       {
         "address": "BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu",
         "amount": "229",
         "decimals": 2,
-        "uiAmount": 2.29
+        "uiAmount": 2.29,
+        "uiAmountString": "2.29"
       }
     ]
   },
@@ -2592,22 +2731,23 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTokenSupply
 
-返回 SPL 代币类型的总供给。 **UNSTABLE**
+Returns the total supply of an SPL Token type.
 
 #### 参数：
 
-- `<string>` - 要查询的代币 Mint 的公钥，以 base-58 编码的字符串
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<string>` - Pubkey of token Mint to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### 结果：
 
-结果将是 RpcResponse JSON 对象，其`值`等于包含以下内容的 JSON 对象：
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount：<f64>` - 代币总供给，使用薄荷规定的小数
-- `amount：<string>` - 不带小数的原始令牌总数，u64 的字符串表示形式
-- `decimals：<u8>` - 小数点右边的以 10 为基数的数字
+- `amount: <string>` - the raw total token supply without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the total token supply, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the total token supply as a string, using mint-prescribed decimals
 
-#### 示例：
+#### 示例:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2625,10 +2765,158 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
       "slot": 1114
     },
     "value": {
-      "uiAmount": 1000,
       "amount": "100000",
-      "decimals": 2
+      "decimals": 2,
+      "uiAmount": 1000,
+      "uiAmountString": "1000"
     }
+  },
+  "id": 1
+}
+```
+
+### getTransaction
+
+Returns transaction details for a confirmed transaction
+
+#### 参数：
+
+- `<string>` - transaction signature as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json". "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### 结果：
+
+- `<null>` - if transaction is not found or not confirmed
+- `<object>` - if transaction is confirmed, an object with the following fields:
+  - `slot: <u64>` - the slot this transaction was processed in
+  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
+  - `meta: <object | null>` - transaction status metadata object:
+    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+    - `fee: <u64>` - fee this transaction was charged, as u64 integer
+    - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+    - `postBalances: <array>` - array of u64 account balances after the transaction was processed
+    - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+    - DEPRECATED: `status: <object>` - Transaction status
+      - `"Ok": <null>` - Transaction was successful
+      - `"Err": <ERR>` - Transaction failed with TransactionError
+
+#### 示例:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "json"
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "postTokenBalances": [],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
+      "preTokenBalances": [],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+          "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+          "SysvarS1otHashes111111111111111111111111111",
+          "SysvarC1ock11111111111111111111111111111111",
+          "Vote111111111111111111111111111111111111111"
+        ],
+        "header": {
+          "numReadonlySignedAccounts": 0,
+          "numReadonlyUnsignedAccounts": 3,
+          "numRequiredSignatures": 1
+        },
+        "instructions": [
+          {
+            "accounts": [1, 2, 3, 0],
+            "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+            "programIdIndex": 4
+          }
+        ],
+        "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+      },
+      "signatures": [
+        "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+      ]
+    }
+  },
+  "blockTime": null,
+  "id": 1
+}
+```
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "base64"
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "postTokenBalances": [],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
+      "preTokenBalances": [],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": [
+      "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+      "base64"
+    ]
   },
   "id": 1
 }
@@ -2636,17 +2924,17 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getTransactionCount
 
-从账本中返回当前交易计数
+Returns the current Transaction count from the ledger
 
-#### 参数：
+#### Parameters:
 
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### 结果：
+#### Results:
 
-- `<u64>` - 计数
+- `<u64>` - count
 
-#### 示例:
+#### Example:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2655,7 +2943,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": 268, "id": 1 }
@@ -2663,22 +2951,22 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### getVersion
 
-返回在节点上运行的当前 solana 版本
+Returns the current solana versions running on the node
 
-#### 参数：
+#### Parameters:
 
-无
+None
 
-#### 结果：
+#### Results:
 
-结果字段将是具有以下字段的 JSON 对象：
+The result field will be a JSON object with the following fields:
 
-- `solana-core`，solana-core 的软件版本
-- `feature-set`，当前软件功能集的唯一标识符
+- `solana-core`, software version of solana-core
+- `feature-set`, unique identifier of the current software's feature set
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2686,35 +2974,37 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.6.0" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.7.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
 
-返回当前银行中所有有投票权的帐户的帐户信息和相关权益。
+Returns the account info and associated stake for all the voting accounts in the current bank.
 
-#### 参数：
+#### Parameters:
 
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `votePubkey: <string>` - Only return results for this validator vote address (base-58 encoded)
 
-#### 结果：
+#### Results:
 
-结果字段将是 `current` 帐户和 `delinquent` 帐户的 JSON 对象，每个帐户都包含带有以下子字段的 JSON 对象数组：
+The result field will be a JSON object of `current` and `delinquent` accounts, each containing an array of JSON objects with the following sub fields:
 
-- `votePubkey：<string>` - 投票帐户公钥，以 base-58 编码的字符串
-- `nodePubkey：<string>` - 节点公钥，以 base-58 编码的字符串
-- `activatedStake：<u64>` - 抽奖活动中的股份，委托给该投票帐户，并在该时期处于活动状态
-- `epochVoteAccount：<bool>` - 布尔，是否为此时代投注了投票帐户
-- `commission: <number>`，应支付给投票帐户的奖励支出的百分比(0-100)
-- `lastVote：<u64>` - 此投票帐户最近投票过的广告位
-- `epochCredits：<array>` - 每个时期结束时获得多少学分的历史，以包含 `[epoch，credits，previousCredits]` 的阵列数组的形式出现
+- `votePubkey: <string>` - Vote account address, as base-58 encoded string
+- `nodePubkey: <string>` - Validator identity, as base-58 encoded string
+- `activatedStake: <u64>` - the stake, in lamports, delegated to this vote account and active in this epoch
+- `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
+- `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
+- `lastVote: <u64>` - Most recent slot voted on by this vote account
+- `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2722,7 +3012,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2758,19 +3048,64 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 }
 ```
 
+#### Example: Restrict results to a single validator vote account
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getVoteAccounts",
+    "params": [
+      {
+        "votePubkey": "3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"
+      }
+    ]
+  }
+'
+```
+
+结果：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "current": [
+      {
+        "commission": 0,
+        "epochVoteAccount": true,
+        "epochCredits": [
+          [1, 64, 0],
+          [2, 192, 64]
+        ],
+        "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
+        "lastVote": 147,
+        "activatedStake": 42,
+        "votePubkey": "3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"
+      }
+    ],
+    "delinquent": []
+  },
+  "id": 1
+}
+```
+
 ### minimumLedgerSlot
 
-返回节点在其账本中具有有关信息的最低插槽。 如果将节点配置为清除较早的账本数据，则此值可能会随着时间增加
+Returns the lowest slot that the node has information about in its ledger. This value may increase over time if the node is configured to purge older ledger data
 
-#### 参数：
+#### Parameters:
 
 无
 
-#### 结果：
+#### Results:
 
-- `u64` - 最小账本插槽
+- `u64` - Minimum ledger slot
 
-#### 示例:
+#### Example:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2787,28 +3122,28 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### requestAirdrop
 
-向空头请求空投空投
+Requests an airdrop of lamports to a Pubkey
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 帐户的公钥，用于接收 lamport，以 base-58 编码的字符串
-- `<integer>` - lamports，如 u64
-- `<object>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment) (用于检索区块哈希和验证空投成功)
+- `<string>` - Pubkey of account to receive lamports, as base-58 encoded string
+- `<integer>` - lamports, as a u64
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
-#### 结果：
+#### Results:
 
-- `<string>` - 空投的交易签名，以 base-58 编码的字符串
+- `<string>` - Transaction Signature of airdrop, as base-58 encoded string
 
-#### 示例:
+#### Example:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}
+  {"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 1000000000]}
 '
 
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2820,36 +3155,36 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### sendTransaction
 
-将已签名的交易提交到集群以进行处理。
+Submits a signed transaction to the cluster for processing.
 
-此方法不会以任何方式更改交易；它将客户端创建的交易按原样中继到节点。
+This method does not alter the transaction in any way; it relays the transaction created by clients to the node as-is.
 
-如果节点的 rpc 服务接收到该交易，则此方法将立即成功，而无需等待任何确认。 此方法的成功响应不能保证集群能够处理或确认交易。
+If the node's rpc service receives the transaction, this method immediately succeeds, without waiting for any confirmations. A successful response from this method does not guarantee the transaction is processed or confirmed by the cluster.
 
-尽管 rpc 服务将合理地重试提交，但是如果交易的 `recent_blockhash` 在到达之前到期，则该交易可能会被拒绝。
+While the rpc service will reasonably retry to submit it, the transaction could be rejected if transaction's `recent_blockhash` expires before it lands.
 
-使用 [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) 确保交易得到处理和确认。
+Use [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) to ensure a transaction is processed and confirmed.
 
-提交之前，请执行以下飞行前检查：
+Before submitting, the following preflight checks are performed:
 
 1. 交易签名已验证
 2. 根据预检承诺指定的银行插槽模拟交易。 失败时将返回错误。 如果需要，可以禁用预检检查。 建议指定相同的承诺和飞行前承诺，以避免混淆行为。
 
-返回的签名是交易中的第一个签名，用于标识交易([交易 ID](../../terminology.md#transanction-id))。 在提交之前，可以很容易地从交易数据中提取该标识符。
+The returned signature is the first signature in the transaction, which is used to identify the transaction ([transaction id](../../terminology.md#transanction-id)). This identifier can be easily extracted from the transaction data before submission.
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 完全签名的交易，作为编码的字符串
-- `<object>` -(可选) 包含以下字段的配置对象：
-  - `skipPreflight：<bool>` - 如果为 true，则跳过预检交易检查(默认值：false)
-  - `preflightCommitment：<string>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment) 用于预检的级别(默认值：`"max"`)。
-  - `encoding：<string>` -(可选)用于交易数据的编码。 `"base58"`(_slow_，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
+- `<string>` - fully-signed Transaction, as encoded string
+- `<object>` - (optional) Configuration object containing the following field:
+  - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
+  - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"finalized"`).
+  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
-#### 结果：
+#### Results:
 
-- `<string>` - 嵌入在交易中的第一个交易签名，以 base-58 编码的字符串([transaction id](../../terminology.md#transanction-id))
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
 
-#### 示例:
+#### Example:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2865,7 +3200,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ```
 
-结果：
+Result:
 
 ```json
 {
@@ -2877,24 +3212,24 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 ### simulateTransaction
 
-模拟发送交易
+Simulate sending a transaction
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 交易，作为编码的字符串。 该交易必须具有有效的散列，但不要求对其进行签名。
-- `<object>` -(可选) 包含以下字段的配置对象：
-  - `sigVerify：<bool>` - 如果为 true，则将验证交易签名(默认值：false)
-  - `commitment：<string>` - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment) 级别以(默认值：`"max"`) 模拟交易。
-  - `encoding：<string>` - (可选) 用于交易数据的编码。 `"base58"` (_slow_，**DEPRECATED**) 或 `"base64"`。 (默认值：`"base58"`)。
+- `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
+- `<object>` - (optional) Configuration object containing the following field:
+  - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+  - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
+  - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
-#### 结果：
+#### Results:
 
-包含 TransactionStatus 对象的 RpcResponse 结果将是 RpcResponse JSON 对象，其中`value`设置为具有以下字段的 JSON 对象：
+An RpcResponse containing a TransactionStatus object The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err：<object>` - 如果交易失败，则返回错误；如果交易成功，则返回 null。 [TransactionError 定义](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-- `logs：<array | null>` - 交易指令在执行期间输出的日志消息数组，如果在交易能够执行之前模拟失败(例如，由于无效的哈希或签名验证失败)，则返回 null
+- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
-#### 示例:
+#### Example:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2929,85 +3264,32 @@ Result:
 }
 ```
 
-### setLogFilter
+## Subscription Websocket
 
-在验证器上设置日志过滤器
+After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
-#### 参数：
-
-- `<string>` - 要使用的新日志过滤器
-
-#### 结果：
-
-- `<null>`
-
-#### 示例:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
-'
-```
-
-结果：
-
-```json
-{ "jsonrpc": "2.0", "result": null, "id": 1 }
-```
-
-### validatorExit
-
-如果验证器在启用 RPC 退出的情况下启动(`--enable-rpc-exit`参数)，则此请求将导致验证器退出。
-
-#### 参数：
-
-无
-
-#### 结果：
-
-- `<bool>` - 验证程序退出操作是否成功
-
-#### 示例：:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"validatorExit"}
-'
-
-```
-
-结果：
-
-```json
-{ "jsonrpc": "2.0", "result": true, "id": 1 }
-```
-
-## 订阅 Websocket
-
-在 `ws://<ADDRESS>/` 连接到 RPC PubSub Websocket 之后：
-
-- 使用以下方法向 Websocket 提交订阅请求
-- 多个订阅可能一次处于活动状态
-- 许多订阅都采用可选的[`commitment` 参数](jsonrpc-api.md#configuring-state-commitment)，定义了如何最终完成更改以触发通知。 对于订阅，如果未指定承诺，则默认值为 `"singleGossip"`。
+- Submit subscription requests to the websocket using the methods below
+- Multiple subscriptions may be active at once
+- Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"finalized"`.
 
 ### accountSubscribe
 
-订阅一个帐户以在给定帐户公钥的灯饰或数据发生更改时接收通知
+Subscribe to an account to receive notifications when the lamports or data for a given account public key changes
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 帐户 Pubkey，以 base-58 编码的字符串
-- `<object>` - (可选) 包含以下可选字段的配置对象：
-  - `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是 "base58"(_slow_)，"base64"，"base64+zstd" 或 "jsonParsed"。 "jsonParsed" 编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求 "jsonParsed" 但找不到解析器，则该字段将退回到二进制编码，当 `data` 字段为 `<string>` 类型时可检测到。
+- `<string>` - account Pubkey, as base-58 encoded string
+- `<object>` -(可选) 包含以下可选字段的配置对象：
+  - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
-#### 结果：
+#### Results:
 
 - `<number>` - Subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 {
@@ -3018,7 +3300,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     "CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12",
     {
       "encoding": "base64",
-      "commitment": "root"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3041,9 +3323,9 @@ Result:
 { "jsonrpc": "2.0", "result": 23784, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
-Base58 编码：
+Base58 encoding:
 
 ```json
 {
@@ -3070,7 +3352,7 @@ Base58 编码：
 }
 ```
 
-Parsed-JSON 编码：
+Parsed-JSON encoding:
 
 ```json
 {
@@ -3082,10 +3364,19 @@ Parsed-JSON 编码：
         "slot": 5199307
       },
       "value": {
-        "data": [
-          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
-          "base58"
-        ],
+        "data": {
+          "program": "nonce",
+          "parsed": {
+            "type": "initialized",
+            "info": {
+              "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+              "feeCalculator": {
+                "lamportsPerSignature": 5000
+              }
+            }
+          }
+        },
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
@@ -3099,25 +3390,25 @@ Parsed-JSON 编码：
 
 ### accountUnsubscribe
 
-取消订阅帐户更改通知
+Unsubscribe from account change notifications
 
-#### 参数：
+#### Parameters:
 
-- `<number>` - 要取消的帐户订阅 ID
+- `<number>` - id of account Subscription to cancel
 
-#### 结果：
+#### Results:
 
 - `<bool>` - 取消订阅成功消息
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "accountUnsubscribe", "params": [0] }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
@@ -3125,24 +3416,24 @@ Parsed-JSON 编码：
 
 ### logsSubscribe
 
-订阅交易日志记录。 **UNSTABLE**
+Subscribe to transaction logging
 
-#### 参数：
+#### Parameters:
 
-- `filter：<string><object>` - 过滤条件，日志按帐户类型接收结果；目前支持：
-  - "all" - 订阅除简单投票交易以外的所有交易
-  - "allWithVotes" - 订阅所有交易，包括简单的投票交易
-  - `{ "mentions": [ <string> ] }` - 订阅所有提及提供的 Pubkey 的交易(以 base-58 编码的字符串)
+- `filter: <string>|<object>` - filter criteria for the logs to receive results by account type; currently supported:
+  - "all" - subscribe to all transactions except for simple vote transactions
+  - "allWithVotes" - subscribe to all transactions including simple vote transactions
+  - `{ "mentions": [ <string> ] }` - subscribe to all transactions that mention the provided Pubkey (as base-58 encoded string)
 - `<object>` -(可选) 包含以下可选字段的配置对象：
   - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
 
-#### 结果：
+#### Results:
 
 - `<integer>` - Subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 {
@@ -3154,7 +3445,7 @@ Parsed-JSON 编码：
       "mentions": [ "11111111111111111111111111111111" ]
     },
     {
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3166,15 +3457,15 @@ Parsed-JSON 编码：
 }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
-Base58 编码：
+Base58 encoding:
 
 ```json
 {
@@ -3200,25 +3491,25 @@ Base58 编码：
 
 ### logsUnsubscribe
 
-退订交易日志
+Unsubscribe from transaction logging
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 要取消的订阅 id
+- `<integer>` - id of subscription to cancel
 
-#### 结果：
+#### Results:
 
 - `<bool>` - 取消订阅成功消息
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "logsUnsubscribe", "params": [0] }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
@@ -3226,23 +3517,23 @@ Base58 编码：
 
 ### programSubscribe
 
-订阅程序以在程序拥有的给定帐户的灯饰或数据发生更改时接收通知
+Subscribe to a program to receive notifications when the lamports or data for a given account owned by the program changes
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - program_id Pubkey，以 base-58 编码的字符串
-- `<object>` -(可选) 包含以下可选字段的配置对象：
-  - (可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding：<string>` - 帐户数据的编码，可以是“ base58”(_slow_)，“ base64”，“ base64 + zstd”或“ jsonParsed”。 “jsonParsed”编码尝试使用特定于程序的状态解析器来返回更多的人类可读和显式的帐户状态数据。 如果请求“ jsonParsed”但找不到解析器，则该字段将回退为 base64 编码，当 `data` 字段为 `<string>` 类型时可检测到。
-  - (可选) `filters：<array>` - 使用各种 [filter objects](jsonrpc-api.md#filters) 过滤结果；帐户必须满足所有过滤条件，才能包含在结果中
+- `<string>` - program_id Pubkey, as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed". "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
+  - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
-#### 结果：
+#### Results:
 
 - `<integer>` - Subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 {
@@ -3253,7 +3544,7 @@ Base58 编码：
     "11111111111111111111111111111111",
     {
       "encoding": "base64",
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3286,15 +3577,15 @@ Base58 编码：
 }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": 24040, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
-Base58 编码：
+Base58 encoding:
 
 ```json
 {
@@ -3324,7 +3615,7 @@ Base58 编码：
 }
 ```
 
-Parsed-JSON 编码：
+Parsed-JSON encoding:
 
 ```json
 {
@@ -3338,10 +3629,19 @@ Parsed-JSON 编码：
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
-          "data": [
-            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
-            "base58"
-          ],
+          "data": {
+            "program": "nonce",
+            "parsed": {
+              "type": "initialized",
+              "info": {
+                "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                "feeCalculator": {
+                  "lamportsPerSignature": 5000
+                }
+              }
+            }
+          },
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
@@ -3356,17 +3656,17 @@ Parsed-JSON 编码：
 
 ### programUnsubscribe
 
-退订计划拥有的帐户更改通知
+Unsubscribe from program-owned account change notifications
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 要取消的帐户订阅 Id
+- `<integer>` - id of account Subscription to cancel
 
-#### 结果：
+#### Results:
 
 - `<bool>` - 取消订阅成功消息
 
-#### 示例:
+#### Example:
 
 请求：
 
@@ -3374,7 +3674,7 @@ Parsed-JSON 编码：
 { "jsonrpc": "2.0", "id": 1, "method": "programUnsubscribe", "params": [0] }
 ```
 
-Result:
+结果：
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
@@ -3382,20 +3682,20 @@ Result:
 
 ### signatureSubscribe
 
-订阅交易签名以在交易确认后接收通知。在 `signatureNotification` 上，订阅将自动取消。
+Subscribe to a transaction signature to receive notification when the transaction is confirmed On `signatureNotification`, the subscription is automatically cancelled
 
-#### 参数：
+#### Parameters:
 
-- `<string>` - 交易签名，以 base-58 编码的字符串
-- `<object>` -(可选) [承诺](jsonrpc-api.md#configuring-state-commitment)
+- `<string>` - Transaction Signature, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### 结果：
+#### Results:
 
-- `integer` - 订阅 id(需要取消订阅)
+- `integer` - subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 {
@@ -3414,7 +3714,7 @@ Result:
   "params": [
     "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b",
     {
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3426,7 +3726,7 @@ Result:
 { "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
 ```bash
 {
@@ -3448,19 +3748,19 @@ Result:
 
 ### signatureUnsubscribe
 
-退订签名确认通知
+Unsubscribe from signature confirmation notification
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 要取消的订阅 Id
+- `<integer>` - subscription id to cancel
 
-#### 结果：
+#### Results:
 
-- `<bool>` - 取消订阅成功消息
+- `<bool>` - unsubscribe success message
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "signatureUnsubscribe", "params": [0] }
@@ -3474,19 +3774,19 @@ Result:
 
 ### slotSubscribe
 
-订阅者可在验证节点处理插槽后随时接收通知
+Subscribe to receive notification anytime a slot is processed by the validator
 
-#### 参数：
+#### Parameters:
 
-无
+None
 
-#### 结果：
+#### Results:
 
-- `integer` - 订阅 id(需要取消订阅)
+- `integer` - subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "slotSubscribe" }
@@ -3498,7 +3798,7 @@ Result:
 { "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
 ```bash
 {
@@ -3517,17 +3817,17 @@ Result:
 
 ### slotUnsubscribe
 
-取消订阅槽通知
+Unsubscribe from slot notifications
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 需要取消的订阅 id
+- `<integer>` - subscription id to cancel
 
-#### 结果：
+#### Results:
 
-- `<bool>` - 取消订阅成功消息
+- `<bool>` - unsubscribe success message
 
-#### 示例:
+#### Example:
 
 请求：
 
@@ -3535,7 +3835,7 @@ Result:
 { "jsonrpc": "2.0", "id": 1, "method": "slotUnsubscribe", "params": [0] }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
@@ -3543,17 +3843,17 @@ Result:
 
 ### rootSubscribe
 
-只要验证节点设置了新的根目录，即可订阅以接收通知。
+Subscribe to receive notification anytime a new root is set by the validator.
 
-#### 参数：
+#### Parameters:
 
-无
+None
 
-#### 结果：
+#### Results:
 
-- `integer` - 订阅 id (需要取消订阅)
+- `integer` - subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
 请求：
 
@@ -3561,15 +3861,15 @@ Result:
 { "jsonrpc": "2.0", "id": 1, "method": "rootSubscribe" }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
-结果是最新的根插槽号
+The result is the latest root slot number.
 
 ```bash
 {
@@ -3582,49 +3882,49 @@ Result:
 }
 ```
 
-### 取消订阅
+### rootUnsubscribe
 
-退订根通知
+Unsubscribe from root notifications
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 要取消的订阅 ID
+- `<integer>` - subscription id to cancel
 
-#### 结果：
+#### Results:
 
-- `<bool>` - 取消订阅成功消息
+- `<bool>` - unsubscribe success message
 
-#### 示例：:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "rootUnsubscribe", "params": [0] }
 ```
 
-结果：
+Result:
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
 ```
 
-### 投票订阅-不稳定，默认情况下处于禁用状态
+### voteSubscribe - Unstable, disabled by default
 
-**此订阅是不稳定的，并且仅在验证器以`--rpc-pubsub-enable-vote-subscription`标志启动时可用。 此订阅的格式将来可能会更改**
+**This subscription is unstable and only available if the validator was started with the `--rpc-pubsub-enable-vote-subscription` flag. The format of this subscription may change in the future**
 
-订阅以在八卦中观察到新的投票时接收通知。 这些票是事先同意的，因此不能保证这些票会进入账本。
+Subscribe to receive notification anytime a new vote is observed in gossip. These votes are pre-consensus therefore there is no guarantee these votes will enter the ledger.
 
-#### 参数：
+#### Parameters:
 
-无
+None
 
-#### 结果：
+#### Results:
 
-- `integer` - 订阅 id (需要取消订阅)
+- `integer` - subscription id \(needed to unsubscribe\)
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "voteSubscribe" }
@@ -3636,9 +3936,9 @@ Result:
 { "jsonrpc": "2.0", "result": 0, "id": 1 }
 ```
 
-#### 通知形式
+#### Notification Format:
 
-结果是最新的投票，其中包含其哈希值，已投票的时隙列表以及可选的时间戳。
+The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
 
 ```json
 {
@@ -3655,28 +3955,471 @@ Result:
 }
 ```
 
-### 投票退订
+### voteUnsubscribe
 
-退订投票通知
+Unsubscribe from vote notifications
 
-#### 参数：
+#### Parameters:
 
-- `<integer>` - 要取消的订阅 ID
+- `<integer>` - subscription id to cancel
 
-#### 结果：
+#### Results:
 
-- `<bool>` - 取消订阅成功消息
+- `<bool>` - unsubscribe success message
 
-#### 示例:
+#### Example:
 
-请求：
+Request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "voteUnsubscribe", "params": [0] }
 ```
 
-响应：
+Response:
 
 ```json
 { "jsonrpc": "2.0", "result": true, "id": 1 }
+```
+
+## JSON RPC API Deprecated Methods
+
+### getConfirmedBlock
+
+**DEPRECATED: Please use [getBlock](jsonrpc-api.md#getblock) instead** This method is expected to be removed in solana-core v1.8
+
+Returns identity and transaction information about a confirmed block in the ledger
+
+#### Parameters:
+
+- `<u64>` - slot, as u64 integer
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json". "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
+  - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
+  - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+
+The result field will be an object with the following fields:
+
+- `<null>` - if specified block is not confirmed
+- `<object>` - if block is confirmed, an object with the following fields:
+  - `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
+  - `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string; if the parent block is not available due to ledger cleanup, this field will return "11111111111111111111111111111111"
+  - `parentSlot: <u64>` - the slot index of this block's parent
+  - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
+    - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
+    - `meta: <object>` - transaction status metadata object, containing `null` or:
+      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+      - `fee: <u64>` - fee this transaction was charged, as u64 integer
+      - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+      - `postBalances: <array>` - array of u64 account balances after the transaction was processed
+      - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+      - DEPRECATED: `status: <object>` - Transaction status
+        - `"Ok": <null>` - Transaction was successful
+        - `"Err": <ERR>` - Transaction failed with TransactionError
+  - `signatures: <array>` - present if "signatures" are requested for transaction details; an array of signatures strings, corresponding to the transaction order in the block
+  - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+    - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+    - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+    - `postBalance: <u64>` - account balance in lamports after the reward was applied
+    - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, {"encoding": "json","transactionDetails":"full","rewards":false}]}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "logMessages": [],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "postTokenBalances": [],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
+          "preTokenBalances": [],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": {
+          "message": {
+            "accountKeys": [
+              "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+              "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+              "SysvarS1otHashes111111111111111111111111111",
+              "SysvarC1ock11111111111111111111111111111111",
+              "Vote111111111111111111111111111111111111111"
+            ],
+            "header": {
+              "numReadonlySignedAccounts": 0,
+              "numReadonlyUnsignedAccounts": 3,
+              "numRequiredSignatures": 1
+            },
+            "instructions": [
+              {
+                "accounts": [1, 2, 3, 0],
+                "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+                "programIdIndex": 4
+              }
+            ],
+            "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+          },
+          "signatures": [
+            "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+          ]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "rewards": [],
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "logMessages": [],
+          "postBalances": [499998932500, 26858640, 1, 1, 1],
+          "postTokenBalances": [],
+          "preBalances": [499998937500, 26858640, 1, 1, 1],
+          "preTokenBalances": [],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": [
+          "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+          "base64"
+        ]
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+For more details on returned data: [Transaction Structure](jsonrpc-api.md#transactionstructure) [Inner Instructions Structure](jsonrpc-api.md#innerinstructionsstructure) [Token Balances Structure](jsonrpc-api.md#tokenbalancesstructure)
+
+### getConfirmedBlocks
+
+**DEPRECATED: Please use [getBlocks](jsonrpc-api.md#getblocks) instead** This method is expected to be removed in solana-core v1.8
+
+Returns a list of confirmed blocks between two slots
+
+#### Parameters:
+
+- `<u64>` - start_slot, as u64 integer
+- `<u64>` - (optional) end_slot, as u64 integer
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+
+The result field will be an array of u64 integers listing confirmed blocks between `start_slot` and either `end_slot`, if provided, or latest confirmed block, inclusive. Max range allowed is 500,000 slots.
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
+'
+```
+
+Result:
+
+```json
+{ "jsonrpc": "2.0", "result": [5, 6, 7, 8, 9, 10], "id": 1 }
+```
+
+### getConfirmedBlocksWithLimit
+
+**DEPRECATED: Please use [getBlocksWithLimit](jsonrpc-api.md#getblockswithlimit) instead** This method is expected to be removed in solana-core v1.8
+
+Returns a list of confirmed blocks starting at the given slot
+
+#### Parameters:
+
+- `<u64>` - start_slot, as u64 integer
+- `<u64>` - limit, as u64 integer
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+
+The result field will be an array of u64 integers listing confirmed blocks starting at `start_slot` for up to `limit` blocks, inclusive.
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
+'
+```
+
+Result:
+
+```json
+{ "jsonrpc": "2.0", "result": [5, 6, 7], "id": 1 }
+```
+
+### getConfirmedSignaturesForAddress2
+
+**DEPRECATED: Please use [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress) instead** This method is expected to be removed in solana-core v1.8
+
+Returns confirmed signatures for transactions involving an address backwards in time from the provided signature or most recent confirmed block
+
+#### Parameters:
+
+- `<string>` - account address as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following fields:
+  - `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+  - `before: <string>` - (optional) start searching backwards from this transaction signature. If not provided the search starts from the top of the highest max confirmed block.
+  - `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+
+The result field will be an array of transaction signature information, ordered from newest to oldest transaction:
+
+- `<object>`
+  - `signature: <string>` - transaction signature as base-58 encoded string
+  - `slot: <u64>` - The slot that contains the block with the transaction
+  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedSignaturesForAddress2",
+    "params": [
+      "Vote111111111111111111111111111111111111111",
+      {
+        "limit": 1
+      }
+    ]
+  }
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "err": null,
+      "memo": null,
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 114,
+      "blockTime": null
+    }
+  ],
+  "id": 1
+}
+```
+
+### getConfirmedTransaction
+
+**DEPRECATED: Please use [getTransaction](jsonrpc-api.md#gettransaction) instead** This method is expected to be removed in solana-core v1.8
+
+Returns transaction details for a confirmed transaction
+
+#### Parameters:
+
+- `<string>` - transaction signature as base-58 encoded string
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json". "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+
+- `<null>` - if transaction is not found or not confirmed
+- `<object>` - if transaction is confirmed, an object with the following fields:
+  - `slot: <u64>` - the slot this transaction was processed in
+  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
+  - `meta: <object | null>` - transaction status metadata object:
+    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+    - `fee: <u64>` - fee this transaction was charged, as u64 integer
+    - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+    - `postBalances: <array>` - array of u64 account balances after the transaction was processed
+    - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+    - DEPRECATED: `status: <object>` - Transaction status
+      - `"Ok": <null>` - Transaction was successful
+      - `"Err": <ERR>` - Transaction failed with TransactionError
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "json"
+    ]
+  }
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "postTokenBalances": [],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
+      "preTokenBalances": [],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+          "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+          "SysvarS1otHashes111111111111111111111111111",
+          "SysvarC1ock11111111111111111111111111111111",
+          "Vote111111111111111111111111111111111111111"
+        ],
+        "header": {
+          "numReadonlySignedAccounts": 0,
+          "numReadonlyUnsignedAccounts": 3,
+          "numRequiredSignatures": 1
+        },
+        "instructions": [
+          {
+            "accounts": [1, 2, 3, 0],
+            "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+            "programIdIndex": 4
+          }
+        ],
+        "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+      },
+      "signatures": [
+        "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+      ]
+    }
+  },
+  "blockTime": null,
+  "id": 1
+}
+```
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "base64"
+    ]
+  }
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [499998932500, 26858640, 1, 1, 1],
+      "postTokenBalances": [],
+      "preBalances": [499998937500, 26858640, 1, 1, 1],
+      "preTokenBalances": [],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": [
+      "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+      "base64"
+    ]
+  },
+  "id": 1
+}
 ```

@@ -79,7 +79,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67b6bdbdbaefc7f833bbbe
 
 但是，除了某些元数据以外，已签名的投票本身当前未存储在任何地方，因此无法按需检索它们。 这些投票可能需要保留在 Rocksdb 数据库中，并通过`(Slot, Hash, Pubkey)`键进行索引，该键代表投票的位置，投票的银行哈希值以及负责投票的投票帐户 pubkey。
 
-这样就可以通过扩展现有的签名订阅逻辑，通过 RPC 向订户提供交易处理和乐观确认证明。 当检测到乐观确认时，已经通知了订阅“SingleGossip”确认级别的客户，可以提供一个标志来指示上述两个证明也应该返回。
+这样就可以通过扩展现有的签名订阅逻辑，通过 RPC 向订户提供交易处理和乐观确认证明。 Clients who subscribe to the "Confirmed" confirmation level are already notified when optimistic confirmation is detected, a flag can be provided to signal the two proofs above should also be returned.
 
 要注意的一点是，对`B`进行乐观确认还意味着对`B`的所有祖先区块进行了乐观确认，而且并不是所有的区块都被乐观确认。
 

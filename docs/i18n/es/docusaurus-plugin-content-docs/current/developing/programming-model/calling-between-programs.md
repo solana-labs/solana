@@ -99,7 +99,7 @@ Dirección derivada del programa:
 
 1. Permitir a los programas controlar direcciones específicas, llamadas direcciones del programa, en de tal manera que ningún usuario externo puede generar transacciones válidas con firmas para esas direcciones.
 
-2. Permitir a los programas firmar programáticamente para direcciones de programas que están presentes en instrucciones invocadas a través de [Invocaciones interprogramas](#cross-program-invocations).
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Dadas las dos condiciones, los usuarios pueden transferir o asignar de forma segura la autoridad de los activos de la cadena a las direcciones del programa y el programa puede entonces asignar esa autoridad en otro lugar a su discreción.
 
@@ -109,14 +109,14 @@ Una dirección de programa no se encuentra en la curva ed25519 y, por tanto, no 
 
 ### Direcciones de programa generadas en base a Hash
 
-Las direcciones de los programas se obtienen de forma determinista a partir de una colección de semillas y un identificador de programa mediante una función hash de 256 bits resistente a la preimagen. La dirección del programa no debe estar en la curva ed25519 para asegurar que no hay una clave privada asociada. Durante la generación aparecerá un error si la dirección se encuentra en la curva. La probabilidad de que esto ocurra es de un 50 % para una determinada colección de semillas y un identificador de programa. Si esto ocurre, se puede utilizar un conjunto diferente de semillas o un bump de semillas (semilla adicional de 8 bits) para encontrar una dirección de programa válida fuera de la curva.
+Las direcciones de los programas se obtienen de forma determinista a partir de una colección de semillas y un identificador de programa mediante una función hash de 256 bits resistente a la preimagen. La dirección del programa no debe estar en la curva ed25519 para asegurar que no hay una clave privada asociada. Durante la generación aparecerá un error si la dirección se encuentra en la curva. There is about a 50/50 chance of this happening for a given collection of seeds and program id. Si esto ocurre, se puede utilizar un conjunto diferente de semillas o un bump de semillas (semilla adicional de 8 bits) para encontrar una dirección de programa válida fuera de la curva.
 
-Las direcciones de programa deterministas para los programas siguen una ruta de derivación similar a la de las cuentas creadas con `SystemInstruction::CreateAccountWithSeed` que se implementa con `system_instruction::create_address_with_seed`.
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 Como referencia, esa implementación es la siguiente:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,9 +167,8 @@ Los programas pueden utilizar la misma función para generar la misma dirección
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ El tiempo de ejecución llamará internamente a `create_program_address`, y comp
 
 ## Ejemplos
 
-Consulte [Desarrollando con Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) y [Desarrollando con C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples) para ver ejemplos de cómo utilizar las Invocaciones interprogramas.
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

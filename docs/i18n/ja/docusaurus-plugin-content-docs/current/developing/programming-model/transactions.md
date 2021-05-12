@@ -52,7 +52,7 @@ title: "トランザクション"
 
 各[命令は](terminology.md#instruction)、1 つのプログラム、プログラムに渡されるべきトランザクションのアカウントのサブセット、およびプログラムに渡されるデータバイト配列を指定します。 プログラムはデータ配列を解釈し、命令で指定された勘定科目を操作します。 プログラムは正常に返すこともできるし、エラーコードで返すこともできます。 エラーで返された場合は、トランザクション全体が直ちに失敗となります。
 
-プログラムは通常、サポートする命令を構築するためのヘルパー関数を提供します。 例えば、システムプログラムは、 [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) 命令を構築するために、以下の Rust ヘルパーを提供します。
+Programs typically provide helper functions to construct instructions they support. 例えば、システムプログラムは、 [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63) 命令を構築するために、以下の Rust ヘルパーを提供します。
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 命令の[プログラム ID](terminology.md#program-id)は、どのプログラムがこの命令を処理するかを指定します。 プログラムのアカウントのオーナーは、プログラムのロードと実行にどのローダーを使用すべきかを指定し、データはランタイムがどのようにプログラムを実行すべきかに関する情報を含んでいます。
 
-[デプロイされた BPF プログラム](developing/deployed-programs/overview.md)の場合、オーナーは BPF ローダーであり、アカウントデータは BPF バイトコードを保持しています。 プログラムアカウントは、デプロイが成功すると、ローダーによって実行可能であると永久にマークされます。 ランタイムは、実行可能でないプログラムを指定するトランザクションを拒否します。
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-デプロイされたプログラムとは異なり、 [builtins](developing/builtins/programs.md) は、 Solana ランタイムに直接組み込まれているという点で異なる処理を行います。
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### アカウント
 
@@ -101,6 +101,14 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 プログラムは、命令データのバイト配列にどのように情報をエンコードするかを自由に指定できます。 データをどのようにエンコードするかは、デコードのオーバーヘッドを考慮して決める必要があります。 いくつかの一般的なエンコーディング(Rust の bincode など) は非常に効率が悪いことがわかっています。
 
 [Solana Program Library の Token プログラム](https://github.com/solana-labs/solana-program-library/tree/master/token)は、命令データを効率的にエンコードする方法の一例を示していますが、この方法は固定サイズの型しかサポートしていないことに注意してください。 トークンは、 [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) トレイトを使用して、命令データをトークン命令と トークンアカウントの状態の両方にエンコード/デコードします。
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## 署名
 

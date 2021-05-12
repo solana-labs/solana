@@ -4,7 +4,7 @@ title: 在Solana质押
 
 _请注意：下文所述的所有价值增加都是指 SOL 余额的绝对值。 本文件在任何情况下都没有对 SOL 的货币价值提出任何建议。_
 
-在 Solana 质押 SOL 代币是您参与到保护世界性能最好的区块链网络的最佳方式， 请参考 [进行操作并获得奖励](implemented-proposals/staking-rewards.md)！ 通货膨胀和网络奖励目前在 Solana 主网 Beta 还*没有*启动，但未来可能会开放。
+在 Solana 质押 SOL 代币是您参与到保护世界性能最好的区块链网络的最佳方式， 请参考 [进行操作并获得奖励](implemented-proposals/staking-rewards.md)！
 
 Solana 是一个能够质押的权益证明(POS) 网络，这意味着任何 SOL 代币持有者可以选择将其一部分 SOL 委托给一个或多个处理交易并运行网络的验证节点。
 
@@ -14,13 +14,11 @@ Solana 是一个能够质押的权益证明(POS) 网络，这意味着任何 SOL
 
 验证节点在运行和维护其系统的时候会产生费用，它们通过收取一定百分比的委托者奖励来覆盖这部分成本。 这笔费用被称为 _佣金_。 由于验证节点获得的委托越多，其奖励就越多，因此为了吸引更多的质押，他们会相互竞争，收取更低的服务佣金。
 
-存在着一个名为*罚没*的程序，质押面临着损失代币的风险。 目前 Solana 主网 Beta 还*没有*启动罚没，但未来可能会开放。 在出现故意的恶意行为时（例如创建无效的交易或审查某些类型的交易或网络参与者），罚没程序会自动移除并销毁验证节点的一部分委托质押。 如果某个验证节点被罚没，所有委托给该验证节点的代币持有者将损失一部分代币。 对代币持有者来说，它意味着即时的损失，同时验证节点器也面临着未来奖励的损失，因为他们的委托总量减少了。
+存在着一个名为*罚没*的程序，质押面临着损失代币的风险。 Slashing involves the removal and destruction of a portion of a validator's delegated stake in response to intentional malicious behavior, such as creating invalid transactions or censoring certain types of transactions or network participants.
+
+如果某个验证节点被罚没，所有委托给该验证节点的代币持有者将损失一部分代币。 对代币持有者来说，它意味着即时的损失，同时验证节点器也面临着未来奖励的损失，因为他们的委托总量减少了。 More details on the slashing roadmap can be found [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 网络奖励和罚没的目标是协调验证节点和代币持有者的金融激励，这反过来又确保了网络的安全、强大和最佳性能。
-
-_请注意：目前在主网 Beta 上还没有启动质押者和验证节点的网络奖励。_
-
-_注意：主网 Beta 目前尚未实施罚没。_
 
 ## 如何质押 SOL 代币？
 
@@ -33,6 +31,10 @@ _注意：主网 Beta 目前尚未实施罚没。_
 - SolFlare.com 配合 keystore 文件或 Ledger Nano 使用。 请查看我们的 [指南来详细了解 SolFlare](wallet-guide/solflare.md) 的使用。
 
 - Solana 命令行工具可以配合使用 CLI 生成的密钥对文件钱包、纸钱包或连接 Ledger Nano 进行所有的质押操作。 [使用 Solana 命令行工具预设命令](cli/delegate-stake.md)
+
+- [Exodus](https://www.exodus.com/) wallet. They make the process very simple, but you cannot choose a validator: they assign you to their partner validator. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+
+- [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges. Note that you cannot choose a validator with these services: they assign you to their partner validator.
 
 #### 创建一个质押账户
 

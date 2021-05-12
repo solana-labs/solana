@@ -20,42 +20,42 @@ El rendimiento anual efectivo basado en el protocolo \(%\) por epoch recibido po
 
 El primer factor es una función de los parámetros del protocolo únicamente (es decir, independiente del comportamiento del validador en una determinada época) y da lugar a un programa de inflación diseñado para incentivar la participación temprana, proporcionar una clara estabilidad monetaria y ofrecer una seguridad óptima en la red.
 
-Como primer paso para entender el impacto del _Programa de Inflación_ en la economía de Solana, hemos simulado los rangos superiores e inferiores de lo que podría ser la emisión de fichas a lo largo del tiempo dados los rangos actuales de los parámetros del Programa de Inflación en estudio.
+As a first step to understanding the impact of the _Inflation Schedule_ on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 Específicamente:
 
-- _Tasa de inflación inicial_: 7-9%
-- _Tasa de desinflación_: -14-16%
-- _Tasa de inflación a largo plazo_: 1-2%
+- _Initial Inflation Rate_: 7-9%
+- _Dis-inflation Rate_: -14-16%
+- _Long-term Inflation Rate_: 1-2%
 
 Utilizando estos rangos para simular una serie de posibles Programas de Inflación, podemos explorar la inflación con el tiempo:
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-En la gráfica anterior, los valores medios del rango se identifican para ilustrar la contribución de cada parámetro. De estos *Programas de Inflación*simulados, también podemos proyectar rangos para emisión de tokens con el tiempo.
+En la gráfica anterior, los valores medios del rango se identifican para ilustrar la contribución de cada parámetro. From these simulated _Inflation Schedules_, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-Finalmente podemos estimar el _Yield en stake_ en el SOL en stake, si introdujimos un parámetro adicional, discutido anteriormente, _% del SOL en stake_:
+Finally we can estimate the _Staked Yield_ on staked SOL, if we introduce an additional parameter, previously discussed, _% of Staked SOL_:
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 
-En este caso, porque _% de SOL en stake_ es un parámetro que debe ser estimado (a diferencia de los parámetros _Inflation Schedule_), es más fácil utilizar parámetros específicos _Horario de inflación_ y explorar un rango de _% del SOL en stake_. Para el ejemplo de abajo, hemos elegido el medio de los rangos de parámetros explorados anteriormente:
+In this case, because _% of Staked SOL_ is a parameter that must be estimated (unlike the _Inflation Schedule_ parameters), it is easier to use specific _Inflation Schedule_ parameters and explore a range of _% of Staked SOL_. Para el ejemplo de abajo, hemos elegido el medio de los rangos de parámetros explorados anteriormente:
 
-- _Tasa de inflación inicial_: 8%
-- _Tasa de desinflación_: -15%
-- _Tasa de inflación a largo plazo_: 1.5%
+- _Initial Inflation Rate_: 8%
+- _Dis-inflation Rate_: -15%
+- _Long-term Inflation Rate_: 1.5%
 
-Los valores del _% del SOL en stake_ varían entre 60% - 90%, que sentimos cubre el rango probable que esperamos observar, basándose en la retroalimentación de las comunidades de inversores y validadores, así como en lo que se observa en protocolos de prueba de stake comparables.
+The values of _% of Staked SOL_ range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-Nuevamente, el ejemplo anterior muestra un _Yield en stake_ que un staker podría esperar con el tiempo en la red Solana con el _Programa de Inflación_ como se especificó. Este es un _Staked Yield_ idealizado ya que desatiende el impacto de tiempo de uso del validador en recompensas, comisiones de validadores, posibles ataques de rendimiento y posibles incidentes de slashing. Adicionalmente ignora que el _% del SOL en stake_ es dinámico por diseño - los incentivos económicos establecidos por este _Programa de Inflación_.
+Again, the above shows an example _Staked Yield_ that a staker might expect over time on the Solana network with the _Inflation Schedule_ as specified. This is an idealized _Staked Yield_ as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling and potential slashing incidents. It additionally ignores that _% of Staked SOL_ is dynamic by design - the economic incentives set up by this _Inflation Schedule_.
 
 ### Yield de Staking Ajustado
 
-Una valoración completa del potencial de ganancias de los tokens en stake debe tener en cuenta la _Dilución de los tokens_ y su impacto en el staking yield. Para esto, definimos _rendimiento de staking yield_ como el cambio en la propiedad de la oferta fraccional de tokens en stake debido a la distribución de la emisión de inflación. Es decir. los efectos dilutivos positivos de la inflación.
+A complete appraisal of earning potential from staking tokens should take into account staked _Token Dilution_ and its impact on staking yield. For this, we define _adjusted staking yield_ as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. Es decir. los efectos dilutivos positivos de la inflación.
 
-Podemos examinar el r _staking yield ajustado_ en función de la tasa de inflación y el porcentaje de tokens en stake en la red. Podemos ver esto representado para varias fracciones de stake aquí:
+We can examine the _adjusted staking yield_ as a function of the inflation rate and the percent of staked tokens on the network. Podemos ver esto representado para varias fracciones de stake aquí:
 
 ![](/img/p_ex_staked_dilution.png)

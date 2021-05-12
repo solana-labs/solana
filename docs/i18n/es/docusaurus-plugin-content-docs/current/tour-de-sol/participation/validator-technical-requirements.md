@@ -8,4 +8,4 @@ Vea [la configuración de hardware sugerida aquí](../../running-validator/valid
 
 ## Software
 
-- Construimos y corremos en Ubuntu 18.04. Algunos usuarios han tenido problemas al ejecutar en Ubuntu 16.04
+- Construimos y corremos en Ubuntu 20.04

@@ -99,7 +99,7 @@ mod acme {
 
 1. Позволяют программам контролировать специальные адреса, которые называются программными адресами, таким образом, чтобы никакой внешний пользователь не мог генерировать валидные транзакции с подписями для этих адресов.
 
-2. Позволяют программно подписывать программные адреса, содержащиеся в инструкциях, вызываемых через механизм [межпрограммных вызовов](#cross-program-invocations).
+2. Allow programs to programmatically sign for program addresses that are present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Принимая во внимание эти два условия, пользователи могут безопасно переводить on-chain активы и передавать полномочия на программные адреса, а программы могут впоследствии назначать владельцев по своему усмотрению.
 
@@ -109,14 +109,14 @@ mod acme {
 
 ### Программные адреса, генерируемые на основе хэша
 
-Программные адреса детерминированно генерируются на основе набора seed-чисел и идентификатора программы с использованием 256-битной устойчивой к прообразу хэш-функции. Программный адрес не должен лежать на кривой ed25519, чтобы гарантировать отсутствие связанного закрытого ключа. Если во время генерации адреса обнаружится, что он лежит на кривой, будет возвращена ошибка. Вероятность, что это произойдет для заданного набора seed-чисел и идентификатора программы составляет 50%. Если это произойдет, то для нахождения валидного программного адреса, не лежащего на кривой, будет использован другой набор seed-чисел или же в этот набор будет добавлено дополнительное 8-битное seed-число.
+Программные адреса детерминированно генерируются на основе набора seed-чисел и идентификатора программы с использованием 256-битной устойчивой к прообразу хэш-функции. Программный адрес не должен лежать на кривой ed25519, чтобы гарантировать отсутствие связанного закрытого ключа. Если во время генерации адреса обнаружится, что он лежит на кривой, будет возвращена ошибка. There is about a 50/50 chance of this happening for a given collection of seeds and program id. Если это произойдет, то для нахождения валидного программного адреса, не лежащего на кривой, будет использован другой набор seed-чисел или же в этот набор будет добавлено дополнительное 8-битное seed-число.
 
-Детерминированные программные адреса для программ следуют той же цепочке происхождения, что и аккаунты, созданные с помощью вызова `SystemInstruction::CreateAccountWithSeed` реализованного в `system_instruction::create_address_with_seed`.
+Deterministic program addresses for programs follow a similar derivation path as Accounts created with `SystemInstruction::CreateAccountWithSeed` which is implemented with `Pubkey::create_with_seed`.
 
 Данная реализация выглядит следующим образом:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -167,13 +167,12 @@ client.send_and_confirm_message(&[&alice_keypair], &message);
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
-    // Пользователь указывает назначение
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
-    // Детерминированное создание ключа депозита.
+    // Deterministically derive the escrow pubkey.
     let escrow_pubkey = create_program_address(&[&["escrow"]], program_id);
 
     // Создание инструкции передачи
@@ -183,7 +182,7 @@ fn transfer_one_token_from_escrow(
     // выполняющейся программы и указанных ключевых слов.
     // Если созданный адрес совпадает с ключом, отмеченным в инструкции как подписанный,
     // то этот ключ принимается как подписанный.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -195,4 +194,4 @@ fn transfer_one_token_from_escrow(
 
 ## Примеры
 
-Примеры использования межпрограммных вызовов вы можете найти в разделах [Разработка на Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples) и [Разработка на C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples).
+Refer to [Developing with Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples) and [Developing with C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples) for examples of how to use cross-program invocation.

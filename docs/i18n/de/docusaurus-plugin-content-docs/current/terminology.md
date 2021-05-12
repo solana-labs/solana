@@ -140,8 +140,7 @@ A sequence of [validator](terminology.md#validator) [public keys](terminology.md
 
 ## ledger
 
-A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client). Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
 
 ## ledger vote
 
@@ -213,9 +212,7 @@ A fraction of a [block](terminology.md#block); the smallest unit sent between [v
 
 ## signature
 
-A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
+A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L. This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account). Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
 
 ## skipped slot
 

@@ -25,13 +25,13 @@ Solana BPF 程序使用的虚拟地址内存映射是固定的，其布局如下
 
 上面的虚拟地址是起始地址，但是程序可以访问存储器映射的子集。 如果程序尝试读取或写入未授予其访问权限的虚拟地址，则会 panic，并且将返回`AccessViolation`错误，其中包含尝试违反的地址和大小。
 
-## 堆栈 {#stack}
+## 堆栈
 
 BPF 使用堆栈帧而不是可变堆栈指针。 每个堆栈帧的大小为 4KB。
 
 如果程序违反了该堆栈帧大小，则编译器将报告溢出情况，作为警告。
 
-例如：`Error: Function _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please minimize large stack variables`
+For example: `Error: Function _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please minimize large stack variables`
 
 该消息标识哪个符号超出了其堆栈框架，但是如果它是 Rust 或 C ++符号，则名称可能会被修饰。 要对 Rust 符号进行解码，请使用[rustfilt](https://github.com/luser/rustfilt)。 上面的警告来自 Rust 程序，因此，已取消组合的符号名称为：
 
@@ -61,7 +61,23 @@ BPF 堆栈帧占用一个从 0x200000000 开始的虚拟地址范围。
 
 ## 浮点数支持
 
-程序支持 Rust 的 float 操作的有限子集，尽管由于涉及的开销而强烈不建议使用。 如果程序尝试使用不受支持的浮点运算，则运行时将报告未解决的符号错误。
+Programs support a limited subset of Rust's float operations, if a program attempts to use a float operation that is not supported, the runtime will report an unresolved symbol error.
+
+Float operations are performed via software libraries, specifically LLVM's float builtins. Due to be software emulated they consume more compute units than integer operations. In general, fixed point operations are recommended where possible.
+
+The Solana Program Library math tests will report the performance of some math operations: https://github.com/solana-labs/solana-program-library/tree/master/libraries/math
+
+To run the test, sync the repo, and run:
+
+`$ cargo test-bpf -- --nocapture --test-threads=1`
+
+Recent results show the float operations take more instructions compared to integers equivalents. Fixed point implementations may vary but will also be less then the float equivalents:
+
+```
+         u64   f32
+Multipy    8   176
+Divide     9   219
+```
 
 ## 静态可写入数据
 

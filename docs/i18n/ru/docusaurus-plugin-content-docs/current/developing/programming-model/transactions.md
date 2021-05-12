@@ -52,7 +52,7 @@ Compact-u16 — многобайтовая кодировка 16 бит. Пер�
 
 Каждая [инструкция](terminology.md#instruction) указывает одну программу, a подмножество аккаунтов транзакций, которые должны быть переданы программе, и массива байт, который так же передается программе. Программа интерпретирует массив данных и оперирует аккаунтами, указанными ее инструкциями. Программа может возвращать успешный результат или код ошибки. В случае ошибки происходит немедленный откат всей транзакции.
 
-Обычно программа предоставляет вспомогательные функции для построения инструкций, которые они поддерживают. Например, системная программа предоставляет следующую вспомогательную функцию Rust для создания инструкции [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
+Programs typically provide helper functions to construct instructions they support. Например, системная программа предоставляет следующую вспомогательную функцию Rust для создания инструкции [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63):
 
 ```rust
 pub fn create_account(
@@ -66,7 +66,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -86,9 +86,9 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 Содержащееся в инструкции [id программы](terminology.md#program-id) какая программа будет обрабатывать данную инструкцию. Владелец аккаунта программы определяет какой загрузчик должен использоваться для загрузки и выполнения программы, а данные содержат информацию о том, как рантайм будет запускать программу.
 
-В случае [развернутых программ BPF ](developing/deployed-programs/overview.md), владельцем является BPF загрузчик и данные учетной записи содержат байткод BPF. Аккаунты программ навсегда помечены как исполняемые загрузчиком сразу после успешной установки. Рантайм отклонит транзакции, которые определяют программы, которые не являются исполняемыми.
+In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md), the owner is the BPF Loader and the account data holds the BPF bytecode. Program accounts are permanently marked as executable by the loader once they are successfully deployed. The runtime will reject transactions that specify programs that are not executable.
 
-В отличии от развернутых программ Bpf, [встроенные](developing/builtins/programs.md) программы обрабатываются иначе и собираются непосредственно в рантайме Solana.
+Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs) are handled differently in that they are built directly into the Solana runtime.
 
 ### Аккаунты
 
@@ -101,6 +101,14 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 Программы вольны выбирать кодировку информации в байтовом массиве данных инструкции. Выбор метода кодирования данных должен учитывать перекрытие декодирования, поскольку этот шаг выполняется on-chain программой. Было отмечено, что некоторые общие кодировки (например, двоичный код Rust) очень неэффективны.
 
 Ренализация токена [Solana Program Library's Token program](https://github.com/solana-labs/solana-program-library/tree/master/token) представляет один из примеров того как данные инструкции могут быть кодированы эффективно, однако отметьте что этот метод поддерживает только типы фиксированного размера. Токен использует трест [Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs) для кодирования/декодирования данных инструкций и для инструкций токена, и для состояния аккаунта токена.
+
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order. This means a malicious user could craft transactions that may pose instructions in an order that the program has not been protected against. Programs should be hardened to properly and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization. Some programs may attempt to deinitialize an account by setting its lamports to zero, with the assumption that the runtime will delete the account. This assumption may be valid between transactions, but it is not between instructions or cross-program invocations. To harden against this, the program should also explicitly zero out the account's data.
+
+An example of where this could be a problem is if a token program, upon transferring the token out of an account, sets the account's lamports to zero, assuming it will be deleted by the runtime. If the program does not zero out the account's data, a malicious user could trail this instruction with another that transfers the tokens a second time.
 
 ## Подписи
 

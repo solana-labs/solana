@@ -1,61 +1,47 @@
 ---
-title: "Examples"
+title: "Ejemplos"
 ---
 
 ## Helloworld
 
-Hello World is a project that demonstrates how to use the Solana Javascript API
-and both Rust and C programs to build, deploy, and interact with programs on the
-Solana blockchain.
+Hello World es un proyecto que demuestra cómo utilizar la API de Javascript de Solana y tanto Rust como C para construir, desplega, e interactúa con programas en la cadena de bloques de Solana.
 
-The project comprises of:
+El proyecto comprende de:
 
-- An on-chain hello world program
-- A client that can send a "hello" to an account and get back the number of
-  times "hello" has been sent
+- Un programa hello world en cadena
+- Un cliente que puede enviar un "hola" a una cuenta y obtener el número de veces que se ha enviado el "hola"
 
-### Build and Run
+### Construir y ejecutar
 
-First fetch the latest version of the example code:
+Primero obtenga la última versión del código de ejemplo:
 
 ```bash
-$ git clone https://github.com/solana-labs/example-helloworld.git
+$ git clon https://github.com/solana-labs/example-helloworld.git
 $ cd example-helloworld
 ```
 
-Next, follow the steps in the git repository's
-[README](https://github.com/solana-labs/example-helloworld/blob/master/README.md).
+A continuación, siga los pasos en el repositorio git [README](https://github.com/solana-labs/example-helloworld/blob/master/README.md).
 
-## Break
+## Romper
 
-[Break](https://break.solana.com/) is a React app that gives users a visceral
-feeling for just how fast and high-performance the Solana network really is. Can
-you _break_ the Solana blockchain? During a 15 second play-though, each click of
-a button or keystroke sends a new transaction to the cluster. Smash the keyboard
-as fast as you can and watch your transactions get finalized in real time while
-the network takes it all in stride!
+[Break](https://break.solana.com/) es una aplicación React que da a los usuarios una sensación visceral por lo rápido y alto rendimiento que realmente es la red Solana. ¿Puedes _romper_ el blockchain de Solana? Sin embargo, durante un juego de 15 segundos, cada clic de un botón o un toque del teclado envía una nueva transacción al clúster. Aplasta el teclado tan rápido como puedas y observa que tus transacciones se terminan en tiempo real mientras ¡la red lo toma todo a paso!
 
-Break can be played on our Devnet, Testnet and Mainnet Beta networks. Plays are
-free on Devnet and Testnet, where the session is funded by a network faucet. On
-Mainnet Beta, users pay to play 0.08 SOL per game. The session account can be
-funded by a local keystore wallet or by scanning a QR code from Trust Wallet to
-transfer the tokens.
+El "break" se puede jugar en nuestras redes Devnet, Testnet y Beta Mainnet. Las reproducciones son gratuitas en Devnet y Testnet, donde la sesión está financiada por una faucet de la red. En Beta Mainnet, los usuarios pagan para jugar 0.08 SOL por partida. La cuenta de sesión puede ser financiada por una billetera local del almacén de claves o escaneando un código QR desde la billetera fiduciaria hasta transferir los tokens.
 
-[Click here to play Break](https://break.solana.com/)
+[Haz clic aquí para jugar al Break](https://break.solana.com/)
 
-### Build and Run
+### Construir y ejecutar
 
-First fetch the latest version of the example code:
+Primero obtener la última versión del código de ejemplo:
 
 ```bash
-$ git clone https://github.com/solana-labs/break.git
-$ cd break
+$ git clon https://github.com/solana-labs/break.git
+$ ruptura de cd
 ```
 
-Next, follow the steps in the git repository's
-[README](https://github.com/solana-labs/break/blob/master/README.md).
+A continuación, siga los pasos en el repositorio git [README](https://github.com/solana-labs/break/blob/master/README.md).
 
-## Language Specific
+## Idioma específico
 
 - [Rust](developing-rust.md#examples)
 - [C](developing-c.md#examples)

@@ -6,7 +6,7 @@ title: "الحسابات (Accounts)"
 
 إذا كان البرنامج يحتاج إلى تخزين الحالة بين المُعاملات، فإنه يفعل ذلك باستخدام _accounts_. الحسابات مُماثلة للملفات الموجودة في نظم التشغيل مثل لينوكس (Linux). مثل الملف، قد يحتفظ الحساب ببيانات عشوائية وتستمر هذه البيانات إلى ما بعد عمر البرنامج. كذلك مثل الملف أيضًا، يتضمن الحساب بيانات وصفية تُخبر وقت التشغيل بمن يُسمح له بالوصول إلى البيانات وكيفية ذلك.
 
-على خلاف الملف، يتضمن الحساب بيانات التعريف لمدى عمر الملف. يتم التعبير عن هذا العمر في "الرموز" ، وهي عدد من الرموز الكسرية الأصلية، تُسمى _ lamports _. يتم الإحتفاظ بالحسابات في ذاكرة المُدقّق (validator) ودفع الإيجار ["rent"](#rent) للبقاء هناك. كل مُدقّق (validator) يقوم دوريا بمسح جميع الحسابات وجمع الإيجار. يتم تطهير أي حساب ينخفض إلى صفر lamports. يمكن أيضًا تمييز الحسابات بأنها معفاة من الإيجار [rent-exempt](#rent-exemption) إذا كانت تحتوي على عدد كافٍ من الـ lamports.
+على خلاف الملف، يتضمن الحساب بيانات التعريف لمدى عمر الملف. يتم التعبير عن هذا العمر في "الرموز" ، وهي عدد من الرموز الكسرية الأصلية، تُسمى _ lamports _. يتم الإحتفاظ بالحسابات في ذاكرة المُدقّق (validator) ودفع الإيجار ["rent"](#rent) للبقاء هناك. كل مُدقّق (validator) يقوم دوريا بمسح جميع الحسابات وجمع الإيجار. يتم تطهير أي حساب ينخفض إلى صفر lamports. Accounts can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient number of lamports.
 
 بنفس الطريقة التي يُستخدم بها مُستخدم Linux مسارًا للبحث عن ملف، يستخدم عميل Solana عنوان _address_ للبحث عن حساب. العنوان هو مفتاح عمومي (Pubkey) بتشفير 256-bit.
 
@@ -34,7 +34,19 @@ title: "الحسابات (Accounts)"
 
 تتم تهيئة الحساب الذي تم إنشاؤه ليكون _owned_ بواسطة برنامج مُدمج يُسمى برنامج النظام ويُسمى حساب النظام _system account_ بجدارة. يشمل الحساب بيانات تعريف "المالك". المالك هو رقم تعريف للبرنامج (program id). وقت التشغيل يمنح البرنامج الوصول للكتابة إلى الحساب إذا كان مُعرفه يطابق المالك. بالنسبة لحالة برنامج النظام، وقت التشغيل يسمح للعملاء بنقل الlamports والأهم تعيين ملكية الحساب _assign_، يعني تغيير المالك إلى مُعرف برنامج مختلف. إذا كان حساب غير مملوك للبرنامج، لا يُسمح للبرنامج إلا بقراءة البيانات الخاصة به والإيداع في الحساب.
 
-## التأجير (Rent)
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the account's `Owner` program. Doing so allows the program to trust that the data passed to them via accounts they own will be in a known and valid state. The runtime enforces this by rejecting any transaction containing a program that attempts to write to an account it does not own. But, there are also cases where a program may merely read an account they think they own and assume the data has only been written by themselves and thus is valid. But anyone can issues instructions to a program, and the runtime does not know that those accounts are expected to be owned by the program. Therefore a malicious user could create accounts with arbitrary data and then pass these accounts to the program in the place of a valid account. The arbitrary data could be crafted in a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar. Unless the program checks the address or owner, it's impossible to be sure whether it's a real and valid sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check isn't required because modifying an unowned (could be the malicious account with the wrong owner) will be rejected by the runtime, and the containing transaction will be thrown out.
+
+## تأجير
 
 يتطلب الإحتفاظ بالحسابات شغالة في Solana تكلفة تخزين تسمى _rent_ لأن الكتلة (cluster) يجب أن تُحافظ بنشاط على البيانات لمعالجة أي مُعاملات مُستقبلية عليها. هذا يختلف عن الBitcoin و الEthereum، حيث لا يُؤدي تخزين الحسابات إلى أي تكاليف.
 
@@ -88,3 +100,14 @@ Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's re
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some point in the future, steps will be taken to ensure that accounts that are rent-exempt before the increase will remain rent-exempt afterwards

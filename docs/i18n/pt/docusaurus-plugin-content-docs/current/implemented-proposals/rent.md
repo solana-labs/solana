@@ -40,13 +40,13 @@ Finalmente, a coleção de aluguel acontece de acordo com as atualizações da c
 
 ### Razão do design atual
 
-Sob o modelo anterior, não é possível ter contas que continuam a ser tocadas, que nunca têm de pagar o aluguel. As contas sempre pagam o aluguel exatamente uma vez para cada epoch, exceto as contas de aluguel, sysvar e executável.
+Sob o modelo anterior, não é possível ter contas que continuam a ser tocadas, que nunca têm de pagar o aluguel. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-Esta escolha é do design pretendido. Caso contrário, seria possível acionar uma coleção de aluguel não autorizado com a instrução `Noop` por qualquer um que possa lucrar injustamente o aluguel (um líder no momento) ou salvar o custo de aluguel previsto para o aluguel.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-Como outro efeito colateral desta escolha, também note que esta coleção de renda periódica força o validador a não armazenar contas obsoletas em um armazenamento otimista e salvar o custo de armazenamento, que não é favorável para os proprietários de contas e pode fazer com que transações neles fiquem mais tempo do que as outras. Do lado da barra, isto impede que usuários maliciosos acumulem uma quantidade significativa de contas de lixo, sobrecarregando validadores.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-Como consequência geral deste design, todas as contas são armazenadas igualmente como conjunto de trabalho do validador com características de mesmo desempenho, Reflectindo diretamente a estrutura de precificação de aluguel uniforme.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### Coleção Ad-hoc
 

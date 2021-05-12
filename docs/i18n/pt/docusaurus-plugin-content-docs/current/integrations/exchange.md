@@ -297,7 +297,7 @@ Sending a synchronous transfer to the Solana cluster allows you to easily ensure
 Solana's command-line tool offers a simple command, `solana transfer`, to generate, submit, and confirm transfer transactions. By default, this method will wait and track progress on stderr until the transaction has been finalized by the cluster. If the transaction fails, it will report any transaction errors.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --allow-unfunded-recipient --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js) offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build a transfer transaction, and submit it using the `sendAndConfirmTransaction` method.
@@ -317,7 +317,7 @@ solana fees --url http://localhost:8899
 In the command-line tool, pass the `--no-wait` argument to send a transfer asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
@@ -360,13 +360,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Blockhash Expiration
 
-When you request a recent blockhash for your withdrawal transaction using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) or `solana fees`, the response will include the `lastValidSlot`, the last slot in which the blockhash will be valid. You can check the cluster slot with a [`getSlot` query](developing/clients/jsonrpc-api.md#getslot); once the cluster slot is greater than `lastValidSlot`, the withdrawal transaction using that blockhash should never succeed.
-
-You can also doublecheck whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is null, the blockhash is expired, and the withdrawal transaction should never succeed.
+You can check whether a particular blockhash is still valid by sending a [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash) request with the blockhash as a parameter. If the response value is `null`, the blockhash is expired, and the withdrawal transaction using that blockhash should never succeed.
 
 ### Validating User-supplied Account Addresses for Withdrawals
 
 As withdrawals are irreversible, it may be a good practice to validate a user-supplied account address before authorizing a withdrawal in order to prevent accidental loss of user funds.
+
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This results in an ASCII text string matching the following regular expression:
+
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+
+This check is insufficient on its own as Solana addresses are not checksummed, so typos cannot be detected. To further validate the user's input, the string can be decoded and the resulting byte array's length confirmed to be 32. However, there are some addresses that can decode to 32 bytes despite a typo such as a single missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the balance be queried for candidate withdraw addresses and the user prompted to confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
 
 The address of a normal account in Solana is a Base58-encoded string of a 256-bit ed25519 public key. Not all bit patterns are valid public keys for the ed25519 curve, so it is possible to ensure user-supplied account addresses are at least correct ed25519 public keys.
 
@@ -433,7 +447,7 @@ O fluxo de trabalho do Token SPL é semelhante ao dos tokens nativos de SOL, mas
 
 ### Token Mints
 
-Cada _tipo_ do SPL Token é declarado criando uma conta _mint_. Esta conta armazena metadados que descrevem recursos do token, como a oferta, número de decimais e várias autoridades com controle sobre a mentalidade. Cada conta SPL Token faz referência a sua menta associada e só pode interagir com Tokens SPL desse tipo.
+Each _type_ of SPL Token is declared by creating a _mint_ account. Esta conta armazena metadados que descrevem recursos do token, como a oferta, número de decimais e várias autoridades com controle sobre a mentalidade. Cada conta SPL Token faz referência a sua menta associada e só pode interagir com Tokens SPL desse tipo.
 
 ### Instalando a `spl-token` Ferramenta CLI
 
@@ -555,8 +569,8 @@ $ transferência spl-token <exchange token account> <withdrawal amount> <withdra
 
 #### Autoridade de congelamento
 
-Por razões de conformidade regulamentar, uma entidade emissora de token SPL pode opcionalmente escolher manter a "Autoridade" sobre todas as contas criadas em associação com sua mentalidade. Isto permite que [bloqueiem](https://spl.solana.com/token#freezing-accounts) os ativos em uma determinada conta, tornando a conta inutilizável até o descongelamento. Se este recurso estiver em uso, a pubkey da autoridade congelada será registrada na conta de SPL Token.
+For regulatory compliance reasons, an SPL Token issuing entity may optionally choose to hold "Freeze Authority" over all accounts created in association with its mint. Isto permite que [bloqueiem](https://spl.solana.com/token#freezing-accounts) os ativos em uma determinada conta, tornando a conta inutilizável até o descongelamento. Se este recurso estiver em uso, a pubkey da autoridade congelada será registrada na conta de SPL Token.
 
 ## Testando a Integração
 
-Certifique-se de testar seu fluxo de trabalho completo em Solana devnet e testnet [clusters](../clusters.md) antes de mudar para produção no mainnet-beta. Devnet é o mais aberto e flexível, e ideal para o desenvolvimento inicial, enquanto testnet oferece uma configuração de cluster mais realista. Tanto devnet quanto testnet suportam uma torneira, execute `solana airdrop 10` para obter algum devnet ou testnet SOL para desenvolvimento e teste.
+Certifique-se de testar seu fluxo de trabalho completo em Solana devnet e testnet [clusters](../clusters.md) antes de mudar para produção no mainnet-beta. Devnet é o mais aberto e flexível, e ideal para o desenvolvimento inicial, enquanto testnet oferece uma configuração de cluster mais realista. Both devnet and testnet support a faucet, run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.
