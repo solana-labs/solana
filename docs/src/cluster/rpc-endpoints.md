@@ -10,13 +10,13 @@ public RPC endpoints currently available and recommended for each public cluster
 
 #### Endpoint
 
-- `https://devnet.solana.com` - single Solana-hosted api node; rate-limited
+- `https://api.devnet.solana.com` - single Solana-hosted api node; rate-limited
 
 #### Rate Limits
 
 - Maximum number of requests per 10 seconds per IP: 100
 - Maximum number of requests per 10 seconds per IP for a single RPC: 40
-- Maximum current connections per IP: 40
+- Maximum concurrent connections per IP: 40
 - Maximum connection rate per 10 seconds per IP: 40
 - Maximum amount of data per 30 second: 100 MB
 
@@ -24,13 +24,13 @@ public RPC endpoints currently available and recommended for each public cluster
 
 #### Endpoint
 
-- `https://testnet.solana.com` - single Solana-hosted api node; rate-limited
+- `https://api.testnet.solana.com` - single Solana-hosted api node; rate-limited
 
 #### Rate Limits
 
 - Maximum number of requests per 10 seconds per IP: 100
 - Maximum number of requests per 10 seconds per IP for a single RPC: 40
-- Maximum current connections per IP: 40
+- Maximum concurrent connections per IP: 40
 - Maximum connection rate per 10 seconds per IP: 40
 - Maximum amount of data per 30 second: 100 MB
 
@@ -45,6 +45,6 @@ public RPC endpoints currently available and recommended for each public cluster
 
 - Maximum number of requests per 10 seconds per IP: 100
 - Maximum number of requests per 10 seconds per IP for a single RPC: 40
-- Maximum current connections per IP: 40
+- Maximum concurrent connections per IP: 40
 - Maximum connection rate per 10 seconds per IP: 40
 - Maximum amount of data per 30 second: 100 MB
