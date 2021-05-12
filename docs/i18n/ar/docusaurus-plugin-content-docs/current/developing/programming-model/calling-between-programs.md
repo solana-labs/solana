@@ -5,8 +5,8 @@ title: Calling Between Programs
 ## Cross-Program Invocations
 
 The Solana runtime allows programs to call each other via a mechanism called
-cross-program invocation.  Calling between programs is achieved by one program
-invoking an instruction of the other.  The invoking program is halted until the
+cross-program invocation. Calling between programs is achieved by one program
+invoking an instruction of the other. The invoking program is halted until the
 invoked program finishes processing the instruction.
 
 For example, a client could create a transaction that modifies two accounts,
@@ -57,7 +57,7 @@ given instruction to the `token` program via the instruction's `program_id`
 field.
 
 Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked.  This means that both the executable account (the
+instruction being invoked. This means that both the executable account (the
 ones that matches the instruction's program id) and the accounts passed to the
 instruction procesor.
 
@@ -155,7 +155,7 @@ Program derived address:
    such a way that no external user can generate valid transactions with
    signatures for those addresses.
 
-2. Allow programs to programmatically sign for programa addresses that are
+2. Allow programs to programmatically sign for program addresses that are
    present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Given the two conditions, users can securely transfer or assign the authority of
@@ -166,28 +166,28 @@ authority elsewhere at its discretion.
 
 A Program address does not lie on the ed25519 curve and therefore has no valid
 private key associated with it, and thus generating a signature for it is
-impossible.  While it has no private key of its own, it can be used by a program
+impossible. While it has no private key of its own, it can be used by a program
 to issue an instruction that includes the Program address as a signer.
 
 ### Hash-based generated program addresses
 
 Program addresses are deterministically derived from a collection of seeds and a
-program id using a 256-bit pre-image resistant hash function.  Program address
+program id using a 256-bit pre-image resistant hash function. Program address
 must not lie on the ed25519 curve to ensure there is no associated private key.
 During generation an error will be returned if the address is found to lie on
-the curve.  There is about a 50/50 change of this happening for a given
-collection of seeds and program id.  If this occurs a different set of seeds or
+the curve. There is about a 50/50 chance of this happening for a given
+collection of seeds and program id. If this occurs a different set of seeds or
 a seed bump (additional 8 bit seed) can be used to find a valid program address
 off the curve.
 
 Deterministic program addresses for programs follow a similar derivation path as
 Accounts created with `SystemInstruction::CreateAccountWithSeed` which is
-implemented with `system_instruction::create_address_with_seed`.
+implemented with `Pubkey::create_with_seed`.
 
 For reference that implementation is as follows:
 
 ```rust,ignore
-pub fn create_address_with_seed(
+pub fn create_with_seed(
     base: &Pubkey,
     seed: &str,
     program_id: &Pubkey,
@@ -242,9 +242,8 @@ as if it had the private key to sign the transaction.
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -258,7 +257,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
@@ -275,7 +274,7 @@ result against the addresses supplied in the instruction.
 ## Examples
 
 Refer to [Developing with
-Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples)
+Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)
 and [Developing with
-C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples)
+C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples)
 for examples of how to use cross-program invocation.

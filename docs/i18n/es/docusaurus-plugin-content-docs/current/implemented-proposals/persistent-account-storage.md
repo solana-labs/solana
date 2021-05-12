@@ -4,9 +4,9 @@ title: Persistent Account Storage
 
 ## Persistent Account Storage
 
-The set of Accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point the changes need to be reversible.
+The set of accounts represent the current computed state of all the transactions that have been processed by a validator. Each validator needs to maintain this entire set. Each block that is proposed by the network represents a change to this set, and since each block is a potential rollback point, the changes need to be reversible.
 
-Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR and care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
+Persistent storage like NVMEs are 20 to 40 times cheaper than DDR. The problem with persistent storage is that write and read performance is much slower than DDR. Care must be taken in how data is read or written to. Both reads and writes can be split between multiple storage drives and accessed in parallel. This design proposes a data structure that allows for concurrent reads and concurrent writes of storage. Writes are optimized by using an AppendVec data structure, which allows a single writer to append while allowing access to many concurrent readers. The accounts index maintains a pointer to a spot where the account was appended to every fork, thus removing the need for explicit checkpointing of state.
 
 ## AppendVec
 
@@ -54,18 +54,6 @@ Three possible options exist:
 - Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
 - Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
 - Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
-
-## Append-only Writes
-
-All the updates to Accounts occur as append-only updates. For every account update, a new version is stored in the AppendVec.
-
-It is possible to optimize updates within a single fork by returning a mutable reference to an already stored account in a fork. The Bank already tracks concurrent access of accounts and guarantees that a write to a specific account fork will not be concurrent with a read to an account at that fork. To support this operation, AppendVec should implement this function:
-
-```text
-fn get_mut(&self, index: u64) -> &mut T;
-```
-
-This API allows for concurrent mutable access to a memory region at `index`. It relies on the Bank to guarantee exclusive access to that index.
 
 ## Garbage collection
 

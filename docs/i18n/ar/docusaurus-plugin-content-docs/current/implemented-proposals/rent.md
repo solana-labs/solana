@@ -40,13 +40,13 @@ Finally, rent collection happens according to the protocol-level account updates
 
 ### Current design rationale
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts are always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
+Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
-This is intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
+This is an intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit from the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
-As another side-effect of this choice, also note that this periodic rent collection effectively forces validator not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than the others. On the flip side, this prevents malicious users from piling significant amount of garbage accounts, burdening validators.
+As another side-effect of this choice, also note that this periodic rent collection effectively forces validators not to store stale accounts into a cold storage optimistically and save the storage cost, which is unfavorable for account owners and may cause transactions on them to stall longer than others. On the flip side, this prevents malicious users from creating significant numbers of garbage accounts, burdening validators.
 
-As the overall consequence of this design, all of accounts is stored equally as validator's working set with same performance characteristics, straightly reflecting the uniform rent pricing structure.
+As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
 ### Ad-hoc collection
 

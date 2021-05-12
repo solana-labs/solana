@@ -25,9 +25,11 @@ Explorers:
   - Devnet typically runs a newer software version than Mainnet Beta
 - Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - Metrics environment variable for Devnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
+
 - RPC URL for Devnet: `https://devnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -40,11 +42,11 @@ solana config set --url https://devnet.solana.com
 
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
     --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
@@ -70,9 +72,11 @@ The `--trusted-validator`s is operated by Solana
   Mainnet Beta
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
+
 - RPC URL for Testnet: `https://testnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -85,14 +89,14 @@ solana config set --url https://testnet.solana.com
 
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
+    --trusted-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
@@ -103,8 +107,8 @@ $ solana-validator \
 
 The identity of the `--trusted-validator`s are:
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
-- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - Break RPC node (Solana)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Foundation (testnet.solana.com)
+- `7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY` - Solana Foundation (Break RPC node)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
@@ -121,9 +125,11 @@ Currently, rewards and inflation are disabled.
     the wallet will always be connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
+
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
+
 - RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -143,7 +149,7 @@ $ solana-validator \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
     --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \

@@ -27,18 +27,18 @@ validator's ReplayStage.
 
 Improved client experience:
 
-* Support connections directly from WebAssembly apps.
-* Clients can be notified of confirmation progress in real-time, including votes
+- Support connections directly from WebAssembly apps.
+- Clients can be notified of confirmation progress in real-time, including votes
   and voter stake weight.
-* Clients can be notified when the heaviest fork changes, if it affects the
+- Clients can be notified when the heaviest fork changes, if it affects the
   transactions confirmation count.
 
 Easier for validators to support:
 
-* Each validator supports some number of concurrent connections and otherwise
+- Each validator supports some number of concurrent connections and otherwise
   has no significant resource constraints.
-* Transaction status is never stored in memory and cannot be polled for.
-* Signatures are only stored in memory until the desired commitment level or
+- Transaction status is never stored in memory and cannot be polled for.
+- Signatures are only stored in memory until the desired commitment level or
   until the blockhash expires, which ever is later.
 
 How it works:

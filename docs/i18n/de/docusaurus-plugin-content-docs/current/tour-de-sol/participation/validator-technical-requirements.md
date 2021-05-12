@@ -8,4 +8,4 @@ See [suggested hardware configuration here](../../running-validator/validator-re
 
 ## Software
 
-- We build and run on Ubuntu 18.04. Some users have had trouble when running on Ubuntu 16.04
+- We build and run on Ubuntu 20.04

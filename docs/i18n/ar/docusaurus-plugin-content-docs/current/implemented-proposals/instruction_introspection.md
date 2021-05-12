@@ -6,7 +6,7 @@ title: instruction introspection
 
 Some smart contract programs may want to verify that another Instruction is present in a
 given Message since that Instruction could be be performing a verification of certain data,
-in a precompiled function. (See secp256k1\_instruction for an example).
+in a precompiled function. (See secp256k1_instruction for an example).
 
 ## Solution
 
