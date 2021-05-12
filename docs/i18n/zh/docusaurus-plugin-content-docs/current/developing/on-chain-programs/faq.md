@@ -2,9 +2,9 @@
 title: "常见问题解答"
 ---
 
-在编写或与Solana程序进行交互时，经常会遇到一些常见的问题或困难。 以下是有助于回答这些问题的资源。
+在编写或与 Solana 程序进行交互时，经常会遇到一些常见的问题或困难。 以下是有助于回答这些问题的资源。
 
-如果还没有解决您的问题，那么Solana[#developers](https://discord.gg/RxeGBH)Discord频道是一个不错的资源。
+如果还没有解决您的问题，那么 Solana[#developers](https://discord.gg/RxeGBH)Discord 频道是一个不错的资源。
 
 ## `CallDepth`错误
 
@@ -14,7 +14,7 @@ title: "常见问题解答"
 
 ## `CallDepthExceeded`错误
 
-此错误表示已超出BPF堆栈深度。
+此错误表示已超出 BPF 堆栈深度。
 
 请参阅[通话深度](overview.md#call-depth)
 
@@ -22,11 +22,11 @@ title: "常见问题解答"
 
 请参见[计算约束](developing/programming-model/runtime.md#compute-budget)
 
-## 浮动Rust类型
+## 浮动 Rust 类型
 
 请参见[浮动支持](overview.md#float-support)
 
-## Heap大小
+## Heap 大小
 
 请参见[heap](overview.md#heap)
 
@@ -38,7 +38,7 @@ title: "常见问题解答"
 
 ## 无效指示数据
 
-尝试反序列化指令时，可能会发生此程序错误，请检查传入的结构是否与指令完全匹配。 字段之间可能会有一些填充。 如果程序实现了Rust的`Pack`特性，则尝试打包和解压缩指令类型`T`以确定程序期望的确切编码：
+尝试反序列化指令时，可能会发生此程序错误，请检查传入的结构是否与指令完全匹配。 字段之间可能会有一些填充。 如果程序实现了 Rust 的`Pack`特性，则尝试打包和解压缩指令类型`T`以确定程序期望的确切编码：
 
 https://github.com/solana-labs/solana/blob/v1.4/sdk/program/src/program_pack.rs
 
@@ -48,13 +48,13 @@ https://github.com/solana-labs/solana/blob/v1.4/sdk/program/src/program_pack.rs
 
 当执行需要签名程序地址的跨程序调用时，程序的实现也可能会导致此错误，但是传递的签名者种子将传递给[`invoke_signed`](developing/programming-model/calling-between-programs.md)与用于创建程序地址[`create_program_address`](developing/programming-model/calling-between-programs.md#program-derived-addresses)的签名者种子不匹配。
 
-## `rand` Rust依赖导致编译失败
+## `rand` Rust 依赖导致编译失败
 
-请参见[Rust项目依赖项](developing-rust.md#project-dependencies)
+请参见[Rust 项目依赖项](developing-rust.md#project-dependencies)
 
-## Rust限制
+## Rust 限制
 
-请参见[Rust限制](developing-rust.md#restrictions)
+请参见[Rust 限制](developing-rust.md#restrictions)
 
 ## 堆栈大小
 

@@ -9,11 +9,12 @@ title: 添加 Solana 到您的交易所
 我们强烈建议在高级计算机/云端设置至少两个节点实例， 立即升级到较新的版本，并随时注意自带的监测工具的服务操作。
 
 这样设置可以让您：
+
 - 为 Solana mainnet-beta 集群设置一个可信的网关来获取数据和提交取现交易
 - 完全控制保留历史区块数据的多少
 - 即使某个节点失败仍然保持您的服务可用性
 
-Solana 节点需要较高的计算力来处理我们的快速区块和高 TPS 。  关于具体要求，请参阅[硬件建议](../running-validator/validator-reqs.md)。
+Solana 节点需要较高的计算力来处理我们的快速区块和高 TPS 。 关于具体要求，请参阅[硬件建议](../running-validator/validator-reqs.md)。
 
 运行一个 api 节点：
 
@@ -37,7 +38,7 @@ solana-validator \
 
 `--entrypoint` and `--experted-genesis-hash` 参数都针对您正在加入的集群。 [主网 Beta 的当前参数](../clusters.md#example-solana-validator-command-line-2)
 
-`--limit-ledger-size` 参数允许您指定保留节点的多少个账本 [shreds](../terminology.md#shred) 在磁盘上。 如果您没有配置该参数，验证节点将保留整个账本直到磁盘空间满了为止。  保持账本磁盘使用量的默认值小于 500GB。  如果需要，可以通过添加参数到 `--limit-ledger-size` 来增加或减少磁盘的使用。 查看 `solana-validator --help` 来配置 `--limit-ledger-size` 所使用的默认限制值。  关于选择一个普通限制值的更多信息请参看 [这里](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
+`--limit-ledger-size` 参数允许您指定保留节点的多少个账本 [shreds](../terminology.md#shred) 在磁盘上。 如果您没有配置该参数，验证节点将保留整个账本直到磁盘空间满了为止。 保持账本磁盘使用量的默认值小于 500GB。 如果需要，可以通过添加参数到 `--limit-ledger-size` 来增加或减少磁盘的使用。 查看 `solana-validator --help` 来配置 `--limit-ledger-size` 所使用的默认限制值。 关于选择一个普通限制值的更多信息请参看 [这里](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 指定一个或多个 `--trusted-validator` 参数可以保护您免遭恶意快照的攻击。 [更多关于使用可信验证程序启动的值](../running-validator/validator-start.md#trusted-validators)
 
@@ -68,22 +69,21 @@ solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 
 默认情况下，您的每个节点都通过可信验证节点提供的快照启动。 这个快照反映了区块链当前的状态，但不包含完整的历史帐本。 如果您的一个节点退出并且通过新的快照启动，那么该节点上的账本中可能会出现一段缺失。 为了防止该问题， 将 `--no-snapshot-fetch` 参数添加到您的 `solana-validator` 命令，来接收历史账本数据（而不是快照）。
 
-不要在初次启动时通过 `--no-snapshot-fetch` 参数，因为它不可能追溯到创世区块去启动节点。  相反，您需要先启动快照，然后添加 `--no-snapshot-quetch` 参数来重启。
+不要在初次启动时通过 `--no-snapshot-fetch` 参数，因为它不可能追溯到创世区块去启动节点。 相反，您需要先启动快照，然后添加 `--no-snapshot-quetch` 参数来重启。
 
-重要的一点是需要注意，在任何时候您的节点从网络其他地方可获取的可用历史账本数量都是有限的。  一旦运行，如果验证节点经历了重大故障，它们可能无法跟上网络，需要从可信的验证节点下载新的快照。  这样做的时候，您的验证节点在它的历史账本数据中将出现一个无法填补的空白。
-
+重要的一点是需要注意，在任何时候您的节点从网络其他地方可获取的可用历史账本数量都是有限的。 一旦运行，如果验证节点经历了重大故障，它们可能无法跟上网络，需要从可信的验证节点下载新的快照。 这样做的时候，您的验证节点在它的历史账本数据中将出现一个无法填补的空白。
 
 ### 最小化验证节点端口风险
 
-验证节点要求从所有其他的 Solana 验证程序中打开 UDP 和 TCP 端口传入流量。   虽然这是最有效率的操作模式，我们也强烈推荐，但是可以将验证节点限制为只需要从另外一个 Solana 验证节点流量接入。
+验证节点要求从所有其他的 Solana 验证程序中打开 UDP 和 TCP 端口传入流量。 虽然这是最有效率的操作模式，我们也强烈推荐，但是可以将验证节点限制为只需要从另外一个 Solana 验证节点流量接入。
 
-首先添加 `--restricted-reparir-only-mode` 参数。  这将会让验证节点在受限制的模式下运行，它将不会收到其他验证节点的消息，而是要不断联系其他验证节点获取区块。  验证节点只能使用 *Gossip* 和 *ServeR* ("服务修理") 端口传输 UDP 包到其他验证节点，并且只有在其 *Gossip* 和 *Repair* 端口上接收 UDP 包。
+首先添加 `--restricted-reparir-only-mode` 参数。 这将会让验证节点在受限制的模式下运行，它将不会收到其他验证节点的消息，而是要不断联系其他验证节点获取区块。 验证节点只能使用 _Gossip_ 和 _ServeR_ ("服务修理") 端口传输 UDP 包到其他验证节点，并且只有在其 _Gossip_ 和 _Repair_ 端口上接收 UDP 包。
 
-*Gossip* 端口是双向的，允许您的验证节点保持与其他集群的联系。  因为Turbine 现在已被禁用，因此您的验证节点需要在 *ServerR* 上传输信息，以便提出修理请求，从网络其余部分获取新区块。  然后您的验证节点将收到其他验证节点在 *Repair* 端口上的维修回应。
+_Gossip_ 端口是双向的，允许您的验证节点保持与其他集群的联系。 因为 Turbine 现在已被禁用，因此您的验证节点需要在 _ServerR_ 上传输信息，以便提出修理请求，从网络其余部分获取新区块。 然后您的验证节点将收到其他验证节点在 _Repair_ 端口上的维修回应。
 
-要进一步限制验证节点只从一个或多个验证器请求区块，您首先确定该验证节点身份的 Pubkey 为每一个 PUBKEY 添加 `--gossip-pull-validator PUBKEY --resurir-validator PUBKEY` 参数。  这将使你的验证节点成为您添加的每个验证节点上的资源流量， 您是可以这样操作的，并且只有在与目标验证节点请求后才能进行。
+要进一步限制验证节点只从一个或多个验证器请求区块，您首先确定该验证节点身份的 Pubkey 为每一个 PUBKEY 添加 `--gossip-pull-validator PUBKEY --resurir-validator PUBKEY` 参数。 这将使你的验证节点成为您添加的每个验证节点上的资源流量， 您是可以这样操作的，并且只有在与目标验证节点请求后才能进行。
 
-现在您的验证节点只能与特别指出的验证节点通信并且只能在 *Gossip*，*Repair* 和 *ServeR* 端口上通信。
+现在您的验证节点只能与特别指出的验证节点通信并且只能在 _Gossip_，_Repair_ 和 _ServeR_ 端口上通信。
 
 ## 设置存款账户
 
@@ -187,13 +187,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-` 原先余额 ` 和 ` 交易后余额 ` 字段能让您跟踪余额每个账户中的变动，而无需解析整个交易。 他们将每个账户的最初和交易后余额分别列出在 [ lamports ](../terminology.md#lamport) 中，并索引到 `账户` 列表。 例如，您准备充值的地址是 ` 47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi `，它表示一笔 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL 的交易。
+`原先余额` 和 `交易后余额` 字段能让您跟踪余额每个账户中的变动，而无需解析整个交易。 他们将每个账户的最初和交易后余额分别列出在 [ lamports ](../terminology.md#lamport) 中，并索引到 `账户` 列表。 例如，您准备充值的地址是 `47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`，它表示一笔 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL 的交易。
 
 如果需要更多关于交易类型或其他细节的信息，您可以用二进制格式从 RPC 请求区块，然后使用 [Rust SDK](https://github.com/solana-labs/solana) 或 [Javascript SDK](https://github.com/solana-labs/solana-web3.js) 进行解析。
 
 ### 地址历史
 
-您也可以查询特定地址的交易历史记录。 这通常 *不是* 一种追踪您所有插槽的所有存款地址的可行方法， 但可能检查一段时间内的几个账户非常有用。
+您也可以查询特定地址的交易历史记录。 这通常 _不是_ 一种追踪您所有插槽的所有存款地址的可行方法， 但可能检查一段时间内的几个账户非常有用。
 
 - 向 api 节点发送 [`getConfirmedSignaturesFors2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2) 请求：
 
@@ -294,7 +294,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 发送同步传输到 Solana 集群可以让您轻松保证转账的成功并由集群确定最终性。
 
-Solana的命令行工具提供了一个用于生成、提交和确认转账交易的简单命令， `solana transfer`。 默认情况下，该方法将等待并跟踪 stderr 的进度，直到集群确认了某笔交易。 如果交易失败，它将报告任何类型的交易错误。
+Solana 的命令行工具提供了一个用于生成、提交和确认转账交易的简单命令， `solana transfer`。 默认情况下，该方法将等待并跟踪 stderr 的进度，直到集群确认了某笔交易。 如果交易失败，它将报告任何类型的交易错误。
 
 ```bash
 solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
@@ -435,7 +435,7 @@ SPL 代币的工作流程类似于原生 SOL 代币，但本节将讨论它们�
 
 ### 代币铸造
 
-每种 *类型* 的 SPL 代币都是由一个 *铸造* 账号所产生。  该帐户存储了代币功能的元数据，如供应量、小数点数和对铸造的多种权限。  每个 SPL Token 帐户引用与它铸造相关的字段，并且只能与该种类型的 SPL 代币交互。
+每种 _类型_ 的 SPL 代币都是由一个 _铸造_ 账号所产生。 该帐户存储了代币功能的元数据，如供应量、小数点数和对铸造的多种权限。 每个 SPL Token 帐户引用与它铸造相关的字段，并且只能与该种类型的 SPL 代币交互。
 
 ### 安装 `spl-token` CLI 工具
 
@@ -463,11 +463,13 @@ spl-token-cli 2.0.1
 
 SPL 代币账户包含了本地系统程序账户所不具备的额外要求：
 
-1. 在创建 SPL Token 帐户之前，必须先存入一定数量的代币。   代币帐户可以使用 `spl-token create-account` 命令显式创建， 或者 `spl-token transfer --fund-receiving ...` 命令隐式创建。
+1. 在创建 SPL Token 帐户之前，必须先存入一定数量的代币。 代币帐户可以使用 `spl-token create-account` 命令显式创建， 或者 `spl-token transfer --fund-receiving ...` 命令隐式创建。
 1. 在生效期间，SPL Token 帐户必须保持 [rent-exempt](developing/programming-model/accounts.md#rent-exemption) 状态，因此在创建帐户时需要存入少量的原生 SOL 代币。 对于 SPL Token v2 账户，该数量为 0.00203928 SOL(2 039 280 lamports)。
 
 #### 命令行
+
 创建具有以下属性的 SPL 代币帐户：
+
 1. 关联指定的铸造
 1. 由资产账户的密钥所拥有
 
@@ -476,6 +478,7 @@ spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
 #### 示例：
+
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -483,6 +486,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ```
 
 或者创建指定密钥对的 SPL 代币账户：
+
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -493,11 +497,13 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### 检查账户余额
 
 #### 命令行
+
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### 示例：
+
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -507,14 +513,16 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 发送代币的源账户是包含余额的实际代币账户。
 
-但是收款人地址可以是一个普通的钱包帐户。  如果给定钱包关联的代币帐户不存在，那么将在发送交易的时候创建一个地址，条件是 `--fund-receiver` 所提供的参数。
+但是收款人地址可以是一个普通的钱包帐户。 如果给定钱包关联的代币帐户不存在，那么将在发送交易的时候创建一个地址，条件是 `--fund-receiver` 所提供的参数。
 
 #### 命令行
+
 ```
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
 #### 示例：
+
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 发送 1 个代币
@@ -524,20 +532,23 @@ $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLeb
 ```
 
 ### 充值
+
 因为每个 `(user, mint)` 对需要在链上有一个单独的帐户，所以建议交易所提前创建批量代币帐户，并分配给各个用户。 这些账户都由交易所账号密钥所拥有。
 
 存款交易的监控应遵循上面描述的 [block polling](#poll-for-blocks) 方法。 每个新区块应该扫描获得铸造 SPL 代币的成功交易 [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92) 或 [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252) 指令来引用用户帐户，然后查询 [代币账户余额](developing/clients/jsonrpc-api.md#gettokenaccountbalance) 更新。
 
-[Considerations](https://github.com/solana-labs/solana/issues/12318) 正在扩展 `preBalance`和`postBalance` 交易状态元数据字段，来把 SPL代币余额转移包括进去。
+[Considerations](https://github.com/solana-labs/solana/issues/12318) 正在扩展 `preBalance`和`postBalance` 交易状态元数据字段，来把 SPL 代币余额转移包括进去。
 
 ### 提现
+
 用户提供的提现地址应该是和普通 SOL 提款地址相同。
 
 在执行提款 [transfer](#token-transfers) 之前，交易所应检查地址符合 [上文所述](#validating-user-supplied-account-addresses-for-withdrawals) 的规则。
 
-从提款地址为正确的铸币确定关联的代币帐户，并将转账发送到该帐户。  请注意关联的代币帐户现在还不存在，因此交易所应该代表用户为该账户提供资金。  对于 SPL Token v2 账户，为提款账户提供的资金额为 0.00203928 SOL (2,039 280 lamports)。
+从提款地址为正确的铸币确定关联的代币帐户，并将转账发送到该帐户。 请注意关联的代币帐户现在还不存在，因此交易所应该代表用户为该账户提供资金。 对于 SPL Token v2 账户，为提款账户提供的资金额为 0.00203928 SOL (2,039 280 lamports)。
 
 用来提现的 `spl-token transfer` 命令模板为：
+
 ```
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
@@ -545,7 +556,8 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 ### 其他考虑因素
 
 #### 冻结权限
-出于法规合规性原因，SPL 代币发行实体可以为与铸造相关联的所有帐户选择保留“冻结权限”。  这允许他们按照需要将一个给定帐户的资产 [冻结](https://spl.solana.com/token#freezing-accounts)，直到解冻以后才能使用。 如果开放该功能，冻结权限的公钥将在 SPL 代币的铸造账户中注册。
+
+出于法规合规性原因，SPL 代币发行实体可以为与铸造相关联的所有帐户选择保留“冻结权限”。 这允许他们按照需要将一个给定帐户的资产 [冻结](https://spl.solana.com/token#freezing-accounts)，直到解冻以后才能使用。 如果开放该功能，冻结权限的公钥将在 SPL 代币的铸造账户中注册。
 
 ## 测试集成
 

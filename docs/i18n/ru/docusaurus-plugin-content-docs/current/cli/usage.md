@@ -57,7 +57,9 @@ $ solana program deploy <PATH>
 ```
 
 ## Usage
+
 ### solana-cli
+
 ```text
 solana-cli 1.7.0 (src:devbuild; feat:2960423209)
 Blockchain, Rebuilt for Scale
@@ -155,6 +157,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-account
+
 ```text
 solana-account
 Show the contents of an account
@@ -193,6 +196,7 @@ ARGS:
 ```
 
 #### solana-address
+
 ```text
 solana-address
 Get your public key
@@ -222,6 +226,7 @@ OPTIONS:
 ```
 
 #### solana-airdrop
+
 ```text
 solana-airdrop
 Request lamports
@@ -261,6 +266,7 @@ ARGS:
 ```
 
 #### solana-authorize-nonce-account
+
 ```text
 solana-authorize-nonce-account
 Assign account authority to a new entity
@@ -304,6 +310,7 @@ ARGS:
 ```
 
 #### solana-balance
+
 ```text
 solana-balance
 Get your balance
@@ -341,6 +348,7 @@ ARGS:
 ```
 
 #### solana-block
+
 ```text
 solana-block
 Get a confirmed block
@@ -372,6 +380,7 @@ ARGS:
 ```
 
 #### solana-block-height
+
 ```text
 solana-block-height
 Get current block height
@@ -400,6 +409,7 @@ OPTIONS:
 ```
 
 #### solana-block-production
+
 ```text
 solana-block-production
 Show information about block production
@@ -431,6 +441,7 @@ OPTIONS:
 ```
 
 #### solana-block-time
+
 ```text
 solana-block-time
 Get estimated production time of a block
@@ -462,6 +473,7 @@ ARGS:
 ```
 
 #### solana-catchup
+
 ```text
 solana-catchup
 Wait for a validator to catch up to the cluster
@@ -503,6 +515,7 @@ ARGS:
 ```
 
 #### solana-cluster-date
+
 ```text
 solana-cluster-date
 Get current cluster date, computed from genesis creation time and network time
@@ -531,6 +544,7 @@ OPTIONS:
 ```
 
 #### solana-cluster-version
+
 ```text
 solana-cluster-version
 Get the version of the cluster entrypoint
@@ -559,6 +573,7 @@ OPTIONS:
 ```
 
 #### solana-config
+
 ```text
 solana-config
 Solana command-line tool configuration settings
@@ -594,6 +609,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-confirm
+
 ```text
 solana-confirm
 Confirm transaction by signature
@@ -634,6 +650,7 @@ Account modes:
 ```
 
 #### solana-create-address-with-seed
+
 ```text
 solana-create-address-with-seed
 Generate a derived account address with a seed
@@ -673,6 +690,7 @@ ARGS:
 ```
 
 #### solana-create-nonce-account
+
 ```text
 solana-create-nonce-account
 Create a nonce account
@@ -713,6 +731,7 @@ ARGS:
 ```
 
 #### solana-create-stake-account
+
 ```text
 solana-create-stake-account
 Create a stake account
@@ -771,6 +790,7 @@ ARGS:
 ```
 
 #### solana-create-vote-account
+
 ```text
 solana-create-vote-account
 Create a vote account
@@ -827,6 +847,7 @@ ARGS:
 ```
 
 #### solana-deactivate-stake
+
 ```text
 solana-deactivate-stake
 Deactivate the delegated stake from the stake account
@@ -879,6 +900,7 @@ ARGS:
 ```
 
 #### solana-decode-transaction
+
 ```text
 solana-decode-transaction
 Decode a serialized transaction
@@ -911,6 +933,7 @@ ARGS:
 ```
 
 #### solana-delegate-stake
+
 ```text
 solana-delegate-stake
 Delegate stake to a vote account
@@ -966,6 +989,7 @@ ARGS:
 ```
 
 #### solana-deploy
+
 ```text
 solana-deploy
 Deploy a program
@@ -1002,6 +1026,7 @@ ARGS:
 ```
 
 #### solana-epoch
+
 ```text
 solana-epoch
 Get current epoch
@@ -1030,6 +1055,7 @@ OPTIONS:
 ```
 
 #### solana-epoch-info
+
 ```text
 solana-epoch-info
 Get information about the current epoch
@@ -1058,6 +1084,7 @@ OPTIONS:
 ```
 
 #### solana-feature
+
 ```text
 solana-feature
 Runtime feature management
@@ -1091,6 +1118,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-fees
+
 ```text
 solana-fees
 Display current cluster fees
@@ -1120,6 +1148,7 @@ OPTIONS:
 ```
 
 #### solana-first-available-block
+
 ```text
 solana-first-available-block
 Get the first available block in the storage
@@ -1148,6 +1177,7 @@ OPTIONS:
 ```
 
 #### solana-genesis-hash
+
 ```text
 solana-genesis-hash
 Get the genesis hash
@@ -1176,6 +1206,7 @@ OPTIONS:
 ```
 
 #### solana-gossip
+
 ```text
 solana-gossip
 Show the current gossip network nodes
@@ -1204,6 +1235,7 @@ OPTIONS:
 ```
 
 #### solana-help
+
 ```text
 solana-help
 Prints this message or the help of the given subcommand(s)
@@ -1216,6 +1248,7 @@ ARGS:
 ```
 
 #### solana-inflation
+
 ```text
 solana-inflation
 Show inflation information
@@ -1248,6 +1281,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-largest-accounts
+
 ```text
 solana-largest-accounts
 Get addresses of largest cluster accounts
@@ -1278,6 +1312,7 @@ OPTIONS:
 ```
 
 #### solana-leader-schedule
+
 ```text
 solana-leader-schedule
 Display leader schedule
@@ -1307,6 +1342,7 @@ OPTIONS:
 ```
 
 #### solana-live-slots
+
 ```text
 solana-live-slots
 Show information about the current slot progression
@@ -1335,6 +1371,7 @@ OPTIONS:
 ```
 
 #### solana-logs
+
 ```text
 solana-logs
 Stream transaction logs
@@ -1372,6 +1409,7 @@ ARGS:
 ```
 
 #### solana-merge-stake
+
 ```text
 solana-merge-stake
 Merges one stake account into another
@@ -1428,6 +1466,7 @@ ARGS:
 ```
 
 #### solana-new-nonce
+
 ```text
 solana-new-nonce
 Generate a new nonce, rendering the existing nonce useless
@@ -1465,6 +1504,7 @@ ARGS:
 ```
 
 #### solana-nonce
+
 ```text
 solana-nonce
 Get the current nonce value
@@ -1501,6 +1541,7 @@ ARGS:
 ```
 
 #### solana-nonce-account
+
 ```text
 solana-nonce-account
 Show the contents of a nonce account
@@ -1538,6 +1579,7 @@ ARGS:
 ```
 
 #### solana-ping
+
 ```text
 solana-ping
 Submit transactions sequentially
@@ -1572,6 +1614,7 @@ OPTIONS:
 ```
 
 #### solana-program
+
 ```text
 solana-program
 Program management
@@ -1610,6 +1653,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-rent
+
 ```text
 solana-rent
 Calculate per-epoch and rent-exempt-minimum values for a given account data length.
@@ -1643,6 +1687,7 @@ ARGS:
 ```
 
 #### solana-resolve-signer
+
 ```text
 solana-resolve-signer
 Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg.
@@ -1675,6 +1720,7 @@ ARGS:
 ```
 
 #### solana-slot
+
 ```text
 solana-slot
 Get current slot
@@ -1703,6 +1749,7 @@ OPTIONS:
 ```
 
 #### solana-split-stake
+
 ```text
 solana-split-stake
 Duplicate a stake account, splitting the tokens between the two
@@ -1756,6 +1803,7 @@ ARGS:
 ```
 
 #### solana-stake-account
+
 ```text
 solana-stake-account
 Show the contents of a stake account
@@ -1795,6 +1843,7 @@ ARGS:
 ```
 
 #### solana-stake-authorize
+
 ```text
 solana-stake-authorize
 Authorize a new signing keypair for the given stake account
@@ -1860,6 +1909,7 @@ ARGS:
 ```
 
 #### solana-stake-history
+
 ```text
 solana-stake-history
 Show the stake history
@@ -1891,6 +1941,7 @@ OPTIONS:
 ```
 
 #### solana-stake-set-lockup
+
 ```text
 solana-stake-set-lockup
 Set Lockup for the stake account
@@ -1949,6 +2000,7 @@ ARGS:
 ```
 
 #### solana-stakes
+
 ```text
 solana-stakes
 Show stake account information
@@ -1986,6 +2038,7 @@ ARGS:
 ```
 
 #### solana-supply
+
 ```text
 solana-supply
 Get information about the cluster supply of SOL
@@ -2015,6 +2068,7 @@ OPTIONS:
 ```
 
 #### solana-transaction-count
+
 ```text
 solana-transaction-count
 Get current transaction count
@@ -2043,6 +2097,7 @@ OPTIONS:
 ```
 
 #### solana-transaction-history
+
 ```text
 solana-transaction-history
 Show historical transactions affecting the given address from newest to oldest
@@ -2082,6 +2137,7 @@ ARGS:
 ```
 
 #### solana-transfer
+
 ```text
 solana-transfer
 Transfer funds between system accounts
@@ -2141,6 +2197,7 @@ ARGS:
 ```
 
 #### solana-validator-info
+
 ```text
 solana-validator-info
 Publish/get Validator info on Solana
@@ -2174,6 +2231,7 @@ SUBCOMMANDS:
 ```
 
 #### solana-validators
+
 ```text
 solana-validators
 Show summary information about the current validators
@@ -2208,6 +2266,7 @@ OPTIONS:
 ```
 
 #### solana-vote-account
+
 ```text
 solana-vote-account
 Show the contents of a vote account
@@ -2247,6 +2306,7 @@ ARGS:
 ```
 
 #### solana-vote-authorize-voter
+
 ```text
 solana-vote-authorize-voter
 Authorize a new vote signing keypair for the given vote account
@@ -2291,6 +2351,7 @@ ARGS:
 ```
 
 #### solana-vote-authorize-withdrawer
+
 ```text
 solana-vote-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given vote account
@@ -2335,6 +2396,7 @@ ARGS:
 ```
 
 #### solana-vote-update-commission
+
 ```text
 solana-vote-update-commission
 Update the vote account's commission
@@ -2374,6 +2436,7 @@ ARGS:
 ```
 
 #### solana-vote-update-validator
+
 ```text
 solana-vote-update-validator
 Update the vote account's validator identity
@@ -2413,6 +2476,7 @@ ARGS:
 ```
 
 #### solana-wait-for-max-stake
+
 ```text
 solana-wait-for-max-stake
 Wait for the max stake of any one node to drop below a percentage of total.
@@ -2444,6 +2508,7 @@ ARGS:
 ```
 
 #### solana-withdraw-from-nonce-account
+
 ```text
 solana-withdraw-from-nonce-account
 Withdraw SOL from the nonce account
@@ -2488,6 +2553,7 @@ ARGS:
 ```
 
 #### solana-withdraw-from-vote-account
+
 ```text
 solana-withdraw-from-vote-account
 Withdraw lamports from a vote account into a specified account
@@ -2538,6 +2604,7 @@ ARGS:
 ```
 
 #### solana-withdraw-stake
+
 ```text
 solana-withdraw-stake
 Withdraw the unstaked SOL from the stake account
@@ -2596,4 +2663,3 @@ ARGS:
                                  * a hardware wallet keypair URL (i.e. usb://ledger)
     <AMOUNT>                   The amount to withdraw from the stake account, in SOL; accepts keyword ALL
 ```
-

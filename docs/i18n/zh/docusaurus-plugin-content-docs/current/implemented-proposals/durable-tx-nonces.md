@@ -4,7 +4,7 @@ title: 持久交易编号（Nonces）
 
 ## 问题
 
-为了防止重花，Solana 交易包含一个有“最近”块哈希值的非空值。 包含太久的(撰文时为 ~2分钟) 区块哈希交易被网络拒绝为无效。 很不幸，某些情况下（例如托管服务），需要更多时间来生成交易的签名。 需要一种机制来支持这些潜在的线下网络参与者。
+为了防止重花，Solana 交易包含一个有“最近”块哈希值的非空值。 包含太久的(撰文时为 ~2 分钟) 区块哈希交易被网络拒绝为无效。 很不幸，某些情况下（例如托管服务），需要更多时间来生成交易的签名。 需要一种机制来支持这些潜在的线下网络参与者。
 
 ## 需求
 
@@ -69,16 +69,16 @@ WithdrawInstruction(to, lamports)
 
 ### 运行时（Runtime）支持
 
-合约本身并不足以实现这个功能。 为了在交易上强制执行一个现有的`recent_blockhash`，并防止通过失败的交易重放来窃取费用，runtime的修改是必要的。
+合约本身并不足以实现这个功能。 为了在交易上强制执行一个现有的`recent_blockhash`，并防止通过失败的交易重放来窃取费用，runtime 的修改是必要的。
 
-任何未能通过通常的`check_hash_age`验证的交易将被测试为持久交易Nonce。 这是由包括一个`AdvanceNonceAccount`指令作为交易中的第一条指令发出的信号。
+任何未能通过通常的`check_hash_age`验证的交易将被测试为持久交易 Nonce。 这是由包括一个`AdvanceNonceAccount`指令作为交易中的第一条指令发出的信号。
 
-如果runtime确定使用了一个持久事务Nonce，它将采取以下额外的操作来验证事务：
+如果 runtime 确定使用了一个持久事务 Nonce，它将采取以下额外的操作来验证事务：
 
 1. 加载`Nonce`指令中指定的`NonceAccount`。
 2. `NonceAccount` 的数据字段反序列化`NonceState`，并确认其处于`Initialized`状态。
-3. 存储在`NonceAccount`中的nonce值与交易的`recent_blockhash`字段中指定的nonce值进行匹配测试。
+3. 存储在`NonceAccount`中的 nonce 值与交易的`recent_blockhash`字段中指定的 nonce 值进行匹配测试。
 
 如果上述三项检查都成功，则允许交易继续验证。
 
-由于以`InstructionError`失败的交易会被收取费用，并且其状态的改变会被回滚，所以如果`AdvanceNonceAccount`指令被回滚，则费用可能会被盗。 恶意验证者可以重放失败的交易，直到存储的nonce被成功推进。 Runtime的更改可以防止这种行为。 当一个持久的nonce事务失败时，除了`AdvanceNonceAccount`指令外，还有一个`InstructionError`，nonce账户会像往常一样被回滚到执行前的状态。 然后，runtime将其nonce值和高级nonce账户存储起来，就像已经成功了。
+由于以`InstructionError`失败的交易会被收取费用，并且其状态的改变会被回滚，所以如果`AdvanceNonceAccount`指令被回滚，则费用可能会被盗。 恶意验证者可以重放失败的交易，直到存储的 nonce 被成功推进。 Runtime 的更改可以防止这种行为。 当一个持久的 nonce 事务失败时，除了`AdvanceNonceAccount`指令外，还有一个`InstructionError`，nonce 账户会像往常一样被回滚到执行前的状态。 然后，runtime 将其 nonce 值和高级 nonce 账户存储起来，就像已经成功了。
