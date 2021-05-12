@@ -162,12 +162,37 @@ impl SignerSource {
     }
 }
 
+const SIGNER_SOURCE_PROMPT: &str = "prompt";
+const SIGNER_SOURCE_FILEPATH: &str = "file";
+const SIGNER_SOURCE_USB: &str = "usb";
+const SIGNER_SOURCE_STDIN: &str = "stdin";
+const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
+
 pub(crate) enum SignerSourceKind {
     Prompt,
     Filepath(String),
     Usb(RemoteWalletLocator),
     Stdin,
     Pubkey(Pubkey),
+}
+
+impl AsRef<str> for SignerSourceKind {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Prompt => SIGNER_SOURCE_PROMPT,
+            Self::Filepath(_) => SIGNER_SOURCE_FILEPATH,
+            Self::Usb(_) => SIGNER_SOURCE_USB,
+            Self::Stdin => SIGNER_SOURCE_STDIN,
+            Self::Pubkey(_) => SIGNER_SOURCE_PUBKEY,
+        }
+    }
+}
+
+impl std::fmt::Debug for SignerSourceKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s: &str = self.as_ref();
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Debug, Error)]
@@ -192,20 +217,20 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    "prompt" => Ok(SignerSource {
+                    SIGNER_SOURCE_PROMPT => Ok(SignerSource {
                         kind: SignerSourceKind::Prompt,
                         derivation_path: DerivationPath::from_uri_any_query(&uri)?,
                         legacy: false,
                     }),
-                    "file" => Ok(SignerSource::new(SignerSourceKind::Filepath(
+                    SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(SignerSourceKind::Filepath(
                         uri.path().to_string(),
                     ))),
-                    "stdin" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    "usb" => Ok(SignerSource {
+                    SIGNER_SOURCE_USB => Ok(SignerSource {
                         kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
                         derivation_path: DerivationPath::from_uri_key_query(&uri)?,
                         legacy: false,
                     }),
+                    SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     _ => Err(SignerSourceError::UnrecognizedSource),
                 }
             } else {
@@ -429,6 +454,56 @@ pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> 
         }
     }
     Ok(passphrase)
+}
+
+/// Parses a path into a SignerSource and returns a Keypair for supporting SignerSourceKinds
+pub fn keypair_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    let SignerSource {
+        kind,
+        derivation_path,
+        legacy,
+    } = parse_signer_source(path)?;
+    match kind {
+        SignerSourceKind::Prompt => {
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            Ok(keypair_from_seed_phrase(
+                keypair_name,
+                skip_validation,
+                confirm_pubkey,
+                derivation_path,
+                legacy,
+            )?)
+        }
+        SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
+            Err(e) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "could not read keypair file \"{}\". \
+                    Run \"solana-keygen new\" to create a keypair file: {}",
+                    path, e
+                ),
+            )
+            .into()),
+            Ok(file) => Ok(file),
+        },
+        SignerSourceKind::Stdin => {
+            let mut stdin = std::io::stdin();
+            Ok(read_keypair(&mut stdin)?)
+        }
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "signer of type `{:?}` does not support Keypair output",
+                kind
+            ),
+        )
+        .into()),
+    }
 }
 
 /// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
