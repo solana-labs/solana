@@ -420,18 +420,6 @@ impl ReplayStage {
                     replay_active_banks_time.stop();
 
                     let forks_root = bank_forks.read().unwrap().root();
-                    // Reset any duplicate slots that have been confirmed
-                    // by the network in anticipation of the confirmed version of
-                    // the slot
-                    /*let mut reset_duplicate_slots_time = Measure::start("reset_duplicate_slots");
-                    Self::reset_duplicate_slots(
-                        &duplicate_slots_reset_receiver,
-                        &mut ancestors,
-                        &mut descendants,
-                        &mut progress,
-                        &bank_forks,
-                    );
-                    reset_duplicate_slots_time.stop();*/
 
                     // Check for any newly confirmed slots detected from gossip.
                     let mut process_gossip_duplicate_confirmed_slots_time = Measure::start("process_gossip_duplicate_confirmed_slots");
@@ -697,6 +685,21 @@ impl ReplayStage {
                     reset_bank_time.stop();
 
                     let mut start_leader_time = Measure::start("start_leader_time");
+                    let mut dump_then_repair_correct_slots_time = Measure::start("dump_then_repair_correct_slots_time");
+                    // Used for correctness check
+                    let poh_bank = poh_recorder.lock().unwrap().bank();
+                    // Dump any duplicate slots that have been confirmed by the network in
+                    // anticipation of repairing the confirmed version of the slot.
+                    // 
+                    // Has to be before `maybe_start_leader()`. Otherwise, `ancestors` and `descendants`
+                    // will be outdated, and we cannot assume `poh_bank` will be in either of these maps.
+                    Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()));
+                    dump_then_repair_correct_slots_time.stop();
+
+                    // From this point on, its not safe to use ancestors/descendants since maybe_start_leader
+                    // may add a bank that will not included in either of these maps.
+                    drop(ancestors);
+                    drop(descendants);
                     if !tpu_has_bank {
                         Self::maybe_start_leader(
                             &my_pubkey,
@@ -721,12 +724,6 @@ impl ReplayStage {
                         }
                     }
                     start_leader_time.stop();
-
-                    let mut dump_then_repair_correct_slots_time = Measure::start("dump_then_repair_correct_slots_time");
-                    // Used for correctness check
-                    let poh_bank = poh_recorder.lock().unwrap().bank();
-                    Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()));
-                    dump_then_repair_correct_slots_time.stop();
 
                     let mut wait_receive_time = Measure::start("wait_receive_time");
                     if !did_complete_bank {
@@ -840,6 +837,9 @@ impl ReplayStage {
         }
 
         let root_bank = bank_forks.read().unwrap().root_bank();
+        // TODO: handle if alternate version of descendant also got confirmed after ancestor was
+        // confirmed, what happens then? Should probably keep track of purged list and skip things
+        // in `duplicate_slots_to_repair` that have already been purged. Add test.
         duplicate_slots_to_repair.retain(|(duplicate_slot, _correct_hash)| {
             // Should not purge duplicate slots if there is currently a poh bank building
             // on top of that slot, as BankingStage might still be referencing/touching that state
