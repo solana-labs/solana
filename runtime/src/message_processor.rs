@@ -353,6 +353,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     .chain(self.message.account_keys.iter())
                     .position(|key| key == *search_key)
                     .map(|mut index| {
+                        // TODO
+                        // Currently we are constructing new accounts on the stack
+                        // before calling MessageProcessor::process_cross_program_instruction
+                        // Ideally we would recycle the existing accounts here.
                         if index < self.account_deps.len() {
                             (
                                 *is_signer,
@@ -367,10 +371,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 *is_signer,
                                 *is_writable,
                                 &self.message.account_keys[index],
-                                // TODO
-                                // Currently we are constructing new accounts on the stack
-                                // before calling MessageProcessor::process_cross_program_instruction
-                                // Ideally we would recycle the existing accounts here like this:
                                 // &self.accounts[index] as &RefCell<AccountSharedData>,
                                 transmute_lifetime(*account),
                             )
