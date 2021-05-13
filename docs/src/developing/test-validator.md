@@ -18,7 +18,7 @@ starts a local, full-featured, single-node cluster on the developer's workstatio
 
 ## Installation
 The `solana-test-validator` binary ships with the Solana CLI Tool Suite.
-[Install](/cli/install-solana-cli-tools) it before continuing.
+[Install](/cli/install-solana-cli-tools) before continuing.
 
 ## Running
 First take a look at the configuration options
