@@ -104,24 +104,26 @@ function Home() {
       <main>
         {features && features.length > 0 && (
           <section className={styles.features}>
-            <div className="row cards__container">
+            <div className="container">
               <div className="alert alert--primary" role="alert">
                 <b>Announcing the Solana Season Hackathon</b>
                 <br />
                 Jumpstart your next project on Solana & join the fastest growing
                 ecosystem in crypto
                 <br />
-                <a
-                  href="https://solana.com/solanaszn"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <button className="button button--outline button--secondary">
-                    Register Now
-                  </button>
-                </a>
+                <p align="right">
+                  <a
+                    href="https://solana.com/solanaszn"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <button className="button button--outline button--secondary">
+                      Register Now
+                    </button>
+                  </a>
+                </p>
               </div>
-              <div className="container">
+              <div className="row cards__container">
                 {features.map((props, idx) => (
                   <Feature key={idx} {...props} />
                 ))}
