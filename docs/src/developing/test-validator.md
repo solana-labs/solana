@@ -12,7 +12,7 @@ starts a full-featured, single-node cluster on the developer's workstation.
 - Direct [on-chain program](on-chain-programs/overview) deployment
 (`--bpf-program ...`)
 - Clone accounts from a public cluster, including programs (`--clone ...`)
-- Configurable transaction history (`--limit-ledger-size ...`)
+- Configurable transaction history retention (`--limit-ledger-size ...`)
 - Configurable epoch length (`--slots-per-epoch ...`)
 - Jump to an arbitrary slot (`--warp-slot ...`)
 
