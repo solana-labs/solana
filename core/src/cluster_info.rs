@@ -454,10 +454,10 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
+            CrdsData::NodeInstance(_) => true,
             CrdsData::LowestSlot(_, _)
             | CrdsData::AccountsHashes(_)
             | CrdsData::LegacyVersion(_)
-            | CrdsData::NodeInstance(_)
             | CrdsData::DuplicateShred(_, _) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
