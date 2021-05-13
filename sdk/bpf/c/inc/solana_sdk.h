@@ -512,38 +512,6 @@ static uint64_t sol_bignum_to_bytes(
 );
 
 /**
- * @param u_ptr bignum address
- * @param a_ptr bignum address
- * @param n_ptr bignum address
- * @param nonce_ptr
- * @param hg_ptr hashed generated return bignum address
- */
-
-static uint64_t sol_bignum_hashed_generator (
-  const uint64_t *u_ptr,
-  const uint64_t *a_ptr,
-  const uint64_t *n_ptr,
-  const uint64_t *nonce_ptr,
-  const uint64_t *hg_ptr
-);
-
-/**
- * @param u_ptr bignum address
- * @param a_ptr bignum address
- * @param z_ptr bignum address
- * @param nonce_ptr
- * @param htp_ptr prime generated return bignum address
- */
-
-static uint64_t sol_bignum_hash_to_prime (
-  const uint64_t *u_ptr,
-  const uint64_t *a_ptr,
-  const uint64_t *z_ptr,
-  const uint64_t *nonce_ptr,
-  const uint64_t *htp_ptr
-);
-
-/**
  * BigNum sol_bignum_add
  *  Performs add and returns bignum for sum
  * @param self_ptr self bignum address
@@ -610,7 +578,7 @@ static uint64_t sol_bignum_exp(
 /**
  * BigNum sol_bignum_sqr
  * @param self_ptr self bignum address
- c
+ * @param uint64_t *sqr_res_ptr
  */
 static uint64_t sol_bignum_sqr(
   const uint64_t  *self_ptr,
@@ -670,7 +638,6 @@ static uint64_t sol_bignum_mod_exp(
 static uint64_t sol_bignum_drop(
     const uint64_t *ptr
 );
-
 
 /**
  * Account Meta

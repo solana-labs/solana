@@ -197,12 +197,6 @@ pub struct BpfComputeBudget {
     pub bignum_mod_mul_cost: u64,
     /// Number of compute units consumed by BigNum mod_inv
     pub bignum_mod_inv_cost: u64,
-    /// Number of compute units consumed by BigNum hashed_generator
-    pub bignum_hashed_generator_cost: u64,
-    /// Number of compute units consumed by Blake3 digest
-    pub blake3_digest_base_cost: u64,
-    /// Number of compute units consumed by BigNum hash_to_prime
-    pub bignum_hash_to_prime_cost: u64,    
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -231,7 +225,7 @@ impl BpfComputeBudget {
             bignum_from_u32_base_cost: 100,
             bignum_from_bytes_base_cost: 100,
             bignum_to_bytes_base_cost: 100,
-            bignum_mod_exp_base_cost: 100,            
+            bignum_mod_exp_base_cost: 100,
             log_bignum_cost: 100,
             bignum_add_cost: 15,
             bignum_sub_cost: 15,
@@ -242,9 +236,6 @@ impl BpfComputeBudget {
             bignum_mod_sqr_cost: 30,
             bignum_mod_mul_cost: 45,
             bignum_mod_inv_cost: 45,
-            bignum_hashed_generator_cost: 100,
-            blake3_digest_base_cost: 85,
-            bignum_hash_to_prime_cost: 20000,
         }
     }
 }

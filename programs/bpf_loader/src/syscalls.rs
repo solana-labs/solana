@@ -1,7 +1,5 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use blake3::traits::digest::Digest;
-use hkdf::Hkdf;
 use openssl::bn::*;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
@@ -97,11 +95,8 @@ pub enum SyscallError {
     BigNumberModMulError,
     #[error("BigNumber: mod_inv error")]
     BigNumberModInvError,
-    #[error("BigNumber: hash generator error")]
-    BigNumberHgError,
-    #[error("BigNumber: hash_to_primeerror")]
-    BigNumberHtpError,
 }
+
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
         EbpfError::UserError(error.into())
@@ -198,15 +193,6 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_sqr", SyscallBigNumModSqr::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_mul", SyscallBigNumModMul::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_inv", SyscallBigNumModInv::call)?;
-    // Compound functions
-    syscall_registry
-        .register_syscall_by_name(b"sol_bignum_hashed_generator", SyscallBigNumHg::call)?;
-
-    syscall_registry.register_syscall_by_name(b"sol_blake3_digest", SyscallBlake3Digest::call)?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_bignum_hash_to_prime",
-        SyscallBigNumberHashToPrime::call,
-    )?;
 
     Ok(syscall_registry)
 }
@@ -447,31 +433,6 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumHg {
-            cost: bpf_compute_budget.bignum_hashed_generator_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
-
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBlake3Digest {
-            cost: bpf_compute_budget.blake3_digest_base_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumberHashToPrime {
-            cost: bpf_compute_budget.bignum_hash_to_prime_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
@@ -1925,82 +1886,6 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModInv<'a> {
     }
 }
 
-struct SyscallBigNumHg<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumHg<'a> {
-    fn call(
-        &mut self,
-        u_addr: u64,
-        a_addr: u64,
-        n_addr: u64,
-        nonce_addr: u64,
-        hg_result_addr: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        // Get the 3 BigNums (u, a, n)
-        let bn_u_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, u_addr, self.loader_id, true),
-            result
-        );
-        let bn_a_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, a_addr, self.loader_id, true),
-            result
-        );
-        let bn_n_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, n_addr, self.loader_id, true),
-            result
-        );
-        let hg_result_address = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, hg_result_addr, self.loader_id, true),
-            result
-        );
-        let nonce_len = unsafe { *(hg_result_address as *mut u64) };
-        let nonce_ptr = question_mark!(
-            translate_slice::<u8>(memory_mapping, nonce_addr, nonce_len, self.loader_id, true),
-            result
-        );
-
-        let u_bn = unsafe { &*(*bn_u_ptr as *mut BigNum) };
-        let a_bn = unsafe { &*(*bn_a_ptr as *mut BigNum) };
-        let n_bn = unsafe { &*(*bn_n_ptr as *mut BigNum) };
-        let bytes = (u_bn.num_bytes() + a_bn.num_bytes() + n_bn.num_bytes()) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-
-        // hash_generator
-        let mut transcript = u_bn.as_ref().to_vec();
-        transcript.append(&mut a_bn.as_ref().to_vec());
-        // transcript.extend_from_slice(nonce_ptr.as_ref());
-        transcript.extend_from_slice(nonce_ptr);
-        // println!("t:{:?}",transcript);
-        let length = n_bn.num_bytes();
-        // println!("len:{}",length);
-        let h = Hkdf::<blake3::Hasher>::new(
-            Some(b"SST_SALT_HASH_TO_GENERATOR_"),
-            transcript.as_slice().as_ref(),
-        );
-        let mut okm = vec![0u8; length as usize];
-        h.expand(b"", &mut okm).unwrap();
-        // println!("okm:{:?}", okm);
-
-        let okm_bn = BigNum::from_slice(okm.as_slice()).unwrap();
-
-        let mut res_bn = Box::new(BigNum::new().unwrap());
-        res_bn
-            .mod_sqr(okm_bn.as_ref(), n_bn, &mut BigNumContext::new().unwrap())
-            .unwrap();
-        let rwptr = Box::into_raw(res_bn);
-        *hg_result_address = rwptr as u64;
-        *result = Ok(0)
-    }
-}
 /// BIGNUM sol_bignum_drop
 struct SyscallBigNumDrop<'a> {
     cost: u64,
@@ -2061,151 +1946,6 @@ impl<'a> SyscallObject<BpfError> for SyscallLogBigNum<'a> {
 
         stable_log::program_log(&self.logger, &bignum.to_string());
         *result = Ok(0);
-    }
-}
-
-struct SyscallBlake3Digest<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBlake3Digest<'a> {
-    fn call(
-        &mut self,
-        bytes_addr: u64,
-        bytes_len_addr: u64,
-        digest_addr: u64,
-        digest_len_addr: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        let bytes_len = question_mark!(
-            translate_type::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
-            result
-        );
-        let bytes = question_mark!(
-            translate_slice::<u8>(memory_mapping, bytes_addr, *bytes_len, self.loader_id, true),
-            result
-        );
-        let digest_len = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, digest_len_addr, self.loader_id, true),
-            result
-        );
-        let digest_bytes = question_mark!(
-            translate_slice_mut::<u8>(
-                memory_mapping,
-                digest_addr,
-                *digest_len,
-                self.loader_id,
-                true
-            ),
-            result
-        );
-
-        // println!("bytes-----syscall:{:?}", bytes);
-        let digest = blake3::Hasher::digest(bytes);
-        // println!("digest-----syscall:{:?}", digest.as_slice().to_vec());
-        let mut index = 0;
-        for byte in digest.iter() {
-            digest_bytes[index] = *byte;
-            index += 1;
-        }
-        *digest_len = index as u64;
-        let bytes = (*bytes_len + *digest_len) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-        *result = Ok(0)
-    }
-}
-
-/// Finds a valid prime from hash of u, a, z, nonce
-struct SyscallBigNumberHashToPrime<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumberHashToPrime<'a> {
-    fn call(
-        &mut self,
-        u_addr: u64,
-        a_addr: u64,
-        z_addr: u64,
-        nonce_addr: u64,
-        htp_result_addr: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        // Get the 3 BigNums pointers (u, a, z)
-        let bn_u_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, u_addr, self.loader_id, true),
-            result
-        );
-        let bn_a_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, a_addr, self.loader_id, true),
-            result
-        );
-        let bn_z_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, z_addr, self.loader_id, true),
-            result
-        );
-        // Get the result location, on inbound it contains the nonce length
-        let htp_result_address = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, htp_result_addr, self.loader_id, true),
-            result
-        );
-        // Get the nonce
-        let nonce_len = unsafe { *(htp_result_address as *mut u64) };
-        let nonce_ptr = question_mark!(
-            translate_slice::<u8>(memory_mapping, nonce_addr, nonce_len, self.loader_id, true),
-            result
-        );
-
-        let u_bn = unsafe { &*(*bn_u_ptr as *mut BigNum) };
-        let a_bn = unsafe { &*(*bn_a_ptr as *mut BigNum) };
-        let z_bn = unsafe { &*(*bn_z_ptr as *mut BigNum) };
-        let bytes = (u_bn.num_bytes() + a_bn.num_bytes() + z_bn.num_bytes()) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-
-        let mut input = u_bn.as_ref().to_vec();
-        input.extend_from_slice(&a_bn.as_ref().to_vec());
-        input.extend_from_slice(&z_bn.as_ref().to_vec());
-        input.extend_from_slice(nonce_ptr);
-        // println!("t:{:?}",input);
-
-        let mut i = 1u32;
-        let offset = input.len();
-        input.extend_from_slice(&i.to_be_bytes()[..]);
-        let end = input.len();
-        let ctx = &mut BigNumContext::new().unwrap();
-        let mut num;
-        loop {
-            let mut hash = blake3::Hasher::digest(input.as_slice());
-            // Force it to be odd
-            hash[31] |= 1;
-            // Only need 256 bits just borrow the bottom 32 bytes
-            // There should be plenty of primes below 2^256
-            // and we want this to be reasonably fast
-            num = BigNum::from_slice(&hash).unwrap();
-            if num.is_prime(15, ctx).unwrap() {
-                break;
-            }
-            i += 1;
-            let i_bytes = i.to_be_bytes();
-            input[offset..end].clone_from_slice(&i_bytes[..]);
-        }
-        println!("HashToPrimeLoop:{}", i);
-        let res_bn = Box::new(num);
-        let rwptr = Box::into_raw(res_bn);
-        *htp_result_address = rwptr as u64;
-        *result = Ok(0)
     }
 }
 
@@ -4996,76 +4736,7 @@ mod tests {
         // let braw: &BigNum = unsafe { &*(mod_inv as *mut BigNum) };
         // println!("(9 % 7)^2 =  {:?}", braw);
     }
-    #[test]
-    fn test_syscall_bignum_hashed_generator() {
-        let nonce = b"hgen_facelift";
-        let mut hg = nonce.len() as u64;
-        let hg_addr = &mut hg as *mut _ as u64;
-        let nonce_addr = nonce as *const _ as u64;
-        let bn_u_ptr = new_u32_bignum(11);
-        let bn_u_addr = &bn_u_ptr as *const _ as u64;
-        let bn_a_ptr = new_u32_bignum(59);
-        let bn_a_addr = &bn_a_ptr as *const _ as u64;
-        let bn_n_ptr = new_u32_bignum(7);
-        let bn_n_addr = &bn_n_ptr as *const _ as u64;
 
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: bn_u_addr,
-                    vm_addr: 2048,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_a_addr,
-                    vm_addr: 4096,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_n_addr,
-                    vm_addr: 8192,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: nonce_addr,
-                    vm_addr: 1024,
-                    len: nonce.len() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: hg_addr,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (20 + 20) as u64,
-            }));
-        let mut syscall = SyscallBigNumHg {
-            cost: 1,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(2048, 4096, 8192, 1024, 96, &memory_mapping, &mut result);
-        result.unwrap();
-        let braw: &BigNum = unsafe { &*(hg_addr as *mut BigNum) };
-        assert_eq!(*braw, BigNum::from_u32(0).unwrap());
-    }
     #[test]
     fn test_syscall_bignum_drop() {
         let mut bn = new_bignum();
@@ -5099,148 +4770,5 @@ mod tests {
         syscall.call(96, 0, 0, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
         assert_eq!(bn, 0);
-        // println!("After drop BigNum address = {}", bn);
-    }
-
-    #[test]
-    fn test_syscall_blake3_digest() {
-        let data = [7u8, 3u8, 1u8, 15u8];
-        let data_len = data.len();
-        let data_len_addr = &data_len as *const _ as u64;
-        let digest = [0u8; 32];
-        let mut digest_len = digest.len();
-        let digest_len_addr = &mut digest_len as *mut _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: data.as_ptr() as *const _ as u64,
-                    vm_addr: 8,
-                    len: data_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: data_len_addr,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: digest.as_ptr() as *const _ as u64,
-                    vm_addr: 16,
-                    len: digest_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-                MemoryRegion {
-                    host_addr: digest_len_addr,
-                    vm_addr: 1024,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (20 + 20) as u64,
-            }));
-        let mut syscall = SyscallBlake3Digest {
-            cost: 1,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 96, 16, 1024, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        let resb = digest[0..digest_len].to_vec();
-        assert_eq!(
-            resb,
-            vec![
-                19, 245, 57, 187, 33, 163, 77, 67, 98, 172, 159, 13, 83, 252, 212, 176, 31, 81,
-                186, 58, 239, 119, 15, 13, 212, 68, 167, 226, 233, 141, 216, 51
-            ]
-        );
-        // println!("This is result {:?}", resb);
-    }
-    #[test]
-    fn test_syscall_bignum_hash_to_prime() {
-        let nonce = b"hash_to_prime";
-        let mut htp = nonce.len() as u64;
-        let htp_addr = &mut htp as *mut _ as u64;
-        let nonce_addr = nonce as *const _ as u64;
-        let bn_u_ptr = new_u32_bignum(11);
-        let bn_u_addr = &bn_u_ptr as *const _ as u64;
-        let bn_a_ptr = new_u32_bignum(59);
-        let bn_a_addr = &bn_a_ptr as *const _ as u64;
-        let bn_z_ptr = new_u32_bignum(7);
-        let bn_z_addr = &bn_z_ptr as *const _ as u64;
-
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: bn_u_addr,
-                    vm_addr: 2048,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_a_addr,
-                    vm_addr: 4096,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_z_addr,
-                    vm_addr: 8192,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: nonce_addr,
-                    vm_addr: 1024,
-                    len: nonce.len() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: htp_addr,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: 10_000 as u64,
-            }));
-        let mut syscall = SyscallBigNumberHashToPrime {
-            cost: 1,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(2048, 4096, 8192, 1024, 96, &memory_mapping, &mut result);
-        result.unwrap();
-        let braw: &BigNum = unsafe { &*(htp as *mut BigNum) };
-        assert_eq!(
-            *braw,
-            BigNum::from_dec_str(
-                "23816539405324371056039456701279617701270933313491427172544877039730238224951"
-            )
-            .unwrap()
-        );
-        // println!("Hash to prime =  {:?}", braw);
     }
 }

@@ -2799,9 +2799,7 @@ name = "solana-bpf-loader-program"
 version = "1.7.0"
 dependencies = [
  "bincode",
- "blake3",
  "byteorder 1.3.4",
- "hkdf",
  "log",
  "num-derive 0.3.0",
  "num-traits",

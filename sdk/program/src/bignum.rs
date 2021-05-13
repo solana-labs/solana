@@ -8,7 +8,6 @@ use std::fmt;
     BorshSerialize,
     BorshDeserialize,
     BorshSchema,
-    // Clone,
     Default,
     Eq,
     PartialEq,
@@ -364,10 +363,7 @@ impl BigNumber {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_bignum_sqr(
-                    self_ptr: *const u64,
-                    modulus_ptr: *const u64,
-                ) -> u64;
+                fn sol_bignum_sqr(self_ptr: *const u64, modulus_ptr: *const u64) -> u64;
             }
             let mut bignum_ptr = 0u64;
             unsafe {
@@ -500,139 +496,6 @@ impl BigNumber {
             Self(*bignum_ptr)
         }
     }
-    /// Hashed Generator
-    pub fn hashed_generator(&self, a: &BigNumber, n: &BigNumber, nonce: &[u8]) -> Self {
-        #[cfg(not(target_arch = "bpf"))]
-        {
-            use hkdf::Hkdf;
-            use openssl::bn::{BigNum, BigNumContext};
-
-            let u_bn = unsafe { &*(self.0 as *mut BigNum) };
-            let a_bn = unsafe { &*(a.0 as *mut BigNum) };
-            let n_bn = unsafe { &*(n.0 as *mut BigNum) };
-            println!("u:{}", u_bn);
-            println!("a:{}", a_bn);
-            println!("n:{}", n_bn);
-            // hash_generator
-            let mut transcript = u_bn.as_ref().to_vec();
-            transcript.append(&mut a_bn.as_ref().to_vec());
-            transcript.extend_from_slice(nonce);
-            println!("t:{:?}", transcript);
-            let length = n_bn.num_bytes();
-            println!("len:{}", length);
-            let h = Hkdf::<blake3::Hasher>::new(
-                Some(b"SST_SALT_HASH_TO_GENERATOR_"),
-                transcript.as_slice().as_ref(),
-            );
-            let mut okm = vec![0u8; length as usize];
-            h.expand(b"", &mut okm).unwrap();
-            println!("okm:{:?}", okm);
-            let okm_bn = BigNum::from_slice(okm.as_slice()).unwrap();
-
-            let mut res_bn = Box::new(BigNum::new().unwrap());
-            res_bn
-                .mod_sqr(
-                    okm_bn.as_ref(),
-                    n_bn.as_ref(),
-                    &mut BigNumContext::new().unwrap(),
-                )
-                .unwrap();
-            let rwptr = Box::into_raw(res_bn);
-            Self(rwptr as u64)
-        }
-        #[cfg(target_arch = "bpf")]
-        {
-            extern "C" {
-                fn sol_bignum_hashed_generator(
-                    self_ptr: *const u64,
-                    a: *const u64,
-                    n: *const u64,
-                    nonce: *const u64,
-                    hg_ptr: *mut u64,
-                ) -> u64;
-            }
-            let mut bignum_ptr = nonce.len() as u64;
-            unsafe {
-                sol_bignum_hashed_generator(
-                    &self.0 as *const _ as *const u64,
-                    &a.0 as *const _ as *const u64,
-                    &n.0 as *const _ as *const u64,
-                    nonce as *const _ as *const u64,
-                    &mut bignum_ptr as *mut _ as *mut u64,
-                );
-            }
-            Self(bignum_ptr)
-        }
-    }
-
-    /// Hash to Prime
-    pub fn hash_to_prime(u: &BigNumber, a: &BigNumber, z: &BigNumber, nonce: &[u8]) -> Self {
-        #[cfg(not(target_arch = "bpf"))]
-        {
-            use blake3::traits::digest::Digest;
-            use openssl::bn::{BigNum, BigNumContext};
-            let u_bn = unsafe { &*(u.0 as *mut BigNum) };
-            let a_bn = unsafe { &*(a.0 as *mut BigNum) };
-            let z_bn = unsafe { &*(z.0 as *mut BigNum) };
-
-            let mut input = u_bn.as_ref().to_vec();
-            input.extend_from_slice(&a_bn.as_ref().to_vec());
-            input.extend_from_slice(&z_bn.as_ref().to_vec());
-            input.extend_from_slice(nonce);
-            // println!("t:{:?}",input);
-
-            let mut i = 1u32;
-            let offset = input.len();
-            input.extend_from_slice(&i.to_be_bytes()[..]);
-            let end = input.len();
-            let ctx = &mut BigNumContext::new().unwrap();
-            let mut num;
-            loop {
-                let mut hash = blake3::Hasher::digest(input.as_slice());
-                // Force it to be odd
-                hash[31] |= 1;
-                // Only need 256 bits just borrow the bottom 32 bytes
-                // There should be plenty of primes below 2^256
-                // and we want this to be reasonably fast
-                //num = BigNumber::from_bytes(&hash[32..]);
-                num = BigNum::from_slice(&hash).unwrap();
-                if num.is_prime(15, ctx).unwrap() {
-                    // msg!("num_bytes:{:?}",num.to_bytes().to_vec());
-                    // msg!("i:{}",i);
-                    break;
-                }
-                i += 1;
-                let i_bytes = i.to_be_bytes();
-                input[offset..end].clone_from_slice(&i_bytes[..]);
-            }
-            let res_bn = Box::new(num);
-            let rwptr = Box::into_raw(res_bn);
-            Self(rwptr as u64)
-        }
-        #[cfg(target_arch = "bpf")]
-        {
-            extern "C" {
-                fn sol_bignum_hash_to_prime(
-                    u: *const u64,
-                    a: *const u64,
-                    z: *const u64,
-                    nonce: *const u64,
-                    htp_ptr: *mut u64,
-                ) -> u64;
-            }
-            let mut bignum_ptr = nonce.len() as u64;
-            unsafe {
-                sol_bignum_hash_to_prime(
-                    &u.0 as *const _ as *const u64,
-                    &a.0 as *const _ as *const u64,
-                    &z.0 as *const _ as *const u64,
-                    nonce as *const _ as *const u64,
-                    &mut bignum_ptr as *mut _ as *mut u64,
-                );
-            }
-            Self(bignum_ptr)
-        }
-    }
 
     /// Log a `BigNum` from a program
     pub fn log(&self) {
@@ -716,38 +579,6 @@ impl Clone for BigNumber {
     }
 }
 
-/// Returns an array of bytes (big endian) of self
-pub fn blake3_digest(data: &[u8]) -> Vec<u8> {
-    #[cfg(not(target_arch = "bpf"))]
-    {
-        use blake3::traits::digest::Digest;
-        blake3::Hasher::digest(data).to_vec()
-    }
-    #[cfg(target_arch = "bpf")]
-    {
-        extern "C" {
-            fn sol_blake3_digest(
-                data_ptr: *const u8,
-                data_len: *const u64,
-                digest_ptr: *mut u8,
-                digest_len: *mut u64,
-            ) -> u64;
-        }
-        let data_len = data.len();
-        let mut digest = [0u8; 32];
-        let mut digest_len = digest.len();
-        unsafe {
-            sol_blake3_digest(
-                data.as_ptr() as *const _ as *const u8,
-                &data_len as *const _ as *const u64,
-                digest.as_mut_ptr() as *mut _ as *mut u8,
-                &mut digest_len as *mut _ as *mut u64,
-            );
-        };
-        digest[0..digest_len].to_vec()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,16 +586,6 @@ mod tests {
     fn test_bignumber_new() {
         let bn1 = BigNumber::new();
         println!("{:?}", bn1);
-    }
-
-    #[test]
-    fn test_bignumber_hashed_generator() {
-        let bn_u = BigNumber::from_u32(11);
-        let bn_a = BigNumber::from_u32(59);
-        let bn_n = BigNumber::from_u32(7);
-        let nonce = b"hgen";
-        let result = bn_u.hashed_generator(&bn_a, &bn_n, nonce);
-        println!("Hashed generator result = {}", result);
     }
 
     #[test]
