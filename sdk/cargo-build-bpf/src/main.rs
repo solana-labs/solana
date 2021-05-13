@@ -360,7 +360,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         &config,
         "bpf-tools",
-        "v1.7",
+        "v1.8",
         "https://github.com/solana-labs/bpf-tools/releases/download",
         &PathBuf::from(bpf_tools_filename),
     )
@@ -377,20 +377,6 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    let linker = llvm_bin.join("ld.lld");
-    let linker_script = config.bpf_sdk.join("rust").join("bpf.ld");
-    let mut rust_flags = String::from("-C lto=no");
-    rust_flags.push_str(" -C opt-level=2");
-    rust_flags.push_str(" -C link-arg=-z -C link-arg=notext");
-    rust_flags.push_str(" -C link-arg=-T");
-    rust_flags.push_str(linker_script.to_str().unwrap());
-    rust_flags.push_str(" -C link-arg=--Bdynamic");
-    rust_flags.push_str(" -C link-arg=-shared");
-    rust_flags.push_str(" -C link-arg=--threads=1");
-    rust_flags.push_str(" -C link-arg=--entry=entrypoint");
-    rust_flags.push_str(" -C linker=");
-    rust_flags.push_str(linker.to_str().unwrap());
-    env::set_var("RUSTFLAGS", rust_flags);
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![

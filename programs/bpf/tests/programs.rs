@@ -1274,7 +1274,7 @@ fn assert_instruction_count() {
     }
 
     let mut passed = true;
-    println!("\n  {:30} expected actual diff", "BPF program");
+    println!("\n  {:30} expected actual  diff", "BPF program");
     for program in programs.iter() {
         let program_id = solana_sdk::pubkey::new_rand();
         let key = solana_sdk::pubkey::new_rand();
@@ -1282,7 +1282,14 @@ fn assert_instruction_count() {
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
         let diff: i64 = count as i64 - program.1 as i64;
-        println!("  {:30} {:8} {:6} {:+4}", program.0, program.1, count, diff);
+        println!(
+            "  {:30} {:8} {:6} {:+5} ({:+3.0}%)",
+            program.0,
+            program.1,
+            count,
+            diff,
+            100.0_f64 * count as f64 / program.1 as f64 - 100.0_f64,
+        );
         if count > program.1 {
             passed = false;
         }
