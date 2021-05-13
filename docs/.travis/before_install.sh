@@ -7,5 +7,3 @@ npm install --global docusaurus-init
 docusaurus-init
 
 npm install --global vercel
-
-npm run crowdin:download
