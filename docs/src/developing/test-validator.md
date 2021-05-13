@@ -121,5 +121,5 @@ service, respectively
 ```
 * Session running time, current slot of the the three block
 [commitment levels](clients/jsonrpc-api#configuring-state-commitment),
-slot height of the last snapshot, trasaction count,
+slot height of the last snapshot, transaction count,
 [voting authority](/running-validator/vote-accounts#vote-authority) balance
