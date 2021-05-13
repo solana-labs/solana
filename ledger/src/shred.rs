@@ -937,7 +937,6 @@ impl Shredder {
     pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
         use reed_solomon_erasure::Error::TooFewDataShards;
         const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
-        Self::verify_consistent_shred_payload_sizes(&"deshred()", shreds)?;
         let index = shreds.first().ok_or(TooFewDataShards)?.index();
         let aligned = shreds.iter().zip(index..).all(|(s, i)| s.index() == i);
         let data_complete = {
@@ -1880,7 +1879,10 @@ pub mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
+        // We are responsible for ensuring that we don't pass an oversized buffer so truncate here
+        let mut serialized_packet = packet.data.to_vec();
+        serialized_packet.truncate(SHRED_PAYLOAD_SIZE);
+        let shred_res = Shred::new_from_serialized_shred(serialized_packet);
         assert_matches!(
             shred_res,
             Err(ShredError::InvalidParentOffset {
