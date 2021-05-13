@@ -10,7 +10,7 @@ starts a local, full-featured, single-node cluster on the developer's workstatio
 - No RPC rate-limits
 - No airdrop limits
 - Direct [on-chain program](on-chain-programs/overview) deployment
-(`--bpl-program ...`)
+(`--bpf-program ...`)
 - Clone accounts from a public cluster, including programs (`--clone ...`)
 - Configurable transaction history (`--limit-ledger-size ...`)
 - Configurable epoch length (`--slots-per-epoch ...`)
