@@ -641,6 +641,22 @@ impl Tower {
                     SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor)
                 };
 
+                // `heaviest_subtree_fork_choice` entries are not cleaned by duplicate block purging/rollback logic,
+                // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
+                // being a duplicate because `ancestors`/`descendants`/`progress` structurs may be missing this slot due
+                // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
+                if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice.latest_invalid_ancestor(&(last_voted_slot, last_voted_hash)) {
+                    // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
+                    // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
+                    // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
+                    // should then have a special case continue building an alternate fork from this ancestor, NOT
+                    // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
+                    // on latest vote. See `select_vote_and_reset_forks()` for more details.
+                    if heaviest_subtree_fork_choice.is_ancestor_slot(switch_slot, &(last_voted_slot, last_voted_hash)) {
+                        return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
+                    }
+                }
+
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                         if self.is_stray_last_vote() {
@@ -669,14 +685,6 @@ impl Tower {
                 if last_vote_ancestors.contains(&switch_slot) {
                     if self.is_stray_last_vote() {
                         return suspended_decision_due_to_major_unsynced_ledger();
-                    } else if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice.latest_invalid_ancestor(&(last_voted_slot, last_voted_hash)) {
-                        // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
-                        // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
-                        // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
-                        // should then have a special case continue building an alternate fork from this ancestor, NOT
-                        // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
-                        // on latest vote. See `select_vote_and_reset_forks()` for more details.
-                        return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
                     } else {
                         panic!(
                             "Should never consider switching to ancestor ({}) of last vote: {}, ancestors({:?})",

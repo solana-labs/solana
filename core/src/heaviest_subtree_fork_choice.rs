@@ -476,6 +476,17 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.is_candidate())
     }
 
+    /// Returns if a node with slot `maybe_ancestor_slot` is an ancestor of the node with
+    /// key `node_key`
+    pub fn is_ancestor_slot(&self, maybe_ancestor_slot: Slot, node_key: &SlotHashKey) -> bool {
+        if maybe_ancestor_slot == node_key.0 {
+            return true;
+        }
+        let mut ancestor_iterator = self.ancestor_iterator(*node_key);
+        ancestor_iterator
+            .any(|(ancestor_slot, _ancestor_hash)| ancestor_slot == maybe_ancestor_slot)
+    }
+
     fn propagate_new_leaf(
         &mut self,
         slot_hash_key: &SlotHashKey,
