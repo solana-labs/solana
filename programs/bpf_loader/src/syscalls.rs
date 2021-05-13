@@ -4139,19 +4139,19 @@ mod tests {
     #[test]
     fn test_syscall_bignum_new() {
         let bn = new_bignum();
-        let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
+        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
     }
 
     #[test]
     fn test_syscall_bignum_from_u32() {
         let bn = new_u32_bignum(20u32);
-        let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
+        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
     }
     #[test]
     fn test_syscall_bignum_from_bytes() {
         let val = [0u8, 0u8, 1u8, 0u8];
         let bn = new_bytes_bignum(&val);
-        let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
+        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
     }
     #[test]
     fn test_syscall_bignum_to_bytes() {
@@ -4725,7 +4725,6 @@ mod tests {
         let mut bn = new_bignum();
         let bn_addr = &mut bn as *mut _ as u64;
         assert_ne!(bn, 0);
-        let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: bn_addr,
