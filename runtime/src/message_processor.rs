@@ -358,7 +358,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 *is_signer,
                                 *is_writable,
                                 &self.account_deps[index].0,
-                                &self.account_deps[index].1 as &RefCell<AccountSharedData>,
+                                // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
+                                transmute_lifetime(*account),
                             )
                         } else {
                             index = index.saturating_sub(self.account_deps.len());
