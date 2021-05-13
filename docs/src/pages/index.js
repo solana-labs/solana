@@ -121,6 +121,27 @@ function Home() {
         {features && features.length > 0 && (
           <section className={styles.features}>
             <div className="container">
+<<<<<<< HEAD
+=======
+              <div className="alert alert--primary" role="alert">
+                <b>Announcing the Solana Season Hackathon</b>
+                <br />
+                Jumpstart your next project on Solana & join the fastest growing
+                ecosystem in crypto
+                <br />
+                <p align="right">
+                  <a
+                    href="https://solana.com/solanaszn"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <button className="button button--outline button--secondary">
+                      Register Now
+                    </button>
+                  </a>
+                </p>
+              </div>
+>>>>>>> 248f2309e... docs: fix fixed banner layout
               <div className="row cards__container">
                 {features.map((props, idx) => (
                   <Feature key={idx} {...props} />
