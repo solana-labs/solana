@@ -585,14 +585,11 @@ mod tests {
     #[test]
     fn test_bignumber_new() {
         let bn1 = BigNumber::new();
-        println!("{:?}", bn1);
     }
 
     #[test]
     fn test_bignumber_clone() {
         let bn_u = BigNumber::from_u32(11);
         let bn_u2 = bn_u.clone();
-        println!("bn_u = {}", bn_u);
-        println!("bn_u2 = {}", bn_u2);
     }
 }

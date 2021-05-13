@@ -1878,10 +1878,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModInv<'a> {
                 *result_mod_sqr_address = mod_sqr_ptr;
                 *result = Ok(0)
             }
-            Err(_e) => {
-                // println!("{}", e);
-                *result = Err(SyscallError::BigNumberModInvError.into())
-            }
+            Err(_e) => *result = Err(SyscallError::BigNumberModInvError.into()),
         };
     }
 }
@@ -4143,21 +4140,18 @@ mod tests {
     fn test_syscall_bignum_new() {
         let bn = new_bignum();
         let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        println!("New BigNum with 0 {:?}", braw);
     }
 
     #[test]
     fn test_syscall_bignum_from_u32() {
         let bn = new_u32_bignum(20u32);
         let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        println!("Reconst {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_from_bytes() {
         let val = [0u8, 0u8, 1u8, 0u8];
         let bn = new_bytes_bignum(&val);
         let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        println!("Reconst {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_to_bytes() {
@@ -4271,8 +4265,7 @@ mod tests {
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(96, 8, 16, 24, 0, &memory_mapping, &mut result);
         result.unwrap();
-        let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        println!("Reconst {:?}", braw);
+        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
     }
 
     #[test]
@@ -4324,7 +4317,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(sum as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(5).unwrap());
-        // println!("2+3 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_sub() {
@@ -4375,7 +4367,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(diff as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_dec_str("-1").unwrap());
-        // println!("2-3 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_mul() {
@@ -4426,7 +4417,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(prod as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(6).unwrap());
-        // println!("2*3 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_div() {
@@ -4477,7 +4467,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(quot as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(2).unwrap());
-        // println!("4/2 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_exp() {
@@ -4528,7 +4517,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(exp as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(16).unwrap());
-        // println!("4^2 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_sqr() {
@@ -4570,7 +4558,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(sqr as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(16).unwrap());
-        // println!("4^2 =  {:?}", braw);
     }
     #[test]
     fn test_syscall_bignum_mod_sqr() {
@@ -4622,7 +4609,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(mod_sqr as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(1).unwrap());
-        // println!("(15 % 7)^2 =  {:?}", braw);
     }
 
     #[test]
@@ -4683,7 +4669,6 @@ mod tests {
         result.unwrap();
         let braw: &BigNum = unsafe { &*(mod_mul as *mut BigNum) };
         assert_eq!(*braw, BigNum::from_u32(2).unwrap());
-        // println!("(3 * 3) % 7 =  {:?}", braw);
     }
     #[test]
     #[should_panic(expected = "UserError(SyscallError(BigNumberModInvError))")]
@@ -4733,8 +4718,6 @@ mod tests {
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(8, 32, 96, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
-        // let braw: &BigNum = unsafe { &*(mod_inv as *mut BigNum) };
-        // println!("(9 % 7)^2 =  {:?}", braw);
     }
 
     #[test]
@@ -4742,9 +4725,7 @@ mod tests {
         let mut bn = new_bignum();
         let bn_addr = &mut bn as *mut _ as u64;
         assert_ne!(bn, 0);
-        println!("After new BigNum address = {}", bn);
         let braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        println!("New BigNum initialized to {:?}", braw);
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: bn_addr,
