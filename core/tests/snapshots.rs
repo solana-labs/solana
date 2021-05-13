@@ -52,7 +52,7 @@ mod tests {
         bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_utils,
-        snapshot_utils::SnapshotVersion,
+        snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -120,6 +120,7 @@ mod tests {
                 snapshot_path: PathBuf::from(snapshot_dir.path()),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
+                maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -248,7 +249,11 @@ mod tests {
             snapshot_package,
             Some(&last_bank.get_thread_pool()),
         );
-        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        snapshot_utils::archive_snapshot_package(
+            &snapshot_package,
+            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        )
+        .unwrap();
 
         // Restore bank from snapshot
         let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
@@ -442,6 +447,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
+            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();
