@@ -87,13 +87,20 @@ impl Dashboard {
                     continue;
                 }
             };
-
             println_name_value("Identity:", &identity.to_string());
+
+            if let Ok(genesis_hash) = rpc_client.get_genesis_hash() {
+                println_name_value("Genesis Hash:", &genesis_hash.to_string());
+            }
+
             if let Some(contact_info) = get_contact_info(&rpc_client, &identity) {
                 println_name_value(
                     "Version:",
                     &contact_info.version.unwrap_or_else(|| "?".to_string()),
                 );
+                if let Some(shred_version) = contact_info.shred_version {
+                    println_name_value("Shred Version:", &shred_version.to_string());
+                }
                 if let Some(gossip) = contact_info.gossip {
                     println_name_value("Gossip Address:", &gossip.to_string());
                 }
