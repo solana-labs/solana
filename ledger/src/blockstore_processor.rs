@@ -407,14 +407,6 @@ pub fn process_blockstore(
         &recyclers,
         cache_block_time_sender,
     );
-    do_process_blockstore_from_root(
-        blockstore,
-        bank0,
-        &opts,
-        &recyclers,
-        None,
-        cache_block_time_sender,
-    )
 }
 
 // Process blockstore from a known root bank

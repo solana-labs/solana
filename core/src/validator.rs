@@ -1130,6 +1130,16 @@ fn new_banks_from_ledger(
         abort()
     });
 
+    let bank_forks = BankForks::new_from_banks(&initial_forks, root);
+    /*blockstore_processor::process_blockstore_from_root(
+        blockstore,
+        deserialized_bank,
+        &process_options,
+        &VerifyRecyclers::default(),
+        transaction_status_sender,
+        cache_block_time_sender,
+    )*/
+
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
             error!("warp slot requires a snapshot config");

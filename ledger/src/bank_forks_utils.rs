@@ -91,14 +91,7 @@ pub fn load(
                 }
 
                 return to_loadresult(
-                    blockstore_processor::process_blockstore_from_root(
-                        blockstore,
-                        deserialized_bank,
-                        &process_options,
-                        &VerifyRecyclers::default(),
-                        transaction_status_sender,
-                        cache_block_time_sender,
-                    ),
+,
                     Some(deserialized_snapshot_hash),
                 );
             }
