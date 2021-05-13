@@ -217,7 +217,7 @@ impl BankForks {
                 "Root entering
                 epoch: {},
                 next_epoch_start_slot: {},
-                epoch_stakes: {:#?}",
+                : {:#?}",
                 new_epoch,
                 root_bank
                     .epoch_schedule()
