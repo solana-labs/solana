@@ -585,11 +585,13 @@ mod tests {
     #[test]
     fn test_bignumber_new() {
         let bn1 = BigNumber::new();
+        assert_eq!(bn1.to_bytes(), BigNumber::new().to_bytes());
     }
 
     #[test]
     fn test_bignumber_clone() {
         let bn_u = BigNumber::from_u32(11);
         let bn_u2 = bn_u.clone();
+        assert_eq!(bn_u2.to_bytes(), bn_u.to_bytes());
     }
 }
