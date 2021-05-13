@@ -1180,6 +1180,11 @@ impl Blockstore {
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
 
         if !is_trusted {
+            if Self::is_data_shred_present(&shred, slot_meta, &index_meta.data()) {
+                handle_duplicate(shred);
+                return Err(InsertDataShredError::Exists);
+            }
+
             if shred.last_in_slot() && shred_index < slot_meta.received && !slot_meta.is_full() {
                 // We got a last shred < slot_meta.received, which signals there's an alternative,
                 // shorter version of the slot. Because also `!slot_meta.is_full()`, then this
@@ -1190,13 +1195,11 @@ impl Blockstore {
                 // just purge all shreds > the new last index slot, but because replay may have already
                 // replayed entries past the newly detected "last" shred, then mark the slot as dead
                 // and wait for replay to dump and repair the correct version.
+                warn!("Received *last* shred index {} less than previous shred index {}, and slot {} is not full, marking slot dead", shred_index, slot_meta.received, slot);
                 write_batch.put::<cf::DeadSlots>(slot, &true).unwrap();
             }
 
-            if Self::is_data_shred_present(&shred, slot_meta, &index_meta.data()) {
-                handle_duplicate(shred);
-                return Err(InsertDataShredError::Exists);
-            } else if !self.should_insert_data_shred(
+            if !self.should_insert_data_shred(
                 &shred,
                 slot_meta,
                 just_inserted_data_shreds,
@@ -4375,44 +4378,6 @@ pub mod tests {
             }
         }
 
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    pub fn test_insert_data_shreds_duplicate() {
-        // Create RocksDb ledger
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-
-            // Make duplicate entries and shreds
-            let num_unique_entries = 10;
-            let (mut original_shreds, original_entries) =
-                make_slot_entries(0, 0, num_unique_entries);
-
-            // Discard first shred
-            original_shreds.remove(0);
-
-            blockstore
-                .insert_shreds(original_shreds, None, false)
-                .unwrap();
-
-            assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), vec![]);
-
-            let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
-            let num_shreds = duplicate_shreds.len() as u64;
-            blockstore
-                .insert_shreds(duplicate_shreds, None, false)
-                .unwrap();
-
-            assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
-
-            let meta = blockstore.meta(0).unwrap().unwrap();
-            assert_eq!(meta.consumed, num_shreds);
-            assert_eq!(meta.received, num_shreds);
-            assert_eq!(meta.parent_slot, 0);
-            assert_eq!(meta.last_index, num_shreds - 1);
-        }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
@@ -8202,6 +8167,58 @@ pub mod tests {
             // Check no coding shreds are inserted
             let res = blockstore.get_coding_shreds_for_slot(slot, 0).unwrap();
             assert!(res.is_empty());
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_insert_data_shreds_same_slot_last_index() {
+        // Create RocksDb ledger
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            // Create enough entries to ensure there are at least two shreds created
+            let num_unique_entries = max_ticks_per_n_shreds(1, None) + 1;
+            let (mut original_shreds, original_entries) =
+                make_slot_entries(0, 0, num_unique_entries);
+
+            // Discard first shred, so that the slot is not full
+            assert!(original_shreds.len() > 1);
+            let last_index = original_shreds.last().unwrap().index() as u64;
+            original_shreds.remove(0);
+
+            // Insert the same shreds, including the last shred specifically, multiple
+            // times
+            for _ in 0..10 {
+                blockstore
+                    .insert_shreds(original_shreds.clone(), None, false)
+                    .unwrap();
+                let meta = blockstore.meta(0).unwrap().unwrap();
+                assert!(!blockstore.is_dead(0));
+                assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), vec![]);
+                assert_eq!(meta.consumed, 0);
+                assert_eq!(meta.received, last_index + 1);
+                assert_eq!(meta.parent_slot, 0);
+                assert_eq!(meta.last_index, last_index);
+                assert!(!blockstore.is_full(0));
+            }
+
+            let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
+            let num_shreds = duplicate_shreds.len() as u64;
+            blockstore
+                .insert_shreds(duplicate_shreds, None, false)
+                .unwrap();
+
+            assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
+
+            let meta = blockstore.meta(0).unwrap().unwrap();
+            assert_eq!(meta.consumed, num_shreds);
+            assert_eq!(meta.received, num_shreds);
+            assert_eq!(meta.parent_slot, 0);
+            assert_eq!(meta.last_index, num_shreds - 1);
+            assert!(blockstore.is_full(0));
+            assert!(!blockstore.is_dead(0));
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
