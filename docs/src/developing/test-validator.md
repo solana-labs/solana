@@ -37,7 +37,9 @@ See [Appendix I](#appendix-i-status-output) for details
 Ledger location: test-ledger
 Log: test-ledger/validator.log
 Identity: EPhgPANa5Rh2wa4V2jxt7YbtWa3Uyw4sTeZ13cQjDDB8
+Genesis Hash: 4754oPEMhAKy14CZc8GzQUP93CB4ouELyaTs4P8ittYn
 Version: 1.6.7
+Shred Version: 13286
 Gossip Address: 127.0.0.1:1024
 TPU Address: 127.0.0.1:1027
 JSON RPC URL: http://127.0.0.1:8899
@@ -59,8 +61,10 @@ solana config set --url http://127.0.0.1:8899
 
 #### Verify the CLI Tool Suite configuration
 ```
-solana cluster-version
+solana genesis-hash
 ```
+* **NOTE:** The result should match the `Genesis Hash:` field in the
+`solana-test-validator` status output
 
 #### Check the wallet balance
 ```
