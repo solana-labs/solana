@@ -14,7 +14,7 @@ pub fn repair_response_packet(
     nonce: Nonce,
 ) -> Option<Packet> {
     let shred = blockstore
-        .get_data_shred(slot, shred_index)
+        .get_data_shred_padded(slot, shred_index)
         .expect("Blockstore could not get data shred");
     shred
         .map(|shred| repair_response_packet_from_shred(shred, dest, nonce))

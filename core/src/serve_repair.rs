@@ -664,7 +664,10 @@ mod tests {
                 .into_iter()
                 .filter_map(|b| {
                     assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                    use solana_ledger::shred::SHRED_PAYLOAD_SIZE;
+                    let mut serialized_shred = vec![0; SHRED_PAYLOAD_SIZE];
+                    serialized_shred.copy_from_slice(&b.data[..SHRED_PAYLOAD_SIZE]);
+                    Shred::new_from_serialized_shred(serialized_shred).ok()
                 })
                 .collect();
             assert!(!rv.is_empty());
@@ -749,7 +752,10 @@ mod tests {
                 .into_iter()
                 .filter_map(|b| {
                     assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                    use solana_ledger::shred::SHRED_PAYLOAD_SIZE;
+                    let mut serialized_shred = vec![0; SHRED_PAYLOAD_SIZE];
+                    serialized_shred.copy_from_slice(&b.data[..SHRED_PAYLOAD_SIZE]);
+                    Shred::new_from_serialized_shred(serialized_shred).ok()
                 })
                 .collect();
             assert_eq!(rv[0].index(), 1);
@@ -1112,7 +1118,9 @@ mod tests {
 
     fn verify_responses<'a>(request: &RepairType, packets: impl Iterator<Item = &'a Packet>) {
         for packet in packets {
-            let shred_payload = packet.data.to_vec();
+            use solana_ledger::shred::SHRED_PAYLOAD_SIZE;
+            let mut shred_payload = vec![0; SHRED_PAYLOAD_SIZE];
+            shred_payload.copy_from_slice(&packet.data[..SHRED_PAYLOAD_SIZE]);
             let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();
             request.verify_response(&shred);
         }
