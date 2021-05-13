@@ -11,7 +11,7 @@ starts a local, full-featured, single-node cluster on the developer's workstatio
 - No airdrop limits
 - Direct [on-chain program](on-chain-programs/overview) deployment
 (`--bpl-program ...`)
-- Clone account's from a public cluster, including programs (`--clone ...`)
+- Clone accounts from a public cluster, including programs (`--clone ...`)
 - Configurable transaction history (`--limit-ledger-size ...`)
 - Configurable epoch length (`--slots-per-epoch ...`)
 - Jump to an arbitrary slot (`--warp-slot ...`)
