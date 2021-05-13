@@ -37,7 +37,6 @@ blake3 = "0.3.7"
 curve25519-dalek = "2.1.0"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.7.0" }
-hkdf = "0.11.0"
 num-bigint = "0.4.0"
 openssl = "0.10.32"
 

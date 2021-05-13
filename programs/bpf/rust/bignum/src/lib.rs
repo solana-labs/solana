@@ -70,7 +70,6 @@ fn test_complex_maths() {
     assert_eq!(base_15.sqr().to_bytes(), [225]);
     assert_eq!(base_15.exp(&base_2).to_bytes(), [13, 47]);
     assert_eq!(base_3.mod_inv(&modulus_7).to_bytes(), [5]);
-    assert!(true);
 }
 
 #[no_mangle]
