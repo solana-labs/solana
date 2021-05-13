@@ -73,8 +73,6 @@ releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
 NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
-For more information on port forwarding with regards to residential networks,
-see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.
