@@ -552,6 +552,15 @@ impl Blockstore {
                 if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
                     let some_data = data_cf
                         .get_bytes((slot, i))
+                        .map(|data| {
+                            data.map(|mut d| {
+                                // Only data_header.size bytes stored in the blockstore so pad the
+                                // payload out to SHRED_PAYLOAD_SIZE. The zero padding is required
+                                // for erasure to work correctly
+                                d.resize(cmp::max(d.len(), crate::shred::SHRED_PAYLOAD_SIZE), 0);
+                                d
+                            })
+                        })
                         .expect("Database failure, could not fetch data shred");
                     if let Some(data) = some_data {
                         Shred::new_from_serialized_shred(data).ok()
@@ -1473,14 +1482,19 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
+    /// Gets a shred from the blockstore without any zero-padding it may have had at insert
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
+        self.data_shred_cf.get_bytes((slot, index))
+    }
+
+    /// Gets a shred from the blockstore with zero padding out to SHRED_PAYLOAD_SIZE bytes
+    pub fn get_data_shred_padded(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_shred_cf.get_bytes((slot, index)).map(|data| {
             data.map(|mut d| {
-                // Only data_header.size bytes stored in the blockstore so
-                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
-                // erasure recovery works properly.
-                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
+                // Only data_header.size bytes stored in the blockstore so pad the
+                // payload out to SHRED_PAYLOAD_SIZE. Having the zero padding may
+                // be useful / needed, such as for erasure or duplicate detection
+                d.resize(cmp::max(d.len(), crate::shred::SHRED_PAYLOAD_SIZE), 0);
                 d
             })
         })
@@ -2855,18 +2869,14 @@ impl Blockstore {
         is_data: bool,
     ) -> Option<Vec<u8>> {
         let res = if is_data {
-            self.get_data_shred(slot, index as u64)
+            self.get_data_shred_padded(slot, index as u64)
                 .expect("fetch from DuplicateSlots column family failed")
         } else {
             self.get_coding_shred(slot, index as u64)
                 .expect("fetch from DuplicateSlots column family failed")
         };
 
-        let mut payload = new_shred_raw.to_vec();
-        payload.resize(
-            std::cmp::max(new_shred_raw.len(), crate::shred::SHRED_PAYLOAD_SIZE),
-            0,
-        );
+        let payload = new_shred_raw.to_vec();
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         res.map(|existing_shred| {
             if existing_shred != new_shred.payload {
@@ -3692,6 +3702,13 @@ pub fn make_many_slot_entries(
     (shreds, entries)
 }
 
+// Check shreds for equality, ignoring any zero padding that either may have
+// used for tests only
+pub fn shreds_equal_ignore_padding(shred1: &Shred, shred2: &Shred) -> bool {
+    shred1.payload[..shred1.data_header.size as usize]
+        == shred2.payload[..shred2.data_header.size as usize]
+}
+
 // Create shreds for slots that have a parent-child relationship defined by the input `chain`
 // used for tests only
 pub fn make_chaining_slot_entries(
@@ -3850,7 +3867,10 @@ pub mod tests {
             .unwrap();
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
 
-        assert_eq!(last_shred, deserialized_shred);
+        assert!(shreds_equal_ignore_padding(
+            &last_shred,
+            &deserialized_shred
+        ));
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -5753,7 +5773,9 @@ pub mod tests {
             .filter_map(|(_, bytes)| Shred::new_from_serialized_shred(bytes.to_vec()).ok())
             .collect();
         assert_eq!(result.len(), slot_8_shreds.len());
-        assert_eq!(result, slot_8_shreds);
+        for (left, right) in result.iter().zip(slot_8_shreds.iter()) {
+            assert!(shreds_equal_ignore_padding(&left, &right));
+        }
 
         drop(blockstore);
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
@@ -7625,20 +7647,17 @@ pub mod tests {
             blockstore
                 .insert_shreds(coding_shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
-            let shred_bufs: Vec<_> = data_shreds
-                .iter()
-                .map(|shred| shred.payload.clone())
-                .collect();
 
             // Check all the data shreds were recovered
-            for (s, buf) in data_shreds.iter().zip(shred_bufs) {
-                assert_eq!(
+            for shred in data_shreds.iter() {
+                let recovered_shred = Shred::new_from_serialized_shred(
                     blockstore
-                        .get_data_shred(s.slot(), s.index() as u64)
+                        .get_data_shred(shred.slot(), shred.index() as u64)
                         .unwrap()
                         .unwrap(),
-                    buf
-                );
+                )
+                .unwrap();
+                assert!(shreds_equal_ignore_padding(&shred, &recovered_shred));
             }
 
             verify_index_integrity(&blockstore, slot);
