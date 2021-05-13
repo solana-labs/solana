@@ -22,8 +22,8 @@ use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats},
     accounts_index::{
-        AccountIndex, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey, IsCached,
-        SlotList, SlotSlice, ZeroLamport,
+        AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey,
+        IsCached, SlotList, SlotSlice, ZeroLamport,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -740,7 +740,7 @@ pub struct AccountsDb {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
 
     pub caching_enabled: bool,
 
@@ -1092,7 +1092,7 @@ impl Default for AccountsDb {
             shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: HashSet::new(),
+            account_indexes: AccountSecondaryIndexes::default(),
             caching_enabled: false,
         }
     }
@@ -1100,13 +1100,18 @@ impl Default for AccountsDb {
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(paths, cluster_type, HashSet::new(), false)
+        AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            AccountSecondaryIndexes::default(),
+            false,
+        )
     }
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
     ) -> Self {
         let new = if !paths.is_empty() {
@@ -2102,11 +2107,22 @@ impl AccountsDb {
         ancestors: &Ancestors,
         index_key: IndexKey,
         scan_func: F,
-    ) -> A
+    ) -> (A, bool)
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
     {
+        let key = match &index_key {
+            IndexKey::ProgramId(key) => key,
+            IndexKey::SplTokenMint(key) => key,
+            IndexKey::SplTokenOwner(key) => key,
+        };
+        if !self.account_indexes.include_key(key) {
+            // the requested key was not indexed in the secondary index, so do a normal scan
+            let used_index = false;
+            return (self.scan_accounts(ancestors, scan_func), used_index);
+        }
+
         let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
@@ -2124,7 +2140,8 @@ impl AccountsDb {
                 scan_func(&mut collector, account_slot)
             },
         );
-        collector
+        let used_index = true;
+        (collector, used_index)
     }
 
     /// Scan a specific slot through all the account storage in parallel
@@ -4983,8 +5000,11 @@ impl AccountsDb {
 pub mod tests {
     use super::*;
     use crate::{
-        accounts_hash::MERKLE_FANOUT, accounts_index::tests::*, accounts_index::RefCount,
-        append_vec::AccountMeta, inline_spl_token_v2_0,
+        accounts_hash::MERKLE_FANOUT,
+        accounts_index::RefCount,
+        accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
+        append_vec::AccountMeta,
+        inline_spl_token_v2_0,
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -6008,7 +6028,7 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_with_config(
+        let mut accounts = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
@@ -6052,16 +6072,51 @@ pub mod tests {
 
         // Secondary index should still find both pubkeys
         let mut found_accounts = HashSet::new();
-        accounts.accounts_index.index_scan_accounts(
-            &HashMap::new(),
-            IndexKey::SplTokenMint(mint_key),
-            |key, _| {
+        let index_key = IndexKey::SplTokenMint(mint_key);
+        accounts
+            .accounts_index
+            .index_scan_accounts(&HashMap::new(), index_key, |key, _| {
                 found_accounts.insert(*key);
-            },
-        );
+            });
         assert_eq!(found_accounts.len(), 2);
         assert!(found_accounts.contains(&pubkey1));
         assert!(found_accounts.contains(&pubkey2));
+
+        {
+            accounts.account_indexes.keys = Some(AccountSecondaryIndexesIncludeExclude {
+                exclude: true,
+                keys: [mint_key].iter().cloned().collect::<HashSet<Pubkey>>(),
+            });
+            // Secondary index can't be used - do normal scan: should still find both pubkeys
+            let found_accounts = accounts.index_scan_accounts(
+                &Ancestors::default(),
+                index_key,
+                |collection: &mut HashSet<Pubkey>, account| {
+                    collection.insert(*account.unwrap().0);
+                },
+            );
+            assert!(!found_accounts.1);
+            assert_eq!(found_accounts.0.len(), 2);
+            assert!(found_accounts.0.contains(&pubkey1));
+            assert!(found_accounts.0.contains(&pubkey2));
+
+            accounts.account_indexes.keys = None;
+
+            // Secondary index can now be used since it isn't marked as excluded
+            let found_accounts = accounts.index_scan_accounts(
+                &Ancestors::default(),
+                index_key,
+                |collection: &mut HashSet<Pubkey>, account| {
+                    collection.insert(*account.unwrap().0);
+                },
+            );
+            assert!(found_accounts.1);
+            assert_eq!(found_accounts.0.len(), 2);
+            assert!(found_accounts.0.contains(&pubkey1));
+            assert!(found_accounts.0.contains(&pubkey2));
+
+            accounts.account_indexes.keys = None;
+        }
 
         accounts.clean_accounts(None);
 
@@ -7774,7 +7829,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
         );
@@ -7783,7 +7838,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
         );
@@ -7792,7 +7847,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
         );
@@ -7801,7 +7856,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
         );
@@ -7810,7 +7865,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
         );
@@ -7819,7 +7874,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
         );
@@ -8208,7 +8263,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -8244,7 +8299,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -8367,7 +8422,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let account_key = Pubkey::new_unique();
@@ -8451,7 +8506,7 @@ pub mod tests {
         let accounts_db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let slot: Slot = 0;
@@ -8505,7 +8560,7 @@ pub mod tests {
         let accounts_db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
@@ -8893,7 +8948,7 @@ pub mod tests {
         let db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::default(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let account_key1 = Pubkey::new_unique();

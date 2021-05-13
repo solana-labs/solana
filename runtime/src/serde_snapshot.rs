@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
-        accounts_index::{AccountIndex, Ancestors},
+        accounts_index::{AccountSecondaryIndexes, Ancestors},
         append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,
@@ -127,7 +127,7 @@ pub(crate) fn bank_from_stream<R>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: HashSet<AccountIndex>,
+    account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
 ) -> std::result::Result<Bank, Error>
 where
@@ -235,7 +235,7 @@ fn reconstruct_bank_from_fields<E>(
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: HashSet<AccountIndex>,
+    account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
 ) -> Result<Bank, Error>
 where
@@ -268,7 +268,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     cluster_type: &ClusterType,
-    account_indexes: HashSet<AccountIndex>,
+    account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
 ) -> Result<AccountsDb, Error>
 where

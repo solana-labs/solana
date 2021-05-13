@@ -431,7 +431,25 @@ typedef struct {
  * @param bytes_len Number of byte arrays
  * @param result 32 byte array to hold the result
  */
-static uint64_t sol_sha256(
+uint64_t sol_sha256(
+    const SolBytes *bytes,
+    int bytes_len,
+    const uint8_t *result
+);
+
+/**
+ * Length of a Keccak hash result
+ */
+#define KECCAK_RESULT_LENGTH 32
+
+/**
+ * Keccak
+ *
+ * @param bytes Array of byte arrays
+ * @param bytes_len Number of byte arrays
+ * @param result 32 byte array to hold the result
+ */
+uint64_t sol_keccak256(
     const SolBytes *bytes,
     int bytes_len,
     const uint8_t *result
@@ -482,7 +500,7 @@ typedef struct {
  * @param program_id Program id of the signer
  * @param program_address Program address created, filled on return
  */
-static uint64_t sol_create_program_address(
+uint64_t sol_create_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
     const SolPubkey *program_id,
@@ -498,7 +516,7 @@ static uint64_t sol_create_program_address(
  * @param program_address Program address created, filled on return
  * @param bump_seed Bump seed required to create a valid program address
  */
-static uint64_t sol_try_find_program_address(
+uint64_t sol_try_find_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
     const SolPubkey *program_id,
@@ -510,6 +528,17 @@ static uint64_t sol_try_find_program_address(
  * Cross-program invocation
  *  * @{
  */
+
+/**
+ * Internal cross-program invocation function
+ */
+uint64_t sol_invoke_signed_c(
+  const SolInstruction *instruction,
+  const SolAccountInfo *account_infos,
+  int account_infos_len,
+  const SolSignerSeeds *signers_seeds,
+  int signers_seeds_len
+);
 
 /**
  * Invoke another program and sign for some of the keys
@@ -527,14 +556,6 @@ static uint64_t sol_invoke_signed(
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  uint64_t sol_invoke_signed_c(
-    const SolInstruction *instruction,
-    const SolAccountInfo *account_infos,
-    int account_infos_len,
-    const SolSignerSeeds *signers_seeds,
-    int signers_seeds_len
-  );
-
   return sol_invoke_signed_c(
     instruction,
     account_infos,

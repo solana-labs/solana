@@ -8,7 +8,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
-    accounts_index::{AccountIndex, Ancestors, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -900,7 +900,7 @@ impl Bank {
             &[],
             None,
             None,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             false,
         )
     }
@@ -912,7 +912,7 @@ impl Bank {
             &[],
             None,
             None,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             false,
         );
 
@@ -923,7 +923,7 @@ impl Bank {
     #[cfg(test)]
     pub(crate) fn new_with_config(
         genesis_config: &GenesisConfig,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
     ) -> Self {
         Self::new_with_paths(
@@ -943,7 +943,7 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
     ) -> Self {
         let mut bank = Self::default();
@@ -4444,6 +4444,10 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
+    pub fn rent_collector(&self) -> RentCollector {
+        self.rent_collector.clone()
+    }
+
     /// Return the total capitalization of the Bank
     pub fn capitalization(&self) -> u64 {
         self.capitalization.load(Relaxed)
@@ -5027,7 +5031,9 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         accounts_db::SHRINK_RATIO,
-        accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
+        accounts_index::{
+            AccountIndex, AccountMap, AccountSecondaryIndexes, Ancestors, ITER_BATCH_SIZE,
+        },
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -8899,8 +8905,8 @@ pub(crate) mod tests {
     #[test]
     fn test_get_filtered_indexed_accounts() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
-        let mut account_indexes = HashSet::new();
-        account_indexes.insert(AccountIndex::ProgramId);
+        let mut account_indexes = AccountSecondaryIndexes::default();
+        account_indexes.indexes.insert(AccountIndex::ProgramId);
         let bank = Arc::new(Bank::new_with_config(
             &genesis_config,
             account_indexes,
@@ -10353,7 +10359,7 @@ pub(crate) mod tests {
         // of the storage for this slot
         let mut bank0 = Arc::new(Bank::new_with_config(
             &genesis_config,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             false,
         ));
         bank0.restore_old_behavior_for_fragile_tests();
@@ -10384,7 +10390,11 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         // Set root for bank 0, with caching enabled
-        let mut bank0 = Arc::new(Bank::new_with_config(&genesis_config, HashSet::new(), true));
+        let mut bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            AccountSecondaryIndexes::default(),
+            true,
+        ));
         bank0.restore_old_behavior_for_fragile_tests();
 
         let pubkey0_size = get_shrink_account_size();
@@ -11564,7 +11574,7 @@ pub(crate) mod tests {
         genesis_config.rent = Rent::free();
         let bank0 = Arc::new(Bank::new_with_config(
             &genesis_config,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled,
         ));
 
