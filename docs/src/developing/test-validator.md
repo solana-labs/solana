@@ -4,7 +4,7 @@ title: Solana Test Validator
 During early stage development, it is often convenient to target a cluster with
 fewer restrictions and more configuration options than the public offerings
 provide. This is easily achieved with the `solana-test-validator` binary, which
-starts a local, full-featured, single-node cluster on the developer's workstation.
+starts a full-featured, single-node cluster on the developer's workstation.
 
 ## Advantages
 - No RPC rate-limits
