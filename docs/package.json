@@ -10,12 +10,13 @@
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids",
     "format": "prettier --check \"**/*.{js,jsx,json,md,scss}\"",
     "format:fix": "prettier --write \"**/*.{js,jsx,json,md,scss}\"",
     "lint": "set -ex; eslint .",
     "lint:fix": "npm run lint -- --fix",
     "crowdin": "crowdin",
-    "crowdin:sync": "npm run write-translations && npm run crowdin upload && npm run crowdin download && npm run format:fix"
+    "crowdin:sync": "npm run write-heading-ids && npm run write-translations && npm run crowdin upload && npm run crowdin download && npm run format:fix"
   },
   "dependencies": {
     "@crowdin/cli": "^3.5.2",

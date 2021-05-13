@@ -1,1 +1,0 @@
-# المُشاركة (Participation)

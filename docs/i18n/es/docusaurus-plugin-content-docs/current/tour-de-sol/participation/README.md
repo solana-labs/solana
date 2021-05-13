@@ -1,1 +1,0 @@
-# Participación
