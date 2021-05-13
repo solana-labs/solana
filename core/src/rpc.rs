@@ -46,7 +46,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
-    accounts_index::{AccountIndex, IndexKey},
+    accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -125,7 +125,7 @@ pub struct JsonRpcConfig {
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
     pub max_multiple_accounts: Option<usize>,
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_bigtable_timeout: Option<Duration>,
     pub minimal_api: bool,
@@ -1706,7 +1706,7 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::ProgramId)
         {
-            if !bank.account_indexes_include_key(program_id) {
+            if !self.config.account_indexes.include_key(program_id) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: program_id.to_string(),
                 }
@@ -1755,7 +1755,7 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenOwner)
         {
-            if !bank.account_indexes_include_key(owner_key) {
+            if !self.config.account_indexes.include_key(owner_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: owner_key.to_string(),
                 }
@@ -1803,7 +1803,7 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenMint)
         {
-            if !bank.account_indexes_include_key(mint_key) {
+            if !self.config.account_indexes.include_key(mint_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: mint_key.to_string(),
                 }
