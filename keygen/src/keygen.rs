@@ -5,9 +5,9 @@ use clap::{
     Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
-    input_validators::is_parsable,
+    input_validators::{is_parsable, is_prompt_signer_source},
     keypair::{
-        keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     ArgConstant, DisplayError,
@@ -483,6 +483,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Recover keypair from seed phrase and optional BIP39 passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
+                    Arg::with_name("prompt_signer")
+                        .index(1)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_prompt_signer_source)
+                        .help("`prompt:` URI scheme or `ASK` keyword"),
+                )
+                .arg(
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
@@ -588,8 +596,13 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            let keypair = keypair_from_seed_phrase("recover", skip_validation, true, None, true)?;
+            let keypair_name = "recover";
+            let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                keypair_from_path(matches, path, keypair_name, true)?
+            } else {
+                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+            };
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
