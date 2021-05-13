@@ -1705,16 +1705,6 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::ProgramId)
         {
-<<<<<<< HEAD
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
-                // The program-id account index checks for Account owner on inclusion. However, due
-                // to the current AccountsDb implementation, an account may remain in storage as a
-                // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
-                // updates. We include the redundant filters here to avoid returning these
-                // accounts.
-                account.owner == *program_id && filter_closure(account)
-            })
-=======
             if !self.config.account_indexes.include_key(program_id) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: program_id.to_string(),
@@ -1728,10 +1718,9 @@ impl JsonRpcRequestProcessor {
                     // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
                     // updates. We include the redundant filters here to avoid returning these
                     // accounts.
-                    account.owner() == program_id && filter_closure(account)
+                    account.owner == *program_id && filter_closure(account)
                 }),
             )
->>>>>>> 27004f1b7... Return error for excluded secondary-index keys (#17193)
         } else {
             Ok(bank.get_filtered_program_accounts(program_id, filter_closure))
         }
@@ -1765,15 +1754,6 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenOwner)
         {
-<<<<<<< HEAD
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                account.owner == spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
-=======
             if !self.config.account_indexes.include_key(owner_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: owner_key.to_string(),
@@ -1783,14 +1763,13 @@ impl JsonRpcRequestProcessor {
             Ok(bank.get_filtered_indexed_accounts(
                 &IndexKey::SplTokenOwner(*owner_key),
                 |account| {
-                    account.owner() == &spl_token_id_v2_0()
+                    account.owner == spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                         })
                 },
             ))
->>>>>>> 27004f1b7... Return error for excluded secondary-index keys (#17193)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -1823,15 +1802,6 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenMint)
         {
-<<<<<<< HEAD
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                account.owner == spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
-=======
             if !self.config.account_indexes.include_key(mint_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: mint_key.to_string(),
@@ -1840,14 +1810,13 @@ impl JsonRpcRequestProcessor {
             }
             Ok(
                 bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
+                    account.owner == spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                         })
                 }),
             )
->>>>>>> 27004f1b7... Return error for excluded secondary-index keys (#17193)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
