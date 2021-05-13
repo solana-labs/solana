@@ -8,4 +8,4 @@ docusaurus-init
 
 npm install --global vercel
 
-npm run crowdin:sync
+npm run crowdin:download
