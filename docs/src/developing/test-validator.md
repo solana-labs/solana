@@ -31,7 +31,7 @@ Next start the test validator
 solana-test-validator
 ```
 
-By default basic status information is printed while the process is running.
+By default, basic status information is printed while the process is running.
 See [Appendix I](#appendix-i-status-output) for details
 ```
 Ledger location: test-ledger
