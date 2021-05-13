@@ -357,15 +357,11 @@ fn network_run_push(
                         })
                         .unwrap();
 
-                    let updated_labels: Vec<_> =
-                        updated.into_iter().map(|u| u.value.label()).collect();
+                    let origins: HashSet<_> =
+                        updated.into_iter().map(|u| u.value.pubkey()).collect();
                     let prunes_map = network
                         .get(&to)
-                        .map(|node| {
-                            node.lock()
-                                .unwrap()
-                                .prune_received_cache(updated_labels, &stakes)
-                        })
+                        .map(|node| node.lock().unwrap().prune_received_cache(origins, &stakes))
                         .unwrap();
 
                     for (from, prune_set) in prunes_map {
