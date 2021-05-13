@@ -244,13 +244,11 @@ pub fn verify_shreds_gpu(
         shred_gpu_offsets(pubkeys_len, batches, recycler_cache);
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
-    elems.push(
-        perf_libs::Elems {
-            #![allow(clippy::cast_ptr_alignment)]
-            elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
-            num: num_packets as u32,
-        },
-    );
+    elems.push(perf_libs::Elems {
+        #[allow(clippy::cast_ptr_alignment)]
+        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
+        num: num_packets as u32,
+    });
 
     for p in batches {
         elems.push(perf_libs::Elems {
@@ -383,13 +381,11 @@ pub fn sign_shreds_gpu(
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
-    elems.push(
-        perf_libs::Elems {
-            #![allow(clippy::cast_ptr_alignment)]
-            elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
-            num: num_keypair_packets as u32,
-        },
-    );
+    elems.push(perf_libs::Elems {
+        #[allow(clippy::cast_ptr_alignment)]
+        elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
+        num: num_keypair_packets as u32,
+    });
 
     for p in batches.iter() {
         elems.push(perf_libs::Elems {
