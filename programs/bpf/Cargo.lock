@@ -1234,16 +1234,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hkdf"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01706d578d5c281058480e673ae4086a9f4710d8df1ad80a5b03e39ece5f886b"
-dependencies = [
- "digest 0.9.0",
- "hmac 0.11.0",
-]
-
-[[package]]
 name = "hmac"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3405,7 +3395,6 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "hkdf",
  "itertools 0.9.0",
  "lazy_static",
  "log",
