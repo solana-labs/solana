@@ -455,6 +455,9 @@ Result:
 
 ### getConfirmedBlock
 
+**NEW: This method is only available in solana-core v1.7 or newer. Please use
+[getBlock](jsonrpc-api.md#getblock) for solana-core v1.6**
+
 Returns identity and transaction information about a confirmed block in the ledger
 
 #### Parameters:
@@ -788,6 +791,9 @@ Result:
 
 ### getConfirmedBlocks
 
+**NEW: This method is only available in solana-core v1.7 or newer. Please use
+[getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks) for solana-core v1.6**
+
 Returns a list of confirmed blocks between two slots
 
 #### Parameters:
@@ -818,6 +824,9 @@ Result:
 ```
 
 ### getConfirmedBlocksWithLimit
+
+**NEW: This method is only available in solana-core v1.7 or newer. Please use
+[getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit) for solana-core v1.6**
 
 Returns a list of confirmed blocks starting at the given slot
 
@@ -2279,6 +2288,72 @@ Result when the node has no snapshot:
 {"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
 ```
 
+<<<<<<< HEAD
+=======
+### getSignaturesForAddress
+
+**NEW: This method is only available in solana-core v1.7 or newer. Please use
+[getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2) for solana-core v1.6**
+
+
+Returns confirmed signatures for transactions involving an
+address backwards in time from the provided signature or most recent confirmed block
+
+#### Parameters:
+* `<string>` - account address as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following fields:
+  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+  * `before: <string>` - (optional) start searching backwards from this transaction signature.
+                         If not provided the search starts from the top of the highest max confirmed block.
+  * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+
+#### Results:
+The result field will be an array of transaction signature information, ordered
+from newest to oldest transaction:
+* `<object>`
+  * `signature: <string>` - transaction signature as base-58 encoded string
+  * `slot: <u64>` - The slot that contains the block with the transaction
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+  * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getSignaturesForAddress",
+    "params": [
+      "Vote111111111111111111111111111111111111111",
+      {
+        "limit": 1
+      }
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "err": null,
+      "memo": null,
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 114,
+      "blockTime": null
+    }
+  ],
+  "id": 1
+}
+```
+
+>>>>>>> 515f8a21d... Add NEW labels for RPC methods introduced in v1.7
 ### getSignatureStatuses
 
 Returns the statuses of a list of signatures. Unless the
@@ -2940,7 +3015,14 @@ Result:
 
 ### getTransactionCount
 
+<<<<<<< HEAD
 Returns the current Transaction count from the ledger
+=======
+**NEW: This method is only available in solana-core v1.7 or newer. Please use
+[getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction) for solana-core v1.6**
+
+Returns transaction details for a confirmed transaction
+>>>>>>> 515f8a21d... Add NEW labels for RPC methods introduced in v1.7
 
 #### Parameters:
 
