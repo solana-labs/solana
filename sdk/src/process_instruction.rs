@@ -167,6 +167,8 @@ pub struct BpfComputeBudget {
     pub sysvar_base_cost: u64,
     /// Base number of compute units consumed to call BIGNUM NEW
     pub bignum_new_base_cost: u64,
+    /// Base number of compute units consumed to call BigNum size in bytes query
+    pub bignum_size_base_cost: u64,
     /// Base number of compute units consumed to call BigNum new from u32 value
     pub bignum_from_u32_base_cost: u64,
     /// Base number of compute units consumed to call BigNum new from big endian byte array
@@ -221,6 +223,7 @@ impl BpfComputeBudget {
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
             bignum_new_base_cost: 100,
+            bignum_size_base_cost: 100,
             bignum_drop_base_cost: 100,
             bignum_from_u32_base_cost: 100,
             bignum_from_bytes_base_cost: 100,

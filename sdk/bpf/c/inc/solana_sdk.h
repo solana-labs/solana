@@ -465,6 +465,17 @@ static uint64_t sol_bignum_new(
 );
 
 /**
+ * BigNum sol_bignum_size_in_bytes
+ *
+ * @param self_ptr address of the BigNum ptr
+ * @parm byte_len address of where to return size
+ */
+static uint64_t sol_bignum_size_in_bytes(
+    const uint64_t *self_ptr,
+    const uint64_t *byte_len
+);
+
+/**
  * BigNum sol_bignum_from_u32
  *
  * @param ptr location where new object address dropped

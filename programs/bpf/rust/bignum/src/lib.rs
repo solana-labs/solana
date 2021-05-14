@@ -28,8 +28,13 @@ fn test_constructors() {
     new_bn_0.log();
     let max_bn_u32 = BigNumber::from_u32(u32::MAX);
     max_bn_u32.log();
-    let new_bn_from_long_str = BigNumber::from_bytes(LONG_DEC_STRING.as_bytes());
+    let big_string_as_bytes = LONG_DEC_STRING.as_bytes();
+    let new_bn_from_long_str = BigNumber::from_bytes(big_string_as_bytes);
     new_bn_from_long_str.log();
+    let new_bn_size = new_bn_from_long_str.size_in_bytes();
+    assert_eq!(new_bn_size, big_string_as_bytes.len());
+    let new_long_str_from_bn = new_bn_from_long_str.to_bytes();
+    assert_eq!(new_long_str_from_bn, big_string_as_bytes);
     let empty_bn = BigNumber::from_bytes(&[0u8]);
     empty_bn.log();
 }
@@ -54,7 +59,6 @@ fn test_basic_maths() {
 /// BigNumber bigger numbers and complex maths
 fn test_complex_maths() {
     msg!("BigNumber Complex Maths");
-    let base_2 = BigNumber::from_u32(3);
     let base_3 = BigNumber::from_u32(3);
     let exp_base_3 = base_3.clone();
     let modulus_7 = BigNumber::from_u32(7);
@@ -67,9 +71,6 @@ fn test_complex_maths() {
         &base_15.mod_sqr(&modulus_7),
         &BigNumber::from_u32(1)
     ));
-    assert_eq!(base_15.sqr().to_bytes(), [225]);
-    assert_eq!(base_15.exp(&base_2).to_bytes(), [13, 47]);
-    assert_eq!(base_3.mod_inv(&modulus_7).to_bytes(), [5]);
 }
 
 #[no_mangle]

@@ -43,6 +43,31 @@ impl BigNumber {
         }
     }
 
+    /// Returns the size, in bytes, of BigNum. Typically used in
+    /// assessing buffer size needed to fetch the bytes for serialization, etc.
+    pub fn size_in_bytes(&self) -> usize {
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            use openssl::bn::BigNum;
+            let self_bignum: &BigNum = unsafe { &*(self.0 as *const BigNum) };
+            self_bignum.num_bytes() as usize
+        }
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_bignum_size_in_bytes(bignum_ptr: *const u64, bytes_len: *mut u64) -> u64;
+            }
+            let mut bignum_size = 0u64;
+            unsafe {
+                sol_bignum_size_in_bytes(
+                    &self.0 as *const _ as *const u64,
+                    &mut bignum_size as *mut _ as *mut u64,
+                );
+            }
+            bignum_size as usize
+        }
+    }
+
     /// Returns a BigNumber with initial value set to a u32 value
     pub fn from_u32(val: u32) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -97,7 +122,7 @@ impl BigNumber {
         }
     }
 
-    /// Returns an array of bytes (big endian) of self
+    /// Returns an array of bytes of self
     pub fn to_bytes(&self) -> Vec<u8> {
         #[cfg(not(target_arch = "bpf"))]
         {
@@ -114,16 +139,18 @@ impl BigNumber {
                     bytes_len: *mut u64,
                 ) -> u64;
             }
-            let mut my_buffer = [0u8; 256];
-            let mut my_buffer_len = my_buffer.len();
+            // Get the BigNum size, allocate result vector
+            let mut bignum_size = self.size_in_bytes() as u64;
+            let mut my_buffer = Vec::<u8>::with_capacity(bignum_size as usize);
             unsafe {
                 sol_bignum_to_bytes(
                     &self.0 as *const _ as *const u64,
-                    &mut my_buffer as *mut _ as *mut u8,
-                    &mut my_buffer_len as *mut _ as *mut u64,
+                    my_buffer.as_mut_ptr() as *mut _ as *mut u8,
+                    &mut bignum_size as *mut _ as *mut u64,
                 );
-            };
-            my_buffer[0..my_buffer_len].to_vec()
+                my_buffer.set_len(bignum_size as usize);
+            }
+            my_buffer.clone()
         }
     }
 
