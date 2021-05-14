@@ -19,7 +19,6 @@
     "crowdin": "crowdin",
     "crowdin:download": "npm run write-i18n && npm run crowdin download && npm run format:fix",
     "crowdin:sync": "npm run write-i18n && npm run crowdin upload && npm run crowdin download && npm run format:fix",
-    "prebuild": "npm run crowdin:download"
   },
   "dependencies": {
     "@crowdin/cli": "^3.5.2",
