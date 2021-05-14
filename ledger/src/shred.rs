@@ -263,20 +263,18 @@ impl Shred {
     }
 
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self> {
+        // A shred can be deserialized in several cases; payload length will vary for these:
+        //   payload.len() <= SHRED_PAYLOAD_SIZE when payload is retrieved from the blockstore
+        //   payload.len() == SHRED_PAYLOAD_SIZE when payload is from a local shred (shred.payload)
+        //   payload.len()  > PACKET_DATA_SIZE when payload comes from a packet (window serivce)
+        // Resize here so the shreds always have the same length
+        payload.resize(SHRED_PAYLOAD_SIZE, 0);
+
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
         let slot = common_header.slot;
-        let expected_data_size = SHRED_PAYLOAD_SIZE;
-        // Safe because any payload from the network must have passed through
-        // window service,  which implies payload wll be of size
-        // PACKET_DATA_SIZE, and `expected_data_size` <= PACKET_DATA_SIZE.
-        //
-        // On the other hand, if this function is called locally, the payload size should match
-        // the `expected_data_size`.
-        assert!(payload.len() >= expected_data_size);
-        payload.truncate(expected_data_size);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
