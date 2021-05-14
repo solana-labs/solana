@@ -2,10 +2,10 @@
 title: Requirements to run a validator
 ---
 
-## Hardware
+## Hardware {#hardware}
 
 See [suggested hardware configuration here](../../running-validator/validator-reqs.md).
 
-## Software
+## Software {#software}
 
 - We build and run on Ubuntu 20.04

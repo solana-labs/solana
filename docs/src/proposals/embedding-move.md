@@ -2,7 +2,7 @@
 title: Embedding the Move Language
 ---
 
-## Problem
+## Problem {#problem}
 
 Solana enables developers to write on-chain programs in general purpose programming languages such as C or Rust, but those programs contain Solana-specific mechanisms. For example, there isn't another chain that asks developers to create a Rust module with a `process_instruction(KeyedAccounts)` function. Whenever practical, Solana should offer application developers more portable options.
 
@@ -24,14 +24,14 @@ This proposal attempts to define a way to embed the Move VM such that:
 
   transactions
 
-## Proposed Solution
+## Proposed Solution {#proposed-solution}
 
-### Move VM as a Solana loader
+### Move VM as a Solana loader {#move-vm-as-a-solana-loader}
 
 The Move VM shall be embedded as a Solana loader under the identifier `MOVE_PROGRAM_ID`, so that Move modules can be marked as `executable` with the VM as its `owner`. This will allow modules to load module dependencies, as well as allow for parallel execution of Move scripts.
 
 All data accounts owned by Move modules must set their owners to the loader, `MOVE_PROGRAM_ID`. Since Move modules encapsulate their account data in the same way Solana programs encapsulate theirs, the Move module owner should be embedded in the account data. The runtime will grant write access to the Move VM, and Move grants access to the module accounts.
 
-### Interacting with Solana programs
+### Interacting with Solana programs {#interacting-with-solana-programs}
 
 To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust BPF programs.

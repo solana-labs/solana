@@ -10,7 +10,7 @@ you have created a wallet and have access to its address (pubkey) and the
 signing keypair. Check out our
 [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
 
-## Testing your Wallet
+## Testing your Wallet {#testing-your-wallet}
 
 Before sharing your public key with others, you may want to first ensure the
 key is valid and that you indeed hold the corresponding private key.
@@ -22,7 +22,7 @@ receive tokens on your wallet type of choice.
 This test example uses our Developer Testnet, called devnet. Tokens issued
 on devnet have **no** value, so don't worry if you lose them.
 
-#### Airdrop some tokens to get started
+#### Airdrop some tokens to get started {#airdrop-some-tokens-to-get-started}
 
 First, _airdrop_ yourself some play tokens on the devnet.
 
@@ -33,7 +33,7 @@ solana airdrop 1 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
 public key/wallet address.
 
-#### Check your balance
+#### Check your balance {#check-your-balance}
 
 Confirm the airdrop was successful by checking the account's balance.
 It should output `1 SOL`:
@@ -42,7 +42,7 @@ It should output `1 SOL`:
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
-#### Create a second wallet address
+#### Create a second wallet address {#create-a-second-wallet-address}
 
 We will need a new address to receive our tokens. Create a second
 keypair and record its pubkey:
@@ -63,7 +63,7 @@ You can also create a second (or more) wallet of any type:
 [file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
 or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 
-#### Transfer tokens from your first wallet to the second address
+#### Transfer tokens from your first wallet to the second address {#transfer-tokens-from-your-first-wallet-to-the-second-address}
 
 Next, prove that you own the airdropped tokens by transferring them.
 The Solana cluster will only accept the transfer if you sign the transaction
@@ -87,7 +87,7 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
 
-#### Full example of test transfer
+#### Full example of test transfer {#full-example-of-test-transfer}
 
 ```bash
 $ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
@@ -129,7 +129,7 @@ $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devn
 
 ```
 
-## Receive Tokens
+## Receive Tokens {#receive-tokens}
 
 To receive tokens, you will need an address for others to send tokens to. In
 Solana, the wallet address is the public key of a keypair. There are a variety
@@ -140,7 +140,7 @@ Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.
 
-## Send Tokens
+## Send Tokens {#send-tokens}
 
 If you already hold SOL and want to send tokens to someone, you will need
 a path to your keypair, their base58-encoded public key, and a number of

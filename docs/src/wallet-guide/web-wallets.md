@@ -2,13 +2,13 @@
 title: Web Wallets
 ---
 
-## Phantom
+## Phantom {#phantom}
 
 [Phantom](https://phantom.app/download) is a non-custodial, chrome extension,
 Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and
 beautiful UX. Use invite code DEVDOCS to get access.
 
-## SolFlare
+## SolFlare {#solflare}
 
 [SolFlare.com](https://solflare.com/) is a community-created non-custodial
 web wallet that was built specifically for Solana. SolFlare supports the creation
@@ -17,13 +17,13 @@ any SPL Token.
 
 Check out our [guide for using SolFlare](solflare.md).
 
-## Sollet
+## Sollet {#sollet}
 
 [sollet.io](https://www.sollet.io/) is a non-custodial web wallet created by the
 [Project Serum](https://projectserum.com/) team. sollet.io can be used to send
 and receive SOL and any SPL Token.
 
-## MathWallet
+## MathWallet {#mathwallet}
 
 [MathWallet](https://mathwallet.org/) supports wallet
 addresses for sending and receiving SOL and SPL Tokens through its

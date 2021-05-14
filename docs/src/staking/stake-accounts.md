@@ -13,7 +13,7 @@ Stake accounts on Solana also work differently than those of other Proof-of-Stak
 blockchain networks that you may be familiar with. This document describes the
 high-level structure and functions of a Solana stake account.
 
-#### Account Address
+#### Account Address {#account-address}
 
 Each stake account has a unique address which can be used to look up the account
 information in the command line or in any network explorer tools. However,
@@ -27,7 +27,7 @@ a stake account using the command line tools](../cli/delegate-stake.md#create-a-
 a new keypair file is created first only to ensure that the stake account's
 address is new and unique.
 
-#### Understanding Account Authorities
+#### Understanding Account Authorities {#understanding-account-authorities}
 
 Certain types of accounts may have one or more _signing authorities_
 associated with a given account. An account authority is used to sign certain
@@ -65,7 +65,7 @@ the stake authority if the stake authority keypair becomes lost or compromised.
 Securing the withdraw authority against loss or theft is of utmost importance
 when managing a stake account.
 
-#### Multiple Delegations
+#### Multiple Delegations {#multiple-delegations}
 
 Each stake account may only be used to delegate to one validator at a time.
 All of the tokens in the account are either delegated or un-delegated, or in the
@@ -81,7 +81,7 @@ with token balances of your choosing.
 The same stake and withdraw authorities can be assigned to multiple
 stake accounts.
 
-#### Merging stake accounts
+#### Merging stake accounts {#merging-stake-accounts}
 
 Two stake accounts that have the same authorities and lockup can be merged into
 a single resulting stake account. A merge is possible between two stakes in the
@@ -98,7 +98,7 @@ For the following cases, the voter pubkey and vote credits observed must match:
 All other combinations of stake states will fail to merge, including all "transient"
 states, where a stake is activating or deactivating with a non-zero effective stake.
 
-#### Delegation Warmup and Cooldown
+#### Delegation Warmup and Cooldown {#delegation-warmup-and-cooldown}
 
 When a stake account is delegated, or a delegation is deactivated, the operation
 does not take effect immediately.
@@ -115,7 +115,7 @@ of other network participants, their exact duration is difficult to predict.
 Details on the warmup and cooldown timing can be found
 [here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
-#### Lockups
+#### Lockups {#lockups}
 
 Stake accounts can have a lockup which prevents the tokens they hold from being
 withdrawn before a particular date or epoch has been
@@ -127,7 +127,7 @@ A lockup can only be added when a stake account is first created, but it can be
 modified later, by the _lockup authority_ or _custodian_, the address of which
 is also set when the account is created.
 
-#### Destroying a Stake Account
+#### Destroying a Stake Account {#destroying-a-stake-account}
 
 Like other types of accounts on the Solana network, a stake account that has a
 balance of 0 SOL is no longer tracked. If a stake account is not delegated
@@ -135,7 +135,7 @@ and all of the tokens it contains are withdrawn to a wallet address, the account
 at that address is effectively destroyed, and will need to be manually
 re-created for the address to be used again.
 
-#### Viewing Stake Accounts
+#### Viewing Stake Accounts {#viewing-stake-accounts}
 
 Stake account details can be viewed on the Solana Explorer by copying and pasting
 an account address into the search bar.

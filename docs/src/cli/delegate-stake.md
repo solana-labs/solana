@@ -10,7 +10,7 @@ then next valid block of transactions in the blockchain. Solana then generates
 new SOL periodically to reward stakers and validators. You earn more rewards
 the more stake you delegate.
 
-## Create a Stake Account
+## Create a Stake Account {#create-a-stake-account}
 
 To delegate stake, you will need to transfer some tokens into a stake account.
 To create an account, you will need a keypair. Its public key will be used as
@@ -61,7 +61,7 @@ Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
-### Set Stake and Withdraw Authorities
+### Set Stake and Withdraw Authorities {#set-stake-and-withdraw-authorities}
 
 [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
 can be set when creating an account via the
@@ -78,7 +78,7 @@ solana stake-authorize <STAKE_ACCOUNT_ADDRESS> \
 This will use the existing stake authority `<KEYPAIR>` to authorize a new stake
 authority `<PUBKEY>` on the stake account `<STAKE_ACCOUNT_ADDRESS>`.
 
-### Advanced: Derive Stake Account Addresses
+### Advanced: Derive Stake Account Addresses {#advanced-derive-stake-account-addresses}
 
 When you delegate stake, you delegate all tokens in the stake account to a
 single validator. To delegate to multiple validators, you will need multiple
@@ -107,7 +107,7 @@ solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
 The command will output a derived address, which can be used for the
 `<STAKE_ACCOUNT_ADDRESS>` argument in staking operations.
 
-## Delegate Stake
+## Delegate Stake {#delegate-stake}
 
 To delegate your stake to a validator, you will need its vote account address.
 Find it by querying the cluster for the list of all validators and their vote
@@ -150,7 +150,7 @@ Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
-## Deactivate Stake
+## Deactivate Stake {#deactivate-stake}
 
 Once delegated, you can undelegate stake with the `solana deactivate-stake`
 command:
@@ -166,7 +166,7 @@ with address `<STAKE_ACCOUNT_ADDRESS>`.
 Note that stake takes several epochs to "cool down". Attempts to delegate stake
 in the cool down period will fail.
 
-## Withdraw Stake
+## Withdraw Stake {#withdraw-stake}
 
 Transfer tokens out of a stake account with the `solana withdraw-stake` command:
 
@@ -179,7 +179,7 @@ solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RE
 `<KEYPAIR>` is the withdraw authority, and `<AMOUNT>` is the number of tokens
 to transfer to `<RECIPIENT_ADDRESS>`.
 
-## Split Stake
+## Split Stake {#split-stake}
 
 You may want to delegate stake to additional validators while your existing
 stake is not eligible for withdrawal. It might not be eligible because it is

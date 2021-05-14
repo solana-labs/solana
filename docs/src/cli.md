@@ -12,7 +12,7 @@ Solana core team deploys new functionality. The command-line interface is not
 necessarily the easiest to use, but it provides the most direct, flexible, and
 secure access to your Solana accounts.
 
-## Getting Started
+## Getting Started {#getting-started}
 
 To get started using the Solana Command Line (CLI) tools:
 

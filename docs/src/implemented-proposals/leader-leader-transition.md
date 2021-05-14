@@ -4,7 +4,7 @@ title: Leader-to-Leader Transition
 
 This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
 
-## Challenges
+## Challenges {#challenges}
 
 Current leader and the next leader are both racing to generate the final tick for the current slot. The next leader may arrive at that slot while still processing the current leader's entries.
 
@@ -14,7 +14,7 @@ The next leader has to make the decision of attaching its own block to the last 
 
 The current leader has incentives to start its slot as early as possible to capture economic rewards. Those incentives need to be balanced by the leader's need to attach its block to a block that has the most commitment from the rest of the network.
 
-## Leader timeout
+## Leader timeout {#leader-timeout}
 
 While a leader is actively receiving entries for the previous slot, the leader can delay broadcasting the start of its block in real time. The delay is locally configurable by each leader, and can be dynamically based on the previous leader's behavior. If the previous leader's block is confirmed by the leader's TVU before the timeout, the PoH is reset to the start of the slot and this leader produces its block immediately.
 
@@ -34,9 +34,9 @@ The upsides compared to guards:
 - The leader can speculatively generate the last tick from the last received entry.
 - The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
 
-## Alternative design options
+## Alternative design options {#alternative-design-options}
 
-### Guard tick at the end of the slot
+### Guard tick at the end of the slot {#guard-tick-at-the-end-of-the-slot}
 
 A leader does not produce entries in its block after the _penultimate tick_, which is the last tick before the first tick of the next slot. The network votes on the _last tick_, so the time difference between the _penultimate tick_ and the _last tick_ is the forced delay for the entire network, as well as the next leader before a new slot can be generated. The network can produce the _last tick_ from the _penultimate tick_.
 

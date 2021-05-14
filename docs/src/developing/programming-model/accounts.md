@@ -2,7 +2,7 @@
 title: "Accounts"
 ---
 
-## Storing State between Transactions
+## Storing State between Transactions {#storing-state-between-transactions}
 
 If the program needs to store state between transactions, it does so using
 _accounts_. Accounts are similar to files in operating systems such as Linux.
@@ -21,7 +21,7 @@ number of lamports.
 In the same way that a Linux user uses a path to look up a file, a Solana client
 uses an _address_ to look up an account. The address is a 256-bit public key.
 
-## Signers
+## Signers {#signers}
 
 Transactions may include digital [signatures](terminology.md#signature)
 corresponding to the accounts' public keys referenced by the transaction. When a
@@ -31,7 +31,7 @@ account is then referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
 
-## Read-only
+## Read-only {#read-only}
 
 Transactions can [indicate](transactions.md#message-header-format) that some of
 the accounts it references be treated as _read-only accounts_ in order to enable
@@ -39,7 +39,7 @@ parallel account processing between transactions. The runtime permits read-only
 accounts to be read concurrently by multiple programs. If a program attempts to
 modify a read-only account, the transaction is rejected by the runtime.
 
-## Executable
+## Executable {#executable}
 
 If an account is marked "executable" in its metadata then it is considered a
 program which can be executed by including the account's public key an
@@ -50,7 +50,7 @@ has determined that the BPF bytecode in the account's data is valid, the loader
 permanently marks the program account as executable. Once executable, the
 runtime enforces that the account's data (the program) is immutable.
 
-## Creating
+## Creating {#creating}
 
 To create an account a client generates a _keypair_ and registers its public key
 using the `SystemProgram::CreateAccount` instruction with preallocated a fixed
@@ -73,7 +73,7 @@ The account's public key may be known to the program or recorded in another
 account and signify some kind of ownership or authority over an asset or
 operation the program controls or performs.
 
-## Ownership and Assignment to Programs
+## Ownership and Assignment to Programs {#ownership-and-assignment-to-programs}
 
 A created account is initialized to be _owned_ by a built-in program called the
 System program and is called a _system account_ aptly. An account includes
@@ -84,7 +84,7 @@ _assign_ account ownership, meaning changing owner to different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
-## Verifying validity of unmodified, reference-only accounts
+## Verifying validity of unmodified, reference-only accounts {#verifying-validity-of-unmodified-reference-only-accounts}
 
 For security purposes, it is recommended that programs check the validity of any
 account it reads but does not modify.
@@ -117,7 +117,7 @@ isn't required because modifying an unowned (could be the malicious account with
 the wrong owner) will be rejected by the runtime, and the containing transaction
 will be thrown out.
 
-## Rent
+## Rent {#rent}
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
 cluster must actively maintain the data to process any future transactions on
@@ -142,7 +142,7 @@ current epoch and be purged immediately at the start of the upcoming epoch.
 Accounts can be exempt from paying rent if they maintain a minimum balance. This
 rent-exemption is described below.
 
-### Calculation of rent
+### Calculation of rent {#calculation-of-rent}
 
 Note: The rent rate can change in the future.
 
@@ -184,7 +184,7 @@ Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fe
 Accordingly, a minimum-size account will be immediately removed after creation
 if the transferred lamports are less than or equal to 2,439.
 
-### Rent exemption
+### Rent exemption {#rent-exemption}
 
 Alternatively, an account can be made entirely exempt from rent collection by
 depositing at least 2 years-worth of rent. This is checked every time an

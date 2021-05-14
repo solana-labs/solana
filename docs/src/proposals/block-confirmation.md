@@ -8,13 +8,13 @@ valid forks may exist at a given height, the vote also indicates exclusive
 support for the fork. This document describes only the former. The latter is
 described in [Tower BFT](../implemented-proposals/tower-bft.md).
 
-## Current Design
+## Current Design {#current-design}
 
 To start voting, a validator first registers an account to which it will send
 its votes. It then sends votes to that account. The vote contains the tick
 height of the block it is voting on. The account stores the 32 highest heights.
 
-### Problems
+### Problems {#problems}
 
 - Only the validator knows how to find its own votes directly.
 
@@ -29,9 +29,9 @@ height of the block it is voting on. The account stores the 32 highest heights.
   there is no evidence that the validator executed the transactions and
   verified there were no double spends.
 
-## Proposed Design
+## Proposed Design {#proposed-design}
 
-### No Cross-block State Initially
+### No Cross-block State Initially {#no-cross-block-state-initially}
 
 At the moment a block is produced, the leader shall add a NewBlock transaction
 to the ledger with a number of tokens that represents the validation reward.
@@ -43,14 +43,14 @@ that includes a hash of its ledger state (the bank state). Once the account has
 sufficient votes, the vote program should disperse the tokens to the
 validators, which causes the account to be deleted.
 
-#### Logging Confirmation Time
+#### Logging Confirmation Time {#logging-confirmation-time}
 
 The bank will need to be aware of the vote program. After each transaction, it
 should check if it is a vote transaction and if so, check the state of that
 account. If the transaction caused the supermajority to be achieved, it should
 log the time since the NewBlock transaction was submitted.
 
-### Finality and Payouts
+### Finality and Payouts {#finality-and-payouts}
 
 [Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm. It proposes
 that payment to miners be postponed until the _stack_ of validator votes reaches
@@ -58,9 +58,9 @@ a certain depth, at which point rollback is not economically feasible. The vote
 program may therefore implement Tower BFT. Vote instructions would need to
 reference a global Tower account so that it can track cross-block state.
 
-## Challenges
+## Challenges {#challenges}
 
-### On-chain voting
+### On-chain voting {#on-chain-voting}
 
 Using programs and accounts to implement this is a bit tedious. The hardest
 part is figuring out how much space to allocate in NewBlock. The two variables
@@ -77,7 +77,7 @@ that'd be the current account value instead of the account value of the most
 recently finalized bank state. The bank currently doesn't offer a means to
 reference accounts from particular points in time.
 
-### Voting Implications on Previous Blocks
+### Voting Implications on Previous Blocks {#voting-implications-on-previous-blocks}
 
 Does a vote on one height imply a vote on all blocks of lower heights of
 that fork? If it does, we'll need a way to lookup the accounts of all

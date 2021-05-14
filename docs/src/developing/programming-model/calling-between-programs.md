@@ -2,7 +2,7 @@
 title: Calling Between Programs
 ---
 
-## Cross-Program Invocations
+## Cross-Program Invocations {#cross-program-invocations}
 
 The Solana runtime allows programs to call each other via a mechanism called
 cross-program invocation. Calling between programs is achieved by one program
@@ -76,7 +76,7 @@ normally would, but using all updated `pre_*` variables. If executing
 can transitively assume `pay_and_launch_missiles()` as whole made no invalid
 account changes, and therefore commit all these account modifications.
 
-### Instructions that require privileges
+### Instructions that require privileges {#instructions-that-require-privileges}
 
 The runtime uses the privileges granted to the caller program to determine what
 privileges can be extended to the callee. Privileges in this context refer to
@@ -91,7 +91,7 @@ signature as a signature of a `token` instruction. When the runtime sees the
 instruction to see if that key corresponds to a signed account. In this case, it
 does and thereby authorizes the `token` program to modify Alice's account.
 
-### Program signed accounts
+### Program signed accounts {#program-signed-accounts}
 
 Programs can issue instructions that contain signed accounts that were not
 signed in the original transaction by using [Program derived
@@ -109,12 +109,12 @@ To sign an account with program derived addresses, a program may
         )?;
 ```
 
-### Call Depth
+### Call Depth {#call-depth}
 
 Cross-program invocations allow programs to invoke other programs directly but
 the depth is constrained currently to 4.
 
-### Reentrancy
+### Reentrancy {#reentrancy}
 
 Reentrancy is currently limited to direct self recursion capped at a fixed
 depth. This restriction prevents situations where a program might invoke another
@@ -122,7 +122,7 @@ from an intermediary state without the knowledge that it might later be called
 back into. Direct recursion gives the program full control of its state at the
 point that it gets called back.
 
-## Program Derived Addresses
+## Program Derived Addresses {#program-derived-addresses}
 
 Program derived addresses allow programmaticly generated signature to be used
 when [calling between programs](#cross-program-invocations).
@@ -162,14 +162,14 @@ Given the two conditions, users can securely transfer or assign the authority of
 on-chain assets to program addresses and the program can then assign that
 authority elsewhere at its discretion.
 
-### Private keys for program addresses
+### Private keys for program addresses {#private-keys-for-program-addresses}
 
 A Program address does not lie on the ed25519 curve and therefore has no valid
 private key associated with it, and thus generating a signature for it is
 impossible. While it has no private key of its own, it can be used by a program
 to issue an instruction that includes the Program address as a signer.
 
-### Hash-based generated program addresses
+### Hash-based generated program addresses {#hash-based-generated-program-addresses}
 
 Program addresses are deterministically derived from a collection of seeds and a
 program id using a 256-bit pre-image resistant hash function. Program address
@@ -217,7 +217,7 @@ pub fn create_program_address(
 ) -> Result<Pubkey, PubkeyError>
 ```
 
-### Using program addresses
+### Using program addresses {#using-program-addresses}
 
 Clients can use the `create_program_address` function to generate a destination
 address.
@@ -261,7 +261,7 @@ fn transfer_one_token_from_escrow(
 }
 ```
 
-### Instructions that require signers
+### Instructions that require signers {#instructions-that-require-signers}
 
 The addresses generated with `create_program_address` are indistinguishable from
 any other public key. The only way for the runtime to verify that the address
@@ -271,7 +271,7 @@ address.
 The runtime will internally call `create_program_address`, and compare the
 result against the addresses supplied in the instruction.
 
-## Examples
+## Examples {#examples}
 
 Refer to [Developing with
 Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)

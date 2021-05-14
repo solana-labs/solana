@@ -7,7 +7,7 @@ In order to participate you need to first register. See [Registration info](../r
 In order to obtain your allotment of SOL you need to publish your
 validator's identity public key under your keybase.io account.
 
-## **Generate Keypair**
+## **Generate Keypair** {#generate-keypair}
 
 1. If you haven't already, generate your validator's identity keypair by running:
 
@@ -29,7 +29,7 @@ If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VA
 
 To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
 
-## Link your Solana pubkey to a Keybase account
+## Link your Solana pubkey to a Keybase account {#link-your-solana-pubkey-to-a-keybase-account}
 
 You must link your Solana pubkey to a Keybase.io account. The following instructions describe how to do that by installing Keybase on your server.
 

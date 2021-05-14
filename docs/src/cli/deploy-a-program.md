@@ -20,9 +20,9 @@ to:
 Once deployed, anyone can execute the program by sending transactions that
 reference it to the cluster.
 
-## Usage
+## Usage {#usage}
 
-### Deploy a program
+### Deploy a program {#deploy-a-program}
 
 To deploy a program, you will need the location of the program's shared object
 (the program binary .so)
@@ -57,7 +57,7 @@ generated automatically by the program build tools:
 ./path-to-program/program-keypair.json
 ```
 
-### Showing a program account
+### Showing a program account {#showing-a-program-account}
 
 To get information about a deployed program:
 
@@ -86,7 +86,7 @@ Data Length: 5216 (0x1460) bytes
 - `Data Length` is the size of the space reserved for deployments. The actual
   space used by the currently deployed program may be less.
 
-### Redeploy a program
+### Redeploy a program {#redeploy-a-program}
 
 A program can be redeployed to the same address to facilitate rapid development,
 bug fixes, or upgrades. Matching keypair files are generated once so that
@@ -114,7 +114,7 @@ Note that program accounts are required to be
 `max-len` is fixed after initial deployment, so any SOL in the program accounts
 is locked up permanently.
 
-### Resuming a failed deploy
+### Resuming a failed deploy {#resuming-a-failed-deploy}
 
 If program deployment fails, there will be a hanging intermediate buffer account
 that contains a non-zero balance. In order to recoup that balance you may
@@ -153,7 +153,7 @@ Then issue a new `deploy` command and specify the buffer:
 solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
 ```
 
-### Closing buffer accounts and reclaiming their lamports
+### Closing buffer accounts and reclaiming their lamports {#closing-buffer-accounts-and-reclaiming-their-lamports}
 
 If deployment fails there will be a left over buffer account that holds
 lamports. The buffer account can either be used to [resume a
@@ -203,7 +203,7 @@ To show all buffer accounts regardless of the authority
 solana program show --buffers --all
 ```
 
-### Set a program's upgrade authority
+### Set a program's upgrade authority {#set-a-programs-upgrade-authority}
 
 The program's upgrade authority must to be present to deploy a program. If no
 authority is specified during program deployment, the default keypair is used as
@@ -228,7 +228,7 @@ Or after deployment and specifying the current authority:
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --upgrade-authority <UPGRADE_AUTHORITY_SIGNER> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
 ```
 
-### Immutable programs
+### Immutable programs {#immutable-programs}
 
 A program can be marked immutable, which prevents all further redeployments, by
 specifying the `--final` flag during deployment:
@@ -253,7 +253,7 @@ solana deploy <PROGRAM_FILEPATH>
 Programs deployed with `solana deploy ...` are not redeployable and are not
 compatible with the `solana program ...` commands.
 
-### Dumping a program to a file
+### Dumping a program to a file {#dumping-a-program-to-a-file}
 
 The deployed program may be dumped back to a local file:
 
@@ -276,7 +276,7 @@ $ truncate -r dump.so extended.so
 $ sha256sum extended.so dump.so
 ```
 
-### Using an intermediary Buffer account
+### Using an intermediary Buffer account {#using-an-intermediary-buffer-account}
 
 Instead of deploying directly to the program account, the program can be written
 to an intermediary buffer account. Intermediary accounts can useful for things

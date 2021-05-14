@@ -2,13 +2,13 @@
 title: Repair Service
 ---
 
-## Repair Service
+## Repair Service {#repair-service}
 
 The RepairService is in charge of retrieving missing shreds that failed to be
 delivered by primary communication protocols like Turbine. It is in charge of
 managing the protocols described below in the `Repair Protocols` section below.
 
-## Challenges:
+## Challenges: {#challenges}
 
 1\) Validators can fail to receive particular shreds due to network failures
 
@@ -20,7 +20,7 @@ existing banks in Blockstore, and thus the `Shred Repair` protocol will not
 repair these slots. If these slots happen to be part of the main chain, this
 will halt replay progress on this node.
 
-## Repair-related primitives
+## Repair-related primitives {#repair-related-primitives}
 
 Epoch Slots:
 Each validator advertises separately on gossip the various parts of an
@@ -42,7 +42,7 @@ Every `N/2` completed slots, the oldest `N/2` slots are moved from the
 `cache` into the `stash`. The base value `M` for the RLE should also
 be updated.
 
-## Repair Request Protocols
+## Repair Request Protocols {#repair-request-protocols}
 
 The repair protocol makes best attempts to progress the forking structure of
 Blockstore.
@@ -97,7 +97,7 @@ Validators should try to send orphan requests to validators who have marked that
 orphan as completed in their EpochSlots. If no such validators exist, then
 randomly select a validator in a stake-weighted fashion.
 
-## Repair Response Protocol
+## Repair Response Protocol {#repair-response-protocol}
 
 When a validator receives a request for a shred `S`, they respond with the
 shred if they have it.

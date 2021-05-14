@@ -8,12 +8,12 @@ on your computer system's filesystem.
 
 > File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
 
-## Before you Begin
+## Before you Begin {#before-you-begin}
 
 Make sure you have
 [installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
 
-## Generate a File System Wallet Keypair
+## Generate a File System Wallet Keypair {#generate-a-file-system-wallet-keypair}
 
 Use Solana's command-line tool `solana-keygen` to generate keypair files. For
 example, run the following from a command-line shell:
@@ -43,7 +43,7 @@ This is the public key corresponding to the keypair in
 `~/my-solana-wallet/my-keypair.json`. The public key of the keypair file is
 your _wallet address_.
 
-## Verify your Address against your Keypair file
+## Verify your Address against your Keypair file {#verify-your-address-against-your-keypair-file}
 
 To verify you hold the private key for a given address, use
 `solana-keygen verify`:
@@ -56,7 +56,7 @@ where `<PUBKEY>` is replaced with your wallet address.
 The command will output "Success" if the given address matches the
 the one in your keypair file, and "Failed" otherwise.
 
-## Creating Multiple File System Wallet Addresses
+## Creating Multiple File System Wallet Addresses {#creating-multiple-file-system-wallet-addresses}
 
 You can create as many wallet addresses as you like. Simply re-run the
 steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)

@@ -7,7 +7,7 @@ Developers can write and deploy their own programs to the Solana blockchain.
 The [Helloworld example](examples.md#helloworld) is a good starting place to see
 how a program is written, built, deployed, and interacted with on-chain.
 
-## Berkley Packet Filter (BPF)
+## Berkley Packet Filter (BPF) {#berkley-packet-filter-bpf}
 
 Solana on-chain programs are compiled via the [LLVM compiler
 infrastructure](https://llvm.org/) to an [Executable and Linkable Format
@@ -24,7 +24,7 @@ set](https://github.com/iovisor/bpf-docs/blob/master/eBPF.md) that can be
 executed in a interpreted virtual machine or as efficient just-in-time compiled
 native instructions.
 
-## Memory map
+## Memory map {#memory-map}
 
 The virtual address memory map used by Solana BPF programs is fixed and laid out
 as follows
@@ -40,7 +40,7 @@ write to a virtual address that it was not granted access to, and an
 `AccessViolation` error will be returned that contains the address and size of
 the attempted violation.
 
-## Stack
+## Stack {#stack}
 
 BPF uses stack frames instead of a variable stack pointer. Each stack frame is
 4KB in size.
@@ -69,12 +69,12 @@ size at runtime, an `AccessViolation` error will be reported.
 
 BPF stack frames occupy a virtual address range starting at 0x200000000.
 
-## Call Depth
+## Call Depth {#call-depth}
 
 Programs are constrained to run quickly, and to facilitate this, the program's
 call stack is limited to a max depth of 64 frames.
 
-## Heap
+## Heap {#heap}
 
 Programs have access to a runtime heap either directly in C or via the Rust
 `alloc` APIs. To facilitate fast allocations, a simple 32KB bump heap is
@@ -87,7 +87,7 @@ specific needs.
 - [Rust program heap usage](developing-rust.md#heap)
 - [C program heap usage](developing-c.md#heap)
 
-## Float Support
+## Float Support {#float-support}
 
 Programs support a limited subset of Rust's float operations, if a program
 attempts to use a float operation that is not supported, the runtime will report
@@ -116,7 +116,7 @@ Multipy    8   176
 Divide     9   219
 ```
 
-## Static Writable Data
+## Static Writable Data {#static-writable-data}
 
 Program shared objects do not support writable shared data. Programs are shared
 between multiple parallel executions using the same shared read-only code and
@@ -124,13 +124,13 @@ data. This means that developers should not include any static writable or
 global variables in programs. In the future a copy-on-write mechanism could be
 added to support writable data.
 
-## Signed division
+## Signed division {#signed-division}
 
 The BPF instruction set does not support [signed
 division](https://www.kernel.org/doc/html/latest/bpf/bpf_design_QA.html#q-why-there-is-no-bpf-sdiv-for-signed-divide-operation).
 Adding a signed division instruction is a consideration.
 
-## Loaders
+## Loaders {#loaders}
 
 Programs are deployed with and executed by runtime loaders, currently there are
 two supported loaders [BPF
@@ -154,7 +154,7 @@ loader see:
 - [Rust program entrypoints](developing-rust.md#program-entrypoint)
 - [C program entrypoints](developing-c.md#program-entrypoint)
 
-### Deployment
+### Deployment {#deployment}
 
 BPF program deployment is the process of uploading a BPF shared object into a
 program account's data and marking the account executable. A client breaks the
@@ -174,7 +174,7 @@ parameters, calls the program's entrypoint, and reports any errors encountered.
 
 For further information see [deploying](deploying.md)
 
-### Input Parameter Serialization
+### Input Parameter Serialization {#input-parameter-serialization}
 
 BPF loaders serialize the program input parameters into a byte array that is
 then passed to the program's entrypoint, where the program is responsible for

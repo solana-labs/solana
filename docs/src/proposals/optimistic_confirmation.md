@@ -2,7 +2,7 @@
 title: Optimistic Confirmation
 ---
 
-## Primitives
+## Primitives {#primitives}
 
 `vote(X, S)` - Votes will be augmented with a "reference" slot, `X`
 which is the **latest** ancestor of this fork that this validator voted on
@@ -123,7 +123,7 @@ The proof is a list of elements `(validator_id, validator_vote(X, S))`, where:
 
 Switching forks without a valid switching proof is slashable.
 
-## Definitions:
+## Definitions: {#definitions}
 
 Optimistic Confirmation - A block `B` is then said to have achieved
 "optimistic confirmation" if `>2/3` of stake have voted with votes `v`
@@ -135,12 +135,12 @@ correct validator has rooted `B` or a descendant of `B`.
 Reverted - A block `B` is said to be reverted if another block `B'` that
 is not a parent or descendant of `B` was finalized.
 
-## Guarantees:
+## Guarantees: {#guarantees}
 
 A block `B` that has reached optimistic confirmation will not be reverted
 unless at least one validator is slashed.
 
-## Proof:
+## Proof: {#proof}
 
 Assume for the sake of contradiction, a block `B` has achieved
 `optimistic confirmation` at some slot `B + n` for some `n`, and:
@@ -165,7 +165,7 @@ greatest `S.last` out of any votes made by `v` that satisfy `X <= B <= S.last`.
 Because we know from above `X` for all such votes made by `v` is unique, we know
 there is such a unique `maximal` vote.
 
-### Lemma 1:
+### Lemma 1: {#lemma-1}
 
 `Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the
 `Optimistic Validators` set, and `S` contains a vote for a slot `s`
@@ -266,7 +266,7 @@ form `Vote(X', S'')`.
 Since none of these cases are valid, the assumption must have been invalid,
 and the claim is proven.
 
-### Lemma 2:
+### Lemma 2: {#lemma-2}
 
 Recall `B'` was the block finalized on a different fork than
 "optimistically" confirmed" block `B`.
@@ -327,7 +327,7 @@ From above, we know `B'` is not a parent of `X`. Then because `B'` was rooted,
 and `B'` is not a parent of `X`, then the validator should not have been able
 to vote on the higher slot `X` that does not descend from `B'`.
 
-### Proof of Safety:
+### Proof of Safety: {#proof-of-safety}
 
 We now aim to show at least one of the validators in the
 `Optimistic Validators` set violated a slashing rule.

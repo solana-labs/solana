@@ -15,7 +15,7 @@ For each native program the program id and description each supported
 instruction is provided. A transaction can mix and match instructions from different
 programs, as well include instructions from on-chain programs.
 
-## System Program
+## System Program {#system-program}
 
 Create new accounts, allocate account data, assign accounts to owning programs,
 transfer lamports from System Program owned accounts and pay transacation fees.
@@ -23,7 +23,7 @@ transfer lamports from System Program owned accounts and pay transacation fees.
 - Program id: `11111111111111111111111111111111`
 - Instructions: [SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
 
-## Config Program
+## Config Program {#config-program}
 
 Add configuration data to the chain and the list of public keys that are permitted to modify it
 
@@ -35,7 +35,7 @@ instructions. It has just one implicit instruction, a "store" instruction. Its
 instruction data is a set of keys that gate access to the account, and the
 data to store in it.
 
-## Stake Program
+## Stake Program {#stake-program}
 
 Create and manage accounts representing stake and rewards for delegations to
 validators.
@@ -43,14 +43,14 @@ validators.
 - Program id: `Stake11111111111111111111111111111111111111`
 - Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
 
-## Vote Program
+## Vote Program {#vote-program}
 
 Create and manage accounts that track validator voting state and rewards.
 
 - Program id: `Vote111111111111111111111111111111111111111`
 - Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
-## BPF Loader
+## BPF Loader {#bpf-loader}
 
 Deploys, upgrades, and executes programs on the chain.
 
@@ -65,7 +65,7 @@ to the BPF Upgradeable Loader to process the instruction.
 
 [More information about deployment](cli/deploy-a-program.md)
 
-## Secp256k1 Program
+## Secp256k1 Program {#secp256k1-program}
 
 Verify secp256k1 public key recovery operations (ecrecover).
 
@@ -115,7 +115,7 @@ also receive data from the transaction itself.
 Cost of the transaction will count the number of signatures to verify multiplied
 by the signature cost verify multiplier.
 
-### Optimization notes
+### Optimization notes {#optimization-notes}
 
 The operation will have to take place after (at least partial) deserialization,
 but all inputs come from the transaction data itself, this allows it to be

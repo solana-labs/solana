@@ -2,7 +2,7 @@
 title: Durable Transaction Nonces
 ---
 
-## Problem
+## Problem {#problem}
 
 To prevent replay, Solana transactions contain a nonce field populated with a
 "recent" blockhash value. A transaction containing a blockhash that is too old
@@ -11,12 +11,12 @@ certain use cases, such as custodial services, require more time to produce a
 signature for the transaction. A mechanism is needed to enable these potentially
 offline network participants.
 
-## Requirements
+## Requirements {#requirements}
 
 1. The transaction's signature needs to cover the nonce value
 2. The nonce must not be reusable, even in the case of signing key disclosure
 
-## A Contract-based Solution
+## A Contract-based Solution {#a-contract-based-solution}
 
 Here we describe a contract-based solution to the problem, whereby a client can
 "stash" a nonce value for future use in a transaction's `recent_blockhash`
@@ -30,7 +30,7 @@ following additional requirements:
 1. The durable nonce value is used in the `recent_blockhash` field
 2. An `AdvanceNonceAccount` instruction is the first issued in the transaction
 
-### Contract Mechanics
+### Contract Mechanics {#contract-mechanics}
 
 TODO: svgbob this into a flowchart
 
@@ -99,7 +99,7 @@ control over the account and its balance to the new authority.
 
 > `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
 
-### Runtime Support
+### Runtime Support {#runtime-support}
 
 The contract alone is not sufficient for implementing this feature. To enforce
 an extant `recent_blockhash` on the transaction and prevent fee theft via

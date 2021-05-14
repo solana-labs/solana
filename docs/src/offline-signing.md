@@ -14,7 +14,7 @@ include:
 This document describes using Solana's CLI to separately sign and submit a
 transaction.
 
-## Commands Supporting Offline Signing
+## Commands Supporting Offline Signing {#commands-supporting-offline-signing}
 
 At present, the following commands support offline signing:
 
@@ -27,7 +27,7 @@ At present, the following commands support offline signing:
 - [`transfer`](cli/usage.md#solana-transfer)
 - [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
 
-## Signing Transactions Offline
+## Signing Transactions Offline {#signing-transactions-offline}
 
 To sign a transaction offline, pass the following arguments on the command line
 
@@ -41,7 +41,7 @@ To sign a transaction offline, pass the following arguments on the command line
    _ Enables the signers to coordinate the blockhash in a multiple-signature
    scheme
 
-### Example: Offline Signing a Payment
+### Example: Offline Signing a Payment {#example-offline-signing-a-payment}
 
 Command
 
@@ -61,7 +61,7 @@ Signers (Pubkey=Signature):
 {"blockhash":"5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF","signers":["FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN"]}'
 ```
 
-## Submitting Offline Signed Transactions to the Network
+## Submitting Offline Signed Transactions to the Network {#submitting-offline-signed-transactions-to-the-network}
 
 To submit a transaction that has been signed offline to the network, pass the
 following arguments on the command line
@@ -71,7 +71,7 @@ following arguments on the command line
    includes the pubkey/signature pairs directly in the transaction rather than
    signing it with any local keypair(s)
 
-### Example: Submitting an Offline Signed Payment
+### Example: Submitting an Offline Signed Payment {#example-submitting-an-offline-signed-payment}
 
 Command
 
@@ -87,14 +87,14 @@ Output
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
 ```
 
-## Offline Signing Over Multiple Sessions
+## Offline Signing Over Multiple Sessions {#offline-signing-over-multiple-sessions}
 
 Offline signing can also take place over multiple sessions. In this scenario,
 pass the absent signer's public key for each role. All pubkeys that were specified,
 but no signature was generated for will be listed as absent in the offline signing
 output
 
-### Example: Transfer with Two Offline Signing Sessions
+### Example: Transfer with Two Offline Signing Sessions {#example-transfer-with-two-offline-signing-sessions}
 
 Command (Offline Session #1)
 
@@ -153,7 +153,7 @@ Output (Online Submission)
 ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTHsJCtdYi
 ```
 
-## Buying More Time to Sign
+## Buying More Time to Sign {#buying-more-time-to-sign}
 
 Typically a Solana transaction must be signed and accepted by the network within
 a number of slots from the blockhash in its `recent_blockhash` field (~2min at

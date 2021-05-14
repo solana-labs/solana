@@ -8,15 +8,15 @@ To interact with a Solana node inside a JavaScript application, use the
 [solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which
 gives a convenient interface for the RPC methods.
 
-## RPC HTTP Endpoint
+## RPC HTTP Endpoint {#rpc-http-endpoint}
 
 **Default port:** 8899 eg. [http://localhost:8899](http://localhost:8899), [http://192.168.1.88:8899](http://192.168.1.88:8899)
 
-## RPC PubSub WebSocket Endpoint
+## RPC PubSub WebSocket Endpoint {#rpc-pubsub-websocket-endpoint}
 
 **Default port:** 8900 eg. ws://localhost:8900, [http://192.168.1.88:8900](http://192.168.1.88:8900)
 
-## Methods
+## Methods {#methods}
 
 - [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 - [getBalance](jsonrpc-api.md#getbalance)
@@ -80,7 +80,7 @@ gives a convenient interface for the RPC methods.
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
 
-### Deprecated Methods
+### Deprecated Methods {#deprecated-methods}
 
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
@@ -88,7 +88,7 @@ gives a convenient interface for the RPC methods.
 - [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
 - [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 
-## Request Formatting
+## Request Formatting {#request-formatting}
 
 To make a JSON-RPC request, send an HTTP POST request with a `Content-Type:
 application/json` header. The JSON request data should contain 4 fields:
@@ -121,14 +121,14 @@ The response output will be a JSON object with the following fields:
 
 Requests can be sent in batches by sending an array of JSON-RPC request objects as the data for a single POST.
 
-## Definitions
+## Definitions {#definitions}
 
 - Hash: A SHA-256 hash of a chunk of data.
 - Pubkey: The public key of a Ed25519 key-pair.
 - Transaction: A list of Solana instructions signed by a client keypair to authorize those actions.
 - Signature: An Ed25519 signature of transaction's payload data including instructions. This can be used to identify transactions.
 
-## Configuring State Commitment
+## Configuring State Commitment {#configuring-state-commitment}
 
 For preflight checks and transaction processing, Solana nodes choose which bank
 state to query based on a commitment requirement set by the client. The
@@ -154,7 +154,7 @@ For processing many dependent transactions in series, it's recommended to use
 `"confirmed"` commitment, which balances speed with rollback safety.
 For total safety, it's recommended to use`"finalized"` commitment.
 
-#### Example
+#### Example {#example}
 
 The commitment parameter should be included as the last element in the `params` array:
 
@@ -174,20 +174,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 '
 ```
 
-#### Default:
+#### Default: {#default}
 
 If commitment configuration is not provided, the node will default to `"finalized"` commitment
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 
-#### RpcResponse Structure
+#### RpcResponse Structure {#rpcresponse-structure}
 
 Many methods that take a commitment parameter return an RpcResponse JSON object comprised of two parts:
 
 - `context` : An RpcResponseContext JSON structure including a `slot` field at which the operation was evaluated.
 - `value` : The value returned by the operation itself.
 
-## Health Check
+## Health Check {#health-check}
 
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
@@ -200,13 +200,13 @@ infrastructure. This request will always return a HTTP 200 OK response with a bo
    information from trusted validators is not yet available.
 2. "ok" is always returned if no trusted validators are provided.
 
-## JSON RPC API Reference
+## JSON RPC API Reference {#json-rpc-api-reference}
 
-### getAccountInfo
+### getAccountInfo {#getaccountinfo}
 
 Returns all information associated with the account of provided Pubkey
 
-#### Parameters:
+#### Parameters: {#parameters}
 
 - `<string>` - Pubkey of account to query, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional
@@ -219,7 +219,7 @@ fields:
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
-#### Results:
+#### Results: {#results}
 
 The result will be an RpcResponse JSON object with `value` equal to:
 
@@ -231,7 +231,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### Example:
+#### Example: {#example-1}
 
 Request:
 ```bash
@@ -272,7 +272,7 @@ Response:
 }
 ```
 
-#### Example:
+#### Example: {#example-2}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -319,20 +319,20 @@ Response:
 }
 ```
 
-### getBalance
+### getBalance {#getbalance}
 
 Returns the balance of the account of provided Pubkey
 
-#### Parameters:
+#### Parameters: {#parameters-1}
 
 - `<string>` - Pubkey of account to query, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-1}
 
 - `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the balance
 
-#### Example:
+#### Example: {#example-3}
 
 Request:
 ```bash
@@ -346,11 +346,11 @@ Result:
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
 ```
 
-### getBlock
+### getBlock {#getblock}
 
 Returns identity and transaction information about a confirmed block in the ledger
 
-#### Parameters:
+#### Parameters: {#parameters-2}
 
 - `<u64>` - slot, as u64 integer
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -360,7 +360,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-2}
 
 The result field will be an object with the following fields:
 
@@ -391,7 +391,7 @@ The result field will be an object with the following fields:
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
 
-#### Example:
+#### Example: {#example-4}
 
 Request:
 ```bash
@@ -475,7 +475,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-5}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -531,7 +531,7 @@ Result:
 }
 ```
 
-#### Transaction Structure
+#### Transaction Structure {#transaction-structure}
 
 Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](developing/programming-model/transactions.md) to learn about transactions on Solana.
 
@@ -550,7 +550,7 @@ The JSON structure of a transaction is defined as follows:
     - `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
     - `data: <string>` - The program input data encoded in a base-58 string.
 
-#### Inner Instructions Structure
+#### Inner Instructions Structure {#inner-instructions-structure}
 
 The Solana runtime records the cross-program instructions that are invoked during transaction processing and makes these available for greater transparency of what was executed on-chain per transaction instruction. Invoked instructions are grouped by the originating transaction instruction and are listed in order of processing.
 
@@ -562,7 +562,7 @@ The JSON structure of inner instructions is defined as a list of objects in the 
   - `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
   - `data: <string>` - The program input data encoded in a base-58 string.
 
-#### Token Balances Structure
+#### Token Balances Structure {#token-balances-structure}
 
 The JSON structure of token balances is defined as a list of objects in the following structure:
 
@@ -575,11 +575,11 @@ The JSON structure of token balances is defined as a list of objects in the foll
   - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
 
 
-### getBlockProduction
+### getBlockProduction {#getblockproduction}
 
 Returns recent block production information from the current or previous epoch.
 
-#### Parameters:
+#### Parameters: {#parameters-3}
 
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
@@ -588,7 +588,7 @@ Returns recent block production information from the current or previous epoch.
     - (optional) `lastSlot: <u64>` - last slot to return block production information for (inclusive). If parameter not provided, defaults to the highest slot
   - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
 
-#### Results:
+#### Results: {#results-3}
 
 The result will be an RpcResponse JSON object with `value` equal to:
 - `<object>`
@@ -599,7 +599,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
     - `firstSlot: <u64>` - first slot of the block production information (inclusive)
     - `lastSlot: <u64>` - last slot of block production information (inclusive)
 
-#### Example:
+#### Example: {#example-6}
 
 Request:
 ```bash
@@ -633,7 +633,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-7}
 
 Request:
 ```bash
@@ -680,15 +680,15 @@ Result:
 }
 ```
 
-### getBlockCommitment
+### getBlockCommitment {#getblockcommitment}
 
 Returns commitment for particular block
 
-#### Parameters:
+#### Parameters: {#parameters-4}
 
 - `<u64>` - block, identified by Slot
 
-#### Results:
+#### Results: {#results-4}
 
 The result field will be a JSON object containing:
 
@@ -697,7 +697,7 @@ The result field will be a JSON object containing:
   - `<array>` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY` + 1
 - `totalStake` - total active stake, in lamports, of the current epoch
 
-#### Example:
+#### Example: {#example-8}
 
 Request:
 ```bash
@@ -718,24 +718,24 @@ Result:
 }
 ```
 
-### getBlocks
+### getBlocks {#getblocks}
 
 Returns a list of confirmed blocks between two slots
 
-#### Parameters:
+#### Parameters: {#parameters-5}
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - (optional) end_slot, as u64 integer
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-5}
 
 The result field will be an array of u64 integers listing confirmed blocks
 between `start_slot` and either `end_slot`, if provided, or latest confirmed block,
 inclusive.  Max range allowed is 500,000 slots.
 
 
-#### Example:
+#### Example: {#example-9}
 
 Request:
 ```bash
@@ -749,22 +749,22 @@ Result:
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
 ```
 
-### getBlocksWithLimit
+### getBlocksWithLimit {#getblockswithlimit}
 
 Returns a list of confirmed blocks starting at the given slot
 
-#### Parameters:
+#### Parameters: {#parameters-6}
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - limit, as u64 integer
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-6}
 
 The result field will be an array of u64 integers listing confirmed blocks
 starting at `start_slot` for up to `limit` blocks, inclusive.
 
-#### Example:
+#### Example: {#example-10}
 
 Request:
 ```bash
@@ -778,7 +778,7 @@ Result:
 {"jsonrpc":"2.0","result":[5,6,7],"id":1}
 ```
 
-### getBlockTime
+### getBlockTime {#getblocktime}
 
 Returns the estimated production time of a block.
 
@@ -787,16 +787,16 @@ intermittently adding a timestamp to a Vote for a particular block. A requested
 block's time is calculated from the stake-weighted mean of the Vote timestamps
 in a set of recent blocks recorded on the ledger.
 
-#### Parameters:
+#### Parameters: {#parameters-7}
 
 - `<u64>` - block, identified by Slot
 
-#### Results:
+#### Results: {#results-7}
 
 * `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
 * `<null>` - timestamp is not available for this block
 
-#### Example:
+#### Example: {#example-11}
 
 Request:
 ```bash
@@ -810,15 +810,15 @@ Result:
 {"jsonrpc":"2.0","result":1574721591,"id":1}
 ```
 
-### getClusterNodes
+### getClusterNodes {#getclusternodes}
 
 Returns information about all the nodes participating in the cluster
 
-#### Parameters:
+#### Parameters: {#parameters-8}
 
 None
 
-#### Results:
+#### Results: {#results-8}
 
 The result field will be an array of JSON objects, each with the following sub fields:
 
@@ -828,7 +828,7 @@ The result field will be an array of JSON objects, each with the following sub f
 - `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
 - `version: <string>|null` - The software version of the node, or `null` if the version information is not available
 
-#### Example:
+#### Example: {#example-12}
 
 Request:
 ```bash
@@ -854,15 +854,15 @@ Result:
 }
 ```
 
-### getEpochInfo
+### getEpochInfo {#getepochinfo}
 
 Returns information about the current epoch
 
-#### Parameters:
+#### Parameters: {#parameters-9}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-9}
 
 The result field will be an object with the following fields:
 
@@ -872,7 +872,7 @@ The result field will be an object with the following fields:
 - `slotIndex: <u64>`, the current slot relative to the start of the current epoch
 - `slotsInEpoch: <u64>`, the number of slots in this epoch
 
-#### Example:
+#### Example: {#example-13}
 
 Request:
 ```bash
@@ -896,15 +896,15 @@ Result:
 }
 ```
 
-### getEpochSchedule
+### getEpochSchedule {#getepochschedule}
 
 Returns epoch schedule information from this cluster's genesis config
 
-#### Parameters:
+#### Parameters: {#parameters-10}
 
 None
 
-#### Results:
+#### Results: {#results-10}
 
 The result field will be an object with the following fields:
 
@@ -914,7 +914,7 @@ The result field will be an object with the following fields:
 - `firstNormalEpoch: <u64>`, first normal-length epoch, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
 - `firstNormalSlot: <u64>`, MINIMUM_SLOTS_PER_EPOCH \* (2.pow(firstNormalEpoch) - 1)
 
-#### Example:
+#### Example: {#example-14}
 
 Request:
 ```bash
@@ -938,16 +938,16 @@ Result:
 }
 ```
 
-### getFeeCalculatorForBlockhash
+### getFeeCalculatorForBlockhash {#getfeecalculatorforblockhash}
 
 Returns the fee calculator associated with the query blockhash, or `null` if the blockhash has expired
 
-#### Parameters:
+#### Parameters: {#parameters-11}
 
 - `<string>` - query blockhash as a Base58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-11}
 
 The result will be an RpcResponse JSON object with `value` equal to:
 
@@ -955,7 +955,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
 - `<object>` - otherwise, a JSON object containing:
   - `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
 
-#### Example:
+#### Example: {#example-15}
 
 Request:
 ```bash
@@ -989,15 +989,15 @@ Result:
 }
 ```
 
-### getFeeRateGovernor
+### getFeeRateGovernor {#getfeerategovernor}
 
 Returns the fee rate governor information from the root bank
 
-#### Parameters:
+#### Parameters: {#parameters-12}
 
 None
 
-#### Results:
+#### Results: {#results-12}
 
 The `result` field will be an `object` with the following fields:
 
@@ -1007,7 +1007,7 @@ The `result` field will be an `object` with the following fields:
 - `targetLamportsPerSignature: <u64>`, Desired fee rate for the cluster
 - `targetSignaturesPerSlot: <u64>`, Desired signature rate for the cluster
 
-#### Example:
+#### Example: {#example-16}
 
 Request:
 ```bash
@@ -1038,17 +1038,17 @@ Result:
 }
 ```
 
-### getFees
+### getFees {#getfees}
 
 Returns a recent block hash from the ledger, a fee schedule that can be used to
 compute the cost of submitting a transaction using it, and the last slot in
 which the blockhash will be valid.
 
-#### Parameters:
+#### Parameters: {#parameters-13}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-13}
 
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
@@ -1056,7 +1056,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 - `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
 
-#### Example:
+#### Example: {#example-17}
 
 Request:
 ```bash
@@ -1085,19 +1085,19 @@ Result:
 }
 ```
 
-### getFirstAvailableBlock
+### getFirstAvailableBlock {#getfirstavailableblock}
 
 Returns the slot of the lowest confirmed block that has not been purged from the ledger
 
-#### Parameters:
+#### Parameters: {#parameters-14}
 
 None
 
-#### Results:
+#### Results: {#results-14}
 
 - `<u64>` - Slot
 
-#### Example:
+#### Example: {#example-18}
 
 Request:
 ```bash
@@ -1111,19 +1111,19 @@ Result:
 {"jsonrpc":"2.0","result":250000,"id":1}
 ```
 
-### getGenesisHash
+### getGenesisHash {#getgenesishash}
 
 Returns the genesis hash
 
-#### Parameters:
+#### Parameters: {#parameters-15}
 
 None
 
-#### Results:
+#### Results: {#results-15}
 
 - `<string>` - a Hash as base-58 encoded string
 
-#### Example:
+#### Example: {#example-19}
 
 Request:
 ```bash
@@ -1137,7 +1137,7 @@ Result:
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
 ```
 
-### getHealth
+### getHealth {#gethealth}
 
 Returns the current health of the node.
 
@@ -1147,18 +1147,18 @@ If one or more `--trusted-validator` arguments are provided to
 an error is returned.  "ok" is always returned if no trusted validators are
 provided.
 
-#### Parameters:
+#### Parameters: {#parameters-16}
 
 None
 
-#### Results:
+#### Results: {#results-16}
 
 If the node is healthy: "ok"
 If the node is unhealthy, a JSON RPC error response is returned.  The specifics
 of the error response are **UNSTABLE** and may change in the future
 
 
-#### Example:
+#### Example: {#example-20}
 
 Request:
 ```bash
@@ -1200,21 +1200,21 @@ Unhealthy Result (if additional information is available)
 }
 ```
 
-### getIdentity
+### getIdentity {#getidentity}
 
 Returns the identity pubkey for the current node
 
-#### Parameters:
+#### Parameters: {#parameters-17}
 
 None
 
-#### Results:
+#### Results: {#results-17}
 
 The result field will be a JSON object with the following fields:
 
 - `identity`, the identity pubkey of the current node \(as a base-58 encoded string\)
 
-#### Example:
+#### Example: {#example-21}
 
 Request:
 ```bash
@@ -1228,15 +1228,15 @@ Result:
 {"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
 ```
 
-### getInflationGovernor
+### getInflationGovernor {#getinflationgovernor}
 
 Returns the current inflation governor
 
-#### Parameters:
+#### Parameters: {#parameters-18}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-18}
 
 The result field will be a JSON object with the following fields:
 
@@ -1247,7 +1247,7 @@ The result field will be a JSON object with the following fields:
 - `foundation: <f64>`, percentage of total inflation allocated to the foundation
 - `foundationTerm: <f64>`, duration of foundation pool inflation in years
 
-#### Example:
+#### Example: {#example-22}
 
 Request:
 ```bash
@@ -1271,15 +1271,15 @@ Result:
 }
 ```
 
-### getInflationRate
+### getInflationRate {#getinflationrate}
 
 Returns the specific inflation values for the current epoch
 
-#### Parameters:
+#### Parameters: {#parameters-19}
 
 None
 
-#### Results:
+#### Results: {#results-19}
 
 The result field will be a JSON object with the following fields:
 
@@ -1288,7 +1288,7 @@ The result field will be a JSON object with the following fields:
 - `foundation: <f64>`, inflation allocated to the foundation
 - `epoch: <f64>`, epoch for which these values are valid
 
-#### Example:
+#### Example: {#example-23}
 
 Request:
 ```bash
@@ -1302,17 +1302,17 @@ Result:
 {"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
 ```
 
-### getInflationReward
+### getInflationReward {#getinflationreward}
 
 Returns the inflation reward for a list of addresses for an epoch
 
-#### Parameters:
+#### Parameters: {#parameters-20}
 - `<array>` - An array of addresses to query, as base-58 encoded strings
 * `<object>` - (optional) Configuration object containing the following optional fields:
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   * (optional) `epoch: <u64>` - An epoch for which the reward occurs. If omitted, the previous epoch will be used
 
-#### Results
+#### Results {#results-20}
 
 The result field will be a JSON array with the following fields:
 
@@ -1321,7 +1321,7 @@ The result field will be a JSON array with the following fields:
 - `amount: <u64>`, reward amount in lamports
 - `postBalance: <u64>`, post balance of the account in lamports
 
-#### Example
+#### Example {#example-24}
 
 Request:
 ```bash
@@ -1354,17 +1354,17 @@ Response:
   }
 ```
 
-### getLargestAccounts
+### getLargestAccounts {#getlargestaccounts}
 
 Returns the 20 largest accounts, by lamport balance (results may be cached up to two hours)
 
-#### Parameters:
+#### Parameters: {#parameters-21}
 
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `filter: <string>` - filter results by account type; currently supported: `circulating|nonCirculating`
 
-#### Results:
+#### Results: {#results-21}
 
 The result will be an RpcResponse JSON object with `value` equal to an array of:
 
@@ -1372,7 +1372,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of:
   - `address: <string>`, base-58 encoded address of the account
   - `lamports: <u64>`, number of lamports in the account, as a u64
 
-#### Example:
+#### Example: {#example-25}
 
 Request:
 ```bash
@@ -1468,11 +1468,11 @@ Result:
 }
 ```
 
-### getLeaderSchedule
+### getLeaderSchedule {#getleaderschedule}
 
 Returns the leader schedule for an epoch
 
-#### Parameters:
+#### Parameters: {#parameters-22}
 
 - `<u64>` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.
             If unspecified, the leader schedule for the current epoch is fetched
@@ -1480,14 +1480,14 @@ Returns the leader schedule for an epoch
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
 
-#### Results:
+#### Results: {#results-22}
 
 - `<null>` - if requested epoch is not found
 - `<object>` - otherwise, the result field will be a dictionary of validator identities,
   as base-58 encoded strings, and their corresponding leader slot indices as values
   (indices are relative to the first slot in the requested epoch)
 
-#### Example:
+#### Example: {#example-26}
 
 Request:
 ```bash
@@ -1507,7 +1507,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-27}
 
 Request:
 ```bash
@@ -1537,15 +1537,15 @@ Result:
 }
 ```
 
-### getMaxRetransmitSlot
+### getMaxRetransmitSlot {#getmaxretransmitslot}
 
 Get the max slot seen from retransmit stage.
 
-#### Results:
+#### Results: {#results-23}
 
 - `<u64>` - Slot
 
-#### Example:
+#### Example: {#example-28}
 
 Request:
 ```bash
@@ -1559,15 +1559,15 @@ Result:
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
-### getMaxShredInsertSlot
+### getMaxShredInsertSlot {#getmaxshredinsertslot}
 
 Get the max slot seen from after shred insert.
 
-#### Results:
+#### Results: {#results-24}
 
 - `<u64>` - Slot
 
-#### Example:
+#### Example: {#example-29}
 
 Request:
 ```bash
@@ -1581,20 +1581,20 @@ Result:
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
-### getMinimumBalanceForRentExemption
+### getMinimumBalanceForRentExemption {#getminimumbalanceforrentexemption}
 
 Returns minimum balance required to make account rent exempt.
 
-#### Parameters:
+#### Parameters: {#parameters-23}
 
 - `<usize>` - account data length
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-25}
 
 - `<u64>` - minimum lamports required in account
 
-#### Example:
+#### Example: {#example-30}
 
 Request:
 ```bash
@@ -1608,11 +1608,11 @@ Result:
 {"jsonrpc":"2.0","result":500,"id":1}
 ```
 
-### getMultipleAccounts
+### getMultipleAccounts {#getmultipleaccounts}
 
 Returns the account information for a list of Pubkeys
 
-#### Parameters:
+#### Parameters: {#parameters-24}
 
 - `<array>` - An array of Pubkeys to query, as base-58 encoded strings
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -1625,7 +1625,7 @@ Returns the account information for a list of Pubkeys
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
 
-#### Results:
+#### Results: {#results-26}
 
 The result will be an RpcResponse JSON object with `value` equal to:
 
@@ -1639,7 +1639,7 @@ An array of:
   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### Example:
+#### Example: {#example-31}
 
 Request:
 ```bash
@@ -1699,7 +1699,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-32}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1755,11 +1755,11 @@ Result:
 }
 ```
 
-### getProgramAccounts
+### getProgramAccounts {#getprogramaccounts}
 
 Returns all accounts owned by the provided program Pubkey
 
-#### Parameters:
+#### Parameters: {#parameters-25}
 
 - `<string>` - Pubkey of program, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -1772,14 +1772,14 @@ Returns all accounts owned by the provided program Pubkey
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
-##### Filters:
+##### Filters: {#filters}
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as base-58 encoded string and limited to less than 129 bytes
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
-#### Results:
+#### Results: {#results-27}
 
 The result field will be an array of JSON objects, which will contain:
 
@@ -1791,7 +1791,7 @@ The result field will be an array of JSON objects, which will contain:
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### Example:
+#### Example: {#example-33}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1819,7 +1819,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-34}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -1867,15 +1867,15 @@ Result:
 }
 ```
 
-### getRecentBlockhash
+### getRecentBlockhash {#getrecentblockhash}
 
 Returns a recent block hash from the ledger, and a fee schedule that can be used to compute the cost of submitting a transaction using it.
 
-#### Parameters:
+#### Parameters: {#parameters-26}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-28}
 
 An RpcResponse containing a JSON object consisting of a string blockhash and FeeCalculator JSON object.
 
@@ -1883,7 +1883,7 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 
-#### Example:
+#### Example: {#example-35}
 
 Request:
 ```bash
@@ -1911,15 +1911,15 @@ Result:
 }
 ```
 
-### getRecentPerformanceSamples
+### getRecentPerformanceSamples {#getrecentperformancesamples}
 
 Returns a list of recent performance samples, in reverse slot order. Performance samples are taken every 60 seconds and
 include the number of transactions and slots that occur in a given time window.
 
-#### Parameters:
+#### Parameters: {#parameters-27}
 - `limit: <usize>` - (optional) number of samples to return (maximum 720)
 
-#### Results:
+#### Results: {#results-29}
 
 An array of:
 
@@ -1929,7 +1929,7 @@ An array of:
   - `numSlots: <u64>` - Number of slots in sample
   - `samplePeriodSecs: <u16>` - Number of seconds in a sample window
 
-#### Example:
+#### Example: {#example-36}
 
 Request:
 ```bash
@@ -1974,19 +1974,19 @@ Result:
 ```
 
 
-### getSnapshotSlot
+### getSnapshotSlot {#getsnapshotslot}
 
 Returns the highest slot that the node has a snapshot for
 
-#### Parameters:
+#### Parameters: {#parameters-28}
 
 None
 
-#### Results:
+#### Results: {#results-30}
 
 - `<u64>` - Snapshot slot
 
-#### Example:
+#### Example: {#example-37}
 
 Request:
 ```bash
@@ -2005,12 +2005,12 @@ Result when the node has no snapshot:
 {"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
 ```
 
-### getSignaturesForAddress
+### getSignaturesForAddress {#getsignaturesforaddress}
 
 Returns confirmed signatures for transactions involving an
 address backwards in time from the provided signature or most recent confirmed block
 
-#### Parameters:
+#### Parameters: {#parameters-29}
 * `<string>` - account address as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following fields:
   * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
@@ -2019,7 +2019,7 @@ address backwards in time from the provided signature or most recent confirmed b
   * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-31}
 The result field will be an array of transaction signature information, ordered
 from newest to oldest transaction:
 * `<object>`
@@ -2029,7 +2029,7 @@ from newest to oldest transaction:
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
-#### Example:
+#### Example: {#example-38}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2064,20 +2064,20 @@ Result:
 }
 ```
 
-### getSignatureStatuses
+### getSignatureStatuses {#getsignaturestatuses}
 
 Returns the statuses of a list of signatures. Unless the
 `searchTransactionHistory` configuration parameter is included, this method only
 searches the recent status cache of signatures, which retains statuses for all
 active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
-#### Parameters:
+#### Parameters: {#parameters-30}
 
 - `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings
 - `<object>` - (optional) Configuration object containing the following field:
   - `searchTransactionHistory: <bool>` - if true, a Solana node will search its ledger cache for any signatures not found in the recent status cache
 
-#### Results:
+#### Results: {#results-32}
 
 An RpcResponse containing a JSON object consisting of an array of TransactionStatus objects.
 
@@ -2095,7 +2095,7 @@ An array of:
     - `"Ok": <null>` - Transaction was successful
     - `"Err": <ERR>` - Transaction failed with TransactionError
 
-#### Example:
+#### Example: {#example-39}
 
 Request:
 ```bash
@@ -2139,7 +2139,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-40}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2184,19 +2184,19 @@ Result:
 }
 ```
 
-### getSlot
+### getSlot {#getslot}
 
 Returns the current slot the node is processing
 
-#### Parameters:
+#### Parameters: {#parameters-31}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-33}
 
 - `<u64>` - Current slot
 
-#### Example:
+#### Example: {#example-41}
 
 Request:
 ```bash
@@ -2210,19 +2210,19 @@ Result:
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
-### getSlotLeader
+### getSlotLeader {#getslotleader}
 
 Returns the current slot leader
 
-#### Parameters:
+#### Parameters: {#parameters-32}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-34}
 
 - `<string>` - Node identity Pubkey as base-58 encoded string
 
-#### Example:
+#### Example: {#example-42}
 
 Request:
 ```bash
@@ -2236,20 +2236,20 @@ Result:
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
 ```
 
-### getSlotLeaders
+### getSlotLeaders {#getslotleaders}
 
 Returns the slot leaders for a given slot range
 
-#### Parameters:
+#### Parameters: {#parameters-33}
 
 - `<u64>` - Start slot, as u64 integer
 - `<u64>` - Limit, as u64 integer
 
-#### Results:
+#### Results: {#results-35}
 
 - `<array<string>>` - Node identity public keys as base-58 encoded strings
 
-#### Example:
+#### Example: {#example-43}
 
 If the current slot is #99, query the next 10 leaders with the following request:
 
@@ -2283,18 +2283,18 @@ The first leader returned is the leader for slot #100:
 }
 ```
 
-### getStakeActivation
+### getStakeActivation {#getstakeactivation}
 
 Returns epoch activation information for a stake account
 
-#### Parameters:
+#### Parameters: {#parameters-34}
 
 * `<string>` - Pubkey of stake account to query, as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following optional fields:
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   * (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
 
-#### Results:
+#### Results: {#results-36}
 
 The result will be a JSON object with the following fields:
 
@@ -2302,7 +2302,7 @@ The result will be a JSON object with the following fields:
 * `active: <u64>` - stake active during the epoch
 * `inactive: <u64>` - stake inactive during the epoch
 
-#### Example:
+#### Example: {#example-44}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2315,7 +2315,7 @@ Result:
 {"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
 ```
 
-#### Example:
+#### Example: {#example-45}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2346,15 +2346,15 @@ Result:
 }
 ```
 
-### getSupply
+### getSupply {#getsupply}
 
 Returns information about the current supply.
 
-#### Parameters:
+#### Parameters: {#parameters-35}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-37}
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
@@ -2363,7 +2363,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 - `nonCirculating: <u64>` - Non-circulating supply in lamports
 - `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings
 
-#### Example:
+#### Example: {#example-46}
 
 Request:
 ```bash
@@ -2396,16 +2396,16 @@ Result:
 }
 ```
 
-### getTokenAccountBalance
+### getTokenAccountBalance {#gettokenaccountbalance}
 
 Returns the token balance of an SPL Token account.
 
-#### Parameters:
+#### Parameters: {#parameters-36}
 
 - `<string>` - Pubkey of Token account to query, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-38}
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
@@ -2414,7 +2414,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 - `uiAmount: <number | null>` - the balance, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the balance as a string, using mint-prescribed decimals
 
-#### Example:
+#### Example: {#example-47}
 
 Request:
 ```bash
@@ -2442,11 +2442,11 @@ Result:
 }
 ```
 
-### getTokenAccountsByDelegate
+### getTokenAccountsByDelegate {#gettokenaccountsbydelegate}
 
 Returns all SPL Token accounts by approved Delegate.
 
-#### Parameters:
+#### Parameters: {#parameters-37}
 
 - `<string>` - Pubkey of account delegate to query, as base-58 encoded string
 - `<object>` - Either:
@@ -2458,7 +2458,7 @@ Returns all SPL Token accounts by approved Delegate.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
-#### Results:
+#### Results: {#results-39}
 
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
 
@@ -2470,7 +2470,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### Example:
+#### Example: {#example-48}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2532,11 +2532,11 @@ Result:
 }
 ```
 
-### getTokenAccountsByOwner
+### getTokenAccountsByOwner {#gettokenaccountsbyowner}
 
 Returns all SPL Token accounts by token owner.
 
-#### Parameters:
+#### Parameters: {#parameters-38}
 
 - `<string>` - Pubkey of account owner to query, as base-58 encoded string
 - `<object>` - Either:
@@ -2548,7 +2548,7 @@ Returns all SPL Token accounts by token owner.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
-#### Results:
+#### Results: {#results-40}
 
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
 
@@ -2560,7 +2560,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
-#### Example:
+#### Example: {#example-49}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2622,16 +2622,16 @@ Result:
 }
 ```
 
-### getTokenLargestAccounts
+### getTokenLargestAccounts {#gettokenlargestaccounts}
 
 Returns the 20 largest accounts of a particular SPL Token type.
 
-#### Parameters:
+#### Parameters: {#parameters-39}
 
 - `<string>` - Pubkey of token Mint to query, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-41}
 
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
 
@@ -2641,7 +2641,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 - `uiAmount: <number | null>` - the token account balance, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the token account balance as a string, using mint-prescribed decimals
 
-#### Example:
+#### Example: {#example-50}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2678,16 +2678,16 @@ Result:
 }
 ```
 
-### getTokenSupply
+### getTokenSupply {#gettokensupply}
 
 Returns the total supply of an SPL Token type.
 
-#### Parameters:
+#### Parameters: {#parameters-40}
 
 - `<string>` - Pubkey of token Mint to query, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-42}
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
@@ -2696,7 +2696,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 - `uiAmount: <number | null>` - the total token supply, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the total token supply as a string, using mint-prescribed decimals
 
-#### Example:
+#### Example: {#example-51}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2723,11 +2723,11 @@ Result:
 }
 ```
 
-### getTransaction
+### getTransaction {#gettransaction}
 
 Returns transaction details for a confirmed transaction
 
-#### Parameters:
+#### Parameters: {#parameters-41}
 
 - `<string>` - transaction signature as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -2735,7 +2735,7 @@ Returns transaction details for a confirmed transaction
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-43}
 
 - `<null>` - if transaction is not found or not confirmed
 - `<object>` - if transaction is confirmed, an object with the following fields:
@@ -2755,7 +2755,7 @@ Returns transaction details for a confirmed transaction
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
 
-#### Example:
+#### Example: {#example-52}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2839,7 +2839,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-53}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2894,19 +2894,19 @@ Result:
 }
 ```
 
-### getTransactionCount
+### getTransactionCount {#gettransactioncount}
 
 Returns the current Transaction count from the ledger
 
-#### Parameters:
+#### Parameters: {#parameters-42}
 
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-44}
 
 - `<u64>` - count
 
-#### Example:
+#### Example: {#example-54}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -2920,22 +2920,22 @@ Result:
 {"jsonrpc":"2.0","result":268,"id":1}
 ```
 
-### getVersion
+### getVersion {#getversion}
 
 Returns the current solana versions running on the node
 
-#### Parameters:
+#### Parameters: {#parameters-43}
 
 None
 
-#### Results:
+#### Results: {#results-45}
 
 The result field will be a JSON object with the following fields:
 
 - `solana-core`, software version of solana-core
 - `feature-set`, unique identifier of the current software's feature set
 
-#### Example:
+#### Example: {#example-55}
 
 Request:
 ```bash
@@ -2949,17 +2949,17 @@ Result:
 {"jsonrpc":"2.0","result":{"solana-core": "1.7.0"},"id":1}
 ```
 
-### getVoteAccounts
+### getVoteAccounts {#getvoteaccounts}
 
 Returns the account info and associated stake for all the voting accounts in the current bank.
 
-#### Parameters:
+#### Parameters: {#parameters-44}
 
 - `<object>` - (optional) Configuration object containing the following field:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `votePubkey: <string>` - Only return results for this validator vote address (base-58 encoded)
 
-#### Results:
+#### Results: {#results-46}
 
 The result field will be a JSON object of `current` and `delinquent` accounts,
 each containing an array of JSON objects with the following sub fields:
@@ -2972,7 +2972,7 @@ each containing an array of JSON objects with the following sub fields:
 - `lastVote: <u64>` - Most recent slot voted on by this vote account
 - `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
 
-#### Example:
+#### Example: {#example-56}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -3015,7 +3015,7 @@ Result:
 }
 ```
 
-#### Example: Restrict results to a single validator vote account
+#### Example: Restrict results to a single validator vote account {#example-restrict-results-to-a-single-validator-vote-account}
 
 Request:
 ```bash
@@ -3058,20 +3058,20 @@ Result:
 }
 ```
 
-### minimumLedgerSlot
+### minimumLedgerSlot {#minimumledgerslot}
 
 Returns the lowest slot that the node has information about in its ledger. This
 value may increase over time if the node is configured to purge older ledger data
 
-#### Parameters:
+#### Parameters: {#parameters-45}
 
 None
 
-#### Results:
+#### Results: {#results-47}
 
 - `u64` - Minimum ledger slot
 
-#### Example:
+#### Example: {#example-57}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -3085,21 +3085,21 @@ Result:
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
-### requestAirdrop
+### requestAirdrop {#requestairdrop}
 
 Requests an airdrop of lamports to a Pubkey
 
-#### Parameters:
+#### Parameters: {#parameters-46}
 
 - `<string>` - Pubkey of account to receive lamports, as base-58 encoded string
 - `<integer>` - lamports, as a u64
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
-#### Results:
+#### Results: {#results-48}
 
 - `<string>` - Transaction Signature of airdrop, as base-58 encoded string
 
-#### Example:
+#### Example: {#example-58}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -3113,7 +3113,7 @@ Result:
 {"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
 ```
 
-### sendTransaction
+### sendTransaction {#sendtransaction}
 
 Submits a signed transaction to the cluster for processing.
 
@@ -3144,7 +3144,7 @@ is used to identify the transaction ([transaction id](../../terminology.md#trans
 This identifier can be easily extracted from the transaction data before
 submission.
 
-#### Parameters:
+#### Parameters: {#parameters-47}
 
 - `<string>` - fully-signed Transaction, as encoded string
 - `<object>` - (optional) Configuration object containing the following field:
@@ -3152,11 +3152,11 @@ submission.
   - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
-#### Results:
+#### Results: {#results-49}
 
 - `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
 
-#### Example:
+#### Example: {#example-59}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -3177,11 +3177,11 @@ Result:
 {"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
 ```
 
-### simulateTransaction
+### simulateTransaction {#simulatetransaction}
 
 Simulate sending a transaction
 
-#### Parameters:
+#### Parameters: {#parameters-48}
 
 - `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
@@ -3189,7 +3189,7 @@ Simulate sending a transaction
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
-#### Results:
+#### Results: {#results-50}
 
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
@@ -3197,7 +3197,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 - `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
-#### Example:
+#### Example: {#example-60}
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -3231,7 +3231,7 @@ Result:
 }
 ```
 
-## Subscription Websocket
+## Subscription Websocket {#subscription-websocket}
 
 After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
@@ -3239,11 +3239,11 @@ After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 - Multiple subscriptions may be active at once
 - Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"finalized"`.
 
-### accountSubscribe
+### accountSubscribe {#accountsubscribe}
 
 Subscribe to an account to receive notifications when the lamports or data for a given account public key changes
 
-#### Parameters:
+#### Parameters: {#parameters-49}
 
 - `<string>` - account Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -3251,11 +3251,11 @@ Subscribe to an account to receive notifications when the lamports or data for a
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
-#### Results:
+#### Results: {#results-51}
 
 - `<number>` - Subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-61}
 
 Request:
 ```json
@@ -3289,7 +3289,7 @@ Result:
 {"jsonrpc": "2.0","result": 23784,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format}
 
 Base58 encoding:
 ```json
@@ -3349,19 +3349,19 @@ Parsed-JSON encoding:
 }
 ```
 
-### accountUnsubscribe
+### accountUnsubscribe {#accountunsubscribe}
 
 Unsubscribe from account change notifications
 
-#### Parameters:
+#### Parameters: {#parameters-50}
 
 - `<number>` - id of account Subscription to cancel
 
-#### Results:
+#### Results: {#results-52}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-62}
 
 Request:
 ```json
@@ -3374,11 +3374,11 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### logsSubscribe
+### logsSubscribe {#logssubscribe}
 
 Subscribe to transaction logging
 
-#### Parameters:
+#### Parameters: {#parameters-51}
 
 - `filter: <string>|<object>` - filter criteria for the logs to receive results by account type; currently supported:
   - "all" - subscribe to all transactions except for simple vote transactions
@@ -3387,11 +3387,11 @@ Subscribe to transaction logging
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-53}
 
 - `<integer>` - Subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-63}
 
 Request:
 ```json
@@ -3421,7 +3421,7 @@ Result:
 {"jsonrpc": "2.0","result": 24040,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-1}
 
 Base58 encoding:
 ```json
@@ -3446,19 +3446,19 @@ Base58 encoding:
 }
 ```
 
-### logsUnsubscribe
+### logsUnsubscribe {#logsunsubscribe}
 
 Unsubscribe from transaction logging
 
-#### Parameters:
+#### Parameters: {#parameters-52}
 
 - `<integer>` - id of subscription to cancel
 
-#### Results:
+#### Results: {#results-54}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-64}
 
 Request:
 ```json
@@ -3471,11 +3471,11 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### programSubscribe
+### programSubscribe {#programsubscribe}
 
 Subscribe to a program to receive notifications when the lamports or data for a given account owned by the program changes
 
-#### Parameters:
+#### Parameters: {#parameters-53}
 
 - `<string>` - program_id Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -3484,11 +3484,11 @@ Subscribe to a program to receive notifications when the lamports or data for a 
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
-#### Results:
+#### Results: {#results-55}
 
 - `<integer>` - Subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-65}
 
 Request:
 ```json
@@ -3538,7 +3538,7 @@ Result:
 {"jsonrpc": "2.0","result": 24040,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-2}
 
 Base58 encoding:
 ```json
@@ -3604,19 +3604,19 @@ Parsed-JSON encoding:
 }
 ```
 
-### programUnsubscribe
+### programUnsubscribe {#programunsubscribe}
 
 Unsubscribe from program-owned account change notifications
 
-#### Parameters:
+#### Parameters: {#parameters-54}
 
 - `<integer>` - id of account Subscription to cancel
 
-#### Results:
+#### Results: {#results-56}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-66}
 
 Request:
 ```json
@@ -3629,20 +3629,20 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### signatureSubscribe
+### signatureSubscribe {#signaturesubscribe}
 
 Subscribe to a transaction signature to receive notification when the transaction is confirmed On `signatureNotification`, the subscription is automatically cancelled
 
-#### Parameters:
+#### Parameters: {#parameters-55}
 
 - `<string>` - Transaction Signature, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-#### Results:
+#### Results: {#results-57}
 
 - `integer` - subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-67}
 
 Request:
 ```json
@@ -3673,7 +3673,7 @@ Result:
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-3}
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3692,19 +3692,19 @@ Result:
 }
 ```
 
-### signatureUnsubscribe
+### signatureUnsubscribe {#signatureunsubscribe}
 
 Unsubscribe from signature confirmation notification
 
-#### Parameters:
+#### Parameters: {#parameters-56}
 
 - `<integer>` - subscription id to cancel
 
-#### Results:
+#### Results: {#results-58}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-68}
 
 Request:
 ```json
@@ -3717,19 +3717,19 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### slotSubscribe
+### slotSubscribe {#slotsubscribe}
 
 Subscribe to receive notification anytime a slot is processed by the validator
 
-#### Parameters:
+#### Parameters: {#parameters-57}
 
 None
 
-#### Results:
+#### Results: {#results-59}
 
 - `integer` - subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-69}
 
 Request:
 ```json
@@ -3742,7 +3742,7 @@ Result:
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-4}
 
 ```bash
 {
@@ -3759,19 +3759,19 @@ Result:
 }
 ```
 
-### slotUnsubscribe
+### slotUnsubscribe {#slotunsubscribe}
 
 Unsubscribe from slot notifications
 
-#### Parameters:
+#### Parameters: {#parameters-58}
 
 - `<integer>` - subscription id to cancel
 
-#### Results:
+#### Results: {#results-60}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-70}
 
 Request:
 ```json
@@ -3784,19 +3784,19 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### rootSubscribe
+### rootSubscribe {#rootsubscribe}
 
 Subscribe to receive notification anytime a new root is set by the validator.
 
-#### Parameters:
+#### Parameters: {#parameters-59}
 
 None
 
-#### Results:
+#### Results: {#results-61}
 
 - `integer` - subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-71}
 
 Request:
 ```json
@@ -3809,7 +3809,7 @@ Result:
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-5}
 
 The result is the latest root slot number.
 
@@ -3824,19 +3824,19 @@ The result is the latest root slot number.
 }
 ```
 
-### rootUnsubscribe
+### rootUnsubscribe {#rootunsubscribe}
 
 Unsubscribe from root notifications
 
-#### Parameters:
+#### Parameters: {#parameters-60}
 
 - `<integer>` - subscription id to cancel
 
-#### Results:
+#### Results: {#results-62}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-72}
 
 Request:
 ```json
@@ -3849,7 +3849,7 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### voteSubscribe - Unstable, disabled by default
+### voteSubscribe - Unstable, disabled by default {#votesubscribe---unstable-disabled-by-default}
 
 **This subscription is unstable and only available if the validator was started
 with the `--rpc-pubsub-enable-vote-subscription` flag.  The format of this
@@ -3859,15 +3859,15 @@ Subscribe to receive notification anytime a new vote is observed in gossip.
 These votes are pre-consensus therefore there is no guarantee these votes will
 enter the ledger.
 
-#### Parameters:
+#### Parameters: {#parameters-61}
 
 None
 
-#### Results:
+#### Results: {#results-63}
 
 - `integer` - subscription id \(needed to unsubscribe\)
 
-#### Example:
+#### Example: {#example-73}
 
 Request:
 ```json
@@ -3880,7 +3880,7 @@ Result:
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
-#### Notification Format:
+#### Notification Format: {#notification-format-6}
 
 The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
 
@@ -3899,19 +3899,19 @@ The result is the latest vote, containing its hash, a list of voted slots, and a
 }
 ```
 
-### voteUnsubscribe
+### voteUnsubscribe {#voteunsubscribe}
 
 Unsubscribe from vote notifications
 
-#### Parameters:
+#### Parameters: {#parameters-62}
 
 - `<integer>` - subscription id to cancel
 
-#### Results:
+#### Results: {#results-64}
 
 - `<bool>` - unsubscribe success message
 
-#### Example:
+#### Example: {#example-74}
 
 Request:
 ```json
@@ -3923,16 +3923,16 @@ Response:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-## JSON RPC API Deprecated Methods
+## JSON RPC API Deprecated Methods {#json-rpc-api-deprecated-methods}
 
-### getConfirmedBlock
+### getConfirmedBlock {#getconfirmedblock}
 
 **DEPRECATED: Please use [getBlock](jsonrpc-api.md#getblock) instead**
 This method is expected to be removed in solana-core v1.8
 
 Returns identity and transaction information about a confirmed block in the ledger
 
-#### Parameters:
+#### Parameters: {#parameters-63}
 
 - `<u64>` - slot, as u64 integer
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -3942,7 +3942,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-65}
 
 The result field will be an object with the following fields:
 
@@ -3973,7 +3973,7 @@ The result field will be an object with the following fields:
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
 
-#### Example:
+#### Example: {#example-75}
 
 Request:
 ```bash
@@ -4057,7 +4057,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-76}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -4118,27 +4118,27 @@ For more details on returned data:
 [Inner Instructions Structure](jsonrpc-api.md#innerinstructionsstructure)
 [Token Balances Structure](jsonrpc-api.md#tokenbalancesstructure)
 
-### getConfirmedBlocks
+### getConfirmedBlocks {#getconfirmedblocks}
 
 **DEPRECATED: Please use [getBlocks](jsonrpc-api.md#getblocks) instead**
 This method is expected to be removed in solana-core v1.8
 
 Returns a list of confirmed blocks between two slots
 
-#### Parameters:
+#### Parameters: {#parameters-64}
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - (optional) end_slot, as u64 integer
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-66}
 
 The result field will be an array of u64 integers listing confirmed blocks
 between `start_slot` and either `end_slot`, if provided, or latest confirmed block,
 inclusive.  Max range allowed is 500,000 slots.
 
 
-#### Example:
+#### Example: {#example-77}
 
 Request:
 ```bash
@@ -4152,25 +4152,25 @@ Result:
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
 ```
 
-### getConfirmedBlocksWithLimit
+### getConfirmedBlocksWithLimit {#getconfirmedblockswithlimit}
 
 **DEPRECATED: Please use [getBlocksWithLimit](jsonrpc-api.md#getblockswithlimit) instead**
 This method is expected to be removed in solana-core v1.8
 
 Returns a list of confirmed blocks starting at the given slot
 
-#### Parameters:
+#### Parameters: {#parameters-65}
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - limit, as u64 integer
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-67}
 
 The result field will be an array of u64 integers listing confirmed blocks
 starting at `start_slot` for up to `limit` blocks, inclusive.
 
-#### Example:
+#### Example: {#example-78}
 
 Request:
 ```bash
@@ -4184,7 +4184,7 @@ Result:
 {"jsonrpc":"2.0","result":[5,6,7],"id":1}
 ```
 
-### getConfirmedSignaturesForAddress2
+### getConfirmedSignaturesForAddress2 {#getconfirmedsignaturesforaddress2}
 
 **DEPRECATED: Please use [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress) instead**
 This method is expected to be removed in solana-core v1.8
@@ -4192,7 +4192,7 @@ This method is expected to be removed in solana-core v1.8
 Returns confirmed signatures for transactions involving an
 address backwards in time from the provided signature or most recent confirmed block
 
-#### Parameters:
+#### Parameters: {#parameters-66}
 * `<string>` - account address as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following fields:
   * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
@@ -4201,7 +4201,7 @@ address backwards in time from the provided signature or most recent confirmed b
   * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-68}
 The result field will be an array of transaction signature information, ordered
 from newest to oldest transaction:
 * `<object>`
@@ -4211,7 +4211,7 @@ from newest to oldest transaction:
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
-#### Example:
+#### Example: {#example-79}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -4246,14 +4246,14 @@ Result:
 }
 ```
 
-### getConfirmedTransaction
+### getConfirmedTransaction {#getconfirmedtransaction}
 
 **DEPRECATED: Please use [getTransaction](jsonrpc-api.md#gettransaction) instead**
 This method is expected to be removed in solana-core v1.8
 
 Returns transaction details for a confirmed transaction
 
-#### Parameters:
+#### Parameters: {#parameters-67}
 
 - `<string>` - transaction signature as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
@@ -4261,7 +4261,7 @@ Returns transaction details for a confirmed transaction
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
-#### Results:
+#### Results: {#results-69}
 
 - `<null>` - if transaction is not found or not confirmed
 - `<object>` - if transaction is confirmed, an object with the following fields:
@@ -4281,7 +4281,7 @@ Returns transaction details for a confirmed transaction
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
 
-#### Example:
+#### Example: {#example-80}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
@@ -4365,7 +4365,7 @@ Result:
 }
 ```
 
-#### Example:
+#### Example: {#example-81}
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '

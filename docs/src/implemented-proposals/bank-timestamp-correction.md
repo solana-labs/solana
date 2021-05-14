@@ -22,7 +22,7 @@ The general outline of the proposed implementation is as follows:
 - Bound the timestamp correction so that it cannot deviate too far from the
   expected theoretical estimate
 
-## Timestamp Correction
+## Timestamp Correction {#timestamp-correction}
 
 On every new Bank, the runtime calculates a realistic timestamp estimate using
 validator timestamp-oracle data. The Bank timestamp is corrected to this value
@@ -31,7 +31,7 @@ should not ever go backward, so that locked up accounts may be released by the
 correction, but once released, accounts can never be relocked by a time
 correction.
 
-### Calculating Stake-Weighted Median Timestamp
+### Calculating Stake-Weighted Median Timestamp {#calculating-stake-weighted-median-timestamp}
 
 In order to calculate the estimated timestamp for a particular Bank, the runtime
 first needs to get the most recent vote timestamps from the active validator
@@ -58,7 +58,7 @@ small. For example, using the previous `calculate_stake_weighted_timestamp()`
 method, a node with 0.00003% of the stake proposing a timestamp of `i64::MAX`
 can shift the timestamp forward 97k years!
 
-### Bounding Timestamps
+### Bounding Timestamps {#bounding-timestamps}
 
 In addition to preventing time moving backward, we can prevent malicious
 activity by bounding the corrected timestamp to an acceptable level of deviation

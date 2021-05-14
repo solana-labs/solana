@@ -2,12 +2,12 @@
 title: Snapshot Verification
 ---
 
-## Problem
+## Problem {#problem}
 
 When a validator boots up from a snapshot, it needs a way to verify the account set matches what the rest of the network sees quickly. A potential
 attacker could give the validator an incorrect state, and then try to convince it to accept a transaction that would otherwise be rejected.
 
-## Solution
+## Solution {#solution}
 
 Currently the bank hash is derived from hashing the delta state of the accounts in a slot which is then combined with the previous bank hash value.
 The problem with this is that the list of hashes will grow on the order of the number of slots processed by the chain and become a burden to both

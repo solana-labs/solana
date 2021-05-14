@@ -2,7 +2,7 @@
 title: "Examples"
 ---
 
-## Helloworld
+## Helloworld {#helloworld}
 
 Hello World is a project that demonstrates how to use the Solana Javascript API
 and both Rust and C programs to build, deploy, and interact with programs on the
@@ -14,7 +14,7 @@ The project comprises of:
 - A client that can send a "hello" to an account and get back the number of
   times "hello" has been sent
 
-### Build and Run
+### Build and Run {#build-and-run}
 
 First fetch the latest version of the example code:
 
@@ -26,7 +26,7 @@ $ cd example-helloworld
 Next, follow the steps in the git repository's
 [README](https://github.com/solana-labs/example-helloworld/blob/master/README.md).
 
-## Break
+## Break {#break}
 
 [Break](https://break.solana.com/) is a React app that gives users a visceral
 feeling for just how fast and high-performance the Solana network really is. Can
@@ -43,7 +43,7 @@ transfer the tokens.
 
 [Click here to play Break](https://break.solana.com/)
 
-### Build and Run
+### Build and Run {#build-and-run-1}
 
 First fetch the latest version of the example code:
 
@@ -55,7 +55,7 @@ $ cd break
 Next, follow the steps in the git repository's
 [README](https://github.com/solana-labs/break/blob/master/README.md).
 
-## Language Specific
+## Language Specific {#language-specific}
 
 - [Rust](developing-rust.md#examples)
 - [C](developing-c.md#examples)

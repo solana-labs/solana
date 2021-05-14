@@ -2,7 +2,7 @@
 title: "Runtime"
 ---
 
-## Capability of Programs
+## Capability of Programs {#capability-of-programs}
 
 The runtime only permits the owner program to debit the account or modify its
 data. The program then defines additional rules for whether the client can
@@ -21,7 +21,7 @@ account metadata to verify that the access policy was not violated. If a program
 violates the policy, the runtime discards all account changes made by all
 instructions in the transaction and marks the transaction as failed.
 
-### Policy
+### Policy {#policy}
 
 After a program has processed an instruction the runtime verifies that the
 program only performed operations it was permitted to, and that the results
@@ -43,7 +43,7 @@ The policy is as follows:
 - Executable is one-way (false->true) and only the account owner may set it.
 - No one modification to the rent_epoch associated with this account.
 
-## Compute Budget
+## Compute Budget {#compute-budget}
 
 To prevent a program from abusing computation resources each instruction in a
 transaction is given a compute budget. The budget consists of computation units
@@ -105,7 +105,7 @@ function to find out how the budget is constructed. An understanding of how
 [features](runtime.md#features) work and what features are enabled on the
 cluster being used are required to determine the current budget's values.
 
-## New Features
+## New Features {#new-features}
 
 As Solana evolves, new features or patches may be introduced that changes the
 behavior of the cluster and how programs run. Changes in behavior must be

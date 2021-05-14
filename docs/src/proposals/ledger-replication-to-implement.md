@@ -10,23 +10,23 @@ once-implemented parts of ledger replication. The
 [second part of this document](#ledger-replication-not-implemented) describes the
 parts of the solution never implemented.
 
-## Proof of Replication
+## Proof of Replication {#proof-of-replication}
 
 At full capacity on a 1gbps network solana will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
 
 The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as it's hashed. The simple solution is to periodically regenerate the hash based on a signed PoH value. This ensures that all the data is present during the generation of the proof and it also requires validators to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `number_of_proofs * data_size`
 
-## Optimization with PoH
+## Optimization with PoH {#optimization-with-poh}
 
 Our improvement on this approach is to randomly sample the encrypted segments faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the segments stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. The total space required for verification is `1_ledger_segment + 2_cbc_blocks * number_of_identities` with core count equal to `number_of_identities`. We use a 64-byte chacha CBC block size.
 
-## Network
+## Network {#network}
 
 Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
 
 Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
 
-## Constraints
+## Constraints {#constraints}
 
 We have the following constraints:
 
@@ -46,9 +46,9 @@ We have the following constraints:
 
   changes to determine what rate it can validate storage proofs.
 
-## Validation and Replication Protocol
+## Validation and Replication Protocol {#validation-and-replication-protocol}
 
-### Constants
+### Constants {#constants}
 
 1. SLOTS_PER_SEGMENT: Number of slots in a segment of ledger data. The
 
@@ -78,7 +78,7 @@ We have the following constraints:
 
    a "turn" of the PoRep game.
 
-### Validator behavior
+### Validator behavior {#validator-behavior}
 
 1. Validators join the network and begin looking for archiver accounts at each
 
@@ -102,7 +102,7 @@ We have the following constraints:
 
 5. Any incorrect validations will be marked during the turn in between.
 
-### Archiver behavior
+### Archiver behavior {#archiver-behavior}
 
 1. Since an archiver is somewhat of a light client and not downloading all the
 
@@ -176,7 +176,7 @@ We have the following constraints:
 
     turn N will be counted towards their rewards.
 
-### The PoRep Game
+### The PoRep Game {#the-porep-game}
 
 The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep games can be in progress but each in a different stage.
 
@@ -197,7 +197,7 @@ The 4 stages of the PoRep Game are as follows:
 
 For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
 
-### Finding who has a given block of ledger
+### Finding who has a given block of ledger {#finding-who-has-a-given-block-of-ledger}
 
 1. Validators monitor the turns in the PoRep game and look at the rooted bank
 
@@ -215,7 +215,7 @@ For each turn of the PoRep game, both Validators and Archivers evaluate each sta
 
 3. Validators would need to invalidate this list every N turns.
 
-## Sybil attacks
+## Sybil attacks {#sybil-attacks}
 
 For any random seed, we force everyone to use a signature that is derived from a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
 
@@ -223,7 +223,7 @@ Since there are many more client identities then encryption identities, we need 
 
 Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for archivers need to store the first block for free and the network can reward long lived client identities more than new ones.
 
-## Validator attacks
+## Validator attacks {#validator-attacks}
 
 - If a validator approves fake proofs, archiver can easily out them by
 
@@ -243,13 +243,13 @@ Our solution to this is to force the clients to continue using the same identity
 
   the proof.
 
-## Reward incentives
+## Reward incentives {#reward-incentives}
 
 Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by archivers may require a higher fee than a normal transaction to represent the computational cost required by validators.
 
 Some percentage of fake proofs are also necessary to receive a reward from storage mining.
 
-## Notes
+## Notes {#notes}
 
 - We can reduce the costs of verification of PoRep by using PoH, and actually
 
@@ -283,11 +283,11 @@ Some percentage of fake proofs are also necessary to receive a reward from stora
 
 Replication behavior yet to be implemented.
 
-## Storage epoch
+## Storage epoch {#storage-epoch}
 
 The storage epoch should be the number of slots which results in around 100GB-1TB of ledger to be generated for archivers to store. Archivers will start storing ledger when a given fork has a high probability of not being rolled back.
 
-## Validator behavior
+## Validator behavior {#validator-behavior-1}
 
 1. Every NUM_KEY_ROTATION_TICKS it also validates samples received from
 
@@ -325,7 +325,7 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    the validators and archivers party to the proofs.
 
-## Archiver behavior
+## Archiver behavior {#archiver-behavior-1}
 
 1. The archiver then generates another set of offsets which it submits a fake
 
@@ -349,11 +349,11 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    frozen.
 
-## Storage proof contract logic
+## Storage proof contract logic {#storage-proof-contract-logic}
 
 Each archiver and validator will have their own storage account. The validator's account would be separate from their gossip id similiar to their vote account. These should be implemented as two programs one which handles the validator as the keysigner and one for the archiver. In that way when the programs reference other accounts, they can check the program id to ensure it is a validator or archiver account they are referencing.
 
-### SubmitMiningProof
+### SubmitMiningProof {#submitminingproof}
 
 ```text
 SubmitMiningProof {
@@ -370,7 +370,7 @@ The program should have a list of slots which are valid storage mining slots. Th
 
 The program should do a signature verify check on the signature, public key from the transaction submitter and the message of the previous storage epoch PoH value.
 
-### ProofValidation
+### ProofValidation {#proofvalidation}
 
 ```text
 ProofValidation {
@@ -383,7 +383,7 @@ A validator will submit this transaction to indicate that a set of proofs for a 
 
 The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
 
-### ClaimStorageReward
+### ClaimStorageReward {#claimstoragereward}
 
 ```text
 ClaimStorageReward {
@@ -393,7 +393,7 @@ keys = [validator_keypair or archiver_keypair, validator/archiver_keypairs (unsi
 
 Archivers and validators will use this transaction to get paid tokens from a program state where SubmitStorageProof, ProofValidation and ChallengeProofValidations are in a state where proofs have been submitted and validated and there are no ChallengeProofValidations referencing those proofs. For a validator, it should reference the archiver keypairs to which it has validated proofs in the relevant epoch. And for an archiver it should reference validator keypairs for which it has validated and wants to be rewarded.
 
-### ChallengeProofValidation
+### ChallengeProofValidation {#challengeproofvalidation}
 
 ```text
 ChallengeProofValidation {
@@ -405,7 +405,7 @@ keys = [archiver_keypair, validator_keypair]
 
 This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash_seed_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
 
-### AdvertiseStorageRecentBlockhash
+### AdvertiseStorageRecentBlockhash {#advertisestoragerecentblockhash}
 
 ```text
 AdvertiseStorageRecentBlockhash {

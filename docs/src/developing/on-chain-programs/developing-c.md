@@ -5,7 +5,7 @@ title: "Developing with C"
 Solana supports writing on-chain programs using the C and C++ programming
 languages.
 
-## Project Layout
+## Project Layout {#project-layout}
 
 C projects are laid out as follows:
 
@@ -28,7 +28,7 @@ Take a look at
 [helloworld](https://github.com/solana-labs/example-helloworld/tree/master/src/program-c)
 for an example of a C program.
 
-## How to Build
+## How to Build {#how-to-build}
 
 First setup the environment:
 
@@ -42,7 +42,7 @@ Then build using make:
 make -C <program directory>
 ```
 
-## How to Test
+## How to Test {#how-to-test}
 
 Solana uses the [Criterion](https://github.com/Snaipe/Criterion) test framework
 and tests are executed each time the program is built [How to
@@ -54,7 +54,7 @@ tests](https://github.com/solana-labs/example-helloworld/blob/master/src/program
 or the [Criterion docs](https://criterion.readthedocs.io/en/master) for
 information on how to write a test case.
 
-## Program Entrypoint
+## Program Entrypoint {#program-entrypoint}
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
 calls when invoking a program. Solana supports multiple [versions of the BPF
@@ -82,7 +82,7 @@ Refer to [helloworld's use of the
 entrypoint](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L37)
 as an example of how things fit together.
 
-### Serialization
+### Serialization {#serialization}
 
 Refer to [helloworld's use of the deserialization
 function](https://github.com/solana-labs/example-helloworld/blob/bc0b25c0ccebeff44df9760ddb97011558b7d234/src/program-c/src/helloworld/helloworld.c#L43).
@@ -107,7 +107,7 @@ the program wishes to commit must be written back into the input byte array.
 Details on how the loader serializes the program inputs can be found in the
 [Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
 
-## Data Types
+## Data Types {#data-types}
 
 The loader's deserialization helper function populates the
 [SolParameters](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L276)
@@ -151,7 +151,7 @@ processed.
 
 `program_id` is the public key of the currently executing program.
 
-## Heap
+## Heap {#heap}
 
 C programs can allocate memory via the system call
 [`calloc`](https://github.com/solana-labs/solana/blob/c3d2d2134c93001566e1e56f691582f379b5ae55/sdk/bpf/c/inc/solana_sdk.h#L245)
@@ -159,7 +159,7 @@ or implement their own heap on top of the 32KB heap region starting at virtual
 address x300000000. The heap region is also used by `calloc` so if a program
 implements their own heap it should not also call `calloc`.
 
-## Logging
+## Logging {#logging}
 
 The runtime provides two system calls that take data and log it to the program
 logs.
@@ -170,7 +170,7 @@ logs.
 The [debugging](debugging.md#logging) section has more information about working
 with program logs.
 
-## Compute Budget
+## Compute Budget {#compute-budget}
 
 Use the system call
 [`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/bpf/c/inc/solana_sdk.h#L140)
@@ -180,7 +180,7 @@ may consume before execution is halted
 See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
-## ELF Dump
+## ELF Dump {#elf-dump}
 
 The BPF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime. The
@@ -197,6 +197,6 @@ $ cd <program directory>
 $ make dump_<program name>
 ```
 
-## Examples
+## Examples {#examples}
 
 The [Solana Program Library github](https://github.com/solana-labs/solana-program-library/tree/master/examples/c) repo contains a collection of C examples

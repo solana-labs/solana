@@ -6,13 +6,13 @@ A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_
 
 During its slot, the leader node distributes shreds between the validator nodes in the first neighborhood \(layer 0\). Each validator shares its data within its neighborhood, but also retransmits the shreds to one node in some neighborhoods in the next layer \(layer 1\). The layer-1 nodes each share their data with their neighborhood peers, and retransmit to nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
 
-## Neighborhood Assignment - Weighted Selection
+## Neighborhood Assignment - Weighted Selection {#neighborhood-assignment---weighted-selection}
 
 In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
 
 To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
 
-## Layer and Neighborhood Structure
+## Layer and Neighborhood Structure {#layer-and-neighborhood-structure}
 
 The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
 
@@ -32,13 +32,13 @@ Finally, the following diagram shows a two layer cluster with a fanout of 2.
 
 ![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
 
-### Configuration Values
+### Configuration Values {#configuration-values}
 
 `DATA_PLANE_FANOUT` - Determines the size of layer 0. Subsequent layers grow by a factor of `DATA_PLANE_FANOUT`. The number of nodes in a neighborhood is equal to the fanout value. Neighborhoods will fill to capacity before new ones are added, i.e if a neighborhood isn't full, it _must_ be the last one.
 
 Currently, configuration is set when the cluster is launched. In the future, these parameters may be hosted on-chain, allowing modification on the fly as the cluster sizes change.
 
-## Calculating the required FEC rate
+## Calculating the required FEC rate {#calculating-the-required-fec-rate}
 
 Turbine relies on retransmission of packets between validators. Due to
 retransmission, any network wide packet loss is compounded, and the
@@ -94,7 +94,7 @@ With FEC rate of `32:32`
 - `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
 - `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
 
-## Neighborhoods
+## Neighborhoods {#neighborhoods}
 
 The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
 

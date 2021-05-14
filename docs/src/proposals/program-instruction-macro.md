@@ -1,6 +1,6 @@
 # Program Instruction Macro
 
-## Problem
+## Problem {#problem}
 
 Currently, inspecting an on-chain transaction requires depending on a
 client-side, language-specific decoding library to parse the instruction. If
@@ -19,7 +19,7 @@ enum definition because the list of account references is in code comments.
 Also, Instruction docs can vary between implementations, as there is no
 mechanism to ensure consistency.
 
-## Proposed Solution
+## Proposed Solution {#proposed-solution}
 
 Move the data from code comments to attributes, such that the constructors
 can be generated, and include all the documentation from the enum definition.
@@ -202,7 +202,7 @@ impl TestInstructionVerbose {
 
 ```
 
-## Considerations
+## Considerations {#considerations}
 
 1. **Named fields** - Since the resulting Verbose enum constructs variants with
    named fields, any unnamed fields in the original Instruction variant will need

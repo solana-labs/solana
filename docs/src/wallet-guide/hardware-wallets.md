@@ -15,13 +15,13 @@ you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
 can pass a _keypair URL_ that uniquely identifies a keypair in a
 hardware wallet.
 
-## Supported Hardware Wallets
+## Supported Hardware Wallets {#supported-hardware-wallets}
 
 The Solana CLI supports the following hardware wallets:
 
 - [Ledger Nano S and Ledger Nano X](hardware-wallets/ledger.md)
 
-## Specify a Keypair URL
+## Specify a Keypair URL {#specify-a-keypair-url}
 
 Solana defines a keypair URL format to uniquely locate any Solana keypair on a
 hardware wallet connected to your computer.

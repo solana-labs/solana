@@ -6,19 +6,19 @@ This page describes how to use a Ledger Nano S or Nano X to interact with Solana
 using the command line tools. To see other solutions to interact with Solana with
 your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
 
-## Before You Begin
+## Before You Begin {#before-you-begin}
 
 - [Set up a Nano with the Solana App](../ledger-live.md)
 - [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
-## Use Ledger Nano with Solana CLI
+## Use Ledger Nano with Solana CLI {#use-ledger-nano-with-solana-cli}
 
 1. Ensure the Ledger Live application is closed
 2. Plug your Nano into your computer's USB port
 3. Enter your pin and start the Solana app on the Nano
 4. Ensure the screen reads "Application is ready"
 
-### View your Wallet ID
+### View your Wallet ID {#view-your-wallet-id}
 
 On your computer, run:
 
@@ -35,7 +35,7 @@ at a time, you don't need to include the wallet ID. For information on
 using the wallet ID to use a specific Ledger, see
 [Manage Multiple Hardware Wallets](#manage-multiple-hardware-wallets).
 
-### View your Wallet Addresses
+### View your Wallet Addresses {#view-your-wallet-addresses}
 
 Your Nano supports an arbitrary number of valid wallet addresses and signers.
 To view any address, use the `solana-keygen pubkey` command, as shown below,
@@ -77,7 +77,7 @@ Now you have a wallet address (or multiple addresses), you can share any of
 these addresses publicly to act as a receiving address, and you can use the
 associated keypair URL as the signer for transactions from that address.
 
-### View your Balance
+### View your Balance {#view-your-balance}
 
 To view the balance of any account, regardless of which wallet it uses, use the
 `solana balance` command:
@@ -102,7 +102,7 @@ Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existen
 accounts are treated the same in Solana. This will change when your account
 address has some SOL in it.
 
-### Send SOL from a Nano
+### Send SOL from a Nano {#send-sol-from-a-nano}
 
 To send some tokens from an address controlled by your Nano, you will
 need to use the device to sign a transaction, using the same keypair URL you
@@ -150,9 +150,9 @@ transaction by going to the Transaction tab in the
 [Explorer](https://explorer.solana.com/transactions)
 and paste in the transaction signature.
 
-## Advanced Operations
+## Advanced Operations {#advanced-operations}
 
-### Manage Multiple Hardware Wallets
+### Manage Multiple Hardware Wallets {#manage-multiple-hardware-wallets}
 
 It is sometimes useful to sign a transaction with keys from multiple hardware
 wallets. Signing with multiple wallets requires _fully qualified keypair URLs_.
@@ -183,9 +183,9 @@ Use the output from the `resolve-signer` command anywhere a `solana` command
 expects a `<KEYPAIR>` entry to use that resolved path as the signer for that
 part of the given transaction.
 
-## Troubleshooting
+## Troubleshooting {#troubleshooting}
 
-### Keypair URL parameters are ignored in zsh
+### Keypair URL parameters are ignored in zsh {#keypair-url-parameters-are-ignored-in-zsh}
 
 The question mark character is a special character in zsh. If that's not a
 feature you use, add the following line to your `~/.zshrc` to treat it as a
@@ -209,7 +209,7 @@ For example:
 solana-keygen pubkey usb://ledger\?key=0
 ```
 
-## Support
+## Support {#support}
 
 Check out our [Wallet Support Page](../support.md)
 for ways to get help.

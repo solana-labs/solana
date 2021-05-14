@@ -1,6 +1,6 @@
-## Restarting a cluster
+## Restarting a cluster {#restarting-a-cluster}
 
-### Step 1. Identify the slot that the cluster will be restarted at
+### Step 1. Identify the slot that the cluster will be restarted at {#step-1-identify-the-slot-that-the-cluster-will-be-restarted-at}
 
 The highest optimistically confirmed slot is the best slot to start from, which
 can be found by looking for
@@ -9,11 +9,11 @@ metrics datapoint. Otherwise use the last root.
 
 Call this slot `SLOT_X`
 
-### Step 2. Stop the validator(s)
+### Step 2. Stop the validator(s) {#step-2-stop-the-validators}
 
-### Step 3. Optionally install the new solana version
+### Step 3. Optionally install the new solana version {#step-3-optionally-install-the-new-solana-version}
 
-### Step 4. Create a new snapshot for slot `SLOT_X` with a hard fork at slot `SLOT_X`
+### Step 4. Create a new snapshot for slot `SLOT_X` with a hard fork at slot `SLOT_X` {#step-4-create-a-new-snapshot-for-slot-slot_x-with-a-hard-fork-at-slot-slot_x}
 
 ```bash
 $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --hard-fork SLOT_X
@@ -34,7 +34,7 @@ Then restart the validator.
 
 Confirm with the log that the validator booted and is now in a holding pattern at `SLOT_X`, waiting for a super majority.
 
-### Step 5. Announce the restart on Discord:
+### Step 5. Announce the restart on Discord: {#step-5-announce-the-restart-on-discord}
 
 Post something like the following to #announcements (adjusting the text as appropriate):
 
@@ -85,6 +85,6 @@ Post something like the following to #announcements (adjusting the text as appro
 >
 > Thanks!
 
-### Step 7. Wait and listen
+### Step 7. Wait and listen {#step-7-wait-and-listen}
 
 Monitor the validators as they restart. Answer questions, help folks,
