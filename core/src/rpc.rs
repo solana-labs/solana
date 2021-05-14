@@ -2789,6 +2789,7 @@ pub mod rpc_full {
                             rpc: valid_address_or_none(&contact_info.rpc),
                             version,
                             feature_set,
+                            shred_version: Some(my_shred_version),
                         })
                     } else {
                         None // Exclude spy nodes
@@ -4074,7 +4075,7 @@ pub mod tests {
             .expect("actual response deserialization");
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}", "version": null, "featureSet": null}}],"id":1}}"#,
+            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "shredVersion": 0, "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}", "version": null, "featureSet": null}}],"id":1}}"#,
             leader_pubkey,
             rpc_port::DEFAULT_RPC_PORT
         );
