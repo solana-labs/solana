@@ -549,7 +549,6 @@ fn do_process_blockstore_from_root(
             ""
         },
     );
-    assert!(bank_forks.active_banks().is_empty());
 
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
@@ -698,7 +697,6 @@ pub fn confirm_slot(
     allow_dead_slots: bool,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
-
     let (entries, num_shreds, slot_full) = {
         let mut load_elapsed = Measure::start("load_elapsed");
         let load_result = blockstore
@@ -869,11 +867,6 @@ fn process_next_slots(
                     .unwrap(),
                 *next_slot,
             ));
-            trace!(
-                "New bank for slot {}, parent slot is {}",
-                next_slot,
-                bank.slot(),
-            );
             pending_slots.push((next_meta, next_bank, bank.last_blockhash()));
         }
     }
@@ -942,8 +935,7 @@ fn load_frozen_forks(
             }
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
-
-            if process_single_slot(
+            let process_result = process_single_slot(
                 blockstore,
                 &bank,
                 opts,
@@ -953,9 +945,17 @@ fn load_frozen_forks(
                 cache_block_time_sender,
                 None,
                 timing,
-            )
-            .is_err()
-            {
+            );
+            // Insert even dead banks into the BankForks so that cleanup
+            // of account state created on Bank creation via `Bank::new_from_parent()`
+            // will occur when the bank is dropped. Otherwise, this state is not
+            // cleaned
+            all_banks.insert(bank.slot(), bank.clone());
+
+            if let Err(e) = process_result {
+                warn!("processing single slot {} error {:?}", slot, e);
+                initial_forks.insert(bank.slot(), bank.clone());
+                all_banks.insert(bank.slot(), bank.clone());
                 continue;
             }
             txs += progress.num_txs;
@@ -963,7 +963,6 @@ fn load_frozen_forks(
             // Block must be frozen by this point, otherwise `process_single_slot` would
             // have errored above
             assert!(bank.is_frozen());
-            all_banks.insert(bank.slot(), bank.clone());
 
             // If we've reached the last known root in blockstore, start looking
             // for newer cluster confirmed roots
@@ -1798,8 +1797,18 @@ pub mod tests {
 
         // Should see the parent of the dead child
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 2, 3]);
-        assert_eq!(bank_forks.working_bank().slot(), 3);
 
+        // Dead slot should be included in the processing result
+        assert_eq!(bank_forks.working_bank().slot(), 4);
+
+        assert_eq!(
+            &bank_forks[4]
+                .parents()
+                .iter()
+                .map(|bank| bank.slot())
+                .collect::<Vec<_>>(),
+            &[2, 1, 0]
+        );
         assert_eq!(
             &bank_forks[3]
                 .parents()
@@ -1816,7 +1825,6 @@ pub mod tests {
                 .collect::<Vec<_>>(),
             &[1, 0]
         );
-        assert_eq!(bank_forks.working_bank().slot(), 3);
         verify_fork_infos(&bank_forks);
     }
 
