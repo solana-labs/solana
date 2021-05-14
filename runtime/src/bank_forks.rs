@@ -274,7 +274,7 @@ impl BankForks {
             root_bank.squash();
         }
         let new_tx_count = root_bank.transaction_count();
-        self.prune_non_root(root, highest_confirmed_root);
+        self.prune_non_rooted(root, highest_confirmed_root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
@@ -290,7 +290,57 @@ impl BankForks {
         self.root
     }
 
-    fn prune_non_root(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
+    /// After setting a new root, prune the banks that are no longer on rooted paths
+    ///
+    /// Given the following banks and slots...
+    ///
+    /// ```text
+    /// slot 6                   * (G)
+    ///                         /
+    /// slot 5        (F)  *   /
+    ///                    |  /
+    /// slot 4    (E) *    | /
+    ///               |    |/
+    /// slot 3        |    * (D) <-- root, from set_root()
+    ///               |    |
+    /// slot 2    (C) *    |
+    ///                \   |
+    /// slot 1          \  * (B)
+    ///                  \ |
+    /// slot 0             * (A)  <-- highest confirmed root [1]
+    /// ```
+    ///
+    /// ...where (D) is set as root, clean up (C) and (E), since they are not rooted.
+    ///
+    /// (A) is kept because it is greater-than-or-equal-to the highest confirmed root, and (D) is
+    ///     one of its descendants
+    /// (B) is kept for the same reason as (A)
+    /// (C) is pruned since it is a lower slot than (D), but (D) is _not_ one of its descendants
+    /// (D) is kept since it is the root
+    /// (E) is pruned since it is not a descendant of (D)
+    /// (F) is kept since it is a descendant of (D)
+    /// (G) is kept for the same reason as (F)
+    ///
+    /// and in table form...
+    ///
+    /// ```text
+    ///       |          |  is root a  | is a descendant ||
+    ///  slot | is root? | descendant? |    of root?     || keep?
+    /// ------+----------+-------------+-----------------++-------
+    ///   (A) |     N    |      Y      |        N        ||   Y
+    ///   (B) |     N    |      Y      |        N        ||   Y
+    ///   (C) |     N    |      N      |        N        ||   N
+    ///   (D) |     Y    |      N      |        N        ||   Y
+    ///   (E) |     N    |      N      |        N        ||   N
+    ///   (F) |     N    |      N      |        Y        ||   Y
+    ///   (G) |     N    |      N      |        Y        ||   Y
+    /// ```
+    ///
+    /// [1] RPC has the concept of commitment level, which is based on the highest confirmed root,
+    /// i.e. the cluster-confirmed root.  This commitment is stronger than the local node's root.
+    /// So (A) and (B) are kept to facilitate RPC at different commitment levels.  Everything below
+    /// the highest confirmed root can be pruned.
+    fn prune_non_rooted(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
         let highest_confirmed_root = highest_confirmed_root.unwrap_or(root);
         let prune_slots: Vec<_> = self
             .banks
