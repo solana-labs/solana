@@ -26,12 +26,12 @@ Solana维护着几个不同用途的集群。
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
-- Devnet RPC URL：`https://devnet.solana.com`
+- Devnet RPC URL：`https://api.devnet.solana.com`
 
 ##### 示例 `solana` 命令行配置
 
 ```bash
-solana config set --url https://devnet.solana.com
+solana config set --url https://api.devnet.solana.com
 ```
 
 ##### 示例 `solana-validator` 命令行
@@ -66,12 +66,12 @@ $ solana-validator \
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
-- Testnet 的 RPC URL: `https://testnet.solana.com`
+- Testnet 的 RPC URL: `https://api.testnet.solana.com`
 
 ##### 示例 `solana` 命令行配置
 
 ```bash
-solana config set --url https://testnet.solana.com
+solana config set --url https://api.testnet.solana.com
 ```
 
 ##### 示例 `solana-validator` 命令行

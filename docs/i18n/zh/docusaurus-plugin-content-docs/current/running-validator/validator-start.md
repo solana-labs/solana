@@ -7,7 +7,7 @@ title: 启动验证程序
 Solana cli包含`get`和`set`配置命令，可自动为cli命令设置`--url`参数。 例如：
 
 ```bash
-solana config set --url http://devnet.solana.com
+solana config set --url http://api.devnet.solana.com
 ```
 
 尽管本节演示了如何连接到Devnet群集，但其他的[Solana群集](../clusters.md)步骤与此类似。
@@ -166,7 +166,7 @@ solana config set --keypair ~/validator-keypair.json
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://devnet.solana.com
+* url: http://api.devnet.solana.com
 * keypair: /home/solana/validator-keypair.json
 ```
 
