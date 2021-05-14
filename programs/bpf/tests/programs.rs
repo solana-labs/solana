@@ -9,6 +9,7 @@ use solana_account_decoder::parse_bpf_loader::{
     parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
 };
 use solana_bpf_loader_program::{
+    BpfError,
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::register_syscalls,
@@ -211,7 +212,7 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable = Executable::from_elf(&data, None, config).unwrap();
+    let mut executable = <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
 

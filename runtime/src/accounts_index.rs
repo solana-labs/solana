@@ -492,9 +492,12 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
+type MapType<T> = AccountMap<Pubkey, AccountMapEntry<T>>;
+type ReadWriteLockMapType<'a, T> = RwLockWriteGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
+
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
-    pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+    pub account_maps: RwLock<MapType<T>>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
@@ -836,12 +839,16 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
-    fn insert_new_entry_if_missing(&self, pubkey: &Pubkey) -> (WriteAccountMapEntry<T>, bool) {
-        let new_entry = Arc::new(AccountMapEntryInner {
+    fn new_entry() -> AccountMapEntry<T> {
+        Arc::new(AccountMapEntryInner {
             ref_count: AtomicU64::new(0),
             slot_list: RwLock::new(SlotList::with_capacity(1)),
-        });
-        let mut w_account_maps = self.account_maps.write().unwrap();
+        })
+    }
+
+    fn insert_new_entry_if_missing(&self, pubkey: &Pubkey) -> (WriteAccountMapEntry<T>, bool) {
+        let new_entry = Self::new_entry();
+        let mut w_account_maps = self.get_account_maps_write_lock();
         let mut is_newly_inserted = false;
         let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
             is_newly_inserted = true;
@@ -873,7 +880,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let mut w_index = self.account_maps.write().unwrap();
+                let mut w_index = self.get_account_maps_write_lock();
                 if let btree_map::Entry::Occupied(index_entry) = w_index.entry(**key) {
                     if index_entry.get().slot_list.read().unwrap().is_empty() {
                         index_entry.remove();
@@ -1140,6 +1147,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
+    fn get_account_maps_write_lock(&self) -> ReadWriteLockMapType<T> {
+        self.account_maps.write().unwrap()
+    }
+
     // Same functionally to upsert, but doesn't take the read lock
     // initially on the accounts_map
     // Can save time when inserting lots of new keys
@@ -1283,7 +1294,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // locked and inserted the pubkey inbetween when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let mut w_maps = self.account_maps.write().unwrap();
+            let mut w_maps = self.get_account_maps_write_lock();
             if let Some(x) = w_maps.get(pubkey) {
                 if x.slot_list.read().unwrap().is_empty() {
                     w_maps.remove(pubkey);

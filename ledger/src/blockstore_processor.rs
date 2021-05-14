@@ -522,6 +522,14 @@ fn do_process_blockstore_from_root(
     }
     let bank_forks = BankForks::new_from_banks(&initial_forks, root);
 
+    datapoint_info!(
+        "process_blockstore_from_root",
+        ("total_time_us", now.elapsed().as_micros(), i64),
+        ("frozen_banks", bank_forks.frozen_banks().len(), i64),
+        ("slot", bank_forks.root(), i64),
+        ("forks", initial_forks.len(), i64)
+    );
+
     info!("ledger processing timing: {:?}", timing);
     info!(
         "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
