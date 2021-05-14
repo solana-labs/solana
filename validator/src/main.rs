@@ -2116,7 +2116,7 @@ pub fn main() {
             rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
-            account_indexes: account_indexes.indexes.clone(),
+            account_indexes: account_indexes.clone(),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (

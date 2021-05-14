@@ -88,6 +88,7 @@ module.exports = {
           "developing/on-chain-programs/faq",
         ],
       },
+      "developing/test-validator",
       "developing/backwards-compatibility",
     ],
     Integrating: ["integrations/exchange"],

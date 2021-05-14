@@ -4246,6 +4246,10 @@ impl Bank {
             .load_by_index_key_with_filter(&self.ancestors, index_key, filter)
     }
 
+    pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
+        self.rc.accounts.account_indexes_include_key(key)
+    }
+
     pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, AccountSharedData, Slot)> {
         self.rc.accounts.load_all(&self.ancestors)
     }
