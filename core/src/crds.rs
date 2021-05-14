@@ -40,9 +40,6 @@ use std::{
 };
 
 const CRDS_SHARDS_BITS: u32 = 8;
-// Limit number of crds values associated with each unique pubkey. This
-// excludes crds values which by label design are limited per each pubkey.
-const MAX_CRDS_VALUES_PER_PUBKEY: usize = 32;
 
 #[derive(Clone)]
 pub struct Crds {
@@ -128,6 +125,14 @@ impl Default for Crds {
 // Both values should have the same key/label.
 fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
     assert_eq!(value.label(), other.value.label(), "labels mismatch!");
+    // Node instances are special cased so that if there are two running
+    // instances of the same node, the more recent start is propagated through
+    // gossip regardless of wallclocks.
+    if let CrdsData::NodeInstance(value) = &value.data {
+        if let Some(out) = value.overrides(&other.value) {
+            return out;
+        }
+    }
     match value.wallclock().cmp(&other.value.wallclock()) {
         Ordering::Less => false,
         Ordering::Greater => true,
@@ -372,9 +377,7 @@ impl Crds {
                     None => 0,
                 }
             };
-            let mut old_labels = Vec::new();
-            // Buffer of crds values to be evicted based on their wallclock.
-            let mut recent_unlimited_labels: Vec<(u64 /*wallclock*/, usize /*index*/)> = index
+            index
                 .into_iter()
                 .filter_map(|ix| {
                     let (label, value) = self.table.get_index(*ix).unwrap();
@@ -383,32 +386,12 @@ impl Crds {
                         .max(local_timestamp)
                         .saturating_add(timeout);
                     if expiry_timestamp <= now {
-                        old_labels.push(label.clone());
-                        None
+                        Some(label.clone())
                     } else {
-                        match label.value_space() {
-                            Some(_) => None,
-                            None => Some((value.value.wallclock(), *ix)),
-                        }
+                        None
                     }
                 })
-                .collect();
-            // Number of values to discard from the buffer:
-            let nth = recent_unlimited_labels
-                .len()
-                .saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
-            // Partition on wallclock to discard the older ones.
-            if nth > 0 && nth < recent_unlimited_labels.len() {
-                recent_unlimited_labels.select_nth_unstable(nth);
-            }
-            old_labels.extend(
-                recent_unlimited_labels
-                    .split_at(nth)
-                    .0
-                    .iter()
-                    .map(|(_ /*wallclock*/, ix)| self.table.get_index(*ix).unwrap().0.clone()),
-            );
-            old_labels
+                .collect::<Vec<_>>()
         };
         thread_pool.install(|| {
             self.records
@@ -541,7 +524,8 @@ mod test {
         contact_info::ContactInfo,
         crds_value::{new_rand_timestamp, NodeInstance},
     };
-    use rand::{thread_rng, Rng};
+    use rand::{thread_rng, Rng, SeedableRng};
+    use rand_chacha::ChaChaRng;
     use rayon::ThreadPoolBuilder;
     use solana_sdk::signature::{Keypair, Signer};
     use std::{collections::HashSet, iter::repeat_with};
@@ -616,6 +600,62 @@ mod test {
         assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
         assert_eq!(crds.table[&val2.label()].ordinal, 2);
     }
+
+    #[test]
+    fn test_upsert_node_instance() {
+        const SEED: [u8; 32] = [0x42; 32];
+        let mut rng = ChaChaRng::from_seed(SEED);
+        fn make_crds_value(node: NodeInstance) -> CrdsValue {
+            CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
+        }
+        let now = 1_620_838_767_000;
+        let mut crds = Crds::default();
+        let pubkey = Pubkey::new_unique();
+        let node = NodeInstance::new(&mut rng, pubkey, now);
+        let node = make_crds_value(node);
+        assert_eq!(crds.insert(node, now), Ok(None));
+        // A node-instance with a different key should insert fine even with
+        // older timestamps.
+        let other = NodeInstance::new(&mut rng, Pubkey::new_unique(), now - 1);
+        let other = make_crds_value(other);
+        assert_eq!(crds.insert(other, now), Ok(None));
+        // A node-instance with older timestamp should fail to insert, even if
+        // the wallclock is more recent.
+        let other = NodeInstance::new(&mut rng, pubkey, now - 1);
+        let other = other.with_wallclock(now + 1);
+        let other = make_crds_value(other);
+        let value_hash = hash(&serialize(&other).unwrap());
+        assert_eq!(
+            crds.insert(other, now),
+            Err(CrdsError::InsertFailed(value_hash))
+        );
+        // A node instance with the same timestamp should insert only if the
+        // random token is larger.
+        let mut num_overrides = 0;
+        for _ in 0..100 {
+            let other = NodeInstance::new(&mut rng, pubkey, now);
+            let other = make_crds_value(other);
+            let value_hash = hash(&serialize(&other).unwrap());
+            match crds.insert(other, now) {
+                Ok(Some(_)) => num_overrides += 1,
+                Err(CrdsError::InsertFailed(x)) => assert_eq!(x, value_hash),
+                _ => panic!(),
+            }
+        }
+        assert_eq!(num_overrides, 5);
+        // A node instance with larger timestamp should insert regardless of
+        // its token value.
+        for k in 1..10 {
+            let other = NodeInstance::new(&mut rng, pubkey, now + k);
+            let other = other.with_wallclock(now - 1);
+            let other = make_crds_value(other);
+            match crds.insert(other, now) {
+                Ok(Some(_)) => (),
+                _ => panic!(),
+            }
+        }
+    }
+
     #[test]
     fn test_find_old_records_default() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
@@ -660,40 +700,6 @@ mod test {
             crds.find_old_labels(&thread_pool, 2, &timeouts),
             vec![val.label()]
         );
-    }
-
-    #[test]
-    fn test_find_old_records_unlimited() {
-        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
-        let mut rng = thread_rng();
-        let now = 1_610_034_423_000;
-        let pubkey = Pubkey::new_unique();
-        let mut crds = Crds::default();
-        let mut timeouts = HashMap::new();
-        timeouts.insert(Pubkey::default(), 1);
-        timeouts.insert(pubkey, 180);
-        for _ in 0..1024 {
-            let wallclock = now - rng.gen_range(0, 240);
-            let val = NodeInstance::new(&mut rng, pubkey, wallclock);
-            let val = CrdsData::NodeInstance(val);
-            let val = CrdsValue::new_unsigned(val);
-            assert_eq!(crds.insert(val, now), Ok(None));
-        }
-        let now = now + 1;
-        let labels = crds.find_old_labels(&thread_pool, now, &timeouts);
-        assert_eq!(crds.table.len() - labels.len(), MAX_CRDS_VALUES_PER_PUBKEY);
-        let max_wallclock = labels
-            .iter()
-            .map(|label| crds.lookup(label).unwrap().wallclock())
-            .max()
-            .unwrap();
-        assert!(max_wallclock > now - 180);
-        let labels: HashSet<_> = labels.into_iter().collect();
-        for (label, value) in crds.table.iter() {
-            if !labels.contains(label) {
-                assert!(max_wallclock <= value.value.wallclock());
-            }
-        }
     }
 
     #[test]

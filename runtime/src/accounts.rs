@@ -715,6 +715,10 @@ impl Accounts {
             .0
     }
 
+    pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
+        self.accounts_db.account_indexes.include_key(key)
+    }
+
     pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, AccountSharedData, Slot)> {
         self.accounts_db.scan_accounts(
             ancestors,
