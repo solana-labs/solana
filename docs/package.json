@@ -16,8 +16,8 @@
     "format:fix": "prettier --write \"**/*.{js,jsx,json,md,scss}\"",
     "lint": "set -ex; eslint .",
     "lint:fix": "npm run lint -- --fix",
-    "crowdin:download": "npm run write-i18n && npx crowdin download && npm run format:fix",
-    "crowdin:sync": "npm run write-i18n && npx crowdin upload && npx crowdin download && npm run format:fix"
+    "crowdin:download": "crowdin download",
+    "crowdin:upload": "npm run write-i18n && crowdin upload"
   },
   "dependencies": {
     "@crowdin/cli": "^3.6.1",
