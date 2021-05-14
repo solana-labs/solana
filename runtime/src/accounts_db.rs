@@ -3988,6 +3988,7 @@ impl AccountsDb {
                                                     let computed_hash =
                                                         loaded_account.compute_hash(*slot, pubkey);
                                                     if computed_hash != loaded_hash {
+                                                        info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
                                                         mismatch_found
                                                             .fetch_add(1, Ordering::Relaxed);
                                                         return None;
