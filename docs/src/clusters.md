@@ -30,12 +30,12 @@ Explorers:
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
 
-- RPC URL for Devnet: `https://devnet.solana.com`
+- RPC URL for Devnet: `https://api.devnet.solana.com`
 
 ##### Example `solana` command-line configuration
 
 ```bash
-solana config set --url https://devnet.solana.com
+solana config set --url https://api.devnet.solana.com
 ```
 
 ##### Example `solana-validator` command-line
@@ -77,12 +77,12 @@ The `--trusted-validator`s is operated by Solana
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
 
-- RPC URL for Testnet: `https://testnet.solana.com`
+- RPC URL for Testnet: `https://api.testnet.solana.com`
 
 ##### Example `solana` command-line configuration
 
 ```bash
-solana config set --url https://testnet.solana.com
+solana config set --url https://api.testnet.solana.com
 ```
 
 ##### Example `solana-validator` command-line
