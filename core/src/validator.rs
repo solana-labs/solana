@@ -1125,6 +1125,7 @@ fn new_banks_from_ledger(
     });
 
     let mut bank_forks = BankForks::new_from_banks(&[bank0.clone()], bank0.slot());
+
     let mut leader_schedule_cache = blockstore_processor::do_process_blockstore_from_root(
         &blockstore,
         bank0,
