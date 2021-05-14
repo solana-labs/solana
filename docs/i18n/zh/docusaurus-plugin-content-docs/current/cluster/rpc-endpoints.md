@@ -6,11 +6,11 @@ Solana 维护专用的 API 节点来完成 [JSON RPC](developing/clients/jsonrpc
 
 ## Devnet（开发者网络）
 
-- `https://devnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
+- `https://api.devnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
 
 ## Testnet（测试网）
 
-- `https://testnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
+- `https://api.testnet.solana.com` - 单个 Solana 托管的 api 节点；限定频率
 
 ## Mainnet Beta（主网 Beta）
 

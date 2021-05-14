@@ -17,7 +17,7 @@ title: 发送和接收代币
 首先，在测试网给您的钱包_空投_ 一些虚拟代币。
 
 ```bash
-solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 ```
 
 其中，用您的 base58-encoded 公钥/钱包地址替换此处的 `<RECIPIENT_ACCOUNT_ADDRESS>`文本。
@@ -27,7 +27,7 @@ solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 通过检查帐户余额确认空投已经成功。 输出值应当为 `10 SOL`:
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url https://api.devnet.solana.com
 ```
 
 #### 创建第二个钱包地址
@@ -51,7 +51,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 接下来，通过发送来证明你拥有空投代币。 Solana 集群只有在您用交易发送方公钥对应的私钥签名时，才会接受交易。
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://api.devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 其中，用第一个钱包的秘钥对的路径替换 `<KEYPAIR>`，用第二个钱包地址替换 `<RECIPIENT_ACCOUNT_ADDRESS>`。
@@ -59,7 +59,7 @@ solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://dev
 使用 `solana balance` 确认余额已经更新：
 
 ```bash
-solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url http://api.devnet.solana.com
 ```
 
 其中 `<ACCOUNT_ADDRESS>` 是您密钥对的公钥或收件人的公钥。
@@ -78,11 +78,11 @@ pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # 
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # 如果这是一个真实的钱包，不要将这次单词分享到网络上！
 ==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # 空投 10 个 SOL 到我的钱包地址/公钥
+$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com  # 空投 10 个 SOL 到我的钱包地址/公钥
 正在从 35.233.193.70:9900 请求 10 SOL
 10 SOL
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # 检查钱包余额
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com # 检查钱包余额
 10 SOL
 
 $ solana-keygen new --no-outfile  # 创建第二个钱包即纸钱包
@@ -95,13 +95,13 @@ pubkey: 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv                   # 这是�
 clump panic cousin hurt coast charge engage fall eager urge win love  # 如果这是一个真实的钱包，切记不要将这次单词分享到网络上！
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # 发送代币到纸钱包的公钥地址
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://api.devnet.solana.com --fee-payer my_solana_wallet.json  # 发送代币到纸钱包的公钥地址
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # 该笔交易的签名
 
-$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://api.devnet.solana.com
 4.999995 SOL  # 由于需要 0.000005 SOL 的交易费用，发送金额要稍微小于 5 SOL
 
-$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
+$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://api.devnet.solana.com
 5 SOL  # 第二个钱包现在已经接收到第一个钱包发送的 5 SOL
 
 ```

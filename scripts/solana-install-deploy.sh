@@ -46,7 +46,7 @@ esac
 
 case $URL in
 stable)
-  URL=http://devnet.solana.com
+  URL=http://api.devnet.solana.com
   ;;
 localhost)
   URL=http://localhost:8899
