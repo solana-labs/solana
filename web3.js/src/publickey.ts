@@ -21,6 +21,7 @@ type PublicKeyInitData =
   | PublicKeyData;
 
 type PublicKeyData = {
+  /** @internal */
   _bn: BN;
 };
 
