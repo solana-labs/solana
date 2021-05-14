@@ -849,6 +849,15 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     fn insert_new_entry_if_missing(&self, pubkey: &Pubkey) -> (WriteAccountMapEntry<T>, bool) {
         let new_entry = Self::new_entry();
         let mut w_account_maps = self.get_account_maps_write_lock();
+        self.insert_new_entry_if_missing_with_lock(pubkey, &mut w_account_maps, new_entry)
+    }
+
+    fn insert_new_entry_if_missing_with_lock(
+        &self,
+        pubkey: &Pubkey,
+        w_account_maps: &mut ReadWriteLockMapType<T>,
+        new_entry: AccountMapEntry<T>,
+    ) -> (WriteAccountMapEntry<T>, bool) {
         let mut is_newly_inserted = false;
         let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
             is_newly_inserted = true;
@@ -1093,7 +1102,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_root
     }
 
-    fn update_secondary_indexes(
+    pub(crate) fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,
         account_owner: &Pubkey,
@@ -1147,31 +1156,29 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    fn get_account_maps_write_lock(&self) -> ReadWriteLockMapType<T> {
+    pub(crate) fn get_account_maps_write_lock(&self) -> ReadWriteLockMapType<T> {
         self.account_maps.write().unwrap()
     }
 
     // Same functionally to upsert, but doesn't take the read lock
     // initially on the accounts_map
-    // Can save time when inserting lots of new keys
-    pub fn insert_new_if_missing(
+    // Can save time when inserting lots of new keys.
+    // But, does NOT update secondary index
+    pub(crate) fn insert_new_if_missing_into_primary_index(
         &self,
         slot: Slot,
         pubkey: &Pubkey,
-        account_owner: &Pubkey,
-        account_data: &[u8],
-        account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
+        w_account_maps: &mut ReadWriteLockMapType<T>,
     ) {
-        {
-            let (mut w_account_entry, _is_new) = self.insert_new_entry_if_missing(pubkey);
-            if account_info.is_zero_lamport() {
-                self.zero_lamport_pubkeys.insert(*pubkey);
-            }
-            w_account_entry.update(slot, account_info, reclaims);
+        let new_entry = Self::new_entry();
+        let (mut w_account_entry, _is_new) =
+            self.insert_new_entry_if_missing_with_lock(pubkey, w_account_maps, new_entry);
+        if account_info.is_zero_lamport() {
+            self.zero_lamport_pubkeys.insert(*pubkey);
         }
-        self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
+        w_account_entry.update(slot, account_info, reclaims);
     }
 
     // Updates the given pubkey at the given slot with the new account information.
