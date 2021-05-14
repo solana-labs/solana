@@ -294,6 +294,7 @@ impl BankForks {
     ///
     /// Given the following banks and slots...
     ///
+    /// ```text
     /// slot 6                   * (G)
     ///                         /
     /// slot 5        (F)  *   /
@@ -307,6 +308,7 @@ impl BankForks {
     /// slot 1          \  * (B)
     ///                  \ |
     /// slot 0             * (A)  <-- highest confirmed root [1]
+    /// ```
     ///
     /// ...where (D) is set as root, clean up (C) and (E), since they are not rooted.
     ///
@@ -321,6 +323,7 @@ impl BankForks {
     ///
     /// and in table form...
     ///
+    /// ```text
     ///       |          |  is root a  | is a descendant ||
     ///  slot | is root? | descendant? |    of root?     || keep?
     /// ------+----------+-------------+-----------------++-------
@@ -331,6 +334,7 @@ impl BankForks {
     ///   (E) |     N    |      N      |        N        ||   N
     ///   (F) |     N    |      N      |        Y        ||   Y
     ///   (G) |     N    |      N      |        Y        ||   Y
+    /// ```
     ///
     /// [1] RPC has the concept of commitment level, which is based on the highest confirmed root,
     /// i.e. the cluster-confirmed root.  This commitment is stronger than the local node's root.
