@@ -4189,9 +4189,7 @@ mod tests {
         .unwrap();
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (400) as u64,
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
         let mut syscall = SyscallBigNumFromBytes {
             cost: 1,
             compute_meter,
@@ -4236,9 +4234,7 @@ mod tests {
         )
         .unwrap();
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (400) as u64,
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
         let mut syscall = SyscallBigNumSizeInBytes {
             cost: 100,
             compute_meter,
@@ -4300,9 +4296,7 @@ mod tests {
         .unwrap();
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (400) as u64,
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
         let mut syscall = SyscallBigNumToBytes {
             cost: 100,
             compute_meter,
