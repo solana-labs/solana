@@ -1687,18 +1687,12 @@ impl ClusterInfo {
         Ok(())
     }
 
-    fn process_entrypoints(&self, entrypoints_processed: &mut bool) {
-        if *entrypoints_processed {
-            return;
-        }
-
+    fn process_entrypoints(&self) -> bool {
         let mut entrypoints = self.entrypoints.write().unwrap();
         if entrypoints.is_empty() {
             // No entrypoint specified.  Nothing more to process
-            *entrypoints_processed = true;
-            return;
+            return true;
         }
-
         for entrypoint in entrypoints.iter_mut() {
             if entrypoint.id == Pubkey::default() {
                 // If a pull from the entrypoint was successful it should exist in the CRDS table
@@ -1727,11 +1721,10 @@ impl ClusterInfo {
                     .set_shred_version(entrypoint.shred_version);
             }
         }
-
-        *entrypoints_processed = self.my_shred_version() != 0
+        self.my_shred_version() != 0
             && entrypoints
                 .iter()
-                .all(|entrypoint| entrypoint.id != Pubkey::default());
+                .all(|entrypoint| entrypoint.id != Pubkey::default())
     }
 
     fn handle_purge(
@@ -1867,8 +1860,7 @@ impl ClusterInfo {
                     }
 
                     self.handle_purge(&thread_pool, &bank_forks, &stakes);
-
-                    self.process_entrypoints(&mut entrypoints_processed);
+                    entrypoints_processed = entrypoints_processed || self.process_entrypoints();
 
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an self.read().unwrap().timeout into sleep
@@ -3851,21 +3843,17 @@ mod tests {
         cluster_info.set_entrypoint(entrypoint.clone());
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert!(pings.is_empty());
-        assert_eq!(1, pulls.len() as u64);
-        match pulls.get(0) {
-            Some((addr, msg)) => {
-                assert_eq!(*addr, entrypoint.gossip);
-                match msg {
-                    Protocol::PullRequest(_, value) => {
-                        assert!(value.verify());
-                        assert_eq!(value.pubkey(), cluster_info.id())
-                    }
-                    _ => panic!("wrong protocol"),
+        assert_eq!(pulls.len(), 64);
+        for (addr, msg) in pulls {
+            assert_eq!(addr, entrypoint.gossip);
+            match msg {
+                Protocol::PullRequest(_, value) => {
+                    assert!(value.verify());
+                    assert_eq!(value.pubkey(), cluster_info.id())
                 }
+                _ => panic!("wrong protocol"),
             }
-            None => panic!("entrypoint should be a pull destination"),
         }
-
         // now add this message back to the table and make sure after the next pull, the entrypoint is unset
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
@@ -3879,7 +3867,7 @@ mod tests {
         );
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert_eq!(pings.len(), 1);
-        assert_eq!(1, pulls.len() as u64);
+        assert_eq!(pulls.len(), 64);
         assert_eq!(*cluster_info.entrypoints.read().unwrap(), vec![entrypoint]);
     }
 
@@ -4068,24 +4056,30 @@ mod tests {
         // fresh timestamp).  There should only be one pull request to `other_node`
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(1, pulls.len() as u64);
-        assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
+        assert_eq!(64, pulls.len());
+        assert!(pulls.into_iter().all(|(addr, _)| addr == other_node.gossip));
 
         // Pull request 2: pretend it's been a while since we've pulled from `entrypoint`.  There should
         // now be two pull requests
         cluster_info.entrypoints.write().unwrap()[0].wallclock = 0;
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(2, pulls.len() as u64);
-        assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
-        assert_eq!(pulls.get(1).unwrap().0, entrypoint.gossip);
+        assert_eq!(pulls.len(), 64 * 2);
+        assert!(pulls
+            .iter()
+            .take(64)
+            .all(|(addr, _)| *addr == other_node.gossip));
+        assert!(pulls
+            .iter()
+            .skip(64)
+            .all(|(addr, _)| *addr == entrypoint.gossip));
 
         // Pull request 3:  `other_node` is present and `entrypoint` was just pulled from.  There should
         // only be one pull request to `other_node`
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(1, pulls.len() as u64);
-        assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
+        assert_eq!(pulls.len(), 64);
+        assert!(pulls.into_iter().all(|(addr, _)| addr == other_node.gossip));
     }
 
     #[test]
@@ -4249,8 +4243,7 @@ mod tests {
             .any(|entrypoint| *entrypoint == gossiped_entrypoint1_info));
 
         // Adopt the entrypoint's gossiped contact info and verify
-        let mut entrypoints_processed = false;
-        ClusterInfo::process_entrypoints(&cluster_info, &mut entrypoints_processed);
+        let entrypoints_processed = ClusterInfo::process_entrypoints(&cluster_info);
         assert_eq!(cluster_info.entrypoints.read().unwrap().len(), 2);
         assert!(cluster_info
             .entrypoints
@@ -4278,8 +4271,7 @@ mod tests {
 
         // Adopt the entrypoint's gossiped contact info and verify
         error!("Adopt the entrypoint's gossiped contact info and verify");
-        let mut entrypoints_processed = false;
-        ClusterInfo::process_entrypoints(&cluster_info, &mut entrypoints_processed);
+        let entrypoints_processed = ClusterInfo::process_entrypoints(&cluster_info);
         assert_eq!(cluster_info.entrypoints.read().unwrap().len(), 2);
         assert!(cluster_info
             .entrypoints
@@ -4322,8 +4314,7 @@ mod tests {
         cluster_info.insert_info(gossiped_entrypoint_info.clone());
 
         // Adopt the entrypoint's gossiped contact info and verify
-        let mut entrypoints_processed = false;
-        ClusterInfo::process_entrypoints(&cluster_info, &mut entrypoints_processed);
+        let entrypoints_processed = ClusterInfo::process_entrypoints(&cluster_info);
         assert_eq!(cluster_info.entrypoints.read().unwrap().len(), 1);
         assert_eq!(
             cluster_info.entrypoints.read().unwrap()[0],
