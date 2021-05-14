@@ -17,7 +17,7 @@
     "lint": "set -ex; eslint .",
     "lint:fix": "npm run lint -- --fix",
     "crowdin:download": "npm run write-i18n && npx crowdin download && npm run format:fix",
-    "crowdin:sync": "npm run write-i18n && npx crowdin upload && npx crowdin download && npm run format:fix",
+    "crowdin:sync": "npm run write-i18n && npx crowdin upload && npx crowdin download && npm run format:fix"
   },
   "dependencies": {
     "@crowdin/cli": "^3.6.1",
