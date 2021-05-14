@@ -1,43 +1,17 @@
-use crate::{
-    blockstore::Blockstore,
-    blockstore_processor::{
-        self, BlockstoreProcessorError, BlockstoreProcessorResult, CacheBlockTimeSender,
-        ProcessOptions, TransactionStatusSender,
-    },
-    entry::VerifyRecyclers,
-    leader_schedule_cache::LeaderScheduleCache,
-};
+use crate::blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions};
 use log::*;
-use solana_runtime::{
-    bank_forks::{BankForks, SnapshotConfig},
-    snapshot_utils,
-};
+use solana_runtime::{bank::Bank, bank_forks::SnapshotConfig, snapshot_utils};
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
-use std::{fs, path::PathBuf, process, result};
+use std::{fs, path::PathBuf, process, result, sync::Arc};
 
-pub type LoadResult = result::Result<
-    (BankForks, LeaderScheduleCache, Option<(Slot, Hash)>),
-    BlockstoreProcessorError,
->;
+pub type LoadResult = result::Result<(Arc<Bank>, Option<(Slot, Hash)>), BlockstoreProcessorError>;
 
-fn to_loadresult(
-    brp: BlockstoreProcessorResult,
-    snapshot_hash: Option<(Slot, Hash)>,
-) -> LoadResult {
-    brp.map(|(bank_forks, leader_schedule_cache)| {
-        (bank_forks, leader_schedule_cache, snapshot_hash)
-    })
-}
-
-pub fn load(
+pub fn load_first_bank(
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
-    process_options: ProcessOptions,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    process_options: &ProcessOptions,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -90,10 +64,10 @@ pub fn load(
                     process::exit(1);
                 }
 
-                return to_loadresult(
-,
+                return Ok((
+                    Arc::new(deserialized_bank),
                     Some(deserialized_snapshot_hash),
-                );
+                ));
             }
             None => info!("No snapshot package available"),
         }
@@ -102,14 +76,8 @@ pub fn load(
     }
 
     info!("Processing ledger from genesis");
-    to_loadresult(
-        blockstore_processor::process_blockstore(
-            &genesis_config,
-            &blockstore,
-            account_paths,
-            process_options,
-            cache_block_time_sender,
-        ),
+    Ok((
+        blockstore_processor::create_first_bank(&genesis_config, account_paths, process_options),
         None,
-    )
+    ))
 }

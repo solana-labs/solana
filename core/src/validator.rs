@@ -39,6 +39,7 @@ use solana_ledger::{
     blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
+    entry::VerifyRecyclers,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
     poh::compute_hash_time_ns,
@@ -1111,13 +1112,24 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
-    let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
+    let (bank0, snapshot_hash) = bank_forks_utils::load_first_bank(
         &genesis_config,
-        &blockstore,
         config.account_paths.clone(),
         config.account_shrink_paths.clone(),
         config.snapshot_config.as_ref(),
-        process_options,
+        &process_options,
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to load ledger: {:?}", err);
+        abort()
+    });
+
+    let mut bank_forks = BankForks::new_from_banks(&[bank0.clone()], bank0.slot());
+    let mut leader_schedule_cache = blockstore_processor::do_process_blockstore_from_root(
+        &blockstore,
+        bank0,
+        &process_options,
+        &VerifyRecyclers::default(),
         transaction_history_services
             .transaction_status_sender
             .as_ref(),
@@ -1129,16 +1141,6 @@ fn new_banks_from_ledger(
         error!("Failed to load ledger: {:?}", err);
         abort()
     });
-
-    let bank_forks = BankForks::new_from_banks(&initial_forks, root);
-    /*blockstore_processor::process_blockstore_from_root(
-        blockstore,
-        deserialized_bank,
-        &process_options,
-        &VerifyRecyclers::default(),
-        transaction_status_sender,
-        cache_block_time_sender,
-    )*/
 
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {

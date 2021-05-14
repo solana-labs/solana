@@ -51,8 +51,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub type BlockstoreProcessorResult =
-    result::Result<(BankForks, LeaderScheduleCache), BlockstoreProcessorError>;
+pub type BlockstoreProcessorResult = result::Result<LeaderScheduleCache, BlockstoreProcessorError>;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -371,10 +370,27 @@ pub struct ProcessOptions {
     pub allow_dead_slots: bool,
 }
 
-pub fn process_blockstore(
+pub fn create_first_bank(
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
+    opts: &ProcessOptions,
+) -> Arc<Bank> {
+    // Setup bank for slot 0
+    let bank0 = Bank::new_with_paths(
+        &genesis_config,
+        account_paths,
+        &opts.frozen_accounts,
+        opts.debug_keys.clone(),
+        Some(&crate::builtins::get(opts.bpf_jit)),
+        opts.account_indexes.clone(),
+        opts.accounts_db_caching_enabled,
+    );
+    Arc::new(bank0)
+}
+
+pub fn process_blockstore(
+    bank0: Arc<Bank>,
+    blockstore: &Blockstore,
     opts: ProcessOptions,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
 ) -> BlockstoreProcessorResult {
@@ -387,17 +403,6 @@ pub fn process_blockstore(
         });
     }
 
-    // Setup bank for slot 0
-    let bank0 = Bank::new_with_paths(
-        &genesis_config,
-        account_paths,
-        &opts.frozen_accounts,
-        opts.debug_keys.clone(),
-        Some(&crate::builtins::get(opts.bpf_jit)),
-        opts.account_indexes.clone(),
-        opts.accounts_db_caching_enabled,
-    );
-    let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(
@@ -407,10 +412,18 @@ pub fn process_blockstore(
         &recyclers,
         cache_block_time_sender,
     );
+    do_process_blockstore_from_root(
+        blockstore,
+        bank0,
+        &opts,
+        &recyclers,
+        None,
+        cache_block_time_sender,
+    )
 }
 
 // Process blockstore from a known root bank
-pub(crate) fn process_blockstore_from_root(
+pub fn process_blockstore_from_root(
     blockstore: &Blockstore,
     bank: Bank,
     opts: &ProcessOptions,
@@ -428,7 +441,7 @@ pub(crate) fn process_blockstore_from_root(
     )
 }
 
-fn do_process_blockstore_from_root(
+pub fn do_process_blockstore_from_root(
     blockstore: &Blockstore,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
@@ -542,7 +555,7 @@ fn do_process_blockstore_from_root(
         return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
     }
 
-    Ok((bank_forks, leader_schedule_cache))
+    Ok(leader_schedule_cache)
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
