@@ -8,7 +8,7 @@ The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
 
 ```bash
-solana config set --url http://devnet.solana.com
+solana config set --url http://api.devnet.solana.com
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
@@ -208,7 +208,7 @@ You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://devnet.solana.com
+* url: http://api.devnet.solana.com
 * keypair: /home/solana/validator-keypair.json
 ```
 
