@@ -458,15 +458,6 @@ uint64_t sol_keccak256(
 );
 
 /**
- * BigNum sol_bignum_new
- *
- * @param ptr location where new object address dropped
- */
-static uint64_t sol_bignum_new(
-    const uint64_t *ptr
-);
-
-/**
  * BigNum sol_bignum_size_in_bytes
  *
  * @param self_ptr address of the BigNum ptr
@@ -485,7 +476,8 @@ static uint64_t sol_bignum_size_in_bytes(
  */
 static uint64_t sol_bignum_from_u32(
     const uint64_t *ptr,
-    const uint32_t val_u32
+    const uint64_t ptr_size,
+    const uint64_t val_u32
 );
 /**
  * BigNum sol_bignum_from_bytes

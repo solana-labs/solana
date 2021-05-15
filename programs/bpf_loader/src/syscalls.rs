@@ -176,17 +176,17 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     // Bignum syscall names
-    syscall_registry.register_syscall_by_name(b"sol_bignum_new", SyscallBigNumNew::call)?;
-    syscall_registry
-        .register_syscall_by_name(b"sol_bignum_size_in_bytes", SyscallBigNumSizeInBytes::call)?;
+    // syscall_registry.register_syscall_by_name(b"sol_bignum_new", SyscallBigNumNew::call)?;
+    // syscall_registry
+    //     .register_syscall_by_name(b"sol_bignum_size_in_bytes", SyscallBigNumSizeInBytes::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_bignum_from_u32", SyscallBigNumFromU32::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_bignum_from_bytes", SyscallBigNumFromBytes::call)?;
-    syscall_registry
-        .register_syscall_by_name(b"sol_bignum_to_bytes", SyscallBigNumToBytes::call)?;
+    // syscall_registry
+    //     .register_syscall_by_name(b"sol_bignum_to_bytes", SyscallBigNumToBytes::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_exp", SyscallBigNumModExp::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_bignum_drop", SyscallBigNumDrop::call)?;
+    // syscall_registry.register_syscall_by_name(b"sol_bignum_drop", SyscallBigNumDrop::call)?;
     syscall_registry.register_syscall_by_name(b"sol_log_bignum", SyscallLogBigNum::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_add", SyscallBigNumAdd::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_sub", SyscallBigNumSub::call)?;
@@ -305,22 +305,22 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
 
     // Bignum bindings
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumNew {
-            cost: bpf_compute_budget.bignum_new_base_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumSizeInBytes {
-            cost: bpf_compute_budget.bignum_size_base_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
+    // vm.bind_syscall_context_object(
+    //     Box::new(SyscallBigNumNew {
+    //         cost: bpf_compute_budget.bignum_new_base_cost,
+    //         compute_meter: invoke_context.get_compute_meter(),
+    //         loader_id,
+    //     }),
+    //     None,
+    // )?;
+    // vm.bind_syscall_context_object(
+    //     Box::new(SyscallBigNumSizeInBytes {
+    //         cost: bpf_compute_budget.bignum_size_base_cost,
+    //         compute_meter: invoke_context.get_compute_meter(),
+    //         loader_id,
+    //     }),
+    //     None,
+    // )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallBigNumFromU32 {
             cost: bpf_compute_budget.bignum_from_u32_base_cost,
@@ -337,14 +337,14 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumToBytes {
-            cost: bpf_compute_budget.bignum_to_bytes_base_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
+    // vm.bind_syscall_context_object(
+    //     Box::new(SyscallBigNumToBytes {
+    //         cost: bpf_compute_budget.bignum_to_bytes_base_cost,
+    //         compute_meter: invoke_context.get_compute_meter(),
+    //         loader_id,
+    //     }),
+    //     None,
+    // )?;
 
     vm.bind_syscall_context_object(
         Box::new(SyscallBigNumModExp {
@@ -354,14 +354,14 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-    vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumDrop {
-            cost: bpf_compute_budget.bignum_drop_base_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
+    // vm.bind_syscall_context_object(
+    //     Box::new(SyscallBigNumDrop {
+    //         cost: bpf_compute_budget.bignum_drop_base_cost,
+    //         compute_meter: invoke_context.get_compute_meter(),
+    //         loader_id,
+    //     }),
+    //     None,
+    // )?;
 
     vm.bind_syscall_context_object(
         Box::new(SyscallLogBigNum {
@@ -1149,68 +1149,6 @@ macro_rules! calc_bignum_cost {
     };
 }
 
-/// BIGNUM sol_bignum_new
-struct SyscallBigNumNew<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumNew<'a> {
-    fn call(
-        &mut self,
-        bn_addr: u64,
-        _arg2: u64,
-        _arg3: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
-
-        let big_number = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
-            result
-        );
-        let bbox = Box::new(BigNum::new().unwrap());
-        let rwptr = Box::into_raw(bbox);
-        let bignum_ptr = rwptr as u64;
-        *big_number = bignum_ptr;
-        *result = Ok(0)
-    }
-}
-/// BigNum size in bytes returns the number of bytes
-/// used by a BigNum
-struct SyscallBigNumSizeInBytes<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumSizeInBytes<'a> {
-    fn call(
-        &mut self,
-        bn_self: u64,
-        bytes_len_addr: u64,
-        _arg3: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
-        let self_bignum_address = question_mark!(
-            translate_type::<u64>(memory_mapping, bn_self, self.loader_id, true),
-            result
-        );
-        let bytes_len = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
-            result
-        );
-        let bn_self = unsafe { &*(*self_bignum_address as *mut BigNum) };
-        *bytes_len = bn_self.num_bytes() as u64;
-        *result = Ok(0)
-    }
-}
 struct SyscallBigNumFromU32<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -1219,29 +1157,31 @@ struct SyscallBigNumFromU32<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallBigNumFromU32<'a> {
     fn call(
         &mut self,
-        bn_addr: u64,
+        bn_out_addr: u64,
+        u64_out_len: u64,
         u32_val: u64,
-        _arg3: u64,
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let big_number = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
-            result
-        );
-        let bbox = Box::new(BigNum::from_u32(u32_val as u32).unwrap());
-        let bytes = bbox.num_bytes() as f64;
         question_mark!(
             self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
+                .consume(self.cost + calc_bignum_cost!(u64_out_len as f64)),
             result
         );
-        let rwptr = Box::into_raw(bbox);
-        let bignum_ptr = rwptr as u64;
-        *big_number = bignum_ptr;
-        *result = Ok(0)
+        let byte_slice = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, bn_out_addr, u64_out_len, self.loader_id, true),
+            result
+        );
+        let bn_bytes = BigNum::from_u32(u32_val as u32).unwrap().to_vec();
+        if bn_bytes.len() as u64 > u64_out_len {
+            *result = Err(SyscallError::BigNumberToBytesError.into())
+        }
+        else {
+            (*byte_slice).copy_from_slice(&bn_bytes);
+            *result = Ok(0)
+        }
     }
 }
 struct SyscallBigNumFromBytes<'a> {
@@ -1282,62 +1222,62 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumFromBytes<'a> {
     }
 }
 
-struct SyscallBigNumToBytes<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumToBytes<'a> {
-    fn call(
-        &mut self,
-        bn_self: u64,
-        bytes_addr: u64,
-        bytes_len_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        let self_bignum_address = question_mark!(
-            translate_type::<u64>(memory_mapping, bn_self, self.loader_id, true),
-            result
-        );
-        let bytes_buffer = question_mark!(
-            translate_slice_mut::<u8>(
-                memory_mapping,
-                bytes_addr,
-                *question_mark!(
-                    translate_type_mut::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
-                    result
-                ),
-                self.loader_id,
-                true
-            ),
-            result
-        );
-        let bytes_len = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
-            result
-        );
-        let in_length = *bytes_len;
-        let bn_self = unsafe { &*(*self_bignum_address as *mut BigNum) };
-        let bn_bytes = bn_self.as_ref().to_vec();
-        let out_length = bn_bytes.len() as u64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(out_length as f64)),
-            result
-        );
-        if in_length != out_length {
-            *bytes_len = 0u64;
-            *result = Err(SyscallError::BigNumberToBytesError.into())
-        } else {
-            (*bytes_buffer).copy_from_slice(&bn_bytes);
-            *bytes_len = out_length;
-            *result = Ok(0)
-        }
-    }
-}
+// struct SyscallBigNumToBytes<'a> {
+//     cost: u64,
+//     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+//     loader_id: &'a Pubkey,
+// }
+// impl<'a> SyscallObject<BpfError> for SyscallBigNumToBytes<'a> {
+//     fn call(
+//         &mut self,
+//         bn_self: u64,
+//         bytes_addr: u64,
+//         bytes_len_addr: u64,
+//         _arg4: u64,
+//         _arg5: u64,
+//         memory_mapping: &MemoryMapping,
+//         result: &mut Result<u64, EbpfError<BpfError>>,
+//     ) {
+//         let self_bignum_address = question_mark!(
+//             translate_type::<u64>(memory_mapping, bn_self, self.loader_id, true),
+//             result
+//         );
+//         let bytes_buffer = question_mark!(
+//             translate_slice_mut::<u8>(
+//                 memory_mapping,
+//                 bytes_addr,
+//                 *question_mark!(
+//                     translate_type_mut::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
+//                     result
+//                 ),
+//                 self.loader_id,
+//                 true
+//             ),
+//             result
+//         );
+//         let bytes_len = question_mark!(
+//             translate_type_mut::<u64>(memory_mapping, bytes_len_addr, self.loader_id, true),
+//             result
+//         );
+//         let in_length = *bytes_len;
+//         let bn_self = unsafe { &*(*self_bignum_address as *mut BigNum) };
+//         let bn_bytes = bn_self.as_ref().to_vec();
+//         let out_length = bn_bytes.len() as u64;
+//         question_mark!(
+//             self.compute_meter
+//                 .consume(self.cost + calc_bignum_cost!(out_length as f64)),
+//             result
+//         );
+//         if in_length != out_length {
+//             *bytes_len = 0u64;
+//             *result = Err(SyscallError::BigNumberToBytesError.into())
+//         } else {
+//             (*bytes_buffer).copy_from_slice(&bn_bytes);
+//             *bytes_len = out_length;
+//             *result = Ok(0)
+//         }
+//     }
+// }
 
 // Keccak256
 pub struct SyscallKeccak256<'a> {
@@ -1939,32 +1879,32 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModInv<'a> {
 }
 
 /// BIGNUM sol_bignum_drop
-struct SyscallBigNumDrop<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBigNumDrop<'a> {
-    fn call(
-        &mut self,
-        bn_addr: u64,
-        _arg2: u64,
-        _arg3: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
-        let big_number = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
-            result
-        );
-        drop(unsafe { Box::from_raw(*big_number as *mut BigNum) });
-        *big_number = 0u64;
-        *result = Ok(0)
-    }
-}
+// struct SyscallBigNumDrop<'a> {
+//     cost: u64,
+//     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+//     loader_id: &'a Pubkey,
+// }
+// impl<'a> SyscallObject<BpfError> for SyscallBigNumDrop<'a> {
+//     fn call(
+//         &mut self,
+//         bn_addr: u64,
+//         _arg2: u64,
+//         _arg3: u64,
+//         _arg4: u64,
+//         _arg5: u64,
+//         memory_mapping: &MemoryMapping,
+//         result: &mut Result<u64, EbpfError<BpfError>>,
+//     ) {
+//         question_mark!(self.compute_meter.consume(self.cost), result);
+//         let big_number = question_mark!(
+//             translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
+//             result
+//         );
+//         drop(unsafe { Box::from_raw(*big_number as *mut BigNum) });
+//         *big_number = 0u64;
+//         *result = Ok(0)
+//     }
+// }
 
 /// Log BigNum values
 struct SyscallLogBigNum<'a> {
@@ -3137,7 +3077,7 @@ mod tests {
         enable_instruction_meter: true,
         enable_instruction_tracing: false,
     };
-    const LONG_DEC_STRING: &str =
+    const _LONG_DEC_STRING: &str =
         "1470463693494555670176851280755142329532258274256991544781479988\
         712408107190720087233560906792937436573943189716784305633216335039\
         300236370809933808677983409391545753391897467230180786617074456716\
@@ -4100,67 +4040,43 @@ mod tests {
         }
     }
 
-    // Bignum testing convenience functions
-    // Creates new empty big_num
-    fn new_bignum() -> u64 {
-        let mut bn = 0u64;
-        let bn_addr = &mut bn as *mut _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: bn_addr,
-                vm_addr: 96,
-                len: std::mem::size_of::<u64>() as u64,
-                vm_gap_shift: 63,
-                is_writable: true,
-            }],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (20 + 20) as u64,
-            }));
-        let mut syscall = SyscallBigNumNew {
-            cost: 1,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(96, 0, 0, 0, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        bn
-    }
-
     // creates new bignum with u32 value
-    fn new_u32_bignum(val: u32) -> u64 {
-        let mut bn = 0u64;
-        let bn_addr = &mut bn as *mut _ as u64;
+    fn new_u32_bignum(val: u32) -> Vec<u8> {
+        let bignum_size = {
+            match val {
+                0..=255 => 1,
+                256..=65_535 => 2,
+                65_536..=16_777_215 => 3,
+                _ => 4,
+            }
+        };
+        let mut my_buffer = Vec::<u8>::with_capacity(bignum_size);
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: bn_addr,
-                vm_addr: 96,
-                len: std::mem::size_of::<u64>() as u64,
-                vm_gap_shift: 63,
-                is_writable: true,
-            }],
+            vec![
+                MemoryRegion {
+                    host_addr: my_buffer.as_mut_ptr() as *mut _ as u64,
+                    vm_addr: 1024,
+                    len: bignum_size as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                ],
             &DEFAULT_CONFIG,
         )
         .unwrap();
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (20 + 20) as u64,
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
         let mut syscall = SyscallBigNumFromU32 {
-            cost: 1,
+            cost: 100,
             compute_meter,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(96, val as u64, 0, 0, 0, &memory_mapping, &mut result);
+        syscall.call(1024, bignum_size as u64, val as u64, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
-        bn
+        unsafe{my_buffer.set_len(bignum_size)};
+        my_buffer
     }
     // creates new bignum with bytes array
     fn new_bytes_bignum(val_array: &[u8]) -> u64 {
@@ -4200,56 +4116,16 @@ mod tests {
         result.unwrap();
         bn
     }
-    #[test]
-    fn test_syscall_bignum_new() {
-        let bn = new_bignum();
-        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
-    }
-
-    #[test]
-    fn test_syscall_bignum_size_in_bytes() {
-        let val = LONG_DEC_STRING.as_bytes();
-        let mut bn = new_bytes_bignum(val);
-        let bn_addr = &mut bn as *mut _ as u64;
-        let mut bytes_len = 0u64;
-        let bytes_len_addr = &mut bytes_len as *mut _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: bn_addr,
-                    vm_addr: 8,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bytes_len_addr,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
-        let mut syscall = SyscallBigNumSizeInBytes {
-            cost: 100,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 96, 0, 0, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        assert_eq!(bytes_len, val.len() as u64);
-    }
 
     #[test]
     fn test_syscall_bignum_from_u32() {
-        let bn = new_u32_bignum(20u32);
-        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
+        let bn_new = BigNum::new().unwrap();
+        let bn_0 = BigNum::from_u32(0).unwrap();
+        println!("bn_new_vec {:?}", bn_new.to_vec());
+        println!("bn_0 {:?}", bn_0.to_vec());
+        let bn_20 = new_u32_bignum(20u32);
+        let bn = BigNum::from_u32(20u32).unwrap().to_vec();
+        assert_eq!(bn_20, bn);
     }
     #[test]
     fn test_syscall_bignum_from_bytes() {
@@ -4257,57 +4133,57 @@ mod tests {
         let bn = new_bytes_bignum(&val);
         let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
     }
-    #[test]
-    fn test_syscall_bignum_to_bytes() {
-        let val = LONG_DEC_STRING.as_bytes();
-        let mut bn = new_bytes_bignum(val);
-        let bn_addr = &mut bn as *mut _ as u64;
-        let big_num: &BigNum = unsafe { &*(bn as *mut BigNum) };
-        let existing_size = big_num.num_bytes() as usize;
-        let bytes_buf = vec![0u8; existing_size];
-        let mut bytes_len = bytes_buf.len();
-        let bytes_len_addr = &mut bytes_len as *mut _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: bn_addr,
-                    vm_addr: 8,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bytes_buf.as_ptr() as *const _ as u64,
-                    vm_addr: 1024,
-                    len: bytes_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-                MemoryRegion {
-                    host_addr: bytes_len_addr,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
+    // #[test]
+    // fn test_syscall_bignum_to_bytes() {
+    //     let val = LONG_DEC_STRING.as_bytes();
+    //     let mut bn = new_bytes_bignum(val);
+    //     let bn_addr = &mut bn as *mut _ as u64;
+    //     let big_num: &BigNum = unsafe { &*(bn as *mut BigNum) };
+    //     let existing_size = big_num.num_bytes() as usize;
+    //     let bytes_buf = vec![0u8; existing_size];
+    //     let mut bytes_len = bytes_buf.len();
+    //     let bytes_len_addr = &mut bytes_len as *mut _ as u64;
+    //     let memory_mapping = MemoryMapping::new::<UserError>(
+    //         vec![
+    //             MemoryRegion {
+    //                 host_addr: bn_addr,
+    //                 vm_addr: 8,
+    //                 len: std::mem::size_of::<u64>() as u64,
+    //                 vm_gap_shift: 63,
+    //                 is_writable: false,
+    //             },
+    //             MemoryRegion {
+    //                 host_addr: bytes_buf.as_ptr() as *const _ as u64,
+    //                 vm_addr: 1024,
+    //                 len: bytes_len as u64,
+    //                 vm_gap_shift: 63,
+    //                 is_writable: true,
+    //             },
+    //             MemoryRegion {
+    //                 host_addr: bytes_len_addr,
+    //                 vm_addr: 96,
+    //                 len: std::mem::size_of::<u64>() as u64,
+    //                 vm_gap_shift: 63,
+    //                 is_writable: true,
+    //             },
+    //         ],
+    //         &DEFAULT_CONFIG,
+    //     )
+    //     .unwrap();
 
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
-        let mut syscall = SyscallBigNumToBytes {
-            cost: 100,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 1024, 96, 0, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        assert_eq!(bytes_len, val.len());
-        assert_eq!(big_num.as_ref().to_vec(), bytes_buf.to_vec());
-    }
+    //     let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+    //         Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
+    //     let mut syscall = SyscallBigNumToBytes {
+    //         cost: 100,
+    //         compute_meter,
+    //         loader_id: &bpf_loader::id(),
+    //     };
+    //     let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+    //     syscall.call(8, 1024, 96, 0, 0, &memory_mapping, &mut result);
+    //     result.unwrap();
+    //     assert_eq!(bytes_len, val.len());
+    //     assert_eq!(big_num.as_ref().to_vec(), bytes_buf.to_vec());
+    // }
 
     #[test]
     fn test_syscall_bignum_mod_exp() {
@@ -4822,37 +4698,5 @@ mod tests {
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(8, 32, 96, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
-    }
-
-    #[test]
-    fn test_syscall_bignum_drop() {
-        let mut bn = new_bignum();
-        let bn_addr = &mut bn as *mut _ as u64;
-        assert_ne!(bn, 0);
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: bn_addr,
-                vm_addr: 96,
-                len: std::mem::size_of::<u64>() as u64,
-                vm_gap_shift: 63,
-                is_writable: true,
-            }],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (20 + 20) as u64,
-            }));
-        let mut syscall = SyscallBigNumDrop {
-            cost: 1,
-            compute_meter,
-            loader_id: &bpf_loader::id(),
-        };
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(96, 0, 0, 0, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        assert_eq!(bn, 0);
     }
 }
