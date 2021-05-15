@@ -3,7 +3,7 @@
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use std::fmt;
 
-#[repr(transparent)]
+#[repr(C)]
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -16,9 +16,9 @@ use std::fmt;
     Hash,
     AbiExample,
 )]
-
 pub struct BigNumber {
     value: Vec<u8>,
+    negative: bool,
 }
 
 // pub struct BigNumber(u64);
@@ -28,7 +28,7 @@ impl BigNumber {
     pub fn new() -> Self {
         let mut value = Vec::<u8>::new();
         value.push(0u8);
-        Self { value }
+        Self { negative: false, value }
     }
 
     /// Returns the size, in bytes, of BigNum. Typically used in
@@ -42,13 +42,13 @@ impl BigNumber {
         if val == 0 {
             let mut value = Vec::<u8>::new();
             value.push(0);
-            Self { value }
+            Self { negative: false, value }
         } else {
             #[cfg(not(target_arch = "bpf"))]
             {
                 use openssl::bn::BigNum;
                 let value = BigNum::from_u32(val).unwrap().to_vec();
-                Self { value }
+                Self { negative: false, value }
             }
             #[cfg(target_arch = "bpf")]
             {
@@ -72,43 +72,57 @@ impl BigNumber {
                     );
                     value.set_len(vec_size);
                 }
-                Self { value }
+                Self { negative: false, value }
+            }
+        }
+    }
+    /// Returns a BigNumber from a decimal string
+    pub fn from_dec_str(string: &str) -> Self {
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            use openssl::bn::BigNum;
+            let bn = BigNum::from_dec_str(string).unwrap();
+            let value = bn.to_vec();
+            Self { negative: bn.is_negative(), value}
+        }
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_bignum_from_dec_str(
+                    in_dec_str_ptr: *const u64,
+                    in_size: u64,
+                    out_ptr: *mut u8,
+                    out_size_ptr: *mut u64,
+                    out_is_neg_flag_ptr: *mut u64,
+                ) -> u64;
+            }
+            let mut value = Vec::<u8>::with_capacity(string.len());
+            let mut value_len = string.len() as u64;
+
+            let mut is_negative = 0u64;
+
+
+            unsafe {
+                sol_bignum_from_dec_str(
+                    string.as_ptr() as *const _ as *const u64,
+                    string.len() as u64,
+                    value.as_mut_ptr() as *mut _ as *mut u8,
+                    &mut value_len as *mut _ as *mut u64,
+                    &mut is_negative as *mut _ as *mut u64
+                );
+                value.set_len(value_len as usize);
+            }
+            Self {
+                negative: is_negative != 0,
+                value
             }
         }
     }
 
-    /// Returns a BigNumber with value set to big endian array of bytes
-    // pub fn from_bytes(val: &[u8]) -> Self {
-    //     #[cfg(not(target_arch = "bpf"))]
-    //     {
-    //         use openssl::bn::BigNum;
-    //         let value = BigNum::from_slice(val).unwrap().to_vec();
-    //         // let bbox = Box::new(BigNum::from_slice(val).unwrap());
-    //         // let rwptr = Box::into_raw(bbox);
-    //         // let bignum_ptr = rwptr as u64;
-    //         // Self(bignum_ptr)
-    //         Self {value}
-    //     }
-    //     #[cfg(target_arch = "bpf")]
-    //     {
-    //         extern "C" {
-    //             fn sol_bignum_from_bytes(
-    //                 bignum_ptr: *mut u64,
-    //                 bytes_ptr: *const u64,
-    //                 bytes_len: u64,
-    //             ) -> u64;
-    //         }
-    //         let mut bignum_ptr = 0u64;
-    //         unsafe {
-    //             sol_bignum_from_bytes(
-    //                 &mut bignum_ptr as *mut _ as *mut u64,
-    //                 val.as_ptr() as *const _ as *const u64,
-    //                 val.len() as u64,
-    //             );
-    //         }
-    //         BigNumber::from(bignum_ptr)
-    //     }
-    // }
+    /// Flag indicating if negative or not
+    pub fn is_negative(&self) -> bool {
+        self.negative
+    }
 
     /// Returns an array of bytes of self
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -531,7 +545,7 @@ impl Default for BigNumber {
     fn default() -> Self {
         let mut value = Vec::<u8>::new();
         value.push(0);
-        Self { value }
+        Self { negative: false, value }
     }
 }
 impl fmt::Debug for BigNumber {

@@ -458,62 +458,32 @@ uint64_t sol_keccak256(
 );
 
 /**
- * BigNum sol_bignum_size_in_bytes
- *
- * @param self_ptr address of the BigNum ptr
- * @parm byte_len address of where to return size
- */
-static uint64_t sol_bignum_size_in_bytes(
-    const uint64_t *self_ptr,
-    const uint64_t *byte_len
-);
-
-/**
  * BigNum sol_bignum_from_u32
  *
- * @param ptr location where new object address dropped
+ * @param out_ptr address of vector array (r/w)
+ * @param ptr_size size of bytes in ptr
  * @param val_u32 unsigned 32 bit value to assign to the new object
  */
 static uint64_t sol_bignum_from_u32(
-    const uint64_t *ptr,
-    const uint64_t ptr_size,
+    const uint64_t *out_ptr,
+    const uint64_t out_size,
     const uint64_t val_u32
 );
 /**
- * BigNum sol_bignum_from_bytes
+ * BigNum sol_bignum_from_dec_str
  *
- * @param ptr location where new object address dropped
- * @param bytes pointer to unsigned byte array
- * @param byte_len size of bytes array
+ * @param in_dec_str_ptr address of decimal string (r/o)
+ * @param in_size size of bytes array (r/o)
+ * @param out_ptr address of vector array (r/w)
+ * @param out_size_ptr size of bytes in ptr (r/o)
+ * @param out_is_neg_flag_ptr if string was negative
  */
-static uint64_t sol_bignum_from_bytes(
-    const uint64_t *ptr,
-    const SolBytes *bytes,
-    const uint64_t byte_len
-);
-/**
- * BigNum sol_bignum_to_bytes
- *
- * @param ptr object address created with sol_bignum_new (read/write)
- * @param bytes pointer to unsigned byte array
- * @param byte_len maximum size of bytes array
- */
-/**
- * Size of Public key in bytes
- */
-#define SIZE_BIGNUMBYTES 256
-
-/**
- * Public key
- */
-typedef struct {
-  uint8_t x[SIZE_BIGNUMBYTES];
-} SolBigNumBuf;
-
-static uint64_t sol_bignum_to_bytes(
-    const uint64_t     *ptr,
-    const SolBigNumBuf *bytes,
-    const uint64_t     *byte_len
+static uint64_t sol_bignum_from_dec_str(
+    const uint64_t *in_dec_str_ptr,
+    const uint64_t in_size,
+    const uint64_t *out_ptr,
+    const uint64_t *out_size_ptr,
+    const uint64_t *out_is_neg_flag_ptr
 );
 
 /**

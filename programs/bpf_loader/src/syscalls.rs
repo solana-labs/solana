@@ -182,7 +182,7 @@ pub fn register_syscalls(
     syscall_registry
         .register_syscall_by_name(b"sol_bignum_from_u32", SyscallBigNumFromU32::call)?;
     syscall_registry
-        .register_syscall_by_name(b"sol_bignum_from_bytes", SyscallBigNumFromBytes::call)?;
+        .register_syscall_by_name(b"sol_bignum_from_dec_str", SyscallBigNumFromDecStr::call)?;
     // syscall_registry
     //     .register_syscall_by_name(b"sol_bignum_to_bytes", SyscallBigNumToBytes::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_exp", SyscallBigNumModExp::call)?;
@@ -330,8 +330,8 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
     vm.bind_syscall_context_object(
-        Box::new(SyscallBigNumFromBytes {
-            cost: bpf_compute_budget.bignum_from_bytes_base_cost,
+        Box::new(SyscallBigNumFromDecStr {
+            cost: bpf_compute_budget.bignum_from_dec_str_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1171,54 +1171,103 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumFromU32<'a> {
             result
         );
         let byte_slice = question_mark!(
-            translate_slice_mut::<u8>(memory_mapping, bn_out_addr, u64_out_len, self.loader_id, true),
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                bn_out_addr,
+                u64_out_len,
+                self.loader_id,
+                true
+            ),
             result
         );
         let bn_bytes = BigNum::from_u32(u32_val as u32).unwrap().to_vec();
         if bn_bytes.len() as u64 > u64_out_len {
             *result = Err(SyscallError::BigNumberToBytesError.into())
-        }
-        else {
+        } else {
             (*byte_slice).copy_from_slice(&bn_bytes);
             *result = Ok(0)
         }
     }
 }
-struct SyscallBigNumFromBytes<'a> {
+/// Converts a decimal string to a bignum and returns
+/// the vector bytes and if negative or not
+struct SyscallBigNumFromDecStr<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallObject<BpfError> for SyscallBigNumFromBytes<'a> {
+impl<'a> SyscallObject<BpfError> for SyscallBigNumFromDecStr<'a> {
     fn call(
         &mut self,
-        bn_addr: u64,
-        bytes_addr: u64,
-        bytes_len: u64,
-        _arg4: u64,
-        _arg5: u64,
+        in_dec_str_addr: u64,
+        in_size: u64,
+        out_array_addr: u64,
+        out_size_addr: u64,
+        out_negative_addr: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let big_number = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
-            result
-        );
-        let byte_slice = question_mark!(
-            translate_slice::<u8>(memory_mapping, bytes_addr, bytes_len, self.loader_id, true),
-            result
-        );
-        let bytes: f64 = byte_slice.len() as f64;
         question_mark!(
             self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
+                .consume(self.cost + calc_bignum_cost!(in_size as f64)),
             result
         );
-        let bbox = Box::new(BigNum::from_slice(byte_slice).unwrap());
-        let rwptr = Box::into_raw(bbox);
-        let bignum_ptr = rwptr as u64;
-        *big_number = bignum_ptr;
-        *result = Ok(0)
+
+        // Get the string and convert to BigNum
+        let in_dec_raw = question_mark!(
+            translate_slice::<u8>(memory_mapping, in_dec_str_addr, in_size, self.loader_id, true),
+            result
+        );
+        let i = match in_dec_raw.iter().position(|byte| *byte == 0) {
+            Some(i) => i,
+            None => in_size as usize,
+        };
+        let big_number = BigNum::from_dec_str(from_utf8(&in_dec_raw[..i]).unwrap()).unwrap();
+        let big_number_bytes = big_number.as_ref().to_vec();
+        let big_number_len = big_number_bytes.len() as u64;
+        let out_size = question_mark!(
+            translate_type_mut::<u64>(memory_mapping, out_size_addr, self.loader_id, true),
+            result
+        );
+
+        // Get result
+        let byte_slice = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                out_array_addr,
+                *out_size,
+                self.loader_id,
+                true
+            ),
+            result
+        );
+
+        // Get negative flag pointer
+        let is_negative = question_mark!(
+            translate_type_mut::<u64>(memory_mapping, out_negative_addr, self.loader_id, true),
+            result
+        );
+
+        // Exceeds size
+        if big_number_len  > *out_size {
+            *result = Err(SyscallError::BigNumberToBytesError.into())
+        } else {
+            // Equal (memcpy)
+            if big_number_len == *out_size {
+                (*byte_slice).copy_from_slice(&big_number_bytes);
+            }
+            // Smaller than our buffer
+            else {
+                let mut index = 0;
+                for byte in big_number_bytes.iter() {
+                    (*byte_slice)[index] = *byte;
+                    index = index + 1;
+                }
+                *out_size = index as u64;
+            }
+            *is_negative = big_number.is_negative() as u64;
+            *result = Ok(0)
+        }
     }
 }
 
@@ -3077,8 +3126,20 @@ mod tests {
         enable_instruction_meter: true,
         enable_instruction_tracing: false,
     };
-    const _LONG_DEC_STRING: &str =
+    const LONG_DEC_STRING: &str =
         "1470463693494555670176851280755142329532258274256991544781479988\
+        712408107190720087233560906792937436573943189716784305633216335039\
+        300236370809933808677983409391545753391897467230180786617074456716\
+        591448871466263060696957107957862111484694673874424855359234132302\
+        162208163361387727626078022804936564470716886986414133429438273232\
+        416190048073715996321578752244853524209178212395809614878549824744\
+        227969245726015222693764433413133633359171080169137831743765672068\
+        374040331773668233371864426354886263106537340208256187214278963052\
+        996538599452325797319977413534714912781503130883692806087195354368\
+        8304190675878204079994222";
+
+    const NEG_LONG_DEC_STRING: &str =
+        "-1470463693494555670176851280755142329532258274256991544781479988\
         712408107190720087233560906792937436573943189716784305633216335039\
         300236370809933808677983409391545753391897467230180786617074456716\
         591448871466263060696957107957862111484694673874424855359234132302\
@@ -4052,15 +4113,13 @@ mod tests {
         };
         let mut my_buffer = Vec::<u8>::with_capacity(bignum_size);
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: my_buffer.as_mut_ptr() as *mut _ as u64,
-                    vm_addr: 1024,
-                    len: bignum_size as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-                ],
+            vec![MemoryRegion {
+                host_addr: my_buffer.as_mut_ptr() as *mut _ as u64,
+                vm_addr: 1024,
+                len: bignum_size as u64,
+                vm_gap_shift: 63,
+                is_writable: true,
+            }],
             &DEFAULT_CONFIG,
         )
         .unwrap();
@@ -4073,31 +4132,58 @@ mod tests {
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(1024, bignum_size as u64, val as u64, 0, 0, &memory_mapping, &mut result);
+        syscall.call(
+            1024,
+            bignum_size as u64,
+            val as u64,
+            0,
+            0,
+            &memory_mapping,
+            &mut result,
+        );
         result.unwrap();
-        unsafe{my_buffer.set_len(bignum_size)};
+        unsafe { my_buffer.set_len(bignum_size) };
         my_buffer
     }
     // creates new bignum with bytes array
-    fn new_bytes_bignum(val_array: &[u8]) -> u64 {
-        let mut bn = 0u64;
-        let bn_addr = &mut bn as *mut _ as u64;
-        let val_len = val_array.len();
+    fn new_dec_str_bignum(string: &str) -> (bool, Vec<u8>) {
+        let dec_str_addr = string.as_ptr() as *const _ as u64;
+        let dec_str_len = string.len();
+        let bytes_buf = vec![0u8; dec_str_len];
+        let mut bytes_len = bytes_buf.len();
+        let bytes_len_addr = &mut bytes_len as *mut _ as u64;
+        let mut neg_flag = 0u64;
+        let neg_flag_addr = &mut neg_flag as *mut _ as u64;
+
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
-                    host_addr: bn_addr,
+                    host_addr: dec_str_addr,
+                    vm_addr: 2048,
+                    len: dec_str_len as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: bytes_buf.as_ptr() as *const _ as u64,
+                    vm_addr: 8196,
+                    len: bytes_len as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: bytes_len_addr,
                     vm_addr: 96,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
                     is_writable: true,
                 },
                 MemoryRegion {
-                    host_addr: val_array.as_ptr() as *const _ as u64,
-                    vm_addr: 1024,
-                    len: val_len as u64,
+                    host_addr: neg_flag_addr,
+                    vm_addr: 8,
+                    len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             &DEFAULT_CONFIG,
@@ -4106,15 +4192,15 @@ mod tests {
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter { remaining: 400 }));
-        let mut syscall = SyscallBigNumFromBytes {
+        let mut syscall = SyscallBigNumFromDecStr {
             cost: 1,
             compute_meter,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(96, 1024, val_len as u64, 0, 0, &memory_mapping, &mut result);
+        syscall.call(2048, dec_str_len as u64, 8196, 96, 8, &memory_mapping, &mut result);
         result.unwrap();
-        bn
+        (neg_flag != 0, bytes_buf[0..bytes_len].to_vec())
     }
 
     #[test]
@@ -4128,10 +4214,17 @@ mod tests {
         assert_eq!(bn_20, bn);
     }
     #[test]
-    fn test_syscall_bignum_from_bytes() {
-        let val = [0u8, 0u8, 1u8, 0u8];
-        let bn = new_bytes_bignum(&val);
-        let _braw: &BigNum = unsafe { &*(bn as *mut BigNum) };
+    fn test_syscall_bignum_from_dec_str() {
+        let (is_neg, result_vec) = new_dec_str_bignum(LONG_DEC_STRING);
+        assert!(is_neg == false);
+        let bns = BigNum::from_dec_str(LONG_DEC_STRING).unwrap();
+        let bns_vec = bns.as_ref().to_vec();
+        assert_eq!(result_vec, bns_vec);
+        let (is_neg, result_vec) = new_dec_str_bignum(NEG_LONG_DEC_STRING);
+        assert!(is_neg);
+        let bns = BigNum::from_dec_str(NEG_LONG_DEC_STRING).unwrap();
+        let bns_vec = bns.as_ref().to_vec();
+        assert_eq!(result_vec, bns_vec);
     }
     // #[test]
     // fn test_syscall_bignum_to_bytes() {

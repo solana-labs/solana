@@ -3,7 +3,7 @@
 extern crate solana_program;
 use solana_program::{bignum::BigNumber, custom_panic_default, msg};
 
-const _LONG_DEC_STRING: &str = "1470463693494555670176851280755142329532258274256991544781479988\
+const LONG_DEC_STRING: &str = "1470463693494555670176851280755142329532258274256991544781479988\
                             712408107190720087233560906792937436573943189716784305633216335039\
                             300236370809933808677983409391545753391897467230180786617074456716\
                             591448871466263060696957107957862111484694673874424855359234132302\
@@ -26,15 +26,18 @@ fn test_constructors() {
     msg!("base_bn_0 {}", base_bn_0);
     let default_0 = BigNumber::default();
     msg!("default_0 {}", default_0);
+    let new_bn_0 = BigNumber::from_u32(0);
+    msg!("new_bn_0 {}", new_bn_0);
+    let max_bn_u32 = BigNumber::from_u32(u32::MAX);
+    msg!("max_bn_u32 {:?}", max_bn_u32.to_bytes());
+    let bn_from_dec = BigNumber::from_dec_str(LONG_DEC_STRING);
+    assert_eq!(bn_from_dec.is_negative(), false);
+    msg!("dec str bytes {:?}", bn_from_dec.to_bytes());
     // base_bn_0.log();
     // let empty_bn = BigNumber::from_bytes(&[0u8]);
     // msg!("empty_bn {}", empty_bn);
     // empty_bn.log();
-    let new_bn_0 = BigNumber::from_u32(0);
-    msg!("new_bn_0 {}", new_bn_0);
     // new_bn_0.log();
-    let max_bn_u32 = BigNumber::from_u32(u32::MAX);
-    msg!("max_bn_u32 {:?}", max_bn_u32.to_bytes());
     // max_bn_u32.log();
     // msg!("Big string len = {}", LONG_DEC_STRING.len());
     // let big_string_as_bytes = LONG_DEC_STRING.as_bytes();

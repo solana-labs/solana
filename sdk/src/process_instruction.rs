@@ -171,8 +171,8 @@ pub struct BpfComputeBudget {
     // pub bignum_size_base_cost: u64,
     /// Base number of compute units consumed to call BigNum new from u32 value
     pub bignum_from_u32_base_cost: u64,
-    /// Base number of compute units consumed to call BigNum new from big endian byte array
-    pub bignum_from_bytes_base_cost: u64,
+    /// Base number of compute units consumed to call BigNum new from a decimal string
+    pub bignum_from_dec_str_base_cost: u64,
     /// Base number of compute units consumed to extract big endian byte array from BigNumb
     // pub bignum_to_bytes_base_cost: u64,
     /// Base number of compute units consumed to drop/dealloc BigNum
@@ -226,7 +226,7 @@ impl BpfComputeBudget {
             // bignum_size_base_cost: 100,
             // bignum_drop_base_cost: 100,
             bignum_from_u32_base_cost: 100,
-            bignum_from_bytes_base_cost: 100,
+            bignum_from_dec_str_base_cost: 100,
             // bignum_to_bytes_base_cost: 100,
             bignum_mod_exp_base_cost: 100,
             log_bignum_cost: 100,
