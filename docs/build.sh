@@ -8,16 +8,14 @@ source ../ci/env.sh
 
 : "${rust_stable_docker_image:=}" # Pacify shellcheck
 
-# Fixated master branch as only one to download translations
+# Fixate master branch as only one to download translations & get its ref
 ONLY_TRANSLATE_ON='master'
-MASTER_REF="$(git rev-parse master)}"
-# Grep last name after last possible backslash for current branch
-CURRENT_BRANCH=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+MASTER_REF="$(git rev-parse "$ONLY_TRANSLATE_ON")}"
+# Get current ref
 CURRENT_REF="$(cat ../.git/HEAD)"
 
-
-# Synchronize translations with Crowdin only on master branch
-if [[ "$CURRENT_BRANCH" = "$ONLY_TRANSLATE_ON" ]]; then
+# Synchronize translations with Crowdin only on master branch (ref)
+if [[ "$CURRENT_REF" = "$MASTER_REF" ]]; then
   echo "Downloading & updating translations..."
   npm run crowdin:download
   npm run crowdin:upload
