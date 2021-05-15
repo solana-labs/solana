@@ -8,8 +8,14 @@ source ../ci/env.sh
 
 : "${rust_stable_docker_image:=}" # Pacify shellcheck
 
-# Synchronize translations with Crowdin
-if [[ -n $CI_TAG ]]; then
+# Fixated master branch as only one to download translations
+ONLY_TRANSLATE_ON='master'
+# Grep last name after last possible backslash for current branch
+CURRENT_BRANCH=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+
+# Synchronize translations with Crowdin only on master branch
+if [[ "$CURRENT_BRANCH" = "$ONLY_TRANSLATE_ON" ]]; then
+  echo "Downloading & updating translations..."
   npm run crowdin:download
   npm run crowdin:upload
 fi
@@ -21,7 +27,7 @@ source ../ci/rust-version.sh
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
-npm run build
+#npm run build
 echo $?
 
 eval "$(../ci/channel-info.sh)"
