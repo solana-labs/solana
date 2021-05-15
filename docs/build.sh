@@ -10,8 +10,11 @@ source ../ci/env.sh
 
 # Fixated master branch as only one to download translations
 ONLY_TRANSLATE_ON='master'
+MASTER_REF="$(git rev-parse master)}"
 # Grep last name after last possible backslash for current branch
 CURRENT_BRANCH=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+CURRENT_REF="$(cat ../.git/HEAD)"
+
 
 # Synchronize translations with Crowdin only on master branch
 if [[ "$CURRENT_BRANCH" = "$ONLY_TRANSLATE_ON" ]]; then
