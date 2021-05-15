@@ -34,6 +34,8 @@ use std::{
 };
 
 const NO_PASSPHRASE: &str = "";
+// Sentinel value used to write to screen instead of file
+const STDOUT_OUTFILE_TOKEN: &str = "-";
 
 struct GrindMatch {
     starts: String,
@@ -151,7 +153,7 @@ fn output_keypair(
     outfile: &str,
     source: &str,
 ) -> Result<(), Box<dyn error::Error>> {
-    if outfile == "-" {
+    if outfile == STDOUT_OUTFILE_TOKEN {
         let mut stdout = std::io::stdout();
         write_keypair(&keypair, &mut stdout)?;
     } else {
@@ -550,7 +552,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             };
 
             match outfile {
-                Some("-") => (),
+                Some(STDOUT_OUTFILE_TOKEN) => (),
                 Some(outfile) => check_for_overwrite(&outfile, &matches),
                 None => (),
             }
@@ -592,7 +594,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 path.to_str().unwrap()
             };
 
-            if outfile != "-" {
+            if outfile != STDOUT_OUTFILE_TOKEN {
                 check_for_overwrite(&outfile, &matches);
             }
 
