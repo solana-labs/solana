@@ -345,6 +345,8 @@ static bool sol_deserialize(
         input += MAX_PERMITTED_DATA_INCREASE;
         input = (uint8_t*)(((uint64_t)input + 8 - 1) & ~(8 - 1)); // padding
         input += sizeof(uint64_t);
+      } else {
+        input += 7; // padding
       }
       continue;
     }

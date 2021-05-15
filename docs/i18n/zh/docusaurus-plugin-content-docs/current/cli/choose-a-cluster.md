@@ -17,7 +17,7 @@ solana config get
 例如，要指定 Devnet 集群，请运行：
 
 ```bash
-solana config set --url https://devnet.solana.com
+solana config set --url https://api.devnet.solana.com
 ```
 
 ## 确保版本相匹配
