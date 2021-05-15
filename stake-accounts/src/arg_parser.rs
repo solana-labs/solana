@@ -149,7 +149,7 @@ where
                 .global(true)
                 .takes_value(true)
                 .value_name("URL")
-                .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
+                .help("RPC entrypoint address. i.e. http://api.devnet.solana.com"),
         )
         .subcommand(
             SubCommand::with_name("new")

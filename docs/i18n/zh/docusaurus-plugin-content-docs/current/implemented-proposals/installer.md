@@ -1,33 +1,33 @@
 ---
-title: Cluster Software Installation and Updates
+title: 集群软件安装和更新
 ---
 
-Currently users are required to build the solana cluster software themselves from the git repository and manually update it, which is error prone and inconvenient.
+目前用户需要自己从git仓库中构建Solana集群软件，并手动更新，容易出错且不方便。
 
-This document proposes an easy to use software install and updater that can be used to deploy pre-built binaries for supported platforms. Users may elect to use binaries supplied by Solana or any other party they trust. Deployment of updates is managed using an on-chain update manifest program.
+本文档提出了一个简单易用的软件安装和更新程序，可以用来为支持的平台部署预建的二进制文件。 用户可以选择使用由Solana或任何其他他们信任的方提供的二进制文件。 更新的部署是通过链上更新清单程序来管理的。
 
-## Motivating Examples {#motivating-examples}
+## 激励的例子
 
-### Fetch and run a pre-built installer using a bootstrap curl/shell script {#fetch-and-run-a-pre-built-installer-using-a-bootstrap-curlshell-script}
+### 使用bootstrap curl/shell脚本获取并运行一个预构建的安装程序。
 
-The easiest install method for supported platforms:
+支持的平台上最简单的安装方法。
 
 ```bash
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh
 ```
 
-This script will check github for the latest tagged release and download and run the `solana-install-init` binary from there.
+这个脚本将检查github以获取最新的标签版本，并从那里下载并运行`Solana-install-init`二进制文件。
 
-If additional arguments need to be specified during the installation, the following shell syntax is used:
+如果在安装过程中需要指定额外的参数，可以使用下面的shell语法。
 
 ```bash
 $ init_args=.... # arguments for `solana-install-init ...`
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
-### Fetch and run a pre-built installer from a Github release {#fetch-and-run-a-pre-built-installer-from-a-github-release}
+### 从Github发布的版本中获取并运行一个预构建的安装程序。
 
-With a well-known release URL, a pre-built binary can be obtained for supported platforms:
+通过知名的发布URL，可以获得支持平台的预构建二进制文件。
 
 ```bash
 $ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-install-init-x86_64-apple-darwin
@@ -35,9 +35,9 @@ $ chmod +x ./solana-install-init
 $ ./solana-install-init --help
 ```
 
-### Build and run the installer from source {#build-and-run-the-installer-from-source}
+### 从源代码构建并运行安装程序。
 
-If a pre-built binary is not available for a given platform, building the installer from source is always an option:
+如果预制的二进制文件不能用于特定的平台，那么从源码中构建安装程序始终是一种选择。
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
@@ -45,16 +45,16 @@ $ cd solana/install
 $ cargo run -- --help
 ```
 
-### Deploy a new update to a cluster {#deploy-a-new-update-to-a-cluster}
+### 向集群部署新的更新。
 
-Given a solana release tarball \(as created by `ci/publish-tarball.sh`\) that has already been uploaded to a publicly accessible URL, the following commands will deploy the update:
+如果Solana发布的tarball\(由`ci/publish-tarball.sh`创建\) 已经上传到一个可公开访问的URL中，以下命令将部署更新。
 
 ```bash
 $ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
 $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
 ```
 
-### Run a validator node that auto updates itself {#run-a-validator-node-that-auto-updates-itself}
+### 运行一个自动更新的验证器节点。
 
 ```bash
 $ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
@@ -63,11 +63,11 @@ $ solana-keygen ...  # <-- runs the latest solana-keygen
 $ solana-install run solana-validator ...  # <-- runs a validator, restarting it as necesary when an update is applied
 ```
 
-## On-chain Update Manifest {#on-chain-update-manifest}
+## 链上更新清单
 
-An update manifest is used to advertise the deployment of new release tarballs on a solana cluster. The update manifest is stored using the `config` program, and each update manifest account describes a logical update channel for a given target triple \(eg, `x86_64-apple-darwin`\). The account public key is well-known between the entity deploying new updates and users consuming those updates.
+更新清单用于在 Solana 集群上宣传部署新版本的 tarballs。 更新清单使用 `config` 程序存储，每个更新清单账户描述了一个给定目标三倍的逻辑更新通道(例如，`x86_64-apple-darwin`)。 账户公钥在部署新更新的实体和消费这些更新的用户之间是众所周知的。
 
-The update tarball itself is hosted elsewhere, off-chain and can be fetched from the specified `download_url`.
+更新的压缩包本身在其他地方托管，不在链上，可以从指定的 `download_url` 获取。
 
 ```text
 use solana_sdk::signature::Signature;
@@ -87,39 +87,39 @@ pub struct SignedUpdateManifest {
 }
 ```
 
-Note that the `manifest` field itself contains a corresponding signature \(`manifest_signature`\) to guard against man-in-the-middle attacks between the `solana-install` tool and the solana cluster RPC API.
+请注意，`manifest` 字段本身包含一个相应的签名\(`manifest_signature`\)，以防止 `solana-install` 工具和 Solana 集群 RPC API 之间的中间人攻击。
 
-To guard against rollback attacks, `solana-install` will refuse to install an update with an older `timestamp_secs` than what is currently installed.
+为了防止回滚攻击，`solana-install` 将拒绝安装比当前安装的 `timestamp_secs` 更早的更新。
 
-## Release Archive Contents {#release-archive-contents}
+## 版本存档内容
 
-A release archive is expected to be a tar file compressed with bzip2 with the following internal structure:
+一个发行版的归档文件应该是一个用bzip2压缩的tar文件，其内部结构如下： /version. yml - 一个简单的YAML文件，包含"target"字段。
 
-- `/version.yml` - a simple YAML file containing the field `"target"` - the
+- `/version.yml` - 一个简单的YAML文件，包含 `"target"` -
 
-  target tuple. Any additional fields are ignored.
+  目标元组。 任何额外的字段将被忽略。
 
-- `/bin/` -- directory containing available programs in the release.
+- `/bin/` -- 发行版中包含可用程序的目录。
 
-  `solana-install` will symlink this directory to
+  `solana-install` 会将这个目录以符号链接的方式连接到
 
-  `~/.local/share/solana-install/bin` for use by the `PATH` environment
+  `~/.local/share/Solana-install/bin` 供 `PATH` 环境变量使用。
 
-  variable.
+  变量。
 
-- `...` -- any additional files and directories are permitted
+- `...` -- 允许有任何其他文件和目录。
 
-## solana-install Tool {#solana-install-tool}
+## solana-install 工具
 
-The `solana-install` tool is used by the user to install and update their cluster software.
+用户使用 `solana-install` 工具来安装和更新他们的集群软件。
 
-It manages the following files and directories in the user's home directory:
+它在用户的主目录中管理以下文件和目录： ~/. config/Solana/install/config. yml -- 用户配置和当前集群软件的信息。
 
-- `~/.config/solana/install/config.yml` - user configuration and information about currently installed software version
-- `~/.local/share/solana/install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-- `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
+- `~/.config/Solana/install/config.yml` - 用户配置和当前安装的软件版本信息。
+- `~/.local/share/solana/install/bin` - 当前版本的符号链接， 例如，`~/.local/share/Solana-update/<update-pubkey>-<manifest_signature>/bin`。
+- `~/.local/share/Solana/install/releases/<download_sha256>/` - 版本内容。
 
-### Command-line Interface {#command-line-interface}
+### 命令行界面
 
 ```text
 solana-install 0.16.0

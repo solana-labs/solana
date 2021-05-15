@@ -22,7 +22,8 @@ use {
         system_program,
     },
     solana_validator::{
-        admin_rpc_service, dashboard::Dashboard, redirect_stderr_to_file, test_validator::*,
+        admin_rpc_service, dashboard::Dashboard, println_name_value, redirect_stderr_to_file,
+        test_validator::*,
     },
     std::{
         collections::HashSet,
@@ -275,11 +276,13 @@ fn main() {
         .map(normalize_to_url_if_moniker)
         .map(RpcClient::new);
 
-    let mint_address = pubkey_of(&matches, "mint_address").unwrap_or_else(|| {
-        read_keypair_file(&cli_config.keypair_path)
-            .unwrap_or_else(|_| Keypair::new())
-            .pubkey()
-    });
+    let (mint_address, random_mint) = pubkey_of(&matches, "mint_address")
+        .map(|pk| (pk, false))
+        .unwrap_or_else(|| {
+            read_keypair_file(&cli_config.keypair_path)
+                .map(|kp| (kp.pubkey(), false))
+                .unwrap_or_else(|_| (Keypair::new().pubkey(), true))
+        });
 
     let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
     let reset_ledger = matches.is_present("reset");
@@ -472,6 +475,11 @@ fn main() {
                 println!("{} argument ignored, ledger already exists", long);
             }
         }
+    } else if random_mint {
+        println_name_value(
+            "\nNotice!",
+            "No wallet available. `solana airdrop` localnet SOL after creating one\n",
+        );
     }
 
     let mut genesis = TestValidatorGenesis::default();
