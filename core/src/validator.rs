@@ -1124,26 +1124,33 @@ fn new_banks_from_ledger(
         abort()
     });
 
+    let epoch_schedule = bank0.epoch_schedule();
+    let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank0);
+    if process_options.full_leader_cache {
+        leader_schedule_cache.set_max_schedules(std::usize::MAX);
+    }
+
     let mut bank_forks = BankForks::new_from_banks(&[bank0.clone()], bank0.slot());
 
-    let mut leader_schedule_cache = blockstore_processor::do_process_blockstore_from_root(
-        &blockstore,
-        bank0,
-        &process_options,
-        &VerifyRecyclers::default(),
-        transaction_history_services
-            .transaction_status_sender
-            .as_ref(),
-        transaction_history_services
-            .cache_block_time_sender
-            .as_ref(),
-    )
-    .unwrap_or_else(|err| {
-        error!("Failed to load ledger: {:?}", err);
-        abort()
-    });
-
     if let Some(warp_slot) = config.warp_slot {
+        blockstore_processor::do_process_blockstore_from_root(
+            &blockstore,
+            bank0,
+            &process_options,
+            &VerifyRecyclers::default(),
+            transaction_history_services
+                .transaction_status_sender
+                .as_ref(),
+            transaction_history_services
+                .cache_block_time_sender
+                .as_ref(),
+            &mut leader_schedule_cache,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to load ledger: {:?}", err);
+            abort()
+        });
+
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
             error!("warp slot requires a snapshot config");
             abort();

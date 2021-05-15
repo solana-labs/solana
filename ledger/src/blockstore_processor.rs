@@ -51,7 +51,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub type BlockstoreProcessorResult = result::Result<LeaderScheduleCache, BlockstoreProcessorError>;
+pub type BlockstoreProcessorResult = result::Result<(), BlockstoreProcessorError>;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -393,6 +393,7 @@ pub fn process_blockstore(
     blockstore: &Blockstore,
     opts: ProcessOptions,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    leader_schedule_cache: &mut LeaderScheduleCache,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -419,6 +420,7 @@ pub fn process_blockstore(
         &recyclers,
         None,
         cache_block_time_sender,
+        leader_schedule_cache,
     )
 }
 
@@ -430,6 +432,7 @@ pub fn process_blockstore_from_root(
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    leader_schedule_cache: &mut LeaderScheduleCache,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
         blockstore,
@@ -438,6 +441,7 @@ pub fn process_blockstore_from_root(
         recyclers,
         transaction_status_sender,
         cache_block_time_sender,
+        leader_schedule_cache,
     )
 }
 
@@ -448,6 +452,7 @@ pub fn do_process_blockstore_from_root(
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    leader_schedule_cache: &mut LeaderScheduleCache,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
 
@@ -489,21 +494,16 @@ pub fn do_process_blockstore_from_root(
 
     let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
-    let (initial_forks, leader_schedule_cache) = {
+    let initial_forks = {
         if let Some(meta) = blockstore
             .meta(start_slot)
             .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
         {
-            let epoch_schedule = bank.epoch_schedule();
-            let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
-            if opts.full_leader_cache {
-                leader_schedule_cache.set_max_schedules(std::usize::MAX);
-            }
             let mut initial_forks = load_frozen_forks(
                 &bank,
                 &meta,
                 blockstore,
-                &mut leader_schedule_cache,
+                leader_schedule_cache,
                 &mut root,
                 opts,
                 recyclers,
@@ -513,13 +513,12 @@ pub fn do_process_blockstore_from_root(
             )?;
             initial_forks.sort_by_key(|bank| bank.slot());
 
-            (initial_forks, leader_schedule_cache)
+            initial_forks
         } else {
             // If there's no meta for the input `start_slot`, then we started from a snapshot
             // and there's no point in processing the rest of blockstore and implies blockstore
             // should be empty past this point.
-            let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            (vec![bank], leader_schedule_cache)
+            vec![bank]
         }
     };
     if initial_forks.is_empty() {
@@ -555,7 +554,7 @@ pub fn do_process_blockstore_from_root(
         return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
     }
 
-    Ok(leader_schedule_cache)
+    Ok(())
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
