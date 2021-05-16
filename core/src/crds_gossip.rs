@@ -297,16 +297,12 @@ impl CrdsGossip {
         );
     }
 
-    pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
-        self.make_timeouts(&HashMap::new(), self.pull.crds_timeout)
-    }
-
     pub fn make_timeouts(
         &self,
         stakes: &HashMap<Pubkey, u64>,
         epoch_ms: u64,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.make_timeouts(&self.id, stakes, epoch_ms)
+        self.pull.make_timeouts(self.id, stakes, epoch_ms)
     }
 
     pub fn purge(

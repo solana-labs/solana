@@ -3836,7 +3836,13 @@ mod tests {
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(cluster_info);
-        let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
+        let timeouts = {
+            let gossip = cluster_info.gossip.read().unwrap();
+            gossip.make_timeouts(
+                &HashMap::default(), // stakes,
+                gossip.pull.crds_timeout,
+            )
+        };
         ClusterInfo::handle_pull_response(
             &cluster_info,
             &entrypoint_pubkey,
