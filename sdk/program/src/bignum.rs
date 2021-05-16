@@ -190,78 +190,154 @@ impl BigNumber {
             }
         }
     }
+    /// Subtract BigNumbers
+    pub fn sub(&self, rhs: &BigNumber) -> Self {
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            use openssl::bn::BigNum;
+            let my_num = BigNum::from_slice(&self.value).unwrap();
+            let rhs_num = BigNum::from_slice(&rhs.value).unwrap();
+            let mut bn_res = BigNum::new().unwrap();
+            bn_res.checked_sub(&my_num, &rhs_num).unwrap();
+            let value = bn_res.as_ref().to_vec();
+            Self {
+                negative: bn_res.is_negative(),
+                value,
+            }
+        }
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_bignum_sub(
+                    arg_address: *const u64,
+                    arg_count: u64,
+                    out_value_address: *mut u8,
+                    out_neg_address: *mut u64,
+                    out_size_address: *mut u64,
+                ) -> u64;
+            }
+            // Setup the argument array (3)
+            let neg_values = vec![self.negative as u8, rhs.negative as u8];
+            let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
+            // Setup the result information
+            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
+            let mut value = Vec::<u8>::with_capacity(value_len as usize);
+            let mut is_negative = 0u64;
+            unsafe {
+                sol_bignum_sub(
+                    arg_array.as_ptr() as *const _ as *const u64,
+                    arg_array.len() as u64,
+                    value.as_mut_ptr() as *mut _ as *mut u8,
+                    &mut is_negative as *mut _ as *mut u64,
+                    &mut value_len as *mut _ as *mut u64,
+                );
+                value.set_len(value_len as usize);
+            }
+            Self {
+                negative: is_negative != 0,
+                value,
+            }
+        }
+    }
 
-    // /// Subtract BigNumbers
-    // pub fn sub(&self, rhs: &BigNumber) -> Self {
-    //     #[cfg(not(target_arch = "bpf"))]
-    //     {
-    //         use openssl::bn::{BigNum, BigNumRef};
-    //         let my_raw: &BigNum = unsafe { &*(self.0 as *const BigNum) };
-    //         let mut bbox = Box::new(BigNum::new().unwrap());
-    //         let rhs_ptr: &BigNum = unsafe { &*(rhs.0 as *const BigNum) };
-    //         BigNumRef::checked_sub(&mut *bbox, my_raw, rhs_ptr).unwrap();
-    //         let rwptr = Box::into_raw(bbox);
-    //         Self(rwptr as u64)
-    //     }
-    //     #[cfg(target_arch = "bpf")]
-    //     {
-    //         extern "C" {
-    //             fn sol_bignum_sub(
-    //                 self_ptr: *const u64,
-    //                 rhs_ptr: *const u64,
-    //                 return_ptr: *mut u64,
-    //             ) -> u64;
-    //         }
-    //         let mut bignum_ptr = 0u64;
-    //         unsafe {
-    //             sol_bignum_sub(
-    //                 &self.0 as *const _ as *const u64,
-    //                 &rhs.0 as *const _ as *const u64,
-    //                 &mut bignum_ptr as *mut _ as *mut u64,
-    //             );
-    //         }
-    //         Self(bignum_ptr)
-    //     }
-    // }
-
-    // /// Multiple BigNumbers
-    // pub fn mul(&self, rhs: &BigNumber) -> Self {
-    //     #[cfg(not(target_arch = "bpf"))]
-    //     {
-    //         use openssl::bn::{BigNum, BigNumContext, BigNumRef};
-    //         let my_raw: &BigNum = unsafe { &*(self.0 as *const BigNum) };
-    //         let mut bbox = Box::new(BigNum::new().unwrap());
-    //         let rhs_ptr: &BigNum = unsafe { &*(rhs.0 as *const BigNum) };
-    //         BigNumRef::checked_mul(
-    //             &mut *bbox,
-    //             my_raw,
-    //             rhs_ptr,
-    //             &mut BigNumContext::new().unwrap(),
-    //         )
-    //         .unwrap();
-    //         let rwptr = Box::into_raw(bbox);
-    //         Self(rwptr as u64)
-    //     }
-    //     #[cfg(target_arch = "bpf")]
-    //     {
-    //         extern "C" {
-    //             fn sol_bignum_mul(
-    //                 self_ptr: *const u64,
-    //                 rhs_ptr: *const u64,
-    //                 return_ptr: *mut u64,
-    //             ) -> u64;
-    //         }
-    //         let mut bignum_ptr = 0u64;
-    //         unsafe {
-    //             sol_bignum_mul(
-    //                 &self.0 as *const _ as *const u64,
-    //                 &rhs.0 as *const _ as *const u64,
-    //                 &mut bignum_ptr as *mut _ as *mut u64,
-    //             );
-    //         }
-    //         Self(bignum_ptr)
-    //     }
-    // }
+    /// Multiple BigNumbers
+    pub fn mul(&self, rhs: &BigNumber) -> Self {
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            use openssl::bn::{BigNum, BigNumContext};
+            let my_num = BigNum::from_slice(&self.value).unwrap();
+            let rhs_num = BigNum::from_slice(&rhs.value).unwrap();
+            let mut bn_res = BigNum::new().unwrap();
+            bn_res.checked_mul(&my_num, &rhs_num, &mut BigNumContext::new().unwrap()).unwrap();
+            let value = bn_res.as_ref().to_vec();
+            Self {
+                negative: bn_res.is_negative(),
+                value,
+            }
+        }
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_bignum_mul(
+                    arg_address: *const u64,
+                    arg_count: u64,
+                    out_value_address: *mut u8,
+                    out_neg_address: *mut u64,
+                    out_size_address: *mut u64,
+                ) -> u64;
+            }
+            // Setup the argument array (3)
+            let neg_values = vec![self.negative as u8, rhs.negative as u8];
+            let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
+            // Setup the result information
+            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
+            let mut value = Vec::<u8>::with_capacity(value_len as usize);
+            let mut is_negative = 0u64;
+            unsafe {
+                sol_bignum_mul(
+                    arg_array.as_ptr() as *const _ as *const u64,
+                    arg_array.len() as u64,
+                    value.as_mut_ptr() as *mut _ as *mut u8,
+                    &mut is_negative as *mut _ as *mut u64,
+                    &mut value_len as *mut _ as *mut u64,
+                );
+                value.set_len(value_len as usize);
+            }
+            Self {
+                negative: is_negative != 0,
+                value,
+            }
+        }
+    }
+    /// Divide BigNumbers
+    pub fn div(&self, rhs: &BigNumber) -> Self {
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            use openssl::bn::{BigNum, BigNumContext};
+            let my_num = BigNum::from_slice(&self.value).unwrap();
+            let rhs_num = BigNum::from_slice(&rhs.value).unwrap();
+            let mut bn_res = BigNum::new().unwrap();
+            bn_res.checked_div(&my_num, &rhs_num, &mut BigNumContext::new().unwrap()).unwrap();
+            let value = bn_res.as_ref().to_vec();
+            Self {
+                negative: bn_res.is_negative(),
+                value,
+            }
+        }
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_bignum_div(
+                    arg_address: *const u64,
+                    arg_count: u64,
+                    out_value_address: *mut u8,
+                    out_neg_address: *mut u64,
+                    out_size_address: *mut u64,
+                ) -> u64;
+            }
+            // Setup the argument array (3)
+            let neg_values = vec![self.negative as u8, rhs.negative as u8];
+            let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
+            // Setup the result information
+            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
+            let mut value = Vec::<u8>::with_capacity(value_len as usize);
+            let mut is_negative = 0u64;
+            unsafe {
+                sol_bignum_div(
+                    arg_array.as_ptr() as *const _ as *const u64,
+                    arg_array.len() as u64,
+                    value.as_mut_ptr() as *mut _ as *mut u8,
+                    &mut is_negative as *mut _ as *mut u64,
+                    &mut value_len as *mut _ as *mut u64,
+                );
+                value.set_len(value_len as usize);
+            }
+            Self {
+                negative: is_negative != 0,
+                value,
+            }
+        }
+    }
 
     // /// Mod multiplier (self * multiplier) % modulus
     // pub fn mod_mul(&self, multiplier: &BigNumber, modulus: &BigNumber) -> Self {
@@ -341,44 +417,6 @@ impl BigNumber {
     //     }
     // }
 
-    // /// Divide BigNumbers
-    // pub fn div(&self, rhs: &BigNumber) -> Self {
-    //     #[cfg(not(target_arch = "bpf"))]
-    //     {
-    //         use openssl::bn::{BigNum, BigNumContext, BigNumRef};
-    //         let my_raw: &BigNum = unsafe { &*(self.0 as *const BigNum) };
-    //         let mut bbox = Box::new(BigNum::new().unwrap());
-    //         let rhs_ptr: &BigNum = unsafe { &*(rhs.0 as *const BigNum) };
-    //         BigNumRef::checked_div(
-    //             &mut *bbox,
-    //             my_raw,
-    //             rhs_ptr,
-    //             &mut BigNumContext::new().unwrap(),
-    //         )
-    //         .unwrap();
-    //         let rwptr = Box::into_raw(bbox);
-    //         Self(rwptr as u64)
-    //     }
-    //     #[cfg(target_arch = "bpf")]
-    //     {
-    //         extern "C" {
-    //             fn sol_bignum_div(
-    //                 self_ptr: *const u64,
-    //                 rhs_ptr: *const u64,
-    //                 return_ptr: *mut u64,
-    //             ) -> u64;
-    //         }
-    //         let mut bignum_ptr = 0u64;
-    //         unsafe {
-    //             sol_bignum_div(
-    //                 &self.0 as *const _ as *const u64,
-    //                 &rhs.0 as *const _ as *const u64,
-    //                 &mut bignum_ptr as *mut _ as *mut u64,
-    //             );
-    //         }
-    //         Self(bignum_ptr)
-    //     }
-    // }
 
     // /// Square BigNumbers
     // pub fn sqr(&self) -> Self {

@@ -1486,45 +1486,135 @@ struct SyscallBigNumSub<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallBigNumSub<'a> {
     fn call(
         &mut self,
-        self_addr: u64,
-        rhs_addr: u64,
-        diff_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
+        arguments_addr: u64,
+        arguments_count: u64,
+        out_result_addr: u64,
+        out_negative_addr: u64,
+        out_size_addr: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let self_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, self_addr, self.loader_id, true),
-            result
-        );
-        let rhs_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, rhs_addr, self.loader_id, true),
-            result
-        );
-        let diff_address = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, diff_addr, self.loader_id, true),
-            result
-        );
-
-        let self_bn = unsafe { &*(*self_ptr as *mut BigNum) };
-        let rhs_bn = unsafe { &*(*rhs_ptr as *mut BigNum) };
-        let bytes = (self_bn.num_bytes() + rhs_bn.num_bytes()) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-        let mut diff_bn = Box::new(BigNum::new().unwrap());
-        match BigNumRef::checked_sub(&mut *diff_bn, self_bn, rhs_bn) {
-            Ok(_) => {
-                let rwptr = Box::into_raw(diff_bn);
-                let diff_ptr = rwptr as u64;
-                *diff_address = diff_ptr;
-                *result = Ok(0)
+        let my_func = String::from("sol_bignum_sub");
+        match arguments_count == 3 {
+            false => {
+                *result =
+                    Err(SyscallError::BigNumberArgError(my_func, 2u64, arguments_count - 1).into())
             }
-            _ => *result = Err(SyscallError::BigNumberSubError.into()),
-        };
+            true => {
+                let args = question_mark!(
+                    translate_slice::<&[u8]>(
+                        memory_mapping,
+                        arguments_addr,
+                        arguments_count,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+                // Get arguments
+                let mut arg_iter = args.iter();
+                let arg_meta = arg_iter.next().unwrap();
+                let mut byte_count = arg_meta.len();
+                let mut arg1 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                let arg_meta = arg_iter.next().unwrap();
+                byte_count += arg_meta.len();
+                let mut arg2 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                // Get the negative flags
+                let arg_meta = arg_iter.next().unwrap();
+                let neg_flag_array = question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Get out size and out vector
+                let out_size = question_mark!(
+                    translate_type_mut::<u64>(memory_mapping, out_size_addr, self.loader_id, true),
+                    result
+                );
+                let bignum_result = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        out_result_addr,
+                        *out_size,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Compute costs
+                question_mark!(
+                    self.compute_meter
+                        .consume(self.cost + calc_bignum_cost!(byte_count as f64)),
+                    result
+                );
+                arg1.set_negative(neg_flag_array[0] == 1);
+                arg2.set_negative(neg_flag_array[1] == 1);
+                // Execute function
+                let mut bn_result = BigNum::new().unwrap();
+                match bn_result.checked_sub(&arg1, &arg2) {
+                    Ok(_) => {
+                        // Get out_size pointer and negative flag pointer
+                        // Get negative flag pointer
+                        let is_negative = question_mark!(
+                            translate_type_mut::<u64>(
+                                memory_mapping,
+                                out_negative_addr,
+                                self.loader_id,
+                                true
+                            ),
+                            result
+                        );
+                        let big_number_bytes = bn_result.as_ref().to_vec();
+                        let big_number_len = big_number_bytes.len() as u64;
+                        if big_number_len > *out_size {
+                            *result = Err(SyscallError::BigNumberToBytesError.into())
+                        } else {
+                            // Equal (memcpy)
+                            if big_number_len == *out_size {
+                                (*bignum_result).copy_from_slice(&big_number_bytes);
+                            }
+                            // Smaller than our buffer
+                            else {
+                                let mut index = 0;
+                                for byte in big_number_bytes.iter() {
+                                    (*bignum_result)[index] = *byte;
+                                    index = index + 1;
+                                }
+                                *out_size = index as u64;
+                            }
+                            *is_negative = bn_result.is_negative() as u64;
+                            *result = Ok(0)
+                        }
+                    }
+                    Err(_) => *result = Err(SyscallError::BigNumberSubError.into()),
+                }
+            }
+        }
     }
 }
 /// Subtract BigNums
@@ -1536,51 +1626,135 @@ struct SyscallBigNumMul<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallBigNumMul<'a> {
     fn call(
         &mut self,
-        self_addr: u64,
-        rhs_addr: u64,
-        prod_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
+        arguments_addr: u64,
+        arguments_count: u64,
+        out_result_addr: u64,
+        out_negative_addr: u64,
+        out_size_addr: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let self_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, self_addr, self.loader_id, true),
-            result
-        );
-        let rhs_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, rhs_addr, self.loader_id, true),
-            result
-        );
-        let prod_address = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, prod_addr, self.loader_id, true),
-            result
-        );
-
-        let self_bn = unsafe { &*(*self_ptr as *mut BigNum) };
-        let rhs_bn = unsafe { &*(*rhs_ptr as *mut BigNum) };
-        let bytes = (self_bn.num_bytes() + rhs_bn.num_bytes()) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-
-        let mut prod_bn = Box::new(BigNum::new().unwrap());
-        match BigNumRef::checked_mul(
-            &mut *prod_bn,
-            self_bn,
-            rhs_bn,
-            &mut BigNumContext::new().unwrap(),
-        ) {
-            Ok(_) => {
-                let rwptr = Box::into_raw(prod_bn);
-                let prod_ptr = rwptr as u64;
-                *prod_address = prod_ptr;
-                *result = Ok(0)
+        let my_func = String::from("sol_bignum_mul");
+        match arguments_count == 3 {
+            false => {
+                *result =
+                    Err(SyscallError::BigNumberArgError(my_func, 2u64, arguments_count - 1).into())
             }
-            _ => *result = Err(SyscallError::BigNumberMulError.into()),
-        };
+            true => {
+                let args = question_mark!(
+                    translate_slice::<&[u8]>(
+                        memory_mapping,
+                        arguments_addr,
+                        arguments_count,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+                // Get arguments
+                let mut arg_iter = args.iter();
+                let arg_meta = arg_iter.next().unwrap();
+                let mut byte_count = arg_meta.len();
+                let mut arg1 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                let arg_meta = arg_iter.next().unwrap();
+                byte_count += arg_meta.len();
+                let mut arg2 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                // Get the negative flags
+                let arg_meta = arg_iter.next().unwrap();
+                let neg_flag_array = question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Get out size and out vector
+                let out_size = question_mark!(
+                    translate_type_mut::<u64>(memory_mapping, out_size_addr, self.loader_id, true),
+                    result
+                );
+                let bignum_result = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        out_result_addr,
+                        *out_size,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Compute costs
+                question_mark!(
+                    self.compute_meter
+                        .consume(self.cost + calc_bignum_cost!(byte_count as f64)),
+                    result
+                );
+                arg1.set_negative(neg_flag_array[0] == 1);
+                arg2.set_negative(neg_flag_array[1] == 1);
+                // Execute function
+                let mut bn_result = BigNum::new().unwrap();
+                match bn_result.checked_mul(&arg1, &arg2, &mut BigNumContext::new().unwrap()) {
+                    Ok(_) => {
+                        // Get out_size pointer and negative flag pointer
+                        // Get negative flag pointer
+                        let is_negative = question_mark!(
+                            translate_type_mut::<u64>(
+                                memory_mapping,
+                                out_negative_addr,
+                                self.loader_id,
+                                true
+                            ),
+                            result
+                        );
+                        let big_number_bytes = bn_result.as_ref().to_vec();
+                        let big_number_len = big_number_bytes.len() as u64;
+                        if big_number_len > *out_size {
+                            *result = Err(SyscallError::BigNumberToBytesError.into())
+                        } else {
+                            // Equal (memcpy)
+                            if big_number_len == *out_size {
+                                (*bignum_result).copy_from_slice(&big_number_bytes);
+                            }
+                            // Smaller than our buffer
+                            else {
+                                let mut index = 0;
+                                for byte in big_number_bytes.iter() {
+                                    (*bignum_result)[index] = *byte;
+                                    index = index + 1;
+                                }
+                                *out_size = index as u64;
+                            }
+                            *is_negative = bn_result.is_negative() as u64;
+                            *result = Ok(0)
+                        }
+                    }
+                    Err(_) => *result = Err(SyscallError::BigNumberMulError.into()),
+                }
+            }
+        }
     }
 }
 struct SyscallBigNumDiv<'a> {
@@ -1591,51 +1765,135 @@ struct SyscallBigNumDiv<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallBigNumDiv<'a> {
     fn call(
         &mut self,
-        self_addr: u64,
-        rhs_addr: u64,
-        quotient_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
+        arguments_addr: u64,
+        arguments_count: u64,
+        out_result_addr: u64,
+        out_negative_addr: u64,
+        out_size_addr: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let self_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, self_addr, self.loader_id, true),
-            result
-        );
-        let rhs_ptr = question_mark!(
-            translate_type::<u64>(memory_mapping, rhs_addr, self.loader_id, true),
-            result
-        );
-        let quotient_address = question_mark!(
-            translate_type_mut::<u64>(memory_mapping, quotient_addr, self.loader_id, true),
-            result
-        );
-
-        let self_bn = unsafe { &*(*self_ptr as *mut BigNum) };
-        let rhs_bn = unsafe { &*(*rhs_ptr as *mut BigNum) };
-        let bytes = (self_bn.num_bytes() + rhs_bn.num_bytes()) as f64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
-
-        let mut quot_bn = Box::new(BigNum::new().unwrap());
-        match BigNumRef::checked_div(
-            &mut *quot_bn,
-            self_bn,
-            rhs_bn,
-            &mut BigNumContext::new().unwrap(),
-        ) {
-            Ok(_) => {
-                let rwptr = Box::into_raw(quot_bn);
-                let prod_ptr = rwptr as u64;
-                *quotient_address = prod_ptr;
-                *result = Ok(0)
+        let my_func = String::from("sol_bignum_div");
+        match arguments_count == 3 {
+            false => {
+                *result =
+                    Err(SyscallError::BigNumberArgError(my_func, 2u64, arguments_count - 1).into())
             }
-            _ => *result = Err(SyscallError::BigNumberDivError.into()),
-        };
+            true => {
+                let args = question_mark!(
+                    translate_slice::<&[u8]>(
+                        memory_mapping,
+                        arguments_addr,
+                        arguments_count,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+                // Get arguments
+                let mut arg_iter = args.iter();
+                let arg_meta = arg_iter.next().unwrap();
+                let mut byte_count = arg_meta.len();
+                let mut arg1 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                let arg_meta = arg_iter.next().unwrap();
+                byte_count += arg_meta.len();
+                let mut arg2 = BigNum::from_slice(question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                ))
+                .unwrap();
+                // Get the negative flags
+                let arg_meta = arg_iter.next().unwrap();
+                let neg_flag_array = question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        arg_meta.as_ptr() as u64,
+                        arg_meta.len() as u64,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Get out size and out vector
+                let out_size = question_mark!(
+                    translate_type_mut::<u64>(memory_mapping, out_size_addr, self.loader_id, true),
+                    result
+                );
+                let bignum_result = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        out_result_addr,
+                        *out_size,
+                        self.loader_id,
+                        true
+                    ),
+                    result
+                );
+                // Compute costs
+                question_mark!(
+                    self.compute_meter
+                        .consume(self.cost + calc_bignum_cost!(byte_count as f64)),
+                    result
+                );
+                arg1.set_negative(neg_flag_array[0] == 1);
+                arg2.set_negative(neg_flag_array[1] == 1);
+                // Execute function
+                let mut bn_result = BigNum::new().unwrap();
+                match bn_result.checked_div(&arg1, &arg2, &mut BigNumContext::new().unwrap()) {
+                    Ok(_) => {
+                        // Get out_size pointer and negative flag pointer
+                        // Get negative flag pointer
+                        let is_negative = question_mark!(
+                            translate_type_mut::<u64>(
+                                memory_mapping,
+                                out_negative_addr,
+                                self.loader_id,
+                                true
+                            ),
+                            result
+                        );
+                        let big_number_bytes = bn_result.as_ref().to_vec();
+                        let big_number_len = big_number_bytes.len() as u64;
+                        if big_number_len > *out_size {
+                            *result = Err(SyscallError::BigNumberToBytesError.into())
+                        } else {
+                            // Equal (memcpy)
+                            if big_number_len == *out_size {
+                                (*bignum_result).copy_from_slice(&big_number_bytes);
+                            }
+                            // Smaller than our buffer
+                            else {
+                                let mut index = 0;
+                                for byte in big_number_bytes.iter() {
+                                    (*bignum_result)[index] = *byte;
+                                    index = index + 1;
+                                }
+                                *out_size = index as u64;
+                            }
+                            *is_negative = bn_result.is_negative() as u64;
+                            *result = Ok(0)
+                        }
+                    }
+                    Err(_) => *result = Err(SyscallError::BigNumberDivError.into()),
+                }
+            }
+        }
     }
 }
 struct SyscallBigNumExp<'a> {
@@ -3158,7 +3416,7 @@ mod tests {
         hash::hashv,
         process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
     };
-    use std::str::FromStr;
+    use std::{str::FromStr, vec};
 
     const DEFAULT_CONFIG: Config = Config {
         max_call_depth: 20,
@@ -4354,7 +4612,6 @@ mod tests {
         let out_size_addr = &mut out_size as *mut _ as u64;
         let mut neg_result = 0u64;
         let neg_flag_addr = &mut neg_result as *mut _ as u64;
-        let neg_flag = 0u64;
 
         let mock_arg1 = ArgSlice {
             addr: 1024,
@@ -4442,31 +4699,81 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_sub() {
-        let mut diff = 0u64;
-        let diff_addr = &mut diff as *mut _ as u64;
-        let bn_2_ptr = new_u32_bignum(2);
-        let bn_3_ptr = new_u32_bignum(3);
-        let bn_2_addr = &bn_2_ptr as *const _ as u64;
-        let bn_3_addr = &bn_3_ptr as *const _ as u64;
+        struct ArgSlice {
+            pub addr: u64,
+            pub len: usize,
+        }
+        let bn_arg1 = BigNum::from_u32(5).unwrap();
+        let bn_arg2 = BigNum::from_u32(258).unwrap();
+        let arg1 = bn_arg1.as_ref().to_vec();
+        let arg2 = bn_arg2.as_ref().to_vec();
+        let neg_flags = vec![bn_arg1.is_negative() as u8, bn_arg2.is_negative() as u8];
+        let mut result_vec = Vec::<u8>::with_capacity(arg1.len() + arg2.len());
+        let mut out_size = result_vec.capacity() as u64;
+        let out_size_addr = &mut out_size as *mut _ as u64;
+        let mut neg_result = 0u64;
+        let neg_flag_addr = &mut neg_result as *mut _ as u64;
+
+        let mock_arg1 = ArgSlice {
+            addr: 1024,
+            len: arg1.len(),
+        };
+        let mock_arg2 = ArgSlice {
+            addr: 2048,
+            len: arg2.len(),
+        };
+        let mock_neg_flags = ArgSlice {
+            addr: 4096,
+            len: neg_flags.len(),
+        };
+        let adds_array = [mock_arg1, mock_arg2, mock_neg_flags];
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
-                    host_addr: bn_2_addr,
+                    host_addr: arg1.as_ptr() as *const _ as u64,
+                    vm_addr: 1024,
+                    len: arg1.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: arg2.as_ptr() as *const _ as u64,
+                    vm_addr: 2048,
+                    len: arg2.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flags.as_ptr() as *const _ as u64,
+                    vm_addr: 4096,
+                    len: neg_flags.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: result_vec.as_mut_ptr() as u64,
+                    vm_addr: 8192,
+                    len: result_vec.capacity() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: adds_array.as_ptr() as *const _ as u64,
+                    vm_addr: 96,
+                    len: 48,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flag_addr,
                     vm_addr: 8,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 MemoryRegion {
-                    host_addr: bn_3_addr,
+                    host_addr: out_size_addr,
                     vm_addr: 16,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: diff_addr,
-                    vm_addr: 96,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
                     is_writable: true,
@@ -4475,6 +4782,7 @@ mod tests {
             &DEFAULT_CONFIG,
         )
         .unwrap();
+
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: (20 + 20) as u64,
@@ -4485,38 +4793,89 @@ mod tests {
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 16, 96, 0, 0, &memory_mapping, &mut result);
+        syscall.call(96, 3, 8192, 8, 16, &memory_mapping, &mut result);
         result.unwrap();
-        let braw: &BigNum = unsafe { &*(diff as *mut BigNum) };
-        assert_eq!(*braw, BigNum::from_dec_str("-1").unwrap());
+        unsafe { result_vec.set_len(out_size as usize) };
+        assert_eq!(result_vec, vec![253]);
     }
+
     #[test]
     fn test_syscall_bignum_mul() {
-        let mut prod = 0u64;
-        let prod_addr = &mut prod as *mut _ as u64;
-        let bn_2_ptr = new_u32_bignum(2);
-        let bn_3_ptr = new_u32_bignum(3);
-        let bn_2_addr = &bn_2_ptr as *const _ as u64;
-        let bn_3_addr = &bn_3_ptr as *const _ as u64;
+        struct ArgSlice {
+            pub addr: u64,
+            pub len: usize,
+        }
+        let bn_arg1 = BigNum::from_u32(5).unwrap();
+        let bn_arg2 = BigNum::from_u32(5).unwrap();
+        let arg1 = bn_arg1.as_ref().to_vec();
+        let arg2 = bn_arg2.as_ref().to_vec();
+        let neg_flags = vec![bn_arg1.is_negative() as u8, bn_arg2.is_negative() as u8];
+        let mut result_vec = Vec::<u8>::with_capacity(arg1.len() + arg2.len());
+        let mut out_size = result_vec.capacity() as u64;
+        let out_size_addr = &mut out_size as *mut _ as u64;
+        let mut neg_result = 0u64;
+        let neg_flag_addr = &mut neg_result as *mut _ as u64;
+
+        let mock_arg1 = ArgSlice {
+            addr: 1024,
+            len: arg1.len(),
+        };
+        let mock_arg2 = ArgSlice {
+            addr: 2048,
+            len: arg2.len(),
+        };
+        let mock_neg_flags = ArgSlice {
+            addr: 4096,
+            len: neg_flags.len(),
+        };
+        let adds_array = [mock_arg1, mock_arg2, mock_neg_flags];
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
-                    host_addr: bn_2_addr,
+                    host_addr: arg1.as_ptr() as *const _ as u64,
+                    vm_addr: 1024,
+                    len: arg1.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: arg2.as_ptr() as *const _ as u64,
+                    vm_addr: 2048,
+                    len: arg2.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flags.as_ptr() as *const _ as u64,
+                    vm_addr: 4096,
+                    len: neg_flags.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: result_vec.as_mut_ptr() as u64,
+                    vm_addr: 8192,
+                    len: result_vec.capacity() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: adds_array.as_ptr() as *const _ as u64,
+                    vm_addr: 96,
+                    len: 48,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flag_addr,
                     vm_addr: 8,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 MemoryRegion {
-                    host_addr: bn_3_addr,
+                    host_addr: out_size_addr,
                     vm_addr: 16,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: prod_addr,
-                    vm_addr: 96,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
                     is_writable: true,
@@ -4525,6 +4884,7 @@ mod tests {
             &DEFAULT_CONFIG,
         )
         .unwrap();
+
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: (20 + 20) as u64,
@@ -4535,38 +4895,89 @@ mod tests {
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 16, 96, 0, 0, &memory_mapping, &mut result);
+        syscall.call(96, 3, 8192, 8, 16, &memory_mapping, &mut result);
         result.unwrap();
-        let braw: &BigNum = unsafe { &*(prod as *mut BigNum) };
-        assert_eq!(*braw, BigNum::from_u32(6).unwrap());
+        unsafe { result_vec.set_len(out_size as usize) };
+        assert_eq!(result_vec, vec![25]);
     }
+
     #[test]
     fn test_syscall_bignum_div() {
-        let mut quot = 0u64;
-        let quot_addr = &mut quot as *mut _ as u64;
-        let bn_2_ptr = new_u32_bignum(4);
-        let bn_3_ptr = new_u32_bignum(2);
-        let bn_2_addr = &bn_2_ptr as *const _ as u64;
-        let bn_3_addr = &bn_3_ptr as *const _ as u64;
+        struct ArgSlice {
+            pub addr: u64,
+            pub len: usize,
+        }
+        let bn_arg1 = BigNum::from_u32(300).unwrap();
+        let bn_arg2 = BigNum::from_u32(10).unwrap();
+        let arg1 = bn_arg1.as_ref().to_vec();
+        let arg2 = bn_arg2.as_ref().to_vec();
+        let neg_flags = vec![bn_arg1.is_negative() as u8, bn_arg2.is_negative() as u8];
+        let mut result_vec = Vec::<u8>::with_capacity(arg1.len() + arg2.len());
+        let mut out_size = result_vec.capacity() as u64;
+        let out_size_addr = &mut out_size as *mut _ as u64;
+        let mut neg_result = 0u64;
+        let neg_flag_addr = &mut neg_result as *mut _ as u64;
+
+        let mock_arg1 = ArgSlice {
+            addr: 1024,
+            len: arg1.len(),
+        };
+        let mock_arg2 = ArgSlice {
+            addr: 2048,
+            len: arg2.len(),
+        };
+        let mock_neg_flags = ArgSlice {
+            addr: 4096,
+            len: neg_flags.len(),
+        };
+        let adds_array = [mock_arg1, mock_arg2, mock_neg_flags];
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
-                    host_addr: bn_2_addr,
+                    host_addr: arg1.as_ptr() as *const _ as u64,
+                    vm_addr: 1024,
+                    len: arg1.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: arg2.as_ptr() as *const _ as u64,
+                    vm_addr: 2048,
+                    len: arg2.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flags.as_ptr() as *const _ as u64,
+                    vm_addr: 4096,
+                    len: neg_flags.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: result_vec.as_mut_ptr() as u64,
+                    vm_addr: 8192,
+                    len: result_vec.capacity() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: adds_array.as_ptr() as *const _ as u64,
+                    vm_addr: 96,
+                    len: 48,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: neg_flag_addr,
                     vm_addr: 8,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 MemoryRegion {
-                    host_addr: bn_3_addr,
+                    host_addr: out_size_addr,
                     vm_addr: 16,
-                    len: std::mem::size_of::<u64>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: quot_addr,
-                    vm_addr: 96,
                     len: std::mem::size_of::<u64>() as u64,
                     vm_gap_shift: 63,
                     is_writable: true,
@@ -4575,6 +4986,7 @@ mod tests {
             &DEFAULT_CONFIG,
         )
         .unwrap();
+
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: (20 + 20) as u64,
@@ -4585,11 +4997,12 @@ mod tests {
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(8, 16, 96, 0, 0, &memory_mapping, &mut result);
+        syscall.call(96, 3, 8192, 8, 16, &memory_mapping, &mut result);
         result.unwrap();
-        let braw: &BigNum = unsafe { &*(quot as *mut BigNum) };
-        assert_eq!(*braw, BigNum::from_u32(2).unwrap());
+        unsafe { result_vec.set_len(out_size as usize) };
+        assert_eq!(result_vec, vec![30]);
     }
+
     #[test]
     fn test_syscall_bignum_exp() {
         let mut exp = 0u64;

@@ -25,11 +25,6 @@ const NEG_LONG_DEC_STRING: &str =
                             996538599452325797319977413534714912781503130883692806087195354368\
                             8304190675878204079994222";
 
-/// Compares the array of numbers return from BigNumbers
-// fn compare_bignum_equal(lhs: &BigNumber, rhs: &BigNumber) -> bool {
-//     lhs.to_bytes() == rhs.to_bytes()
-// }
-
 /// BigNumber construction
 fn test_constructors() {
     msg!("BigNumber constructors");
@@ -55,16 +50,19 @@ fn test_basic_maths() {
     let bn_5 = BigNumber::from_u32(5);
     let bn_258 = BigNumber::from_u32(258);
     let added = bn_5.add(&bn_258);
-    msg!("added vec {:?}", added.to_bytes());
+    msg!("add bn vec {:?}", added.to_bytes());
     assert_eq!(added.to_bytes(), [1, 7]);
-//     let sub_res = rhs.sub(&lhs);
-//     assert!(compare_bignum_equal(&sub_res, &BigNumber::from_u32(1)));
-//     let lhs = BigNumber::from_u32(20);
-//     let rhs = BigNumber::from_u32(10);
-//     let div_res = lhs.div(&rhs);
-//     assert!(compare_bignum_equal(&div_res, &BigNumber::from_u32(2)));
-//     let mul_res = rhs.mul(&lhs);
-//     assert!(compare_bignum_equal(&mul_res, &BigNumber::from_u32(200)));
+    let subed = bn_5.sub(&bn_258);
+    msg!("sub bn vec {:?}", subed.to_bytes());
+    assert_eq!(subed.to_bytes(), vec![253]);
+    let muled = bn_5.mul(&bn_5);
+    msg!("mul bn vec {:?}", muled.to_bytes());
+    assert_eq!(muled.to_bytes(), vec![25]);
+    let bn_300 = BigNumber::from_u32(300);
+    let bn_10 = BigNumber::from_u32(10);
+    let dived = bn_300.div(&bn_10);
+    msg!("div bn vec {:?}", dived.to_bytes());
+    assert_eq!(dived.to_bytes(), vec![30]);
 }
 
 // /// BigNumber bigger numbers and complex maths
