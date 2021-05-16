@@ -29,13 +29,8 @@ fn bench_hash_as_u64(bencher: &mut Bencher) {
 fn bench_build_crds_filters(bencher: &mut Bencher) {
     let thread_pool = ThreadPoolBuilder::new().build().unwrap();
     let mut rng = thread_rng();
-    let mut crds_gossip_pull = CrdsGossipPull::default();
+    let crds_gossip_pull = CrdsGossipPull::default();
     let mut crds = Crds::default();
-    for _ in 0..50_000 {
-        crds_gossip_pull
-            .purged_values
-            .push_back((solana_sdk::hash::new_rand(&mut rng), rng.gen()));
-    }
     let mut num_inserts = 0;
     for _ in 0..90_000 {
         if crds
