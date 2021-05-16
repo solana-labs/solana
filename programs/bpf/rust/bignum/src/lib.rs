@@ -56,11 +56,7 @@ fn test_basic_maths() {
     let bn_258 = BigNumber::from_u32(258);
     let added = bn_5.add(&bn_258);
     msg!("added vec {:?}", added.to_bytes());
-    assert_eq!(added.to_bytes(), [1, 7])
-//     let lhs = BigNumber::from_u32(3);
-//     let rhs = BigNumber::from_u32(4);
-//     let add_res = lhs.add(&rhs);
-//     assert!(compare_bignum_equal(&add_res, &BigNumber::from_u32(7)));
+    assert_eq!(added.to_bytes(), [1, 7]);
 //     let sub_res = rhs.sub(&lhs);
 //     assert!(compare_bignum_equal(&sub_res, &BigNumber::from_u32(1)));
 //     let lhs = BigNumber::from_u32(20);

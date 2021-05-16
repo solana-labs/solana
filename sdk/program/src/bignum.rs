@@ -28,7 +28,10 @@ impl BigNumber {
     pub fn new() -> Self {
         let mut value = Vec::<u8>::new();
         value.push(0u8);
-        Self { negative: false, value }
+        Self {
+            negative: false,
+            value,
+        }
     }
 
     /// Returns the size, in bytes, of BigNum. Typically used in
@@ -42,13 +45,19 @@ impl BigNumber {
         if val == 0 {
             let mut value = Vec::<u8>::new();
             value.push(0);
-            Self { negative: false, value }
+            Self {
+                negative: false,
+                value,
+            }
         } else {
             #[cfg(not(target_arch = "bpf"))]
             {
                 use openssl::bn::BigNum;
                 let value = BigNum::from_u32(val).unwrap().to_vec();
-                Self { negative: false, value }
+                Self {
+                    negative: false,
+                    value,
+                }
             }
             #[cfg(target_arch = "bpf")]
             {
@@ -72,7 +81,10 @@ impl BigNumber {
                     );
                     value.set_len(vec_size);
                 }
-                Self { negative: false, value }
+                Self {
+                    negative: false,
+                    value,
+                }
             }
         }
     }
@@ -83,7 +95,10 @@ impl BigNumber {
             use openssl::bn::BigNum;
             let bn = BigNum::from_dec_str(string).unwrap();
             let value = bn.to_vec();
-            Self { negative: bn.is_negative(), value}
+            Self {
+                negative: bn.is_negative(),
+                value,
+            }
         }
         #[cfg(target_arch = "bpf")]
         {
@@ -105,13 +120,13 @@ impl BigNumber {
                     string.len() as u64,
                     value.as_mut_ptr() as *mut _ as *mut u8,
                     &mut value_len as *mut _ as *mut u64,
-                    &mut is_negative as *mut _ as *mut u64
+                    &mut is_negative as *mut _ as *mut u64,
                 );
                 value.set_len(value_len as usize);
             }
             Self {
                 negative: is_negative != 0,
-                value
+                value,
             }
         }
     }
@@ -138,7 +153,7 @@ impl BigNumber {
             let value = bn_res.as_ref().to_vec();
             Self {
                 negative: bn_res.is_negative(),
-                value
+                value,
             }
         }
         #[cfg(target_arch = "bpf")]
@@ -155,16 +170,10 @@ impl BigNumber {
             // Setup the argument array (3)
             let neg_values = vec![self.negative as u8, rhs.negative as u8];
             let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
-            // let mut arg_array = Vec::<&[u8]>::new();
-            // arg_array.push(self.to_bytes());
-            // arg_array.push(rhs.to_bytes());
-            // arg_array.push(&neg_values);
-
-
-            let mut value_len = std::cmp::max(self.value.len(),rhs.value.len()) +1;
+            // Setup the result information
+            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
-
             unsafe {
                 sol_bignum_add(
                     arg_array.as_ptr() as *const _ as *const u64,
@@ -172,13 +181,12 @@ impl BigNumber {
                     value.as_mut_ptr() as *mut _ as *mut u8,
                     &mut is_negative as *mut _ as *mut u64,
                     &mut value_len as *mut _ as *mut u64,
-
                 );
                 value.set_len(value_len as usize);
             }
             Self {
                 negative: is_negative != 0,
-                value
+                value,
             }
         }
     }
@@ -538,7 +546,10 @@ impl Default for BigNumber {
     fn default() -> Self {
         let mut value = Vec::<u8>::new();
         value.push(0);
-        Self { negative: false, value }
+        Self {
+            negative: false,
+            value,
+        }
     }
 }
 impl fmt::Debug for BigNumber {
