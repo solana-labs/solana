@@ -148,7 +148,7 @@ pub fn create_vm<'a>(
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
-    let heap = AlignedMemory::new(DEFAULT_HEAP_SIZE, HOST_ALIGN);
+    let heap = AlignedMemory::new_with_size(DEFAULT_HEAP_SIZE, HOST_ALIGN);
     let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
     syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
