@@ -6004,7 +6004,7 @@ pub(crate) mod tests {
 
         let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            previous_capitalization - current_capitalization + sysvar_and_native_proram_delta,
+            previous_capitalization - (current_capitalization - sysvar_and_native_proram_delta),
             burned_portion
         );
 
@@ -8480,6 +8480,7 @@ pub(crate) mod tests {
         use sysvar::clock::Clock;
 
         let dummy_clock_id = solana_sdk::pubkey::new_rand();
+        let dummy_rent_epoch = 44;
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
         let expected_previous_slot = 3;
@@ -8496,19 +8497,22 @@ pub(crate) mod tests {
                 bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
                     assert!(optional_account.is_none());
 
-                    create_account(
+                    let mut account = create_account(
                         &Clock {
                             slot: expected_previous_slot,
                             ..Clock::default()
                         },
                         bank1.inherit_specially_retained_account_fields(optional_account),
-                    )
+                    );
+                    account.set_rent_epoch(dummy_rent_epoch);
+                    account
                 });
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
                 assert_eq!(
                     expected_previous_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
+                assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
             },
             |old, new| {
                 assert_eq!(old + 1, new);
@@ -8560,6 +8564,7 @@ pub(crate) mod tests {
                     expected_next_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
+                assert_eq!(INITIAL_RENT_EPOCH, current_account.rent_epoch());
             },
             |old, new| {
                 // if existing, capitalization shouldn't change
