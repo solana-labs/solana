@@ -74,6 +74,20 @@ function wait_for_bootstrap_validator_stake_drop {
   ssh "${sshOptions[@]}" "${validatorIpList[0]}" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
 }
 
+function wait_for_equal_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+
+  max_stake=$((100 / ${#validatorIpList[@]} + 1))
+  execution_step "Waiting for stake on all validators to fall below ${max_stake}%"
+
+  # shellcheck disable=SC2154
+  for ip in "${validatorIpList[@]}"; do
+    # shellcheck disable=SC2029
+    ssh "${sshOptions[@]}" "$ip" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
+  done
+}
+
 function get_slot {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
