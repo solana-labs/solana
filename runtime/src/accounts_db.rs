@@ -25,7 +25,7 @@ use crate::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         Ancestors, IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
     },
-    append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
+    append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
     read_only_accounts_cache::ReadOnlyAccountsCache,
 };
@@ -90,7 +90,7 @@ const CACHE_VIRTUAL_STORAGE_ID: usize = AppendVecId::MAX;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
+const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 
 // A specially reserved offset (represents an offset into an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
@@ -307,7 +307,7 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn write_version(&self) -> u64 {
+    pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.meta.write_version,
             LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
@@ -3353,9 +3353,9 @@ impl AccountsDb {
         Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
-    fn bulk_assign_write_version(&self, count: usize) -> u64 {
+    fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
         self.write_version
-            .fetch_add(count as u64, Ordering::Relaxed)
+            .fetch_add(count as StoredMetaWriteVersion, Ordering::Relaxed)
     }
 
     fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
@@ -4818,7 +4818,7 @@ impl AccountsDb {
         accounts: &[(&Pubkey, &impl ReadableAccount)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
-        write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
+        write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
         // the append vec so that hashing could happen on the store
@@ -4956,7 +4956,8 @@ impl AccountsDb {
         // BTreeMap because we want in-order traversal of oldest write_version to newest.
         // Thus, all instances of an account in a store are added to the index in oldest to newest
         // order and we update refcounts and track reclaims correctly.
-        type AccountsMap<'a> = HashMap<Pubkey, BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>;
+        type AccountsMap<'a> =
+            HashMap<Pubkey, BTreeMap<StoredMetaWriteVersion, (AppendVecId, StoredAccountMeta<'a>)>>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
