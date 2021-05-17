@@ -208,9 +208,9 @@ You should see the following output:
 
 ```text
 Config File: /home/solana/.config/solana/cli/config.yml
-RPC URL: http://api.devnet.solana.com 
+RPC URL: http://api.devnet.solana.com
 WebSocket URL: ws://api.devnet.solana.com/ (computed)
-Keypair Path: /home/solana/validator-keypair.json 
+Keypair Path: /home/solana/validator-keypair.json
 Commitment: confirmed
 ```
 
