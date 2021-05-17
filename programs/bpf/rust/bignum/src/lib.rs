@@ -1,7 +1,7 @@
 //! @brief BigNumber Syscall test
 
 extern crate solana_program;
-use solana_program::{bignum::BigNumber, custom_panic_default, log::sol_log_compute_units, msg};
+use solana_program::{bignum::BigNumber, custom_panic_default, msg};
 
 const LONG_DEC_STRING: &str = "1470463693494555670176851280755142329532258274256991544781479988\
                             712408107190720087233560906792937436573943189716784305633216335039\
