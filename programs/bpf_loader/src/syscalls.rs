@@ -4656,8 +4656,6 @@ mod tests {
     fn test_syscall_bignum_from_u32() {
         let bn_new = BigNum::new().unwrap();
         let bn_0 = BigNum::from_u32(0).unwrap();
-        println!("bn_new_vec {:?}", bn_new.to_vec());
-        println!("bn_0 {:?}", bn_0.to_vec());
         let bn_20 = new_u32_bignum(20u32);
         let bn = BigNum::from_u32(20u32).unwrap().to_vec();
         assert_eq!(bn_20, bn);
