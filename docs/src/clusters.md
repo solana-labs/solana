@@ -100,6 +100,8 @@ $ solana-validator \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
+    --entrypoint entrypoint2.testnet.solana.com:8001 \
+    --entrypoint entrypoint3.testnet.solana.com:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
