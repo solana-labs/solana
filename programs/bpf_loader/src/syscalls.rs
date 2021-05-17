@@ -1318,7 +1318,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumFromDecStr<'a> {
                 let mut index = 0;
                 for byte in big_number_bytes.iter() {
                     (*byte_slice)[index] = *byte;
-                    index = index + 1;
+                    index += 1;
                 }
                 *out_size = index as u64;
             }
@@ -1464,7 +1464,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumAdd<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -1563,7 +1563,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumSub<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -1665,7 +1665,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumMul<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -1766,7 +1766,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumDiv<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -1864,7 +1864,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumSqr<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -1964,7 +1964,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumExp<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -2066,7 +2066,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModSqr<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -2173,7 +2173,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModExp<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -2279,7 +2279,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModMul<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
@@ -2384,7 +2384,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModInv<'a> {
                                 let mut index = 0;
                                 for byte in big_number_bytes.iter() {
                                     (*bignum_result)[index] = *byte;
-                                    index = index + 1;
+                                    index += 1;
                                 }
                                 *out_size = index as u64;
                             }
