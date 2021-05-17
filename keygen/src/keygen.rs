@@ -5,6 +5,7 @@ use clap::{
     Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
+    input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::{is_parsable, is_prompt_signer_source},
     keypair::{
         keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
@@ -34,8 +35,6 @@ use std::{
 };
 
 const NO_PASSPHRASE: &str = "";
-// Sentinel value used to write to screen instead of file
-const STDOUT_OUTFILE_TOKEN: &str = "-";
 
 struct GrindMatch {
     starts: String,

@@ -1,6 +1,6 @@
 use {
     crate::{
-        input_parsers::pubkeys_sigs_of,
+        input_parsers::{pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
         offline::{SIGNER_ARG, SIGN_ONLY_ARG},
         ArgConstant,
     },
@@ -235,7 +235,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                 }
             } else {
                 match source {
-                    "-" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
+                    STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
                     _ => match Pubkey::from_str(source) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn test_parse_signer_source() {
         assert!(matches!(
-            parse_signer_source("-").unwrap(),
+            parse_signer_source(STDOUT_OUTFILE_TOKEN).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,

@@ -17,6 +17,9 @@ use {
     std::{str::FromStr, sync::Arc},
 };
 
+// Sentinel value used to indicate to write to screen instead of file
+pub const STDOUT_OUTFILE_TOKEN: &str = "-";
+
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
 where
