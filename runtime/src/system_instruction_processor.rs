@@ -120,8 +120,13 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // guard against sysvars being made
-    if sysvar::check_id(owner) {
+    // bpf programs are allowed to do this; so this is inconsistent...
+    // Thus, we're starting to remove this restricition from system instruction
+    // processor for consistency and fewer special casing by piggybacking onto
+    // the related feature gate..
+    let rent_for_sysvars = invoke_context.is_feature_active(&feature_set::rent_for_sysvars::id());
+    if !rent_for_sysvars && sysvar::check_id(owner) {
+        // guard against sysvars being made
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
         return Err(SystemError::InvalidProgramId.into());
     }
@@ -890,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_sysvar_invalid_id() {
+    fn test_create_sysvar_invalid_id_with_feature() {
         // Attempt to create system account in account already owned by another program
         let from = solana_sdk::pubkey::new_rand();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
@@ -912,7 +917,34 @@ mod tests {
             &signers,
             &MockInvokeContext::new(vec![]),
         );
+        assert_eq!(result, Ok(()));
+    }
 
+    #[test]
+    fn test_create_sysvar_invalid_id_without_feature() {
+        // Attempt to create system account in account already owned by another program
+        let from = solana_sdk::pubkey::new_rand();
+        let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
+
+        let to = solana_sdk::pubkey::new_rand();
+        let to_account = AccountSharedData::new_ref(0, 0, &system_program::id());
+
+        let signers = [from, to].iter().cloned().collect::<HashSet<_>>();
+        let to_address = to.into();
+
+        let result = create_account(
+            &KeyedAccount::new(&from, true, &from_account),
+            &KeyedAccount::new(&to, false, &to_account),
+            &to_address,
+            50,
+            2,
+            &sysvar::id(),
+            &signers,
+            &MockInvokeContext {
+                feature_active: false,
+                ..MockInvokeContext::new(vec![])
+            },
+        );
         assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
     }
 
@@ -1025,7 +1057,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_to_sysvar() {
+    fn test_assign_to_sysvar_with_feature() {
         let new_owner = sysvar::id();
 
         let from = solana_sdk::pubkey::new_rand();
@@ -1038,6 +1070,28 @@ mod tests {
                 &new_owner,
                 &[from].iter().cloned().collect::<HashSet<_>>(),
                 &MockInvokeContext::new(vec![]),
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_assign_to_sysvar_without_feature() {
+        let new_owner = sysvar::id();
+
+        let from = solana_sdk::pubkey::new_rand();
+        let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
+
+        assert_eq!(
+            assign(
+                &mut from_account,
+                &from.into(),
+                &new_owner,
+                &[from].iter().cloned().collect::<HashSet<_>>(),
+                &MockInvokeContext {
+                    feature_active: false,
+                    ..MockInvokeContext::new(vec![])
+                },
             ),
             Err(SystemError::InvalidProgramId.into())
         );

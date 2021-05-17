@@ -163,6 +163,10 @@ pub mod neon_evm_compute_budget {
     solana_sdk::declare_id!("GLrVvDPkQi5PMYUrsYWT9doZhSHr1BVZXqj5DbFps3rS");
 }
 
+pub mod rent_for_sysvars {
+    solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -203,6 +207,7 @@ lazy_static! {
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         (updated_verify_policy::id(), "Update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
+        (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

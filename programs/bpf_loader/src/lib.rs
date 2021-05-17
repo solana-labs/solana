@@ -1138,6 +1138,7 @@ mod tests {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
+            feature_active: false,
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),

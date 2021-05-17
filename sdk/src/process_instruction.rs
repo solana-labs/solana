@@ -334,6 +334,7 @@ pub struct MockInvokeContext<'a> {
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    pub feature_active: bool,
 }
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
@@ -348,6 +349,7 @@ impl<'a> MockInvokeContext<'a> {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
+            feature_active: true,
         };
         invoke_context
             .invoke_stack
@@ -442,7 +444,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        true
+        self.feature_active
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         for (key, account) in self.accounts.iter() {
