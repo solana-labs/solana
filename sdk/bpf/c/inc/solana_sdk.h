@@ -489,129 +489,150 @@ static uint64_t sol_bignum_from_dec_str(
 /**
  * BigNum sol_bignum_add
  *  Performs add and returns bignum for sum
- * @param self_ptr self bignum address
- * @param rhs_ptr bignum address to add with self
- * @param sum_ptr object address of resulting sum
-
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_add(
-    const uint64_t *self_ptr,
-    const uint64_t *rhs_ptr,
-    const uint64_t *sum_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 /**
  * BigNum sol_bignum_sub
  *  Performs subtraction and returns bignum for difference
- * @param self_ptr self bignum address
- * @param rhs_ptr bignum address number to sub from self
- * @param diff_ptr object address of resulting difference
-
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_sub(
-    const uint64_t *self_ptr,
-    const uint64_t *rhs_ptr,
-    const uint64_t *diff_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 /**
  * BigNum sol_bignum_mul
  *  Performs multiplication and returns bignum for product
- * @param self_ptr self bignum address
- * @param rhs_ptr bignum address number to multiple self by
- * @param product_ptr object address of resulting product
-
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_mul(
-    const uint64_t *self_ptr,
-    const uint64_t *rhs_ptr,
-    const uint64_t *product_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 /**
  * BigNum sol_bignum_div
  *  Performs division and returns bignum for product
- * @param self_ptr self bignum address
- * @param rhs_ptr bignum address number to divide self by
- * @param quotient_ptr object address of resulting quotient
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_div(
-    const uint64_t *self_ptr,
-    const uint64_t *rhs_ptr,
-    const uint64_t *quotient_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 
 /**
  * BigNum sol_bignum_exp
- * @param self_ptr self bignum address
- * @param exponent_ptr  exponent bignum address
- * @param exp_res_ptr object address of resulting self^exp
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_exp(
-  const uint64_t  *self_ptr,
-  const uint64_t  *self_exponent_ptr,
-  const uint64_t  *exp_res_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 
 /**
  * BigNum sol_bignum_sqr
- * @param self_ptr self bignum address
- * @param uint64_t *sqr_res_ptr
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
+
 static uint64_t sol_bignum_sqr(
-  const uint64_t  *self_ptr,
-  const uint64_t  *sqr_res_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 
 /**
  * BigNum sol_bignum_mod_mul
  * Performs (base * multiplier) % modulus and updates self_ptr BigNum
- * @param self_ptr base bignum address (i.e. self -- read)
- * @param multiplier_ptr - The number that self_ptr is multiplied by
- * @param modulus_ptr the modulus applied to the product of self*multiplier
- * @param mod_exp_ptr object address of resulting BigNum
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_mod_mul(
-    const uint64_t *self_ptr,
-    const uint64_t *multiplier_ptr,
-    const uint64_t *modulus_ptr,
-    const uint64_t *mod_mul_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 
 /**
  * BigNum sol_bignum_mod_inverse
- *  Performs (base * multiplier) % modulus and updates self_ptr BigNum
- * @param self_ptr base bignum address (i.e. self -- read)
- * @param modulus_ptr the modulus applied to the product of self*multiplier
- * @param mod_exp_ptr object address of resulting BigNum
+ *  Performs (base * multiplier) % modulus
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_mod_inverse(
-    const uint64_t *self_ptr,
-    const uint64_t *modulus_ptr,
-    const uint64_t *mod_mul_ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
-
 
 /**
  * BigNum sol_bignum_mod_exp
- *  Performs base^exponent % modulus and updates self_ptr BigNum
- * @param mod_exp_ptr object address of resulting BigNum
- * @param self_ptr base bignum address (i.e. self -- read)
- * @param exponent_ptr exponent bignum address (read)
- * @param modulus_ptr modulus bignum address (read)
+ *  Performs base^exponent % modulus
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
  */
 static uint64_t sol_bignum_mod_exp(
-    const uint64_t *mod_exp_ptr,
-    const uint64_t *self_ptr,
-    const uint64_t *base_ptr,
-    const uint64_t *exponent_ptr,
-    const uint64_t *modulus_ptr
-);
-
-/**
- * BigNum drop
- *
- * @param ptr object address created with sol_bignum_new
- */
-static uint64_t sol_bignum_drop(
-    const uint64_t *ptr
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
 );
 
 /**

@@ -165,22 +165,14 @@ pub struct BpfComputeBudget {
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
-    /// Base number of compute units consumed to call BIGNUM NEW
-    // pub bignum_new_base_cost: u64,
-    /// Base number of compute units consumed to call BigNum size in bytes query
-    // pub bignum_size_base_cost: u64,
     /// Base number of compute units consumed to call BigNum new from u32 value
     pub bignum_from_u32_base_cost: u64,
     /// Base number of compute units consumed to call BigNum new from a decimal string
     pub bignum_from_dec_str_base_cost: u64,
-    /// Base number of compute units consumed to extract big endian byte array from BigNumb
-    // pub bignum_to_bytes_base_cost: u64,
-    /// Base number of compute units consumed to drop/dealloc BigNum
-    // pub bignum_drop_base_cost: u64,
     /// Incremental number of units consumed to drop/dealloc BigNum (based on bytes)
     pub bignum_mod_exp_base_cost: u64,
     /// Number of compute units consumed by logging a `BigNum`
-    pub log_bignum_cost: u64,
+    pub bignum_log_cost: u64,
     /// Number of compute units consumed by BigNum add
     pub bignum_add_cost: u64,
     /// Number of compute units consumed by BigNum subtract
@@ -222,14 +214,10 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
-            // bignum_new_base_cost: 100,
-            // bignum_size_base_cost: 100,
-            // bignum_drop_base_cost: 100,
             bignum_from_u32_base_cost: 100,
             bignum_from_dec_str_base_cost: 100,
-            // bignum_to_bytes_base_cost: 100,
             bignum_mod_exp_base_cost: 100,
-            log_bignum_cost: 100,
+            bignum_log_cost: 100,
             bignum_add_cost: 15,
             bignum_sub_cost: 15,
             bignum_mul_cost: 30,

@@ -65,29 +65,22 @@ fn test_basic_maths() {
     assert_eq!(dived.to_bytes(), vec![30]);
 }
 
-// /// BigNumber bigger numbers and complex maths
-// fn test_complex_maths() {
-//     msg!("BigNumber Complex Maths");
-//     let base_3 = BigNumber::from_u32(3);
-//     let exp_base_3 = base_3.clone();
-//     let modulus_7 = BigNumber::from_u32(7);
-//     assert!(compare_bignum_equal(
-//         &base_3.mod_mul(&exp_base_3, &modulus_7),
-//         &BigNumber::from_u32(2)
-//     ));
-//     let base_15 = BigNumber::from_u32(15);
-//     assert!(compare_bignum_equal(
-//         &base_15.mod_sqr(&modulus_7),
-//         &BigNumber::from_u32(1)
-//     ));
-// }
+/// BigNumber bigger numbers and complex maths
+fn test_complex_maths() {
+    msg!("BigNumber Complex Maths");
+    let bn_arg1 = BigNumber::from_u32(8);
+    let bn_arg2 = BigNumber::from_u32(2);
+    let exp_res = bn_arg1.exp(&bn_arg2);
+    msg!("exp vec {:?}", exp_res.to_bytes());
+    assert_eq!(exp_res.to_bytes(), vec![64]);
+}
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     msg!("bignum");
     test_constructors();
     test_basic_maths();
-    // test_complex_maths();
+    test_complex_maths();
     0u64
 }
 
@@ -105,8 +98,8 @@ mod test {
     fn test_simple_maths_pass() {
         test_basic_maths();
     }
-    // #[test]
-    // fn test_complex_maths_pass() {
-    //     test_complex_maths();
-    // }
+    #[test]
+    fn test_complex_maths_pass() {
+        test_complex_maths();
+    }
 }
