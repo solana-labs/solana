@@ -53,7 +53,7 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::{Borrow, Cow},
     boxed::Box,
-    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     io::{Error as IoError, Result as IoResult},
     ops::{Range, RangeBounds},
@@ -4952,12 +4952,10 @@ impl AccountsDb {
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn generate_index(&self) {
-        // BTreeMap because we want in-order traversal of oldest write_version to newest.
-        // Thus, all instances of an account in a store are added to the index in oldest to newest
-        // order and we update refcounts and track reclaims correctly.
         type AccountsMap<'a> =
-            HashMap<Pubkey, BTreeMap<StoredMetaWriteVersion, (AppendVecId, StoredAccountMeta<'a>)>>;
+            HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -5008,28 +5006,33 @@ impl AccountsDb {
                     storage_maps.iter().for_each(|storage| {
                         let accounts = storage.all_accounts();
                         accounts.into_iter().for_each(|stored_account| {
-                            let entry = accounts_map
-                                .entry(stored_account.meta.pubkey)
-                                .or_insert_with(BTreeMap::new);
-                            assert!(
-                                // There should only be one update per write version for a specific slot
-                                // and account
-                                entry
-                                    .insert(
-                                        stored_account.meta.write_version,
-                                        (storage.append_vec_id(), stored_account)
-                                    )
-                                    .is_none()
-                            );
+                            let this_version = stored_account.meta.write_version;
+                            match accounts_map.entry(stored_account.meta.pubkey) {
+                                std::collections::hash_map::Entry::Vacant(entry) => {
+                                    entry.insert((
+                                        this_version,
+                                        storage.append_vec_id(),
+                                        stored_account,
+                                    ));
+                                }
+                                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                                    let occupied_version = entry.get().0;
+                                    if occupied_version < this_version {
+                                        entry.insert((
+                                            this_version,
+                                            storage.append_vec_id(),
+                                            stored_account,
+                                        ));
+                                    } else {
+                                        assert!(occupied_version != this_version);
+                                    }
+                                }
+                            }
                         })
                     });
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
-                    // Need to restore indexes even with older write versions which may
-                    // be shielding other accounts. When they are then purged, the
-                    // original non-shielded account value will be visible when the account
-                    // is restored from the append-vec
                     if !accounts_map.is_empty() {
                         let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                         let dirty_keys =
@@ -5038,47 +5041,38 @@ impl AccountsDb {
 
                         let infos: Vec<_> = accounts_map
                             .iter()
-                            .map(|(pubkey, account_infos)| {
-                                account_infos
-                                    .iter()
-                                    .map(|(_, (store_id, stored_account))| {
-                                        (
-                                            pubkey,
-                                            AccountInfo {
-                                                store_id: *store_id,
-                                                offset: stored_account.offset,
-                                                stored_size: stored_account.stored_size,
-                                                lamports: stored_account.account_meta.lamports,
-                                            },
-                                        )
-                                    })
-                                    .collect::<Vec<_>>()
+                            .map(|(pubkey, (_, store_id, stored_account))| {
+                                (
+                                    pubkey,
+                                    AccountInfo {
+                                        store_id: *store_id,
+                                        offset: stored_account.offset,
+                                        stored_size: stored_account.stored_size,
+                                        lamports: stored_account.account_meta.lamports,
+                                    },
+                                )
                             })
-                            .collect();
+                            .collect::<Vec<_>>(); // we want this collection to occur before the lock below
                         let mut lock = self.accounts_index.get_account_maps_write_lock();
-                        infos.into_iter().for_each(|item| {
-                            item.into_iter().for_each(|(pubkey, account_info)| {
-                                self.accounts_index
-                                    .insert_new_if_missing_into_primary_index(
-                                        *slot,
-                                        &pubkey,
-                                        account_info,
-                                        &mut _reclaims,
-                                        &mut lock,
-                                    );
-                            });
+                        infos.into_iter().for_each(|(pubkey, account_info)| {
+                            self.accounts_index
+                                .insert_new_if_missing_into_primary_index(
+                                    *slot,
+                                    &pubkey,
+                                    account_info,
+                                    &mut _reclaims,
+                                    &mut lock,
+                                );
                         });
                         drop(lock);
                         if !self.account_indexes.is_empty() {
-                            for (pubkey, account_infos) in accounts_map.into_iter() {
-                                for (_, (_store_id, stored_account)) in account_infos.iter() {
-                                    self.accounts_index.update_secondary_indexes(
-                                        &pubkey,
-                                        &stored_account.account_meta.owner,
-                                        &stored_account.data,
-                                        &self.account_indexes,
-                                    );
-                                }
+                            for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
+                                self.accounts_index.update_secondary_indexes(
+                                    &pubkey,
+                                    &stored_account.account_meta.owner,
+                                    &stored_account.data,
+                                    &self.account_indexes,
+                                );
                             }
                         }
                     }
