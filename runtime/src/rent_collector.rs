@@ -61,15 +61,9 @@ impl RentCollector {
         address: &Pubkey,
         account: &mut AccountSharedData,
     ) -> u64 {
-<<<<<<< HEAD
-        if account.executable
+        if account.executable() // executable accounts must be rent-exempt balance
             || account.rent_epoch > self.epoch
             || sysvar::check_id(&account.owner)
-=======
-        if account.executable() // executable accounts must be rent-exempt balance
-            || account.rent_epoch() > self.epoch
-            || sysvar::check_id(account.owner())
->>>>>>> bcbe15557... Minor test cleanup and comments (#17283)
             || *address == incinerator::id()
         {
             0

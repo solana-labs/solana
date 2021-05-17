@@ -8364,7 +8364,7 @@ pub(crate) mod tests {
                         },
                         bank1.inherit_specially_retained_account_fields(optional_account),
                     );
-                    account.set_rent_epoch(dummy_rent_epoch);
+                    account.rent_epoch = dummy_rent_epoch;
                     account
                 });
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
@@ -8372,7 +8372,7 @@ pub(crate) mod tests {
                     expected_previous_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
-                assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
+                assert_eq!(dummy_rent_epoch, current_account.rent_epoch);
             },
             |old, new| {
                 assert_eq!(old + 1, new);
@@ -8424,7 +8424,7 @@ pub(crate) mod tests {
                     expected_next_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
-                assert_eq!(INITIAL_RENT_EPOCH, current_account.rent_epoch());
+                assert_eq!(INITIAL_RENT_EPOCH, current_account.rent_epoch);
             },
             |old, new| {
                 // if existing, capitalization shouldn't change
