@@ -10,7 +10,7 @@ source ../ci/env.sh
 
 # Fixate master branch as only one to download translations & get its ref
 ONLY_TRANSLATE_ON='master'
-MASTER_REF="$(git rev-parse "$ONLY_TRANSLATE_ON")}"
+MASTER_REF="$(git rev-parse "$ONLY_TRANSLATE_ON")"
 # Get current ref
 CURRENT_REF="$(cat ../.git/HEAD)"
 
@@ -28,7 +28,7 @@ source ../ci/rust-version.sh
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
-#npm run build
+npm run build
 echo $?
 
 eval "$(../ci/channel-info.sh)"
