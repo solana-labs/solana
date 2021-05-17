@@ -210,6 +210,8 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let mut key_check = MessageProgramIdsCache::new(message);
             let mut rent_debits = RentDebits::default();
+            let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
+
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if key_check.is_non_loader_key(key, i) {
                     if payer_index.is_none() {
@@ -229,8 +231,11 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(key, &mut account);
+                                    let rent_due = rent_collector.collect_from_existing_account(
+                                        key,
+                                        &mut account,
+                                        rent_for_sysvars,
+                                    );
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -916,6 +921,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_for_sysvars: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -924,6 +930,7 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
+            rent_for_sysvars,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -948,6 +955,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_for_sysvars: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), tx)) in loaded.iter_mut().zip(txs).enumerate() {
@@ -1009,7 +1017,11 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        let rent = rent_collector.collect_from_created_account(key, account);
+                        let rent = rent_collector.collect_from_created_account(
+                            key,
+                            account,
+                            rent_for_sysvars,
+                        );
                         loaded_transaction.rent += rent;
                         loaded_transaction
                             .rent_debits
@@ -2005,6 +2017,7 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
+            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2381,6 +2394,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2496,6 +2510,7 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
+            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 1);
