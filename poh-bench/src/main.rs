@@ -117,7 +117,6 @@ fn main() {
                 );
             }
         }
-        
 
         if perf_libs::api().is_some() {
             let mut time = Measure::start("time");
