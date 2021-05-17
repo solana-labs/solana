@@ -233,7 +233,6 @@ single-threaded environment, and must be deterministic:
   - `std::net`
   - `std::os`
   - `std::future`
-  - `std::net`
   - `std::process`
   - `std::sync`
   - `std::task`
