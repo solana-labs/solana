@@ -107,6 +107,8 @@ fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
+        // Require a seed phrase to avoid generating a keypair
+        // but having no way to get the private key
         .requires("use_mnemonic")
         .help(NO_OUTFILE_ARG.help)
 }
