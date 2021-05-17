@@ -1048,22 +1048,28 @@ mod test {
         let now = now + 1_000;
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(ping_cache);
-        for _ in 0..10 {
-            let req = node.new_pull_request(
-                &thread_pool,
-                &crds,
-                &node_keypair,
-                0,
-                now,
-                None,
-                &HashMap::new(),
-                PACKET_DATA_SIZE,
-                &ping_cache,
-                &mut pings,
-            );
-            let (peer, _) = req.unwrap();
-            assert_eq!(peer, *old.contact_info().unwrap());
-        }
+        let old = old.contact_info().unwrap();
+        let count = repeat_with(|| {
+            let (peer, _filters) = node
+                .new_pull_request(
+                    &thread_pool,
+                    &crds,
+                    &node_keypair,
+                    0, // self_shred_version
+                    now,
+                    None,             // gossip_validators
+                    &HashMap::new(),  // stakes
+                    PACKET_DATA_SIZE, // bloom_size
+                    &ping_cache,
+                    &mut pings,
+                )
+                .unwrap();
+            peer
+        })
+        .take(100)
+        .filter(|peer| peer != old)
+        .count();
+        assert!(count < 2, "count of peer != old: {}", count);
     }
 
     #[test]
