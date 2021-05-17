@@ -17,6 +17,8 @@ import { reportError } from "utils/sentry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
 import { Copyable } from "components/common/Copyable";
+import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
+import { displayTimestampWithoutDate } from "utils/date";
 
 const getEthAddress = (link?: string) => {
   let address = "";
@@ -76,7 +78,6 @@ function MintAccountCard({
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(account.pubkey);
-
   const tokenInfo = tokenRegistry.get(mintAddress);
 
   const bridgeContractAddress = getEthAddress(
@@ -85,6 +86,15 @@ function MintAccountCard({
   const assetContractAddress = getEthAddress(
     tokenInfo?.extensions?.assetContract
   );
+
+  const coinInfo = useCoinGecko(tokenInfo?.extensions?.coingeckoId);
+
+  let tokenPriceInfo;
+  if (coinInfo?.status === CoingeckoStatus.Success) {
+    tokenPriceInfo = coinInfo.coinInfo;
+  }
+
+  console.log(tokenPriceInfo);
 
   return (
     <div className="card">
@@ -115,6 +125,17 @@ function MintAccountCard({
             )}
           </td>
         </tr>
+        {tokenPriceInfo?.price && (
+          <tr>
+            <td>Current Price</td>
+            <td className="text-lg-right">
+              $
+              {tokenPriceInfo.price.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+              })}
+            </td>
+          </tr>
+        )}
         {tokenInfo?.extensions?.website && (
           <tr>
             <td>Website</td>
@@ -189,6 +210,12 @@ function MintAccountCard({
           </tr>
         )}
       </TableCardBody>
+      {tokenPriceInfo && (
+        <p className="updated-time text-muted mb-0">
+          Price updated at{" "}
+          {displayTimestampWithoutDate(tokenPriceInfo.last_updated.getTime())}
+        </p>
+      )}
     </div>
   );
 }
