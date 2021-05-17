@@ -629,7 +629,7 @@ pub(crate) struct BankFieldsToDeserialize {
 // Bank's common fields shared by all supported snapshot versions for serialization.
 // This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
 // So, sync fields with BankFieldsToDeserialize!
-// all members are made public to remain Bank private and to make versioned serializer workable on this
+// all members are made public to keep Bank private and to make versioned serializer workable on this
 #[derive(Debug)]
 pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
