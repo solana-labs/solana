@@ -32,13 +32,15 @@ macro_rules! u64_align {
 
 const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
 
+pub type StoredMetaWriteVersion = u64;
+
 /// Meta contains enough context to recover the index from storage itself
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Debug)]
 pub struct StoredMeta {
     /// global write version
-    pub write_version: u64,
+    pub write_version: StoredMetaWriteVersion,
     /// key for the account
     pub pubkey: Pubkey,
     pub data_len: u64,
