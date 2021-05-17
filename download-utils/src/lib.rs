@@ -3,8 +3,7 @@ use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
-use solana_sdk::clock::Slot;
-use solana_sdk::hash::Hash;
+use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
 use std::fs::{self, File};
 use std::io;
 use std::io::Read;
@@ -158,11 +157,11 @@ pub fn download_genesis_if_missing(
 ) -> Result<PathBuf, String> {
     if !genesis_package.exists() {
         let tmp_genesis_path = genesis_package.parent().unwrap().join("tmp-genesis");
-        let tmp_genesis_package = tmp_genesis_path.join("genesis.tar.bz2");
+        let tmp_genesis_package = tmp_genesis_path.join(DEFAULT_GENESIS_ARCHIVE);
 
         let _ignored = fs::remove_dir_all(&tmp_genesis_path);
         download_file(
-            &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
+            &format!("http://{}/{}", rpc_addr, DEFAULT_GENESIS_ARCHIVE),
             &tmp_genesis_package,
             use_progress_bar,
         )?;

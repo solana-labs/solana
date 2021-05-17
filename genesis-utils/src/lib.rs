@@ -1,6 +1,9 @@
 use solana_download_utils::download_genesis_if_missing;
 use solana_runtime::hardened_unpack::unpack_genesis_archive;
-use solana_sdk::{genesis_config::GenesisConfig, hash::Hash};
+use solana_sdk::{
+    genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE},
+    hash::Hash,
+};
 use std::net::SocketAddr;
 
 fn check_genesis_hash(
@@ -45,7 +48,7 @@ pub fn download_then_check_genesis_hash(
         return Ok(genesis_config);
     }
 
-    let genesis_package = ledger_path.join("genesis.tar.bz2");
+    let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
     let genesis_config = if let Ok(tmp_genesis_package) =
         download_genesis_if_missing(rpc_addr, &genesis_package, use_progress_bar)
     {
