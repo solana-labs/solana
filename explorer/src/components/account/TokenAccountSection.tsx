@@ -94,8 +94,6 @@ function MintAccountCard({
     tokenPriceInfo = coinInfo.coinInfo;
   }
 
-  console.log(tokenPriceInfo);
-
   return (
     <div className="card">
       <div className="card-header">
@@ -211,7 +209,7 @@ function MintAccountCard({
         )}
       </TableCardBody>
       {tokenPriceInfo && (
-        <p className="updated-time text-muted mb-0">
+        <p className="updated-time text-muted mr-4">
           Price updated at{" "}
           {displayTimestampWithoutDate(tokenPriceInfo.last_updated.getTime())}
         </p>
