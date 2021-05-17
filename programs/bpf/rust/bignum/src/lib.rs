@@ -29,9 +29,13 @@ const NEG_LONG_DEC_STRING: &str =
 fn test_constructors() {
     msg!("BigNumber constructors");
     let base_bn_0 = BigNumber::new();
+    assert_eq!(base_bn_0.to_bytes(), vec![0]);
     let default_0 = BigNumber::default();
+    assert_eq!(default_0.to_bytes(), vec![0]);
     let new_bn_0 = BigNumber::from_u32(0);
+    assert_eq!(new_bn_0.to_bytes(), vec![0]);
     let max_bn_u32 = BigNumber::from_u32(u32::MAX);
+    assert_eq!(max_bn_u32.to_bytes(), vec![255, 255, 255, 255]);
     let bn_from_dec = BigNumber::from_dec_str(LONG_DEC_STRING);
     assert_eq!(bn_from_dec.is_negative(), false);
     let bn_from_dec = BigNumber::from_dec_str(NEG_LONG_DEC_STRING);
