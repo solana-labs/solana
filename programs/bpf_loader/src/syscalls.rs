@@ -4661,7 +4661,7 @@ mod tests {
     #[test]
     fn test_syscall_bignum_from_dec_str() {
         let (is_neg, result_vec) = new_dec_str_bignum(LONG_DEC_STRING);
-        assert!(is_neg == false);
+        assert!(!is_neg);
         let bns = BigNum::from_dec_str(LONG_DEC_STRING).unwrap();
         let bns_vec = bns.as_ref().to_vec();
         assert_eq!(result_vec, bns_vec);
