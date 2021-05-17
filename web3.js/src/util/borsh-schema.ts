@@ -1,3 +1,4 @@
+import {Buffer} from 'buffer';
 import {serialize, deserialize} from 'borsh';
 
 // Class wrapping a plain object
