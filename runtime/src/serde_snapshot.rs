@@ -255,7 +255,10 @@ where
         account_indexes,
         caching_enabled,
     )?;
-    accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
+    accounts_db.freeze_accounts(
+        &Ancestors::from(&bank_fields.ancestors),
+        frozen_account_pubkeys,
+    );
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
     let bank = Bank::new_from_fields(
