@@ -4552,6 +4552,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-genesis-utils"
+version = "1.7.0"
+dependencies = [
+ "solana-download-utils",
+ "solana-runtime",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-gossip"
 version = "1.7.0"
 dependencies = [
@@ -5415,6 +5424,7 @@ dependencies = [
  "solana-core",
  "solana-download-utils",
  "solana-faucet",
+ "solana-genesis-utils",
  "solana-ledger",
  "solana-logger 1.7.0",
  "solana-metrics",
