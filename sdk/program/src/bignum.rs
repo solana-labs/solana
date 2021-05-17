@@ -26,11 +26,9 @@ pub struct BigNumber {
 impl BigNumber {
     /// Returns a BigNumber with initial value of 0
     pub fn new() -> Self {
-        let mut value = Vec::<u8>::new();
-        value.push(0u8);
         Self {
             negative: false,
-            value,
+            value: vec![0u8],
         }
     }
 
@@ -43,11 +41,9 @@ impl BigNumber {
     /// Returns a BigNumber with initial value set to a u32 value
     pub fn from_u32(val: u32) -> Self {
         if val == 0 {
-            let mut value = Vec::<u8>::new();
-            value.push(0);
             Self {
                 negative: false,
-                value,
+                value: vec![0u8],
             }
         } else {
             #[cfg(not(target_arch = "bpf"))]
@@ -707,11 +703,9 @@ impl BigNumber {
 
 impl Default for BigNumber {
     fn default() -> Self {
-        let mut value = Vec::<u8>::new();
-        value.push(0);
         Self {
             negative: false,
-            value,
+            value: vec![0u8],
         }
     }
 }
