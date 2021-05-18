@@ -68,13 +68,11 @@ pub enum ParsePubkeyError {
     WrongSize,
     #[error("Invalid Base58 string")]
     Invalid,
-    #[error("Infallible")]
-    Infallible,
 }
 
 impl From<Infallible> for ParsePubkeyError {
     fn from(_: Infallible) -> Self {
-        Self::Infallible
+        unreachable!("Infallible unihnabited");
     }
 }
 
