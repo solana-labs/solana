@@ -685,11 +685,20 @@ impl BigNumber {
     /// Log a `BigNum` from a program
     pub fn log(&self) {
         #[cfg(not(target_arch = "bpf"))]
-        crate::program_stubs::sol_log(&self.to_string());
+        {
+            use openssl::bn::BigNum;
+            let mut my_num = BigNum::from_slice(&self.value).unwrap();
+            my_num.set_negative(self.negative);
+            crate::program_stubs::sol_log(&my_num.to_dec_str().unwrap());
+        }
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_bignum_log(bignum_addr: *const u64, bignum_size: u64, negative_set: u64) -> u64;
+                fn sol_bignum_log(
+                    bignum_addr: *const u64,
+                    bignum_size: u64,
+                    negative_set: u64,
+                ) -> u64;
             }
             unsafe {
                 sol_bignum_log(
