@@ -608,6 +608,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -638,6 +639,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -663,6 +665,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -688,6 +691,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -706,6 +710,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -756,6 +761,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
@@ -778,6 +784,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -881,6 +888,7 @@ fn test_stake_authorize_with_fee_payer() {
         memo: None,
         fee_payer: 1,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
@@ -902,6 +910,7 @@ fn test_stake_authorize_with_fee_payer() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -920,6 +929,7 @@ fn test_stake_authorize_with_fee_payer() {
         memo: None,
         fee_payer: 0,
         custodian: None,
+        no_wait: false,
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed

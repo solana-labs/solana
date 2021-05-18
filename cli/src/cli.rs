@@ -276,6 +276,7 @@ pub enum CliCommand {
         memo: Option<String>,
         fee_payer: SignerIndex,
         custodian: Option<SignerIndex>,
+        no_wait: bool,
     },
     StakeSetLockup {
         stake_account_pubkey: Pubkey,
@@ -1679,6 +1680,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             memo,
             fee_payer,
             custodian,
+            no_wait,
         } => process_stake_authorize(
             &rpc_client,
             config,
@@ -1692,6 +1694,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
+            *no_wait,
         ),
         CliCommand::StakeSetLockup {
             stake_account_pubkey,

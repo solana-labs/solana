@@ -238,6 +238,12 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
+                .arg(
+                    Arg::with_name("no_wait")
+                        .long("no-wait")
+                        .takes_value(false)
+                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                )
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -627,6 +633,7 @@ pub fn parse_stake_authorize(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
     let (custodian, custodian_pubkey) = signer_of(matches, "custodian", wallet_manager)?;
+    let no_wait = matches.is_present("no_wait");
 
     bulk_signers.push(fee_payer);
     if nonce_account.is_some() {
@@ -663,6 +670,7 @@ pub fn parse_stake_authorize(
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
+            no_wait,
         },
         signers: signer_info.signers,
     })
@@ -1094,6 +1102,7 @@ pub fn process_stake_authorize(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    no_wait: bool,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
     let custodian = custodian.map(|index| config.signers[index]);
@@ -1157,7 +1166,11 @@ pub fn process_stake_authorize(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = if no_wait {
+            rpc_client.send_transaction(&tx)
+        } else {
+            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
+        };
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -2151,6 +2164,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2188,6 +2202,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2229,6 +2244,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2259,6 +2275,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2286,6 +2303,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2319,6 +2337,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2353,6 +2372,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2384,6 +2404,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2392,6 +2413,35 @@ mod tests {
                         .into(),
                 ],
             },
+        );
+
+        // Test Authorize Subcommand w/ no-wait
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--no-wait",
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    custodian: None,
+                    no_wait: true,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
         );
 
         // Test Authorize Subcommand w/ sign-only
@@ -2421,6 +2471,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2460,6 +2511,7 @@ mod tests {
                     memo: None,
                     fee_payer: 1,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2509,6 +2561,7 @@ mod tests {
                     memo: None,
                     fee_payer: 1,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2544,6 +2597,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2584,6 +2638,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2620,6 +2675,7 @@ mod tests {
                     memo: None,
                     fee_payer: 1,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2660,6 +2716,7 @@ mod tests {
                     memo: None,
                     fee_payer: 1,
                     custodian: None,
+                    no_wait: false,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

@@ -1275,7 +1275,7 @@ fn assert_instruction_count() {
     }
 
     let mut passed = true;
-    println!("\n  {:30} expected actual diff", "BPF program");
+    println!("\n  {:30} expected actual  diff", "BPF program");
     for program in programs.iter() {
         let program_id = solana_sdk::pubkey::new_rand();
         let key = solana_sdk::pubkey::new_rand();
@@ -1283,7 +1283,14 @@ fn assert_instruction_count() {
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
         let diff: i64 = count as i64 - program.1 as i64;
-        println!("  {:30} {:8} {:6} {:+4}", program.0, program.1, count, diff);
+        println!(
+            "  {:30} {:8} {:6} {:+5} ({:+3.0}%)",
+            program.0,
+            program.1,
+            count,
+            diff,
+            100.0_f64 * count as f64 / program.1 as f64 - 100.0_f64,
+        );
         if count > program.1 {
             passed = false;
         }
@@ -1911,6 +1918,38 @@ fn test_program_bpf_disguised_as_bpf_loader() {
             TransactionError::InstructionError(0, InstructionError::IncorrectProgramId)
         );
     }
+}
+
+#[test]
+#[cfg(feature = "bpf_c")]
+fn test_program_bpf_c_dup() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+
+    let account_address = Pubkey::new_unique();
+    let account =
+        AccountSharedData::new_data(42, &[1_u8, 2, 3], &solana_sdk::system_program::id()).unwrap();
+    bank.store_account(&account_address, &account);
+
+    let bank_client = BankClient::new(bank);
+
+    let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "ser");
+    let account_metas = vec![
+        AccountMeta::new_readonly(account_address, false),
+        AccountMeta::new_readonly(account_address, false),
+    ];
+    let instruction = Instruction::new_with_bytes(program_id, &[4, 5, 6, 7], account_metas);
+    bank_client
+        .send_and_confirm_instruction(&mint_keypair, instruction)
+        .unwrap();
 }
 
 #[cfg(feature = "bpf_rust")]

@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
         accounts_index::{AccountSecondaryIndexes, Ancestors},
-        append_vec::AppendVec,
+        append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,
         epoch_stakes::EpochStakes,
@@ -64,7 +64,12 @@ pub(crate) enum SerdeStyle {
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
-struct AccountsDbFields<T>(HashMap<Slot, Vec<T>>, u64, Slot, BankHashInfo);
+struct AccountsDbFields<T>(
+    HashMap<Slot, Vec<T>>,
+    StoredMetaWriteVersion,
+    Slot,
+    BankHashInfo,
+);
 
 trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
