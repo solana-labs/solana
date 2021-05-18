@@ -3,7 +3,7 @@ use super::common::UnusedAccounts;
 use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
-use crate::accounts_index::AncestorsForSerialization;
+use crate::ancestors::AncestorsForSerialization;
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
