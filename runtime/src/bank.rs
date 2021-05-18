@@ -4518,12 +4518,36 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
+        let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
             self.clean_accounts(true);
+        }
+        clean_time.stop();
+
+        let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
+        if self.slot() > 0 {
             self.shrink_all_slots();
         }
+        shrink_all_slots_time.stop();
+
+        let mut verify_time = Measure::start("verify_bank_hash");
+        let mut verify = self.verify_bank_hash();
+        verify_time.stop();
+
+        let mut verify2_time = Measure::start("verify_hash");
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
-        self.verify_bank_hash() && self.verify_hash()
+        verify = verify && self.verify_hash();
+        verify2_time.stop();
+
+        datapoint_info!(
+            "verify_snapshot_bank",
+            ("clean_us", clean_time.as_us(), i64),
+            ("shrink_all_slots_us", shrink_all_slots_time.as_us(), i64),
+            ("verify_bank_hash_us", verify_time.as_us(), i64),
+            ("verify_hash_us", verify2_time.as_us(), i64),
+        );
+
+        verify
     }
 
     /// Return the number of hashes per tick
