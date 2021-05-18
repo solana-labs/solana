@@ -84,7 +84,6 @@ fn test_complex_maths() {
     let bn_arg2 = BigNumber::from_u32(7);
     let mod_inv = bn_arg1.mod_inv(&bn_arg2);
     assert_eq!(mod_inv.to_bytes(), vec![4]);
-    mod_inv.log();
 }
 
 fn test_output_logging() {
