@@ -27,6 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::Mutex,
+    time::Duration,
 };
 
 pub struct CrdsGossip {
@@ -300,9 +301,9 @@ impl CrdsGossip {
     pub fn make_timeouts(
         &self,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_ms: u64,
+        epoch_duration: Duration,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.make_timeouts(self.id, stakes, epoch_ms)
+        self.pull.make_timeouts(self.id, stakes, epoch_duration)
     }
 
     pub fn purge(

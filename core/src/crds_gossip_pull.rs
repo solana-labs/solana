@@ -34,7 +34,7 @@ use std::{
     convert::TryInto,
     net::SocketAddr,
     sync::Mutex,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
@@ -552,9 +552,9 @@ impl CrdsGossipPull {
         &self,
         self_pubkey: Pubkey,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_ms: u64,
+        epoch_duration: Duration,
     ) -> HashMap<Pubkey, u64> {
-        let extended_timeout = self.crds_timeout.max(epoch_ms);
+        let extended_timeout = self.crds_timeout.max(epoch_duration.as_millis() as u64);
         let default_timeout = if stakes.values().all(|stake| *stake == 0) {
             extended_timeout
         } else {
@@ -1342,7 +1342,7 @@ mod test {
                 .process_pull_response(
                     &mut node_crds,
                     &node_pubkey,
-                    &node.make_timeouts(node_pubkey, &HashMap::new(), 0),
+                    &node.make_timeouts(node_pubkey, &HashMap::new(), Duration::default()),
                     rsp.into_iter().flatten().collect(),
                     1,
                 )
@@ -1391,7 +1391,7 @@ mod test {
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
 
         // purge
-        let timeouts = node.make_timeouts(node_pubkey, &HashMap::new(), 0);
+        let timeouts = node.make_timeouts(node_pubkey, &HashMap::new(), Duration::default());
         node.purge_active(&thread_pool, &mut node_crds, node.crds_timeout, &timeouts);
 
         //verify self is still valid after purge

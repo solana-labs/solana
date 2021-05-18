@@ -1723,8 +1723,11 @@ impl ClusterInfo {
         bank_forks: Option<&RwLock<BankForks>>,
         stakes: &HashMap<Pubkey, u64>,
     ) {
-        let epoch_ms = get_epoch_millis(bank_forks);
-        let timeouts = self.gossip.read().unwrap().make_timeouts(stakes, epoch_ms);
+        let epoch_duration = get_epoch_duration(bank_forks);
+        let timeouts = {
+            let gossip = self.gossip.read().unwrap();
+            gossip.make_timeouts(stakes, epoch_duration)
+        };
         let num_purged = self
             .time_gossip_write_lock("purge", &self.stats.purge)
             .purge(thread_pool, timestamp(), &timeouts);
@@ -2128,7 +2131,7 @@ impl ClusterInfo {
         responses: Vec<(Pubkey, Vec<CrdsValue>)>,
         thread_pool: &ThreadPool,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_time_ms: u64,
+        epoch_duration: Duration,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_responses_time);
         if responses.is_empty() {
@@ -2177,11 +2180,10 @@ impl ClusterInfo {
                 .reduce(HashMap::new, merge)
         });
         if !responses.is_empty() {
-            let timeouts = self
-                .gossip
-                .read()
-                .unwrap()
-                .make_timeouts(&stakes, epoch_time_ms);
+            let timeouts = {
+                let gossip = self.gossip.read().unwrap();
+                gossip.make_timeouts(&stakes, epoch_duration)
+            };
             for (from, data) in responses {
                 self.handle_pull_response(&from, data, &timeouts);
             }
@@ -2502,7 +2504,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
         stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
-        epoch_time_ms: u64,
+        epoch_duration: Duration,
         should_check_duplicate_instance: bool,
     ) -> Result<()> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
@@ -2594,7 +2596,7 @@ impl ClusterInfo {
             response_sender,
             require_stake_for_gossip,
         );
-        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_time_ms);
+        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_duration);
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
@@ -2633,7 +2635,6 @@ impl ClusterInfo {
                     .add_relaxed(excess_count as u64);
             }
         }
-        let epoch_time_ms = get_epoch_millis(bank_forks);
         // Using root_bank instead of working_bank here so that an enbaled
         // feature does not roll back (if the feature happens to get enabled in
         // a minority fork).
@@ -2652,7 +2653,7 @@ impl ClusterInfo {
             response_sender,
             &stakes,
             feature_set.as_deref(),
-            epoch_time_ms,
+            get_epoch_duration(bank_forks),
             should_check_duplicate_instance,
         )?;
         if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
@@ -2756,10 +2757,10 @@ impl ClusterInfo {
     }
 }
 
-// Returns root bank's epoch duration in millis. Falls back on
+// Returns root bank's epoch duration. Falls back on
 //     DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT
 // if there are no working banks.
-fn get_epoch_millis(bank_forks: Option<&RwLock<BankForks>>) -> u64 {
+fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
     let num_slots = match bank_forks {
         None => {
             inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
@@ -2770,7 +2771,7 @@ fn get_epoch_millis(bank_forks: Option<&RwLock<BankForks>>) -> u64 {
             bank.get_slots_in_epoch(bank.epoch())
         }
     };
-    num_slots * DEFAULT_MS_PER_SLOT
+    Duration::from_millis(num_slots * DEFAULT_MS_PER_SLOT)
 }
 
 /// Turbine logic
@@ -3822,7 +3823,7 @@ mod tests {
             let gossip = cluster_info.gossip.read().unwrap();
             gossip.make_timeouts(
                 &HashMap::default(), // stakes,
-                gossip.pull.crds_timeout,
+                Duration::from_millis(gossip.pull.crds_timeout),
             )
         };
         ClusterInfo::handle_pull_response(
@@ -4482,8 +4483,8 @@ mod tests {
     #[test]
     fn test_get_epoch_millis_no_bank() {
         assert_eq!(
-            get_epoch_millis(/*bank_forks=*/ None), // 48 hours
-            DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT
+            get_epoch_duration(/*bank_forks=*/ None).as_millis() as u64,
+            DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT // 48 hours
         );
     }
 }
