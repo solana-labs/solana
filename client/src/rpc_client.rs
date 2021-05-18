@@ -1166,7 +1166,6 @@ impl RpcClient {
                 filters: None,
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64Zstd),
-                    commitment: Some(self.commitment_config),
                     ..RpcAccountInfoConfig::default()
                 },
             },
@@ -1178,7 +1177,10 @@ impl RpcClient {
         pubkey: &Pubkey,
         config: RpcProgramAccountsConfig,
     ) -> ClientResult<Vec<(Pubkey, Account)>> {
-        let commitment = config.account_config.commitment.unwrap_or_default();
+        let commitment = config
+            .account_config
+            .commitment
+            .unwrap_or_else(|| self.commitment());
         let commitment = self.maybe_map_commitment(commitment)?;
         let account_config = RpcAccountInfoConfig {
             commitment: Some(commitment),
