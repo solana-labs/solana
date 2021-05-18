@@ -1175,13 +1175,23 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         w_account_maps: &mut ReadWriteLockMapType<T>,
     ) {
-        let new_entry = Self::new_entry();
-        let (mut w_account_entry, _is_new) =
-            self.insert_new_entry_if_missing_with_lock(pubkey, w_account_maps, new_entry);
+        let mut is_newly_inserted = false;
+        let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
+            is_newly_inserted = true;
+            // this value is equivalent to what update() below would have created
+            Arc::new(AccountMapEntryInner {
+                ref_count: AtomicU64::new(if account_info.is_cached() { 0 } else { 1 }),
+                slot_list: RwLock::new(vec![(slot, account_info.clone())]),
+            })
+        });
         if account_info.is_zero_lamport() {
             self.zero_lamport_pubkeys.insert(*pubkey);
         }
-        w_account_entry.update(slot, account_info, reclaims);
+        if !is_newly_inserted {
+            let mut w_account_entry =
+                WriteAccountMapEntry::from_account_map_entry(account_entry.clone());
+            w_account_entry.update(slot, account_info, reclaims);
+        }
     }
 
     // Updates the given pubkey at the given slot with the new account information.
