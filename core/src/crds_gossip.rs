@@ -318,9 +318,8 @@ impl CrdsGossip {
         }
         if now > self.pull.crds_timeout {
             //sanity check
-            let min = self.pull.crds_timeout;
             assert_eq!(timeouts[&self.id], std::u64::MAX);
-            assert_eq!(timeouts[&Pubkey::default()], min);
+            assert!(timeouts.contains_key(&Pubkey::default()));
             rv = self
                 .pull
                 .purge_active(thread_pool, &mut self.crds, now, &timeouts);

@@ -554,15 +554,16 @@ impl CrdsGossipPull {
         stakes: &HashMap<Pubkey, u64>,
         epoch_ms: u64,
     ) -> HashMap<Pubkey, u64> {
+        let extended_timeout = self.crds_timeout.max(epoch_ms);
         let default_timeout = if stakes.values().all(|stake| *stake == 0) {
-            self.crds_timeout.max(epoch_ms)
+            extended_timeout
         } else {
             self.crds_timeout
         };
         stakes
             .iter()
             .filter(|(_, stake)| **stake > 0)
-            .map(|(pubkey, _)| (*pubkey, epoch_ms))
+            .map(|(pubkey, _)| (*pubkey, extended_timeout))
             .chain(vec![
                 (Pubkey::default(), default_timeout),
                 (self_pubkey, u64::MAX),
