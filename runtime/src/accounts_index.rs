@@ -2212,7 +2212,7 @@ pub mod tests {
         let account_info = true;
         index.insert_new_if_missing_into_primary_index(
             slot,
-            &key.pubkey(),
+            pubkey,
             account_info,
             &mut gc,
             &mut w_account_maps,
@@ -2242,7 +2242,7 @@ pub mod tests {
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
         index.insert_new_if_missing_into_primary_index(
             slot,
-            &key.pubkey(),
+            pubkey,
             account_info,
             &mut gc,
             &mut w_account_maps,
