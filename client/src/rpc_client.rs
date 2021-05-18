@@ -1016,12 +1016,7 @@ impl RpcClient {
             RpcProgramAccountsConfig {
                 filters: None,
                 account_config: RpcAccountInfoConfig {
-<<<<<<< HEAD
-                    encoding: Some(UiAccountEncoding::Base64),
-                    commitment: Some(self.commitment_config),
-=======
                     encoding: Some(UiAccountEncoding::Base64Zstd),
->>>>>>> 63b97729e... get_program_accounts_with_config() now correctly defaults to RpcClient's commitment level
                     ..RpcAccountInfoConfig::default()
                 },
             },
