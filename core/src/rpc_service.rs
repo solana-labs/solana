@@ -239,7 +239,8 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
             let non_circulating_supply =
-                crate::non_circulating_supply::calculate_non_circulating_supply(&bank).lamports;
+                solana_runtime::non_circulating_supply::calculate_non_circulating_supply(&bank)
+                    .lamports;
             Some(format!(
                 "{}",
                 lamports_to_sol(total_supply - non_circulating_supply)

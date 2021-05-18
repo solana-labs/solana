@@ -44,7 +44,6 @@ pub mod gossip_service;
 pub mod heaviest_subtree_fork_choice;
 pub mod latest_validator_votes_for_frozen_banks;
 pub mod ledger_cleanup_service;
-pub mod non_circulating_supply;
 pub mod optimistic_confirmation_verifier;
 pub mod optimistically_confirmed_bank_tracker;
 pub mod outstanding_requests;

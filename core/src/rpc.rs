@@ -4,7 +4,6 @@ use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
     max_slots::MaxSlots,
-    non_circulating_supply::calculate_non_circulating_supply,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -51,6 +50,7 @@ use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
     inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+    non_circulating_supply::calculate_non_circulating_supply,
     snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
@@ -3751,7 +3751,6 @@ pub mod tests {
     use super::{rpc_full::*, rpc_minimal::*, *};
     use crate::{
         contact_info::ContactInfo,
-        non_circulating_supply::non_circulating_accounts,
         optimistically_confirmed_bank_tracker::{
             BankNotification, OptimisticallyConfirmedBankTracker,
         },
@@ -3769,6 +3768,7 @@ pub mod tests {
     };
     use solana_runtime::{
         accounts_background_service::AbsRequestSender, commitment::BlockCommitment,
+        non_circulating_supply::non_circulating_accounts,
     };
     use solana_sdk::{
         account::Account,
