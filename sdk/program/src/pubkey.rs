@@ -227,7 +227,7 @@ impl Pubkey {
                     program_id_addr: *const u8,
                     address_bytes_addr: *const u8,
                 ) -> u64;
-            };
+            }
             let mut bytes = [0; 32];
             let result = unsafe {
                 sol_create_program_address(
@@ -309,7 +309,7 @@ impl Pubkey {
                     address_bytes_addr: *const u8,
                     bump_seed_addr: *const u8,
                 ) -> u64;
-            };
+            }
             let mut bytes = [0; 32];
             let mut bump_seed = std::u8::MAX;
             let result = unsafe {
@@ -342,7 +342,7 @@ impl Pubkey {
         {
             extern "C" {
                 fn sol_log_pubkey(pubkey_addr: *const u8);
-            };
+            }
             unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
         }
 

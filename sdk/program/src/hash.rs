@@ -135,7 +135,7 @@ pub fn hashv(vals: &[&[u8]]) -> Hash {
     {
         extern "C" {
             fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
-        };
+        }
         let mut hash_result = [0; HASH_BYTES];
         unsafe {
             sol_sha256(
