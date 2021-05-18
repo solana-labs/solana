@@ -342,4 +342,11 @@ describe('PublicKey', function () {
     );
     expect(PublicKey.isOnCurve(offCurve.toBuffer())).to.be.false;
   });
+
+  it('canBeSerializedWithBorsh', () => {
+    const publicKey = Keypair.generate().publicKey;
+    const encoded = publicKey.encode();
+    const decoded = PublicKey.decode(encoded);
+    expect(decoded.equals(publicKey)).to.be.true;
+  });
 });
