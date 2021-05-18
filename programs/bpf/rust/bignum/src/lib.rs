@@ -31,9 +31,9 @@ fn test_constructors() {
     let base_bn_0 = BigNumber::new();
     assert_eq!(base_bn_0.to_bytes(), vec![0]);
     let default_0 = BigNumber::default();
-    assert_eq!(default_0.to_bytes(), vec![0]);
+    assert!(base_bn_0 == default_0);
     let new_bn_0 = BigNumber::from_u32(0);
-    assert_eq!(new_bn_0.to_bytes(), vec![0]);
+    assert!(new_bn_0 == default_0);
     let max_bn_u32 = BigNumber::from_u32(u32::MAX);
     assert_eq!(max_bn_u32.to_bytes(), vec![255, 255, 255, 255]);
     let bn_from_dec = BigNumber::from_dec_str(LONG_DEC_STRING);
@@ -87,12 +87,20 @@ fn test_complex_maths() {
     mod_inv.log();
 }
 
+fn test_output_logging() {
+    let bn_from_dec = BigNumber::from_dec_str(LONG_DEC_STRING);
+    bn_from_dec.log();
+    let bn_from_dec = BigNumber::from_dec_str(NEG_LONG_DEC_STRING);
+    bn_from_dec.log();
+}
+
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     msg!("bignum");
     test_constructors();
     test_basic_maths();
     test_complex_maths();
+    test_output_logging();
     0u64
 }
 
@@ -113,5 +121,10 @@ mod test {
     #[test]
     fn test_complex_maths_pass() {
         test_complex_maths();
+    }
+
+    #[test]
+    fn test_logging() {
+        test_output_logging();
     }
 }

@@ -2410,7 +2410,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumLog<'a> {
         &mut self,
         bn_addr: u64,
         bn_size: u64,
-        _arg3: u64,
+        neg_flag: u64,
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &MemoryMapping,
@@ -2425,7 +2425,8 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumLog<'a> {
                 .consume(self.cost + calc_bignum_cost!(bn_size as f64)),
             result
         );
-        let bignum = BigNum::from_slice(bignum_ptr).unwrap();
+        let mut bignum = BigNum::from_slice(bignum_ptr).unwrap();
+        bignum.set_negative(neg_flag == 1u64);
         stable_log::program_log(&self.logger, &bignum.to_string());
         *result = Ok(0);
     }

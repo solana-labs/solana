@@ -268,7 +268,7 @@ impl BigNumber {
             let neg_values = vec![self.negative as u8, rhs.negative as u8];
             let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
+            let mut value_len = self.value.len() + rhs.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
             unsafe {
@@ -319,7 +319,7 @@ impl BigNumber {
             let neg_values = vec![self.negative as u8, rhs.negative as u8];
             let arg_array = vec![self.to_bytes(), rhs.to_bytes(), &neg_values];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), rhs.value.len()) + 1;
+            let mut value_len = self.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
             unsafe {
@@ -423,7 +423,7 @@ impl BigNumber {
             let neg_values = vec![self.negative as u8, exponent.negative as u8];
             let arg_array = vec![self.to_bytes(), exponent.to_bytes(), &neg_values];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), exponent.value.len()) + 1;
+            let mut value_len = self.value.len() * exponent.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
             unsafe {
@@ -474,7 +474,7 @@ impl BigNumber {
             let neg_values = vec![self.negative as u8, modulus.negative as u8];
             let arg_array = vec![self.to_bytes(), modulus.to_bytes(), &neg_values];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), modulus.value.len()) + 1;
+            let mut value_len = modulus.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
             unsafe {
@@ -541,7 +541,7 @@ impl BigNumber {
                 &neg_values,
             ];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), exponent.value.len()) + 1;
+            let mut value_len = self.value.len() * exponent.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
 
@@ -609,7 +609,7 @@ impl BigNumber {
                 &neg_values,
             ];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), multiplier.value.len()) + 1;
+            let mut value_len = modulus.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
 
@@ -662,7 +662,7 @@ impl BigNumber {
             let neg_values = vec![self.negative as u8, modulus.negative as u8];
             let arg_array = vec![self.to_bytes(), modulus.to_bytes(), &neg_values];
             // Setup the result information
-            let mut value_len = std::cmp::max(self.value.len(), modulus.value.len()) + 1;
+            let mut value_len = modulus.value.len();
             let mut value = Vec::<u8>::with_capacity(value_len as usize);
             let mut is_negative = 0u64;
             unsafe {
@@ -689,12 +689,13 @@ impl BigNumber {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_bignum_log(bignum_addr: *const u64, bignum_size: u64) -> u64;
+                fn sol_bignum_log(bignum_addr: *const u64, bignum_size: u64, negative_set: u64) -> u64;
             }
             unsafe {
                 sol_bignum_log(
                     self.value.as_ptr() as *const _ as *const u64,
                     self.value.len() as u64,
+                    self.negative as u64,
                 )
             };
         }
