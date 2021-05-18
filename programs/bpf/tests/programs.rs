@@ -11,7 +11,7 @@ use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::register_syscalls,
-    ThisInstructionMeter,
+    BpfError, ThisInstructionMeter,
 };
 use solana_cli_output::display::println_transaction;
 use solana_rbpf::vm::{Config, Executable, Tracer};
@@ -213,7 +213,8 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable = Executable::from_elf(&data, None, config).unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
 
@@ -1281,10 +1282,10 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("bpf_to_bpf", 13),
             ("multiple_static", 8),
-            ("noop", 45),
+            ("noop", 5),
             ("relative_call", 10),
-            ("sanity", 175),
-            ("sanity++", 177),
+            ("sanity", 169),
+            ("sanity++", 168),
             ("sha", 694),
             ("struct_pass", 8),
             ("struct_ret", 22),
@@ -1293,18 +1294,18 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 572),
-            ("solana_bpf_rust_alloc", 8906),
+            ("solana_bpf_rust_128bit", 584),
+            ("solana_bpf_rust_alloc", 4967),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 521),
-            ("solana_bpf_rust_iter", 724),
-            ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_mem", 3143),
-            ("solana_bpf_rust_membuiltins", 4069),
-            ("solana_bpf_rust_noop", 495),
+            ("solana_bpf_rust_external_spend", 334),
+            ("solana_bpf_rust_iter", 8),
+            ("solana_bpf_rust_many_args", 189),
+            ("solana_bpf_rust_mem", 1989),
+            ("solana_bpf_rust_membuiltins", 1715),
+            ("solana_bpf_rust_noop", 322),
             ("solana_bpf_rust_param_passing", 46),
-            ("solana_bpf_rust_sanity", 917),
-            ("solana_bpf_rust_sha", 29099),
+            ("solana_bpf_rust_sanity", 587),
+            ("solana_bpf_rust_sha", 22417),
         ]);
     }
 
