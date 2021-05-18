@@ -5119,24 +5119,6 @@ impl Bank {
                 .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
         }
     }
-
-    /// Bank cleanup
-    ///
-    /// If the bank is unfrozen and then dropped, additional cleanup is needed.  In particular,
-    /// cleaning up the pubkeys that are only in this bank.  To do that, call into AccountsDb to
-    /// scan for dirty pubkeys and add them to the uncleaned pubkeys list so they will be cleaned
-    /// up in AccountsDb::clean_accounts().
-    fn cleanup(&self) {
-        if self.is_frozen() {
-            // nothing to do here
-            return;
-        }
-
-        self.rc
-            .accounts
-            .accounts_db
-            .scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(self.slot);
-    }
 }
 
 impl Drop for Bank {
@@ -5144,8 +5126,6 @@ impl Drop for Bank {
         if self.skip_drop.load(Relaxed) {
             return;
         }
-
-        self.cleanup();
 
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
@@ -12664,7 +12644,6 @@ pub(crate) mod tests {
         let key3 = Keypair::new(); // touched in both bank1 and bank2
         let key4 = Keypair::new(); // in only bank1, and has zero lamports
         let key5 = Keypair::new(); // in both bank1 and bank2, and has zero lamports
-
         bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.freeze();
 
@@ -12691,12 +12670,7 @@ pub(crate) mod tests {
         bank2.clean_accounts(false, false);
 
         let expected_ref_count_for_cleaned_up_keys = 0;
-        let expected_ref_count_for_keys_only_in_slot_2 = bank2
-            .rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .ref_count_from_storage(&key2.pubkey());
+        let expected_ref_count_for_keys_in_both_slot1_and_slot2 = 1;
 
         assert_eq!(
             bank2
@@ -12732,7 +12706,7 @@ pub(crate) mod tests {
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key5.pubkey()),
-            expected_ref_count_for_keys_only_in_slot_2
+            expected_ref_count_for_keys_in_both_slot1_and_slot2,
         );
 
         assert_eq!(
