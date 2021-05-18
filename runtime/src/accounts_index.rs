@@ -1,4 +1,5 @@
 use crate::{
+    ancestors::Ancestors,
     contains::Contains,
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     secondary_index::*,
@@ -15,7 +16,7 @@ use solana_sdk::{
 use std::{
     collections::{
         btree_map::{self, BTreeMap},
-        HashMap, HashSet,
+        HashSet,
     },
     ops::{
         Bound,
@@ -32,7 +33,6 @@ pub const ITER_BATCH_SIZE: usize = 1000;
 
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
-pub type Ancestors = HashMap<Slot, usize>;
 
 pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;

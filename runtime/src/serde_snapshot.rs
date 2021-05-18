@@ -2,7 +2,8 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
-        accounts_index::{AccountSecondaryIndexes, Ancestors},
+        accounts_index::AccountSecondaryIndexes,
+        ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,

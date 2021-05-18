@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_runtime::{
     accounts_db::{AccountsDb, LoadHint},
-    accounts_index::Ancestors,
+    ancestors::Ancestors,
 };
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::{

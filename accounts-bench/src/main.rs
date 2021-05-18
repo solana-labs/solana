@@ -6,7 +6,8 @@ use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
-    accounts_index::{AccountSecondaryIndexes, Ancestors},
+    accounts_index::AccountSecondaryIndexes,
+    ancestors::Ancestors,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
 use std::{env, fs, path::PathBuf};
