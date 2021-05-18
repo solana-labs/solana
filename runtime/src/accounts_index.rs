@@ -2203,6 +2203,7 @@ pub mod tests {
     #[test]
     fn test_insert_new_with_lock_no_ancestors() {
         let key = Keypair::new();
+        let pubkey = &key.pubkey();
         let mut gc = Vec::new();
         let slot = 0;
 
@@ -2211,7 +2212,7 @@ pub mod tests {
         let account_info = true;
         index.insert_new_if_missing_into_primary_index(
             slot,
-            &key.pubkey(),
+            pubkey,
             account_info,
             &mut gc,
             &mut w_account_maps,
@@ -2222,15 +2223,15 @@ pub mod tests {
         assert!(index.zero_lamport_pubkeys().is_empty());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index.get(&pubkey, Some(&ancestors), None).is_none());
+        assert!(index.get(&pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_some());
-        assert_eq!(index.ref_count_from_storage(&key.pubkey()), 1);
+        assert!(index.get(&pubkey, Some(&ancestors), None).is_some());
+        assert_eq!(index.ref_count_from_storage(&pubkey), 1);
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 1);
 
@@ -2241,7 +2242,7 @@ pub mod tests {
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
         index.insert_new_if_missing_into_primary_index(
             slot,
-            &key.pubkey(),
+            pubkey,
             account_info,
             &mut gc,
             &mut w_account_maps,
@@ -2252,15 +2253,15 @@ pub mod tests {
         assert!(!index.zero_lamport_pubkeys().is_empty());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index.get(&pubkey, Some(&ancestors), None).is_none());
+        assert!(index.get(&pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_some());
-        assert_eq!(index.ref_count_from_storage(&key.pubkey()), 0); // cached, so 0
+        assert!(index.get(&pubkey, Some(&ancestors), None).is_some());
+        assert_eq!(index.ref_count_from_storage(&pubkey), 0); // cached, so 0
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 1);
     }
