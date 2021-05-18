@@ -357,24 +357,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                         // Currently we are constructing new accounts on the stack
                         // before calling MessageProcessor::process_cross_program_instruction
                         // Ideally we would recycle the existing accounts here.
-                        if index < self.account_deps.len() {
-                            (
-                                *is_signer,
-                                *is_writable,
-                                &self.account_deps[index].0,
-                                // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
-                                transmute_lifetime(*account),
-                            )
+                        let key = if index < self.account_deps.len() {
+                            &self.account_deps[index].0
+                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
                         } else {
                             index = index.saturating_sub(self.account_deps.len());
-                            (
-                                *is_signer,
-                                *is_writable,
-                                &self.message.account_keys[index],
-                                // &self.accounts[index] as &RefCell<AccountSharedData>,
-                                transmute_lifetime(*account),
-                            )
-                        }
+                            &self.message.account_keys[index]
+                            // &self.accounts[index] as &RefCell<AccountSharedData>,
+                        };
+                        (*is_signer, *is_writable, key, transmute_lifetime(*account))
                     })
             })
             .collect::<Option<Vec<_>>>()
