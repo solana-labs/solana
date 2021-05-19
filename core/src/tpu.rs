@@ -10,14 +10,16 @@ use crate::{
         VerifiedVoteSender, VoteTracker,
     },
     fetch_stage::FetchStage,
-    optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::{PohRecorder, WorkingBankEntry},
-    rpc_subscriptions::RpcSubscriptions,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_rpc::{
+    optimistically_confirmed_bank_tracker::BankNotificationSender,
+    rpc_subscriptions::RpcSubscriptions,
+};
 use solana_runtime::{
     bank_forks::BankForks,
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},

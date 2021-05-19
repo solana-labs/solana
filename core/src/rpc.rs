@@ -3,9 +3,6 @@
 use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
-    max_slots::MaxSlots,
-    non_circulating_supply::calculate_non_circulating_supply,
-    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
     validator::ValidatorExit,
@@ -14,12 +11,8 @@ use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
-    parse_account_data::AccountAdditionalData,
-    parse_token::{
-        get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
-        token_amount_to_ui_amount, UiTokenAmount,
-    },
-    UiAccount, UiAccountData, UiAccountEncoding, UiDataSliceConfig,
+    parse_token::{spl_token_id_v2_0, token_amount_to_ui_amount, UiTokenAmount},
+    UiAccount, UiAccountEncoding, UiDataSliceConfig,
 };
 use solana_client::{
     rpc_cache::LargestAccountsCache,
@@ -44,6 +37,10 @@ use solana_ledger::{
 };
 use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
+use solana_rpc::{
+    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+    parsed_token_accounts::*,
+};
 use solana_runtime::{
     accounts::AccountAddressFilter,
     accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
@@ -51,6 +48,7 @@ use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
     inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+    non_circulating_supply::calculate_non_circulating_supply,
     snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
@@ -1991,62 +1989,6 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     }
 }
 
-pub(crate) fn get_parsed_token_account(
-    bank: Arc<Bank>,
-    pubkey: &Pubkey,
-    account: AccountSharedData,
-) -> UiAccount {
-    let additional_data = get_token_account_mint(&account.data())
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
-        .map(|(_, decimals)| AccountAdditionalData {
-            spl_token_decimals: Some(decimals),
-        });
-
-    UiAccount::encode(
-        pubkey,
-        account,
-        UiAccountEncoding::JsonParsed,
-        additional_data,
-        None,
-    )
-}
-
-pub(crate) fn get_parsed_token_accounts<I>(
-    bank: Arc<Bank>,
-    keyed_accounts: I,
-) -> impl Iterator<Item = RpcKeyedAccount>
-where
-    I: Iterator<Item = (Pubkey, AccountSharedData)>,
-{
-    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-    keyed_accounts.filter_map(move |(pubkey, account)| {
-        let additional_data = get_token_account_mint(&account.data()).map(|mint_pubkey| {
-            let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
-                mint_decimals.insert(mint_pubkey, decimals);
-                Some(decimals)
-            });
-            AccountAdditionalData { spl_token_decimals }
-        });
-
-        let maybe_encoded_account = UiAccount::encode(
-            &pubkey,
-            account,
-            UiAccountEncoding::JsonParsed,
-            additional_data,
-            None,
-        );
-        if let UiAccountData::Json(_) = &maybe_encoded_account.data {
-            Some(RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: maybe_encoded_account,
-            })
-        } else {
-            None
-        }
-    })
-}
-
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program
 /// id and optional Mint
 fn get_token_program_id_and_mint(
@@ -2073,28 +2015,6 @@ fn get_token_program_id_and_mint(
             }
         }
     }
-}
-
-/// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
-/// program_id) and decimals
-fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
-    if mint == &spl_token_v2_0_native_mint() {
-        Ok((spl_token_id_v2_0(), spl_token_v2_0::native_mint::DECIMALS))
-    } else {
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        let decimals = get_mint_decimals(&mint_account.data())?;
-        Ok((*mint_account.owner(), decimals))
-    }
-}
-
-fn get_mint_decimals(data: &[u8]) -> Result<u8> {
-    Mint::unpack(data)
-        .map_err(|_| {
-            Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
-        })
-        .map(|mint| mint.decimals)
 }
 
 fn _send_transaction(
@@ -3751,12 +3671,7 @@ pub mod tests {
     use super::{rpc_full::*, rpc_minimal::*, *};
     use crate::{
         contact_info::ContactInfo,
-        non_circulating_supply::non_circulating_accounts,
-        optimistically_confirmed_bank_tracker::{
-            BankNotification, OptimisticallyConfirmedBankTracker,
-        },
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
-        rpc_subscriptions::RpcSubscriptions,
     };
     use bincode::deserialize;
     use jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value};
@@ -3767,8 +3682,15 @@ pub mod tests {
         blockstore_processor::fill_blockstore_slot_with_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
+    use solana_rpc::{
+        optimistically_confirmed_bank_tracker::{
+            BankNotification, OptimisticallyConfirmedBankTracker,
+        },
+        rpc_subscriptions::RpcSubscriptions,
+    };
     use solana_runtime::{
         accounts_background_service::AbsRequestSender, commitment::BlockCommitment,
+        non_circulating_supply::non_circulating_accounts,
     };
     use solana_sdk::{
         account::Account,

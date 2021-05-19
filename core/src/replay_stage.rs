@@ -16,13 +16,11 @@ use crate::{
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{DuplicateStats, ForkProgress, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
-    rpc_subscriptions::RpcSubscriptions,
     unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     window_service::DuplicateSlotReceiver,
 };
@@ -36,6 +34,10 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
+use solana_rpc::{
+    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+    rpc_subscriptions::RpcSubscriptions,
+};
 use solana_runtime::{
     accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
     commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
@@ -2475,7 +2477,6 @@ pub(crate) mod tests {
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         crds::Cursor,
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -2493,6 +2494,7 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
+    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::{
         accounts_background_service::AbsRequestSender,
         commitment::BlockCommitment,

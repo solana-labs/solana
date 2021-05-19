@@ -1,10 +1,12 @@
-use crate::rpc_subscriptions::RpcSubscriptions;
-use solana_client::rpc_response::SlotUpdate;
-use solana_ledger::blockstore::CompletedSlotsReceiver;
-use solana_sdk::timing::timestamp;
-use std::{
-    sync::Arc,
-    thread::{Builder, JoinHandle},
+use {
+    crate::rpc_subscriptions::RpcSubscriptions,
+    solana_client::rpc_response::SlotUpdate,
+    solana_ledger::blockstore::CompletedSlotsReceiver,
+    solana_sdk::timing::timestamp,
+    std::{
+        sync::Arc,
+        thread::{Builder, JoinHandle},
+    },
 };
 
 pub struct RpcCompletedSlotsService;

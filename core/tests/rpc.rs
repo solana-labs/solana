@@ -11,7 +11,8 @@ use solana_client::{
     rpc_response::{Response, RpcSignatureResult, SlotUpdate},
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
+use solana_core::test_validator::TestValidator;
+use solana_rpc::rpc_pubsub::gen_client::Client as PubsubClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,

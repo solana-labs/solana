@@ -4302,8 +4302,6 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-http-server",
- "jsonrpc-pubsub",
- "jsonrpc-ws-server",
  "libc",
  "log 0.4.11",
  "lru",
@@ -4342,6 +4340,7 @@ dependencies = [
  "solana-perf",
  "solana-program-test",
  "solana-rayon-threadlimit",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
@@ -5033,6 +5032,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-rpc"
+version = "1.7.0"
+dependencies = [
+ "bs58",
+ "crossbeam-channel 0.4.4",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "jsonrpc-ws-server",
+ "log 0.4.11",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serial_test",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-stake-program",
+ "solana-vote-program",
+ "spl-token",
+ "tokio 1.1.1",
+]
+
+[[package]]
 name = "solana-runtime"
 version = "1.7.0"
 dependencies = [
@@ -5420,6 +5448,7 @@ dependencies = [
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "solana-version",
