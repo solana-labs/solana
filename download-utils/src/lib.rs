@@ -10,7 +10,7 @@ use std::io;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");
@@ -24,10 +24,31 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
+/// Structure modeling information about download progress
+pub struct DownloadProgressRecord {
+    // Duration since the beginning of the download
+    pub elapsed_time: Duration,
+    // Duration since the the last notification
+    pub last_elapsed_time: Duration,
+    // the bytes/sec speed measured for the last time 
+    pub last_throughput: f32,
+    // the bytes/sec speed measured from the beginning
+    pub total_throughput: f32,
+    // total bytes of the download
+    pub total_bytes: usize,
+    // bytes downloaded so far
+    pub current_bytes: usize,
+    // percentage downloaded
+    pub percentage_done: f32,
+}
+
+type ProgressNotifyCallack = fn(progress_report: &DownloadProgressRecord) -> bool;
+
 pub fn download_file(
     url: &str,
     destination_file: &Path,
     use_progress_bar: bool,
+    progress_notify_callback: Option<ProgressNotifyCallack>,
 ) -> Result<(), String> {
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
@@ -92,30 +113,52 @@ pub fn download_file(
         last_print_bytes: usize,
         download_size: f32,
         use_progress_bar: bool,
+        start_time: Instant,
+        callback: Option<ProgressNotifyCallack>,
     }
 
     impl<R: Read> Read for DownloadProgress<R> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.response.read(buf).map(|n| {
-                if self.use_progress_bar {
-                    self.progress_bar.inc(n as u64);
-                } else {
+            match self.response.read(buf) {
+                Ok(n) => {
                     self.current_bytes += n;
-                    if self.last_print.elapsed().as_secs() > 5 {
-                        let total_bytes_f32 = self.current_bytes as f32;
-                        let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
-                        info!(
-                            "downloaded {} bytes {:.1}% {:.1} bytes/s",
-                            self.current_bytes,
-                            100f32 * (total_bytes_f32 / self.download_size),
-                            diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
-                        );
-                        self.last_print = Instant::now();
-                        self.last_print_bytes = self.current_bytes;
+                    let total_bytes_f32 = self.current_bytes as f32;
+                    let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
+                    let progress_record = DownloadProgressRecord {
+                        elapsed_time: self.start_time.elapsed(),
+                        last_elapsed_time: self.last_print.elapsed(),
+                        last_throughput: diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
+                        total_throughput: self.current_bytes as f32 / self.start_time.elapsed().as_secs_f32(),
+                        total_bytes: self.download_size as usize,
+                        current_bytes: self.current_bytes,
+                        percentage_done: 100f32 * (total_bytes_f32 / self.download_size),
+                    };
+
+                    if let Some(callback) = self.callback {
+                        if !callback(&progress_record) {
+                            info!("Download is aborted by the caller");
+                            return Err(io::Error::new(io::ErrorKind::Interrupted, "Download is aborted by the  caller"));
+                        }
                     }
-                }
-                n
-            })
+
+                    if self.use_progress_bar {
+                        self.progress_bar.inc(n as u64);
+                    } else {
+                        if progress_record.last_elapsed_time.as_secs() > 5 {
+                            info!(
+                                "downloaded {} bytes {:.1}% {:.1} bytes/s",
+                                self.current_bytes,
+                                progress_record.percentage_done,
+                                progress_record.last_throughput,
+                            );
+                            self.last_print = Instant::now();
+                            self.last_print_bytes = self.current_bytes;
+                        }
+                    }
+                    Ok(n)
+                },
+                Err(e) => Err(e)
+            }
         }
     }
 
@@ -127,6 +170,8 @@ pub fn download_file(
         last_print_bytes: 0,
         download_size: (download_size as f32).max(1f32),
         use_progress_bar,
+        start_time: Instant::now(),
+        callback: progress_notify_callback,
     };
 
     File::create(&temp_destination_file)
@@ -165,6 +210,7 @@ pub fn download_genesis_if_missing(
             &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
             &tmp_genesis_package,
             use_progress_bar,
+            None,
         )?;
 
         Ok(tmp_genesis_package)
@@ -179,6 +225,7 @@ pub fn download_snapshot(
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
     maximum_snapshots_to_retain: usize,
+    progress_notify_callback: Option<ProgressNotifyCallack>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir, maximum_snapshots_to_retain);
 
@@ -209,6 +256,7 @@ pub fn download_snapshot(
             ),
             &desired_snapshot_package,
             use_progress_bar,
+            progress_notify_callback,
         )
         .is_ok()
         {
