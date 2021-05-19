@@ -10,10 +10,11 @@ use crate::{
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
-    crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
+    crds_value::{CrdsData, CrdsValue},
     duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
     ping_pong::PingCache,
 };
+use itertools::Itertools;
 use rayon::ThreadPool;
 use solana_ledger::shred::Shred;
 use solana_sdk::{
@@ -80,21 +81,24 @@ impl CrdsGossip {
     }
 
     /// remove redundant paths in the network
-    pub fn prune_received_cache(
+    pub fn prune_received_cache<I>(
         &mut self,
-        labels: Vec<CrdsValueLabel>,
+        origins: I, // Unique pubkeys of crds values' owners.
         stakes: &HashMap<Pubkey, u64>,
-    ) -> HashMap<Pubkey, HashSet<Pubkey>> {
-        let id = &self.id;
-        let push = &mut self.push;
-        let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        for origin in labels.iter().map(|k| k.pubkey()) {
-            let peers = push.prune_received_cache(id, &origin, stakes);
-            for from in peers {
-                prune_map.entry(from).or_default().insert(origin);
-            }
-        }
-        prune_map
+    ) -> HashMap</*gossip peer:*/ Pubkey, /*origins:*/ Vec<Pubkey>>
+    where
+        I: IntoIterator<Item = Pubkey>,
+    {
+        let self_pubkey = self.id;
+        origins
+            .into_iter()
+            .flat_map(|origin| {
+                self.push
+                    .prune_received_cache(&self_pubkey, &origin, stakes)
+                    .into_iter()
+                    .zip(std::iter::repeat(origin))
+            })
+            .into_group_map()
     }
 
     pub fn new_push_messages(

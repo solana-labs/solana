@@ -53,7 +53,10 @@ pub struct CrdsGossipPush {
     /// bool indicates it has been pruned.
     /// This cache represents a lagging view of which validators
     /// currently have this node in their `active_set`
-    received_cache: HashMap<Pubkey, HashMap<Pubkey, (bool, u64)>>,
+    received_cache: HashMap<
+        Pubkey, // origin/owner
+        HashMap</*gossip peer:*/ Pubkey, (/*pruned:*/ bool, /*timestamp:*/ u64)>,
+    >,
     last_pushed_to: LruCache<Pubkey, u64>,
     pub num_active: usize,
     pub push_fanout: usize,
@@ -102,67 +105,58 @@ impl CrdsGossipPush {
     ) -> Vec<Pubkey> {
         let origin_stake = stakes.get(origin).unwrap_or(&0);
         let self_stake = stakes.get(self_pubkey).unwrap_or(&0);
-        let cache = self.received_cache.get(origin);
-        if cache.is_none() {
-            return Vec::new();
-        }
-        let peers = cache.unwrap();
-
+        let peers = match self.received_cache.get_mut(origin) {
+            None => return Vec::default(),
+            Some(peers) => peers,
+        };
         let peer_stake_total: u64 = peers
             .iter()
-            .filter(|v| !(v.1).0)
-            .map(|v| stakes.get(v.0).unwrap_or(&0))
+            .filter(|(_, (pruned, _))| !pruned)
+            .filter_map(|(peer, _)| stakes.get(peer))
             .sum();
         let prune_stake_threshold = Self::prune_stake_threshold(*self_stake, *origin_stake);
         if peer_stake_total < prune_stake_threshold {
             return Vec::new();
         }
-
-        let staked_peers: Vec<(Pubkey, u64)> = peers
-            .iter()
-            .filter(|v| !(v.1).0)
-            .filter_map(|p| stakes.get(p.0).map(|s| (*p.0, *s)))
-            .filter(|(_, s)| *s > 0)
-            .collect();
-
-        let mut seed = [0; 32];
-        rand::thread_rng().fill(&mut seed[..]);
-        let shuffle = weighted_shuffle(
-            &staked_peers.iter().map(|(_, stake)| *stake).collect_vec(),
-            seed,
-        );
-
+        let shuffled_staked_peers = {
+            let peers: Vec<_> = peers
+                .iter()
+                .filter(|(_, (pruned, _))| !pruned)
+                .filter_map(|(peer, _)| Some((*peer, *stakes.get(peer)?)))
+                .filter(|(_, stake)| *stake > 0)
+                .collect();
+            let mut seed = [0; 32];
+            rand::thread_rng().fill(&mut seed[..]);
+            let weights: Vec<_> = peers.iter().map(|(_, stake)| *stake).collect();
+            weighted_shuffle(&weights, seed)
+                .into_iter()
+                .map(move |i| peers[i])
+        };
         let mut keep = HashSet::new();
         let mut peer_stake_sum = 0;
         keep.insert(*origin);
-        for next in shuffle {
-            let (next_peer, next_stake) = staked_peers[next];
-            if next_peer == *origin {
+        for (peer, stake) in shuffled_staked_peers {
+            if peer == *origin {
                 continue;
             }
-            keep.insert(next_peer);
-            peer_stake_sum += next_stake;
+            keep.insert(peer);
+            peer_stake_sum += stake;
             if peer_stake_sum >= prune_stake_threshold
                 && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES
             {
                 break;
             }
         }
-
-        let pruned_peers: Vec<Pubkey> = peers
+        for (peer, (pruned, _)) in peers.iter_mut() {
+            if !*pruned && !keep.contains(peer) {
+                *pruned = true;
+            }
+        }
+        peers
             .keys()
-            .filter(|p| !keep.contains(p))
-            .cloned()
-            .collect();
-        pruned_peers.iter().for_each(|p| {
-            self.received_cache
-                .get_mut(origin)
-                .unwrap()
-                .get_mut(p)
-                .unwrap()
-                .0 = true;
-        });
-        pruned_peers
+            .filter(|peer| !keep.contains(peer))
+            .copied()
+            .collect()
     }
 
     fn wallclock_window(&self, now: u64) -> impl RangeBounds<u64> {
