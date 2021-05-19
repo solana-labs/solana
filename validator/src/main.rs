@@ -83,7 +83,7 @@ enum Operation {
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
-
+const MIN_SNAPSHOT_DOWNLOAD_SPEED: f32 = 10485760_f32;
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
         println!(
@@ -958,7 +958,15 @@ fn rpc_bootstrap(
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
-                                Some(|_| { true }),
+                                Some(|download_progress| { 
+                                    if download_progress.last_throughput <  MIN_SNAPSHOT_DOWNLOAD_SPEED && download_progress.notification_count <= 1 {
+                                        info!("The snapshot download is too slow, throughput: {} < min speed {}, try a different node",
+                                            download_progress.last_throughput, MIN_SNAPSHOT_DOWNLOAD_SPEED);
+                                        false
+                                    } else {
+                                        true
+                                    }
+                                }),
                             );
                             gossip_service.join().unwrap();
                             ret

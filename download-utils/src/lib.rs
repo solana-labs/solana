@@ -40,8 +40,13 @@ pub struct DownloadProgressRecord {
     pub current_bytes: usize,
     // percentage downloaded
     pub percentage_done: f32,
+    // The times of the progress is being notified, it starts from 1 and increments by 1 each time
+    pub notification_count: u64,
 }
 
+/// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
+/// Return "true" to continue the download
+/// Return "false" to abort the download
 type ProgressNotifyCallack = fn(progress_report: &DownloadProgressRecord) -> bool;
 
 pub fn download_file(
@@ -115,6 +120,7 @@ pub fn download_file(
         use_progress_bar: bool,
         start_time: Instant,
         callback: Option<ProgressNotifyCallack>,
+        notification_count: u64,
     }
 
     impl<R: Read> Read for DownloadProgress<R> {
@@ -124,7 +130,7 @@ pub fn download_file(
                     self.current_bytes += n;
                     let total_bytes_f32 = self.current_bytes as f32;
                     let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
-                    let progress_record = DownloadProgressRecord {
+                    let mut progress_record = DownloadProgressRecord {
                         elapsed_time: self.start_time.elapsed(),
                         last_elapsed_time: self.last_print.elapsed(),
                         last_throughput: diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
@@ -132,27 +138,34 @@ pub fn download_file(
                         total_bytes: self.download_size as usize,
                         current_bytes: self.current_bytes,
                         percentage_done: 100f32 * (total_bytes_f32 / self.download_size),
+                        notification_count: self.notification_count
                     };
-
-                    if let Some(callback) = self.callback {
-                        if !callback(&progress_record) {
-                            info!("Download is aborted by the caller");
-                            return Err(io::Error::new(io::ErrorKind::Interrupted, "Download is aborted by the  caller"));
-                        }
+                    let mut to_update_progress = false;
+                    if progress_record.last_elapsed_time.as_secs() > 5 {
+                        self.last_print = Instant::now();
+                        self.last_print_bytes = self.current_bytes;
+                        to_update_progress = true;
+                        self.notification_count += 1;
+                        progress_record.notification_count = self.notification_count
                     }
 
                     if self.use_progress_bar {
                         self.progress_bar.inc(n as u64);
-                    } else {
-                        if progress_record.last_elapsed_time.as_secs() > 5 {
-                            info!(
-                                "downloaded {} bytes {:.1}% {:.1} bytes/s",
-                                self.current_bytes,
-                                progress_record.percentage_done,
-                                progress_record.last_throughput,
-                            );
-                            self.last_print = Instant::now();
-                            self.last_print_bytes = self.current_bytes;
+                    } else if to_update_progress {
+                        info!(
+                            "downloaded {} bytes {:.1}% {:.1} bytes/s",
+                            self.current_bytes,
+                            progress_record.percentage_done,
+                            progress_record.last_throughput,
+                        );
+                    }
+
+                    if let Some(callback) = self.callback {
+                        if to_update_progress {
+                            if !callback(&progress_record) {
+                                info!("Download is aborted by the caller");
+                                return Err(io::Error::new(io::ErrorKind::Interrupted, "Download is aborted by the caller"));
+                            }
                         }
                     }
                     Ok(n)
@@ -172,6 +185,7 @@ pub fn download_file(
         use_progress_bar,
         start_time: Instant::now(),
         callback: progress_notify_callback,
+        notification_count: 0,
     };
 
     File::create(&temp_destination_file)
