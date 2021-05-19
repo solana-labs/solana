@@ -891,6 +891,7 @@ fn rpc_bootstrap(
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
+                                Some(|_| { true }),
                             );
                             gossip_service.join().unwrap();
                             ret
