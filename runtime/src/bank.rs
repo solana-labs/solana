@@ -39,7 +39,8 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
-    accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    ancestors::Ancestors,
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -5185,9 +5186,8 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         accounts_db::SHRINK_RATIO,
-        accounts_index::{
-            AccountIndex, AccountMap, AccountSecondaryIndexes, Ancestors, ITER_BATCH_SIZE,
-        },
+        accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
+        ancestors::Ancestors,
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,

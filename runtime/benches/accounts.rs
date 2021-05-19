@@ -8,7 +8,8 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, AccountAddressFilter, Accounts},
-    accounts_index::{AccountSecondaryIndexes, Ancestors},
+    accounts_index::AccountSecondaryIndexes,
+    ancestors::Ancestors,
     bank::*,
 };
 use solana_sdk::{

@@ -1,4 +1,4 @@
-use crate::accounts_index::Ancestors;
+use crate::ancestors::Ancestors;
 
 use log::*;
 use rand::{thread_rng, Rng};

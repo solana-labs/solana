@@ -2,7 +2,8 @@ use crate::{
     accounts_db::{
         AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
     },

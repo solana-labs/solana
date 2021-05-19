@@ -1,5 +1,5 @@
 use crate::{
-    accounts::Accounts, accounts_index::Ancestors, instruction_recorder::InstructionRecorder,
+    accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
     log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
