@@ -838,6 +838,7 @@ struct AccountsStats {
 
     last_store_report: AtomicU64,
     store_hash_accounts: AtomicU64,
+    calc_stored_meta: AtomicU64,
     store_accounts: AtomicU64,
     store_update_index: AtomicU64,
     store_handle_reclaims: AtomicU64,
@@ -3811,6 +3812,7 @@ impl AccountsDb {
         mut write_version_producer: P,
         is_cached_store: bool,
     ) -> Vec<AccountInfo> {
+        let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let accounts_and_meta_to_store: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
@@ -3831,6 +3833,10 @@ impl AccountsDb {
                 (meta, account)
             })
             .collect();
+        calc_stored_meta_time.stop();
+        self.stats
+            .calc_stored_meta
+            .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store)
@@ -4752,6 +4758,11 @@ impl AccountsDb {
                 (
                     "read_only_accounts_cache_misses",
                     read_only_cache_misses,
+                    i64
+                ),
+                (
+                    "calc_stored_meta_us",
+                    self.stats.calc_stored_meta.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
