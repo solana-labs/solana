@@ -19,7 +19,7 @@
 //! CrdsValue enums.
 //!
 //! Merge strategy is implemented in:
-//!     impl PartialOrd for VersionedCrdsValue
+//!     fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool
 //!
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
@@ -66,8 +66,6 @@ pub enum CrdsError {
 }
 
 /// This structure stores some local metadata associated with the CrdsValue
-/// The implementation of PartialOrd ensures that the "highest" version is always picked to be
-/// stored in the Crds
 #[derive(PartialEq, Debug, Clone)]
 pub struct VersionedCrdsValue {
     /// Ordinal index indicating insert order.
