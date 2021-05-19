@@ -342,19 +342,19 @@ mod tests {
         let spy_ref = Arc::new(cluster_info);
 
         let (met_criteria, secs, _, tvu_peers) = spy(spy_ref.clone(), None, Some(1), None, None);
-        assert_eq!(met_criteria, false);
+        assert!(!met_criteria);
         assert_eq!(secs, 1);
         assert_eq!(tvu_peers, spy_ref.tvu_peers());
 
         // Find num_nodes
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, None, None);
-        assert_eq!(met_criteria, true);
+        assert!(met_criteria);
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(2), None, None, None);
-        assert_eq!(met_criteria, true);
+        assert!(met_criteria);
 
         // Find specific node by pubkey
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), None, None, Some(peer0), None);
-        assert_eq!(met_criteria, true);
+        assert!(met_criteria);
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
@@ -362,13 +362,13 @@ mod tests {
             Some(solana_sdk::pubkey::new_rand()),
             None,
         );
-        assert_eq!(met_criteria, false);
+        assert!(!met_criteria);
 
         // Find num_nodes *and* specific node by pubkey
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, Some(peer0), None);
-        assert_eq!(met_criteria, true);
+        assert!(met_criteria);
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(3), Some(0), Some(peer0), None);
-        assert_eq!(met_criteria, false);
+        assert!(!met_criteria);
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             Some(1),
@@ -376,12 +376,12 @@ mod tests {
             Some(solana_sdk::pubkey::new_rand()),
             None,
         );
-        assert_eq!(met_criteria, false);
+        assert!(!met_criteria);
 
         // Find specific node by gossip address
         let (met_criteria, _, _, _) =
             spy(spy_ref.clone(), None, None, None, Some(&peer0_info.gossip));
-        assert_eq!(met_criteria, true);
+        assert!(met_criteria);
 
         let (met_criteria, _, _, _) = spy(
             spy_ref,
@@ -390,6 +390,6 @@ mod tests {
             None,
             Some(&"1.1.1.1:1234".parse().unwrap()),
         );
-        assert_eq!(met_criteria, false);
+        assert!(!met_criteria);
     }
 }

@@ -739,7 +739,7 @@ mod tests {
         let mut packets = Packets::new(vec![]);
         solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
-        assert_eq!(packets.packets[0].meta.repair, false);
+        assert!(!packets.packets[0].meta.repair);
 
         let mut repair = packet.clone();
         repair.meta.repair = true;
@@ -752,7 +752,7 @@ mod tests {
         let mut packets = Packets::new(vec![]);
         solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
-        assert_eq!(packets.packets[0].meta.repair, false);
+        assert!(!packets.packets[0].meta.repair);
     }
 
     #[test]

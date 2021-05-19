@@ -260,7 +260,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&3), true);
+        assert!(pending_optimistically_confirmed_banks.contains(&3));
 
         // Test bank will only be cached when frozen
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
@@ -286,7 +286,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), true);
+        assert!(pending_optimistically_confirmed_banks.contains(&4));
 
         let bank4 = bank_forks.read().unwrap().get(4).unwrap().clone();
         let bank5 = Bank::new_from_parent(&bank4, &Pubkey::default(), 5);
@@ -301,7 +301,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), false);
+        assert!(!pending_optimistically_confirmed_banks.contains(&4));
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
@@ -323,6 +323,6 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&6), false);
+        assert!(!pending_optimistically_confirmed_banks.contains(&6));
     }
 }

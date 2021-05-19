@@ -1476,11 +1476,13 @@ mod test {
         }
     }
     fn run_test_mask(mask_bits: u32) {
-        let masks: Vec<_> = (0..2u64.pow(mask_bits))
-            .map(|seed| CrdsFilter::compute_mask(seed, mask_bits))
-            .dedup()
-            .collect();
-        assert_eq!(masks.len(), 2u64.pow(mask_bits) as usize)
+        assert_eq!(
+            (0..2u64.pow(mask_bits))
+                .map(|seed| CrdsFilter::compute_mask(seed, mask_bits))
+                .dedup()
+                .count(),
+            2u64.pow(mask_bits) as usize
+        )
     }
 
     #[test]

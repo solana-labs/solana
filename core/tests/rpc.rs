@@ -100,7 +100,7 @@ fn test_rpc_send_tx() {
         sleep(Duration::from_millis(500));
     }
 
-    assert_eq!(confirmed_tx, true);
+    assert!(confirmed_tx);
 
     use solana_account_decoder::UiAccountEncoding;
     use solana_client::rpc_config::RpcAccountInfoConfig;

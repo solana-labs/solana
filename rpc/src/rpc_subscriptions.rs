@@ -1968,18 +1968,18 @@ pub(crate) mod tests {
         assert_eq!(subscriptions.get(&0).unwrap().len(), 2);
         assert_eq!(subscriptions.get(&1).unwrap().len(), 1);
 
-        assert_eq!(
-            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
-            true
-        );
+        assert!(remove_subscription(
+            &mut subscriptions,
+            &SubscriptionId::Number(0)
+        ));
         assert_eq!(subscriptions.len(), num_keys as usize);
         assert_eq!(subscriptions.get(&0).unwrap().len(), 1);
-        assert_eq!(
-            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
-            false
-        );
+        assert!(!remove_subscription(
+            &mut subscriptions,
+            &SubscriptionId::Number(0)
+        ));
 
-        assert_eq!(remove_subscription(&mut subscriptions, &extra_sub_id), true);
+        assert!(remove_subscription(&mut subscriptions, &extra_sub_id));
         assert_eq!(subscriptions.len(), (num_keys - 1) as usize);
         assert!(subscriptions.get(&0).is_none());
     }

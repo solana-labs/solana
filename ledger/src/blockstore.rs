@@ -1200,7 +1200,8 @@ impl Blockstore {
         just_inserted_data_shreds.insert((slot, shred_index), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
-        if !erasure_metas.contains_key(&(slot, set_index)) {
+        if let std::collections::hash_map::Entry::Vacant(_) = erasure_metas.entry((slot, set_index))
+        {
             if let Some(meta) = self
                 .erasure_meta_cf
                 .get((slot, set_index))
@@ -5381,17 +5382,14 @@ pub mod tests {
                     panic!("Shred in unexpected format")
                 }
             };
-            assert_eq!(
-                blockstore.should_insert_data_shred(
-                    &shred7,
-                    &slot_meta,
-                    &HashMap::new(),
-                    &last_root,
-                    None,
-                    false
-                ),
+            assert!(!blockstore.should_insert_data_shred(
+                &shred7,
+                &slot_meta,
+                &HashMap::new(),
+                &last_root,
+                None,
                 false
-            );
+            ));
             assert!(blockstore.has_duplicate_shreds_in_slot(0));
 
             // Insert all pending shreds
@@ -5405,17 +5403,14 @@ pub mod tests {
             } else {
                 panic!("Shred in unexpected format")
             }
-            assert_eq!(
-                blockstore.should_insert_data_shred(
-                    &shred7,
-                    &slot_meta,
-                    &HashMap::new(),
-                    &last_root,
-                    None,
-                    false
-                ),
+            assert!(!blockstore.should_insert_data_shred(
+                &shred7,
+                &slot_meta,
+                &HashMap::new(),
+                &last_root,
+                None,
                 false
-            );
+            ));
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

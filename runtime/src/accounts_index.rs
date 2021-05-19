@@ -183,28 +183,31 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     // already exists in the list, remove the older item, add it to `reclaims`, and insert
     // the new item.
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
-        // filter out other dirty entries from the same slot
-        let mut same_slot_previous_updates: Vec<(usize, &(Slot, T))> = self
-            .slot_list()
-            .iter()
-            .enumerate()
-            .filter(|(_, (s, _))| *s == slot)
-            .collect();
-        assert!(same_slot_previous_updates.len() <= 1);
-        if let Some((list_index, (s, previous_update_value))) = same_slot_previous_updates.pop() {
-            let is_flush_from_cache =
-                previous_update_value.is_cached() && !account_info.is_cached();
-            reclaims.push((*s, previous_update_value.clone()));
-            self.slot_list_mut(|list| list.remove(list_index));
-            if is_flush_from_cache {
-                self.ref_count().fetch_add(1, Ordering::Relaxed);
+        let mut addref = !account_info.is_cached();
+        self.slot_list_mut(|list| {
+            // find other dirty entries from the same slot
+            for list_index in 0..list.len() {
+                let (s, previous_update_value) = &list[list_index];
+                if *s == slot {
+                    addref = addref && previous_update_value.is_cached();
+
+                    let mut new_item = (slot, account_info);
+                    std::mem::swap(&mut new_item, &mut list[list_index]);
+                    reclaims.push(new_item);
+                    list[(list_index + 1)..]
+                        .iter()
+                        .for_each(|item| assert!(item.0 != slot));
+                    return; // this returns from self.slot_list_mut above
+                }
             }
-        } else if !account_info.is_cached() {
+
+            // if we make it here, we did not find the slot in the list
+            list.push((slot, account_info));
+        });
+        if addref {
             // If it's the first non-cache insert, also bump the stored ref count
             self.ref_count().fetch_add(1, Ordering::Relaxed);
         }
-
-        self.slot_list_mut(|list| list.push((slot, account_info)));
     }
 }
 

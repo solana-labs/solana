@@ -1389,22 +1389,22 @@ mod tests {
     fn test_is_zeroed() {
         const ZEROS_LEN: usize = 1024;
         let mut buf = [0; ZEROS_LEN];
-        assert_eq!(PreAccount::is_zeroed(&buf), true);
+        assert!(PreAccount::is_zeroed(&buf));
         buf[0] = 1;
-        assert_eq!(PreAccount::is_zeroed(&buf), false);
+        assert!(!PreAccount::is_zeroed(&buf));
 
         let mut buf = [0; ZEROS_LEN - 1];
-        assert_eq!(PreAccount::is_zeroed(&buf), true);
+        assert!(PreAccount::is_zeroed(&buf));
         buf[0] = 1;
-        assert_eq!(PreAccount::is_zeroed(&buf), false);
+        assert!(!PreAccount::is_zeroed(&buf));
 
         let mut buf = [0; ZEROS_LEN + 1];
-        assert_eq!(PreAccount::is_zeroed(&buf), true);
+        assert!(PreAccount::is_zeroed(&buf));
         buf[0] = 1;
-        assert_eq!(PreAccount::is_zeroed(&buf), false);
+        assert!(!PreAccount::is_zeroed(&buf));
 
         let buf = vec![];
-        assert_eq!(PreAccount::is_zeroed(&buf), true);
+        assert!(PreAccount::is_zeroed(&buf));
     }
 
     #[test]

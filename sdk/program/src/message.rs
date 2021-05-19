@@ -865,12 +865,12 @@ mod tests {
             instructions: vec![],
         };
         let demote_sysvar_write_locks = true;
-        assert_eq!(message.is_writable(0, demote_sysvar_write_locks), true);
-        assert_eq!(message.is_writable(1, demote_sysvar_write_locks), false);
-        assert_eq!(message.is_writable(2, demote_sysvar_write_locks), false);
-        assert_eq!(message.is_writable(3, demote_sysvar_write_locks), true);
-        assert_eq!(message.is_writable(4, demote_sysvar_write_locks), true);
-        assert_eq!(message.is_writable(5, demote_sysvar_write_locks), false);
+        assert!(message.is_writable(0, demote_sysvar_write_locks));
+        assert!(!message.is_writable(1, demote_sysvar_write_locks));
+        assert!(!message.is_writable(2, demote_sysvar_write_locks));
+        assert!(message.is_writable(3, demote_sysvar_write_locks));
+        assert!(message.is_writable(4, demote_sysvar_write_locks));
+        assert!(!message.is_writable(5, demote_sysvar_write_locks));
     }
 
     #[test]

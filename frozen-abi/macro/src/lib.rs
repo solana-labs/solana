@@ -1,9 +1,5 @@
 extern crate proc_macro;
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-#[macro_use]
-extern crate lazy_static;
-
 // This file littered with these essential cfgs so ensure them.
 #[cfg(not(any(RUSTC_WITH_SPECIALIZATION, RUSTC_WITHOUT_SPECIALIZATION)))]
 compile_error!("rustc_version is missing in build dependency and build.rs is not specified");
@@ -71,37 +67,6 @@ fn filter_allow_attrs(attrs: &mut Vec<Attribute>) {
     });
 }
 
-#[allow(deprecated)]
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-fn quote_for_specialization_detection() -> TokenStream2 {
-    lazy_static! {
-        static ref SPECIALIZATION_DETECTOR_INJECTED: std::sync::atomic::AtomicBool =
-            std::sync::atomic::AtomicBool::new(false);
-    }
-
-    if !SPECIALIZATION_DETECTOR_INJECTED.compare_and_swap(
-        false,
-        true,
-        std::sync::atomic::Ordering::AcqRel,
-    ) {
-        quote! {
-            mod specialization_detector {
-                trait SpecializedTrait {
-                    fn specialized_fn() {}
-                }
-                impl<T: Sized> SpecializedTrait for T {
-                    default fn specialized_fn() {}
-                }
-                impl<T: Sized + Default> SpecializedTrait for T {
-                    fn specialized_fn() {}
-                }
-            }
-        }
-    } else {
-        quote! {}
-    }
-}
-
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn derive_abi_sample_enum_type(input: ItemEnum) -> TokenStream {
     let type_name = &input.ident;
@@ -162,10 +127,8 @@ fn derive_abi_sample_enum_type(input: ItemEnum) -> TokenStream {
     let mut attrs = input.attrs.clone();
     filter_allow_attrs(&mut attrs);
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let injection = quote_for_specialization_detection();
 
     let result = quote! {
-        #injection
         #[automatically_derived]
         #( #attrs )*
         impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
@@ -216,10 +179,8 @@ fn derive_abi_sample_struct_type(input: ItemStruct) -> TokenStream {
     filter_allow_attrs(&mut attrs);
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let turbofish = ty_generics.as_turbofish();
-    let injection = quote_for_specialization_detection();
 
     let result = quote! {
-        #injection
         #[automatically_derived]
         #( #attrs )*
         impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {

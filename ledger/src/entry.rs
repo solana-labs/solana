@@ -868,17 +868,14 @@ mod tests {
         solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert_eq!(vec![][..].verify(&zero), true); // base case
-        assert_eq!(vec![Entry::new_tick(0, &zero)][..].verify(&zero), true); // singleton case 1
-        assert_eq!(vec![Entry::new_tick(0, &zero)][..].verify(&one), false); // singleton case 2, bad
-        assert_eq!(
-            vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero),
-            true
-        ); // inductive step
+        assert!(vec![][..].verify(&zero)); // base case
+        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
+        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
+        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
-        assert_eq!(bad_ticks.verify(&zero), false); // inductive step, bad
+        assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
 
     #[test]
@@ -887,18 +884,18 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
-        assert_eq!(vec![][..].verify(&one), true); // base case
-        assert_eq!(vec![Entry::new_tick(1, &two)][..].verify(&one), true); // singleton case 1
-        assert_eq!(vec![Entry::new_tick(1, &two)][..].verify(&two), false); // singleton case 2, bad
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
+        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
 
         let mut ticks = vec![next_entry(&one, 1, vec![])];
         ticks.push(next_entry(&ticks.last().unwrap().hash, 1, vec![]));
-        assert_eq!(ticks.verify(&one), true); // inductive step
+        assert!(ticks.verify(&one)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
         bad_ticks[1].hash = one;
-        assert_eq!(bad_ticks.verify(&one), false); // inductive step, bad
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
 
     #[test]
@@ -910,15 +907,9 @@ mod tests {
         let alice_pubkey = Keypair::new();
         let tx0 = create_sample_payment(&alice_pubkey, one);
         let tx1 = create_sample_timestamp(&alice_pubkey, one);
-        assert_eq!(vec![][..].verify(&one), true); // base case
-        assert_eq!(
-            vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one),
-            true
-        ); // singleton case 1
-        assert_eq!(
-            vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two),
-            false
-        ); // singleton case 2, bad
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
+        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
 
         let mut ticks = vec![next_entry(&one, 1, vec![tx0.clone()])];
         ticks.push(next_entry(
@@ -926,12 +917,12 @@ mod tests {
             1,
             vec![tx1.clone()],
         ));
-        assert_eq!(ticks.verify(&one), true); // inductive step
+        assert!(ticks.verify(&one)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
-        assert_eq!(bad_ticks.verify(&one), false); // inductive step, bad
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
 
     #[test]

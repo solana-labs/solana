@@ -1,4 +1,4 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 
 extern crate serde_derive;
 use serde_derive::{Deserialize, Serialize};

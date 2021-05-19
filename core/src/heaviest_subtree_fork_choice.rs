@@ -2685,7 +2685,7 @@ mod test {
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(1, Hash::default());
 
-        assert_eq!(tower.is_stray_last_vote(), false);
+        assert!(!tower.is_stray_last_vote());
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             Some((2, Hash::default()))
@@ -2700,7 +2700,7 @@ mod test {
             .adjust_lockouts_after_replay(0, &slot_history)
             .unwrap();
 
-        assert_eq!(tower.is_stray_last_vote(), true);
+        assert!(tower.is_stray_last_vote());
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             Some((2, Hash::default()))
@@ -2712,7 +2712,7 @@ mod test {
             .adjust_lockouts_after_replay(0, &slot_history)
             .unwrap();
 
-        assert_eq!(tower.is_stray_last_vote(), true);
+        assert!(tower.is_stray_last_vote());
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             None

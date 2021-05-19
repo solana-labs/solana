@@ -5623,6 +5623,7 @@ mod tests {
         unsafe { result_vec.set_len(out_size as usize) };
         assert_eq!(result_vec, vec![3]);
     }
+
     #[test]
     fn test_syscall_bignum_mod_inv() {
         struct ArgSlice {

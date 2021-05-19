@@ -495,9 +495,9 @@ mod tests {
         batch.packets.push(Packet::default());
         let mut batches: Vec<Packets> = vec![batch];
         mark_disabled(&mut batches, &[vec![0]]);
-        assert_eq!(batches[0].packets[0].meta.discard, true);
+        assert!(batches[0].packets[0].meta.discard);
         mark_disabled(&mut batches, &[vec![1]]);
-        assert_eq!(batches[0].packets[0].meta.discard, false);
+        assert!(!batches[0].packets[0].meta.discard);
     }
 
     #[test]
