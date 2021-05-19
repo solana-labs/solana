@@ -1,6 +1,8 @@
 use crate::crds_gossip::CrdsGossip;
 use solana_measure::measure::Measure;
+use solana_sdk::pubkey::Pubkey;
 use std::{
+    collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
         RwLock,
@@ -116,15 +118,21 @@ pub(crate) struct GossipStats {
     pub(crate) tvu_peers: Counter,
 }
 
-pub(crate) fn submit_gossip_stats(stats: &GossipStats, gossip: &RwLock<CrdsGossip>) {
-    let (table_size, purged_values_size, failed_inserts_size) = {
+pub(crate) fn submit_gossip_stats(
+    stats: &GossipStats,
+    gossip: &RwLock<CrdsGossip>,
+    stakes: &HashMap<Pubkey, u64>,
+) {
+    let (table_size, num_nodes, purged_values_size, failed_inserts_size) = {
         let gossip = gossip.read().unwrap();
         (
             gossip.crds.len(),
+            gossip.crds.num_nodes(),
             gossip.pull.purged_values.len(),
             gossip.pull.failed_inserts.len(),
         )
     };
+    let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();
     datapoint_info!(
         "cluster_info_stats",
         ("entrypoint", stats.entrypoint.clear(), i64),
@@ -142,6 +150,8 @@ pub(crate) fn submit_gossip_stats(stats: &GossipStats, gossip: &RwLock<CrdsGossi
         ("table_size", table_size as i64, i64),
         ("purged_values_size", purged_values_size as i64, i64),
         ("failed_inserts_size", failed_inserts_size as i64, i64),
+        ("num_nodes", num_nodes as i64, i64),
+        ("num_nodes_staked", num_nodes_staked as i64, i64),
     );
     datapoint_info!(
         "cluster_info_stats2",
