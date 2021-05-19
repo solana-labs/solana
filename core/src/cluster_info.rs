@@ -2562,7 +2562,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
-        stakes: HashMap<Pubkey, u64>,
+        stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
         should_check_duplicate_instance: bool,
@@ -2635,13 +2635,13 @@ impl ClusterInfo {
         self.stats
             .packets_received_prune_messages_count
             .add_relaxed(prune_messages.len() as u64);
-        let require_stake_for_gossip = self.require_stake_for_gossip(feature_set, &stakes);
+        let require_stake_for_gossip = self.require_stake_for_gossip(feature_set, stakes);
         if require_stake_for_gossip {
             for (_, data) in &mut pull_responses {
-                retain_staked(data, &stakes);
+                retain_staked(data, stakes);
             }
             for (_, data) in &mut push_messages {
-                retain_staked(data, &stakes);
+                retain_staked(data, stakes);
             }
             pull_responses.retain(|(_, data)| !data.is_empty());
             push_messages.retain(|(_, data)| !data.is_empty());
@@ -2652,18 +2652,18 @@ impl ClusterInfo {
             push_messages,
             thread_pool,
             recycler,
-            &stakes,
+            stakes,
             response_sender,
             require_stake_for_gossip,
         );
-        self.handle_batch_pull_responses(pull_responses, thread_pool, &stakes, epoch_time_ms);
-        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
+        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_time_ms);
+        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
             pull_requests,
             thread_pool,
             recycler,
-            &stakes,
+            stakes,
             response_sender,
             require_stake_for_gossip,
         );
@@ -2682,6 +2682,7 @@ impl ClusterInfo {
         should_check_duplicate_instance: bool,
     ) -> Result<()> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+        const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
         let mut packets = VecDeque::from(packets);
         while let Ok(packet) = requests_receiver.try_recv() {
@@ -2712,13 +2713,13 @@ impl ClusterInfo {
             thread_pool,
             recycler,
             response_sender,
-            stakes,
+            &stakes,
             feature_set.as_deref(),
             epoch_time_ms,
             should_check_duplicate_instance,
         )?;
-        if last_print.elapsed().as_millis() > 2000 {
-            submit_gossip_stats(&self.stats, &self.gossip);
+        if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
+            submit_gossip_stats(&self.stats, &self.gossip, &stakes);
             *last_print = Instant::now();
         }
         Ok(())
