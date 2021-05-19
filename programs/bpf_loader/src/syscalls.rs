@@ -2822,10 +2822,7 @@ mod tests {
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
 
-<<<<<<< HEAD
-=======
         #[allow(dead_code)]
->>>>>>> 477898f68 (Optimize aligned memory used by the runtime (#17324))
         struct MockSlice {
             pub addr: u64,
             pub len: usize,
