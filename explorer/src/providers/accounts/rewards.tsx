@@ -7,8 +7,6 @@ import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
 const PAGE_SIZE = 15;
-const timeout = (ms: number | undefined) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 export type Rewards = {
   highestFetchedEpoch?: number;
@@ -122,23 +120,15 @@ async function fetchRewards(
     return null;
   };
 
-  let foundSome = false;
-  let results;
-  while (!foundSome && fromEpoch >= 0) {
-    const requests = [];
-    for (let i: number = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
-      if (i >= 0) {
-        requests.push(getInflationReward(i));
-      }
-    }
-    results = await Promise.all(requests);
-    fromEpoch = fromEpoch - requests.length;
-    foundSome = results.some((v) => v !== null);
-    if (!foundSome) {
-      // avoid rate limit
-      await timeout(500);
+  const requests = [];
+  for (let i: number = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
+    if (i >= 0) {
+      requests.push(getInflationReward(i));
     }
   }
+
+  const results = await Promise.all(requests);
+  fromEpoch = fromEpoch - requests.length;
 
   dispatch({
     type: ActionType.Update,
