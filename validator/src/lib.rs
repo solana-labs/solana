@@ -2,7 +2,7 @@
 pub use solana_core::{cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, test_validator};
 use {
     console::style,
-    indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
+    indicatif::{ProgressDrawTarget, ProgressStyle},
     log::*,
     std::{env, process::exit, thread::JoinHandle},
 };
@@ -91,17 +91,44 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
     }
 }
 
+/// Pretty print a "name value"
+pub fn println_name_value(name: &str, value: &str) {
+    println!("{} {}", style(name).bold(), value);
+}
+
 /// Creates a new process bar for processing that will take an unknown amount of time
 pub fn new_spinner_progress_bar() -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
+    let progress_bar = indicatif::ProgressBar::new(42);
     progress_bar.set_draw_target(ProgressDrawTarget::stdout());
     progress_bar
         .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
     progress_bar.enable_steady_tick(100);
-    progress_bar
+
+    ProgressBar {
+        progress_bar,
+        is_term: console::Term::stdout().is_term(),
+    }
 }
 
-/// Pretty print a "name value"
-pub fn println_name_value(name: &str, value: &str) {
-    println!("{} {}", style(name).bold(), value);
+pub struct ProgressBar {
+    progress_bar: indicatif::ProgressBar,
+    is_term: bool,
+}
+
+impl ProgressBar {
+    pub fn set_message(&self, msg: &str) {
+        if self.is_term {
+            self.progress_bar.set_message(msg);
+        } else {
+            println!("{}", msg);
+        }
+    }
+
+    pub fn abandon_with_message(&self, msg: &str) {
+        if self.is_term {
+            self.progress_bar.abandon_with_message(msg);
+        } else {
+            println!("{}", msg);
+        }
+    }
 }
