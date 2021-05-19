@@ -91,6 +91,8 @@ pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
+// lint warning "bank_weight is never read"
+#[allow(dead_code)]
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,

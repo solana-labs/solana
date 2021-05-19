@@ -4953,6 +4953,7 @@ impl AccountsDb {
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn generate_index(&self) {
         // BTreeMap because we want in-order traversal of oldest write_version to newest.
         // Thus, all instances of an account in a store are added to the index in oldest to newest
