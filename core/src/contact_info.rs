@@ -6,11 +6,10 @@ use solana_sdk::sanitize::{Sanitize, SanitizeError};
 #[cfg(test)]
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
-use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
 
 /// Structure representing a node on the network
-#[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize)]
 pub struct ContactInfo {
     pub id: Pubkey,
     /// gossip address
@@ -48,34 +47,13 @@ impl Sanitize for ContactInfo {
     }
 }
 
-impl Ord for ContactInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-
-impl PartialOrd for ContactInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for ContactInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for ContactInfo {}
-
 #[macro_export]
 macro_rules! socketaddr {
     ($ip:expr, $port:expr) => {
         std::net::SocketAddr::from((std::net::Ipv4Addr::from($ip), $port))
     };
     ($str:expr) => {{
-        let a: std::net::SocketAddr = $str.parse().unwrap();
-        a
+        $str.parse::<std::net::SocketAddr>().unwrap()
     }};
 }
 #[macro_export]

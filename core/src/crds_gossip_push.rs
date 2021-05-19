@@ -753,36 +753,32 @@ mod test {
     #[test]
     fn test_personalized_push_messages() {
         let now = timestamp();
+        let mut rng = rand::thread_rng();
         let mut crds = Crds::default();
         let mut push = CrdsGossipPush::default();
-        let peer_1 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
-        assert_eq!(crds.insert(peer_1.clone(), now), Ok(None));
-        let peer_2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
-        assert_eq!(crds.insert(peer_2.clone(), now), Ok(None));
-        let peer_3 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            now,
-        )));
+        let peers: Vec<_> = vec![0, 0, now]
+            .into_iter()
+            .map(|wallclock| {
+                let mut peer = ContactInfo::new_rand(&mut rng, /*pubkey=*/ None);
+                peer.wallclock = wallclock;
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(peer))
+            })
+            .collect();
+        assert_eq!(crds.insert(peers[0].clone(), now), Ok(None));
+        assert_eq!(crds.insert(peers[1].clone(), now), Ok(None));
         assert_eq!(
-            push.process_push_message(&mut crds, &Pubkey::default(), peer_3.clone(), now),
+            push.process_push_message(&mut crds, &Pubkey::default(), peers[2].clone(), now),
             Ok(None)
         );
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         // push 3's contact info to 1 and 2 and 3
-        let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &peer_3.pubkey(),
-            0,
-        )));
-        let mut expected = HashMap::new();
-        expected.insert(peer_1.pubkey(), vec![new_msg.clone()]);
-        expected.insert(peer_2.pubkey(), vec![new_msg]);
+        let expected: HashMap<_, _> = vec![
+            (peers[0].pubkey(), vec![peers[2].clone()]),
+            (peers[1].pubkey(), vec![peers[2].clone()]),
+        ]
+        .into_iter()
+        .collect();
         assert_eq!(push.active_set.len(), 3);
         assert_eq!(push.new_push_messages(&crds, now), expected);
     }
