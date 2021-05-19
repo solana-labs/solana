@@ -37,7 +37,7 @@ fn test_constructors() {
     let max_bn_u32 = BigNumber::from_u32(u32::MAX);
     assert_eq!(max_bn_u32.to_bytes(), vec![255, 255, 255, 255]);
     let bn_from_dec = BigNumber::from_dec_str(LONG_DEC_STRING);
-    assert_eq!(bn_from_dec.is_negative(), false);
+    assert!(!bn_from_dec.is_negative());
     let bn_from_dec = BigNumber::from_dec_str(NEG_LONG_DEC_STRING);
     assert!(bn_from_dec.is_negative());
 }
