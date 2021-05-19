@@ -642,7 +642,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 && starts_and_ends_with_args.is_empty()
             {
                 eprintln!(
-                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with, optionally --ignore-case)"
                 );
                 exit(1);
             }
