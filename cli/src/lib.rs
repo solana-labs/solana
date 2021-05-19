@@ -10,7 +10,6 @@ macro_rules! ACCOUNT_STRING {
     };
 }
 
-#[macro_use]
 macro_rules! pubkey {
     ($arg:expr, $help:expr) => {
         $arg.takes_value(true)

@@ -72,6 +72,7 @@ impl fmt::Debug for Packet {
     }
 }
 
+#[allow(clippy::uninit_assumed_init)]
 impl Default for Packet {
     fn default() -> Packet {
         Packet {

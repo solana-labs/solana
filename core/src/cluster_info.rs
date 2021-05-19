@@ -2369,6 +2369,7 @@ impl ClusterInfo {
         }
     }
 
+    #[allow(clippy::needless_collect)]
     fn handle_batch_push_messages(
         &self,
         messages: Vec<(Pubkey, Vec<CrdsValue>)>,
@@ -3229,6 +3230,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::needless_collect)]
     fn test_handle_ping_messages() {
         let mut rng = rand::thread_rng();
         let this_node = Arc::new(Keypair::new());
@@ -3583,7 +3585,7 @@ mod tests {
             .unwrap()
             .new_push_messages(cluster_info.drain_push_queue(), timestamp());
         // there should be some pushes ready
-        assert_eq!(push_messages.is_empty(), false);
+        assert!(!push_messages.is_empty());
         push_messages
             .values()
             .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
@@ -3934,6 +3936,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::needless_collect)]
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
@@ -3967,9 +3970,10 @@ mod tests {
         let expected_len = (NUM_VALUES + num_values_per_payload - 1) / num_values_per_payload;
         let msgs = vec![value; NUM_VALUES as usize];
 
-        let split: Vec<_> =
-            ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).collect();
-        assert!(split.len() as u64 <= expected_len);
+        assert!(
+            ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).count() as u64
+                <= expected_len
+        );
     }
 
     #[test]

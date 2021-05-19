@@ -2810,6 +2810,8 @@ mod tests {
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
 
+        // lint warns field addr and len "never read"
+        #[allow(dead_code)]
         struct MockSlice {
             pub addr: u64,
             pub len: usize,

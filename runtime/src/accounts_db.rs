@@ -3203,6 +3203,7 @@ impl AccountsDb {
         }
     }
 
+    #[allow(clippy::needless_collect)]
     fn purge_slots(&self, slots: &HashSet<Slot>) {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
@@ -6502,7 +6503,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
-        assert_eq!(check_storage(&accounts, 0, 100), true);
+        assert!(check_storage(&accounts, 0, 100));
     }
 
     #[test]
@@ -7100,7 +7101,7 @@ pub mod tests {
 
         // do some updates to those accounts and re-check
         modify_accounts(&accounts, &pubkeys, 0, 100, 2);
-        assert_eq!(check_storage(&accounts, 0, 100), true);
+        assert!(check_storage(&accounts, 0, 100));
         check_accounts(&accounts, &pubkeys, 0, 100, 2);
         accounts.get_accounts_delta_hash(0);
         accounts.add_root(0);

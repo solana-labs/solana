@@ -384,7 +384,7 @@ fn get_and_verify_slot_entries(
     last_entry: &Hash,
 ) -> Vec<Entry> {
     let entries = blockstore.get_slot_entries(slot, 0).unwrap();
-    assert_eq!(entries.verify(last_entry), true);
+    assert!(entries.verify(last_entry));
     entries
 }
 

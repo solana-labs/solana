@@ -105,7 +105,7 @@ mod tests {
         // Only the nonempty packet had a timestamp greater than 1
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(1);
         assert_eq!(new_update_version, 2);
-        assert_eq!(updates.packets.is_empty(), false);
+        assert!(!updates.packets.is_empty());
 
         // If the given timestamp is greater than all timestamps in any update,
         // returned timestamp should be the same as the given timestamp, and

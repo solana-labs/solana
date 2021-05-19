@@ -133,11 +133,10 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
             )
         })
         .collect();
-    let bhq: Vec<_> = blocks
+    blocks
         .iter()
         .map(|(i, hash, fee_calc)| IterItem(*i, hash, fee_calc))
-        .collect();
-    bhq.into_iter().collect()
+        .collect()
 }
 
 #[cfg(test)]

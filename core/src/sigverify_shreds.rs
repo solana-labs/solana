@@ -153,7 +153,7 @@ pub mod tests {
         batch[0].packets[1].meta.size = shred.payload.len();
 
         let rv = verifier.verify_batch(batch);
-        assert_eq!(rv[0].packets[0].meta.discard, false);
-        assert_eq!(rv[0].packets[1].meta.discard, true);
+        assert!(!rv[0].packets[0].meta.discard);
+        assert!(rv[0].packets[1].meta.discard);
     }
 }

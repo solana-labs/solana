@@ -1,4 +1,4 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
 //! The `solana` library implements the Solana high-performance blockchain architecture.
 //! It includes a full Rust implementation of the architecture (see

@@ -231,18 +231,9 @@ mod tests {
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
-        assert_eq!(
-            check_account_for_balance(&rpc_client, &pubkey, 1).unwrap(),
-            true
-        );
-        assert_eq!(
-            check_account_for_balance(&rpc_client, &pubkey, account_balance).unwrap(),
-            true
-        );
-        assert_eq!(
-            check_account_for_balance(&rpc_client, &pubkey, account_balance + 1).unwrap(),
-            false
-        );
+        assert!(check_account_for_balance(&rpc_client, &pubkey, 1).unwrap());
+        assert!(check_account_for_balance(&rpc_client, &pubkey, account_balance).unwrap());
+        assert!(!check_account_for_balance(&rpc_client, &pubkey, account_balance + 1).unwrap());
     }
 
     #[test]
