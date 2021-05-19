@@ -2430,7 +2430,6 @@ pub mod tests {
     fn test_insert_with_lock_no_ancestors() {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
-        let mut gc = Vec::new();
         let slot = 0;
         let account_info = true;
 
@@ -2441,11 +2440,8 @@ pub mod tests {
             &mut w_account_maps,
             new_entry,
         );
-        let mut write = write.unwrap();
+        assert!(write.is_none());
         drop(w_account_maps);
-        write.update(slot, account_info, &mut gc);
-        assert!(gc.is_empty());
-        drop(write);
 
         let mut ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
