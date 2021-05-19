@@ -1,28 +1,30 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote};
-use jsonrpc_core::{Error, ErrorCode, Result};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_account_decoder::UiAccount;
-use solana_client::{
-    rpc_config::{
-        RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
-    },
-    rpc_response::{
-        Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult, SlotInfo,
-        SlotUpdate,
-    },
-};
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 #[cfg(test)]
 use std::sync::RwLock;
-use std::{
-    str::FromStr,
-    sync::{atomic, Arc},
+use {
+    crate::rpc_subscriptions::{RpcSubscriptions, RpcVote},
+    jsonrpc_core::{Error, ErrorCode, Result},
+    jsonrpc_derive::rpc,
+    jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId},
+    solana_account_decoder::UiAccount,
+    solana_client::{
+        rpc_config::{
+            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
+            RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        },
+        rpc_response::{
+            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
+            SlotInfo, SlotUpdate,
+        },
+    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    std::{
+        str::FromStr,
+        sync::{atomic, Arc},
+    },
 };
 
 const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
@@ -540,44 +542,46 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc_subscriptions::tests::robust_poll_or_panic,
-    };
-    use jsonrpc_core::{futures::channel::mpsc, Response};
-    use jsonrpc_pubsub::{PubSubHandler, Session};
-    use serial_test::serial;
-    use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-    use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
-    use solana_runtime::{
-        bank::Bank,
-        bank_forks::BankForks,
-        commitment::{BlockCommitmentCache, CommitmentSlots},
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
-            ValidatorVoteKeypairs,
+    use {
+        super::*,
+        crate::{
+            optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+            rpc_subscriptions::tests::robust_poll_or_panic,
         },
-    };
-    use solana_sdk::{
-        account::ReadableAccount,
-        commitment_config::CommitmentConfig,
-        hash::Hash,
-        message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction, system_program, system_transaction,
-        transaction::{self, Transaction},
-    };
-    use solana_stake_program::{
-        self, stake_instruction,
-        stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
-    };
-    use solana_vote_program::vote_state::Vote;
-    use std::{
-        sync::{atomic::AtomicBool, RwLock},
-        thread::sleep,
-        time::Duration,
+        jsonrpc_core::{futures::channel::mpsc, Response},
+        jsonrpc_pubsub::{PubSubHandler, Session},
+        serial_test::serial,
+        solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
+        solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult},
+        solana_runtime::{
+            bank::Bank,
+            bank_forks::BankForks,
+            commitment::{BlockCommitmentCache, CommitmentSlots},
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
+                ValidatorVoteKeypairs,
+            },
+        },
+        solana_sdk::{
+            account::ReadableAccount,
+            commitment_config::CommitmentConfig,
+            hash::Hash,
+            message::Message,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction, system_program, system_transaction,
+            transaction::{self, Transaction},
+        },
+        solana_stake_program::{
+            self, stake_instruction,
+            stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
+        },
+        solana_vote_program::vote_state::Vote,
+        std::{
+            sync::{atomic::AtomicBool, RwLock},
+            thread::sleep,
+            time::Duration,
+        },
     };
 
     fn process_transaction_and_notify(
