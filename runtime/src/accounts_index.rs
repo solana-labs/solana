@@ -508,7 +508,7 @@ pub trait ZeroLamport {
 }
 
 type MapType<T> = AccountMap<Pubkey, AccountMapEntry<T>>;
-type ReadWriteLockMapType<'a, T> = RwLockWriteGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
+type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
 
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
@@ -859,10 +859,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         slot: Slot,
         info: &T,
-        lock: Option<&mut ReadWriteLockMapType<T>>,
+        w_account_maps: Option<&mut AccountMapsWriteLock<T>>,
     ) -> Option<WriteAccountMapEntry<T>> {
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, info);
-        match lock {
+        match w_account_maps {
             Some(w_account_maps) => {
                 self.insert_new_entry_if_missing_with_lock(pubkey, w_account_maps, new_entry)
             }
@@ -878,7 +878,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     fn insert_new_entry_if_missing_with_lock(
         &self,
         pubkey: &Pubkey,
-        w_account_maps: &mut ReadWriteLockMapType<T>,
+        w_account_maps: &mut AccountMapsWriteLock<T>,
         new_entry: AccountMapEntry<T>,
     ) -> Option<WriteAccountMapEntry<T>> {
         let mut is_newly_inserted = false;
@@ -1179,7 +1179,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    pub(crate) fn get_account_maps_write_lock(&self) -> ReadWriteLockMapType<T> {
+    pub(crate) fn get_account_maps_write_lock(&self) -> AccountMapsWriteLock<T> {
         self.account_maps.write().unwrap()
     }
 
@@ -1193,7 +1193,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         account_info: T,
         reclaims: &mut SlotList<T>,
-        w_account_maps: &mut ReadWriteLockMapType<T>,
+        w_account_maps: &mut AccountMapsWriteLock<T>,
     ) {
         let account_entry =
             self.insert_new_entry_if_missing(pubkey, slot, &account_info, Some(w_account_maps));
@@ -1237,9 +1237,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             }
             if let Some(mut w_account_entry) = w_account_entry {
                 w_account_entry.update(slot, account_info, reclaims);
-                true
-            } else {
                 false
+            } else {
+                true
             }
         };
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
