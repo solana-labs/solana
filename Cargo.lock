@@ -4342,6 +4342,7 @@ dependencies = [
  "solana-perf",
  "solana-program-test",
  "solana-rayon-threadlimit",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
@@ -5031,6 +5032,10 @@ dependencies = [
  "thiserror",
  "uriparse",
 ]
+
+[[package]]
+name = "solana-rpc"
+version = "1.7.0"
 
 [[package]]
 name = "solana-runtime"

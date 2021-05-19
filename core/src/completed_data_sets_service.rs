@@ -1,7 +1,8 @@
-use crate::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
 use solana_ledger::entry::Entry;
+use solana_rpc::max_slots::MaxSlots;
 use solana_sdk::signature::Signature;
 use std::{
     sync::{

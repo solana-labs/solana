@@ -3,7 +3,6 @@
 use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
-    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -43,6 +42,7 @@ use solana_ledger::{
 };
 use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
+use solana_rpc::max_slots::MaxSlots;
 use solana_runtime::{
     accounts::AccountAddressFilter,
     accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},

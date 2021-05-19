@@ -12,7 +12,6 @@ use crate::{
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
@@ -45,6 +44,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
+use solana_rpc::max_slots::MaxSlots;
 use solana_runtime::{
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
