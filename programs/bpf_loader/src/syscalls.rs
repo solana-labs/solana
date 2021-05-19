@@ -4255,7 +4255,7 @@ mod tests {
     fn test_syscall_sha256() {
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
-
+        #[allow(dead_code)]
         struct MockSlice {
             pub addr: u64,
             pub len: usize,
@@ -4675,6 +4675,7 @@ mod tests {
 
     #[test]
     fn test_syscall_bignum_add() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -4776,6 +4777,7 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_sub() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -4878,6 +4880,7 @@ mod tests {
 
     #[test]
     fn test_syscall_bignum_mul() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -4980,6 +4983,7 @@ mod tests {
 
     #[test]
     fn test_syscall_bignum_div() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5081,6 +5085,7 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_sqr() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5170,6 +5175,7 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_exp() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5272,6 +5278,7 @@ mod tests {
 
     #[test]
     fn test_syscall_bignum_mod_sqr() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5373,6 +5380,7 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_mod_exp() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5499,6 +5507,7 @@ mod tests {
     }
     #[test]
     fn test_syscall_bignum_mod_mul() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
@@ -5626,6 +5635,7 @@ mod tests {
 
     #[test]
     fn test_syscall_bignum_mod_inv() {
+        #[allow(dead_code)]
         struct ArgSlice {
             pub addr: u64,
             pub len: usize,
