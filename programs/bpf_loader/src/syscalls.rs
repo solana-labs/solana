@@ -2701,7 +2701,7 @@ mod tests {
     fn test_syscall_sol_alloc_free() {
         // large alloc
         {
-            let heap = AlignedMemory::new(100, HOST_ALIGN);
+            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -2728,7 +2728,7 @@ mod tests {
         }
         // many small unaligned allocs
         {
-            let heap = AlignedMemory::new(100, HOST_ALIGN);
+            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -2754,7 +2754,7 @@ mod tests {
         }
         // many small aligned allocs
         {
-            let heap = AlignedMemory::new(100, HOST_ALIGN);
+            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -2781,7 +2781,7 @@ mod tests {
         // aligned allocs
 
         fn check_alignment<T>() {
-            let heap = AlignedMemory::new(100, HOST_ALIGN);
+            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -2822,6 +2822,7 @@ mod tests {
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
 
+        #[allow(dead_code)]
         struct MockSlice {
             pub addr: u64,
             pub len: usize,
