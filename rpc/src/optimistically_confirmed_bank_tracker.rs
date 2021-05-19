@@ -103,7 +103,7 @@ impl OptimisticallyConfirmedBankTracker {
         Ok(())
     }
 
-    pub(crate) fn process_notification(
+    pub fn process_notification(
         notification: BankNotification,
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,

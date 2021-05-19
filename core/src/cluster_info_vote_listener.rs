@@ -3,11 +3,9 @@ use crate::{
     crds::Cursor,
     crds_value::CrdsValueLabel,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::PohRecorder,
     replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
-    rpc_subscriptions::RpcSubscriptions,
     sigverify,
     verified_vote_packets::VerifiedVotePackets,
     vote_stake_tracker::VoteStakeTracker,
@@ -20,6 +18,10 @@ use log::*;
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
+use solana_rpc::{
+    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+    rpc_subscriptions::RpcSubscriptions,
+};
 use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
@@ -824,8 +826,8 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_perf::packet;
+    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::{
         bank::Bank,
         commitment::BlockCommitmentCache,

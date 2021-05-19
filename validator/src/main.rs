@@ -29,7 +29,6 @@ use {
         gossip_service::GossipService,
         poh_service,
         rpc::JsonRpcConfig,
-        rpc_pubsub_service::PubSubConfig,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
@@ -38,6 +37,7 @@ use {
     solana_download_utils::{download_genesis_if_missing, download_snapshot},
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
+    solana_rpc::rpc_pubsub_service::PubSubConfig,
     solana_runtime::{
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,

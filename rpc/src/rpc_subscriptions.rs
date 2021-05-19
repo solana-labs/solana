@@ -2,7 +2,7 @@
 
 use crate::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-    rpc::{get_parsed_token_account, get_parsed_token_accounts},
+    parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
 };
 use core::hash::Hash;
 use jsonrpc_pubsub::{
