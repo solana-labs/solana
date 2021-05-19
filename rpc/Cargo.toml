@@ -1,0 +1,44 @@
+[package]
+name = "solana-rpc"
+version = "1.7.0"
+description = "Solana RPC"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-rpc"
+edition = "2018"
+
+[dependencies]
+bs58 = "0.3.1"
+crossbeam-channel = "0.4"
+jsonrpc-core = "17.0.0"
+jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }
+jsonrpc-derive = "17.0.0"
+jsonrpc-pubsub = "17.0.0"
+jsonrpc-ws-server = "17.0.0"
+log = "0.4.11"
+serde = "1.0.122"
+serde_derive = "1.0.103"
+serde_json = "1.0.56"
+solana-account-decoder = { path = "../account-decoder", version = "=1.7.0" }
+solana-client = { path = "../client", version = "=1.7.0" }
+solana-ledger = { path = "../ledger", version = "=1.7.0" }
+solana-measure = { path = "../measure", version = "=1.7.0" }
+solana-metrics = { path = "../metrics", version = "=1.7.0" }
+solana-runtime = { path = "../runtime", version = "=1.7.0" }
+solana-sdk = { path = "../sdk", version = "=1.7.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.0" }
+spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
+
+[dev-dependencies]
+serial_test = "0.4.0"
+solana-stake-program = { path = "../programs/stake", version = "=1.7.0" }
+tokio = { version = "1", features = ["full"] }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_rpc"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

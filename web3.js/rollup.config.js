@@ -52,6 +52,7 @@ function generateConfig(configType, format) {
     config.external = [
       /@babel\/runtime/,
       'bn.js',
+      'borsh',
       'bs58',
       'buffer-layout',
       'crypto-hash',
@@ -81,6 +82,7 @@ function generateConfig(configType, format) {
           config.external = [
             /@babel\/runtime/,
             'bn.js',
+            'borsh',
             'bs58',
             'buffer',
             'buffer-layout',

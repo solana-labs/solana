@@ -32,13 +32,15 @@ macro_rules! u64_align {
 
 const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
 
+pub type StoredMetaWriteVersion = u64;
+
 /// Meta contains enough context to recover the index from storage itself
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Debug)]
 pub struct StoredMeta {
     /// global write version
-    pub write_version: u64,
+    pub write_version: StoredMetaWriteVersion,
     /// key for the account
     pub pubkey: Pubkey,
     pub data_len: u64,
@@ -881,7 +883,7 @@ pub mod tests {
             let executable_bool: &bool = &account.account_meta.executable;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
-            assert_eq!(*executable_bool, false);
+            assert!(!*executable_bool);
             const FALSE: bool = false; // keep clippy happy
             if *executable_bool == FALSE {
                 panic!("This didn't occur if this test passed.");
@@ -892,7 +894,7 @@ pub mod tests {
         // we can NOT observe crafted value by value
         {
             let executable_bool: bool = account.account_meta.executable;
-            assert_eq!(executable_bool, false);
+            assert!(!executable_bool);
             assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
         }
 

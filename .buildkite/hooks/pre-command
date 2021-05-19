@@ -36,4 +36,7 @@ export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
   # `std:
   #    "found possibly newer version of crate `std` which `xyz` depends on
   rm -rf target/bpfel-unknown-unknown
+  if [[ $BUILDKITE_LABEL = "stable-perf" ]]; then
+    rm -rf target/release
+  fi
 )

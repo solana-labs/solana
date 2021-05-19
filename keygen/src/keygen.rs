@@ -5,6 +5,7 @@ use clap::{
     Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
+    input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::{is_parsable, is_prompt_signer_source},
     keypair::{
         keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
@@ -105,6 +106,9 @@ fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
+        // Require a seed phrase to avoid generating a keypair
+        // but having no way to get the private key
+        .requires("use_mnemonic")
         .help(NO_OUTFILE_ARG.help)
 }
 
@@ -151,7 +155,7 @@ fn output_keypair(
     outfile: &str,
     source: &str,
 ) -> Result<(), Box<dyn error::Error>> {
-    if outfile == "-" {
+    if outfile == STDOUT_OUTFILE_TOKEN {
         let mut stdout = std::io::stdout();
         write_keypair(&keypair, &mut stdout)?;
     } else {
@@ -550,7 +554,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             };
 
             match outfile {
-                Some("-") => (),
+                Some(STDOUT_OUTFILE_TOKEN) => (),
                 Some(outfile) => check_for_overwrite(&outfile, &matches),
                 None => (),
             }
@@ -592,7 +596,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 path.to_str().unwrap()
             };
 
-            if outfile != "-" {
+            if outfile != STDOUT_OUTFILE_TOKEN {
                 check_for_overwrite(&outfile, &matches);
             }
 

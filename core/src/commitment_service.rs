@@ -1,6 +1,7 @@
-use crate::{consensus::Stake, rpc_subscriptions::RpcSubscriptions};
+use crate::consensus::Stake;
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
+use solana_rpc::rpc_subscriptions::RpcSubscriptions;
 use solana_runtime::{
     bank::Bank,
     commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},

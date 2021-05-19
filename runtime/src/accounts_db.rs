@@ -25,7 +25,7 @@ use crate::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         Ancestors, IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
     },
-    append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
+    append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
     read_only_accounts_cache::ReadOnlyAccountsCache,
 };
@@ -53,7 +53,7 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::{Borrow, Cow},
     boxed::Box,
-    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     io::{Error as IoError, Result as IoResult},
     ops::{Range, RangeBounds},
@@ -90,7 +90,7 @@ const CACHE_VIRTUAL_STORAGE_ID: usize = AppendVecId::MAX;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
+const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 
 // A specially reserved offset (represents an offset into an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
@@ -307,7 +307,7 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn write_version(&self) -> u64 {
+    pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.meta.write_version,
             LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
@@ -3203,6 +3203,7 @@ impl AccountsDb {
         }
     }
 
+    #[allow(clippy::needless_collect)]
     fn purge_slots(&self, slots: &HashSet<Slot>) {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
@@ -3353,9 +3354,9 @@ impl AccountsDb {
         Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
-    fn bulk_assign_write_version(&self, count: usize) -> u64 {
+    fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
         self.write_version
-            .fetch_add(count as u64, Ordering::Relaxed)
+            .fetch_add(count as StoredMetaWriteVersion, Ordering::Relaxed)
     }
 
     fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
@@ -4818,7 +4819,7 @@ impl AccountsDb {
         accounts: &[(&Pubkey, &impl ReadableAccount)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
-        write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
+        write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
         // the append vec so that hashing could happen on the store
@@ -4952,11 +4953,10 @@ impl AccountsDb {
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn generate_index(&self) {
-        // BTreeMap because we want in-order traversal of oldest write_version to newest.
-        // Thus, all instances of an account in a store are added to the index in oldest to newest
-        // order and we update refcounts and track reclaims correctly.
-        type AccountsMap<'a> = HashMap<Pubkey, BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>;
+        type AccountsMap<'a> =
+            HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -5007,49 +5007,72 @@ impl AccountsDb {
                     storage_maps.iter().for_each(|storage| {
                         let accounts = storage.all_accounts();
                         accounts.into_iter().for_each(|stored_account| {
-                            let entry = accounts_map
-                                .entry(stored_account.meta.pubkey)
-                                .or_insert_with(BTreeMap::new);
-                            assert!(
-                                // There should only be one update per write version for a specific slot
-                                // and account
-                                entry
-                                    .insert(
-                                        stored_account.meta.write_version,
-                                        (storage.append_vec_id(), stored_account)
-                                    )
-                                    .is_none()
-                            );
+                            let this_version = stored_account.meta.write_version;
+                            match accounts_map.entry(stored_account.meta.pubkey) {
+                                std::collections::hash_map::Entry::Vacant(entry) => {
+                                    entry.insert((
+                                        this_version,
+                                        storage.append_vec_id(),
+                                        stored_account,
+                                    ));
+                                }
+                                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                                    let occupied_version = entry.get().0;
+                                    if occupied_version < this_version {
+                                        entry.insert((
+                                            this_version,
+                                            storage.append_vec_id(),
+                                            stored_account,
+                                        ));
+                                    } else {
+                                        assert!(occupied_version != this_version);
+                                    }
+                                }
+                            }
                         })
                     });
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
-                    // Need to restore indexes even with older write versions which may
-                    // be shielding other accounts. When they are then purged, the
-                    // original non-shielded account value will be visible when the account
-                    // is restored from the append-vec
                     if !accounts_map.is_empty() {
                         let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                         let dirty_keys =
                             accounts_map.iter().map(|(pubkey, _info)| *pubkey).collect();
                         self.uncleaned_pubkeys.insert(*slot, dirty_keys);
-                        for (pubkey, account_infos) in accounts_map.into_iter() {
-                            for (_, (store_id, stored_account)) in account_infos.into_iter() {
-                                let account_info = AccountInfo {
-                                    store_id,
-                                    offset: stored_account.offset,
-                                    stored_size: stored_account.stored_size,
-                                    lamports: stored_account.account_meta.lamports,
-                                };
-                                self.accounts_index.insert_new_if_missing(
+
+                        let infos: Vec<_> = accounts_map
+                            .iter()
+                            .map(|(pubkey, (_, store_id, stored_account))| {
+                                (
+                                    pubkey,
+                                    AccountInfo {
+                                        store_id: *store_id,
+                                        offset: stored_account.offset,
+                                        stored_size: stored_account.stored_size,
+                                        lamports: stored_account.account_meta.lamports,
+                                    },
+                                )
+                            })
+                            .collect::<Vec<_>>(); // we want this collection to occur before the lock below
+                        let mut lock = self.accounts_index.get_account_maps_write_lock();
+                        infos.into_iter().for_each(|(pubkey, account_info)| {
+                            self.accounts_index
+                                .insert_new_if_missing_into_primary_index(
                                     *slot,
+                                    &pubkey,
+                                    account_info,
+                                    &mut _reclaims,
+                                    &mut lock,
+                                );
+                        });
+                        drop(lock);
+                        if !self.account_indexes.is_empty() {
+                            for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
+                                self.accounts_index.update_secondary_indexes(
                                     &pubkey,
                                     &stored_account.account_meta.owner,
                                     &stored_account.data,
                                     &self.account_indexes,
-                                    account_info,
-                                    &mut _reclaims,
                                 );
                             }
                         }
@@ -6480,7 +6503,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
-        assert_eq!(check_storage(&accounts, 0, 100), true);
+        assert!(check_storage(&accounts, 0, 100));
     }
 
     #[test]
@@ -7078,7 +7101,7 @@ pub mod tests {
 
         // do some updates to those accounts and re-check
         modify_accounts(&accounts, &pubkeys, 0, 100, 2);
-        assert_eq!(check_storage(&accounts, 0, 100), true);
+        assert!(check_storage(&accounts, 0, 100));
         check_accounts(&accounts, &pubkeys, 0, 100, 2);
         accounts.get_accounts_delta_hash(0);
         accounts.add_root(0);

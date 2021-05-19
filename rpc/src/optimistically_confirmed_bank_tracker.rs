@@ -2,19 +2,21 @@
 //! most recent optimistically confirmed bank for use in rpc services, and triggers gossip
 //! subscription notifications
 
-use crate::rpc_subscriptions::RpcSubscriptions;
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_client::rpc_response::{SlotTransactionStats, SlotUpdate};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, timing::timestamp};
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    crate::rpc_subscriptions::RpcSubscriptions,
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    solana_client::rpc_response::{SlotTransactionStats, SlotUpdate},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{clock::Slot, timing::timestamp},
+    std::{
+        collections::HashSet,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
 };
 
 pub struct OptimisticallyConfirmedBank {
@@ -103,7 +105,7 @@ impl OptimisticallyConfirmedBankTracker {
         Ok(())
     }
 
-    pub(crate) fn process_notification(
+    pub fn process_notification(
         notification: BankNotification,
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -190,12 +192,14 @@ impl OptimisticallyConfirmedBankTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
+    use {
+        super::*,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
+        },
+        solana_sdk::pubkey::Pubkey,
     };
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_process_notification() {
@@ -256,7 +260,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&3), true);
+        assert!(pending_optimistically_confirmed_banks.contains(&3));
 
         // Test bank will only be cached when frozen
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
@@ -282,7 +286,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), true);
+        assert!(pending_optimistically_confirmed_banks.contains(&4));
 
         let bank4 = bank_forks.read().unwrap().get(4).unwrap().clone();
         let bank5 = Bank::new_from_parent(&bank4, &Pubkey::default(), 5);
@@ -297,7 +301,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), false);
+        assert!(!pending_optimistically_confirmed_banks.contains(&4));
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
@@ -319,6 +323,6 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&6), false);
+        assert!(!pending_optimistically_confirmed_banks.contains(&6));
     }
 }

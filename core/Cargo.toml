@@ -33,8 +33,6 @@ jsonrpc-core = "17.0.0"
 jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "17.0.0"
 jsonrpc-http-server = "17.0.0"
-jsonrpc-pubsub = "17.0.0"
-jsonrpc-ws-server = "17.0.0"
 libc = "0.2.81"
 log = "0.4.11"
 lru = "0.6.1"
@@ -65,6 +63,7 @@ solana-measure = { path = "../measure", version = "=1.7.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.7.0" }
 solana-perf = { path = "../perf", version = "=1.7.0" }
 solana-program-test = { path = "../program-test", version = "=1.7.0" }
+solana-rpc = { path = "../rpc", version = "=1.7.0" }
 solana-runtime = { path = "../runtime", version = "=1.7.0" }
 solana-sdk = { path = "../sdk", version = "=1.7.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.7.0" }

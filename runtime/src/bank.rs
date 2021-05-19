@@ -629,7 +629,7 @@ pub(crate) struct BankFieldsToDeserialize {
 // Bank's common fields shared by all supported snapshot versions for serialization.
 // This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
 // So, sync fields with BankFieldsToDeserialize!
-// all members are made public to remain Bank private and to make versioned serializer workable on this
+// all members are made public to keep Bank private and to make versioned serializer workable on this
 #[derive(Debug)]
 pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
@@ -4518,12 +4518,36 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
+        let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
             self.clean_accounts(true);
+        }
+        clean_time.stop();
+
+        let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
+        if self.slot() > 0 {
             self.shrink_all_slots();
         }
+        shrink_all_slots_time.stop();
+
+        let mut verify_time = Measure::start("verify_bank_hash");
+        let mut verify = self.verify_bank_hash();
+        verify_time.stop();
+
+        let mut verify2_time = Measure::start("verify_hash");
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
-        self.verify_bank_hash() && self.verify_hash()
+        verify = verify && self.verify_hash();
+        verify2_time.stop();
+
+        datapoint_info!(
+            "verify_snapshot_bank",
+            ("clean_us", clean_time.as_us(), i64),
+            ("shrink_all_slots_us", shrink_all_slots_time.as_us(), i64),
+            ("verify_bank_hash_us", verify_time.as_us(), i64),
+            ("verify_hash_us", verify2_time.as_us(), i64),
+        );
+
+        verify
     }
 
     /// Return the number of hashes per tick
@@ -6004,7 +6028,7 @@ pub(crate) mod tests {
 
         let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            previous_capitalization - current_capitalization + sysvar_and_native_proram_delta,
+            previous_capitalization - (current_capitalization - sysvar_and_native_proram_delta),
             burned_portion
         );
 
@@ -8480,6 +8504,7 @@ pub(crate) mod tests {
         use sysvar::clock::Clock;
 
         let dummy_clock_id = solana_sdk::pubkey::new_rand();
+        let dummy_rent_epoch = 44;
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
         let expected_previous_slot = 3;
@@ -8496,19 +8521,22 @@ pub(crate) mod tests {
                 bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
                     assert!(optional_account.is_none());
 
-                    create_account(
+                    let mut account = create_account(
                         &Clock {
                             slot: expected_previous_slot,
                             ..Clock::default()
                         },
                         bank1.inherit_specially_retained_account_fields(optional_account),
-                    )
+                    );
+                    account.set_rent_epoch(dummy_rent_epoch);
+                    account
                 });
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
                 assert_eq!(
                     expected_previous_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
+                assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
             },
             |old, new| {
                 assert_eq!(old + 1, new);
@@ -8560,6 +8588,7 @@ pub(crate) mod tests {
                     expected_next_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
                 );
+                assert_eq!(INITIAL_RENT_EPOCH, current_account.rent_epoch());
             },
             |old, new| {
                 // if existing, capitalization shouldn't change
@@ -8748,15 +8777,15 @@ pub(crate) mod tests {
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank.is_delta.load(Relaxed), true);
+        assert!(bank.is_delta.load(Relaxed));
 
         let bank1 = new_from_parent(&bank);
         let hash1 = bank1.hash_internal_state();
-        assert_eq!(bank1.is_delta.load(Relaxed), false);
+        assert!(!bank1.is_delta.load(Relaxed));
         assert_ne!(hash1, bank.hash());
         // ticks don't make a bank into a delta or change its state unless a block boundary is crossed
         bank1.register_tick(&Hash::default());
-        assert_eq!(bank1.is_delta.load(Relaxed), false);
+        assert!(!bank1.is_delta.load(Relaxed));
         assert_eq!(bank1.hash_internal_state(), hash1);
     }
 
@@ -8767,13 +8796,13 @@ pub(crate) mod tests {
         let key1 = Keypair::new();
 
         // The zeroth bank is empty becasue there are no transactions
-        assert_eq!(bank0.is_empty(), true);
+        assert!(bank0.is_empty());
 
         // Set is_delta to true, bank is no longer empty
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank0.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank0.is_empty(), false);
+        assert!(!bank0.is_empty());
     }
 
     #[test]

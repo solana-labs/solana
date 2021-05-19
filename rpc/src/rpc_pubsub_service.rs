@@ -1,19 +1,21 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::{
-    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
-    rpc_subscriptions::RpcSubscriptions,
-};
-use jsonrpc_pubsub::{PubSubHandler, Session};
-use jsonrpc_ws_server::{RequestContext, ServerBuilder};
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+use {
+    crate::{
+        rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+        rpc_subscriptions::RpcSubscriptions,
     },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::Duration,
+    jsonrpc_pubsub::{PubSubHandler, Session},
+    jsonrpc_ws_server::{RequestContext, ServerBuilder},
+    std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -105,17 +107,19 @@ impl PubSubService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use solana_runtime::{
-        bank::Bank,
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    };
-    use std::{
-        net::{IpAddr, Ipv4Addr},
-        sync::RwLock,
+    use {
+        super::*,
+        crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        solana_runtime::{
+            bank::Bank,
+            bank_forks::BankForks,
+            commitment::BlockCommitmentCache,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        std::{
+            net::{IpAddr, Ipv4Addr},
+            sync::RwLock,
+        },
     };
 
     #[test]

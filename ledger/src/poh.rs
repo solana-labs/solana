@@ -197,95 +197,77 @@ mod tests {
         let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
 
         let mut poh = Poh::new(zero, None);
-        assert_eq!(
-            verify(
-                zero,
-                &[
-                    (poh.tick().unwrap(), None),
-                    (poh.record(zero).unwrap(), Some(zero)),
-                    (poh.record(zero).unwrap(), Some(zero)),
-                    (poh.tick().unwrap(), None),
-                ],
-            ),
-            true
-        );
+        assert!(verify(
+            zero,
+            &[
+                (poh.tick().unwrap(), None),
+                (poh.record(zero).unwrap(), Some(zero)),
+                (poh.record(zero).unwrap(), Some(zero)),
+                (poh.tick().unwrap(), None),
+            ],
+        ));
 
-        assert_eq!(
-            verify(
-                zero,
-                &[(
-                    PohEntry {
-                        num_hashes: 1,
-                        hash: one,
-                    },
-                    None
-                )],
-            ),
-            true
-        );
-        assert_eq!(
-            verify(
-                zero,
-                &[(
-                    PohEntry {
-                        num_hashes: 2,
-                        hash: two,
-                    },
-                    None
-                )]
-            ),
-            true
-        );
+        assert!(verify(
+            zero,
+            &[(
+                PohEntry {
+                    num_hashes: 1,
+                    hash: one,
+                },
+                None
+            )],
+        ));
+        assert!(verify(
+            zero,
+            &[(
+                PohEntry {
+                    num_hashes: 2,
+                    hash: two,
+                },
+                None
+            )]
+        ));
 
-        assert_eq!(
-            verify(
-                zero,
-                &[(
+        assert!(verify(
+            zero,
+            &[(
+                PohEntry {
+                    num_hashes: 1,
+                    hash: one_with_zero,
+                },
+                Some(zero)
+            )]
+        ));
+        assert!(!verify(
+            zero,
+            &[(
+                PohEntry {
+                    num_hashes: 1,
+                    hash: zero,
+                },
+                None
+            )]
+        ));
+
+        assert!(verify(
+            zero,
+            &[
+                (
                     PohEntry {
                         num_hashes: 1,
                         hash: one_with_zero,
                     },
                     Some(zero)
-                )]
-            ),
-            true
-        );
-        assert_eq!(
-            verify(
-                zero,
-                &[(
+                ),
+                (
                     PohEntry {
                         num_hashes: 1,
-                        hash: zero,
+                        hash: hash(&one_with_zero.as_ref()),
                     },
                     None
-                )]
-            ),
-            false
-        );
-
-        assert_eq!(
-            verify(
-                zero,
-                &[
-                    (
-                        PohEntry {
-                            num_hashes: 1,
-                            hash: one_with_zero,
-                        },
-                        Some(zero)
-                    ),
-                    (
-                        PohEntry {
-                            num_hashes: 1,
-                            hash: hash(&one_with_zero.as_ref()),
-                        },
-                        None
-                    )
-                ]
-            ),
-            true
-        );
+                )
+            ]
+        ));
     }
 
     #[test]

@@ -1796,7 +1796,7 @@ The result field will be an array of JSON objects, which will contain:
 - `account: <object>` - a JSON object, with the following sub fields:
    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+   - `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 

@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(mem[0], 50);
         assert_eq!(mem[1], 10);
         assert_eq!(mem.len(), 2);
-        assert_eq!(mem.is_empty(), false);
+        assert!(!mem.is_empty());
         let mut iter = mem.iter();
         assert_eq!(*iter.next().unwrap(), 50);
         assert_eq!(*iter.next().unwrap(), 10);

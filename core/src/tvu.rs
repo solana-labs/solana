@@ -14,13 +14,10 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
     rewards_recorder_service::RewardsRecorderSender,
-    rpc_subscriptions::RpcSubscriptions,
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
@@ -31,6 +28,10 @@ use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
+};
+use solana_rpc::{
+    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
+    rpc_subscriptions::RpcSubscriptions,
 };
 use solana_runtime::{
     accounts_background_service::{
@@ -333,7 +334,6 @@ pub mod tests {
     use crate::{
         banking_stage::create_test_recorder,
         cluster_info::{ClusterInfo, Node},
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     };
     use serial_test::serial;
     use solana_ledger::{
@@ -341,6 +341,7 @@ pub mod tests {
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
+    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 

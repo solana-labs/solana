@@ -64,6 +64,7 @@
   "dependencies": {
     "@babel/runtime": "^7.12.5",
     "bn.js": "^5.0.0",
+    "borsh": "^0.4.0",
     "bs58": "^4.0.1",
     "buffer": "6.0.1",
     "buffer-layout": "^1.2.0",

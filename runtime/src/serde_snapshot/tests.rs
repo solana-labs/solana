@@ -286,7 +286,7 @@ fn test_bank_serialize_newer() {
 mod test_bank_serialize {
     use super::*;
 
-    // These some what long test harness is required to freeze the ABI of
+    // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
     #[frozen_abi(digest = "DuRGntVwLGNAv5KooafUSpxk67BPAx2yC7Z8A9c8wr2G")]
     #[derive(Serialize, AbiExample)]

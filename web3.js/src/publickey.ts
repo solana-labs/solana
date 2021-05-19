@@ -4,6 +4,7 @@ import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
 import {Buffer} from 'buffer';
 
+import {Struct, SOLANA_SCHEMA} from './util/borsh-schema';
 import {toBuffer} from './util/to-buffer';
 
 /**
@@ -11,10 +12,27 @@ import {toBuffer} from './util/to-buffer';
  */
 export const MAX_SEED_LENGTH = 32;
 
+type PublicKeyInitData =
+  | number
+  | string
+  | Buffer
+  | Uint8Array
+  | Array<number>
+  | PublicKeyData;
+
+type PublicKeyData = {
+  /** @internal */
+  _bn: BN;
+};
+
+function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
+  return (value as PublicKeyData)._bn !== undefined;
+}
+
 /**
  * A public key
  */
-export class PublicKey {
+export class PublicKey extends Struct {
   /** @internal */
   _bn: BN;
 
@@ -22,20 +40,25 @@ export class PublicKey {
    * Create a new PublicKey object
    * @param value ed25519 public key as buffer or base-58 encoded string
    */
-  constructor(value: number | string | Buffer | Uint8Array | Array<number>) {
-    if (typeof value === 'string') {
-      // assume base 58 encoding by default
-      const decoded = bs58.decode(value);
-      if (decoded.length != 32) {
+  constructor(value: PublicKeyInitData) {
+    super({});
+    if (isPublicKeyData(value)) {
+      this._bn = value._bn;
+    } else {
+      if (typeof value === 'string') {
+        // assume base 58 encoding by default
+        const decoded = bs58.decode(value);
+        if (decoded.length != 32) {
+          throw new Error(`Invalid public key input`);
+        }
+        this._bn = new BN(decoded);
+      } else {
+        this._bn = new BN(value);
+      }
+
+      if (this._bn.byteLength() > 32) {
         throw new Error(`Invalid public key input`);
       }
-      this._bn = new BN(decoded);
-    } else {
-      this._bn = new BN(value);
-    }
-
-    if (this._bn.byteLength() > 32) {
-      throw new Error(`Invalid public key input`);
     }
   }
 
@@ -166,6 +189,11 @@ export class PublicKey {
     return is_on_curve(pubkey) == 1;
   }
 }
+
+SOLANA_SCHEMA.set(PublicKey, {
+  kind: 'struct',
+  fields: [['_bn', 'u256']],
+});
 
 // @ts-ignore
 let naclLowLevel = nacl.lowlevel;

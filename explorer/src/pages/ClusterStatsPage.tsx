@@ -15,18 +15,9 @@ import { Status, useFetchSupply, useSupply } from "providers/supply";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { useVoteAccounts } from "providers/accounts/vote-accounts";
-// @ts-ignore
-import * as CoinGecko from "coingecko-api";
-
-enum CoingeckoStatus {
-  Success,
-  FetchFailed,
-}
-
-const CoinGeckoClient = new CoinGecko();
+import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 
 const CLUSTER_STATS_TIMEOUT = 5000;
-const PRICE_REFRESH = 10000;
 
 export function ClusterStatsPage() {
   return (
@@ -331,78 +322,4 @@ export function StatsNotReady({ error }: { error: boolean }) {
       Loading
     </div>
   );
-}
-
-interface CoinInfo {
-  price: number;
-  volume_24: number;
-  market_cap: number;
-  price_change_percentage_24h: number;
-  market_cap_rank: number;
-  last_updated: Date;
-}
-
-interface CoinInfoResult {
-  data: {
-    market_data: {
-      current_price: {
-        usd: number;
-      };
-      total_volume: {
-        usd: number;
-      };
-      market_cap: {
-        usd: number;
-      };
-      price_change_percentage_24h: number;
-      market_cap_rank: number;
-    };
-    last_updated: string;
-  };
-}
-
-type CoinGeckoResult = {
-  coinInfo?: CoinInfo;
-  status: CoingeckoStatus;
-};
-
-function useCoinGecko(coinId: string): CoinGeckoResult | undefined {
-  const [coinInfo, setCoinInfo] = React.useState<CoinGeckoResult>();
-
-  React.useEffect(() => {
-    const getCoinInfo = () => {
-      CoinGeckoClient.coins
-        .fetch("solana")
-        .then((info: CoinInfoResult) => {
-          setCoinInfo({
-            coinInfo: {
-              price: info.data.market_data.current_price.usd,
-              volume_24: info.data.market_data.total_volume.usd,
-              market_cap: info.data.market_data.market_cap.usd,
-              market_cap_rank: info.data.market_data.market_cap_rank,
-              price_change_percentage_24h:
-                info.data.market_data.price_change_percentage_24h,
-              last_updated: new Date(info.data.last_updated),
-            },
-            status: CoingeckoStatus.Success,
-          });
-        })
-        .catch((error: any) => {
-          setCoinInfo({
-            status: CoingeckoStatus.FetchFailed,
-          });
-        });
-    };
-
-    getCoinInfo();
-    const interval = setInterval(() => {
-      getCoinInfo();
-    }, PRICE_REFRESH);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [setCoinInfo]);
-
-  return coinInfo;
 }

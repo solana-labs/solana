@@ -3,8 +3,6 @@
 use crate::{
     bigtable_upload_service::BigTableUploadService,
     cluster_info::ClusterInfo,
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     poh_recorder::PohRecorder,
     rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
@@ -20,6 +18,9 @@ use regex::Regex;
 use solana_client::rpc_cache::LargestAccountsCache;
 use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
 use solana_metrics::inc_new_counter_info;
+use solana_rpc::{
+    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+};
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
@@ -239,7 +240,8 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
             let non_circulating_supply =
-                crate::non_circulating_supply::calculate_non_circulating_supply(&bank).lamports;
+                solana_runtime::non_circulating_supply::calculate_non_circulating_supply(&bank)
+                    .lamports;
             Some(format!(
                 "{}",
                 lamports_to_sol(total_supply - non_circulating_supply)

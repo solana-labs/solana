@@ -1881,22 +1881,16 @@ mod tests {
 
     #[test]
     fn test_stake_is_bootstrap() {
-        assert_eq!(
-            Delegation {
-                activation_epoch: std::u64::MAX,
-                ..Delegation::default()
-            }
-            .is_bootstrap(),
-            true
-        );
-        assert_eq!(
-            Delegation {
-                activation_epoch: 0,
-                ..Delegation::default()
-            }
-            .is_bootstrap(),
-            false
-        );
+        assert!(Delegation {
+            activation_epoch: std::u64::MAX,
+            ..Delegation::default()
+        }
+        .is_bootstrap());
+        assert!(!Delegation {
+            activation_epoch: 0,
+            ..Delegation::default()
+        }
+        .is_bootstrap());
     }
 
     #[test]
@@ -5719,65 +5713,50 @@ mod tests {
             custodian,
         };
         // neither time
-        assert_eq!(
-            lockup.is_in_force(
-                &Clock {
-                    epoch: 0,
-                    unix_timestamp: 0,
-                    ..Clock::default()
-                },
-                None
-            ),
-            true
-        );
+        assert!(lockup.is_in_force(
+            &Clock {
+                epoch: 0,
+                unix_timestamp: 0,
+                ..Clock::default()
+            },
+            None
+        ));
         // not timestamp
-        assert_eq!(
-            lockup.is_in_force(
-                &Clock {
-                    epoch: 2,
-                    unix_timestamp: 0,
-                    ..Clock::default()
-                },
-                None
-            ),
-            true
-        );
+        assert!(lockup.is_in_force(
+            &Clock {
+                epoch: 2,
+                unix_timestamp: 0,
+                ..Clock::default()
+            },
+            None
+        ));
         // not epoch
-        assert_eq!(
-            lockup.is_in_force(
-                &Clock {
-                    epoch: 0,
-                    unix_timestamp: 2,
-                    ..Clock::default()
-                },
-                None
-            ),
-            true
-        );
+        assert!(lockup.is_in_force(
+            &Clock {
+                epoch: 0,
+                unix_timestamp: 2,
+                ..Clock::default()
+            },
+            None
+        ));
         // both, no custodian
-        assert_eq!(
-            lockup.is_in_force(
-                &Clock {
-                    epoch: 1,
-                    unix_timestamp: 1,
-                    ..Clock::default()
-                },
-                None
-            ),
-            false
-        );
+        assert!(!lockup.is_in_force(
+            &Clock {
+                epoch: 1,
+                unix_timestamp: 1,
+                ..Clock::default()
+            },
+            None
+        ));
         // neither, but custodian
-        assert_eq!(
-            lockup.is_in_force(
-                &Clock {
-                    epoch: 0,
-                    unix_timestamp: 0,
-                    ..Clock::default()
-                },
-                Some(&custodian),
-            ),
-            false,
-        );
+        assert!(!lockup.is_in_force(
+            &Clock {
+                epoch: 0,
+                unix_timestamp: 0,
+                ..Clock::default()
+            },
+            Some(&custodian),
+        ));
     }
 
     #[test]
