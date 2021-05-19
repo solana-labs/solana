@@ -2122,7 +2122,7 @@ impl Bank {
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
-        self.shrink_all_slots();
+        self.shrink_all_slots(false);
         shrink.stop();
 
         info!(
@@ -4527,7 +4527,7 @@ impl Bank {
 
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if self.slot() > 0 {
-            self.shrink_all_slots();
+            self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
 
@@ -4816,8 +4816,8 @@ impl Bank {
         self.rc.accounts.accounts_db.clean_accounts(max_clean_slot);
     }
 
-    pub fn shrink_all_slots(&self) {
-        self.rc.accounts.accounts_db.shrink_all_slots();
+    pub fn shrink_all_slots(&self, is_startup: bool) {
+        self.rc.accounts.accounts_db.shrink_all_slots(is_startup);
     }
 
     pub fn print_accounts_stats(&self) {

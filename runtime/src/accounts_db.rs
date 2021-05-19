@@ -2171,12 +2171,22 @@ impl AccountsDb {
         num_candidates
     }
 
-    pub fn shrink_all_slots(&self) {
-        for slot in self.all_slots_in_storage() {
-            if self.caching_enabled {
-                self.shrink_slot_forced(slot);
-            } else {
-                self.do_shrink_slot_forced_v1(slot);
+    pub fn shrink_all_slots(&self, is_startup: bool) {
+        if is_startup && self.caching_enabled {
+            let slots = self.all_slots_in_storage();
+            let chunk_size = std::cmp::max(slots.len() / 8, 1); // approximately 400k slots in a snapshot
+            slots.par_chunks(chunk_size).for_each(|slots| {
+                for slot in slots {
+                    self.shrink_slot_forced(*slot);
+                }
+            });
+        } else {
+            for slot in self.all_slots_in_storage() {
+                if self.caching_enabled {
+                    self.shrink_slot_forced(slot);
+                } else {
+                    self.do_shrink_slot_forced_v1(slot);
+                }
             }
         }
     }
@@ -8445,13 +8455,15 @@ pub mod tests {
 
     #[test]
     fn test_shrink_all_slots_none() {
-        let accounts = AccountsDb::new_single();
+        for startup in &[false, true] {
+            let accounts = AccountsDb::new_single();
 
-        for _ in 0..10 {
-            accounts.shrink_candidate_slots();
+            for _ in 0..10 {
+                accounts.shrink_candidate_slots();
+            }
+
+            accounts.shrink_all_slots(*startup);
         }
-
-        accounts.shrink_all_slots();
     }
 
     #[test]
@@ -8532,68 +8544,70 @@ pub mod tests {
     fn test_shrink_stale_slots_processed() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_single();
+        for startup in &[false, true] {
+            let accounts = AccountsDb::new_single();
 
-        let pubkey_count = 100;
-        let pubkeys: Vec<_> = (0..pubkey_count)
-            .map(|_| solana_sdk::pubkey::new_rand())
-            .collect();
+            let pubkey_count = 100;
+            let pubkeys: Vec<_> = (0..pubkey_count)
+                .map(|_| solana_sdk::pubkey::new_rand())
+                .collect();
 
-        let some_lamport = 223;
-        let no_data = 0;
-        let owner = *AccountSharedData::default().owner();
+            let some_lamport = 223;
+            let no_data = 0;
+            let owner = *AccountSharedData::default().owner();
 
-        let account = AccountSharedData::new(some_lamport, no_data, &owner);
+            let account = AccountSharedData::new(some_lamport, no_data, &owner);
 
-        let mut current_slot = 0;
+            let mut current_slot = 0;
 
-        current_slot += 1;
-        for pubkey in &pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            current_slot += 1;
+            for pubkey in &pubkeys {
+                accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            }
+            let shrink_slot = current_slot;
+            accounts.get_accounts_delta_hash(current_slot);
+            accounts.add_root(current_slot);
+
+            current_slot += 1;
+            let pubkey_count_after_shrink = 10;
+            let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
+
+            for pubkey in updated_pubkeys {
+                accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            }
+            accounts.get_accounts_delta_hash(current_slot);
+            accounts.add_root(current_slot);
+
+            accounts.clean_accounts(None);
+
+            assert_eq!(
+                pubkey_count,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
+            accounts.shrink_all_slots(*startup);
+            assert_eq!(
+                pubkey_count_after_shrink,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
+
+            let no_ancestors = Ancestors::default();
+            accounts.update_accounts_hash(current_slot, &no_ancestors);
+            accounts
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
+                .unwrap();
+
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
+                .unwrap();
+
+            // repeating should be no-op
+            accounts.shrink_all_slots(*startup);
+            assert_eq!(
+                pubkey_count_after_shrink,
+                accounts.all_account_count_in_append_vec(shrink_slot)
+            );
         }
-        let shrink_slot = current_slot;
-        accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
-
-        current_slot += 1;
-        let pubkey_count_after_shrink = 10;
-        let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
-
-        for pubkey in updated_pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
-        }
-        accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
-
-        accounts.clean_accounts(None);
-
-        assert_eq!(
-            pubkey_count,
-            accounts.all_account_count_in_append_vec(shrink_slot)
-        );
-        accounts.shrink_all_slots();
-        assert_eq!(
-            pubkey_count_after_shrink,
-            accounts.all_account_count_in_append_vec(shrink_slot)
-        );
-
-        let no_ancestors = Ancestors::default();
-        accounts.update_accounts_hash(current_slot, &no_ancestors);
-        accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
-            .unwrap();
-
-        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-        accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
-            .unwrap();
-
-        // repeating should be no-op
-        accounts.shrink_all_slots();
-        assert_eq!(
-            pubkey_count_after_shrink,
-            accounts.all_account_count_in_append_vec(shrink_slot)
-        );
     }
 
     #[test]
@@ -8648,7 +8662,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots();
+        accounts.shrink_all_slots(false);
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -8708,7 +8722,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots();
+        accounts.shrink_all_slots(false);
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -8910,7 +8924,7 @@ pub mod tests {
         }
         accounts.add_root(1);
         accounts.clean_accounts(None);
-        accounts.shrink_all_slots();
+        accounts.shrink_all_slots(false);
         accounts.print_accounts_stats("post-shrink");
         let num_stores = accounts.recycle_stores.read().unwrap().entry_count();
         assert!(num_stores > 0);
