@@ -2,19 +2,21 @@
 //! most recent optimistically confirmed bank for use in rpc services, and triggers gossip
 //! subscription notifications
 
-use crate::rpc_subscriptions::RpcSubscriptions;
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_client::rpc_response::{SlotTransactionStats, SlotUpdate};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, timing::timestamp};
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    crate::rpc_subscriptions::RpcSubscriptions,
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    solana_client::rpc_response::{SlotTransactionStats, SlotUpdate},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{clock::Slot, timing::timestamp},
+    std::{
+        collections::HashSet,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
 };
 
 pub struct OptimisticallyConfirmedBank {
@@ -103,7 +105,7 @@ impl OptimisticallyConfirmedBankTracker {
         Ok(())
     }
 
-    pub(crate) fn process_notification(
+    pub fn process_notification(
         notification: BankNotification,
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -190,12 +192,14 @@ impl OptimisticallyConfirmedBankTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
+    use {
+        super::*,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
+        },
+        solana_sdk::pubkey::Pubkey,
     };
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_process_notification() {

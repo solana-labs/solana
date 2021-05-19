@@ -1,28 +1,30 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote};
-use jsonrpc_core::{Error, ErrorCode, Result};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_account_decoder::UiAccount;
-use solana_client::{
-    rpc_config::{
-        RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
-    },
-    rpc_response::{
-        Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult, SlotInfo,
-        SlotUpdate,
-    },
-};
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 #[cfg(test)]
 use std::sync::RwLock;
-use std::{
-    str::FromStr,
-    sync::{atomic, Arc},
+use {
+    crate::rpc_subscriptions::{RpcSubscriptions, RpcVote},
+    jsonrpc_core::{Error, ErrorCode, Result},
+    jsonrpc_derive::rpc,
+    jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId},
+    solana_account_decoder::UiAccount,
+    solana_client::{
+        rpc_config::{
+            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
+            RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        },
+        rpc_response::{
+            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
+            SlotInfo, SlotUpdate,
+        },
+    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    std::{
+        str::FromStr,
+        sync::{atomic, Arc},
+    },
 };
 
 const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
@@ -540,46 +542,46 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc_subscriptions::tests::robust_poll_or_panic,
-    };
-    use crossbeam_channel::unbounded;
-    use jsonrpc_core::{futures::channel::mpsc, Response};
-    use jsonrpc_pubsub::{PubSubHandler, Session};
-    use serial_test::serial;
-    use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-    use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
-    use solana_runtime::{
-        bank::Bank,
-        bank_forks::BankForks,
-        commitment::{BlockCommitmentCache, CommitmentSlots},
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
-            ValidatorVoteKeypairs,
+    use {
+        super::*,
+        crate::{
+            optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+            rpc_subscriptions::tests::robust_poll_or_panic,
         },
-    };
-    use solana_sdk::{
-        account::ReadableAccount,
-        commitment_config::CommitmentConfig,
-        hash::Hash,
-        message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction, system_program, system_transaction,
-        transaction::{self, Transaction},
-    };
-    use solana_stake_program::{
-        self, stake_instruction,
-        stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
-    };
-    use solana_vote_program::vote_transaction;
-    use std::{
-        sync::{atomic::AtomicBool, RwLock},
-        thread::sleep,
-        time::Duration,
+        jsonrpc_core::{futures::channel::mpsc, Response},
+        jsonrpc_pubsub::{PubSubHandler, Session},
+        serial_test::serial,
+        solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
+        solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult},
+        solana_runtime::{
+            bank::Bank,
+            bank_forks::BankForks,
+            commitment::{BlockCommitmentCache, CommitmentSlots},
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
+                ValidatorVoteKeypairs,
+            },
+        },
+        solana_sdk::{
+            account::ReadableAccount,
+            commitment_config::CommitmentConfig,
+            hash::Hash,
+            message::Message,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction, system_program, system_transaction,
+            transaction::{self, Transaction},
+        },
+        solana_stake_program::{
+            self, stake_instruction,
+            stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
+        },
+        solana_vote_program::vote_state::Vote,
+        std::{
+            sync::{atomic::AtomicBool, RwLock},
+            thread::sleep,
+            time::Duration,
+        },
     };
 
     fn process_transaction_and_notify(
@@ -1227,9 +1229,7 @@ mod tests {
         );
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_config);
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         // Setup RPC
         let mut rpc = RpcSolPubSubImpl::default_with_bank_forks(bank_forks.clone());
@@ -1239,52 +1239,22 @@ mod tests {
         // Setup Subscriptions
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = RpcSubscriptions::new_with_vote_subscription(
+        let subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
             &exit,
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
             true,
-        );
-        rpc.subscriptions = Arc::new(subscriptions);
+        ));
+        rpc.subscriptions = subscriptions.clone();
         rpc.vote_subscribe(session, subscriber);
 
-        // Create some voters at genesis
-        let vote_tracker = VoteTracker::new(&bank);
-        let (votes_sender, votes_receiver) = unbounded();
-        let (vote_tracker, validator_voting_keypairs) =
-            (Arc::new(vote_tracker), validator_voting_keypairs);
-
-        let vote_slots = vec![1, 2];
-        validator_voting_keypairs.iter().for_each(|keypairs| {
-            let node_keypair = &keypairs.node_keypair;
-            let vote_keypair = &keypairs.vote_keypair;
-            let vote_tx = vote_transaction::new_vote_transaction(
-                vote_slots.clone(),
-                Hash::default(),
-                Hash::default(),
-                node_keypair,
-                vote_keypair,
-                vote_keypair,
-                None,
-            );
-            votes_sender.send(vec![vote_tx]).unwrap();
-        });
-
-        // Process votes and check they were notified.
-        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
-        let (gossip_verified_vote_hash_sender, _gossip_verified_vote_hash_receiver) = unbounded();
-        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
-        ClusterInfoVoteListener::get_and_process_votes_for_tests(
-            &votes_receiver,
-            &vote_tracker,
-            &bank,
-            &rpc.subscriptions,
-            &gossip_verified_vote_hash_sender,
-            &verified_vote_sender,
-            &replay_votes_receiver,
-        )
-        .unwrap();
+        let vote = Vote {
+            slots: vec![1, 2],
+            hash: Hash::default(),
+            timestamp: None,
+        };
+        subscriptions.notify_vote(&vote);
 
         let (response, _) = robust_poll_or_panic(receiver);
         assert_eq!(

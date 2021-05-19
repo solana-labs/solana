@@ -1,9 +1,9 @@
 use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
-use solana_core::{
+use solana_core::test_validator::TestValidator;
+use solana_rpc::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_subscriptions::RpcSubscriptions,
-    test_validator::TestValidator,
 };
 use solana_runtime::{
     bank::Bank,

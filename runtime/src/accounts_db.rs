@@ -5035,15 +5035,29 @@ impl AccountsDb {
                         let dirty_keys =
                             accounts_map.iter().map(|(pubkey, _info)| *pubkey).collect();
                         self.uncleaned_pubkeys.insert(*slot, dirty_keys);
+
+                        let infos: Vec<_> = accounts_map
+                            .iter()
+                            .map(|(pubkey, account_infos)| {
+                                account_infos
+                                    .iter()
+                                    .map(|(_, (store_id, stored_account))| {
+                                        (
+                                            pubkey,
+                                            AccountInfo {
+                                                store_id: *store_id,
+                                                offset: stored_account.offset,
+                                                stored_size: stored_account.stored_size,
+                                                lamports: stored_account.account_meta.lamports,
+                                            },
+                                        )
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect();
                         let mut lock = self.accounts_index.get_account_maps_write_lock();
-                        for (pubkey, account_infos) in accounts_map.iter() {
-                            for (_, (store_id, stored_account)) in account_infos.iter() {
-                                let account_info = AccountInfo {
-                                    store_id: *store_id,
-                                    offset: stored_account.offset,
-                                    stored_size: stored_account.stored_size,
-                                    lamports: stored_account.account_meta.lamports,
-                                };
+                        infos.into_iter().for_each(|item| {
+                            item.into_iter().for_each(|(pubkey, account_info)| {
                                 self.accounts_index
                                     .insert_new_if_missing_into_primary_index(
                                         *slot,
@@ -5052,8 +5066,8 @@ impl AccountsDb {
                                         &mut _reclaims,
                                         &mut lock,
                                     );
-                            }
-                        }
+                            });
+                        });
                         drop(lock);
                         if !self.account_indexes.is_empty() {
                             for (pubkey, account_infos) in accounts_map.into_iter() {

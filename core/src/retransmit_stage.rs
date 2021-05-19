@@ -8,12 +8,9 @@ use crate::{
     cluster_slots_service::ClusterSlotsService,
     completed_data_sets_service::CompletedDataSetsSender,
     contact_info::ContactInfo,
-    max_slots::MaxSlots,
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
     result::{Error, Result},
-    rpc_completed_slots_service::RpcCompletedSlotsService,
-    rpc_subscriptions::RpcSubscriptions,
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::{Receiver, Sender};
@@ -27,6 +24,10 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
+use solana_rpc::{
+    max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
+    rpc_subscriptions::RpcSubscriptions,
+};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
 use solana_streamer::streamer::PacketReceiver;
