@@ -46,7 +46,7 @@ on your wallet type.
 #### Paper Wallet
 
 In a paper wallet, the keypair is securely derived from the seed words and
-optional passphrase you entered when the wallet was create. To use a paper
+optional passphrase you entered when the wallet was created. To use a paper
 wallet keypair anywhere the `<KEYPAIR>` text is shown in examples or help
 documents, enter the uri scheme `prompt://` and the program will prompt you to
 enter your seed words when you run the command.
