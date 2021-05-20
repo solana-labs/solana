@@ -1,13 +1,15 @@
-use crate::crds_gossip::CrdsGossip;
-use solana_measure::measure::Measure;
-use solana_sdk::pubkey::Pubkey;
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        RwLock,
+use {
+    crate::crds_gossip::CrdsGossip,
+    solana_measure::measure::Measure,
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            RwLock,
+        },
+        time::Instant,
     },
-    time::Instant,
 };
 
 #[derive(Default)]

@@ -1,11 +1,12 @@
 //! The `weighted_shuffle` module provides an iterator over shuffled weights.
 
-use itertools::Itertools;
-use num_traits::{FromPrimitive, ToPrimitive};
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
-use std::iter;
-use std::ops::Div;
+use {
+    itertools::Itertools,
+    num_traits::{FromPrimitive, ToPrimitive},
+    rand::{Rng, SeedableRng},
+    rand_chacha::ChaChaRng,
+    std::{iter, ops::Div},
+};
 
 /// Returns a list of indexes shuffled based on the input weights
 /// Note - The sum of all weights must not exceed `u64::MAX`

@@ -12,76 +12,77 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::{
-    cluster_info_metrics::{submit_gossip_stats, Counter, GossipStats, ScopedTimer},
-    contact_info::ContactInfo,
-    crds::Cursor,
-    crds_gossip::CrdsGossip,
-    crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-        SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+use {
+    crate::{
+        cluster_info_metrics::{submit_gossip_stats, Counter, GossipStats, ScopedTimer},
+        contact_info::ContactInfo,
+        crds::Cursor,
+        crds_gossip::CrdsGossip,
+        crds_gossip_error::CrdsGossipError,
+        crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+        crds_value::{
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
+            SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+        },
+        data_budget::DataBudget,
+        epoch_slots::EpochSlots,
+        gossip_error::GossipError,
+        ping_pong::{self, PingCache, Pong},
+        socketaddr, socketaddr_any,
+        weighted_shuffle::weighted_shuffle,
     },
-    data_budget::DataBudget,
-    epoch_slots::EpochSlots,
-    gossip_error::GossipError,
-    ping_pong::{self, PingCache, Pong},
-    socketaddr, socketaddr_any,
-    weighted_shuffle::weighted_shuffle,
-};
-use rand::{seq::SliceRandom, CryptoRng, Rng};
-use solana_ledger::shred::Shred;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
-
-use bincode::{serialize, serialized_size};
-use itertools::Itertools;
-use rand::thread_rng;
-use rayon::prelude::*;
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use serde::ser::Serialize;
-use solana_measure::measure::Measure;
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_net_utils::{
-    bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
-    multi_bind_in_range, PortRange,
-};
-use solana_perf::packet::{
-    limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
-    PACKET_DATA_SIZE,
-};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
-    feature_set::{self, FeatureSet},
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signable, Signature, Signer},
-    timing::timestamp,
-    transaction::Transaction,
-};
-use solana_streamer::packet;
-use solana_streamer::sendmmsg::multicast;
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    fs::{self, File},
-    io::BufReader,
-    iter::repeat,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
-    ops::{Deref, DerefMut, Div},
-    path::{Path, PathBuf},
-    result::Result,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    bincode::{serialize, serialized_size},
+    itertools::Itertools,
+    rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
+    rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
+    serde::ser::Serialize,
+    solana_ledger::shred::Shred,
+    solana_measure::measure::Measure,
+    solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
+    solana_net_utils::{
+        bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
+        multi_bind_in_range, PortRange,
     },
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    solana_perf::packet::{
+        limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
+        PACKET_DATA_SIZE,
+    },
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
+        feature_set::{self, FeatureSet},
+        hash::Hash,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        signature::{Keypair, Signable, Signature, Signer},
+        timing::timestamp,
+        transaction::Transaction,
+    },
+    solana_streamer::{
+        packet,
+        sendmmsg::multicast,
+        streamer::{PacketReceiver, PacketSender},
+    },
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    std::{
+        borrow::Cow,
+        collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+        fmt::Debug,
+        fs::{self, File},
+        io::BufReader,
+        iter::repeat,
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+        ops::{Deref, DerefMut, Div},
+        path::{Path, PathBuf},
+        result::Result,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+        },
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
@@ -3043,21 +3044,25 @@ pub fn stake_weight_peers(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
-        crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
-        duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+    use {
+        super::*,
+        crate::{
+            crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
+            crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+            duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+        },
+        itertools::izip,
+        rand::{seq::SliceRandom, SeedableRng},
+        rand_chacha::ChaChaRng,
+        solana_ledger::shred::Shredder,
+        solana_sdk::signature::{Keypair, Signer},
+        solana_vote_program::{vote_instruction, vote_state::Vote},
+        std::{
+            iter::repeat_with,
+            net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4},
+            sync::Arc,
+        },
     };
-    use itertools::izip;
-    use rand::{seq::SliceRandom, SeedableRng};
-    use rand_chacha::ChaChaRng;
-    use solana_ledger::shred::Shredder;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::iter::repeat_with;
-    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4};
-    use std::sync::Arc;
 
     #[test]
     fn test_gossip_node() {

@@ -1,20 +1,22 @@
-use crate::crds_value::sanitize_wallclock;
-use itertools::Itertools;
-use solana_ledger::{
-    blockstore_meta::DuplicateSlotProof,
-    shred::{Shred, ShredError, ShredType},
+use {
+    crate::crds_value::sanitize_wallclock,
+    itertools::Itertools,
+    solana_ledger::{
+        blockstore_meta::DuplicateSlotProof,
+        shred::{Shred, ShredError, ShredType},
+    },
+    solana_sdk::{
+        clock::Slot,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+    },
+    std::{
+        collections::{hash_map::Entry, HashMap},
+        convert::TryFrom,
+        num::TryFromIntError,
+    },
+    thiserror::Error,
 };
-use solana_sdk::{
-    clock::Slot,
-    pubkey::Pubkey,
-    sanitize::{Sanitize, SanitizeError},
-};
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    convert::TryFrom,
-    num::TryFromIntError,
-};
-use thiserror::Error;
 
 const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
 

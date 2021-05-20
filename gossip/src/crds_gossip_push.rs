@@ -8,25 +8,27 @@
 //!    the local nodes wallclock window they are dropped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
-use crate::{
-    cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
-    contact_info::ContactInfo,
-    crds::{Crds, Cursor},
-    crds_gossip::{get_stake, get_weight},
-    crds_gossip_error::CrdsGossipError,
-    crds_value::CrdsValue,
-    weighted_shuffle::weighted_shuffle,
-};
-use bincode::serialized_size;
-use indexmap::map::IndexMap;
-use lru::LruCache;
-use rand::{seq::SliceRandom, Rng};
-use solana_runtime::bloom::{AtomicBloom, Bloom};
-use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp};
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-    ops::RangeBounds,
+use {
+    crate::{
+        cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
+        contact_info::ContactInfo,
+        crds::{Crds, Cursor},
+        crds_gossip::{get_stake, get_weight},
+        crds_gossip_error::CrdsGossipError,
+        crds_value::CrdsValue,
+        weighted_shuffle::weighted_shuffle,
+    },
+    bincode::serialized_size,
+    indexmap::map::IndexMap,
+    lru::LruCache,
+    rand::{seq::SliceRandom, Rng},
+    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp},
+    std::{
+        cmp,
+        collections::{HashMap, HashSet},
+        ops::RangeBounds,
+    },
 };
 
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
@@ -395,9 +397,10 @@ impl CrdsGossipPush {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::crds_value::CrdsData;
+    use {
+        super::*,
+        crate::{contact_info::ContactInfo, crds_value::CrdsData},
+    };
 
     #[test]
     fn test_prune() {

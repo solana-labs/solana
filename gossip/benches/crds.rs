@@ -2,14 +2,16 @@
 
 extern crate test;
 
-use rand::{thread_rng, Rng};
-use rayon::ThreadPoolBuilder;
-use solana_gossip::{
-    crds::Crds, crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, crds_value::CrdsValue,
+use {
+    rand::{thread_rng, Rng},
+    rayon::ThreadPoolBuilder,
+    solana_gossip::{
+        crds::Crds, crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, crds_value::CrdsValue,
+    },
+    solana_sdk::pubkey::Pubkey,
+    std::collections::HashMap,
+    test::Bencher,
 };
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
-use test::Bencher;
 
 #[bench]
 fn bench_find_old_labels(bencher: &mut Bencher) {

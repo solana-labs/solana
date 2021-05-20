@@ -1,26 +1,30 @@
 //! The `gossip_service` module implements the network control plane.
 
-use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
-use crate::contact_info::ContactInfo;
-use rand::{thread_rng, Rng};
-use solana_client::thin_client::{create_client, ThinClient};
-use solana_perf::recycler::Recycler;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use solana_streamer::streamer;
-use std::{
-    collections::HashSet,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::channel,
-        {Arc, RwLock},
+use {
+    crate::{
+        cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE},
+        contact_info::ContactInfo,
     },
-    thread::{self, sleep, JoinHandle},
-    time::{Duration, Instant},
+    rand::{thread_rng, Rng},
+    solana_client::thin_client::{create_client, ThinClient},
+    solana_perf::recycler::Recycler,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::streamer,
+    std::{
+        collections::HashSet,
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::channel,
+            {Arc, RwLock},
+        },
+        thread::{self, sleep, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 pub struct GossipService {
@@ -305,10 +309,11 @@ fn make_gossip_node(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
+    use {
+        super::*,
+        crate::cluster_info::{ClusterInfo, Node},
+        std::sync::{atomic::AtomicBool, Arc},
+    };
 
     #[test]
     #[ignore]

@@ -2,16 +2,18 @@
 
 extern crate test;
 
-use rand::{thread_rng, Rng};
-use rayon::ThreadPoolBuilder;
-use solana_gossip::{
-    cluster_info::MAX_BLOOM_SIZE,
-    crds::Crds,
-    crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
-    crds_value::CrdsValue,
+use {
+    rand::{thread_rng, Rng},
+    rayon::ThreadPoolBuilder,
+    solana_gossip::{
+        cluster_info::MAX_BLOOM_SIZE,
+        crds::Crds,
+        crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
+        crds_value::CrdsValue,
+    },
+    solana_sdk::hash,
+    test::Bencher,
 };
-use solana_sdk::hash;
-use test::Bencher;
 
 #[bench]
 fn bench_hash_as_u64(bencher: &mut Bencher) {

@@ -1,6 +1,8 @@
-use crate::duplicate_shred;
-use std::{io, sync};
-use thiserror::Error;
+use {
+    crate::duplicate_shred,
+    std::{io, sync},
+    thiserror::Error,
+};
 
 #[derive(Error, Debug)]
 pub enum GossipError {

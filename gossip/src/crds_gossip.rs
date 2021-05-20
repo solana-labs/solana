@@ -3,31 +3,33 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::PACKET_DATA_SIZE size.
 
-use crate::{
-    cluster_info::Ping,
-    contact_info::ContactInfo,
-    crds::Crds,
-    crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
-    crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
-    crds_value::{CrdsData, CrdsValue},
-    duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
-    ping_pong::PingCache,
-};
-use itertools::Itertools;
-use rayon::ThreadPool;
-use solana_ledger::shred::Shred;
-use solana_sdk::{
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    timing::timestamp,
-};
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    sync::Mutex,
-    time::Duration,
+use {
+    crate::{
+        cluster_info::Ping,
+        contact_info::ContactInfo,
+        crds::Crds,
+        crds_gossip_error::CrdsGossipError,
+        crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
+        crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
+        crds_value::{CrdsData, CrdsValue},
+        duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+        ping_pong::PingCache,
+    },
+    itertools::Itertools,
+    rayon::ThreadPool,
+    solana_ledger::shred::Shred,
+    solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        timing::timestamp,
+    },
+    std::{
+        collections::{HashMap, HashSet},
+        net::SocketAddr,
+        sync::Mutex,
+        time::Duration,
+    },
 };
 
 pub struct CrdsGossip {
@@ -361,11 +363,11 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::crds_value::CrdsData;
-    use solana_sdk::hash::hash;
-    use solana_sdk::timing::timestamp;
+    use {
+        super::*,
+        crate::{contact_info::ContactInfo, crds_value::CrdsData},
+        solana_sdk::{hash::hash, timing::timestamp},
+    };
 
     #[test]
     fn test_prune_errors() {
