@@ -5065,14 +5065,13 @@ impl AccountsDb {
 
                     if !accounts_map.is_empty() {
                         let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
-                        let dirty_keys =
-                            accounts_map.iter().map(|(pubkey, _info)| *pubkey).collect();
-                        self.uncleaned_pubkeys.insert(*slot, dirty_keys);
+                        let len = accounts_map.len();
 
-                        let infos: Vec<_> = accounts_map
+                        let mut items = Vec::with_capacity(len);
+                        let dirty_keys = accounts_map
                             .iter()
                             .map(|(pubkey, (_, store_id, stored_account))| {
-                                (
+                                items.push((
                                     pubkey,
                                     AccountInfo {
                                         store_id: *store_id,
@@ -5080,21 +5079,14 @@ impl AccountsDb {
                                         stored_size: stored_account.stored_size,
                                         lamports: stored_account.account_meta.lamports,
                                     },
-                                )
+                                ));
+                                *pubkey
                             })
-                            .collect::<Vec<_>>(); // we want this collection to occur before the lock below
-                        let mut lock = self.accounts_index.get_account_maps_write_lock();
-                        infos.into_iter().for_each(|(pubkey, account_info)| {
-                            self.accounts_index
-                                .insert_new_if_missing_into_primary_index(
-                                    *slot,
-                                    &pubkey,
-                                    account_info,
-                                    &mut _reclaims,
-                                    &mut lock,
-                                );
-                        });
-                        drop(lock);
+                            .collect::<Vec<_>>();
+                        self.uncleaned_pubkeys.insert(*slot, dirty_keys);
+
+                        self.accounts_index
+                            .insert_new_if_missing_into_primary_index(*slot, items);
                         if !self.account_indexes.is_empty() {
                             for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
                                 self.accounts_index.update_secondary_indexes(

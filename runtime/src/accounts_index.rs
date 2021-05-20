@@ -1179,30 +1179,49 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    pub(crate) fn get_account_maps_write_lock(&self) -> AccountMapsWriteLock<T> {
+    fn get_account_maps_write_lock(&self) -> AccountMapsWriteLock<T> {
         self.account_maps.write().unwrap()
     }
 
-    // Same functionally to upsert, but doesn't take the read lock
-    // initially on the accounts_map
+    // Same functionally to upsert, but:
+    // 1. operates on a batch of items
+    // 2. holds the write lock for the duration of adding the items
     // Can save time when inserting lots of new keys.
     // But, does NOT update secondary index
+    // This is designed to be called at startup time.
+    #[allow(clippy::needless_collect)]
     pub(crate) fn insert_new_if_missing_into_primary_index(
         &self,
         slot: Slot,
-        pubkey: &Pubkey,
-        account_info: T,
-        reclaims: &mut SlotList<T>,
-        w_account_maps: &mut AccountMapsWriteLock<T>,
+        items: Vec<(&Pubkey, T)>,
     ) {
-        let account_entry =
-            self.insert_new_entry_if_missing(pubkey, slot, &account_info, Some(w_account_maps));
-        if account_info.is_zero_lamport() {
-            self.zero_lamport_pubkeys.insert(*pubkey);
-        }
-        if let Some(mut w_account_entry) = account_entry {
-            w_account_entry.update(slot, account_info, reclaims);
-        }
+        let potentially_new_items = items
+            .iter()
+            .map(|(_pubkey, account_info)| {
+                // this value is equivalent to what update() below would have created if we inserted a new item
+                WriteAccountMapEntry::new_entry_after_update(slot, account_info)
+            })
+            .collect::<Vec<_>>(); // collect here so we have created all data prior to obtaining lock
+
+        let mut _reclaims = SlotList::new();
+
+        let mut w_account_maps = self.get_account_maps_write_lock();
+        items
+            .into_iter()
+            .zip(potentially_new_items.into_iter())
+            .for_each(|((pubkey, account_info), new_item)| {
+                let account_entry = self.insert_new_entry_if_missing_with_lock(
+                    pubkey,
+                    &mut w_account_maps,
+                    new_item,
+                );
+                if account_info.is_zero_lamport() {
+                    self.zero_lamport_pubkeys.insert(*pubkey);
+                }
+                if let Some(mut w_account_entry) = account_entry {
+                    w_account_entry.update(slot, account_info, &mut _reclaims);
+                }
+            });
     }
 
     // Updates the given pubkey at the given slot with the new account information.
@@ -2232,21 +2251,12 @@ pub mod tests {
     fn test_insert_new_with_lock_no_ancestors() {
         let key = Keypair::new();
         let pubkey = &key.pubkey();
-        let mut gc = Vec::new();
         let slot = 0;
 
         let index = AccountsIndex::<bool>::default();
-        let mut w_account_maps = index.get_account_maps_write_lock();
         let account_info = true;
-        index.insert_new_if_missing_into_primary_index(
-            slot,
-            pubkey,
-            account_info,
-            &mut gc,
-            &mut w_account_maps,
-        );
-        drop(w_account_maps);
-        assert!(gc.is_empty());
+        let items = vec![(pubkey, account_info)];
+        index.insert_new_if_missing_into_primary_index(slot, items);
 
         assert!(index.zero_lamport_pubkeys().is_empty());
 
@@ -2264,19 +2274,10 @@ pub mod tests {
         assert_eq!(num, 1);
 
         // not zero lamports
-        let mut gc = Vec::new();
         let index = AccountsIndex::<AccountInfoTest>::default();
-        let mut w_account_maps = index.get_account_maps_write_lock();
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
-        index.insert_new_if_missing_into_primary_index(
-            slot,
-            pubkey,
-            account_info,
-            &mut gc,
-            &mut w_account_maps,
-        );
-        drop(w_account_maps);
-        assert!(gc.is_empty());
+        let items = vec![(pubkey, account_info)];
+        index.insert_new_if_missing_into_primary_index(slot, items);
 
         assert!(!index.zero_lamport_pubkeys().is_empty());
 
@@ -2320,6 +2321,27 @@ pub mod tests {
         );
     }
 
+    #[test]
+    fn test_batch_insert() {
+        let slot0 = 0;
+        let key0 = Keypair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
+
+        let index = AccountsIndex::<bool>::default();
+        let account_infos = [true, false];
+
+        index.insert_new_if_missing_into_primary_index(
+            slot0,
+            vec![(&key0, account_infos[0]), (&key1, account_infos[1])],
+        );
+
+        for (i, key) in [key0, key1].iter().enumerate() {
+            let entry = index.get_account_read_entry(key).unwrap();
+            assert_eq!(entry.ref_count().load(Ordering::Relaxed), 1);
+            assert_eq!(entry.slot_list().to_vec(), vec![(slot0, account_infos[i]),]);
+        }
+    }
+
     fn test_new_entry_code_paths_helper<
         T: 'static + Clone + IsCached + ZeroLamport + std::cmp::PartialEq + std::fmt::Debug,
     >(
@@ -2346,13 +2368,9 @@ pub mod tests {
                 &mut gc,
             );
         } else {
-            let mut lock = index.get_account_maps_write_lock();
             index.insert_new_if_missing_into_primary_index(
                 slot0,
-                &key,
-                account_infos[0].clone(),
-                &mut gc,
-                &mut lock,
+                vec![(&key, account_infos[0].clone())],
             );
         }
         assert!(gc.is_empty());
@@ -2385,13 +2403,9 @@ pub mod tests {
                 &mut gc,
             );
         } else {
-            let mut lock = index.get_account_maps_write_lock();
             index.insert_new_if_missing_into_primary_index(
                 slot1,
-                &key,
-                account_infos[1].clone(),
-                &mut gc,
-                &mut lock,
+                vec![(&key, account_infos[1].clone())],
             );
         }
         assert!(gc.is_empty());
