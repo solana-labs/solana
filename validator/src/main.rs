@@ -34,7 +34,7 @@ use {
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
         },
     },
-    solana_download_utils::download_snapshot,
+    solana_download_utils::{download_snapshot, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
@@ -891,8 +891,13 @@ fn rpc_bootstrap(
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
-                                Some(|download_progress| { 
+                                &Some(|download_progress: &DownloadProgressRecord| {
                                     if download_progress.last_throughput <  MIN_SNAPSHOT_DOWNLOAD_SPEED && download_progress.notification_count <= 1 {
+                                        if let Some(ref trusted_validators) = validator_config.trusted_validators {
+                                            if trusted_validators.contains(&rpc_contact_info.id) {
+                                                return true; // Never blacklist a trusted node
+                                            }
+                                        }
                                         info!("The snapshot download is too slow, throughput: {} < min speed {}, try a different node",
                                             download_progress.last_throughput, MIN_SNAPSHOT_DOWNLOAD_SPEED);
                                         false

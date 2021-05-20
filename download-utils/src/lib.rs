@@ -29,7 +29,7 @@ pub struct DownloadProgressRecord {
     pub elapsed_time: Duration,
     // Duration since the the last notification
     pub last_elapsed_time: Duration,
-    // the bytes/sec speed measured for the last time 
+    // the bytes/sec speed measured for the last time
     pub last_throughput: f32,
     // the bytes/sec speed measured from the beginning
     pub total_throughput: f32,
@@ -46,14 +46,16 @@ pub struct DownloadProgressRecord {
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
 /// Return "true" to continue the download
 /// Return "false" to abort the download
-type ProgressNotifyCallack = fn(progress_report: &DownloadProgressRecord) -> bool;
 
-pub fn download_file(
+pub fn download_file<F>(
     url: &str,
     destination_file: &Path,
     use_progress_bar: bool,
-    progress_notify_callback: Option<ProgressNotifyCallack>,
-) -> Result<(), String> {
+    progress_notify_callback: &Option<F>,
+) -> Result<(), String>
+where
+    F: Fn(&DownloadProgressRecord) -> bool,
+{
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
     }
@@ -109,7 +111,10 @@ pub fn download_file(
         info!("Downloading {} bytes from {}", download_size, url);
     }
 
-    struct DownloadProgress<R> {
+    struct DownloadProgress<R, F>
+    where
+        F: Fn(&DownloadProgressRecord) -> bool,
+    {
         progress_bar: ProgressBar,
         response: R,
         last_print: Instant,
@@ -118,11 +123,14 @@ pub fn download_file(
         download_size: f32,
         use_progress_bar: bool,
         start_time: Instant,
-        callback: Option<ProgressNotifyCallack>,
+        callback: Option<F>,
         notification_count: u64,
     }
 
-    impl<R: Read> Read for DownloadProgress<R> {
+    impl<R: Read, F> Read for DownloadProgress<R, F>
+    where
+        F: Fn(&DownloadProgressRecord) -> bool,
+    {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             match self.response.read(buf) {
                 Ok(n) => {
@@ -133,11 +141,12 @@ pub fn download_file(
                         elapsed_time: self.start_time.elapsed(),
                         last_elapsed_time: self.last_print.elapsed(),
                         last_throughput: diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
-                        total_throughput: self.current_bytes as f32 / self.start_time.elapsed().as_secs_f32(),
+                        total_throughput: self.current_bytes as f32
+                            / self.start_time.elapsed().as_secs_f32(),
                         total_bytes: self.download_size as usize,
                         current_bytes: self.current_bytes,
                         percentage_done: 100f32 * (total_bytes_f32 / self.download_size),
-                        notification_count: self.notification_count
+                        notification_count: self.notification_count,
                     };
                     let mut to_update_progress = false;
                     if progress_record.last_elapsed_time.as_secs() > 5 {
@@ -159,17 +168,20 @@ pub fn download_file(
                         );
                     }
 
-                    if let Some(callback) = self.callback {
+                    if let Some(callback) = &self.callback {
                         if to_update_progress {
                             if !callback(&progress_record) {
                                 info!("Download is aborted by the caller");
-                                return Err(io::Error::new(io::ErrorKind::Interrupted, "Download is aborted by the caller"));
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Interrupted,
+                                    "Download is aborted by the caller",
+                                ));
                             }
                         }
                     }
                     Ok(n)
-                },
-                Err(e) => Err(e)
+                }
+                Err(e) => Err(e),
             }
         }
     }
@@ -183,7 +195,7 @@ pub fn download_file(
         download_size: (download_size as f32).max(1f32),
         use_progress_bar,
         start_time: Instant::now(),
-        callback: progress_notify_callback,
+        callback: progress_notify_callback.as_ref(),
         notification_count: 0,
     };
 
@@ -223,7 +235,7 @@ pub fn download_genesis_if_missing(
             &format!("http://{}/{}", rpc_addr, DEFAULT_GENESIS_ARCHIVE),
             &tmp_genesis_package,
             use_progress_bar,
-            None,
+            &None::<fn(&DownloadProgressRecord) -> bool>,
         )?;
 
         Ok(tmp_genesis_package)
@@ -232,14 +244,17 @@ pub fn download_genesis_if_missing(
     }
 }
 
-pub fn download_snapshot(
+pub fn download_snapshot<F>(
     rpc_addr: &SocketAddr,
     snapshot_output_dir: &Path,
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
     maximum_snapshots_to_retain: usize,
-    progress_notify_callback: Option<ProgressNotifyCallack>,
-) -> Result<(), String> {
+    progress_notify_callback: &Option<F>,
+) -> Result<(), String>
+where
+    F: Fn(&DownloadProgressRecord) -> bool,
+{
     snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir, maximum_snapshots_to_retain);
 
     for compression in &[
@@ -269,7 +284,7 @@ pub fn download_snapshot(
             ),
             &desired_snapshot_package,
             use_progress_bar,
-            progress_notify_callback,
+            &progress_notify_callback,
         )
         .is_ok()
         {
