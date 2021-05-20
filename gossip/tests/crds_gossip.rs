@@ -4,7 +4,7 @@ use log::*;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serial_test::serial;
-use solana_core::{
+use solana_gossip::{
     cluster_info,
     contact_info::ContactInfo,
     crds_gossip::*,

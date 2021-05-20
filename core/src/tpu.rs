@@ -4,7 +4,6 @@
 use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
         ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
         VerifiedVoteSender, VoteTracker,
@@ -15,6 +14,7 @@ use crate::{
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::BankNotificationSender,

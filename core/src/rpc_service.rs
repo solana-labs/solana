@@ -2,7 +2,6 @@
 
 use crate::{
     bigtable_upload_service::BigTableUploadService,
-    cluster_info::ClusterInfo,
     poh_recorder::PohRecorder,
     rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
@@ -16,6 +15,7 @@ use jsonrpc_http_server::{
 };
 use regex::Regex;
 use solana_client::rpc_cache::LargestAccountsCache;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
 use solana_metrics::inc_new_counter_info;
 use solana_rpc::{
@@ -479,10 +479,8 @@ impl JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        crds_value::{CrdsData, CrdsValue, SnapshotHash},
-        rpc::create_validator_exit,
-    };
+    use crate::rpc::create_validator_exit;
+    use solana_gossip::crds_value::{CrdsData, CrdsValue, SnapshotHash};
     use solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,

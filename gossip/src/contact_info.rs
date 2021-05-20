@@ -1,9 +1,7 @@
 use crate::crds_value::MAX_WALLCLOCK;
 use solana_sdk::pubkey::Pubkey;
-#[cfg(test)]
 use solana_sdk::rpc_port;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
-#[cfg(test)]
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
 use std::net::{IpAddr, SocketAddr};
@@ -132,8 +130,8 @@ impl ContactInfo {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
+    // Used in tests
+    pub fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
         fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
             let mut nxt_addr = *addr;
             nxt_addr.set_port(addr.port() + nxt);
@@ -166,8 +164,8 @@ impl ContactInfo {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
+    // Used in tests
+    pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
         let keypair = Keypair::new();
         Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }

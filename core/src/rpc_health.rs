@@ -1,5 +1,5 @@
 use {
-    crate::cluster_info::ClusterInfo,
+    solana_gossip::cluster_info::ClusterInfo,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashSet,

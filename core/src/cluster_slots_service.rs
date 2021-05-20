@@ -1,4 +1,5 @@
-use crate::{cluster_info::ClusterInfo, cluster_slots::ClusterSlots};
+use crate::cluster_slots::ClusterSlots;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
 use solana_measure::measure::Measure;
 use solana_runtime::bank_forks::BankForks;
@@ -185,7 +186,7 @@ impl ClusterSlotsService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{cluster_info::Node, crds_value::CrdsValueLabel};
+    use solana_gossip::{cluster_info::Node, crds_value::CrdsValueLabel};
 
     #[test]
     pub fn test_update_lowest_slot() {

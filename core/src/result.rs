@@ -1,7 +1,7 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
 use crate::poh_recorder;
-use crate::{cluster_info, duplicate_shred};
+use solana_gossip::{cluster_info, duplicate_shred, gossip_error::GossipError};
 use solana_ledger::block_error;
 use solana_ledger::blockstore;
 use solana_runtime::snapshot_utils;
@@ -34,6 +34,7 @@ pub enum Error {
     WeightedIndexError(rand::distributions::weighted::WeightedError),
     DuplicateNodeInstance,
     DuplicateShredError(duplicate_shred::Error),
+    GossipError(GossipError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -154,6 +155,11 @@ impl std::convert::From<rand::distributions::weighted::WeightedError> for Error 
 impl std::convert::From<duplicate_shred::Error> for Error {
     fn from(e: duplicate_shred::Error) -> Error {
         Error::DuplicateShredError(e)
+    }
+}
+impl std::convert::From<GossipError> for Error {
+    fn from(e: GossipError) -> Error {
+        Error::GossipError(e)
     }
 }
 

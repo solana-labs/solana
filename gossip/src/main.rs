@@ -8,7 +8,7 @@ use solana_clap_utils::{
     input_parsers::keypair_of,
     input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
 };
-use solana_core::{contact_info::ContactInfo, gossip_service::discover};
+use solana_gossip::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::{
     error,

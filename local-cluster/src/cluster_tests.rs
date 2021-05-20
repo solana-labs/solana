@@ -6,10 +6,10 @@ use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::thin_client::create_client;
+use solana_core::consensus::VOTE_THRESHOLD_DEPTH;
 use solana_core::validator::ValidatorExit;
-use solana_core::{
-    cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
-    gossip_service::discover_cluster,
+use solana_gossip::{
+    cluster_info::VALIDATOR_PORT_RANGE, contact_info::ContactInfo, gossip_service::discover_cluster,
 };
 use solana_ledger::{
     blockstore::Blockstore,

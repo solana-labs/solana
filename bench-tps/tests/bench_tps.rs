@@ -5,8 +5,9 @@ use solana_bench_tps::{
     cli::Config,
 };
 use solana_client::thin_client::create_client;
-use solana_core::{cluster_info::VALIDATOR_PORT_RANGE, validator::ValidatorConfig};
+use solana_core::validator::ValidatorConfig;
 use solana_faucet::faucet::run_local_faucet_with_port;
+use solana_gossip::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
     validator_configs::make_identical_validator_configs,

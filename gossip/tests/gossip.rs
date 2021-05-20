@@ -3,7 +3,7 @@
 extern crate log;
 
 use rayon::iter::*;
-use solana_core::{
+use solana_gossip::{
     cluster_info::{ClusterInfo, Node},
     crds::Cursor,
     gossip_service::GossipService,

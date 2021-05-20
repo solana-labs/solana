@@ -138,7 +138,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
+    use solana_gossip::contact_info::ContactInfo;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]

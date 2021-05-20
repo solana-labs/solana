@@ -25,8 +25,9 @@ use crate::{
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
+    gossip_error::GossipError,
     ping_pong::{self, PingCache, Pong},
-    result::{Error, Result},
+    socketaddr, socketaddr_any,
     weighted_shuffle::weighted_shuffle,
 };
 use rand::{seq::SliceRandom, CryptoRng, Rng};
@@ -74,6 +75,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     ops::{Deref, DerefMut, Div},
     path::{Path, PathBuf},
+    result::Result,
     sync::{
         atomic::{AtomicBool, Ordering},
         {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -209,7 +211,7 @@ pub struct ClusterInfo {
     /// The network
     pub gossip: RwLock<CrdsGossip>,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
-    pub(crate) keypair: Arc<Keypair>,
+    pub keypair: Arc<Keypair>,
     /// Network entrypoints
     entrypoints: RwLock<Vec<ContactInfo>>,
     outbound_budget: DataBudget,
@@ -267,7 +269,7 @@ impl PruneData {
 }
 
 impl Sanitize for PruneData {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
             return Err(SanitizeError::ValueOutOfBounds);
         }
@@ -408,7 +410,7 @@ impl Protocol {
 }
 
 impl Sanitize for Protocol {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
             Protocol::PullRequest(filter, val) => {
                 filter.sanitize()?;
@@ -894,7 +896,7 @@ impl ClusterInfo {
         }
     }
 
-    pub(crate) fn push_epoch_slots(&self, mut update: &[Slot]) {
+    pub fn push_epoch_slots(&self, mut update: &[Slot]) {
         let current_slots: Vec<_> = {
             let gossip =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
@@ -968,7 +970,7 @@ impl ClusterInfo {
         GossipWriteLock::new(self.gossip.write().unwrap(), label, counter)
     }
 
-    pub(crate) fn push_message(&self, message: CrdsValue) {
+    pub fn push_message(&self, message: CrdsValue) {
         self.local_message_pending_push_queue
             .lock()
             .unwrap()
@@ -1094,7 +1096,11 @@ impl ClusterInfo {
         }
     }
 
-    pub fn send_vote(&self, vote: &Transaction, tpu: Option<SocketAddr>) -> Result<()> {
+    pub fn send_vote(
+        &self,
+        vote: &Transaction,
+        tpu: Option<SocketAddr>,
+    ) -> Result<(), GossipError> {
         let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
         let buf = serialize(vote)?;
         self.socket.send_to(&buf, &tpu)?;
@@ -1119,7 +1125,11 @@ impl ClusterInfo {
         (labels, txs)
     }
 
-    pub(crate) fn push_duplicate_shred(&self, shred: &Shred, other_payload: &[u8]) -> Result<()> {
+    pub fn push_duplicate_shred(
+        &self,
+        shred: &Shred,
+        other_payload: &[u8],
+    ) -> Result<(), GossipError> {
         self.gossip.write().unwrap().push_duplicate_shred(
             &self.keypair,
             shred,
@@ -1154,7 +1164,7 @@ impl ClusterInfo {
             .map(map)
     }
 
-    pub(crate) fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
+    pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
@@ -1203,7 +1213,7 @@ impl ClusterInfo {
     }
 
     // All nodes in gossip (including spy nodes) and the last time we heard about them
-    pub(crate) fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
+    pub fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
         self.gossip
             .read()
             .unwrap()
@@ -1376,7 +1386,7 @@ impl ClusterInfo {
         packet: &Packet,
         s: &UdpSocket,
         forwarded: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         trace!("retransmit orders {}", peers.len());
         let dests: Vec<_> = if forwarded {
             peers
@@ -1398,7 +1408,7 @@ impl ClusterInfo {
                         1
                     );
                     error!("retransmit result {:?}", e);
-                    return Err(Error::Io(e));
+                    return Err(GossipError::Io(e));
                 }
             }
         }
@@ -1561,7 +1571,7 @@ impl ClusterInfo {
         let mut push_queue = self.local_message_pending_push_queue.lock().unwrap();
         std::mem::take(&mut *push_queue)
     }
-    #[cfg(test)]
+    // Used in tests
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
@@ -1649,7 +1659,7 @@ impl ClusterInfo {
         sender: &PacketSender,
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
@@ -2491,7 +2501,7 @@ impl ClusterInfo {
         feature_set: Option<&FeatureSet>,
         epoch_duration: Duration,
         should_check_duplicate_instance: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
         self.stats
             .packets_received_count
@@ -2517,7 +2527,7 @@ impl ClusterInfo {
             if should_check_duplicate_instance {
                 for value in values {
                     if self.instance.check_duplicate(value) {
-                        return Err(Error::DuplicateNodeInstance);
+                        return Err(GossipError::DuplicateNodeInstance);
                     }
                 }
             }
@@ -2605,7 +2615,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
         should_check_duplicate_instance: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
@@ -2678,7 +2688,7 @@ impl ClusterInfo {
                         should_check_duplicate_instance,
                     ) {
                         match err {
-                            Error::RecvTimeoutError(_) => {
+                            GossipError::RecvTimeoutError(_) => {
                                 let table_size = self.gossip.read().unwrap().crds.len();
                                 debug!(
                                     "{}: run_listen timeout, table size: {}",
@@ -2686,7 +2696,7 @@ impl ClusterInfo {
                                     table_size,
                                 );
                             }
-                            Error::DuplicateNodeInstance => {
+                            GossipError::DuplicateNodeInstance => {
                                 error!(
                                     "duplicate running instances of the same validator node: {}",
                                     self.id()
@@ -3013,7 +3023,7 @@ pub fn push_messages_to_peer(
     messages: Vec<CrdsValue>,
     self_id: Pubkey,
     peer_gossip: SocketAddr,
-) -> Result<()> {
+) -> Result<(), GossipError> {
     let reqs: Vec<_> = ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, messages)
         .map(move |payload| (peer_gossip, Protocol::PushMessage(self_id, payload)))
         .collect();

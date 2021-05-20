@@ -6,8 +6,8 @@ use rayon::prelude::*;
 use solana_account_decoder::parse_token::spl_token_v2_0_pubkey;
 use solana_clap_utils::input_parsers::pubkey_of;
 use solana_client::rpc_client::RpcClient;
-use solana_core::gossip_service::discover;
 use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
+use solana_gossip::gossip_service::discover;
 use solana_measure::measure::Measure;
 use solana_runtime::inline_spl_token_v2_0;
 use solana_sdk::{

@@ -20,13 +20,8 @@ use {
         rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
         rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
-    solana_core::ledger_cleanup_service::{
-        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
-    },
     solana_core::{
-        cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-        gossip_service::GossipService,
+        ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         poh_service,
         rpc::JsonRpcConfig,
         tpu::DEFAULT_TPU_COALESCE_MS,
@@ -36,6 +31,11 @@ use {
     },
     solana_download_utils::{download_snapshot, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+        contact_info::ContactInfo,
+        gossip_service::GossipService,
+    },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
     solana_rpc::rpc_pubsub_service::PubSubConfig,

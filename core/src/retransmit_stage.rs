@@ -2,12 +2,10 @@
 #![allow(clippy::rc_buffer)]
 
 use crate::{
-    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     cluster_slots_service::ClusterSlotsService,
     completed_data_sets_service::CompletedDataSetsSender,
-    contact_info::ContactInfo,
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
     result::{Error, Result},
@@ -16,6 +14,10 @@ use crate::{
 use crossbeam_channel::{Receiver, Sender};
 use lru::LruCache;
 use solana_client::rpc_response::SlotUpdate;
+use solana_gossip::{
+    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    contact_info::ContactInfo,
+};
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
@@ -691,7 +693,7 @@ impl RetransmitStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
+    use solana_gossip::contact_info::ContactInfo;
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};

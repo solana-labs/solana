@@ -1,11 +1,10 @@
 use {
     crate::{
-        cluster_info::Node,
-        gossip_service::discover_cluster,
         rpc::JsonRpcConfig,
         validator::{Validator, ValidatorConfig, ValidatorExit, ValidatorStartProgress},
     },
     solana_client::rpc_client::RpcClient,
+    solana_gossip::{cluster_info::Node, gossip_service::discover_cluster, socketaddr},
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
     solana_runtime::{
