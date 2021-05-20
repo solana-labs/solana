@@ -147,6 +147,10 @@ pub mod system_transfer_zero_check {
     solana_sdk::declare_id!("BrTR9hzw4WBGFP65AJMbpAo64DcA3U6jdPSga9fMV5cS");
 }
 
+pub mod blake3_syscall_enabled {
+    solana_sdk::declare_id!("HTW2pSyErTj4BV6KBM9NZ9VBUJVxt7sacNWcf76wtzb3");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -184,6 +188,7 @@ lazy_static! {
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
+        (blake3_syscall_enabled::id(), "blake3 syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
