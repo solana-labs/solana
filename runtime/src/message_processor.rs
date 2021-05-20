@@ -266,7 +266,8 @@ pub struct ThisInvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
     ancestors: &'a Ancestors,
-    sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    #[allow(clippy::type_complexity)]
+    sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -314,7 +315,7 @@ impl<'a> ThisInvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             account_db,
             ancestors,
-            sysvars: vec![],
+            sysvars: RefCell::new(vec![]),
         };
         invoke_context
             .invoke_stack
@@ -509,22 +510,25 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        // Try share from cache
-        let mut result =
-            self.sysvars
+    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+        if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
+            // Try share from cache
+            let mut result = sysvars
                 .iter()
                 .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-        if result.is_none() {
-            // Load it
-            result = self
-                .account_db
-                .load_with_fixed_root(self.ancestors, id)
-                .map(|(account, _)| Rc::new(account.data().to_vec()));
-            // Cache it
-            self.sysvars.push((*id, result.clone()));
+            if result.is_none() {
+                // Load it
+                result = self
+                    .account_db
+                    .load_with_fixed_root(self.ancestors, id)
+                    .map(|(account, _)| Rc::new(account.data().to_vec()));
+                // Cache it
+                sysvars.push((*id, result.clone()));
+            }
+            result
+        } else {
+            None
         }
-        result
     }
 }
 pub struct ThisLogger {
