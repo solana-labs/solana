@@ -881,6 +881,7 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError>;
 }
 
@@ -1219,6 +1220,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::new();
         let withdraw_authority_pubkey = withdraw_authority
@@ -1248,8 +1250,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Initialized(meta) => {
                 meta.authorized
                     .check(&signers, StakeAuthorize::Withdrawer)?;
+                let reserve = if prevent_withdraw_to_zero {
+                    checked_add(meta.rent_exempt_reserve, 1)? // stake accounts must have a balance > rent_exempt_reserve
+                } else {
+                    meta.rent_exempt_reserve
+                };
 
-                (meta.lockup, meta.rent_exempt_reserve, false)
+                (meta.lockup, reserve, false)
             }
             StakeState::Uninitialized => {
                 if !signers.contains(&self.unsigned_key()) {
@@ -3090,6 +3097,7 @@ mod tests {
                 &StakeHistory::default(),
                 &to_keyed_account, // unsigned account as withdraw authority
                 None,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3105,6 +3113,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3140,6 +3149,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3181,6 +3191,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3198,6 +3209,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3217,6 +3229,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3231,6 +3244,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3287,6 +3301,7 @@ mod tests {
                 &StakeHistory::default(),
                 &authority_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds),
         );
@@ -3358,6 +3373,7 @@ mod tests {
                 &stake_history,
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3387,6 +3403,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -3429,6 +3446,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(StakeError::LockupInForce.into())
         );
@@ -3444,6 +3462,7 @@ mod tests {
                     &StakeHistory::default(),
                     &stake_keyed_account,
                     Some(&custodian_keyed_account),
+                    true,
                 ),
                 Ok(())
             );
@@ -3465,6 +3484,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3508,6 +3528,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(StakeError::LockupInForce.into())
         );
@@ -3522,11 +3543,111 @@ mod tests {
                     &StakeHistory::default(),
                     &stake_keyed_account,
                     Some(&custodian_keyed_account),
+                    true,
                 ),
                 Ok(())
             );
             assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
         }
+    }
+
+    #[test]
+    fn test_withdraw_rent_exempt() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let clock = Clock::default();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake = 42;
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            stake + rent_exempt_reserve,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&stake_pubkey)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let to = solana_sdk::pubkey::new_rand();
+        let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+
+        // Withdrawing account down to only rent-exempt reserve should succeed before feature, and
+        // fail after
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                false,
+            ),
+            Ok(())
+        );
+        stake_account
+            .borrow_mut()
+            .checked_add_lamports(stake)
+            .unwrap(); // top up account
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Withdrawal that would leave less than rent-exempt reserve should fail
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + 1,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                false,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + 1,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Withdrawal of complete account should succeed
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + rent_exempt_reserve,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Ok(())
+        );
     }
 
     #[test]
@@ -3965,6 +4086,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account, // old signer
                 None,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3981,6 +4103,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account2,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -5934,6 +6057,7 @@ mod tests {
                 &stake_history,
                 &stake_keyed_account,
                 None,
+                true,
             )
             .unwrap();
         let expected_balance = rent_exempt_reserve + initial_lamports - withdraw_lamports;
