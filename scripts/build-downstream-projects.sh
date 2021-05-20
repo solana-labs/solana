@@ -101,4 +101,4 @@ EOF
 
 _ example_helloworld
 _ spl
-# _ serum_dex
+_ serum_dex
