@@ -51,6 +51,15 @@ serial_test = "0.4.0"
 [build-dependencies]
 rustc_version = "0.2"
 
+[[bench]]
+name = "crds"
+
+[[bench]]
+name = "crds_gossip_pull"
+
+[[bench]]
+name = "crds_shards"
+
 [[bin]]
 name = "solana-gossip"
 path = "src/main.rs"

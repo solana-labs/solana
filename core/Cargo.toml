@@ -103,13 +103,7 @@ name = "banking_stage"
 name = "blockstore"
 
 [[bench]]
-name = "crds"
-
-[[bench]]
-name = "crds_gossip_pull"
-
-[[bench]]
-name = "crds_shards"
+name = "cluster_info"
 
 [[bench]]
 name = "gen_keys"
@@ -122,9 +116,6 @@ name = "poh"
 
 [[bench]]
 name = "retransmit_stage"
-
-[[bench]]
-name = "cluster_info"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

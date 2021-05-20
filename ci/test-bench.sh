@@ -27,7 +27,7 @@ BENCH_ARTIFACT=current_bench_results.log
 _ "$cargo" build --manifest-path=keygen/Cargo.toml
 export PATH="$PWD/target/debug":$PATH
 
-# Clear the C dependency files, if dependeny moves these files are not regenerated
+# Clear the C dependency files, if dependency moves these files are not regenerated
 test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
 test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 
@@ -43,6 +43,10 @@ _ "$cargo" nightly bench --manifest-path sdk/Cargo.toml ${V:+--verbose} \
 
 # Run runtime benches
 _ "$cargo" nightly bench --manifest-path runtime/Cargo.toml ${V:+--verbose} \
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
+
+# Run gossip benches
+_ "$cargo" nightly bench --manifest-path gossip/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
 # Run core benches
