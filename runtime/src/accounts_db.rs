@@ -1057,13 +1057,17 @@ impl ShrinkStats {
         let last = self.last_report.load(Ordering::Relaxed);
         let now = solana_sdk::timing::timestamp();
 
+        // last is initialized to 0 by ::default()
+        // thus, the first 'report' call would always log.
+        // Instead, the first call now initialializes 'last_report' to now.
+        let is_first_call = last == 0;
         let should_report = now.saturating_sub(last) > 1000
             && self
                 .last_report
                 .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
                 == Ok(last);
 
-        if should_report {
+        if !is_first_call && should_report {
             datapoint_info!(
                 "shrink_stats",
                 (
