@@ -177,18 +177,11 @@ pub fn register_syscalls(
         .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
-    // Bignum syscall names
-    // syscall_registry.register_syscall_by_name(b"sol_bignum_new", SyscallBigNumNew::call)?;
-    // syscall_registry
-    //     .register_syscall_by_name(b"sol_bignum_size_in_bytes", SyscallBigNumSizeInBytes::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_bignum_from_u32", SyscallBigNumFromU32::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_bignum_from_dec_str", SyscallBigNumFromDecStr::call)?;
-    // syscall_registry
-    //     .register_syscall_by_name(b"sol_bignum_to_bytes", SyscallBigNumToBytes::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_mod_exp", SyscallBigNumModExp::call)?;
-    // syscall_registry.register_syscall_by_name(b"sol_bignum_drop", SyscallBigNumDrop::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_log", SyscallBigNumLog::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_add", SyscallBigNumAdd::call)?;
     syscall_registry.register_syscall_by_name(b"sol_bignum_sub", SyscallBigNumSub::call)?;
@@ -306,23 +299,17 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    // Bignum bindings
-    // vm.bind_syscall_context_object(
-    //     Box::new(SyscallBigNumNew {
-    //         cost: bpf_compute_budget.bignum_new_base_cost,
-    //         compute_meter: invoke_context.get_compute_meter(),
-    //         loader_id,
-    //     }),
-    //     None,
-    // )?;
-    // vm.bind_syscall_context_object(
-    //     Box::new(SyscallBigNumSizeInBytes {
-    //         cost: bpf_compute_budget.bignum_size_base_cost,
-    //         compute_meter: invoke_context.get_compute_meter(),
-    //         loader_id,
-    //     }),
-    //     None,
-    // )?;
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
+        Box::new(SyscallKeccak256 {
+            base_cost: bpf_compute_budget.sha256_base_cost,
+            byte_cost: bpf_compute_budget.sha256_byte_cost,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
     vm.bind_syscall_context_object(
         Box::new(SyscallBigNumFromU32 {
             cost: bpf_compute_budget.bignum_from_u32_base_cost,
@@ -339,14 +326,6 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-    // vm.bind_syscall_context_object(
-    //     Box::new(SyscallBigNumToBytes {
-    //         cost: bpf_compute_budget.bignum_to_bytes_base_cost,
-    //         compute_meter: invoke_context.get_compute_meter(),
-    //         loader_id,
-    //     }),
-    //     None,
-    // )?;
 
     vm.bind_syscall_context_object(
         Box::new(SyscallBigNumModExp {
