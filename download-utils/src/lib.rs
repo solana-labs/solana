@@ -5,6 +5,7 @@ use log::*;
 use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
+use std::fmt;
 use std::fs::{self, File};
 use std::io;
 use std::io::Read;
@@ -30,7 +31,7 @@ pub struct DownloadProgressRecord {
     pub elapsed_time: Duration,
     // Duration since the the last notification
     pub last_elapsed_time: Duration,
-    // the bytes/sec speed measured for the last time
+    // the bytes/sec speed measured for the last notification period
     pub last_throughput: f32,
     // the bytes/sec speed measured from the beginning
     pub total_throughput: f32,
@@ -42,6 +43,22 @@ pub struct DownloadProgressRecord {
     pub percentage_done: f32,
     // The times of the progress is being notified, it starts from 1 and increments by 1 each time
     pub notification_count: u64,
+}
+
+impl fmt::Debug for DownloadProgressRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DownloadProgress")
+            .field("elapsed_time", &self.elapsed_time)
+            .field("last_elapsed_time", &self.last_elapsed_time)
+            .field("last_throughput", &self.last_throughput)
+            .field("total_throughput", &self.total_throughput)
+            .field("last_elapsed_time", &self.last_elapsed_time)
+            .field("total_bytes", &self.total_bytes)
+            .field("current_bytes", &self.current_bytes)
+            .field("percentage_done", &self.percentage_done)
+            .field("notification_count", &self.notification_count)
+            .finish()
+    }
 }
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
