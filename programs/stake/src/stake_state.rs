@@ -179,9 +179,28 @@ impl Meta {
         &mut self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
-        if !signers.contains(&self.lockup.custodian) {
-            return Err(InstructionError::MissingRequiredSignature);
+        match clock {
+            None => {
+                // pre-stake_program_v4 behavior: custodian can set lockups at any time
+                if !signers.contains(&self.lockup.custodian) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+            }
+            Some(clock) => {
+                // post-stake_program_v4 behavior:
+                // * custodian can update the lockup while in force
+                // * withdraw authority can set a new lockup
+                //
+                if self.lockup.is_in_force(clock, None) {
+                    if !signers.contains(&self.lockup.custodian) {
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                } else if !signers.contains(&self.authorized.withdrawer) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+            }
         }
         if let Some(unix_timestamp) = lockup.unix_timestamp {
             self.lockup.unix_timestamp = unix_timestamp;
@@ -874,6 +893,7 @@ pub trait StakeAccount {
         &self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError>;
     fn split(
         &self,
@@ -1054,14 +1074,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
         match self.state()? {
             StakeState::Initialized(mut meta) => {
-                meta.set_lockup(lockup, signers)?;
+                meta.set_lockup(lockup, signers, clock)?;
                 self.set_state(&StakeState::Initialized(meta))
             }
             StakeState::Stake(mut meta, stake) => {
-                meta.set_lockup(lockup, signers)?;
+                meta.set_lockup(lockup, signers, clock)?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
             _ => Err(InstructionError::InvalidAccountData),
@@ -2987,7 +3008,7 @@ mod tests {
         // wrong state, should fail
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
         assert_eq!(
-            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default()),
+            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default(), None),
             Err(InstructionError::InvalidAccountData)
         );
 
@@ -3006,7 +3027,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default()),
+            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default(), None),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -3017,7 +3038,8 @@ mod tests {
                     epoch: Some(1),
                     custodian: Some(custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3054,6 +3076,7 @@ mod tests {
                     custodian: Some(custodian),
                 },
                 &HashSet::default(),
+                None
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3064,14 +3087,15 @@ mod tests {
                     epoch: Some(1),
                     custodian: Some(custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
     }
 
     #[test]
-    fn test_optional_lockup() {
+    fn test_optional_lockup_for_stake_program_v3_and_earlier() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_ref_data_with_space(
@@ -3103,7 +3127,8 @@ mod tests {
                     epoch: None,
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3115,7 +3140,8 @@ mod tests {
                     epoch: None,
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3137,7 +3163,8 @@ mod tests {
                     epoch: Some(3),
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3160,7 +3187,8 @@ mod tests {
                     epoch: None,
                     custodian: Some(new_custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3178,9 +3206,101 @@ mod tests {
         assert_eq!(
             stake_keyed_account.set_lockup(
                 &LockupArgs::default(),
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Err(InstructionError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn test_optional_lockup_for_stake_program_v4() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
+
+        let custodian = solana_sdk::pubkey::new_rand();
+        stake_keyed_account
+            .initialize(
+                &Authorized::auto(&stake_pubkey),
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &Rent::free(),
+            )
+            .unwrap();
+
+        // Lockup in force: authorized withdrawer cannot change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(2),
+                    epoch: None,
+                    custodian: None
+                },
+                &vec![stake_pubkey].into_iter().collect(),
+                Some(&Clock::default())
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Lockup in force: custodian can change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(2),
+                    epoch: None,
+                    custodian: None
+                },
+                &vec![custodian].into_iter().collect(),
+                Some(&Clock::default())
+            ),
+            Ok(())
+        );
+
+        // Lockup expired: custodian cannot change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(3),
+                    epoch: None,
+                    custodian: None,
+                },
+                &vec![custodian].into_iter().collect(),
+                Some(&Clock {
+                    unix_timestamp: UnixTimestamp::MAX,
+                    epoch: Epoch::MAX,
+                    ..Clock::default()
+                })
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Lockup expired: authorized withdrawer can change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(3),
+                    epoch: None,
+                    custodian: None,
+                },
+                &vec![stake_pubkey].into_iter().collect(),
+                Some(&Clock {
+                    unix_timestamp: UnixTimestamp::MAX,
+                    epoch: Epoch::MAX,
+                    ..Clock::default()
+                })
+            ),
+            Ok(())
         );
     }
 

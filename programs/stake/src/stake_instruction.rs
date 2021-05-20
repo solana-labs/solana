@@ -11,7 +11,7 @@ use solana_sdk::{
     feature_set,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
-    process_instruction::InvokeContext,
+    process_instruction::{get_sysvar, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
@@ -126,9 +126,12 @@ pub enum StakeInstruction {
 
     /// Set stake lockup
     ///
+    /// If a lockup is not active, the withdraw authority may set a new lockup
+    /// If a lockup is active, the lockup custodian may update the lockup parameters
+    ///
     /// # Account references
     ///   0. [WRITE] Initialized stake account
-    ///   1. [SIGNER] Lockup authority
+    ///   1. [SIGNER] Lockup authority or withdraw authority
     SetLockup(LockupArgs),
 
     /// Merge two stake accounts.
@@ -624,7 +627,14 @@ pub fn process_instruction(
             &signers,
         ),
 
-        StakeInstruction::SetLockup(lockup) => me.set_lockup(&lockup, &signers),
+        StakeInstruction::SetLockup(lockup) => {
+            let clock = if invoke_context.is_feature_active(&feature_set::stake_program_v4::id()) {
+                Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?)
+            } else {
+                None
+            };
+            me.set_lockup(&lockup, &signers, clock.as_ref())
+        }
     }
 }
 
@@ -635,7 +645,7 @@ mod tests {
     use solana_sdk::{
         account::{self, Account, AccountSharedData, WritableAccount},
         keyed_account::KeyedAccount,
-        process_instruction::MockInvokeContext,
+        process_instruction::{mock_set_sysvar, MockInvokeContext},
         rent::Rent,
         sysvar::stake_history::StakeHistory,
     };
@@ -717,11 +727,15 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(
-                &Pubkey::default(),
-                &instruction.data,
-                &mut MockInvokeContext::new(keyed_accounts),
+
+            let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+            mock_set_sysvar(
+                &mut invoke_context,
+                sysvar::clock::id(),
+                sysvar::clock::Clock::default(),
             )
+            .unwrap();
+            super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }
 
