@@ -3973,69 +3973,72 @@ impl AccountsDb {
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
-        let hashes: Vec<Vec<Hash>> = {
-            self.thread_pool_clean.install(|| {
-                keys.par_chunks(chunks)
-                    .map(|pubkeys| {
-                        let mut sum = 0u128;
-                        let result: Vec<Hash> = pubkeys
-                            .iter()
-                            .filter_map(|pubkey| {
-                                if let AccountIndexGetResult::Found(lock, index) =
-                                    self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
-                                {
-                                    let (slot, account_info) = &lock.slot_list()[index];
-                                    if account_info.lamports != 0 {
-                                        // Because we're keeping the `lock' here, there is no need
-                                        // to use retry_to_get_account_accessor()
-                                        // In other words, flusher/shrinker/cleaner is blocked to
-                                        // cause any Accessor(None) situtation.
-                                        // Anyway this race condition concern is currently a moot
-                                        // point because calculate_accounts_hash() should not
-                                        // currently race with clean/shrink because the full hash
-                                        // is synchronous with clean/shrink in
-                                        // AccountsBackgroundService
-                                        self.get_account_accessor(
-                                            *slot,
-                                            pubkey,
-                                            account_info.store_id,
-                                            account_info.offset,
-                                        )
-                                        .get_loaded_account()
-                                        .and_then(
-                                            |loaded_account| {
-                                                let loaded_hash = loaded_account.loaded_hash();
-                                                let balance = account_info.lamports;
-                                                if check_hash {
-                                                    let computed_hash =
-                                                        loaded_account.compute_hash(*slot, pubkey);
-                                                    if computed_hash != loaded_hash {
-                                                        info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
-                                                        mismatch_found
-                                                            .fetch_add(1, Ordering::Relaxed);
-                                                        return None;
-                                                    }
+        let get_hashes = || {
+            keys.par_chunks(chunks)
+                .map(|pubkeys| {
+                    let mut sum = 0u128;
+                    let result: Vec<Hash> = pubkeys
+                        .iter()
+                        .filter_map(|pubkey| {
+                            if let AccountIndexGetResult::Found(lock, index) =
+                                self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                            {
+                                let (slot, account_info) = &lock.slot_list()[index];
+                                if account_info.lamports != 0 {
+                                    // Because we're keeping the `lock' here, there is no need
+                                    // to use retry_to_get_account_accessor()
+                                    // In other words, flusher/shrinker/cleaner is blocked to
+                                    // cause any Accessor(None) situtation.
+                                    // Anyway this race condition concern is currently a moot
+                                    // point because calculate_accounts_hash() should not
+                                    // currently race with clean/shrink because the full hash
+                                    // is synchronous with clean/shrink in
+                                    // AccountsBackgroundService
+                                    self.get_account_accessor(
+                                        *slot,
+                                        pubkey,
+                                        account_info.store_id,
+                                        account_info.offset,
+                                    )
+                                    .get_loaded_account()
+                                    .and_then(
+                                        |loaded_account| {
+                                            let loaded_hash = loaded_account.loaded_hash();
+                                            let balance = account_info.lamports;
+                                            if check_hash {
+                                                let computed_hash =
+                                                    loaded_account.compute_hash(*slot, pubkey);
+                                                if computed_hash != loaded_hash {
+                                                    info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
+                                                    mismatch_found
+                                                        .fetch_add(1, Ordering::Relaxed);
+                                                    return None;
                                                 }
+                                            }
 
-                                                sum += balance as u128;
-                                                Some(loaded_hash)
-                                            },
-                                        )
-                                    } else {
-                                        None
-                                    }
+                                            sum += balance as u128;
+                                            Some(loaded_hash)
+                                        },
+                                    )
                                 } else {
                                     None
                                 }
-                            })
-                            .collect();
-                        let mut total = total_lamports.lock().unwrap();
-                        *total =
-                            AccountsHash::checked_cast_for_capitalization(*total as u128 + sum);
-                        result
-                    })
-                    .collect()
-            })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let mut total = total_lamports.lock().unwrap();
+                    *total =
+                        AccountsHash::checked_cast_for_capitalization(*total as u128 + sum);
+                    result
+                }).collect()
+        };
+
+        let hashes: Vec<Vec<Hash>> = if check_hash {
+            get_hashes()
+        } else {
+            self.thread_pool_clean.install(get_hashes)
         };
         if mismatch_found.load(Ordering::Relaxed) > 0 {
             warn!(
