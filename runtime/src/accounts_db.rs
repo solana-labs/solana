@@ -1895,8 +1895,11 @@ impl AccountsDb {
 
         // If the slot is dead, remove the need to shrink the storages as
         // the storage entries will be purged.
-        for slot in dead_slots {
-            self.shrink_candidate_slots.lock().unwrap().remove(slot);
+        {
+            let mut list = self.shrink_candidate_slots.lock().unwrap();
+            for slot in dead_slots {
+                list.remove(slot);
+            }
         }
 
         debug!(
