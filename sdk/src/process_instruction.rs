@@ -4,6 +4,7 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
+    sysvar::Sysvar,
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
@@ -69,7 +70,7 @@ pub trait InvokeContext {
         deserialize_us: u64,
     );
     /// Get sysvar data
-    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
+    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -100,6 +101,21 @@ macro_rules! ic_msg {
     ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
     };
+}
+
+pub fn get_sysvar<T: Sysvar>(
+    invoke_context: &dyn InvokeContext,
+    id: &Pubkey,
+) -> Result<T, InstructionError> {
+    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
+        ic_msg!(invoke_context, "Unable to get sysvar {}", id);
+        InstructionError::UnsupportedSysvar
+    })?;
+
+    bincode::deserialize(&sysvar_data).map_err(|err| {
+        ic_msg!(invoke_context, "Unable to get sysvar {}: {:?}", id, err);
+        InstructionError::UnsupportedSysvar
+    })
 }
 
 #[derive(Clone, Copy, Debug, AbiExample)]
@@ -302,9 +318,41 @@ impl Default for MockInvokeContext {
         }
     }
 }
+<<<<<<< HEAD
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
         self.invoke_depth = self.invoke_depth.saturating_add(1);
+=======
+
+pub fn mock_set_sysvar<T: Sysvar>(
+    mock_invoke_context: &mut MockInvokeContext,
+    id: Pubkey,
+    sysvar: T,
+) -> Result<(), InstructionError> {
+    let mut data = Vec::with_capacity(T::size_of());
+
+    bincode::serialize_into(&mut data, &sysvar).map_err(|err| {
+        ic_msg!(mock_invoke_context, "Unable to serialize sysvar: {:?}", err);
+        InstructionError::GenericError
+    })?;
+    mock_invoke_context.sysvars.push((id, Some(Rc::new(data))));
+    Ok(())
+}
+
+impl<'a> InvokeContext for MockInvokeContext<'a> {
+    fn push(
+        &mut self,
+        key: &Pubkey,
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+    ) -> Result<(), InstructionError> {
+        fn transmute_lifetime<'a, 'b>(value: Vec<KeyedAccount<'a>>) -> Vec<KeyedAccount<'b>> {
+            unsafe { std::mem::transmute(value) }
+        }
+        self.invoke_stack.push(InvokeContextStackFrame::new(
+            *key,
+            transmute_lifetime(create_keyed_accounts_unified(keyed_accounts)),
+        ));
+>>>>>>> 2c99b23ad (Add get_sysvar() helper to sdk)
         Ok(())
     }
     fn pop(&mut self) {
@@ -361,7 +409,7 @@ impl InvokeContext for MockInvokeContext {
         _deserialize_us: u64,
     ) {
     }
-    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
         self.sysvars
             .iter()
             .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
