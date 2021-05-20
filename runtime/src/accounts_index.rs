@@ -113,10 +113,10 @@ impl<T> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: 'static, U> {
+pub enum AccountIndexGetResult<'a, T: 'static> {
     Found(ReadAccountMapEntry<T>, usize),
     NotFoundOnFork,
-    Missing(std::sync::RwLockReadGuard<'a, AccountMap<U, AccountMapEntry<T>>>),
+    Missing(AccountMapsReadLock<'a, T>),
 }
 
 #[self_referencing]
@@ -1091,7 +1091,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<'_, T, Pubkey> {
+    ) -> AccountIndexGetResult<'_, T> {
         let read_lock = self.account_maps.read().unwrap();
         let account = read_lock
             .get(pubkey)
