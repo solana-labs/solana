@@ -1133,7 +1133,7 @@ fn test_stake_set_lockup() {
         stake_account: 1,
         seed: None,
         staker: Some(offline_pubkey),
-        withdrawer: Some(offline_pubkey),
+        withdrawer: Some(config.signers[0].pubkey()),
         lockup,
         amount: SpendAmount::Some(10 * minimum_stake_balance),
         sign_only: false,
