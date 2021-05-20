@@ -859,7 +859,7 @@ version = "3.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d52ff39419d3e16961ecfb9e32f5042bdaacf9a4cc553d2d688057117bae49b"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.3.2",
  "num-traits",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
@@ -1742,6 +1742,17 @@ name = "num-bigint"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d0a3d5e207573f948a9e5376662aa743a2ea13f7c50a554d7af443a73fbfeba"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e0d047c1062aa51e256408c560894e5251f08925980e53cf1aa5bd00eec6512"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -2762,6 +2773,7 @@ dependencies = [
  "log",
  "num-derive 0.3.0",
  "num-traits",
+ "openssl",
  "rand_core 0.6.2",
  "sha3",
  "solana-measure",
@@ -2811,6 +2823,13 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-alloc"
+version = "1.7.0"
+dependencies = [
+ "solana-program 1.7.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-bignum"
 version = "1.7.0"
 dependencies = [
  "solana-program 1.7.0",
@@ -3358,8 +3377,10 @@ dependencies = [
  "itertools 0.9.0",
  "lazy_static",
  "log",
+ "num-bigint 0.4.0",
  "num-derive 0.3.0",
  "num-traits",
+ "openssl",
  "rand 0.7.3",
  "rustc_version",
  "rustversion",

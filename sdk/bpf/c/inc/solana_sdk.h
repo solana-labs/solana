@@ -458,6 +458,184 @@ uint64_t sol_keccak256(
 );
 
 /**
+ * BigNum sol_bignum_from_u32
+ *
+ * @param out_ptr address of vector array (r/w)
+ * @param ptr_size size of bytes in ptr
+ * @param val_u32 unsigned 32 bit value to assign to the new object
+ */
+static uint64_t sol_bignum_from_u32(
+    const uint64_t *out_ptr,
+    const uint64_t out_size,
+    const uint64_t val_u32
+);
+/**
+ * BigNum sol_bignum_from_dec_str
+ *
+ * @param in_dec_str_ptr address of decimal string (r/o)
+ * @param in_size size of bytes array (r/o)
+ * @param out_ptr address of vector array (r/w)
+ * @param out_size_ptr size of bytes in ptr (r/o)
+ * @param out_is_neg_flag_ptr if string was negative
+ */
+static uint64_t sol_bignum_from_dec_str(
+    const uint64_t *in_dec_str_ptr,
+    const uint64_t in_size,
+    const uint64_t *out_ptr,
+    const uint64_t *out_size_ptr,
+    const uint64_t *out_is_neg_flag_ptr
+);
+
+/**
+ * BigNum sol_bignum_add
+ *  Performs add and returns bignum for sum
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_add(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+/**
+ * BigNum sol_bignum_sub
+ *  Performs subtraction and returns bignum for difference
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_sub(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+/**
+ * BigNum sol_bignum_mul
+ *  Performs multiplication and returns bignum for product
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_mul(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+/**
+ * BigNum sol_bignum_div
+ *  Performs division and returns bignum for product
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_div(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
+ * BigNum sol_bignum_exp
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_exp(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
+ * BigNum sol_bignum_sqr
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+
+static uint64_t sol_bignum_sqr(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
+ * BigNum sol_bignum_mod_mul
+ * Performs (base * multiplier) % modulus and updates self_ptr BigNum
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_mod_mul(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
+ * BigNum sol_bignum_mod_inverse
+ *  Performs (base * multiplier) % modulus
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_mod_inverse(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
+ * BigNum sol_bignum_mod_exp
+ *  Performs base^exponent % modulus
+ * @param args_ptr pointer to array of arguments
+ * @param arg_count count of arrays in args_ptr
+ * @param result_ptr address of buffer for result,
+ * @param negative_ptr address to store if result is negative (true)
+ * @param outsize_ptr on in, contains size of result_ptr, on out it num bytes copied
+ */
+static uint64_t sol_bignum_mod_exp(
+  const uint64_t *args_ptr,
+  const uint64_t arg_count,
+  const uint64_t *result_ptr,
+  const uint64_t *negative_ptr,
+  const uint64_t *outsize_ptr
+);
+
+/**
  * Account Meta
  */
 typedef struct {
