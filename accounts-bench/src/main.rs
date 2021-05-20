@@ -88,11 +88,13 @@ fn main() {
         num_slots,
         create_time
     );
-    let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
+    let mut ancestors = Vec::with_capacity(num_slots);
+    ancestors.push((0, 0));
     for i in 1..num_slots {
-        ancestors.insert(i as u64, i - 1);
+        ancestors.push((i as u64, i - 1));
         accounts.add_root(i as u64);
     }
+    let ancestors = Ancestors::from(ancestors);
     let mut elapsed = vec![0; iterations];
     let mut elapsed_store = vec![0; iterations];
     for x in 0..iterations {

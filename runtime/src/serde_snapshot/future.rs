@@ -3,6 +3,8 @@ use super::common::UnusedAccounts;
 use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
+use crate::ancestors::AncestorsForSerialization;
+
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
 // Serializable version of AccountStorageEntry for snapshot format
@@ -45,7 +47,7 @@ use std::sync::RwLock;
 #[derive(Clone, Deserialize)]
 pub(crate) struct DeserializableVersionedBank {
     pub(crate) blockhash_queue: BlockhashQueue,
-    pub(crate) ancestors: Ancestors,
+    pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,
     pub(crate) parent_hash: Hash,
     pub(crate) parent_slot: Slot,
@@ -122,7 +124,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
 #[derive(Serialize)]
 pub(crate) struct SerializableVersionedBank<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
-    pub(crate) ancestors: &'a Ancestors,
+    pub(crate) ancestors: &'a AncestorsForSerialization,
     pub(crate) hash: Hash,
     pub(crate) parent_hash: Hash,
     pub(crate) parent_slot: Slot,
@@ -163,7 +165,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
         }
         Self {
             blockhash_queue: rhs.blockhash_queue,
-            ancestors: rhs.ancestors,
+            ancestors: &rhs.ancestors,
             hash: rhs.hash,
             parent_hash: rhs.parent_hash,
             parent_slot: rhs.parent_slot,
@@ -213,8 +215,10 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
+        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
+        let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         (
-            SerializableVersionedBank::from(serializable_bank.bank.get_fields_to_serialize()),
+            SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
                 accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
