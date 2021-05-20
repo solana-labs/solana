@@ -4099,8 +4099,8 @@ impl AccountsDb {
             .map(|storages: &[Vec<Arc<AccountStorageEntry>>]| {
                 let mut retval = B::default();
 
-                for storage in storages.iter() {
-                    for storage in storage {
+                for sub_storages in storages {
+                    for storage in sub_storages {
                         let accounts = storage.accounts.accounts(0);
                         accounts.into_iter().for_each(|stored_account| {
                             scan_func(
@@ -5755,6 +5755,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
+        solana_logger::setup();
         let (mut storages, raw_expected) = sample_storages_and_accounts();
 
         let bins = 1;
@@ -5824,15 +5825,8 @@ pub mod tests {
 
         // enough stores to get to 2nd chunk
         let bins = 1;
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-
-        let arc = Arc::new(data);
-
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![vec![]; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -5927,15 +5921,8 @@ pub mod tests {
         // enough stores to get to 2nd chunk
         // range is for only 1 bin out of 256.
         let bins = 256;
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-
-        let arc = Arc::new(data);
-
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![vec![]; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
