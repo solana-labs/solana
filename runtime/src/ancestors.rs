@@ -83,7 +83,7 @@ impl From<&Ancestors> for HashMap<Slot, usize> {
     fn from(source: &Ancestors) -> HashMap<Slot, usize> {
         let mut result = HashMap::with_capacity(source.len());
         source.keys().iter().for_each(|slot| {
-            result.insert(*slot, *source.get(slot).unwrap());
+            result.insert(*slot, 0);
         });
         result
     }
@@ -102,15 +102,15 @@ impl Ancestors {
         }
     }
 
-    pub fn get(&self, slot: &Slot) -> Option<&usize> {
+    pub fn get(&self, slot: &Slot) -> bool {
         if self.large_range_slots.is_empty() {
             if slot < &self.min || slot >= &self.max {
-                return None;
+                return false;
             }
             let slot = self.slot_index(slot);
-            self.slots[slot].as_ref()
+            self.slots[slot].is_some()
         } else {
-            self.large_range_slots.get(slot)
+            self.large_range_slots.get(slot).is_some()
         }
     }
 
@@ -272,10 +272,10 @@ pub mod tests {
             let key = item.0;
             min = std::cmp::min(min, *key);
             max = std::cmp::max(max, *key);
-            assert_eq!(ancestors.get(&key).unwrap(), item.1);
+            assert!(ancestors.get(&key));
         }
         for slot in min - 1..max + 2 {
-            assert_eq!(ancestors.get(&slot), hashset.get(&slot));
+            assert_eq!(ancestors.get(&slot), hashset.contains(&slot));
         }
     }
 
