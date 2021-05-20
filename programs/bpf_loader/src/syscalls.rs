@@ -29,7 +29,7 @@ use solana_sdk::{
     keccak,
     keyed_account::KeyedAccount,
     native_loader,
-    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
+    process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
     rent::Rent,
     sysvar::{self, fees::Fees, Sysvar, SysvarId},
@@ -957,8 +957,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
     memory_mapping: &MemoryMapping,
     invoke_context: Rc<RefCell<&mut dyn InvokeContext>>,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let mut invoke_context = invoke_context
-        .try_borrow_mut()
+    let invoke_context = invoke_context
+        .try_borrow()
         .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
 
     invoke_context.get_compute_meter().consume(
@@ -971,15 +971,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id()),
     )?;
 
-    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
-        ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
-        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
-    })?;
-
-    *var = bincode::deserialize(&sysvar_data).map_err(|e| {
-        ic_msg!(invoke_context, "Unable to get Sysvar {}: {:?}", id, e);
-        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
-    })?;
+    *var = process_instruction::get_sysvar::<T>(*invoke_context, id)
+        .map_err(SyscallError::InstructionError)?;
 
     Ok(SUCCESS)
 }
