@@ -86,6 +86,8 @@ enum Operation {
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
 const MIN_SNAPSHOT_DOWNLOAD_SPEED: f32 = 10485760_f32;
+const MAX_DOWNLOAD_ABORT: u32 = 5;
+
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
         println!(
@@ -830,6 +832,7 @@ fn rpc_bootstrap(
 
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
+    let mut download_abort_count = 0;
     loop {
         if gossip.is_none() {
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
@@ -961,10 +964,12 @@ fn rpc_bootstrap(
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
                                 &Some(|download_progress: &DownloadProgressRecord| {
-                                    if download_progress.last_throughput <  MIN_SNAPSHOT_DOWNLOAD_SPEED && download_progress.notification_count <= 1 {
+                                    if download_progress.last_throughput <  MIN_SNAPSHOT_DOWNLOAD_SPEED
+                                       && download_progress.notification_count <= 1
+                                       && download_abort_count <= MAX_DOWNLOAD_ABORT {
                                         if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                                            if trusted_validators.contains(&rpc_contact_info.id) {
-                                                return true; // Never blacklist a trusted node
+                                            if trusted_validators.contains(&rpc_contact_info.id) && trusted_validators.len() == 1 {
+                                                return true; // Do not abort download from the one and only trusted validator
                                             }
                                         }
                                         info!("The snapshot download is too slow, throughput: {} < min speed {}, try a different node",
@@ -975,6 +980,10 @@ fn rpc_bootstrap(
                                     }
                                 }),
                             );
+
+                            if ret.is_err() {
+                                download_abort_count += 1;
+                            }
                             gossip_service.join().unwrap();
                             ret
                         })
