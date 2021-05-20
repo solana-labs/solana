@@ -900,23 +900,20 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_epoch_slots(&self, update: &[Slot]) {
+    pub(crate) fn push_epoch_slots(&self, update: &[Slot]) {
         let mut num = 0;
-        let mut current_slots: Vec<_> = (0..crds_value::MAX_EPOCH_SLOTS)
-            .filter_map(|ix| {
-                Some((
-                    self.time_gossip_read_lock(
-                        "lookup_epoch_slots",
-                        &self.stats.epoch_slots_lookup,
-                    )
-                    .crds
-                    .lookup(&CrdsValueLabel::EpochSlots(ix, self.id()))
-                    .and_then(CrdsValue::epoch_slots)
-                    .and_then(|x| Some((x.wallclock, x.first_slot()?)))?,
-                    ix,
-                ))
-            })
-            .collect();
+        let mut current_slots: Vec<_> = {
+            let gossip =
+                self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
+            (0..crds_value::MAX_EPOCH_SLOTS)
+                .filter_map(|ix| {
+                    let label = CrdsValueLabel::EpochSlots(ix, self.id());
+                    let epoch_slots = gossip.crds.get(&label)?.value.epoch_slots()?;
+                    let first_slot = epoch_slots.first_slot()?;
+                    Some(((epoch_slots.wallclock, first_slot), ix))
+                })
+                .collect()
+        };
         current_slots.sort_unstable();
         let min_slot: Slot = current_slots
             .iter()
