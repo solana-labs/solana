@@ -1106,6 +1106,32 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
+    /// Get an account
+    /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub(crate) fn get_with_lock(
+        &self,
+        pubkey: &Pubkey,
+        max_root: Option<Slot>,
+        read_lock: &AccountMapsReadLock<T>,
+    ) -> AccountIndexGetResult<'_, T> {
+        let account = read_lock
+            .get(pubkey)
+            .cloned()
+            .map(ReadAccountMapEntry::from_account_map_entry);
+
+        match account {
+            Some(locked_entry) => {
+                let slot_list = locked_entry.slot_list();
+                let found_index = self.latest_slot(None, slot_list, max_root);
+                match found_index {
+                    Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
+                    None => AccountIndexGetResult::NotFoundOnFork,
+                }
+            }
+            None => AccountIndexGetResult::Missing(self.get_account_maps_read_lock()),
+        }
+    }
+
     // Get the maximum root <= `max_allowed_root` from the given `slice`
     fn get_newest_root_in_slot_list(
         roots: &RollingBitField,
@@ -1182,6 +1208,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     fn get_account_maps_write_lock(&self) -> AccountMapsWriteLock<T> {
         self.account_maps.write().unwrap()
+    }
+
+    pub(crate) fn get_account_maps_read_lock(&self) -> AccountMapsReadLock<T> {
+        self.account_maps.read().unwrap()
     }
 
     // Same functionally to upsert, but:

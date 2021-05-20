@@ -1616,8 +1616,23 @@ impl AccountsDb {
                     .map(|pubkeys: &[Pubkey]| {
                         let mut purges_zero_lamports = HashMap::new();
                         let mut purges_old_accounts = Vec::new();
+                        let lock = if is_startup {
+                            Some(self.accounts_index.get_account_maps_read_lock())
+                        } else {
+                            None
+                        };
+                        let lock_ref = lock.as_ref();
                         for pubkey in pubkeys {
-                            match self.accounts_index.get(pubkey, None, max_clean_root) {
+                            let get = if is_startup {
+                                self.accounts_index.get_with_lock(
+                                    pubkey,
+                                    max_clean_root,
+                                    lock_ref.unwrap(),
+                                )
+                            } else {
+                                self.accounts_index.get(pubkey, None, max_clean_root)
+                            };
+                            match get {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
