@@ -12,11 +12,11 @@ potential forks that the cluster has to resolve.
 3. `DUPLICATE_THRESHOLD`: The minimum percentage of stake that needs to vote on a fork with version `X` of a duplicate slot, in order for that fork to become votable.
 
 ## Protocol
-1. When WindowStage detects a duplicate slot proof `P`, it checks the new `gossip_root` to see if `<= 33%` of the nodes have rooted a slot `S >= P`. If so, it pushes a proof to `gossip_duplicate_slots` to gossip. WindowStage then signals ReplayStage about this duplicate slot `S`. These proofs can be purged from gossip once the validator sees > 2/3 of people gossiping roots `R > S`.
+1. When WindowStage detects a duplicate slot proof `P`, it checks the new `gossip_root` to see if `<= 1/3` of the nodes have rooted a slot `S >= P`. If so, it pushes a proof to `gossip_duplicate_slots` to gossip. WindowStage then signals ReplayStage about this duplicate slot `S`. These proofs can be purged from gossip once the validator sees > 2/3 of people gossiping roots `R > S`.
 
 2. When ReplayStage receives the signal for a duplicate slot `S` from `1)` above, the validator monitors gossip and replay waiting for`>= DUPLICATE_THRESHOLD` votes for the same hash which implies the same version of the slot. If this conditon is met for some version with hash `H` of slot `S`, this is then known as the `duplicate_confirmed` version of the slot.
 
-Before a duplciate slot `S` is `duplicate_confirmed`, it's first excluded rom the vote candidate set in the fork choice rules. In addition, ReplayStage also resets PoH to the *latest* ancestor of the *earliest* `non-duplicate/confirmed_duplicate_slot`, so that block generation can start happening on the earliest known *safe* block.
+Before a duplicate slot `S` is `duplicate_confirmed`, it's first excluded from the vote candidate set in the fork choice rules. In addition, ReplayStage also resets PoH to the *latest* ancestor of the *earliest* `non-duplicate/confirmed_duplicate_slot`, so that block generation can start happening on the earliest known *safe* block.
 
 Some notes about the `DUPLICATE_THRESHOLD`. In the cases below, assume `DUPLICATE_THRESHOLD = 52`:
 
@@ -25,7 +25,7 @@ a malcious tolerance of `4%`
 
 b) The liveness of the network is at most `1 - DUPLICATE_THRESHOLD - SWITCH_THRESHOLD`. This is because if you need at least `SWITCH_THRESHOLD` percentage of the stake voting on a different fork in order to switch off of a duplicate fork that has `< DUPLICATE_THRESHOLD` stake voting on it, and is *not* `duplicate_confirmed`. For `DUPLICATE_THRESHOLD = 52` and `DUPLICATE_THRESHOLD = 38`, this implies a liveness tolerance of `10%`.
 
-For example in the situation below, validators that voted on `2` can't vote any farther on fork `2` because it's been removed from fork choice. Now slot 6 better have enough stake for a switching proof, or the network halts.
+For example in the situation below, validators that voted on `2` can't vote any further on fork `2` because it's been removed from fork choice. Now slot 6 better have enough stake for a switching proof, or the network halts.
 
 ```text
     |-------- 2 (51% voted, then detected this slot was a duplicate and removed this slot from fork choice)
@@ -51,8 +51,6 @@ Imagine each version of slot 2 and 2' have `DUPLICATE_THRESHOLD / 2` of the vote
 on it, which is less than the switching threshold. Thus, in order for validators voting on `2` or `2'` to switch to slot 6, and make progress, they need to incorporate votes from the other version of the slot into their switching proofs.
 
 
-## TBD:
-
 ### The repair problem.
 Now what happens if one of the following occurs:
 
@@ -62,7 +60,7 @@ Now what happens if one of the following occurs:
 
 3) People who are catching up and don't see the votes in gossip encounter a dup block and can't make progress.
 
-We assume that given a network is eventually stable, if at least one correct validator observed `S` is `duplicate_confirmed`, then if `S` is part of the heaviest fork, then eventaully all validators will observe some descendant of `S` is duplicate confirmed.
+We assume that given a network is eventually stable, if at least one correct validator observed `S` is `duplicate_confirmed`, then if `S` is part of the heaviest fork, then eventually all validators will observe some descendant of `S` is duplicate confirmed.
 
 This problem we need to solve is modeled simply by the below scenario:
 
