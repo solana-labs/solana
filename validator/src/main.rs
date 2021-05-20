@@ -896,17 +896,17 @@ fn rpc_bootstrap(
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
                                 &Some(|download_progress: &DownloadProgressRecord| {
-                                    info!("Download progress: {:?}", download_progress);
+                                    debug!("Download progress: {:?}", download_progress);
                                     if download_progress.last_throughput <  minimal_snapshot_download_speed
                                        && download_progress.notification_count <= 1
-                                       && download_abort_count <= MAX_DOWNLOAD_ABORT {
+                                       && download_abort_count < MAX_DOWNLOAD_ABORT {
                                         if let Some(ref trusted_validators) = validator_config.trusted_validators {
                                             if trusted_validators.contains(&rpc_contact_info.id) && trusted_validators.len() == 1 {
                                                 return true; // Do not abort download from the one-and-only trusted validator
                                             }
                                         }
-                                        info!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, try a different node. Progress detail: {:?}",
-                                            download_progress.last_throughput, minimal_snapshot_download_speed, download_progress);
+                                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, try a different node. Abort count: {}, Progress detail: {:?}",
+                                            download_progress.last_throughput, minimal_snapshot_download_speed, download_abort_count, download_progress);
                                         false
                                     } else {
                                         true

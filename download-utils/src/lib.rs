@@ -190,7 +190,7 @@ where
                             if !callback(&progress_record) {
                                 info!("Download is aborted by the caller");
                                 return Err(io::Error::new(
-                                    io::ErrorKind::Interrupted,
+                                    io::ErrorKind::Other,
                                     "Download is aborted by the caller",
                                 ));
                             }
