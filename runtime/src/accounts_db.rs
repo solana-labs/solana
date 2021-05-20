@@ -3131,8 +3131,8 @@ impl AccountsDb {
         recycle_stores_write_elapsed.as_us()
     }
 
-    // Purges every slot in `removed_slots` from both the cache and storage. This includes
-    // entries in the accounts index, cache entries, and any backing storage entries.
+    /// Purges every slot in `removed_slots` from both the cache and storage. This includes
+    /// entries in the accounts index, cache entries, and any backing storage entries.
     fn purge_slots_from_cache_and_store<'a>(
         &'a self,
         removed_slots: impl Iterator<Item = &'a Slot>,
@@ -3235,8 +3235,8 @@ impl AccountsDb {
             .fetch_add(total_removed_cached_bytes, Ordering::Relaxed);
     }
 
-    // Purge the backing storage entries for the given slot, does not purge from
-    // the cache!
+    /// Purge the backing storage entries for the given slot, does not purge from
+    /// the cache!
     fn purge_slot_storage_entries<'a>(
         &'a self,
         removed_slots: impl Iterator<Item = &'a Slot> + Clone,
