@@ -114,15 +114,42 @@ fn bench_deshredder(bencher: &mut Bencher) {
     })
 }
 
-#[bench]
-fn bench_deserialize_hdr(bencher: &mut Bencher) {
-    let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD];
+fn make_trimmed_serialized_shred() -> Vec<u8> {
+    let data = vec![0; 512];
+    let mut shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0, 1);
+    // Trim off the zero padding that Shred::new_from_data would have added,
+    // we want to emulate having a "non-full" shred
+    shred.data_header.size = 512;
+    shred.payload.truncate(512);
+    // Even though shred will no longer be used, explicitly clone it to trimmed_payload
+    // so that a new buffer that is exactly 512 bytes will be allocated. Otherwise,
+    // truncate would drop the number of elements but keep the underlying buffer.
+    #[allow(clippy::redundant_clone)]
+    let trimmed_payload = shred.payload.clone();
+    // Ensure our new buffer is as expected
+    assert!(trimmed_payload.len() == 512);
+    assert!(trimmed_payload.capacity() == 512);
 
-    let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0, 1);
+    trimmed_payload
+}
+
+#[bench]
+fn bench_deserialize_shred_no_padding(bencher: &mut Bencher) {
+    let trimmed_payload = make_trimmed_serialized_shred();
 
     bencher.iter(|| {
-        let payload = shred.payload.clone();
+        let payload = trimmed_payload.clone();
         let _ = Shred::new_from_serialized_shred(payload).unwrap();
+    })
+}
+
+#[bench]
+fn bench_deserialize_shred_padding(bencher: &mut Bencher) {
+    let trimmed_payload = make_trimmed_serialized_shred();
+
+    bencher.iter(|| {
+        let payload = trimmed_payload.clone();
+        let _ = Shred::new_from_serialized_shred_pad_out(payload).unwrap();
     })
 }
 

@@ -359,6 +359,51 @@ impl Shred {
         Ok(shred)
     }
 
+    pub fn new_from_serialized_shred_pad_out(mut payload: Vec<u8>) -> Result<Self> {
+        // A shred can be deserialized in several cases; payload length will vary for these:
+        //   payload.len() <= SHRED_PAYLOAD_SIZE when payload is retrieved from the blockstore
+        //   payload.len() == SHRED_PAYLOAD_SIZE when a new shred is created
+        //   payload.len() == PACKET_DATA_SIZE when payload comes from a packet (window serivce)
+
+        // Pad out the shred
+        payload.resize(SHRED_PAYLOAD_SIZE, 0);
+
+        let mut start = 0;
+        let common_header: ShredCommonHeader =
+            Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
+        let slot = common_header.slot;
+
+        let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
+            let coding_header: CodingShredHeader =
+                Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
+            Self {
+                common_header,
+                data_header: DataShredHeader::default(),
+                coding_header,
+                payload,
+            }
+        } else if common_header.shred_type == ShredType(DATA_SHRED) {
+            let data_header: DataShredHeader =
+                Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
+            if u64::from(data_header.parent_offset) > common_header.slot {
+                return Err(ShredError::InvalidParentOffset {
+                    slot,
+                    parent_offset: data_header.parent_offset,
+                });
+            }
+            Self {
+                common_header,
+                data_header,
+                coding_header: CodingShredHeader::default(),
+                payload,
+            }
+        } else {
+            return Err(ShredError::InvalidShredType);
+        };
+
+        Ok(shred)
+    }
+
     pub fn new_empty_coding(
         slot: Slot,
         index: u32,
