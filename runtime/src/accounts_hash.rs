@@ -25,7 +25,6 @@ pub struct HashStats {
     pub hash_time_total_us: u64,
     pub sort_time_total_us: u64,
     pub flatten_time_total_us: u64,
-    pub pre_scan_flatten_time_total_us: u64,
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
@@ -36,8 +35,7 @@ impl HashStats {
             + self.zeros_time_total_us
             + self.hash_time_total_us
             + self.sort_time_total_us
-            + self.flatten_time_total_us
-            + self.pre_scan_flatten_time_total_us;
+            + self.flatten_time_total_us;
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("accounts_scan", self.scan_time_total_us, i64),
@@ -50,11 +48,6 @@ impl HashStats {
             (
                 "num_snapshot_storage",
                 self.num_snapshot_storage as i64,
-                i64
-            ),
-            (
-                "pre_scan_flatten",
-                self.pre_scan_flatten_time_total_us as i64,
                 i64
             ),
             ("total", total_time_us as i64, i64),
