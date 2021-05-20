@@ -11205,6 +11205,41 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_cached_executors_eviction() {
+        let key1 = solana_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
+        let key3 = solana_sdk::pubkey::new_rand();
+        let key4 = solana_sdk::pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let mut cache = CachedExecutors::new(3, 0);
+        assert!(cache.current_epoch == 0);
+
+        cache.put(&key1, executor.clone());
+        cache.put(&key2, executor.clone());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key1).is_some());
+
+        cache = cache.clone_with_epoch(1);
+        assert!(cache.current_epoch == 1);
+
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+        cache.put(&key4, executor.clone());
+
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key3).is_none());
+
+        cache = cache.clone_with_epoch(2);
+        assert!(cache.current_epoch == 2);
+
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key3).is_some());
+    }
+
+    #[test]
     fn test_bank_executor_cache() {
         solana_logger::setup();
 
