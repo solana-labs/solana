@@ -900,9 +900,8 @@ impl ClusterInfo {
         }
     }
 
-    pub(crate) fn push_epoch_slots(&self, update: &[Slot]) {
-        let mut num = 0;
-        let mut current_slots: Vec<_> = {
+    pub(crate) fn push_epoch_slots(&self, mut update: &[Slot]) {
+        let current_slots: Vec<_> = {
             let gossip =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
             (0..crds_value::MAX_EPOCH_SLOTS)
@@ -910,16 +909,15 @@ impl ClusterInfo {
                     let label = CrdsValueLabel::EpochSlots(ix, self.id());
                     let epoch_slots = gossip.crds.get(&label)?.value.epoch_slots()?;
                     let first_slot = epoch_slots.first_slot()?;
-                    Some(((epoch_slots.wallclock, first_slot), ix))
+                    Some((epoch_slots.wallclock, first_slot, ix))
                 })
                 .collect()
         };
-        current_slots.sort_unstable();
         let min_slot: Slot = current_slots
             .iter()
-            .map(|((_, s), _)| *s)
+            .map(|(_wallclock, slot, _index)| *slot)
             .min()
-            .unwrap_or(0);
+            .unwrap_or_default();
         let max_slot: Slot = update.iter().max().cloned().unwrap_or(0);
         let total_slots = max_slot as isize - min_slot as isize;
         // WARN if CRDS is not storing at least a full epoch worth of slots
@@ -934,8 +932,11 @@ impl ClusterInfo {
             );
         }
         let mut reset = false;
-        let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
-        while num < update.len() {
+        let mut epoch_slot_index = match current_slots.iter().max() {
+            Some((_wallclock, _slot, index)) => *index,
+            None => 0,
+        };
+        while !update.is_empty() {
             let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
             let now = timestamp();
             let mut slots = if !reset {
@@ -943,7 +944,8 @@ impl ClusterInfo {
             } else {
                 EpochSlots::new(self.id(), now)
             };
-            let n = slots.fill(&update[num..], now);
+            let n = slots.fill(update, now);
+            update = &update[n..];
             if n > 0 {
                 let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
                 self.local_message_pending_push_queue
@@ -951,11 +953,8 @@ impl ClusterInfo {
                     .unwrap()
                     .push(entry);
             }
-            num += n;
-            if num < update.len() {
-                epoch_slot_index += 1;
-                reset = true;
-            }
+            epoch_slot_index += 1;
+            reset = true;
         }
     }
 
