@@ -491,6 +491,8 @@ impl AccountsHash {
         // vec: 1 vec per PUBKEY_BINS_FOR_CALCULATING_HASHES
         //   vec: Intermediate data whose pubkey belongs in this division
         let mut flatten_time = Measure::start("flatten");
+        
+        
         let mut data_by_pubkey: Vec<Vec<T>> = vec![];
         let mut raw_len = 0;
         let mut lens = vec![];
