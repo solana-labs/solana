@@ -9,11 +9,10 @@ use solana_account_decoder::parse_bpf_loader::{
     parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
 };
 use solana_bpf_loader_program::{
-    BpfError,
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::register_syscalls,
-    ThisInstructionMeter,
+    BpfError, ThisInstructionMeter,
 };
 use solana_cli_output::display::println_transaction;
 use solana_rbpf::vm::{Config, Executable, Tracer};
@@ -28,6 +27,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
+    account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::MAX_PROCESSING_AGE,
@@ -212,7 +212,8 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable = <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
 
@@ -1987,6 +1988,17 @@ fn test_program_bpf_upgrade_via_cpi() {
         &authority_keypair,
         "solana_bpf_rust_upgradeable",
     );
+    let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
+    let programdata_address = match program_account.state() {
+        Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+            programdata_address,
+        }) => programdata_address,
+        _ => unreachable!(),
+    };
+    let original_programdata = bank_client
+        .get_account_data(&programdata_address)
+        .unwrap()
+        .unwrap();
 
     let mut instruction = Instruction::new_with_bytes(
         invoke_and_return,
@@ -1999,7 +2011,7 @@ fn test_program_bpf_upgrade_via_cpi() {
         ],
     );
 
-    // Call the upgraded program
+    // Call the upgradable program
     instruction.data[0] += 1;
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
@@ -2046,6 +2058,13 @@ fn test_program_bpf_upgrade_via_cpi() {
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(43))
     );
+
+    // Validate that the programdata was actually overwritten
+    let programdata = bank_client
+        .get_account_data(&programdata_address)
+        .unwrap()
+        .unwrap();
+    assert_ne!(programdata, original_programdata);
 }
 
 #[cfg(feature = "bpf_rust")]
