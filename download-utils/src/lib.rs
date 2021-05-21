@@ -159,8 +159,9 @@ where
                     let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
                     let last_throughput = diff_bytes_f32 / self.last_print.elapsed().as_secs_f32();
                     let mut estimated_remaining_time: f32 = f32::MAX;
-                    if last_throughput > 0_f32  {
-                        estimated_remaining_time = (self.download_size - self.current_bytes as f32) / last_throughput;
+                    if last_throughput > 0_f32 {
+                        estimated_remaining_time =
+                            (self.download_size - self.current_bytes as f32) / last_throughput;
                     }
                     let mut progress_record = DownloadProgressRecord {
                         elapsed_time: self.start_time.elapsed(),
