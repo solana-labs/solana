@@ -13,7 +13,7 @@ use crate::{
     cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
     contact_info::ContactInfo,
     crds::{Crds, CrdsError},
-    crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
+    crds_gossip::{get_stake, get_weight},
     crds_gossip_error::CrdsGossipError,
     crds_value::CrdsValue,
     ping_pong::PingCache,
@@ -30,7 +30,6 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{
-    cmp,
     collections::{HashMap, HashSet, VecDeque},
     convert::TryInto,
     net::SocketAddr,
@@ -468,11 +467,10 @@ impl CrdsGossipPull {
         bloom_size: usize,
     ) -> Vec<CrdsFilter> {
         const PAR_MIN_LENGTH: usize = 512;
-        let num = cmp::max(
-            CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
-            crds.len() + self.purged_values.len() + self.failed_inserts.len(),
-        );
-        let filters = CrdsFilterSet::new(num, bloom_size);
+        const MIN_NUM_BLOOM_ITEMS: usize = 65_536;
+        let num_items = crds.len() + self.purged_values.len() + self.failed_inserts.len();
+        let num_items = MIN_NUM_BLOOM_ITEMS.max(num_items);
+        let filters = CrdsFilterSet::new(num_items, bloom_size);
         thread_pool.install(|| {
             crds.par_values()
                 .with_min_len(PAR_MIN_LENGTH)
@@ -915,7 +913,7 @@ mod test {
         }
         assert_eq!(num_inserts, 20_000);
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
-        assert_eq!(filters.len(), 32);
+        assert_eq!(filters.len(), 64);
         let hash_values: Vec<_> = crds
             .values()
             .map(|v| v.value_hash)
@@ -1170,24 +1168,29 @@ mod test {
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
         assert_eq!(rsp[0].len(), 0);
-
-        assert_eq!(filters.len(), 1);
-        filters.push(filters[0].clone());
-        //should return new value since caller is new
-        filters[1].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
-        )));
-
+        assert_eq!(filters.len(), 64);
+        filters.extend({
+            // Should return new value since caller is new.
+            let now = CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1;
+            let caller = ContactInfo::new_localhost(&Pubkey::new_unique(), now);
+            let caller = CrdsValue::new_unsigned(CrdsData::ContactInfo(caller));
+            filters
+                .iter()
+                .map(|(_, filter)| (caller.clone(), filter.clone()))
+                .collect::<Vec<_>>()
+        });
         let rsp = dest.generate_pull_responses(
             &dest_crds,
             &filters,
             /*output_size_limit=*/ usize::MAX,
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
-        assert_eq!(rsp.len(), 2);
-        assert_eq!(rsp[0].len(), 0);
-        assert_eq!(rsp[1].len(), 1); // Orders are also preserved.
+        assert_eq!(rsp.len(), 128);
+        // There should be only one non-empty response in the 2nd half.
+        // Orders are also preserved.
+        assert!(rsp.iter().take(64).all(|r| r.is_empty()));
+        assert_eq!(rsp.iter().filter(|r| r.is_empty()).count(), 127);
+        assert_eq!(rsp.iter().find(|r| !r.is_empty()).unwrap().len(), 1);
     }
 
     #[test]
@@ -1312,7 +1315,7 @@ mod test {
             );
             let (_, filters) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.generate_pull_responses(
+            let rsp = dest.generate_pull_responses(
                 &dest_crds,
                 &filters,
                 /*output_size_limit=*/ usize::MAX,
@@ -1332,13 +1335,13 @@ mod test {
             if rsp.is_empty() {
                 continue;
             }
-            assert_eq!(rsp.len(), 1);
+            assert_eq!(rsp.len(), 64);
             let failed = node
                 .process_pull_response(
                     &mut node_crds,
                     &node_pubkey,
                     &node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1),
-                    rsp.pop().unwrap(),
+                    rsp.into_iter().flatten().collect(),
                     1,
                 )
                 .0;
