@@ -3582,10 +3582,7 @@ mod tests {
             ),
             Ok(())
         );
-        stake_account
-            .borrow_mut()
-            .checked_add_lamports(stake)
-            .unwrap(); // top up account
+        stake_account.borrow_mut().lamports += stake; // top up account
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
