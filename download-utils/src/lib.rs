@@ -167,13 +167,13 @@ where
                     let mut progress_record = DownloadProgressRecord {
                         elapsed_time: self.start_time.elapsed(),
                         last_elapsed_time: self.last_print.elapsed(),
-                        last_throughput: last_throughput,
+                        last_throughput,
                         total_throughput: self.current_bytes as f32
                             / self.start_time.elapsed().as_secs_f32(),
                         total_bytes: self.download_size as usize,
                         current_bytes: self.current_bytes,
                         percentage_done: 100f32 * (total_bytes_f32 / self.download_size),
-                        estimated_remaining_time: estimated_remaining_time,
+                        estimated_remaining_time,
                         notification_count: self.notification_count,
                     };
                     let mut to_update_progress = false;
@@ -197,14 +197,12 @@ where
                     }
 
                     if let Some(callback) = &self.callback {
-                        if to_update_progress {
-                            if !callback(&progress_record) {
-                                info!("Download is aborted by the caller");
-                                return Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    "Download is aborted by the caller",
-                                ));
-                            }
+                        if to_update_progress && !callback(&progress_record) {
+                            info!("Download is aborted by the caller");
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Download is aborted by the caller",
+                            ));
                         }
                     }
                     Ok(n)
