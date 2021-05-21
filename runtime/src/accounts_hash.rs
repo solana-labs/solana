@@ -80,16 +80,14 @@ impl CalculateHashIntermediate {
 pub struct CalculateHashIntermediate2 {
     pub hash: Hash,
     pub lamports: u64,
-    pub slot: Slot,
     pub pubkey: Pubkey,
 }
 
 impl CalculateHashIntermediate2 {
-    pub fn new(hash: Hash, lamports: u64, slot: Slot, pubkey: Pubkey) -> Self {
+    pub fn new(hash: Hash, lamports: u64, pubkey: Pubkey) -> Self {
         Self {
             hash,
             lamports,
-            slot,
             pubkey,
         }
     }

@@ -4188,7 +4188,7 @@ impl AccountsDb {
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
-    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+    ) -> Vec<Vec<Vec<CalculateHashIntermediate2>>> {
         let max_plus_1 = std::u8::MAX as usize + 1;
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -4227,11 +4227,16 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
-            |accum: Vec<Vec<CalculateHashIntermediate>>| accum,
+            Self::sort_and_simplify
         );
         time.stop();
         stats.scan_time_total_us += time.as_us();
         result
+    }
+
+    fn sort_and_simplify(accum: Vec<Vec<CalculateHashIntermediate>>) -> Vec<Vec<CalculateHashIntermediate2>> {
+        accum
+
     }
 
     // modeled after get_accounts_delta_hash
