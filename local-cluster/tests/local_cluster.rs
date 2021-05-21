@@ -20,7 +20,7 @@ use solana_core::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
-use solana_download_utils::download_snapshot;
+use solana_download_utils::{download_snapshot, DownloadProgressRecord};
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
     blockstore::{Blockstore, PurgeType},
@@ -1685,6 +1685,7 @@ fn test_snapshot_download() {
         archive_snapshot_hash,
         false,
         snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        &None::<fn(&DownloadProgressRecord) -> bool>,
     )
     .unwrap();
 
