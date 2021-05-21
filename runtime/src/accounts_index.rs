@@ -838,10 +838,16 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     }
 
     pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
-        self.account_maps
-            .read()
-            .unwrap()
-            .get(pubkey)
+        let lock = self.get_account_maps_read_lock();
+        self.get_account_read_entry_with_lock(pubkey, &lock)
+    }
+
+    pub fn get_account_read_entry_with_lock(
+        &self,
+        pubkey: &Pubkey,
+        lock: &AccountMapsReadLock<'_, T>,
+    ) -> Option<ReadAccountMapEntry<T>> {
+        lock.get(pubkey)
             .cloned()
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
@@ -1182,6 +1188,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     fn get_account_maps_write_lock(&self) -> AccountMapsWriteLock<T> {
         self.account_maps.write().unwrap()
+    }
+
+    pub(crate) fn get_account_maps_read_lock(&self) -> AccountMapsReadLock<T> {
+        self.account_maps.read().unwrap()
     }
 
     // Same functionally to upsert, but:
@@ -2411,8 +2421,21 @@ pub mod tests {
         }
         assert!(gc.is_empty());
 
-        {
-            let entry = index.get_account_read_entry(&key).unwrap();
+        for lock in &[false, true] {
+            let read_lock = if *lock {
+                Some(index.get_account_maps_read_lock())
+            } else {
+                None
+            };
+
+            let entry = if *lock {
+                index
+                    .get_account_read_entry_with_lock(&key, read_lock.as_ref().unwrap())
+                    .unwrap()
+            } else {
+                index.get_account_read_entry(&key).unwrap()
+            };
+
             assert_eq!(
                 entry.ref_count().load(Ordering::Relaxed),
                 if is_cached { 0 } else { 2 }
