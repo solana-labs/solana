@@ -41,6 +41,8 @@ pub struct DownloadProgressRecord {
     pub current_bytes: usize,
     // percentage downloaded
     pub percentage_done: f32,
+    // Estimated remaining time (in seconds) to finish the download if it keeps at the the last download speed
+    pub estimated_remaining_time: f32,
     // The times of the progress is being notified, it starts from 1 and increments by 1 each time
     pub notification_count: u64,
 }
@@ -56,6 +58,7 @@ impl fmt::Debug for DownloadProgressRecord {
             .field("total_bytes", &self.total_bytes)
             .field("current_bytes", &self.current_bytes)
             .field("percentage_done", &self.percentage_done)
+            .field("estimated_remaining_time", &self.estimated_remaining_time)
             .field("notification_count", &self.notification_count)
             .finish()
     }
@@ -155,15 +158,21 @@ where
                     self.current_bytes += n;
                     let total_bytes_f32 = self.current_bytes as f32;
                     let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
+                    let last_throughput = diff_bytes_f32 / self.last_print.elapsed().as_secs_f32();
+                    let mut estimated_remaining_time: f32 = f32::MAX;
+                    if last_throughput > 0_f32  {
+                        estimated_remaining_time = (self.download_size - self.current_bytes as f32) / last_throughput;
+                    }
                     let mut progress_record = DownloadProgressRecord {
                         elapsed_time: self.start_time.elapsed(),
                         last_elapsed_time: self.last_print.elapsed(),
-                        last_throughput: diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
+                        last_throughput: last_throughput,
                         total_throughput: self.current_bytes as f32
                             / self.start_time.elapsed().as_secs_f32(),
                         total_bytes: self.download_size as usize,
                         current_bytes: self.current_bytes,
                         percentage_done: 100f32 * (total_bytes_f32 / self.download_size),
+                        estimated_remaining_time: estimated_remaining_time,
                         notification_count: self.notification_count,
                     };
                     let mut to_update_progress = false;
