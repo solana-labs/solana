@@ -1377,7 +1377,9 @@ pub fn main() {
                 .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
                 .takes_value(true)
                 .default_value(default_min_snapshot_download_speed)
-                .help("The minimal speed of snapshots download speed measured in bytes/second. If the intial download speed falls belong the threshold, the system will try a different rpc node for download.")
+                .help("The minimal speed of snapshots download speed measured in bytes/second. \
+                      If the intial download speed falls below the threshold, the system will try \
+                      a different rpc node for download."),
         )
         .arg(
             Arg::with_name("contact_debug_interval")
@@ -2283,7 +2285,8 @@ pub fn main() {
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_snapshots_to_retain =
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
-    let minimal_snapshot_download_speed = value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
+    let minimal_snapshot_download_speed =
+        value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
     let snapshot_output_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
