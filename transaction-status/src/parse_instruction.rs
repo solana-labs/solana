@@ -10,19 +10,15 @@ use inflector::Inflector;
 use serde_json::Value;
 use solana_account_decoder::parse_token::spl_token_id_v2_0;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, system_program};
-use std::{
-    collections::HashMap,
-    str::{from_utf8, FromStr},
-};
+use std::{collections::HashMap, str::from_utf8};
 use thiserror::Error;
 
 lazy_static! {
     static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id_v1_0();
     static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
-    static ref MEMO_V1_PROGRAM_ID: Pubkey =
-        Pubkey::from_str(&spl_memo::v1::id().to_string()).unwrap();
-    static ref MEMO_V3_PROGRAM_ID: Pubkey = Pubkey::from_str(&spl_memo::id().to_string()).unwrap();
+    static ref MEMO_V1_PROGRAM_ID: Pubkey = Pubkey::new_from_array(spl_memo::v1::id().to_bytes());
+    static ref MEMO_V3_PROGRAM_ID: Pubkey = Pubkey::new_from_array(spl_memo::id().to_bytes());
     static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
