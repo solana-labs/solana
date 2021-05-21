@@ -38,7 +38,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{ErrorCounters, SnapshotStorages},
+    accounts_db::{ErrorCounters, SnapshotStorage},
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -371,7 +371,7 @@ impl BankRc {
         }
     }
 
-    pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
+    pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorage {
         self.accounts.accounts_db.get_snapshot_storages(slot)
     }
 }
@@ -4436,11 +4436,8 @@ impl Bank {
         )
     }
 
-    pub fn get_snapshot_storages(&self) -> SnapshotStorages {
-        self.rc
-            .get_snapshot_storages(self.slot())
-            .into_iter()
-            .collect()
+    pub fn get_snapshot_storages(&self) -> SnapshotStorage {
+        self.rc.get_snapshot_storages(self.slot())
     }
 
     #[must_use]

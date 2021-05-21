@@ -243,14 +243,13 @@ impl<'a> TypeContext<'a> for Context {
             .load(Ordering::Relaxed);
 
         // (1st of 3 elements) write the list of account storage entry lists out as a map
-        let entry_count = RefCell::<usize>::new(0);
+        let entry_count = RefCell::<usize>::new(serializable_db.account_storage_entries.len());
         let entries =
             serialize_iter_as_map(serializable_db.account_storage_entries.iter().map(|x| {
-                *entry_count.borrow_mut() += x.len();
                 (
-                    x.first().unwrap().slot(),
+                    x.slot(),
                     serialize_iter_as_seq(
-                        x.iter()
+                        std::iter::once(x)
                             .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref())),
                     ),
                 )

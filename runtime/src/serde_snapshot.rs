@@ -1,7 +1,9 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
+        accounts_db::{
+            AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo, SnapshotStorageEntry,
+        },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
@@ -54,8 +56,6 @@ use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tupl
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
-
-pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -171,7 +171,7 @@ pub(crate) fn bank_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[SnapshotStorageEntry],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -199,7 +199,7 @@ where
 
 struct SerializableBankAndStorage<'a, C> {
     bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
+    snapshot_storages: &'a [SnapshotStorageEntry],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -215,7 +215,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
 struct SerializableAccountsDb<'a, C> {
     accounts_db: &'a AccountsDb,
     slot: Slot,
-    account_storage_entries: &'a [SnapshotStorage],
+    account_storage_entries: &'a [SnapshotStorageEntry],
     phantom: std::marker::PhantomData<C>,
 }
 

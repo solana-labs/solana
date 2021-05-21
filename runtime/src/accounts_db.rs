@@ -164,8 +164,8 @@ impl ZeroLamport for AccountInfo {
 
 /// An offset into the AccountsDb::storage vector
 pub type AppendVecId = usize;
-pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
-pub type SnapshotStorages = Vec<SnapshotStorage>;
+pub type SnapshotStorageEntry = Arc<AccountStorageEntry>;
+pub type SnapshotStorage = Vec<SnapshotStorageEntry>;
 
 // Each slot has a set of storage entries.
 pub(crate) type SlotStores = Arc<RwLock<HashMap<usize, Arc<AccountStorageEntry>>>>;
@@ -4079,7 +4079,7 @@ impl AccountsDb {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
-        snapshot_storages: &[SnapshotStorage],
+        snapshot_storages: &[SnapshotStorageEntry],
         stats: &mut crate::accounts_hash::HashStats,
         scan_func: F,
     ) -> Vec<B>
@@ -4088,16 +4088,15 @@ impl AccountsDb {
         B: Send + Default,
     {
         let mut time = Measure::start("flatten");
-        let items: Vec<_> = snapshot_storages.iter().flatten().collect();
         time.stop();
         stats.pre_scan_flatten_time_total_us += time.as_us();
 
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        items
+        snapshot_storages
             .par_chunks(MAX_ITEMS_PER_CHUNK)
-            .map(|storages: &[&Arc<AccountStorageEntry>]| {
+            .map(|storages| {
                 let mut retval = B::default();
 
                 for storage in storages {
@@ -4161,7 +4160,7 @@ impl AccountsDb {
     }
 
     fn scan_snapshot_stores(
-        storage: &[SnapshotStorage],
+        storage: &[SnapshotStorageEntry],
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
@@ -4214,7 +4213,7 @@ impl AccountsDb {
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
-        storages: &[SnapshotStorage],
+        storages: &[SnapshotStorageEntry],
         thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
         let scan_and_hash = || {
@@ -4960,7 +4959,7 @@ impl AccountsDb {
         }
     }
 
-    pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
+    pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorage {
         self.storage
             .0
             .iter()
@@ -4979,6 +4978,7 @@ impl AccountsDb {
                     .collect()
             })
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
+            .flatten()
             .collect()
     }
 
@@ -5675,7 +5675,7 @@ pub mod tests {
         AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
     }
 
-    fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+    fn sample_storages_and_accounts() -> (SnapshotStorage, Vec<CalculateHashIntermediate>) {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
@@ -5832,7 +5832,7 @@ pub mod tests {
         let arc = Arc::new(data);
 
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -5935,7 +5935,7 @@ pub mod tests {
         let arc = Arc::new(data);
 
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -5980,14 +5980,14 @@ pub mod tests {
         assert_eq!(result, (expected_hash, sum));
     }
 
-    fn sample_storage() -> (SnapshotStorages, usize, Slot) {
+    fn sample_storage() -> (SnapshotStorage, usize, Slot) {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         (storages, size, slot_expected)
     }
 
@@ -6007,7 +6007,7 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let sm = StoredMeta {
@@ -6015,7 +6015,7 @@ pub mod tests {
             pubkey,
             write_version: 1,
         };
-        storages[0][0]
+        storages[0]
             .accounts
             .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
 
@@ -8302,11 +8302,7 @@ pub mod tests {
         accounts.store_uncached(current_slot, &[(&pubkey3, &zero_lamport_account)]);
 
         let snapshot_stores = accounts.get_snapshot_storages(current_slot);
-        let total_accounts: usize = snapshot_stores
-            .iter()
-            .flatten()
-            .map(|s| s.all_accounts().len())
-            .sum();
+        let total_accounts: usize = snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
         assert!(!snapshot_stores.is_empty());
         assert!(total_accounts > 0);
 
@@ -8319,11 +8315,8 @@ pub mod tests {
 
         accounts.print_accounts_stats("Post-D clean");
 
-        let total_accounts_post_clean: usize = snapshot_stores
-            .iter()
-            .flatten()
-            .map(|s| s.all_accounts().len())
-            .sum();
+        let total_accounts_post_clean: usize =
+            snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
         assert_eq!(total_accounts, total_accounts_post_clean);
 
         // should clean all 3 pubkeys

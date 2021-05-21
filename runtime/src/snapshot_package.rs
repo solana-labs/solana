@@ -1,6 +1,6 @@
 use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
-use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+use crate::{accounts_db::SnapshotStorage, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::hash::Hash;
@@ -20,7 +20,7 @@ pub struct AccountsPackagePre {
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub storages: SnapshotStorages,
+    pub storages: SnapshotStorage,
     pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
@@ -37,7 +37,7 @@ impl AccountsPackagePre {
         block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
-        storages: SnapshotStorages,
+        storages: SnapshotStorage,
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -68,7 +68,7 @@ pub struct AccountsPackage {
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub storages: SnapshotStorages,
+    pub storages: SnapshotStorage,
     pub tar_output_file: PathBuf,
     pub hash: Hash,
     pub archive_format: ArchiveFormat,
@@ -81,7 +81,7 @@ impl AccountsPackage {
         block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
-        storages: SnapshotStorages,
+        storages: SnapshotStorage,
         tar_output_file: PathBuf,
         hash: Hash,
         archive_format: ArchiveFormat,

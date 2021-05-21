@@ -1,13 +1,11 @@
 use {
     crate::{
-        accounts_db::AccountsDb,
+        accounts_db::{AccountsDb, SnapshotStorage, SnapshotStorageEntry},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, UnpackError, UnpackedAppendVecMap},
-        serde_snapshot::{
-            bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
-        },
+        serde_snapshot::{bank_from_stream, bank_to_stream, SerdeStyle},
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
@@ -148,7 +146,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_path: Q,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
     snapshot_package_output_path: P,
-    snapshot_storages: SnapshotStorages,
+    snapshot_storages: SnapshotStorage,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
     hash_for_testing: Option<Hash>,
@@ -274,7 +272,7 @@ pub fn archive_snapshot_package(
     )?;
 
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.storages.iter().flatten() {
+    for storage in &snapshot_package.storages {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(crate::append_vec::AppendVec::file_name(
@@ -511,7 +509,7 @@ where
 pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[SnapshotStorageEntry],
     snapshot_version: SnapshotVersion,
 ) -> Result<SlotSnapshotPaths> {
     let slot = bank.slot();
@@ -915,7 +913,7 @@ pub fn snapshot_bank(
     archive_format: &ArchiveFormat,
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
-    let storages: Vec<_> = root_bank.get_snapshot_storages();
+    let storages = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -966,7 +964,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 
     let temp_dir = tempfile::tempdir_in(snapshot_path)?;
 
-    let storages: Vec<_> = bank.get_snapshot_storages();
+    let storages = bank.get_snapshot_storages();
     let slot_snapshot_paths = add_snapshot(&temp_dir, &bank, &storages, snapshot_version)?;
     let package = package_snapshot(
         &bank,

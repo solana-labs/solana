@@ -30,7 +30,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
 ) -> std::io::Result<UnpackedAppendVecMap> {
     let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
-    for storage in storage_entries.iter().flatten() {
+    for storage in storage_entries {
         let storage_path = storage.get_path();
         let file_name = AppendVec::file_name(storage.slot(), storage.append_vec_id());
         let output_path = output_dir.as_ref().join(&file_name);
@@ -101,7 +101,7 @@ fn accountsdb_to_stream<W>(
     stream: &mut W,
     accounts_db: &AccountsDb,
     slot: Slot,
-    account_storage_entries: &[SnapshotStorage],
+    account_storage_entries: &[SnapshotStorageEntry],
 ) -> Result<(), Error>
 where
     W: Write,
