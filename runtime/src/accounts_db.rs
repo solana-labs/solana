@@ -4194,7 +4194,7 @@ impl AccountsDb {
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.len();
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
             &storage,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
@@ -4235,8 +4235,13 @@ impl AccountsDb {
     }
 
     fn sort_and_simplify(accum: Vec<Vec<CalculateHashIntermediate>>) -> Vec<Vec<CalculateHashIntermediate2>> {
-        accum
-
+        let result = accum.map(|items| {
+            items.sort_by(AccountsHash::compare_two_hash_entries);
+            let result = Vec::with_capacity(items.len());
+            items.into_iter().map(|item| {
+                CalculateHashIntermediate2.new(item.hash, item.lamports, item.pubkey)
+            }).collect()
+        }).collect()
     }
 
     // modeled after get_accounts_delta_hash
