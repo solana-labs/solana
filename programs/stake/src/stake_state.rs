@@ -755,13 +755,28 @@ impl Stake {
         clock: &Clock,
         stake_history: &StakeHistory,
         config: &Config,
+        can_reverse_deactivation: bool,
     ) -> Result<(), StakeError> {
-        // can't redelegate if stake is active.  either the stake
-        //  is freshly activated or has fully de-activated.  redelegation
-        //  implies re-activation
+        // If stake is currently active:
         if self.stake(clock.epoch, Some(stake_history), true) != 0 {
-            return Err(StakeError::TooSoonToRedelegate);
+            // If pubkey of new voter is the same as current,
+            // and we are scheduled to start deactivating this epoch,
+            // we rescind deactivation
+            if self.delegation.voter_pubkey == *voter_pubkey
+                && clock.epoch == self.delegation.deactivation_epoch
+                && can_reverse_deactivation
+            {
+                self.delegation.deactivation_epoch = std::u64::MAX;
+                return Ok(());
+            } else {
+                // can't redelegate to another pubkey if stake is active.
+                return Err(StakeError::TooSoonToRedelegate);
+            }
         }
+        // Either the stake is freshly activated, is active but has been
+        // deactivated this epoch, or has fully de-activated.
+        // Redelegation implies either re-activation or un-deactivation
+
         self.delegation.stake = stake_lamports;
         self.delegation.activation_epoch = clock.epoch;
         self.delegation.deactivation_epoch = std::u64::MAX;
@@ -852,6 +867,7 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
+        can_reverse_deactivation: bool,
     ) -> Result<(), InstructionError>;
     fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError>;
     fn set_lockup(
@@ -989,6 +1005,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
+        can_reverse_deactivation: bool,
     ) -> Result<(), InstructionError> {
         if vote_account.owner()? != solana_vote_program::id() {
             return Err(InstructionError::IncorrectProgramId);
@@ -1015,6 +1032,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     clock,
                     stake_history,
                     config,
+                    can_reverse_deactivation,
                 )?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
@@ -1908,9 +1926,15 @@ mod tests {
         };
 
         let vote_pubkey = solana_sdk::pubkey::new_rand();
+        let vote_pubkey_2 = solana_sdk::pubkey::new_rand();
+
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
             vote_state.process_slot_vote_unchecked(i);
+        }
+        let mut vote_state_2 = VoteState::default();
+        for i in 0..1000 {
+            vote_state_2.process_slot_vote_unchecked(i);
         }
 
         let vote_account = RefCell::new(vote_state::create_account(
@@ -1919,10 +1943,22 @@ mod tests {
             0,
             100,
         ));
+        let vote_account_2 = RefCell::new(vote_state::create_account(
+            &vote_pubkey_2,
+            &solana_sdk::pubkey::new_rand(),
+            0,
+            100,
+        ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
+        let vote_keyed_account_2 = KeyedAccount::new(&vote_pubkey_2, false, &vote_account_2);
+
         let vote_state_credits = vote_state.credits();
         vote_keyed_account
             .set_state(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        let vote_state_credits_2 = vote_state_2.credits();
+        vote_keyed_account_2
+            .set_state(&VoteStateVersions::new_current(vote_state_2))
             .unwrap();
 
         let stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -1952,6 +1988,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1966,6 +2003,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             )
             .is_ok());
 
@@ -1987,14 +2025,63 @@ mod tests {
 
         clock.epoch += 1;
 
-        // verify that delegate fails if stake is still active
+        // verify that delegate fails as stake is active and not deactivating
         assert_eq!(
             stake_keyed_account.delegate(
                 &vote_keyed_account,
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true
+            ),
+            Err(StakeError::TooSoonToRedelegate.into())
+        );
+
+        // deactivate
+        stake_keyed_account.deactivate(&clock, &signers).unwrap();
+
+        // verify that delegate to a different vote account fails
+        // during deactivation
+        assert_eq!(
+            stake_keyed_account.delegate(
+                &vote_keyed_account_2,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
+            ),
+            Err(StakeError::TooSoonToRedelegate.into())
+        );
+
+        // verify that delegate succeeds to same vote account
+        // when stake is deactivating
+        stake_keyed_account
+            .delegate(
+                &vote_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
+            )
+            .unwrap();
+
+        // verify that deactivation has been cleared
+        let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
+        assert_eq!(stake.delegation.deactivation_epoch, std::u64::MAX);
+
+        // verify that delegate to a different vote account fails
+        // if stake is still active
+        assert_eq!(
+            stake_keyed_account.delegate(
+                &vote_keyed_account_2,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
             ),
             Err(StakeError::TooSoonToRedelegate.into())
         );
@@ -2005,23 +2092,25 @@ mod tests {
         // without stake history, cool down is instantaneous
         clock.epoch += 1;
 
-        // verify that delegate can be called twice, 2nd is redelegate
+        // verify that delegate can be called to new vote account, 2nd is redelegate
         assert!(stake_keyed_account
             .delegate(
-                &vote_keyed_account,
+                &vote_keyed_account_2,
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             )
             .is_ok());
 
         // signed but faked vote account
-        let faked_vote_account = vote_account.clone();
+        let faked_vote_account = vote_account_2.clone();
         faked_vote_account
             .borrow_mut()
             .set_owner(solana_sdk::pubkey::new_rand());
-        let faked_vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &faked_vote_account);
+        let faked_vote_keyed_account =
+            KeyedAccount::new(&vote_pubkey_2, false, &faked_vote_account);
         assert_eq!(
             stake_keyed_account.delegate(
                 &faked_vote_keyed_account,
@@ -2029,6 +2118,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Err(solana_sdk::instruction::InstructionError::IncorrectProgramId)
         );
@@ -2039,13 +2129,13 @@ mod tests {
             stake,
             Stake {
                 delegation: Delegation {
-                    voter_pubkey: vote_pubkey,
+                    voter_pubkey: vote_pubkey_2,
                     stake: stake_lamports,
                     activation_epoch: clock.epoch,
                     deactivation_epoch: std::u64::MAX,
                     ..Delegation::default()
                 },
-                credits_observed: vote_state_credits,
+                credits_observed: vote_state_credits_2,
             }
         );
 
@@ -2059,7 +2149,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             )
             .is_err());
     }
@@ -2835,7 +2926,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             ),
             Ok(())
         );
@@ -2928,6 +3020,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &vec![stake_pubkey].into_iter().collect(),
+                true,
             )
             .unwrap();
 
@@ -3174,6 +3267,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Ok(())
         );
@@ -3350,6 +3444,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Ok(())
         );
@@ -5926,6 +6021,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             )
             .unwrap();
 
@@ -5973,6 +6069,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &other_signers,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -5985,7 +6082,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &new_signers
+                &new_signers,
+                true,
             ),
             Ok(())
         );
@@ -6038,6 +6136,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
 
@@ -6045,6 +6144,7 @@ mod tests {
         stake_keyed_account.deactivate(&clock, &signers).unwrap();
 
         clock.epoch += 1;
+        // Once deactivated, we withdraw stake to new keyed account
         let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
@@ -6071,6 +6171,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
         let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
@@ -6097,6 +6198,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
         let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
