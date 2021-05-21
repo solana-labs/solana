@@ -4982,7 +4982,7 @@ impl AccountsDb {
     pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
         self.storage
             .0
-            .iter()
+            .par_iter()
             .filter(|iter_item| {
                 let slot = *iter_item.key();
                 slot <= snapshot_slot && self.accounts_index.is_root(slot)
