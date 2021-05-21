@@ -1383,7 +1383,7 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         peers: &[&ContactInfo],
-        packet: &mut Packet,
+        packet: &Packet,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
