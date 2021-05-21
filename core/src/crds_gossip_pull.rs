@@ -503,8 +503,8 @@ impl CrdsGossipPull {
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let jitter = rand::thread_rng().gen_range(0, msg_timeout / 4);
         //skip filters from callers that are too old
-        let future = now.saturating_add(msg_timeout);
-        let past = now.saturating_sub(msg_timeout);
+        let caller_wallclock_window =
+            now.saturating_sub(msg_timeout)..now.saturating_add(msg_timeout);
         let mut dropped_requests = 0;
         let mut total_skipped = 0;
         let ret: Vec<_> = filters
@@ -514,7 +514,7 @@ impl CrdsGossipPull {
                     return None;
                 }
                 let caller_wallclock = caller.wallclock();
-                if caller_wallclock >= future || caller_wallclock < past {
+                if !caller_wallclock_window.contains(&caller_wallclock) {
                     dropped_requests += 1;
                     return Some(vec![]);
                 }
