@@ -20,7 +20,7 @@
 
 use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-    accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
+    accounts_hash::{AccountsHash, CalculateHashIntermediate, CalculateHashIntermediate2, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
@@ -4102,13 +4102,16 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, B>(
+    fn scan_account_storage_no_bank<F, F2, B, C>(
         snapshot_storages: &[SnapshotStorage],
         scan_func: F,
-    ) -> Vec<B>
+        after_func: F2
+    ) -> Vec<C>
     where
-        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
-        B: Send + Default,
+    F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+    F2: Fn(B) -> C + Send + Sync,
+    B: Send + Default,
+    C: Send + Default,
     {
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -4130,7 +4133,7 @@ impl AccountsDb {
                         });
                     }
                 }
-                retval
+                after_func(retval)
             })
             .collect()
     }
@@ -4224,6 +4227,7 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
+            |accum: Vec<Vec<CalculateHashIntermediate>>| accum,
         );
         time.stop();
         stats.scan_time_total_us += time.as_us();

@@ -76,6 +76,25 @@ impl CalculateHashIntermediate {
     }
 }
 
+#[derive(Default, Debug, PartialEq, Clone)]
+pub struct CalculateHashIntermediate2 {
+    pub hash: Hash,
+    pub lamports: u64,
+    pub slot: Slot,
+    pub pubkey: Pubkey,
+}
+
+impl CalculateHashIntermediate2 {
+    pub fn new(hash: Hash, lamports: u64, slot: Slot, pubkey: Pubkey) -> Self {
+        Self {
+            hash,
+            lamports,
+            slot,
+            pubkey,
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct CumulativeOffset {
     pub index: Vec<usize>,
