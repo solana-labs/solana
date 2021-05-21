@@ -81,7 +81,7 @@ pub struct VersionedMessage {
     /// The max encoded version is 2^7 - 1 due to the ignored upper disambiguation bit
     pub version: u8,
     pub header: MessageHeader,
-    /// Number of read-only account inputs specified thru indexes 
+    /// Number of read-only account inputs specified thru indexes
     pub num_readonly_indexed_accounts: u8,
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
