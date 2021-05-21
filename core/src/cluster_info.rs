@@ -1720,21 +1720,14 @@ impl ClusterInfo {
     fn handle_purge(
         &self,
         thread_pool: &ThreadPool,
-        bank_forks: &Option<Arc<RwLock<BankForks>>>,
+        bank_forks: Option<&RwLock<BankForks>>,
         stakes: &HashMap<Pubkey, u64>,
     ) {
-        let timeout = {
-            if let Some(ref bank_forks) = bank_forks {
-                let bank = bank_forks.read().unwrap().working_bank();
-                let epoch = bank.epoch();
-                let epoch_schedule = bank.epoch_schedule();
-                epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT
-            } else {
-                inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
-                CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
-            }
+        let epoch_duration = get_epoch_duration(bank_forks);
+        let timeouts = {
+            let gossip = self.gossip.read().unwrap();
+            gossip.make_timeouts(stakes, epoch_duration)
         };
-        let timeouts = self.gossip.read().unwrap().make_timeouts(stakes, timeout);
         let num_purged = self
             .time_gossip_write_lock("purge", &self.stats.purge)
             .purge(thread_pool, timestamp(), &timeouts);
@@ -1848,10 +1841,8 @@ impl ClusterInfo {
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
-
-                    self.handle_purge(&thread_pool, &bank_forks, &stakes);
+                    self.handle_purge(&thread_pool, bank_forks.as_deref(), &stakes);
                     entrypoints_processed = entrypoints_processed || self.process_entrypoints();
-
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an self.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
@@ -2140,7 +2131,7 @@ impl ClusterInfo {
         responses: Vec<(Pubkey, Vec<CrdsValue>)>,
         thread_pool: &ThreadPool,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_time_ms: u64,
+        epoch_duration: Duration,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_responses_time);
         if responses.is_empty() {
@@ -2189,11 +2180,10 @@ impl ClusterInfo {
                 .reduce(HashMap::new, merge)
         });
         if !responses.is_empty() {
-            let timeouts = self
-                .gossip
-                .read()
-                .unwrap()
-                .make_timeouts(&stakes, epoch_time_ms);
+            let timeouts = {
+                let gossip = self.gossip.read().unwrap();
+                gossip.make_timeouts(&stakes, epoch_duration)
+            };
             for (from, data) in responses {
                 self.handle_pull_response(&from, data, &timeouts);
             }
@@ -2479,28 +2469,6 @@ impl ClusterInfo {
         let _ = response_sender.send(packets);
     }
 
-    fn get_stakes_and_epoch_time(
-        bank_forks: Option<&Arc<RwLock<BankForks>>>,
-    ) -> (
-        HashMap<Pubkey, u64>, // staked nodes
-        u64,                  // epoch time ms
-    ) {
-        match bank_forks {
-            Some(ref bank_forks) => {
-                let bank = bank_forks.read().unwrap().root_bank();
-                let epoch = bank.epoch();
-                (
-                    bank.staked_nodes(),
-                    bank.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT,
-                )
-            }
-            None => {
-                inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
-                (HashMap::new(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS)
-            }
-        }
-    }
-
     fn require_stake_for_gossip(
         &self,
         feature_set: Option<&FeatureSet>,
@@ -2536,7 +2504,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
         stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
-        epoch_time_ms: u64,
+        epoch_duration: Duration,
         should_check_duplicate_instance: bool,
     ) -> Result<()> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
@@ -2628,7 +2596,7 @@ impl ClusterInfo {
             response_sender,
             require_stake_for_gossip,
         );
-        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_time_ms);
+        self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_duration);
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
@@ -2646,7 +2614,7 @@ impl ClusterInfo {
     fn run_listen(
         &self,
         recycler: &PacketsRecycler,
-        bank_forks: Option<&Arc<RwLock<BankForks>>>,
+        bank_forks: Option<&RwLock<BankForks>>,
         requests_receiver: &PacketReceiver,
         response_sender: &PacketSender,
         thread_pool: &ThreadPool,
@@ -2667,19 +2635,17 @@ impl ClusterInfo {
                     .add_relaxed(excess_count as u64);
             }
         }
-        let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
         // Using root_bank instead of working_bank here so that an enbaled
         // feature does not roll back (if the feature happens to get enabled in
         // a minority fork).
-        let feature_set = bank_forks.map(|bank_forks| {
-            bank_forks
-                .read()
-                .unwrap()
-                .root_bank()
-                .deref()
-                .feature_set
-                .clone()
-        });
+        let (feature_set, stakes) = match bank_forks {
+            None => (None, HashMap::default()),
+            Some(bank_forks) => {
+                let bank = bank_forks.read().unwrap().root_bank();
+                let feature_set = bank.feature_set.clone();
+                (Some(feature_set), bank.staked_nodes())
+            }
+        };
         self.process_packets(
             packets,
             thread_pool,
@@ -2687,7 +2653,7 @@ impl ClusterInfo {
             response_sender,
             &stakes,
             feature_set.as_deref(),
-            epoch_time_ms,
+            get_epoch_duration(bank_forks),
             should_check_duplicate_instance,
         )?;
         if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
@@ -2719,7 +2685,7 @@ impl ClusterInfo {
                 while !exit.load(Ordering::Relaxed) {
                     if let Err(err) = self.run_listen(
                         &recycler,
-                        bank_forks.as_ref(),
+                        bank_forks.as_deref(),
                         &requests_receiver,
                         &response_sender,
                         &thread_pool,
@@ -2789,6 +2755,23 @@ impl ClusterInfo {
 
         (contact_info, gossip_socket, None)
     }
+}
+
+// Returns root bank's epoch duration. Falls back on
+//     DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT
+// if there are no working banks.
+fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
+    let num_slots = match bank_forks {
+        None => {
+            inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
+            DEFAULT_SLOTS_PER_EPOCH
+        }
+        Some(bank_forks) => {
+            let bank = bank_forks.read().unwrap().root_bank();
+            bank.get_slots_in_epoch(bank.epoch())
+        }
+    };
+    Duration::from_millis(num_slots * DEFAULT_MS_PER_SLOT)
 }
 
 /// Turbine logic
@@ -3836,7 +3819,13 @@ mod tests {
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(cluster_info);
-        let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
+        let timeouts = {
+            let gossip = cluster_info.gossip.read().unwrap();
+            gossip.make_timeouts(
+                &HashMap::default(), // stakes,
+                Duration::from_millis(gossip.pull.crds_timeout),
+            )
+        };
         ClusterInfo::handle_pull_response(
             &cluster_info,
             &entrypoint_pubkey,
@@ -4488,6 +4477,14 @@ mod tests {
                 .pull_request_time
                 .len(),
             CRDS_UNIQUE_PUBKEY_CAPACITY
+        );
+    }
+
+    #[test]
+    fn test_get_epoch_millis_no_bank() {
+        assert_eq!(
+            get_epoch_duration(/*bank_forks=*/ None).as_millis() as u64,
+            DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT // 48 hours
         );
     }
 }

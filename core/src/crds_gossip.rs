@@ -27,6 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::Mutex,
+    time::Duration,
 };
 
 pub struct CrdsGossip {
@@ -297,16 +298,12 @@ impl CrdsGossip {
         );
     }
 
-    pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
-        self.make_timeouts(&HashMap::new(), self.pull.crds_timeout)
-    }
-
     pub fn make_timeouts(
         &self,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_ms: u64,
+        epoch_duration: Duration,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.make_timeouts(&self.id, stakes, epoch_ms)
+        self.pull.make_timeouts(self.id, stakes, epoch_duration)
     }
 
     pub fn purge(
@@ -322,9 +319,8 @@ impl CrdsGossip {
         }
         if now > self.pull.crds_timeout {
             //sanity check
-            let min = self.pull.crds_timeout;
             assert_eq!(timeouts[&self.id], std::u64::MAX);
-            assert_eq!(timeouts[&Pubkey::default()], min);
+            assert!(timeouts.contains_key(&Pubkey::default()));
             rv = self
                 .pull
                 .purge_active(thread_pool, &mut self.crds, now, &timeouts);
