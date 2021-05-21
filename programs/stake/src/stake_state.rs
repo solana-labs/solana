@@ -1390,14 +1390,24 @@ impl MergeKind {
         invoke_context: &dyn InvokeContext,
         stake: &Meta,
         source: &Meta,
-        _clock: Option<&Clock>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
+        let can_merge_lockups = match clock {
+            // pre-v4 behavior. lockups must match, even when expired
+            None => stake.lockup == source.lockup,
+            // v4 behavior. lockups may mismatch so long as both have expired
+            Some(clock) => {
+                stake.lockup == source.lockup
+                    || (!stake.lockup.is_in_force(clock, None)
+                        && !source.lockup.is_in_force(clock, None))
+            }
+        };
         // `rent_exempt_reserve` has no bearing on the mergeability of accounts,
         // as the source account will be culled by runtime once the operation
         // succeeds. Considering it here would needlessly prevent merging stake
         // accounts with differing data lengths, which already exist in the wild
         // due to an SDK bug
-        if stake.authorized == source.authorized && stake.lockup == source.lockup {
+        if stake.authorized == source.authorized && can_merge_lockups {
             Ok(())
         } else {
             ic_msg!(invoke_context, "Unable to merge due to metadata mismatch");
@@ -6574,6 +6584,152 @@ mod tests {
             None,
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_metas_can_merge_v4() {
+        let invoke_context = MockInvokeContext::new(vec![]);
+        // Identical Metas can merge
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_ok());
+
+        let mismatched_rent_exempt_reserve_ok = Meta {
+            rent_exempt_reserve: 42,
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_rent_exempt_reserve_ok.rent_exempt_reserve,
+            Meta::default().rent_exempt_reserve,
+        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &mismatched_rent_exempt_reserve_ok,
+            Some(&Clock::default())
+        )
+        .is_ok());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &mismatched_rent_exempt_reserve_ok,
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_ok());
+
+        let mismatched_authorized_fails = Meta {
+            authorized: Authorized {
+                staker: Pubkey::new_unique(),
+                withdrawer: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_authorized_fails.authorized,
+            Meta::default().authorized,
+        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &mismatched_authorized_fails,
+            Some(&Clock::default())
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &mismatched_authorized_fails,
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_err());
+
+        let lockup1_timestamp = 42;
+        let lockup2_timestamp = 4242;
+        let lockup1_epoch = 4;
+        let lockup2_epoch = 42;
+        let metas_with_lockup1 = Meta {
+            lockup: Lockup {
+                unix_timestamp: lockup1_timestamp,
+                epoch: lockup1_epoch,
+                custodian: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        let metas_with_lockup2 = Meta {
+            lockup: Lockup {
+                unix_timestamp: lockup2_timestamp,
+                epoch: lockup2_epoch,
+                custodian: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+
+        // Mismatched lockups fail when both in force
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&Clock::default())
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&Clock::default())
+        )
+        .is_err());
+
+        let clock = Clock {
+            epoch: lockup1_epoch + 1,
+            unix_timestamp: lockup1_timestamp + 1,
+            ..Clock::default()
+        };
+
+        // Mismatched lockups fail when either in force
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&clock)
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&clock)
+        )
+        .is_err());
+
+        let clock = Clock {
+            epoch: lockup2_epoch + 1,
+            unix_timestamp: lockup2_timestamp + 1,
+            ..Clock::default()
+        };
+
+        // Mismatched lockups succeed when both expired
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&clock)
+        )
+        .is_ok());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&clock)
+        )
+        .is_ok());
     }
 
     #[test]
