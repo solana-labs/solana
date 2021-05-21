@@ -2097,18 +2097,10 @@ mod tests {
             .is_ok());
 
         // signed but faked vote account
-<<<<<<< HEAD
-        let faked_vote_account = vote_account.clone();
-        faked_vote_account.borrow_mut().owner = solana_sdk::pubkey::new_rand();
-        let faked_vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &faked_vote_account);
-=======
         let faked_vote_account = vote_account_2.clone();
-        faked_vote_account
-            .borrow_mut()
-            .set_owner(solana_sdk::pubkey::new_rand());
+        faked_vote_account.borrow_mut().owner = solana_sdk::pubkey::new_rand();
         let faked_vote_keyed_account =
             KeyedAccount::new(&vote_pubkey_2, false, &faked_vote_account);
->>>>>>> 662c2aaee (programs/stake: cancel deactivate (#17344))
         assert_eq!(
             stake_keyed_account.delegate(
                 &faked_vote_keyed_account,
