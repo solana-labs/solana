@@ -113,10 +113,10 @@ impl<T> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: 'static, U> {
+pub enum AccountIndexGetResult<'a, T: 'static> {
     Found(ReadAccountMapEntry<T>, usize),
     NotFoundOnFork,
-    Missing(std::sync::RwLockReadGuard<'a, AccountMap<U, AccountMapEntry<T>>>),
+    Missing(AccountMapsReadLock<'a, T>),
 }
 
 #[self_referencing]
@@ -509,6 +509,7 @@ pub trait ZeroLamport {
 
 type MapType<T> = AccountMap<Pubkey, AccountMapEntry<T>>;
 type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
+type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
 
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
@@ -1084,7 +1085,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<'_, T, Pubkey> {
+    ) -> AccountIndexGetResult<'_, T> {
         let read_lock = self.account_maps.read().unwrap();
         let account = read_lock
             .get(pubkey)
@@ -1550,7 +1551,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: 'static, U> AccountIndexGetResult<'a, T, U> {
+    impl<'a, T: 'static> AccountIndexGetResult<'a, T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
