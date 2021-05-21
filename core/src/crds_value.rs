@@ -20,6 +20,7 @@ use solana_sdk::{
 use solana_vote_program::vote_transaction::parse_vote_transaction;
 use std::{
     borrow::{Borrow, Cow},
+    cmp::Ordering,
     collections::{hash_map::Entry, BTreeSet, HashMap},
     fmt,
 };
@@ -405,7 +406,7 @@ impl NodeInstance {
     }
 
     // Clones the value with an updated wallclock.
-    pub fn with_wallclock(&self, now: u64) -> Self {
+    pub(crate) fn with_wallclock(&self, now: u64) -> Self {
         Self {
             wallclock: now,
             ..*self
@@ -414,7 +415,7 @@ impl NodeInstance {
 
     // Returns true if the crds-value is a duplicate instance
     // of this node, with a more recent timestamp.
-    pub fn check_duplicate(&self, other: &CrdsValue) -> bool {
+    pub(crate) fn check_duplicate(&self, other: &CrdsValue) -> bool {
         match &other.data {
             CrdsData::NodeInstance(other) => {
                 self.token != other.token
@@ -422,6 +423,26 @@ impl NodeInstance {
                     && self.from == other.from
             }
             _ => false,
+        }
+    }
+
+    // Returns None if tokens are the same or other is not a node-instance from
+    // the same owner. Otherwise returns true if self has more recent timestamp
+    // than other, and so overrides it.
+    pub(crate) fn overrides(&self, other: &CrdsValue) -> Option<bool> {
+        let other = match &other.data {
+            CrdsData::NodeInstance(other) => other,
+            _ => return None,
+        };
+        if self.token == other.token || self.from != other.from {
+            return None;
+        }
+        match self.timestamp.cmp(&other.timestamp) {
+            Ordering::Less => Some(false),
+            Ordering::Greater => Some(true),
+            // Ties should be broken in a deterministic way across the cluster,
+            // so that nodes propagate the same value through gossip.
+            Ordering::Equal => Some(other.token < self.token),
         }
     }
 }
@@ -445,7 +466,7 @@ pub enum CrdsValueLabel {
     AccountsHashes(Pubkey),
     LegacyVersion(Pubkey),
     Version(Pubkey),
-    NodeInstance(Pubkey, u64 /*token*/),
+    NodeInstance(Pubkey),
     DuplicateShred(DuplicateShredIndex, Pubkey),
 }
 
@@ -460,7 +481,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
-            CrdsValueLabel::NodeInstance(pk, token) => write!(f, "NodeInstance({}, {})", pk, token),
+            CrdsValueLabel::NodeInstance(pk) => write!(f, "NodeInstance({})", pk),
             CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({}, {})", ix, pk),
         }
     }
@@ -477,25 +498,8 @@ impl CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(p) => *p,
             CrdsValueLabel::LegacyVersion(p) => *p,
             CrdsValueLabel::Version(p) => *p,
-            CrdsValueLabel::NodeInstance(p, _ /*token*/) => *p,
+            CrdsValueLabel::NodeInstance(p) => *p,
             CrdsValueLabel::DuplicateShred(_, p) => *p,
-        }
-    }
-
-    /// Returns number of possible distinct labels of the same type for
-    /// a fixed pubkey, and None if that is practically unlimited.
-    pub(crate) fn value_space(&self) -> Option<usize> {
-        match self {
-            CrdsValueLabel::ContactInfo(_) => Some(1),
-            CrdsValueLabel::Vote(_, _) => Some(MAX_VOTES as usize),
-            CrdsValueLabel::LowestSlot(_) => Some(1),
-            CrdsValueLabel::SnapshotHashes(_) => Some(1),
-            CrdsValueLabel::EpochSlots(_, _) => Some(MAX_EPOCH_SLOTS as usize),
-            CrdsValueLabel::AccountsHashes(_) => Some(1),
-            CrdsValueLabel::LegacyVersion(_) => Some(1),
-            CrdsValueLabel::Version(_) => Some(1),
-            CrdsValueLabel::NodeInstance(_, _) => None,
-            CrdsValueLabel::DuplicateShred(_, _) => Some(MAX_DUPLICATE_SHREDS as usize),
         }
     }
 }
@@ -570,7 +574,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
-            CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(node.from, node.token),
+            CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(node.from),
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
         }
     }
@@ -931,7 +935,7 @@ mod test {
             token: rng.gen(),
             ..node
         };
-        assert_ne!(
+        assert_eq!(
             make_crds_value(node).label(),
             make_crds_value(other).label()
         );
@@ -946,20 +950,31 @@ mod test {
         let mut rng = rand::thread_rng();
         let pubkey = Pubkey::new_unique();
         let node = NodeInstance::new(&mut rng, pubkey, now);
+        let node_crds = make_crds_value(node.clone());
         // Same token is not a duplicate.
-        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+        let other = NodeInstance {
             from: pubkey,
             wallclock: now + 1,
             timestamp: now + 1,
             token: node.token,
-        })));
+        };
+        let other_crds = make_crds_value(other.clone());
+        assert!(!node.check_duplicate(&other_crds));
+        assert!(!other.check_duplicate(&node_crds));
+        assert_eq!(node.overrides(&other_crds), None);
+        assert_eq!(other.overrides(&node_crds), None);
         // Older timestamp is not a duplicate.
-        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+        let other = NodeInstance {
             from: pubkey,
             wallclock: now + 1,
             timestamp: now - 1,
             token: rng.gen(),
-        })));
+        };
+        let other_crds = make_crds_value(other.clone());
+        assert!(!node.check_duplicate(&other_crds));
+        assert!(other.check_duplicate(&node_crds));
+        assert_eq!(node.overrides(&other_crds), Some(true));
+        assert_eq!(other.overrides(&node_crds), Some(false));
         // Updated wallclock is not a duplicate.
         let other = node.with_wallclock(now + 8);
         assert_eq!(
@@ -971,27 +986,56 @@ mod test {
                 token: node.token,
             }
         );
-        assert!(!node.check_duplicate(&make_crds_value(other)));
-        // Duplicate instance.
-        assert!(node.check_duplicate(&make_crds_value(NodeInstance {
-            from: pubkey,
-            wallclock: 0,
-            timestamp: now,
-            token: rng.gen(),
-        })));
+        let other_crds = make_crds_value(other.clone());
+        assert!(!node.check_duplicate(&other_crds));
+        assert!(!other.check_duplicate(&node_crds));
+        assert_eq!(node.overrides(&other_crds), None);
+        assert_eq!(other.overrides(&node_crds), None);
+        // Duplicate instance; tied timestamp.
+        for _ in 0..10 {
+            let other = NodeInstance {
+                from: pubkey,
+                wallclock: 0,
+                timestamp: now,
+                token: rng.gen(),
+            };
+            let other_crds = make_crds_value(other.clone());
+            assert!(node.check_duplicate(&other_crds));
+            assert!(other.check_duplicate(&node_crds));
+            assert_eq!(node.overrides(&other_crds), Some(other.token < node.token));
+            assert_eq!(other.overrides(&node_crds), Some(node.token < other.token));
+        }
+        // Duplicate instance; more recent timestamp.
+        for _ in 0..10 {
+            let other = NodeInstance {
+                from: pubkey,
+                wallclock: 0,
+                timestamp: now + 1,
+                token: rng.gen(),
+            };
+            let other_crds = make_crds_value(other.clone());
+            assert!(node.check_duplicate(&other_crds));
+            assert!(!other.check_duplicate(&node_crds));
+            assert_eq!(node.overrides(&other_crds), Some(false));
+            assert_eq!(other.overrides(&node_crds), Some(true));
+        }
         // Different pubkey is not a duplicate.
-        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+        let other = NodeInstance {
             from: Pubkey::new_unique(),
             wallclock: now + 1,
             timestamp: now + 1,
             token: rng.gen(),
-        })));
+        };
+        let other_crds = make_crds_value(other.clone());
+        assert!(!node.check_duplicate(&other_crds));
+        assert!(!other.check_duplicate(&node_crds));
+        assert_eq!(node.overrides(&other_crds), None);
+        assert_eq!(other.overrides(&node_crds), None);
         // Differnt crds value is not a duplicate.
-        assert!(
-            !node.check_duplicate(&CrdsValue::new_unsigned(CrdsData::ContactInfo(
-                ContactInfo::new_rand(&mut rng, Some(pubkey))
-            )))
-        );
+        let other = ContactInfo::new_rand(&mut rng, Some(pubkey));
+        let other = CrdsValue::new_unsigned(CrdsData::ContactInfo(other));
+        assert!(!node.check_duplicate(&other));
+        assert_eq!(node.overrides(&other), None);
     }
 
     #[test]
