@@ -591,12 +591,15 @@ pub fn process_instruction(
         }
         StakeInstruction::Merge => {
             let source_stake = &next_keyed_account(keyed_accounts)?;
+            let can_merge_expired_lockups =
+                invoke_context.is_feature_active(&feature_set::stake_program_v4::id());
             me.merge(
                 invoke_context,
                 source_stake,
                 &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
                 &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &signers,
+                can_merge_expired_lockups,
             )
         }
 

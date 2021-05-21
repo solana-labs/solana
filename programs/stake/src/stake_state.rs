@@ -888,6 +888,7 @@ pub trait StakeAccount {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
+        can_merge_expired_lockups: bool,
     ) -> Result<(), InstructionError>;
     fn withdraw(
         &self,
@@ -1189,6 +1190,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
+        can_merge_expired_lockups: bool,
     ) -> Result<(), InstructionError> {
         // Ensure source isn't spoofed
         if source_account.owner()? != id() {
@@ -1211,8 +1213,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         let source_merge_kind =
             MergeKind::get_if_mergeable(invoke_context, source_account, clock, stake_history)?;
 
+        let clock = if can_merge_expired_lockups {
+            Some(clock)
+        } else {
+            None
+        };
+
         ic_msg!(invoke_context, "Merging stake accounts");
-        if let Some(merged_state) = stake_merge_kind.merge(invoke_context, source_merge_kind)? {
+        if let Some(merged_state) =
+            stake_merge_kind.merge(invoke_context, source_merge_kind, clock)?
+        {
             self.set_state(&merged_state)?;
         }
 
@@ -1376,6 +1386,7 @@ impl MergeKind {
         invoke_context: &dyn InvokeContext,
         stake: &Meta,
         source: &Meta,
+        _clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
         // `rent_exempt_reserve` has no bearing on the mergeability of accounts,
         // as the source account will be culled by runtime once the operation
@@ -1435,8 +1446,9 @@ impl MergeKind {
         self,
         invoke_context: &dyn InvokeContext,
         source: Self,
+        clock: Option<&Clock>,
     ) -> Result<Option<StakeState>, InstructionError> {
-        Self::metas_can_merge(invoke_context, self.meta(), source.meta())?;
+        Self::metas_can_merge(invoke_context, self.meta(), source.meta(), clock)?;
         self.active_stake()
             .zip(source.active_stake())
             .map(|(stake, source)| Self::active_stakes_can_merge(invoke_context, stake, source))
@@ -5362,7 +5374,8 @@ mod tests {
                         &source_stake_keyed_account,
                         &Clock::default(),
                         &StakeHistory::default(),
-                        &HashSet::new()
+                        &HashSet::new(),
+                        false,
                     ),
                     Err(InstructionError::MissingRequiredSignature)
                 );
@@ -5373,7 +5386,8 @@ mod tests {
                         &source_stake_keyed_account,
                         &Clock::default(),
                         &StakeHistory::default(),
-                        &signers
+                        &signers,
+                        false,
                     ),
                     Ok(())
                 );
@@ -5465,6 +5479,7 @@ mod tests {
                 &Clock::default(),
                 &StakeHistory::default(),
                 &signers,
+                false,
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -5522,6 +5537,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &wrong_signers,
+                        false,
                     ),
                     Err(InstructionError::MissingRequiredSignature)
                 );
@@ -5533,6 +5549,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &signers,
+                        false,
                     ),
                     Err(StakeError::MergeMismatch.into())
                 );
@@ -5585,6 +5602,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &signers,
+                        false,
                     ),
                     Err(InstructionError::InvalidAccountData)
                 );
@@ -5633,7 +5651,8 @@ mod tests {
                 &source_stake_keyed_account,
                 &Clock::default(),
                 &StakeHistory::default(),
-                &signers
+                &signers,
+                false,
             ),
             Err(InstructionError::IncorrectProgramId)
         );
@@ -5730,6 +5749,7 @@ mod tests {
                 clock,
                 stake_history,
                 signers,
+                false,
             );
             if result.is_ok() {
                 assert_eq!(test_source_keyed.state(), Ok(StakeState::Uninitialized),);
@@ -6461,11 +6481,19 @@ mod tests {
             &good_delegation
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_metas_can_merge_pre_v4() {
+        let invoke_context = MockInvokeContext::default();
         // Identical Metas can merge
-        assert!(
-            MergeKind::metas_can_merge(&invoke_context, &Meta::default(), &Meta::default()).is_ok()
-        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &Meta::default(),
+            None,
+        )
+        .is_ok());
 
         let mismatched_rent_exempt_reserve_ok = Meta {
             rent_exempt_reserve: 42,
@@ -6478,13 +6506,15 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_rent_exempt_reserve_ok
+            &mismatched_rent_exempt_reserve_ok,
+            None,
         )
         .is_ok());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_rent_exempt_reserve_ok,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_ok());
 
@@ -6502,13 +6532,15 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_authorized_fails
+            &mismatched_authorized_fails,
+            None,
         )
         .is_err());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_authorized_fails,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_err());
 
@@ -6524,13 +6556,15 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_lockup_fails
+            &mismatched_lockup_fails,
+            None,
         )
         .is_err());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_lockup_fails,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_err());
     }
@@ -6790,37 +6824,37 @@ mod tests {
         assert_eq!(
             inactive
                 .clone()
-                .merge(&invoke_context, inactive.clone())
+                .merge(&invoke_context, inactive.clone(), None)
                 .unwrap(),
             None
         );
         assert_eq!(
             inactive
                 .clone()
-                .merge(&invoke_context, activation_epoch.clone())
+                .merge(&invoke_context, activation_epoch.clone(), None)
                 .unwrap(),
             None
         );
         assert!(inactive
             .clone()
-            .merge(&invoke_context, fully_active.clone())
+            .merge(&invoke_context, fully_active.clone(), None)
             .is_err());
         assert!(activation_epoch
             .clone()
-            .merge(&invoke_context, fully_active.clone())
+            .merge(&invoke_context, fully_active.clone(), None)
             .is_err());
         assert!(fully_active
             .clone()
-            .merge(&invoke_context, inactive.clone())
+            .merge(&invoke_context, inactive.clone(), None)
             .is_err());
         assert!(fully_active
             .clone()
-            .merge(&invoke_context, activation_epoch.clone())
+            .merge(&invoke_context, activation_epoch.clone(), None)
             .is_err());
 
         let new_state = activation_epoch
             .clone()
-            .merge(&invoke_context, inactive)
+            .merge(&invoke_context, inactive, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();
@@ -6828,7 +6862,7 @@ mod tests {
 
         let new_state = activation_epoch
             .clone()
-            .merge(&invoke_context, activation_epoch)
+            .merge(&invoke_context, activation_epoch, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();
@@ -6839,7 +6873,7 @@ mod tests {
 
         let new_state = fully_active
             .clone()
-            .merge(&invoke_context, fully_active)
+            .merge(&invoke_context, fully_active, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();
