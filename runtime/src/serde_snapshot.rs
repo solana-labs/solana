@@ -17,6 +17,7 @@ use {
     bincode,
     bincode::{config::Options, Error},
     log::*,
+    rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_sdk::{
@@ -36,7 +37,6 @@ use {
         path::PathBuf,
         result::Result,
         sync::{atomic::Ordering, Arc, RwLock},
-        time::Instant,
     },
 };
 
@@ -77,7 +77,9 @@ trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
-        + SerializableStorage;
+        + SerializableStorage
+        + Sync
+        + Send;
 
     fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
@@ -246,7 +248,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
 ) -> Result<Bank, Error>
 where
-    E: SerializableStorage,
+    E: SerializableStorage + Sync + Send,
 {
     let mut accounts_db = reconstruct_accountsdb_from_fields(
         accounts_db_fields,
@@ -282,7 +284,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
 ) -> Result<AccountsDb, Error>
 where
-    E: SerializableStorage,
+    E: SerializableStorage + Sync + Send,
 {
     let mut measure_total = Measure::start("");
 
@@ -300,21 +302,11 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
-    let mut last_log_update = Instant::now();
-    let mut remaining_slots_to_process = storage.len();
-
     // Remap the deserialized AppendVec paths to point to correct local paths
     let mut measure_appendvecs = Measure::start("");
     let mut storage = storage
-        .into_iter()
+        .into_par_iter()
         .map(|(slot, mut slot_storage)| {
-            let now = Instant::now();
-            if now.duration_since(last_log_update).as_secs() >= 10 {
-                info!("{} slots remaining...", remaining_slots_to_process);
-                last_log_update = now;
-            }
-            remaining_slots_to_process -= 1;
-
             let mut new_slot_storage = HashMap::new();
             for storage_entry in slot_storage.drain(..) {
                 let file_name = AppendVec::file_name(slot, storage_entry.id());
@@ -347,12 +339,6 @@ where
     // but non-root stores should not be included in the snapshot
     storage.retain(|_slot, stores| !stores.is_empty());
 
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(slot, bank_hash_info);
-
     // Process deserialized data, set necessary fields in self
     let max_id: usize = *storage
         .values()
@@ -360,19 +346,23 @@ where
         .max()
         .expect("At least one storage entry must exist from deserializing stream");
 
-    let mut measure_accountsdb = Measure::start("");
-    {
-        accounts_db.storage.0.extend(
-            storage.into_iter().map(|(slot, slot_storage_entry)| {
-                (slot, Arc::new(RwLock::new(slot_storage_entry)))
-            }),
-        );
-    }
-    measure_accountsdb.stop();
-
     if max_id > AppendVecId::MAX / 2 {
         panic!("Storage id {} larger than allowed max", max_id);
     }
+
+    accounts_db
+        .bank_hashes
+        .write()
+        .unwrap()
+        .insert(slot, bank_hash_info);
+
+    let mut measure_accountsdb = Measure::start("accounts db");
+    accounts_db.storage.0.par_extend(
+        storage
+            .into_par_iter()
+            .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry)))),
+    );
+    measure_accountsdb.stop();
 
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
     accounts_db
