@@ -570,7 +570,7 @@ impl AccountsHash {
     fn sort_hash_intermediate(
         data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
         stats: &mut HashStats,
-    ) -> Vec<Vec<CalculateHashIntermediate>> {
+    ) -> Vec<Vec<CalculateHashIntermediate2>> {
         data_by_pubkey
         /*
         // sort each PUBKEY_DIVISION vec
@@ -595,7 +595,7 @@ impl AccountsHash {
     }
 
     fn de_dup_and_eliminate_zeros(
-        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
         stats: &mut HashStats,
     ) -> (Vec<Vec<Vec<Hash>>>, u64) {
         // 1. eliminate zero lamport accounts
@@ -628,7 +628,7 @@ impl AccountsHash {
     //   vec: sorted sections from parallelism, in pubkey order
     //     vec: individual hashes in pubkey order
     fn de_dup_accounts_in_parallel(
-        pubkey_division: &[CalculateHashIntermediate],
+        pubkey_division: &[CalculateHashIntermediate2],
         chunk_count: usize,
     ) -> (Vec<Vec<Hash>>, u64) {
         let len = pubkey_division.len();
@@ -671,7 +671,7 @@ impl AccountsHash {
 
     fn de_dup_accounts_from_stores(
         is_first_slice: bool,
-        slice: &[CalculateHashIntermediate],
+        slice: &[CalculateHashIntermediate2],
     ) -> (Vec<Hash>, u128) {
         let len = slice.len();
         let mut result: Vec<Hash> = Vec::with_capacity(len);
@@ -699,14 +699,6 @@ impl AccountsHash {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
-                    } else {
-                        let prev = &slice[k - 1];
-                        assert!(
-                            !(prev.slot == now.slot
-                                && prev.version == now.version
-                                && (prev.hash != now.hash || prev.lamports != now.lamports)),
-                            "Conflicting store data. Pubkey: {}, Slot: {}, Version: {}, Hashes: {}, {}, Lamports: {}, {}", now.pubkey, now.slot, now.version, prev.hash, now.hash, prev.lamports, now.lamports
-                        );
                     }
                 }
 
