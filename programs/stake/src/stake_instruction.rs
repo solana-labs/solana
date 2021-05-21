@@ -602,10 +602,18 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 to,
+<<<<<<< HEAD
                 &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
                 &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 next_keyed_account(keyed_accounts)?,
                 keyed_accounts.next(),
+=======
+                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                keyed_account_at_index(keyed_accounts, 4)?,
+                keyed_account_at_index(keyed_accounts, 5).ok(),
+                invoke_context.is_feature_active(&feature_set::stake_program_v4::id()),
+>>>>>>> 91f2b6185 (Prevent withrawing Initialized stake account to zero stake (#17366))
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
