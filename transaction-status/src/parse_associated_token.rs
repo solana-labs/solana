@@ -3,12 +3,11 @@ use crate::parse_instruction::{
 };
 use serde_json::json;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
-use std::str::FromStr;
 
 // A helper function to convert spl_associated_token_account_v1_0::id() as spl_sdk::pubkey::Pubkey
 // to solana_sdk::pubkey::Pubkey
 pub fn spl_associated_token_id_v1_0() -> Pubkey {
-    Pubkey::from_str(&spl_associated_token_account_v1_0::id().to_string()).unwrap()
+    Pubkey::new_from_array(spl_associated_token_account_v1_0::id().to_bytes())
 }
 
 pub fn parse_associated_token(
@@ -58,7 +57,7 @@ mod test {
     };
 
     fn convert_pubkey(pubkey: Pubkey) -> SplAssociatedTokenPubkey {
-        SplAssociatedTokenPubkey::from_str(&pubkey.to_string()).unwrap()
+        SplAssociatedTokenPubkey::new_from_array(pubkey.to_bytes())
     }
 
     fn convert_compiled_instruction(
