@@ -841,7 +841,8 @@ pub struct AccountsDb {
     is_bank_drop_callback_enabled: AtomicBool,
 
     // Set of slots currently being flushed by `flush_slot_cache()` or removed
-    // by `remove_unrooted_slot()`
+    // by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
+    // can safely clear the set of unrooted slots `slots`.
     remove_unrooted_slots: RemoveUnrootedSlots,
 }
 
@@ -3434,14 +3435,18 @@ impl AccountsDb {
             );
         }
 
+        let RemoveUnrootedSlots {
+            slots_under_contention,
+            signal,
+        } = &self.remove_unrooted_slots;
+
         {
-            // Slot that are currently being flushed by flush_slot_cache()
-            let RemoveUnrootedSlots {
-                slots_under_contention,
-                signal,
-            } = &self.remove_unrooted_slots;
+            // Slots that are currently being flushed by flush_slot_cache()
             let mut contended_slots = slots_under_contention.lock().unwrap();
-            let mut cache_flush_slots: Vec<Slot> = remove_slots
+
+            // Slots that are currently being flushed by flush_slot_cache() AND
+            // we want to remove in this function
+            let mut contended_cache_flush_slots: Vec<Slot> = remove_slots
                 .iter()
                 .filter(|remove_slot| {
                     let is_cache_flushing_slot = contended_slots.contains(remove_slot);
@@ -3455,15 +3460,35 @@ impl AccountsDb {
                 .collect();
 
             // Wait for cache flushes to finish
-            while !cache_flush_slots.is_empty() {
-                contended_slots = signal.wait(contended_slots).unwrap();
-                cache_flush_slots.retain(|flushing_slot| !contended_slots.contains(flushing_slot));
+            loop {
+                if !contended_cache_flush_slots.is_empty() {
+                    // Don't wait if the contended_cache_flush_slots is empty, otherwise
+                    // we may never get a signal
+                    contended_slots = signal.wait(contended_slots).unwrap();
+                } else {
+                    // There are no slots being flushed to block on, it's safe to continue
+                    // to purging these slots
+                    break;
+                }
+                contended_cache_flush_slots.retain(|flushing_slot| {
+                    let is_being_flushed = contended_slots.contains(flushing_slot);
+                    if !is_being_flushed {
+                        // Mark that we're about to delete this slot now
+                        contended_slots.insert(*flushing_slot);
+                    }
+                    !is_being_flushed
+                });
             }
         }
 
         let remove_unrooted_purge_stats = PurgeStats::default();
         self.purge_slots_from_cache_and_store(remove_slots.iter(), &remove_unrooted_purge_stats);
         remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
+
+        let mut contended_slots = slots_under_contention.lock().unwrap();
+        for slot in remove_slots {
+            assert!(contended_slots.remove(slot));
+        }
     }
 
     pub fn hash_stored_account(slot: Slot, account: &StoredAccountMeta) -> Hash {
@@ -10642,6 +10667,114 @@ pub mod tests {
     #[test]
     fn test_load_account_and_shrink_race_without_retry() {
         do_test_load_account_and_shrink_race(false);
+    }
+
+    #[test]
+    fn test_cache_flush_remove_unrooted_race() {
+        let caching_enabled = true;
+        let db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            caching_enabled,
+        );
+        let db = Arc::new(db);
+        let num_cached_slots = 100;
+
+        let num_trials = 100;
+        let (new_trial_start_sender, new_trial_start_receiver) = unbounded();
+        let (flush_done_sender, flush_done_receiver) = unbounded();
+        // Start up a thread to flush the accounts cache
+        let t_flush_cache = {
+            let db = db.clone();
+
+            std::thread::Builder::new()
+                .name("account-cache-flush".to_string())
+                .spawn(move || loop {
+                    // Wait for the signal to start a trial
+                    if new_trial_start_receiver.recv().is_err() {
+                        return;
+                    }
+                    for slot in 0..num_cached_slots {
+                        db.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+                    }
+                    flush_done_sender.send(()).unwrap();
+                })
+                .unwrap()
+        };
+
+        // Run multiple trials. Has the added benefit of rewriting the same slots after we've
+        // dumped them in previous trials.
+        for _ in 0..num_trials {
+            // Store an account
+            let lamports = 42;
+            let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+            account.set_lamports(lamports);
+
+            // Pick random 50% of the slots to pass to `remove_unrooted_slots()`
+            let mut all_slots: Vec<Slot> = (0..num_cached_slots).collect();
+            all_slots.shuffle(&mut rand::thread_rng());
+            let slots_to_dump = &all_slots[0..num_cached_slots as usize / 2];
+            let slots_to_keep = &all_slots[num_cached_slots as usize / 2..];
+
+            // Set up a one account per slot across many different slots, track which
+            // pubkey was stored in each slot.
+            let slot_to_pubkey_map: HashMap<Slot, Pubkey> = (0..num_cached_slots)
+                .map(|slot| {
+                    let pubkey = Pubkey::new_unique();
+                    db.store_cached(slot, &[(&pubkey, &account)]);
+                    (slot, pubkey)
+                })
+                .collect();
+
+            // Signal the flushing shred to start flushing
+            new_trial_start_sender.send(()).unwrap();
+
+            // Here we want to test both:
+            // 1) Flush thread starts flushing a slot before we try dumping it.
+            // 2) Flushing thread trying to flush while/after we're trying to dump the slot,
+            // in which case flush should ignore/move past the slot to be dumped
+            //
+            // Hence, we split into chunks to get the dumping of each chunk to race with the
+            // flushes. If we were to dump the entire chunk at once, then this lessens the possibility
+            // of the flush occurring first since the dumping logic reserves all the slots it's about
+            // to dump immediately.
+            for chunks in slots_to_dump.chunks(slots_to_dump.len() / 2) {
+                db.remove_unrooted_slots(chunks);
+            }
+
+            // Check that all the slots in `slots_to_dump` were completely removed from the
+            // cache, storage, and index
+            for slot in slots_to_dump {
+                assert!(db.storage.get_slot_storage_entries(*slot).is_none());
+                assert!(db.accounts_cache.slot_cache(*slot).is_none());
+                let account_in_slot = slot_to_pubkey_map[slot];
+                assert!(db
+                    .accounts_index
+                    .get_account_read_entry(&account_in_slot)
+                    .is_none());
+            }
+
+            // Wait for flush to finish before starting next trial
+            flush_done_receiver.recv().unwrap();
+
+            for slot in slots_to_keep {
+                let account_in_slot = slot_to_pubkey_map[slot];
+                assert!(db
+                    .load(
+                        &Ancestors::from(vec![(*slot, 0)]),
+                        &account_in_slot,
+                        LoadHint::FixedMaxRoot
+                    )
+                    .is_some());
+                // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`
+                // in `purge_slot_pubkeys()` doesn't trigger
+                db.remove_unrooted_slots(&[*slot]);
+            }
+        }
+
+        drop(new_trial_start_sender);
+        t_flush_cache.join().unwrap();
     }
 
     #[test]
