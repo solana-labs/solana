@@ -1308,9 +1308,9 @@ pub fn main() {
                 .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
                 .takes_value(true)
                 .default_value(default_min_snapshot_download_speed)
-                .help("The minimal speed of snapshots download speed measured in bytes/second. \
-                      If the intial download speed falls below the threshold, the system will try \
-                      a different rpc node for download."),
+                .help("The minimal speed of snapshot downloads measured in bytes/second. \
+                      If the initial download speed falls below this threshold, the system will \
+                      retry the download against a different rpc node."),
         )
         .arg(
             Arg::with_name("contact_debug_interval")
