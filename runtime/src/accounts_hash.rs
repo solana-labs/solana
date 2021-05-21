@@ -568,9 +568,11 @@ impl AccountsHash {
     }
 
     fn sort_hash_intermediate(
-        data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
         stats: &mut HashStats,
     ) -> Vec<Vec<CalculateHashIntermediate>> {
+        data_by_pubkey
+        /*
         // sort each PUBKEY_DIVISION vec
         let mut sort_time = Measure::start("sort");
         let sorted_data_by_pubkey: Vec<Vec<_>> = data_by_pubkey
@@ -583,6 +585,7 @@ impl AccountsHash {
         sort_time.stop();
         stats.sort_time_total_us += sort_time.as_us();
         sorted_data_by_pubkey
+        */
     }
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
@@ -719,7 +722,7 @@ impl AccountsHash {
     //     vec: [..] - items which fit in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     pub fn rest_of_hash_calculation(
-        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
+        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate2>>>,
         mut stats: &mut HashStats,
         is_last_pass: bool,
         mut previous_state: PreviousPass,
