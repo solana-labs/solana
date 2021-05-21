@@ -897,8 +897,11 @@ fn rpc_bootstrap(
                                 maximum_snapshots_to_retain,
                                 &Some(|download_progress: &DownloadProgressRecord| {
                                     debug!("Download progress: {:?}", download_progress);
+
                                     if download_progress.last_throughput <  minimal_snapshot_download_speed
                                        && download_progress.notification_count <= 1
+                                       && download_progress.percentage_done <= 2_f32
+                                       && download_progress.estimated_remaining_time > 60_f32
                                        && download_abort_count < MAX_DOWNLOAD_ABORT {
                                         if let Some(ref trusted_validators) = validator_config.trusted_validators {
                                             if trusted_validators.contains(&rpc_contact_info.id) && trusted_validators.len() == 1 {
