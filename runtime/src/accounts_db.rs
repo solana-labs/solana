@@ -1497,7 +1497,7 @@ impl AccountsDb {
 
     fn purge_keys_exact<'a, C: 'a>(
         &'a self,
-        pubkey_to_slot_set: &'a [(Pubkey, C)],
+        pubkey_to_slot_set: impl Iterator<Item = &'a (Pubkey, C)>,
     ) -> Vec<(u64, AccountInfo)>
     where
         C: Contains<'a, Slot>,
@@ -1805,7 +1805,7 @@ impl AccountsDb {
             })
             .collect();
 
-        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
+        let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
 
         // Don't reset from clean, since the pubkeys in those stores may need to be unref'ed
         // and those stores may be used for background hashing.
@@ -3161,14 +3161,17 @@ impl AccountsDb {
                 // confident that the entire state for this slot has been flushed to the storage
                 // already.
                 let mut scan_storages_elasped = Measure::start("scan_storages_elasped");
-                let scan_result: ScanStorageResult<Pubkey, DashSet<Pubkey>> = self
-                    .scan_account_storage(
-                        *remove_slot,
-                        |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
-                        |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
-                            accum.insert(*loaded_account.pubkey());
-                        },
-                    );
+                type ScanResult = ScanStorageResult<Pubkey, Arc<Mutex<HashSet<(Pubkey, Slot)>>>>;
+                let scan_result: ScanResult = self.scan_account_storage(
+                    *remove_slot,
+                    |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
+                    |accum: &Arc<Mutex<HashSet<(Pubkey, Slot)>>>, loaded_account: LoadedAccount| {
+                        accum
+                            .lock()
+                            .unwrap()
+                            .insert((*loaded_account.pubkey(), *remove_slot));
+                    },
+                );
                 scan_storages_elasped.stop();
                 purge_stats
                     .scan_storages_elasped
@@ -3176,21 +3179,14 @@ impl AccountsDb {
 
                 let mut purge_accounts_index_elapsed =
                     Measure::start("purge_accounts_index_elapsed");
-                // Purge this slot from the accounts index
-                let purge_slot: HashSet<Slot> = vec![*remove_slot].into_iter().collect();
-                let mut reclaims = vec![];
+                let reclaims;
                 match scan_result {
                     ScanStorageResult::Cached(_) => {
                         panic!("Should not see cached keys in this `else` branch, since we checked this slot did not exist in the cache above");
                     }
                     ScanStorageResult::Stored(stored_keys) => {
-                        for set_ref in stored_keys.iter() {
-                            self.accounts_index.purge_exact(
-                                set_ref.key(),
-                                &purge_slot,
-                                &mut reclaims,
-                            );
-                        }
+                        // Purge this slot from the accounts index
+                        reclaims = self.purge_keys_exact(stored_keys.lock().unwrap().iter());
                     }
                 }
                 purge_accounts_index_elapsed.stop();
@@ -3325,7 +3321,7 @@ impl AccountsDb {
         // Slot purged from cache should not exist in the backing store
         assert!(self.storage.get_slot_stores(purged_slot).is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
-        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
+        let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
         if is_dead {
             self.remove_dead_slot_metadata(
@@ -6392,15 +6388,18 @@ pub mod tests {
         );
     }
 
-    #[test]
-    fn test_remove_unrooted_slot() {
+    fn run_test_remove_unrooted_slot(is_cached: bool) {
         let unrooted_slot = 9;
         let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         db.caching_enabled = true;
         let key = Pubkey::default();
         let account0 = AccountSharedData::new(1, 0, &key);
         let ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
-        db.store_cached(unrooted_slot, &[(&key, &account0)]);
+        if is_cached {
+            db.store_cached(unrooted_slot, &[(&key, &account0)]);
+        } else {
+            db.store_uncached(unrooted_slot, &[(&key, &account0)]);
+        }
         db.bank_hashes
             .write()
             .unwrap()
@@ -6415,12 +6414,9 @@ pub mod tests {
         db.remove_unrooted_slot(unrooted_slot);
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
+        assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.0.get(&unrooted_slot).is_none());
-        assert!(db
-            .accounts_index
-            .get_account_read_entry(&key)
-            .map(|locked_entry| locked_entry.slot_list().is_empty())
-            .unwrap_or(true));
+        assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
             .get(&key, Some(&ancestors), None)
@@ -6430,6 +6426,16 @@ pub mod tests {
         let account0 = AccountSharedData::new(2, 0, &key);
         db.store_uncached(unrooted_slot, &[(&key, &account0)]);
         assert_load_account(&db, unrooted_slot, key, 2);
+    }
+
+    #[test]
+    fn test_remove_unrooted_slot_cached() {
+        run_test_remove_unrooted_slot(true);
+    }
+
+    #[test]
+    fn test_remove_unrooted_slot_storage() {
+        run_test_remove_unrooted_slot(false);
     }
 
     #[test]
@@ -7723,7 +7729,7 @@ pub mod tests {
 
         let slots: HashSet<Slot> = vec![1].into_iter().collect();
         let purge_keys = vec![(key1, slots)];
-        db.purge_keys_exact(&purge_keys);
+        db.purge_keys_exact(purge_keys.iter());
 
         let account2 = AccountSharedData::new(3, 0, &key);
         db.store_uncached(2, &[(&key1, &account2)]);
