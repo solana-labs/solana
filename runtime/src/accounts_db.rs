@@ -4088,35 +4088,31 @@ impl AccountsDb {
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
         snapshot_storages: &[SnapshotStorage],
-        stats: &mut crate::accounts_hash::HashStats,
         scan_func: F,
     ) -> Vec<B>
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
-        let mut time = Measure::start("flatten");
-        let items: Vec<_> = snapshot_storages.iter().flatten().collect();
-        time.stop();
-        stats.pre_scan_flatten_time_total_us += time.as_us();
-
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        items
+        snapshot_storages
             .par_chunks(MAX_ITEMS_PER_CHUNK)
-            .map(|storages: &[&Arc<AccountStorageEntry>]| {
+            .map(|storages: &[Vec<Arc<AccountStorageEntry>>]| {
                 let mut retval = B::default();
 
-                for storage in storages {
-                    let accounts = storage.accounts.accounts(0);
-                    accounts.into_iter().for_each(|stored_account| {
-                        scan_func(
-                            LoadedAccount::Stored(stored_account),
-                            &mut retval,
-                            storage.slot(),
-                        )
-                    });
+                for sub_storages in storages {
+                    for storage in sub_storages {
+                        let accounts = storage.accounts.accounts(0);
+                        accounts.into_iter().for_each(|stored_account| {
+                            scan_func(
+                                LoadedAccount::Stored(stored_account),
+                                &mut retval,
+                                storage.slot(),
+                            )
+                        });
+                    }
                 }
                 retval
             })
@@ -4181,7 +4177,6 @@ impl AccountsDb {
         stats.num_snapshot_storage = storage.len();
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
             &storage,
-            &mut stats,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
@@ -5763,6 +5758,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
+        solana_logger::setup();
         let (mut storages, raw_expected) = sample_storages_and_accounts();
 
         let bins = 1;
@@ -5832,15 +5828,8 @@ pub mod tests {
 
         // enough stores to get to 2nd chunk
         let bins = 1;
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-
-        let arc = Arc::new(data);
-
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![vec![]; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -5935,15 +5924,8 @@ pub mod tests {
         // enough stores to get to 2nd chunk
         // range is for only 1 bin out of 256.
         let bins = 256;
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-
-        let arc = Arc::new(data);
-
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
+        storages.splice(0..0, vec![vec![]; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -6030,7 +6012,6 @@ pub mod tests {
         let calls = AtomicU64::new(0);
         let result = AccountsDb::scan_account_storage_no_bank(
             &storages,
-            &mut HashStats::default(),
             |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
