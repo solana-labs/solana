@@ -310,20 +310,8 @@ impl<'a> ThisInvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             account_db,
             ancestors,
-<<<<<<< HEAD
-            sysvars: vec![],
-        }
-=======
             sysvars: RefCell::new(vec![]),
-        };
-        invoke_context
-            .invoke_stack
-            .push(InvokeContextStackFrame::new(
-                *program_id,
-                create_keyed_accounts_unified(&keyed_accounts),
-            ));
-        invoke_context
->>>>>>> 2c99b23ad (Add get_sysvar() helper to sdk)
+        }
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -448,29 +436,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             let mut result = sysvars
                 .iter()
                 .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-<<<<<<< HEAD
-        if result.is_none() {
-            // Load it
-            result = self
-                .account_db
-                .load_slow(self.ancestors, id)
-                .map(|(account, _)| Rc::new(account.data().clone()));
-            // Cache it
-            self.sysvars.push((*id, result.clone()));
-=======
             if result.is_none() {
                 // Load it
                 result = self
                     .account_db
-                    .load_with_fixed_root(self.ancestors, id)
-                    .map(|(account, _)| Rc::new(account.data().to_vec()));
+                    .load_slow(self.ancestors, id)
+                    .map(|(account, _)| Rc::new(account.data().clone()));
                 // Cache it
                 sysvars.push((*id, result.clone()));
             }
             result
         } else {
             None
->>>>>>> 2c99b23ad (Add get_sysvar() helper to sdk)
         }
     }
 }

@@ -318,11 +318,6 @@ impl Default for MockInvokeContext {
         }
     }
 }
-<<<<<<< HEAD
-impl InvokeContext for MockInvokeContext {
-    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-        self.invoke_depth = self.invoke_depth.saturating_add(1);
-=======
 
 pub fn mock_set_sysvar<T: Sysvar>(
     mock_invoke_context: &mut MockInvokeContext,
@@ -339,20 +334,9 @@ pub fn mock_set_sysvar<T: Sysvar>(
     Ok(())
 }
 
-impl<'a> InvokeContext for MockInvokeContext<'a> {
-    fn push(
-        &mut self,
-        key: &Pubkey,
-        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
-    ) -> Result<(), InstructionError> {
-        fn transmute_lifetime<'a, 'b>(value: Vec<KeyedAccount<'a>>) -> Vec<KeyedAccount<'b>> {
-            unsafe { std::mem::transmute(value) }
-        }
-        self.invoke_stack.push(InvokeContextStackFrame::new(
-            *key,
-            transmute_lifetime(create_keyed_accounts_unified(keyed_accounts)),
-        ));
->>>>>>> 2c99b23ad (Add get_sysvar() helper to sdk)
+impl InvokeContext for MockInvokeContext {
+    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        self.invoke_depth = self.invoke_depth.saturating_add(1);
         Ok(())
     }
     fn pop(&mut self) {
