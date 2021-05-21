@@ -2422,10 +2422,12 @@ pub mod tests {
         assert!(gc.is_empty());
 
         for lock in &[false, true] {
-            let mut read_lock = None;
-            if *lock {
-                read_lock = Some(index.get_account_maps_read_lock());
-            }
+            let read_lock = if *lock {
+                Some(index.get_account_maps_read_lock())
+            } else {
+                None
+            };
+
             let entry = if *lock {
                 index
                     .get_account_read_entry_with_lock(&key, read_lock.as_ref().unwrap())

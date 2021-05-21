@@ -1950,18 +1950,22 @@ impl AccountsDb {
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let mut alive_total = 0;
-        let mut read_lock = None;
-        if is_startup {
-            read_lock = Some(self.accounts_index.get_account_maps_read_lock());
-        }
-        let read_lock_ref = read_lock.as_ref();
+        let accounts_index_map_lock = if is_startup {
+            // at startup, there is nobody else to contend with the accounts_index read lock, so it is more efficient for us to keep it held
+            Some(self.accounts_index.get_account_maps_read_lock())
+        } else {
+            None
+        };
+        let accounts_index_map_lock_ref = accounts_index_map_lock.as_ref();
 
         let alive_accounts: Vec<_> = stored_accounts
             .iter()
             .filter(|(pubkey, stored_account)| {
                 let lookup = if is_startup {
-                    self.accounts_index
-                        .get_account_read_entry_with_lock(pubkey, read_lock_ref.unwrap())
+                    self.accounts_index.get_account_read_entry_with_lock(
+                        pubkey,
+                        accounts_index_map_lock_ref.unwrap(),
+                    )
                 } else {
                     self.accounts_index.get_account_read_entry(pubkey)
                 };
@@ -1986,7 +1990,7 @@ impl AccountsDb {
                 }
             })
             .collect();
-        drop(read_lock);
+        drop(accounts_index_map_lock);
         index_read_elapsed.stop();
         let aligned_total: u64 = self.page_align(alive_total);
 
