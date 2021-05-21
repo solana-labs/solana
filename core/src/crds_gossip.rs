@@ -29,9 +29,6 @@ use std::{
     sync::Mutex,
 };
 
-///The min size for bloom filters
-pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
-
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
