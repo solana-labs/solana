@@ -26,7 +26,7 @@ use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
     hash::Hash,
-    message::Message,
+    message::{Message, MessageProgramIdsCache},
     native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
@@ -205,9 +205,9 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let demote_sysvar_write_locks =
                 feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
-
+            let mut key_check = MessageProgramIdsCache::new(&message);
             for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if message.is_non_loader_key(key, i) {
+                let account = if key_check.is_non_loader_key(key, i) {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
