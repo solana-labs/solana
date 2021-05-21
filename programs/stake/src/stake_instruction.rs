@@ -610,6 +610,7 @@ pub fn process_instruction(
                 &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
                 keyed_account_at_index(keyed_accounts, 4)?,
                 keyed_account_at_index(keyed_accounts, 5).ok(),
+                invoke_context.is_feature_active(&feature_set::stake_program_v4::id()),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
