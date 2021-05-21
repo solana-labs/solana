@@ -2755,12 +2755,7 @@ impl Blockstore {
         let result: HashMap<u64, Vec<u64>> = slots
             .iter()
             .zip(slot_metas)
-            .filter_map(|(height, meta)| {
-                meta.map(|meta| {
-                    let valid_next_slots: Vec<u64> = meta.next_slots.to_vec();
-                    (*height, valid_next_slots)
-                })
-            })
+            .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots.to_vec())))
             .collect();
 
         Ok(result)
