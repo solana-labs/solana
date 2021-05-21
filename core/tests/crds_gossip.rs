@@ -333,7 +333,10 @@ fn network_run_push(
             .par_iter()
             .map(|node| {
                 let mut node_lock = node.lock().unwrap();
-                let timeouts = node_lock.make_timeouts_test();
+                let timeouts = node_lock.make_timeouts(
+                    &HashMap::default(), // stakes
+                    Duration::from_millis(node_lock.pull.crds_timeout),
+                );
                 node_lock.purge(thread_pool, now, &timeouts);
                 (node_lock.id, node_lock.new_push_messages(vec![], now))
             })
