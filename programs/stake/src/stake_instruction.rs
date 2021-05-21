@@ -572,7 +572,13 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::DelegateStake => {
+<<<<<<< HEAD
             let vote = next_keyed_account(keyed_accounts)?;
+=======
+            let can_reverse_deactivation =
+                invoke_context.is_feature_active(&feature_set::stake_program_v4::id());
+            let vote = keyed_account_at_index(keyed_accounts, 1)?;
+>>>>>>> 662c2aaee (programs/stake: cancel deactivate (#17344))
 
             me.delegate(
                 &vote,
@@ -580,6 +586,7 @@ pub fn process_instruction(
                 &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
+                can_reverse_deactivation,
             )
         }
         StakeInstruction::Split(lamports) => {
