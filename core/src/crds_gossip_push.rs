@@ -12,14 +12,13 @@ use crate::{
     cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
     contact_info::ContactInfo,
     crds::{Crds, Cursor, VersionedCrdsValue},
-    crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
+    crds_gossip::{get_stake, get_weight},
     crds_gossip_error::CrdsGossipError,
     crds_value::CrdsValue,
     weighted_shuffle::weighted_shuffle,
 };
 use bincode::serialized_size;
 use indexmap::map::IndexMap;
-use itertools::Itertools;
 use lru::LruCache;
 use rand::{seq::SliceRandom, Rng};
 use solana_runtime::bloom::{AtomicBloom, Bloom};
@@ -264,46 +263,44 @@ impl CrdsGossipPush {
         network_size: usize,
         ratio: usize,
     ) {
+        const BLOOM_FALSE_RATE: f64 = 0.1;
+        const BLOOM_MAX_BITS: usize = 1024 * 8 * 4;
         let mut rng = rand::thread_rng();
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
-
-        let options: Vec<_> = self.push_options(
-            crds,
-            &self_id,
-            self_shred_version,
-            stakes,
-            gossip_validators,
-        );
-        if options.is_empty() {
+        let (weights, peers): (Vec<_>, Vec<_>) = self
+            .push_options(
+                crds,
+                &self_id,
+                self_shred_version,
+                stakes,
+                gossip_validators,
+            )
+            .into_iter()
+            .unzip();
+        if peers.is_empty() {
             return;
         }
-
-        let mut seed = [0; 32];
-        rng.fill(&mut seed[..]);
-        let mut shuffle = weighted_shuffle(
-            &options.iter().map(|weighted| weighted.0).collect_vec(),
-            seed,
-        )
-        .into_iter();
-
-        while new_items.len() < need {
-            match shuffle.next() {
-                Some(index) => {
-                    let item = options[index].1;
-                    if self.active_set.get(&item.id).is_some() {
-                        continue;
-                    }
-                    if new_items.get(&item.id).is_some() {
-                        continue;
-                    }
-                    let size = cmp::max(CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS, network_size);
-                    let bloom: AtomicBloom<_> = Bloom::random(size, 0.1, 1024 * 8 * 4).into();
-                    bloom.add(&item.id);
-                    new_items.insert(item.id, bloom);
-                }
-                _ => break,
+        let num_bloom_items = CRDS_UNIQUE_PUBKEY_CAPACITY.max(network_size);
+        let shuffle = {
+            let mut seed = [0; 32];
+            rng.fill(&mut seed[..]);
+            weighted_shuffle(&weights, seed).into_iter()
+        };
+        for peer in shuffle.map(|i| peers[i].id) {
+            if new_items.len() >= need {
+                break;
             }
+            if self.active_set.contains_key(&peer) || new_items.contains_key(&peer) {
+                continue;
+            }
+            let bloom = AtomicBloom::from(Bloom::random(
+                num_bloom_items,
+                BLOOM_FALSE_RATE,
+                BLOOM_MAX_BITS,
+            ));
+            bloom.add(&peer);
+            new_items.insert(peer, bloom);
         }
         let mut keys: Vec<Pubkey> = self.active_set.keys().cloned().collect();
         keys.shuffle(&mut rng);
