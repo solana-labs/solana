@@ -625,6 +625,8 @@ impl AccountsHash {
         (hashes, sum)
     }
 
+    //fn remove_item( &mut )
+
     // 1. eliminate zero lamport accounts
     // 2. pick the highest slot or (slot = and highest version) of each pubkey
     // 3. produce this output:
@@ -632,39 +634,65 @@ impl AccountsHash {
     //     vec: individual hashes in pubkey order
     fn de_dup_accounts_in_parallel(
         pubkey_division: &Vec<Vec<Vec<CalculateHashIntermediate2>>>,
-        range: &Range<usize>,
+        _range: &Range<usize>,
         bin: usize,
     ) -> (Vec<Hash>, u64) {
         let len = pubkey_division.len();
         let mut item_len = 0;
         let mut indexes = vec![0; len];
         let max_pubkey = Pubkey::new_from_array([0xff; 32]);
-        let first_items = Vec::with_capacity(len);
+        let mut first_items = Vec::with_capacity(len);
 
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             if bins.len() > bin {
                 item_len += bins[bin].len();
-                first_items.push((&bins[bin][0].hash, i));
+                first_items.push((&bins[bin][0].pubkey, i));
             }
         });
-        let overall_sum = Mutex::new(0u64);
-        let hashes: Vec<Hash> = Vec::with_capacity(item_len);
+        let mut overall_sum = 0;
+        let mut hashes: Vec<Hash> = Vec::with_capacity(item_len);
 
         while !first_items.is_empty() {
             let mut min_pubkey = &max_pubkey;
-            let mut min_index = 0;
-            first_items.iter().enumerate().for_each(|(first_item_index, (key, _i))| {
+            let mut min_index = usize::MAX;
+            let mut first_item_index = 0;
+            let mut max_len = first_items.len();
+            while first_item_index < max_len {
+                let (key, _) = first_items[first_item_index];
                 if min_pubkey >= key {
+                    if min_index != usize::MAX {
+                        // we found an item that was masked by a later slot, so skip it
+                        let first_item = first_items[min_index];
+                        let division_index = first_item.1;
+                        let bin = &pubkey_division[division_index][bin];
+                        let mut index = indexes[division_index];
+                        index += 1;
+                        if index >= bin.len() {
+                            first_items.remove(min_index); // stop looking in this vector - we exhausted it
+                            first_item_index -= 1;
+                            max_len -= 1;
+                        }
+                        else {
+                            // still more items where we found the previous key, so just increment the index for that slot group
+                            first_items[min_index] = (&bin[index].pubkey, division_index);
+                            indexes[division_index] = index;
+                        }
+                    }
                     min_index = first_item_index;
                     min_pubkey = key;
                 }
-            });
+                first_item_index += 1;
+            };
             let first_item = first_items[min_index];
             let division_index = first_item.1;
 
-            let bin = pubkey_division[division_index];
-            let index = indexes[division_index];
-            hashes.push(bin[index].hash);
+            let bin = &pubkey_division[division_index][bin];
+            let mut index = indexes[division_index];
+            let item = &bin[index];
+            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
+                overall_sum = Self::checked_cast_for_capitalization(item.lamports as u128 + overall_sum as u128);
+                hashes.push(item.hash);
+            }
             index += 1;
             if index >= bin.len() {
                 first_items.remove(min_index); // stop looking in this vector - we exhausted it
@@ -674,16 +702,7 @@ impl AccountsHash {
                 indexes[division_index] = index;
             }
         }
-        /*
-                let mut overall = overall_sum.lock().unwrap();
-                *overall = Self::checked_cast_for_capitalization(sum + *overall as u128);
-
-                result
-            })
-            .collect();
-        */
-        let sum = *overall_sum.lock().unwrap();
-        (hashes, sum)
+        (hashes, overall_sum)
     }
 
     fn de_dup_accounts_from_stores(
@@ -741,7 +760,7 @@ impl AccountsHash {
 
         //let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
 
-        let (mut hashes, mut total_lamports) =
+        let (hashes, mut total_lamports) =
             Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, &mut stats, range);
         let mut hashes = vec![hashes];
 
