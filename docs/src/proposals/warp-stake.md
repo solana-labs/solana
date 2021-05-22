@@ -54,7 +54,7 @@ for (stake_pk, vote_pk) in trf_req {
 trf_req = trf_req.drain(0..accounts_moved).collect();
 ```
 
-Requests in the waitlist that fail to transfer but did not fail fully-activated criteria would retain their positions in the list, for the following epoch.
+Requests in the waitlist that fail to warp, but did not fail criterion of being fully activated, would retain their positions in the list with highest warp priority for the following epoch.
 
 You can always cancel a transfer at any time before the epoch boundary. Re-requesting a transfer will put you at the end of the request list, however.
 
