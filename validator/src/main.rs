@@ -83,8 +83,10 @@ enum Operation {
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
-const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: f32 = 10485760_f32;
-const MAX_DOWNLOAD_ABORT: u32 = 5;
+// The default minimal snapshot download speed (bytes/second)
+const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
+// The maximum times of snapshot download abort and retry
+const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -745,6 +747,7 @@ fn rpc_bootstrap(
     should_check_duplicate_instance: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     minimal_snapshot_download_speed: f32,
+    maximum_snapshot_download_abort: u64,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -902,14 +905,16 @@ fn rpc_bootstrap(
                                        && download_progress.notification_count <= 1
                                        && download_progress.percentage_done <= 2_f32
                                        && download_progress.estimated_remaining_time > 60_f32
-                                       && download_abort_count < MAX_DOWNLOAD_ABORT {
+                                       && download_abort_count < maximum_snapshot_download_abort {
                                         if let Some(ref trusted_validators) = validator_config.trusted_validators {
                                             if trusted_validators.contains(&rpc_contact_info.id) && trusted_validators.len() == 1 {
                                                 return true; // Do not abort download from the one-and-only trusted validator
                                             }
                                         }
-                                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, try a different node. Abort count: {}, Progress detail: {:?}",
-                                            download_progress.last_throughput, minimal_snapshot_download_speed, download_abort_count, download_progress);
+                                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
+                                               and try a different node. Abort count: {}, Progress detail: {:?}",
+                                               download_progress.last_throughput, minimal_snapshot_download_speed,
+                                               download_abort_count, download_progress);
                                         false
                                     } else {
                                         true
@@ -999,6 +1004,7 @@ pub fn main() {
     let default_rpc_threads = num_cpus::get().to_string();
     let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
     let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
+    let default_max_snapshot_download_abort = &MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1311,6 +1317,15 @@ pub fn main() {
                 .help("The minimal speed of snapshot downloads measured in bytes/second. \
                       If the initial download speed falls below this threshold, the system will \
                       retry the download against a different rpc node."),
+        )
+        .arg(
+            Arg::with_name("maximum_snapshot_download_abort")
+                .long("maximum-snapshot-download-abort")
+                .value_name("MAXIMUM_SNAPSHOT_DOWNLOAD_ABORT")
+                .takes_value(true)
+                .default_value(default_max_snapshot_download_abort)
+                .help("The maximum number of times to abort and retry when encountering a \
+                      slow snapshot download."),
         )
         .arg(
             Arg::with_name("contact_debug_interval")
@@ -2218,6 +2233,9 @@ pub fn main() {
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
     let minimal_snapshot_download_speed =
         value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
+    let maximum_snapshot_download_abort =
+        value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
+
     let snapshot_output_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
@@ -2478,6 +2496,7 @@ pub fn main() {
             should_check_duplicate_instance,
             &start_progress,
             minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
         );
         *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
