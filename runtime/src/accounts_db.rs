@@ -3183,7 +3183,12 @@ impl AccountsDb {
         removed_slots: impl Iterator<Item = &'a Slot> + Clone,
         purge_stats: &PurgeStats,
     ) {
-        // Check all slots `removed_slots` are no longer rooted
+        // Check all slots `removed_slots` are no longer "relevant" roots.
+        // Note that the slots here could have been rooted slots, but if they're passed here
+        // for removal it means:
+        // 1) All updates in that old root have been outdated by updates in newer roots
+        // 2) Those slots/roots should have already been purged from the accounts index root
+        // tracking metadata via `accounts_index.clean_dead_slot()`.
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
         assert!(self
             .accounts_index
