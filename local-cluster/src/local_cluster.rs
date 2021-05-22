@@ -9,7 +9,7 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
-    gossip_service::discover_cluster,
+    gossip_service::{discover_cluster, DEFAULT_DISCOVER_TIME_OUT},
     validator::{Validator, ValidatorConfig, ValidatorStartProgress},
 };
 use solana_ledger::create_new_tmp_ledger;
@@ -273,10 +273,11 @@ impl LocalCluster {
         discover_cluster(
             &cluster.entry_point_info.gossip,
             config.node_stakes.len() + config.num_listeners as usize,
+            DEFAULT_DISCOVER_TIME_OUT,
         )
         .unwrap();
 
-        discover_cluster(&cluster.entry_point_info.gossip, config.node_stakes.len()).unwrap();
+        discover_cluster(&cluster.entry_point_info.gossip, config.node_stakes.len(), DEFAULT_DISCOVER_TIME_OUT).unwrap();
 
         cluster
     }
@@ -410,6 +411,7 @@ impl LocalCluster {
         let cluster_nodes = discover_cluster(
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
+            DEFAULT_DISCOVER_TIME_OUT,
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
@@ -429,6 +431,7 @@ impl LocalCluster {
         let cluster_nodes = discover_cluster(
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
+            DEFAULT_DISCOVER_TIME_OUT,
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());

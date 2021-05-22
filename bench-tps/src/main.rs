@@ -2,7 +2,7 @@
 use log::*;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
 use solana_bench_tps::cli;
-use solana_core::gossip_service::{discover_cluster, get_client, get_multi_client};
+use solana_core::gossip_service::{discover_cluster, get_client, get_multi_client, DEFAULT_DISCOVER_TIME_OUT};
 use solana_genesis::Base64Account;
 use solana_sdk::fee_calculator::FeeRateGovernor;
 use solana_sdk::signature::{Keypair, Signer};
@@ -68,7 +68,7 @@ fn main() {
     }
 
     info!("Connecting to the cluster");
-    let nodes = discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
+    let nodes = discover_cluster(&entrypoint_addr, *num_nodes, DEFAULT_DISCOVER_TIME_OUT).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });

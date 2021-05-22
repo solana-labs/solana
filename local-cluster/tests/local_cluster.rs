@@ -16,7 +16,7 @@ use solana_core::{
     cluster_info::{self, VALIDATOR_PORT_RANGE},
     consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
     crds_value::{self, CrdsData, CrdsValue},
-    gossip_service::discover_cluster,
+    gossip_service::{discover_cluster, DEFAULT_DISCOVER_TIME_OUT},
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
@@ -376,7 +376,7 @@ fn run_cluster_partition<C>(
         HashSet::new(),
     );
 
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes, DEFAULT_DISCOVER_TIME_OUT).unwrap();
 
     // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
@@ -1307,7 +1307,7 @@ fn test_forwarding() {
     };
     let cluster = LocalCluster::new(&mut config);
 
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 2).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 2, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     assert!(cluster_nodes.len() >= 2);
 
     let leader_pubkey = cluster.entry_point_info.id;
@@ -1371,7 +1371,7 @@ fn test_listener_startup() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config);
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 4, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
 }
 
@@ -1388,7 +1388,7 @@ fn test_mainnet_beta_cluster_type() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config);
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
     let client = create_client(
@@ -1566,7 +1566,7 @@ fn test_consistency_halt() {
     let mut cluster = LocalCluster::new(&mut config);
 
     sleep(Duration::from_millis(5000));
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     info!("num_nodes: {}", cluster_nodes.len());
 
     // Add a validator with the leader as trusted, it should halt when it detects
@@ -1593,7 +1593,7 @@ fn test_consistency_halt() {
     );
     let num_nodes = 2;
     assert_eq!(
-        discover_cluster(&cluster.entry_point_info.gossip, num_nodes)
+        discover_cluster(&cluster.entry_point_info.gossip, num_nodes, DEFAULT_DISCOVER_TIME_OUT)
             .unwrap()
             .len(),
         num_nodes
@@ -1602,7 +1602,7 @@ fn test_consistency_halt() {
     // Check for only 1 node on the network.
     let mut encountered_error = false;
     loop {
-        let discover = discover_cluster(&cluster.entry_point_info.gossip, 2);
+        let discover = discover_cluster(&cluster.entry_point_info.gossip, 2, DEFAULT_DISCOVER_TIME_OUT);
         match discover {
             Err(_) => {
                 encountered_error = true;
@@ -1828,7 +1828,7 @@ fn test_snapshots_blockstore_floor() {
     // Start up a new node from a snapshot
     let validator_stake = 5;
 
-    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     let mut trusted_validators = HashSet::new();
     trusted_validators.insert(cluster_nodes[0].id);
     validator_snapshot_test_config

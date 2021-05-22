@@ -5,7 +5,7 @@ pub mod order_book;
 
 use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
 use log::*;
-use solana_core::gossip_service::{discover_cluster, get_multi_client};
+use solana_core::gossip_service::{discover_cluster, get_multi_client, DEFAULT_DISCOVER_TIME_OUT};
 use solana_sdk::signature::Signer;
 
 fn main() {
@@ -55,7 +55,7 @@ fn main() {
         );
     } else {
         info!("Connecting to the cluster");
-        let nodes = discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|_| {
+        let nodes = discover_cluster(&entrypoint_addr, num_nodes, DEFAULT_DISCOVER_TIME_OUT).unwrap_or_else(|_| {
             panic!("Failed to discover nodes");
         });
 

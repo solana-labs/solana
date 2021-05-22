@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_info::Node,
-        gossip_service::discover_cluster,
+        gossip_service::{discover_cluster, DEFAULT_DISCOVER_TIME_OUT},
         rpc::JsonRpcConfig,
         validator::{Validator, ValidatorConfig, ValidatorExit, ValidatorStartProgress},
     },
@@ -519,7 +519,7 @@ impl TestValidator {
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1)
+        discover_cluster(&gossip, 1, DEFAULT_DISCOVER_TIME_OUT)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         // This is a hack to delay until the fees are non-zero for test consistency

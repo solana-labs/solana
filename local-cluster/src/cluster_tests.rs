@@ -9,7 +9,7 @@ use solana_client::thin_client::create_client;
 use solana_core::validator::ValidatorExit;
 use solana_core::{
     cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
-    gossip_service::discover_cluster,
+    gossip_service::{discover_cluster, DEFAULT_DISCOVER_TIME_OUT},
 };
 use solana_ledger::{
     blockstore::Blockstore,
@@ -43,7 +43,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
 ) {
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
@@ -184,7 +184,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     slot_millis: u64,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes, DEFAULT_DISCOVER_TIME_OUT).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     // sleep long enough to make sure we are in epoch 3

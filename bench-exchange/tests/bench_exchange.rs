@@ -1,7 +1,7 @@
 use log::*;
 use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
 use solana_core::{
-    gossip_service::{discover_cluster, get_multi_client},
+    gossip_service::{discover_cluster, get_multi_client, DEFAULT_DISCOVER_TIME_OUT},
     validator::ValidatorConfig,
 };
 use solana_exchange_program::{
@@ -69,7 +69,7 @@ fn test_exchange_local_cluster() {
 
     info!("Connecting to the cluster");
     let nodes =
-        discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
+        discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES, DEFAULT_DISCOVER_TIME_OUT).unwrap_or_else(|err| {
             error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
             exit(1);
         });

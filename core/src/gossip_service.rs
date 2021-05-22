@@ -27,6 +27,8 @@ pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
+pub const DEFAULT_DISCOVER_TIME_OUT: Option<u64> = Some(30_u64);
+
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
@@ -81,15 +83,17 @@ impl GossipService {
 }
 
 /// Discover Validators in a cluster
+/// if time_out is set to None, the default value of 30 second will be used
 pub fn discover_cluster(
     entrypoint: &SocketAddr,
     num_nodes: usize,
+    time_out: Option<u64>,
 ) -> std::io::Result<Vec<ContactInfo>> {
     discover(
         None,
         Some(entrypoint),
         Some(num_nodes),
-        Some(30),
+        time_out,
         None,
         None,
         None,
