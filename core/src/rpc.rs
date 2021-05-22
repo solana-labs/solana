@@ -361,7 +361,7 @@ impl JsonRpcRequestProcessor {
         program_id: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
         filters: Vec<RpcFilterType>,
-        with_context: bool, // TODO: consider RpcProgramsConfig instead of separate arg
+        with_context: bool,
     ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
