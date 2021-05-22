@@ -345,22 +345,6 @@ mod tests {
 
         let spy_ref = Arc::new(cluster_info);
 
-<<<<<<< HEAD
-        let (met_criteria, secs, _, tvu_peers) = spy(spy_ref.clone(), None, Some(1), None, None);
-        assert_eq!(met_criteria, false);
-        assert_eq!(secs, 1);
-        assert_eq!(tvu_peers, spy_ref.tvu_peers());
-
-        // Find num_nodes
-        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, None, None);
-        assert_eq!(met_criteria, true);
-        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(2), None, None, None);
-        assert_eq!(met_criteria, true);
-
-        // Find specific node by pubkey
-        let (met_criteria, _, _, _) = spy(spy_ref.clone(), None, None, Some(peer0), None);
-        assert_eq!(met_criteria, true);
-=======
         let (met_criteria, elapsed, _, tvu_peers) = spy(spy_ref.clone(), None, TIMEOUT, None, None);
         assert!(!met_criteria);
         assert!((TIMEOUT..TIMEOUT + Duration::from_secs(1)).contains(&elapsed));
@@ -375,7 +359,6 @@ mod tests {
         // Find specific node by pubkey
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), None, TIMEOUT, Some(peer0), None);
         assert!(met_criteria);
->>>>>>> cf1acfb02 (uses Duration type for gossip discover timeout)
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
@@ -386,17 +369,10 @@ mod tests {
         assert_eq!(met_criteria, false);
 
         // Find num_nodes *and* specific node by pubkey
-<<<<<<< HEAD
-        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, Some(peer0), None);
-        assert_eq!(met_criteria, true);
-        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(3), Some(0), Some(peer0), None);
-        assert_eq!(met_criteria, false);
-=======
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), TIMEOUT, Some(peer0), None);
         assert!(met_criteria);
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(3), TIMEOUT, Some(peer0), None);
         assert!(!met_criteria);
->>>>>>> cf1acfb02 (uses Duration type for gossip discover timeout)
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             Some(1),
@@ -407,11 +383,6 @@ mod tests {
         assert_eq!(met_criteria, false);
 
         // Find specific node by gossip address
-<<<<<<< HEAD
-        let (met_criteria, _, _, _) =
-            spy(spy_ref.clone(), None, None, None, Some(&peer0_info.gossip));
-        assert_eq!(met_criteria, true);
-=======
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
@@ -420,7 +391,6 @@ mod tests {
             Some(&peer0_info.gossip),
         );
         assert!(met_criteria);
->>>>>>> cf1acfb02 (uses Duration type for gossip discover timeout)
 
         let (met_criteria, _, _, _) = spy(
             spy_ref,
