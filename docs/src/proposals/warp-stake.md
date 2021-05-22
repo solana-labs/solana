@@ -25,9 +25,9 @@ Concretely, maintain an ordered list of requests.
 
 `type TransferRequests = Vec<(PubKey, Pubkey)> // stake_account -> new_vote_account`
 
-We also maintain a `HashSet` to dedup.
+We also maintain a `HashSet` to dedup stake account pubkeys.
 
-*Eligibility at epoch boundary:* At the turn of the next epoch, the stake account requesting transfer must be `StakeState::Stake` and have all stake activated  i.e. `stake_activating_and_deactivating` reads `(x, 0, 0)`. So we allow stake to still be activating in epoch prior, but not deactivating. We remove account from the list if failing to meet criteria. 
+*Eligibility at epoch boundary:* At the turn of the next epoch, the stake account requesting transfer must be `StakeState::Stake` and have all stake activated  i.e. `stake_activating_and_deactivating` reads `(x, 0, 0)`. So we allow stake to still be activating in epoch prior, but not deactivating. When processing, we remove account from the list if failing to meet criteria. 
 
 Pseudocode for how `Bank` processes warp transfers after calling `pay_validator_rewards`:
 ```
@@ -58,9 +58,12 @@ Requests in the waitlist that fail to transfer but did not fail fully-activated 
 
 You can always cancel a transfer at any time before the epoch boundary. Re-requesting a transfer will put you at the end of the request list, however.
 
+**Advantages**:
+1. Simple design. Clear behaviour. Avoid struct modifications.
 
 **Disadvantages:**
-1. (mostly negated) A malicious user with a lot of stake can request for big transfers to fill up warp rate for the epoch, provoking users to try to deactivate instead of warping. However unfulfilled warps have highest priority in next epoch, so warping in the waitlist is probably always better than deactivating. Thus the scare tactic is not effective unless `total_warp_request stake > 2 * warp_rate * effective_stake`, which is a pretty high bar if `warp_rate = 0.25`, for instance.
+1. Vector lookup overhead. But #stake accounts is relatively small.
+2. (mostly negated) A malicious user with a lot of stake can request for big transfers to fill up warp rate for the epoch, provoking users to try to deactivate instead of warping. However unfulfilled warps have highest priority in next epoch, so warping in the waitlist is probably always better than deactivating. Thus the scare tactic is not effective unless `total_warp_request stake > 2 * warp_rate * effective_stake`, which is a pretty high bar if `warp_rate = 0.25`, for instance.
 
 ### Design 2: Wrap/Unwrap from new Struct `TransferableStake`
 We define a new `StakeState::TransferStake(meta, TransferableStake)`.
