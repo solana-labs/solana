@@ -52,6 +52,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
+        atomic::{AtomicBool, Ordering},
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
         Arc, Mutex, RwLock,
     },
@@ -2923,12 +2924,60 @@ impl Blockstore {
         self.last_root()
     }
 
+    pub fn lowest_cleanup_slot(&self) -> Slot {
+        *self.lowest_cleanup_slot.read().unwrap()
+    }
+
     pub fn storage_size(&self) -> Result<u64> {
         self.db.storage_size()
     }
 
     pub fn is_primary_access(&self) -> bool {
         self.db.is_primary_access()
+    }
+
+    pub fn scan_and_fix_roots(&self, exit: &Arc<AtomicBool>) -> Result<()> {
+        let ancestor_iterator = AncestorIterator::new(self.last_root(), &self)
+            .take_while(|&slot| slot >= self.lowest_cleanup_slot());
+
+        let mut find_missing_roots = Measure::start("find_missing_roots");
+        let mut roots_to_fix = vec![];
+        for slot in ancestor_iterator.filter(|slot| !self.is_root(*slot)) {
+            if exit.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+            roots_to_fix.push(slot);
+        }
+        find_missing_roots.stop();
+        let mut fix_roots = Measure::start("fix_roots");
+        if !roots_to_fix.is_empty() {
+            info!("{} slots to be rooted", roots_to_fix.len());
+            for chunk in roots_to_fix.chunks(100) {
+                if exit.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+                trace!("{:?}", chunk);
+                self.set_roots(&roots_to_fix)?;
+            }
+        } else {
+            debug!(
+                "No missing roots found in range {} to {}",
+                self.lowest_cleanup_slot(),
+                self.last_root()
+            );
+        }
+        fix_roots.stop();
+        datapoint_info!(
+            "blockstore-scan_and_fix_roots",
+            (
+                "find_missing_roots_us",
+                find_missing_roots.as_us() as i64,
+                i64
+            ),
+            ("num_roots_to_fix", roots_to_fix.len() as i64, i64),
+            ("fix_roots_us", fix_roots.as_us() as i64, i64),
+        );
+        Ok(())
     }
 }
 
