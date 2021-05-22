@@ -5685,13 +5685,17 @@ pub mod tests {
         ancestors
     }
 
+    fn empty_storages<'a>() -> Vec<&'a Arc<AccountStorageEntry>> {
+        vec![]
+    }
+
     #[test]
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
     fn test_accountsdb_scan_snapshot_stores_illegal_bins2() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257, &bounds);
+        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 257, &bounds);
     }
     #[test]
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
@@ -5699,7 +5703,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0, &bounds);
+        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 0, &bounds);
     }
 
     #[test]
@@ -5710,7 +5714,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds);
     }
     #[test]
     #[should_panic(
@@ -5720,7 +5724,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds);
     }
 
     #[test]
@@ -5731,7 +5735,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds);
     }
 
     fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
@@ -5812,6 +5816,14 @@ pub mod tests {
         (storages, raw_expected)
     }
 
+    fn get_storage_refs(input: &SnapshotStorages) -> Vec<&Arc<AccountStorageEntry>> {
+        input
+            .iter()
+            .map(|inner| inner.iter().map(|item| item))
+            .flatten()
+            .collect()
+    }
+
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
         solana_logger::setup();
@@ -5821,7 +5833,7 @@ pub mod tests {
         let mut stats = HashStats::default();
 
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5833,7 +5845,7 @@ pub mod tests {
 
         let bins = 2;
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5850,7 +5862,7 @@ pub mod tests {
 
         let bins = 4;
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5867,7 +5879,7 @@ pub mod tests {
 
         let bins = 256;
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5889,7 +5901,7 @@ pub mod tests {
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5911,7 +5923,7 @@ pub mod tests {
         // just the first bin of 2
         let bins = 2;
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5926,7 +5938,7 @@ pub mod tests {
 
         // just the second bin of 2
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -5944,7 +5956,7 @@ pub mod tests {
         let bins = 4;
         for bin in 0..bins {
             let result = AccountsDb::scan_snapshot_stores(
-                &storages,
+                &get_storage_refs(&storages),
                 &mut stats,
                 bins,
                 &Range {
@@ -5961,7 +5973,7 @@ pub mod tests {
         let bin_locations = vec![0, 127, 128, 255];
         for bin in 0..bins {
             let result = AccountsDb::scan_snapshot_stores(
-                &storages,
+                &get_storage_refs(&storages),
                 &mut stats,
                 bins,
                 &Range {
@@ -5985,7 +5997,7 @@ pub mod tests {
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
-            &storages,
+            &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
@@ -6067,7 +6079,7 @@ pub mod tests {
 
         let calls = AtomicU64::new(0);
         let result = AccountsDb::scan_account_storage_no_bank(
-            &storages,
+            &get_storage_refs(&storages),
             |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
