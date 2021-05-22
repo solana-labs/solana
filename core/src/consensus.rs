@@ -715,6 +715,8 @@ impl Tower {
                         // then use this bank as a representative for the fork.
                         || descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
                         || *candidate_slot == last_voted_slot
+                        // Ignore if the `candidate_slot` is a descendant of the `last_voted_slot`, since we do not
+                        // want to count votes on the same fork.
                         || Self::is_candidate_slot_descendant_of_last_vote(*candidate_slot, last_voted_slot, ancestors).expect("exists in descendants map, so must exist in ancestors map")
                         || *candidate_slot <= root
                     {
@@ -776,9 +778,30 @@ impl Tower {
                     }
 
                     if *candidate_latest_frozen_vote > last_voted_slot
-                    && !Self::is_candidate_slot_descendant_of_last_vote(
+                    &&
+                    // Because `candidate_latest_frozen_vote` is the last vote made by some validator
+                    // in the cluster for a frozen bank `B` observed through gossip, we may have cleared
+                    // that frozen bank `B` because we `set_root(root)` for a `root` on a different fork,
+                    // like so:
+                    //
+                    //    |----------X ------candidate_latest_frozen_vote (frozen)
+                    // old root
+                    //    |----------new root ----last_voted_slot
+                    //
+                    // In most cases, because `last_voted_slot` must be a descendant of `root`, then
+                    // if `candidate_latest_frozen_vote` is not found in the ancestors/descendants map (recall these
+                    // directly reflect the state of BankForks), this implies that `B` was pruned from BankForks
+                    // because it was on a different fork than `last_voted_slot`, and thus this vote for `candidate_latest_frozen_vote`
+                    // should be safe to count towards the switching proof:
+                    //
+                    // However, there is also the possibility that `last_voted_slot` is a stray, in which
+                    // case we cannot make this conclusion as we do not know the ancestors/descendants
+                    // of strays. Hence we err on the side of caution here and ignore this vote. This
+                    // is ok because validators voting on different unrooted forks should eventually vote
+                    // on some descendant of the root, at which time they can be included in switching proofs.
+                    !Self::is_candidate_slot_descendant_of_last_vote(
                         *candidate_latest_frozen_vote, last_voted_slot, ancestors)
-                        .expect("candidate_latest_frozen_vote is a frozen bank, so must exist in ancestors map") {
+                        .unwrap_or(true) {
                         let stake = epoch_vote_accounts
                                 .get(vote_account_pubkey)
                                 .map(|(stake, _)| *stake)
@@ -1820,7 +1843,8 @@ pub mod test {
                         / (tr(44)
                             // Minor fork 2
                             / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
-                            / (tr(110))))));
+                            / (tr(110)))
+                        / tr(112))));
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
@@ -2124,18 +2148,19 @@ pub mod test {
             .latest_validator_votes_for_frozen_banks
             .check_add_vote(
                 other_vote_account,
-                110,
+                112,
                 Some(
                     vote_simulator
                         .bank_forks
                         .read()
                         .unwrap()
-                        .get(110)
+                        .get(112)
                         .unwrap()
                         .hash(),
                 ),
                 false,
             );
+
         assert_eq!(
             tower.check_switch_threshold(
                 110,
@@ -2147,6 +2172,30 @@ pub mod test {
                 &vote_simulator.latest_validator_votes_for_frozen_banks
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // If we now set a root that causes slot 112 to be purged from BankForks, then
+        // the switch proof will now fail since that validator's vote can no longer be
+        // included in the switching proof
+        vote_simulator.set_root(44);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+                &vote_simulator.latest_validator_votes_for_frozen_banks
+            ),
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
     }
 
