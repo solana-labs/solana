@@ -60,7 +60,7 @@ You can always cancel a transfer at any time before the epoch boundary. Re-reque
 
 
 **Disadvantages:**
-1. (mostly negated) A malicious user with a lot of stake can request for big transfers to fill up warp rate for the epoch, provoking users to try to deactivate instead of warping. However unfulfilled warps have highest priority in next epoch, so warping in the waitlist is probably always better than deactivating. Thus the scare tactic is not effective unless `total_warp_request stake > 0.5 * effective_stake`, which is a pretty high bar.
+1. (mostly negated) A malicious user with a lot of stake can request for big transfers to fill up warp rate for the epoch, provoking users to try to deactivate instead of warping. However unfulfilled warps have highest priority in next epoch, so warping in the waitlist is probably always better than deactivating. Thus the scare tactic is not effective unless `total_warp_request stake > 2 * warp_rate * effective_stake`, which is a pretty high bar.
 
 ### Design 2: Wrap/Unwrap from new Struct `TransferableStake`
 We define a new `StakeState::TransferStake(meta, TransferableStake)`.
