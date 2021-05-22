@@ -575,8 +575,11 @@ impl AccountsHash {
 
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             if bins.len() > bin {
-                item_len += bins[bin].len();
-                first_items.push((&bins[bin][0].pubkey, i));
+                let sub = &bins[bin];
+                if !sub.is_empty() {
+                    item_len += bins[bin].len();
+                    first_items.push((&bins[bin][0].pubkey, i));
+                }
             }
         });
         let mut overall_sum = 0;
@@ -895,7 +898,7 @@ pub mod tests {
     fn convert2(original: Vec<CalculateHashIntermediate>) -> Vec<CalculateHashIntermediate2> {
         original
             .into_iter()
-            .map(|item| CalculateHashIntermediate2::from(item))
+            .map(CalculateHashIntermediate2::from)
             .collect()
     }
 

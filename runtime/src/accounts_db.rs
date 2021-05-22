@@ -20,7 +20,10 @@
 
 use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-    accounts_hash::{AccountsHash, CalculateHashIntermediate, CalculateHashIntermediate2, HashStats, PreviousPass},
+    accounts_hash::{
+        AccountsHash, CalculateHashIntermediate, CalculateHashIntermediate2, HashStats,
+        PreviousPass,
+    },
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
@@ -4103,15 +4106,15 @@ impl AccountsDb {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, F2, B, C>(
-        snapshot_storages: &Vec<&Arc<AccountStorageEntry>>,
+        snapshot_storages: &[&Arc<AccountStorageEntry>],
         scan_func: F,
-        after_func: F2
+        after_func: F2,
     ) -> Vec<C>
     where
-    F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
-    F2: Fn(B) -> C + Send + Sync,
-    B: Send + Default,
-    C: Send + Default,
+        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        F2: Fn(B) -> C + Send + Sync,
+        B: Send + Default,
+        C: Send + Default,
     {
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -4182,7 +4185,7 @@ impl AccountsDb {
     }
 
     fn scan_snapshot_stores(
-        storage: &Vec<&Arc<AccountStorageEntry>>,
+        storage: &[&Arc<AccountStorageEntry>],
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
@@ -4225,30 +4228,37 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
-            Self::sort_and_simplify
+            Self::sort_and_simplify,
         );
         time.stop();
         stats.scan_time_total_us += time.as_us();
         result
     }
 
-    fn sort_and_simplify(accum: Vec<Vec<CalculateHashIntermediate>>) -> Vec<Vec<CalculateHashIntermediate2>> {
-        accum.into_iter().map(|mut items| {
-            items.par_sort_by(AccountsHash::compare_two_hash_entries);
-            let mut result = Vec::with_capacity(items.len());
-            if !items.is_empty() {
-                for i in 0..items.len() {
-                    let item = &items[i];
-                    if i > 0 {
-                        if items[i-1].pubkey == item.pubkey {
+    fn sort_and_simplify(
+        accum: Vec<Vec<CalculateHashIntermediate>>,
+    ) -> Vec<Vec<CalculateHashIntermediate2>> {
+        accum
+            .into_iter()
+            .map(|mut items| {
+                items.par_sort_by(AccountsHash::compare_two_hash_entries);
+                let mut result = Vec::with_capacity(items.len());
+                if !items.is_empty() {
+                    for i in 0..items.len() {
+                        let item = &items[i];
+                        if i > 0 && items[i - 1].pubkey == item.pubkey {
                             continue; // pubkey found a second time in this batch of slots, so only take the first one
                         }
+                        result.push(CalculateHashIntermediate2::new(
+                            item.hash,
+                            item.lamports,
+                            item.pubkey,
+                        ));
                     }
-                    result.push(CalculateHashIntermediate2::new(item.hash, item.lamports, item.pubkey));
                 }
-            }
-            result
-        }).collect()
+                result
+            })
+            .collect()
     }
 
     fn sort_storages(storages: &[SnapshotStorage]) -> Vec<&Arc<AccountStorageEntry>> {
@@ -5816,12 +5826,8 @@ pub mod tests {
         (storages, raw_expected)
     }
 
-    fn get_storage_refs(input: &SnapshotStorages) -> Vec<&Arc<AccountStorageEntry>> {
-        input
-            .iter()
-            .map(|inner| inner.iter().map(|item| item))
-            .flatten()
-            .collect()
+    fn get_storage_refs(input: &[SnapshotStorage]) -> Vec<&Arc<AccountStorageEntry>> {
+        input.iter().map(|inner| inner.iter()).flatten().collect()
     }
 
     #[test]
