@@ -28,6 +28,7 @@ pub struct HashStats {
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
+    pub storage_sort_us: u64,
 }
 impl HashStats {
     fn log(&mut self) {
@@ -35,6 +36,7 @@ impl HashStats {
             + self.zeros_time_total_us
             + self.hash_time_total_us
             + self.sort_time_total_us
+            + self.storage_sort_us
             + self.flatten_time_total_us;
         datapoint_info!(
             "calculate_accounts_hash_without_index",
@@ -44,6 +46,7 @@ impl HashStats {
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("flatten", self.flatten_time_total_us, i64),
+            ("storage_sort_us", self.storage_sort_us, i64),
             ("unreduced_entries", self.unreduced_entries as i64, i64),
             (
                 "num_snapshot_storage",

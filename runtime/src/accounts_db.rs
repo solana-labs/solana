@@ -4103,7 +4103,7 @@ impl AccountsDb {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, F2, B, C>(
-        snapshot_storages: &[SnapshotStorage],
+        snapshot_storages: &Vec<&Arc<AccountStorageEntry>>,
         scan_func: F,
         after_func: F2
     ) -> Vec<C>
@@ -4118,20 +4118,18 @@ impl AccountsDb {
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
         snapshot_storages
             .par_chunks(MAX_ITEMS_PER_CHUNK)
-            .map(|storages: &[Vec<Arc<AccountStorageEntry>>]| {
+            .map(|storages: &[&Arc<AccountStorageEntry>]| {
                 let mut retval = B::default();
 
-                for sub_storages in storages {
-                    for storage in sub_storages {
-                        let accounts = storage.accounts.accounts(0);
-                        accounts.into_iter().for_each(|stored_account| {
-                            scan_func(
-                                LoadedAccount::Stored(stored_account),
-                                &mut retval,
-                                storage.slot(),
-                            )
-                        });
-                    }
+                for storage in storages {
+                    let accounts = storage.accounts.accounts(0);
+                    accounts.into_iter().for_each(|stored_account| {
+                        scan_func(
+                            LoadedAccount::Stored(stored_account),
+                            &mut retval,
+                            storage.slot(),
+                        )
+                    });
                 }
                 after_func(retval)
             })
@@ -4184,7 +4182,7 @@ impl AccountsDb {
     }
 
     fn scan_snapshot_stores(
-        storage: &[SnapshotStorage],
+        storage: &Vec<&Arc<AccountStorageEntry>>,
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
@@ -4195,7 +4193,7 @@ impl AccountsDb {
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.len();
         let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
-            &storage,
+            storage,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
@@ -4252,6 +4250,19 @@ impl AccountsDb {
             result
         }).collect()
     }
+    
+    fn sort_storages(storages: &[SnapshotStorage]) -> Vec<&Arc<AccountStorageEntry>> {
+        let mut m1 = Measure::start("");
+        let mut result = storages
+            .iter()
+            .flatten()
+            .map(|item| (item.slot(), item))
+            .collect::<Vec<(Slot, &Arc<AccountStorageEntry>)>>();
+        m1.stop();
+        error!("storage_sort_us: {}", m1.as_us());
+        result.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        result.into_iter().map(|(_, item)| item).collect()
+    }
 
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
@@ -4279,6 +4290,11 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
+            let mut sort_time = Measure::start("");
+            let storages = Self::sort_storages(storages);
+            sort_time.stop();
+            stats.storage_sort_us = sort_time.as_us();
+
             for pass in 0..num_scan_passes {
                 let bounds = Range {
                     start: pass * bins_per_pass,
@@ -4286,7 +4302,7 @@ impl AccountsDb {
                 };
 
                 let result = Self::scan_snapshot_stores(
-                    storages,
+                    &storages,
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
