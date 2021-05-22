@@ -1780,7 +1780,7 @@ Returns all accounts owned by the provided program Pubkey
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
-
+  - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
 ##### Filters:
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
   - `offset: <usize>` - offset into program account data to start comparison
@@ -1790,7 +1790,9 @@ Returns all accounts owned by the provided program Pubkey
 
 #### Results:
 
-The result field will be an array of JSON objects, which will contain:
+By default the result field will be an array of JSON objects. If `withContext` flag is set the array will be wrapped in an RpcResponse JSON object.
+
+The array will contain:
 
 - `pubkey: <string>` - the account Pubkey as base-58 encoded string
 - `account: <object>` - a JSON object, with the following sub fields:

@@ -10,6 +10,7 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
+use serde::{Deserialize, Serialize};
 use solana_account_decoder::{
     parse_token::{spl_token_id_v2_0, token_amount_to_ui_amount, UiTokenAmount},
     UiAccount, UiAccountEncoding, UiDataSliceConfig,
@@ -101,6 +102,16 @@ const MAX_RPC_EPOCH_CREDITS_HISTORY: usize = 5;
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
     Response { context, value }
+}
+
+/// Wrapper for rpc return types of methods that provide responses both with and without context.
+/// Main purpose of this is to fix methods that lack context information in their return type,
+/// without breaking backwards compatibility.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptionalContext<T> {
+    Context(RpcResponse<T>),
+    NoContext(T),
 }
 
 fn is_finalized(
@@ -350,7 +361,8 @@ impl JsonRpcRequestProcessor {
         program_id: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
         filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<RpcKeyedAccount>> {
+        with_context: bool,
+    ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
@@ -367,7 +379,7 @@ impl JsonRpcRequestProcessor {
         };
         let result =
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                get_parsed_token_accounts(bank, keyed_accounts.into_iter()).collect()
+                get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
             } else {
                 keyed_accounts
                     .into_iter()
@@ -383,7 +395,10 @@ impl JsonRpcRequestProcessor {
                     })
                     .collect()
             };
-        Ok(result)
+        Ok(result).map(|result| match with_context {
+            true => OptionalContext::Context(new_response(&bank, result)),
+            false => OptionalContext::NoContext(result),
+        })
     }
 
     pub fn get_inflation_reward(
@@ -2274,7 +2289,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             program_id_str: String,
             config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<Vec<RpcKeyedAccount>>;
+        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
 
         #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
         fn get_minimum_balance_for_rent_exemption(
@@ -2599,19 +2614,20 @@ pub mod rpc_full {
             meta: Self::Metadata,
             program_id_str: String,
             config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<Vec<RpcKeyedAccount>> {
+        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
             debug!(
                 "get_program_accounts rpc request received: {:?}",
                 program_id_str
             );
             let program_id = verify_pubkey(&program_id_str)?;
-            let (config, filters) = if let Some(config) = config {
+            let (config, filters, with_context) = if let Some(config) = config {
                 (
                     Some(config.account_config),
                     config.filters.unwrap_or_default(),
+                    config.with_context.unwrap_or_default(),
                 )
             } else {
-                (None, vec![])
+                (None, vec![], false)
             };
             if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
                 return Err(Error::invalid_params(format!(
@@ -2622,7 +2638,7 @@ pub mod rpc_full {
             for filter in &filters {
                 verify_filter(filter)?;
             }
-            meta.get_program_accounts(&program_id, config, filters)
+            meta.get_program_accounts(&program_id, config, filters, with_context)
         }
 
         fn get_inflation_governor(
@@ -4696,6 +4712,26 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+
+        // Test returns context
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{
+                    "withContext": true
+                }}]
+            }}"#,
+            system_program::id(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response")).unwrap();
+        let contains_slot = result["result"]["context"]
+            .as_object()
+            .expect("must contain context")
+            .contains_key("slot");
+        assert!(contains_slot);
 
         // Set up nonce accounts to test filters
         let nonce_keypair0 = Keypair::new();
