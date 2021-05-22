@@ -85,17 +85,17 @@ pub fn discover_cluster(
     entrypoint: &SocketAddr,
     num_nodes: usize,
 ) -> std::io::Result<Vec<ContactInfo>> {
-    discover(
-        None,
+    let (_all_peers, validators) = discover(
+        None, // keypair
         Some(entrypoint),
         Some(num_nodes),
-        Some(30),
-        None,
-        None,
-        None,
-        0,
-    )
-    .map(|(_all_peers, validators)| validators)
+        Some(120), // timeout
+        None,      // find_node_by_pubkey
+        None,      // find_node_by_gossip_addr
+        None,      // my_gossip_addr
+        0,         // my_shred_version
+    )?;
+    Ok(validators)
 }
 
 pub fn discover(
