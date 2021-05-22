@@ -146,6 +146,10 @@ impl<T: Clone> ReadAccountMapEntry<T> {
     pub fn unref(&self) {
         self.ref_count().fetch_sub(1, Ordering::Relaxed);
     }
+
+    pub fn addref(&self) {
+        self.ref_count().fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 #[self_referencing]
