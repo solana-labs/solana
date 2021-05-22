@@ -15,6 +15,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     process::exit,
     sync::Arc,
+    time::Duration,
 };
 
 fn parse_matches() -> ArgMatches<'static> {
@@ -238,15 +239,15 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
             .expect("unable to find an available gossip port")
         }),
     );
-
+    let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
     let (_all_peers, validators) = discover(
         identity_keypair,
         entrypoint_addr.as_ref(),
         num_nodes,
-        timeout,
-        pubkey,
-        None,
-        Some(&gossip_addr),
+        discover_timeout,
+        pubkey,             // find_node_by_pubkey
+        None,               // find_node_by_gossip_addr
+        Some(&gossip_addr), // my_gossip_addr
         shred_version,
     )?;
 
@@ -271,13 +272,13 @@ fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let (_all_peers, validators) = discover(
-        None,
+        None, // keypair
         entrypoint_addr.as_ref(),
-        Some(1),
-        Some(timeout),
-        None,
-        entrypoint_addr.as_ref(),
-        None,
+        Some(1), // num_nodes
+        Duration::from_secs(timeout),
+        None,                     // find_node_by_pubkey
+        entrypoint_addr.as_ref(), // find_node_by_gossip_addr
+        None,                     // my_gossip_addr
         shred_version,
     )?;
 
