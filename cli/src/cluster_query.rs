@@ -1676,11 +1676,11 @@ pub fn process_show_stakes(
     progress_bar.set_message("Fetching stake accounts...");
 
     let mut program_accounts_config = RpcProgramAccountsConfig {
-        filters: None,
         account_config: RpcAccountInfoConfig {
             encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
             ..RpcAccountInfoConfig::default()
         },
+        ..RpcProgramAccountsConfig::default()
     };
 
     if let Some(vote_account_pubkeys) = vote_account_pubkeys {
