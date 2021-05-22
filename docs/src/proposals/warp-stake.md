@@ -21,13 +21,13 @@ There are two ways to achieve this:
 We assume **time-priority** is chosen for the rest of the design proposal.
 
 
-Concretely, maintain an ordered list of requests. 
+Concretely, maintain an ordered list of requests.
 
 `type TransferRequests = Vec<(PubKey, Pubkey)> // stake_account -> new_vote_account`
 
 We also maintain a `HashSet` to dedup stake account pubkeys.
 
-*Eligibility at epoch boundary:* At the turn of the next epoch, the stake account requesting transfer must be `StakeState::Stake` and have all stake activated  i.e. `stake_activating_and_deactivating` reads `(x, 0, 0)`. So we allow stake to still be activating in epoch prior, but not deactivating. When processing, we remove account from the list if failing to meet criteria. 
+*Eligibility at epoch boundary:* At the turn of the next epoch, the stake account requesting transfer must be `StakeState::Stake` and have all stake activated  i.e. `stake_activating_and_deactivating` reads `(x, 0, 0)`. So we allow stake to still be activating in epoch prior, but not deactivating. When processing, we remove account from the list if failing to meet criteria.
 
 Pseudocode for how `Bank` processes warp transfers after calling `pay_validator_rewards`:
 ```
@@ -40,7 +40,7 @@ let mut accounts_moved = 0
 for (stake_pk, vote_pk) in trf_req {
     let stake_state = get_account(stake_pk);
     let stake = stake_state.delegation.stake;
-    
+
     // If we will exceed the warp rate for this epoch, we stop further warps
     if stake_moved + stake >= cfg.warp_rate * cluster_stake.effective {
         break;
@@ -82,8 +82,8 @@ impl TransferableStake {
         let mut transferred = 0;
         while current_epoch < target_epoch {
             current_epoch += 1;
-            // check transferable_in_epoch based on 
-            // cluster_transfer_history.transfer, 
+            // check transferable_in_epoch based on
+            // cluster_transfer_history.transfer,
             // cluster_stake_history.effective
 
             transferred += transferable_in_epoch;
@@ -98,14 +98,14 @@ impl StakeState {
     fn deactivate/delegate/merge/split() {
         // if TransferStake return error
     }
-    
+
     // Wrap Stake as TransferableStake
     fn wrap_transferable() {
-        // if stake.delegation.stake != stake.delegation.stake(), 
+        // if stake.delegation.stake != stake.delegation.stake(),
         // i.e. not fully activated, return error.
     }
 
-    
+
     /// allow unwrapping only if not transferred/fully transferred
     fn unwrap_transferable() {
         if let Some(StakeState::TransferStake(meta, t_stake)) = self.state()? {
@@ -120,14 +120,14 @@ impl StakeState {
         } else {
             // error
         }
-        
+
     } ...
 }
 
 // Complicated plumbing
 fn redeem_rewards() {
-    // If stake_account.state()? = TransferStake 
-    
+    // If stake_account.state()? = TransferStake
+
         t_stake.calculate_points_and_credits() .. {
             let stake1 = t_stake.current_stake.delegation.stake() - t_stake.transferred();
             let stake2 = t_stake.transferred();
@@ -150,10 +150,10 @@ struct Stakes {
 ## Tradeoffs and Discussion
 Although design 1 has a different way of handling warp rate than with activation/deactivation, it has reasonable behaviour in both times of non-congestion and congestion.
 
-1. **In times of non-congestion**: as long as you request early enough, you always know you will be warped. 
-2. **In times of congestion**: If you fail to warp this epoch, you would be automatically queued to highest priority to warp the next epoch. 
-    Nonetheless, if you are not guaranteed a warp, although this is the poorer decision in most cases, you can always cancel your request and go for deactivation instead. 
+1. **In times of non-congestion**: as long as you request early enough, you always know you will be warped.
+2. **In times of congestion**: If you fail to warp this epoch, you would be automatically queued to highest priority to warp the next epoch.
+    Nonetheless, if you are not guaranteed a warp, although this is the poorer decision in most cases, you can always cancel your request and go for deactivation instead.
 
-In design 1, you will always know that you can never be stuck warping over multiple epochs. 
+In design 1, you will always know that you can never be stuck warping over multiple epochs.
 
 In design 2 as in activating/deactivating, there is always a non-zero chance of being stuck warping over multiple epochs, which cannot be pre-determined at the epoch boundary.
