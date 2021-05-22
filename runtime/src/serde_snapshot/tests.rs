@@ -73,6 +73,7 @@ where
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        None,
     )
 }
 
@@ -226,6 +227,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         AccountSecondaryIndexes::default(),
         false,
+        None,
     )
     .unwrap();
     dbank.src = ref_sc;

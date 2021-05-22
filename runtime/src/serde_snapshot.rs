@@ -135,6 +135,7 @@ pub(crate) fn bank_from_stream<R>(
     additional_builtins: Option<&Builtins>,
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -154,6 +155,7 @@ where
                 additional_builtins,
                 account_indexes,
                 caching_enabled,
+                limit_load_slot_count_from_snapshot,
             )?;
             Ok(bank)
         }};
@@ -243,6 +245,7 @@ fn reconstruct_bank_from_fields<E>(
     additional_builtins: Option<&Builtins>,
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage,
@@ -254,6 +257,7 @@ where
         &genesis_config.cluster_type,
         account_indexes,
         caching_enabled,
+        limit_load_slot_count_from_snapshot,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -279,6 +283,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     cluster_type: &ClusterType,
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage,
@@ -371,6 +376,6 @@ where
     accounts_db
         .write_version
         .fetch_add(version, Ordering::Relaxed);
-    accounts_db.generate_index();
+    accounts_db.generate_index(limit_load_slot_count_from_snapshot);
     Ok(accounts_db)
 }
