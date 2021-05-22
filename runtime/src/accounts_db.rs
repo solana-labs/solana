@@ -4250,7 +4250,7 @@ impl AccountsDb {
             result
         }).collect()
     }
-    
+
     fn sort_storages(storages: &[SnapshotStorage]) -> Vec<&Arc<AccountStorageEntry>> {
         let mut m1 = Measure::start("");
         let mut result = storages
@@ -6086,6 +6086,7 @@ pub mod tests {
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
+            |a| a,
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
