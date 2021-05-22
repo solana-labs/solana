@@ -4237,10 +4237,10 @@ impl AccountsDb {
     fn sort_and_simplify(accum: Vec<Vec<CalculateHashIntermediate>>) -> Vec<Vec<CalculateHashIntermediate2>> {
         accum.into_iter().map(|mut items| {
             items.par_sort_by(AccountsHash::compare_two_hash_entries);
-            let result = Vec::with_capacity(items.len());
+            let mut result = Vec::with_capacity(items.len());
             if !items.is_empty() {
                 for i in 0..items.len() {
-                    let item = items[i];
+                    let item = &items[i];
                     if i > 0 {
                         if items[i-1].pubkey == item.pubkey {
                             continue; // pubkey found a second time in this batch of slots, so only take the first one
@@ -4297,6 +4297,7 @@ impl AccountsDb {
                     &mut stats,
                     pass == num_scan_passes - 1,
                     previous_pass,
+                    &bounds,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
