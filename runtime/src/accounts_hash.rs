@@ -6,7 +6,7 @@ use solana_sdk::{
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
-use std::{convert::TryInto, sync::Mutex};
+use std::{convert::TryInto, ops::Range, sync::Mutex};
 
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -511,8 +511,6 @@ impl AccountsHash {
         // vec: 1 vec per PUBKEY_BINS_FOR_CALCULATING_HASHES
         //   vec: Intermediate data whose pubkey belongs in this division
         let mut flatten_time = Measure::start("flatten");
-        
-        
         let mut data_by_pubkey: Vec<Vec<T>> = vec![];
         let mut raw_len = 0;
         let mut lens = vec![];
@@ -572,7 +570,7 @@ impl AccountsHash {
 
     fn sort_hash_intermediate(
         data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
-        stats: &mut HashStats,
+        _stats: &mut HashStats,
     ) -> Vec<Vec<CalculateHashIntermediate2>> {
         data_by_pubkey
         /*
@@ -598,9 +596,10 @@ impl AccountsHash {
     }
 
     fn de_dup_and_eliminate_zeros(
-        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
+        sorted_data_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate2>>>,
         stats: &mut HashStats,
-    ) -> (Vec<Vec<Vec<Hash>>>, u64) {
+        range: &Range<usize>,
+    ) -> (Vec<Vec<Hash>>, u64) {
         // 1. eliminate zero lamport accounts
         // 2. pick the highest slot or (slot = and highest version) of each pubkey
         // 3. produce this output:
@@ -610,10 +609,11 @@ impl AccountsHash {
         let mut zeros = Measure::start("eliminate zeros");
         let overall_sum = Mutex::new(0u64);
         const CHUNKS: usize = 10;
-        let hashes: Vec<Vec<Vec<Hash>>> = sorted_data_by_pubkey
+        let hashes: Vec<Vec<Hash>> = (range.start..range.end)
             .into_par_iter()
-            .map(|pubkey_division| {
-                let (hashes, sum) = Self::de_dup_accounts_in_parallel(&pubkey_division, CHUNKS);
+            .map(|bin| {
+                let (hashes, sum) =
+                    Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, range, bin);
                 let mut overall = overall_sum.lock().unwrap();
                 *overall = Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
                 hashes
@@ -631,43 +631,57 @@ impl AccountsHash {
     //   vec: sorted sections from parallelism, in pubkey order
     //     vec: individual hashes in pubkey order
     fn de_dup_accounts_in_parallel(
-        pubkey_division: &[CalculateHashIntermediate2],
-        chunk_count: usize,
-    ) -> (Vec<Vec<Hash>>, u64) {
+        pubkey_division: &Vec<Vec<Vec<CalculateHashIntermediate2>>>,
+        range: &Range<usize>,
+        bin: usize,
+    ) -> (Vec<Hash>, u64) {
         let len = pubkey_division.len();
-        let max = if len > chunk_count {
-            std::cmp::max(chunk_count, 1)
-        } else {
-            1
-        };
-        let chunk_size = len / max;
+        let mut item_len = 0;
+        let mut indexes = vec![0; len];
+        let max_pubkey = Pubkey::new_from_array([0xff; 32]);
+        let first_items = Vec::with_capacity(len);
+
+        pubkey_division.iter().enumerate().for_each(|(i, bins)| {
+            if bins.len() > bin {
+                item_len += bins[bin].len();
+                first_items.push((&bins[bin][0].hash, i));
+            }
+        });
         let overall_sum = Mutex::new(0u64);
-        let hashes: Vec<Vec<Hash>> = (0..max)
-            .into_par_iter()
-            .map(|chunk_index| {
-                let mut start_index = chunk_index * chunk_size;
-                let mut end_index = start_index + chunk_size;
-                if chunk_index == max - 1 {
-                    end_index = len;
-                }
+        let hashes: Vec<Hash> = Vec::with_capacity(item_len);
 
-                let is_first_slice = chunk_index == 0;
-                if !is_first_slice {
-                    // note that this causes all regions after region 0 to have 1 item that overlaps with the previous region
-                    start_index -= 1;
+        while !first_items.is_empty() {
+            let mut min_pubkey = &max_pubkey;
+            let mut min_index = 0;
+            first_items.iter().enumerate().for_each(|(first_item_index, (key, _i))| {
+                if min_pubkey >= key {
+                    min_index = first_item_index;
+                    min_pubkey = key;
                 }
+            });
+            let first_item = first_items[min_index];
+            let division_index = first_item.1;
 
-                let (result, sum) = Self::de_dup_accounts_from_stores(
-                    chunk_index == 0,
-                    &pubkey_division[start_index..end_index],
-                );
+            let bin = pubkey_division[division_index];
+            let index = indexes[division_index];
+            hashes.push(bin[index].hash);
+            index += 1;
+            if index >= bin.len() {
+                first_items.remove(min_index); // stop looking in this vector - we exhausted it
+                }
+            else {
+                first_items[min_index] = (&bin[index].pubkey, division_index);
+                indexes[division_index] = index;
+            }
+        }
+        /*
                 let mut overall = overall_sum.lock().unwrap();
                 *overall = Self::checked_cast_for_capitalization(sum + *overall as u128);
 
                 result
             })
             .collect();
-
+        */
         let sum = *overall_sum.lock().unwrap();
         (hashes, sum)
     }
@@ -721,13 +735,15 @@ impl AccountsHash {
         mut stats: &mut HashStats,
         is_last_pass: bool,
         mut previous_state: PreviousPass,
+        range: &Range<usize>,
     ) -> (Hash, u64, PreviousPass) {
-        let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
+        //let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
 
-        let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
+        //let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
 
         let (mut hashes, mut total_lamports) =
-            Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey, &mut stats);
+            Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, &mut stats, range);
+        let mut hashes = vec![hashes];
 
         total_lamports += previous_state.lamports;
 
