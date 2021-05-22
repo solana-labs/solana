@@ -1102,6 +1102,7 @@ fn get_buffers(
                 data_slice: Some(UiDataSliceConfig { offset: 0, length }),
                 ..RpcAccountInfoConfig::default()
             },
+            ..RpcProgramAccountsConfig::default()
         },
     )?;
     Ok(results)
@@ -1406,6 +1407,7 @@ fn process_close(
                     data_slice: Some(UiDataSliceConfig { offset: 0, length }),
                     ..RpcAccountInfoConfig::default()
                 },
+                ..RpcProgramAccountsConfig::default()
             },
         )?;
 
