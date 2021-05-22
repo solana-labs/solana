@@ -369,6 +369,7 @@ pub struct ProcessOptions {
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub allow_dead_slots: bool,
+    pub accounts_db_test_hash_calculation: bool,
 }
 
 pub fn process_blockstore(
