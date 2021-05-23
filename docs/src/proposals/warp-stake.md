@@ -63,7 +63,7 @@ You can always cancel a transfer at any time before the epoch boundary. Re-reque
 
 **Disadvantages:**
 1. Vector lookup overhead. But #stake accounts is relatively small.
-2. We have to do `stake_account.set_state(new_state)?` for each successful transfer. This could be pretty expensive and needs to be benchmarked. Say for 500K accounts. Not sure what the threat model ought to be here.
+2. We have to do `stake_account.set_state(new_state)?` for each successful transfer. However, we have already read to memory during `Bank::pay_validator_rewards`, and disk write is async and batched.
 3. (mostly negated) A malicious user with a lot of stake can request for big transfers to fill up warp rate for the epoch, provoking users to try to deactivate instead of warping. However unfulfilled warps have highest priority in next epoch, so warping in the waitlist is probably always better than deactivating. Thus the scare tactic is not effective unless `cluster_warp_stake_requested > 2 * warp_rate * effective_stake`, which is a pretty high bar if `warp_rate = 0.25`, for instance.
 
 ### Design 2: Wrap/Unwrap from new Struct `TransferableStake`
