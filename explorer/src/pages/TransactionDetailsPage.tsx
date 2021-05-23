@@ -12,7 +12,7 @@ import {
   SystemProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -288,7 +288,9 @@ function StatusCard({
         {fee && (
           <tr>
             <td>Fee (SOL)</td>
-            <td className="text-lg-right">{lamportsToSolString(fee)}</td>
+            <td className="text-lg-right">
+              <SolBalance lamports={fee} />
+            </td>
           </tr>
         )}
       </TableCardBody>
@@ -357,7 +359,9 @@ function AccountsCard({
         <td>
           <BalanceDelta delta={delta} isSol />
         </td>
-        <td>{lamportsToSolString(post)}</td>
+        <td>
+          <SolBalance lamports={post} />
+        </td>
         <td>
           {index === 0 && (
             <span className="badge badge-soft-info mr-1">Fee Payer</span>
