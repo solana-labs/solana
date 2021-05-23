@@ -314,7 +314,7 @@ impl CachedExecutors {
         let mut executors = HashMap::new();
         for (key, entry) in self.executors.iter() {
             // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
-            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0
+            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
             if epoch > self.current_epoch {
                 executors.insert(
                     *key,
