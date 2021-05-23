@@ -468,6 +468,9 @@ impl CrdsGossipPull {
         bloom_size: usize,
     ) -> Vec<CrdsFilter> {
         const PAR_MIN_LENGTH: usize = 512;
+        #[cfg(debug_assertions)]
+        const MIN_NUM_BLOOM_ITEMS: usize = 512;
+        #[cfg(not(debug_assertions))]
         const MIN_NUM_BLOOM_ITEMS: usize = 65_536;
         let num_items = crds.len() + self.purged_values.len() + self.failed_inserts.len();
         let num_items = MIN_NUM_BLOOM_ITEMS.max(num_items);
@@ -646,7 +649,7 @@ impl CrdsGossipPull {
     }
 }
 #[cfg(test)]
-mod test {
+pub(crate) mod tests {
     use super::*;
     use crate::cluster_info::MAX_BLOOM_SIZE;
     use crate::contact_info::ContactInfo;
@@ -661,6 +664,11 @@ mod test {
         timing::timestamp,
     };
     use std::{iter::repeat_with, time::Duration};
+
+    #[cfg(debug_assertions)]
+    pub(crate) const MIN_NUM_BLOOM_FILTERS: usize = 1;
+    #[cfg(not(debug_assertions))]
+    pub(crate) const MIN_NUM_BLOOM_FILTERS: usize = 64;
 
     #[test]
     fn test_hash_as_u64() {
@@ -916,7 +924,7 @@ mod test {
         }
         assert_eq!(num_inserts, 20_000);
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
-        assert_eq!(filters.len(), 64);
+        assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(32));
         let hash_values: Vec<_> = crds
             .values()
             .map(|v| v.value_hash)
@@ -1171,7 +1179,7 @@ mod test {
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
         assert_eq!(rsp[0].len(), 0);
-        assert_eq!(filters.len(), 64);
+        assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS);
         filters.extend({
             // Should return new value since caller is new.
             let now = CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1;
@@ -1188,12 +1196,12 @@ mod test {
             /*output_size_limit=*/ usize::MAX,
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
-        assert_eq!(rsp.len(), 128);
+        assert_eq!(rsp.len(), 2 * MIN_NUM_BLOOM_FILTERS);
         // There should be only one non-empty response in the 2nd half.
         // Orders are also preserved.
-        assert!(rsp.iter().take(64).all(|r| r.is_empty()));
-        assert_eq!(rsp.iter().filter(|r| r.is_empty()).count(), 127);
-        assert_eq!(rsp.iter().find(|r| !r.is_empty()).unwrap().len(), 1);
+        assert!(rsp.iter().take(MIN_NUM_BLOOM_FILTERS).all(|r| r.is_empty()));
+        assert_eq!(rsp.iter().filter(|r| r.is_empty()).count(), rsp.len() - 1);
+        assert_eq!(rsp.iter().find(|r| r.len() == 1).unwrap().len(), 1);
     }
 
     #[test]
@@ -1338,7 +1346,7 @@ mod test {
             if rsp.is_empty() {
                 continue;
             }
-            assert_eq!(rsp.len(), 64);
+            assert_eq!(rsp.len(), MIN_NUM_BLOOM_FILTERS);
             let failed = node
                 .process_pull_response(
                     &mut node_crds,

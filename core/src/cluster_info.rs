@@ -3046,6 +3046,7 @@ pub fn stake_weight_peers(
 mod tests {
     use super::*;
     use crate::{
+        crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
         crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
         duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
     };
@@ -3800,7 +3801,7 @@ mod tests {
         cluster_info.set_entrypoint(entrypoint.clone());
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert!(pings.is_empty());
-        assert_eq!(pulls.len(), 64);
+        assert_eq!(pulls.len(), MIN_NUM_BLOOM_FILTERS);
         for (addr, msg) in pulls {
             assert_eq!(addr, entrypoint.gossip);
             match msg {
@@ -3830,7 +3831,7 @@ mod tests {
         );
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
         assert_eq!(pings.len(), 1);
-        assert_eq!(pulls.len(), 64);
+        assert_eq!(pulls.len(), MIN_NUM_BLOOM_FILTERS);
         assert_eq!(*cluster_info.entrypoints.read().unwrap(), vec![entrypoint]);
     }
 
@@ -4019,7 +4020,7 @@ mod tests {
         // fresh timestamp).  There should only be one pull request to `other_node`
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(64, pulls.len());
+        assert_eq!(pulls.len(), MIN_NUM_BLOOM_FILTERS);
         assert!(pulls.into_iter().all(|(addr, _)| addr == other_node.gossip));
 
         // Pull request 2: pretend it's been a while since we've pulled from `entrypoint`.  There should
@@ -4027,21 +4028,21 @@ mod tests {
         cluster_info.entrypoints.write().unwrap()[0].wallclock = 0;
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(pulls.len(), 64 * 2);
+        assert_eq!(pulls.len(), 2 * MIN_NUM_BLOOM_FILTERS);
         assert!(pulls
             .iter()
-            .take(64)
+            .take(MIN_NUM_BLOOM_FILTERS)
             .all(|(addr, _)| *addr == other_node.gossip));
         assert!(pulls
             .iter()
-            .skip(64)
+            .skip(MIN_NUM_BLOOM_FILTERS)
             .all(|(addr, _)| *addr == entrypoint.gossip));
 
         // Pull request 3:  `other_node` is present and `entrypoint` was just pulled from.  There should
         // only be one pull request to `other_node`
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
-        assert_eq!(pulls.len(), 64);
+        assert_eq!(pulls.len(), MIN_NUM_BLOOM_FILTERS);
         assert!(pulls.into_iter().all(|(addr, _)| addr == other_node.gossip));
     }
 

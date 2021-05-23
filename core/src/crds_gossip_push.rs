@@ -265,6 +265,10 @@ impl CrdsGossipPush {
     ) {
         const BLOOM_FALSE_RATE: f64 = 0.1;
         const BLOOM_MAX_BITS: usize = 1024 * 8 * 4;
+        #[cfg(debug_assertions)]
+        const MIN_NUM_BLOOM_ITEMS: usize = 512;
+        #[cfg(not(debug_assertions))]
+        const MIN_NUM_BLOOM_ITEMS: usize = CRDS_UNIQUE_PUBKEY_CAPACITY;
         let mut rng = rand::thread_rng();
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
@@ -281,7 +285,7 @@ impl CrdsGossipPush {
         if peers.is_empty() {
             return;
         }
-        let num_bloom_items = CRDS_UNIQUE_PUBKEY_CAPACITY.max(network_size);
+        let num_bloom_items = MIN_NUM_BLOOM_ITEMS.max(network_size);
         let shuffle = {
             let mut seed = [0; 32];
             rng.fill(&mut seed[..]);
