@@ -683,14 +683,10 @@ impl ClusterInfo {
     where
         F: FnOnce(&ContactInfo) -> Y,
     {
-        let entry = CrdsValueLabel::ContactInfo(*id);
-        self.gossip
-            .read()
-            .unwrap()
-            .crds
-            .lookup(&entry)
-            .and_then(CrdsValue::contact_info)
-            .map(map)
+        let label = CrdsValueLabel::ContactInfo(*id);
+        let gossip = self.gossip.read().unwrap();
+        let entry = gossip.crds.get(&label)?;
+        Some(map(entry.value.contact_info()?))
     }
 
     pub fn lookup_contact_info_by_gossip_addr(
@@ -715,13 +711,11 @@ impl ClusterInfo {
     }
 
     pub fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
-        let entry = CrdsValueLabel::EpochSlots(ix, self.id());
-        self.gossip
-            .read()
-            .unwrap()
-            .crds
-            .lookup(&entry)
-            .and_then(CrdsValue::epoch_slots)
+        let label = CrdsValueLabel::EpochSlots(ix, self.id());
+        let gossip = self.gossip.read().unwrap();
+        let entry = gossip.crds.get(&label);
+        entry
+            .and_then(|v| v.value.epoch_slots())
             .cloned()
             .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
     }
@@ -884,8 +878,8 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .lookup(&CrdsValueLabel::LowestSlot(self.id()))
-            .and_then(|x| x.lowest_slot())
+            .get(&CrdsValueLabel::LowestSlot(self.id()))
+            .and_then(|x| x.value.lowest_slot())
             .map(|x| x.lowest)
             .unwrap_or(0);
         if min > last {
@@ -1050,9 +1044,9 @@ impl ClusterInfo {
             (0..MAX_LOCKOUT_HISTORY as u8)
                 .filter_map(|ix| {
                     let vote = CrdsValueLabel::Vote(ix, self_pubkey);
-                    let vote = gossip.crds.lookup(&vote)?;
+                    let vote = gossip.crds.get(&vote)?;
                     num_crds_votes += 1;
-                    match &vote.data {
+                    match &vote.value.data {
                         CrdsData::Vote(_, vote) if should_evict_vote(vote) => {
                             Some((vote.wallclock, ix))
                         }
@@ -1073,8 +1067,8 @@ impl ClusterInfo {
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
             (0..MAX_LOCKOUT_HISTORY as u8).find(|ix| {
                 let vote = CrdsValueLabel::Vote(*ix, self.id());
-                if let Some(vote) = gossip.crds.lookup(&vote) {
-                    match &vote.data {
+                if let Some(vote) = gossip.crds.get(&vote) {
+                    match &vote.value.data {
                         CrdsData::Vote(_, prev_vote) => match prev_vote.slot() {
                             Some(prev_vote_slot) => prev_vote_slot == vote_slot,
                             None => {
@@ -3432,13 +3426,8 @@ mod tests {
         let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
-        assert!(cluster_info
-            .gossip
-            .read()
-            .unwrap()
-            .crds
-            .lookup(&label)
-            .is_some());
+        let gossip = cluster_info.gossip.read().unwrap();
+        assert!(gossip.crds.get(&label).is_some());
     }
 
     fn assert_in_range(x: u16, range: (u16, u16)) {
@@ -3711,7 +3700,7 @@ mod tests {
             let gossip = cluster_info.gossip.read().unwrap();
             let mut vote_slots = HashSet::new();
             for label in labels {
-                match &gossip.crds.lookup(&label).unwrap().data {
+                match &gossip.crds.get(&label).unwrap().value.data {
                     CrdsData::Vote(_, vote) => {
                         assert!(vote_slots.insert(vote.slot().unwrap()));
                     }
