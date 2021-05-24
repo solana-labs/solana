@@ -5134,7 +5134,7 @@ impl Drop for Bank {
             // 1. Tests
             // 2. At startup when replaying blockstore and there's no
             // AccountsBackgroundService to perform cleanups yet.
-            self.rc.accounts.purge_slot(self.slot());
+            self.rc.accounts.purge_slot(self.slot(), false);
         }
     }
 }
@@ -11921,8 +11921,10 @@ pub(crate) mod tests {
                         current_major_fork_bank.force_flush_accounts_cache();
                         current_major_fork_bank.clean_accounts(false, false);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
-                        // with clean
-                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank);
+                        // with clean. Simulates the call from AccountsBackgroundService
+                        let is_abs_service = true;
+                        abs_request_handler
+                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(

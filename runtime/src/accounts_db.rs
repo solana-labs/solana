@@ -19,6 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
+    accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
@@ -828,6 +829,8 @@ pub struct AccountsDb {
 
     #[cfg(test)]
     load_limit: AtomicU64,
+
+    is_bank_drop_callback_enabled: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -1257,6 +1260,7 @@ impl Default for AccountsDb {
             load_delay: u64::default(),
             #[cfg(test)]
             load_limit: AtomicU64::default(),
+            is_bank_drop_callback_enabled: AtomicBool::default(),
         }
     }
 }
@@ -3101,7 +3105,20 @@ impl AccountsDb {
             .is_none());
     }
 
-    pub fn purge_slot(&self, slot: Slot) {
+    pub fn create_drop_bank_callback(
+        &self,
+        pruned_banks_sender: DroppedSlotsSender,
+    ) -> SendDroppedBankCallback {
+        self.is_bank_drop_callback_enabled
+            .store(true, Ordering::SeqCst);
+        SendDroppedBankCallback::new(pruned_banks_sender)
+    }
+
+    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
+    pub fn purge_slot(&self, slot: Slot, is_from_abs: bool) {
+        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
+            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
+        }
         let mut slots = HashSet::new();
         slots.insert(slot);
         self.purge_slots(&slots);
@@ -5043,11 +5060,11 @@ impl AccountsDb {
         //    a) this slot  has at least one account (the one being stored),
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
-        // From 1) and 2) we guarantee passing `purge_stats` == None, which is
+        // From 1) and 2) we guarantee passing `no_purge_stats` == None, which is
         // equivalent to asserting there will be no dead slots, is safe.
-        let purge_stats = None;
+        let no_purge_stats = None;
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(&reclaims, Some(slot), purge_stats, None, reset_accounts);
+        self.handle_reclaims(&reclaims, Some(slot), no_purge_stats, None, reset_accounts);
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
@@ -9605,7 +9622,7 @@ pub mod tests {
         assert_eq!(account.0.lamports(), slot1_account.lamports());
 
         // Simulate dropping the bank, which finally removes the slot from the cache
-        db.purge_slot(1);
+        db.purge_slot(1, false);
         assert!(db
             .do_load(
                 &scan_ancestors,
