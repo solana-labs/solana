@@ -1185,8 +1185,8 @@ impl Bank {
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
         ancestors.push((new.slot(), 0));
-        new.parents().iter().enumerate().for_each(|(i, p)| {
-            ancestors.push((p.slot(), i + 1));
+        new.parents().iter().for_each(|p| {
+            ancestors.push((p.slot(), 0));
         });
         new.ancestors = Ancestors::from(ancestors);
 
