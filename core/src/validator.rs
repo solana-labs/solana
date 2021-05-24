@@ -276,7 +276,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
-    ip_echo_server: solana_net_utils::IpEchoServer,
+    ip_echo_server: Option<solana_net_utils::IpEchoServer>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -591,7 +591,7 @@ impl Validator {
             std::thread::park();
         }
 
-        let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
+        let ip_echo_server = node.sockets.ip_echo.map(solana_net_utils::ip_echo_server);
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -887,7 +887,9 @@ impl Validator {
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
-        self.ip_echo_server.shutdown_background();
+        if let Some(ip_echo_server) = self.ip_echo_server {
+            ip_echo_server.shutdown_background();
+        }
     }
 }
 
