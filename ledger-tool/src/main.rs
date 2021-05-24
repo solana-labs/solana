@@ -762,6 +762,9 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
+    let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
+        .long("accounts-db-test-hash-calculation")
+        .help("Enable hash calculation test");
     let halt_at_slot_arg = Arg::with_name("halt_at_slot")
         .long("halt-at-slot")
         .value_name("SLOT")
@@ -1039,6 +1042,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
+            .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1741,6 +1745,8 @@ fn main() {
                 bpf_jit: !matches.is_present("no_bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
+                accounts_db_test_hash_calculation: arg_matches
+                    .is_present("accounts_db_test_hash_calculation"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
