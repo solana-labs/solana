@@ -1197,14 +1197,8 @@ pub(crate) mod tests {
             1,
         );
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
-        assert!(dest_crds.lookup(&caller.label()).is_some());
-        assert_eq!(
-            dest_crds
-                .lookup_versioned(&caller.label())
-                .unwrap()
-                .local_timestamp,
-            1
-        );
+        assert!(dest_crds.get(&caller.label()).is_some());
+        assert_eq!(dest_crds.get(&caller.label()).unwrap().local_timestamp, 1);
     }
     #[test]
     fn test_process_pull_request_response() {
@@ -1243,13 +1237,7 @@ pub(crate) mod tests {
         assert_eq!(same_key.label(), new.label());
         assert!(same_key.wallclock() < new.wallclock());
         node_crds.insert(same_key.clone(), 0).unwrap();
-        assert_eq!(
-            node_crds
-                .lookup_versioned(&same_key.label())
-                .unwrap()
-                .local_timestamp,
-            0
-        );
+        assert_eq!(node_crds.get(&same_key.label()).unwrap().local_timestamp, 0);
         let mut done = false;
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(ping_cache);
@@ -1300,21 +1288,9 @@ pub(crate) mod tests {
                 )
                 .0;
             assert_eq!(failed, 0);
-            assert_eq!(
-                node_crds
-                    .lookup_versioned(&new.label())
-                    .unwrap()
-                    .local_timestamp,
-                1
-            );
+            assert_eq!(node_crds.get(&new.label()).unwrap().local_timestamp, 1);
             // verify that the whole record was updated for dest since this is a response from dest
-            assert_eq!(
-                node_crds
-                    .lookup_versioned(&same_key.label())
-                    .unwrap()
-                    .local_timestamp,
-                1
-            );
+            assert_eq!(node_crds.get(&same_key.label()).unwrap().local_timestamp, 1);
             done = true;
             break;
         }
@@ -1337,19 +1313,23 @@ pub(crate) mod tests {
             0,
         )));
         node_crds.insert(old.clone(), 0).unwrap();
-        let value_hash = node_crds.lookup_versioned(&old.label()).unwrap().value_hash;
+        let value_hash = node_crds.get(&old.label()).unwrap().value_hash;
 
         //verify self is valid
-        assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
-
+        assert_eq!(
+            node_crds.get(&node_label).unwrap().value.label(),
+            node_label
+        );
         // purge
         let timeouts = node.make_timeouts(node_pubkey, &HashMap::new(), Duration::default());
         node.purge_active(&thread_pool, &mut node_crds, node.crds_timeout, &timeouts);
 
         //verify self is still valid after purge
-        assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
-
-        assert_eq!(node_crds.lookup_versioned(&old.label()), None);
+        assert_eq!(
+            node_crds.get(&node_label).unwrap().value.label(),
+            node_label
+        );
+        assert_eq!(node_crds.get(&old.label()), None);
         assert_eq!(node_crds.num_purged(), 1);
         for _ in 0..30 {
             // there is a chance of a false positive with bloom filters
