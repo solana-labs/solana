@@ -222,14 +222,6 @@ impl Crds {
         }
     }
 
-    pub fn lookup(&self, label: &CrdsValueLabel) -> Option<&CrdsValue> {
-        self.table.get(label).map(|x| &x.value)
-    }
-
-    pub fn lookup_versioned(&self, label: &CrdsValueLabel) -> Option<&VersionedCrdsValue> {
-        self.table.get(label)
-    }
-
     pub fn get(&self, label: &CrdsValueLabel) -> Option<&VersionedCrdsValue> {
         self.table.get(label)
     }
