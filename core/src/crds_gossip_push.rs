@@ -459,7 +459,7 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
             Ok(())
         );
-        assert_eq!(crds.lookup(&label), Some(&value));
+        assert_eq!(crds.get(&label).unwrap().value, value);
 
         // push it again
         assert_matches!(
@@ -843,7 +843,7 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
             Ok(())
         );
-        assert_eq!(crds.lookup(&label), Some(&value));
+        assert_eq!(crds.get(&label).unwrap().value, value);
 
         // push it again
         assert_matches!(
