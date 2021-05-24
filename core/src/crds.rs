@@ -48,7 +48,8 @@ pub struct Crds {
     cursor: Cursor, // Next insert ordinal location.
     shards: CrdsShards,
     nodes: IndexSet<usize>, // Indices of nodes' ContactInfo.
-    votes: IndexSet<usize>, // Indices of Vote crds values.
+    // Indices of Votes keyed by insert order.
+    votes: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of EpochSlots keyed by insert order.
     epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
@@ -111,7 +112,7 @@ impl Default for Crds {
             cursor: Cursor::default(),
             shards: CrdsShards::new(CRDS_SHARDS_BITS),
             nodes: IndexSet::default(),
-            votes: IndexSet::default(),
+            votes: BTreeMap::default(),
             epoch_slots: BTreeMap::default(),
             records: HashMap::default(),
             entries: BTreeMap::default(),
@@ -172,7 +173,7 @@ impl Crds {
                         self.nodes.insert(entry_index);
                     }
                     CrdsData::Vote(_, _) => {
-                        self.votes.insert(entry_index);
+                        self.votes.insert(value.ordinal, entry_index);
                     }
                     CrdsData::EpochSlots(_, _) => {
                         self.epoch_slots.insert(value.ordinal, entry_index);
@@ -189,9 +190,16 @@ impl Crds {
                 let entry_index = entry.index();
                 self.shards.remove(entry_index, entry.get());
                 self.shards.insert(entry_index, &value);
-                if let CrdsData::EpochSlots(_, _) = value.value.data {
-                    self.epoch_slots.remove(&entry.get().ordinal);
-                    self.epoch_slots.insert(value.ordinal, entry_index);
+                match value.value.data {
+                    CrdsData::Vote(_, _) => {
+                        self.votes.remove(&entry.get().ordinal);
+                        self.votes.insert(value.ordinal, entry_index);
+                    }
+                    CrdsData::EpochSlots(_, _) => {
+                        self.epoch_slots.remove(&entry.get().ordinal);
+                        self.epoch_slots.insert(value.ordinal, entry_index);
+                    }
+                    _ => (),
                 }
                 self.entries.remove(&entry.get().ordinal);
                 self.entries.insert(value.ordinal, entry_index);
@@ -253,15 +261,10 @@ impl Crds {
         &'a self,
         cursor: &'a mut Cursor,
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        let since = cursor.ordinal();
-        self.votes.iter().filter_map(move |i| {
-            let entry = self.table.index(*i);
-            if entry.ordinal >= since {
-                cursor.consume(entry.ordinal);
-                Some(entry)
-            } else {
-                None
-            }
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.votes.range(range).map(move |(ordinal, index)| {
+            cursor.consume(*ordinal);
+            self.table.index(*index)
         })
     }
 
@@ -407,7 +410,7 @@ impl Crds {
                 self.nodes.swap_remove(&index);
             }
             CrdsData::Vote(_, _) => {
-                self.votes.swap_remove(&index);
+                self.votes.remove(&value.ordinal);
             }
             CrdsData::EpochSlots(_, _) => {
                 self.epoch_slots.remove(&value.ordinal);
@@ -441,8 +444,7 @@ impl Crds {
                     self.nodes.insert(index);
                 }
                 CrdsData::Vote(_, _) => {
-                    self.votes.swap_remove(&size);
-                    self.votes.insert(index);
+                    self.votes.insert(value.ordinal, index);
                 }
                 CrdsData::EpochSlots(_, _) => {
                     self.epoch_slots.insert(value.ordinal, index);
