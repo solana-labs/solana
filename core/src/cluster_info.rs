@@ -904,8 +904,8 @@ impl ClusterInfo {
                         &self.stats.epoch_slots_lookup,
                     )
                     .crds
-                    .lookup(&CrdsValueLabel::EpochSlots(ix, self.id()))
-                    .and_then(CrdsValue::epoch_slots)
+                    .get(&CrdsValueLabel::EpochSlots(ix, self.id()))
+                    .and_then(|v| v.value.epoch_slots())
                     .and_then(|x| Some((x.wallclock, x.first_slot()?)))?,
                     ix,
                 ))
