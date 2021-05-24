@@ -907,7 +907,14 @@ fn rpc_bootstrap(
                                        && download_progress.estimated_remaining_time > 60_f32
                                        && download_abort_count < maximum_snapshot_download_abort {
                                         if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                                            if trusted_validators.contains(&rpc_contact_info.id) && trusted_validators.len() == 1 {
+                                            if trusted_validators.contains(&rpc_contact_info.id)
+                                               && trusted_validators.len() == 1
+                                               && bootstrap_config.no_untrusted_rpc {
+                                                warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
+                                                      and try a different node as it is the only trusted validator and the no-untrusted-rpc is set. \
+                                                      Abort count: {}, Progress detail: {:?}",
+                                                      download_progress.last_throughput, minimal_snapshot_download_speed,
+                                                      download_abort_count, download_progress);
                                                 return true; // Do not abort download from the one-and-only trusted validator
                                             }
                                         }
