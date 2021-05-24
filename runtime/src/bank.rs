@@ -5104,7 +5104,7 @@ impl Drop for Bank {
                 // 1. Tests
                 // 2. At startup when replaying blockstore and there's no
                 // AccountsBackgroundService to perform cleanups yet.
-                self.rc.accounts.purge_slot(self.slot());
+                self.rc.accounts.purge_slot(self.slot(), false);
             }
         }
     }
@@ -5144,6 +5144,7 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::SHRINK_RATIO,
         accounts_index::{
             AccountIndex, AccountMap, AccountSecondaryIndexes, Ancestors, ITER_BATCH_SIZE,
@@ -5156,7 +5157,7 @@ pub(crate) mod tests {
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use crossbeam_channel::bounded;
+    use crossbeam_channel::{bounded, unbounded};
     use solana_sdk::{
         account::Account,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -11738,8 +11739,11 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
-    fn test_store_scan_consistency<F: 'static>(accounts_db_caching_enabled: bool, update_f: F)
-    where
+    fn test_store_scan_consistency<F: 'static>(
+        accounts_db_caching_enabled: bool,
+        update_f: F,
+        drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
+    ) where
         F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
             + std::marker::Send,
     {
@@ -11756,6 +11760,7 @@ pub(crate) mod tests {
             AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled,
         ));
+        bank0.set_callback(drop_callback);
 
         // Set up pubkeys to write to
         let total_pubkeys = ITER_BATCH_SIZE * 10;
@@ -11852,9 +11857,18 @@ pub(crate) mod tests {
     #[test]
     fn test_store_scan_consistency_unrooted() {
         for accounts_db_caching_enabled in &[false, true] {
+            let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+            let abs_request_handler = AbsRequestHandler {
+                snapshot_request_handler: None,
+                pruned_banks_receiver,
+            };
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,
-                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                move |bank0,
+                      bank_to_scan_sender,
+                      pubkeys_to_modify,
+                      program_id,
+                      starting_lamports| {
                     let mut current_major_fork_bank = bank0;
                     loop {
                         let mut current_minor_fork_bank = current_major_fork_bank.clone();
@@ -11905,7 +11919,7 @@ pub(crate) mod tests {
 
                         // Send the last new bank to the scan thread to perform the scan.
                         // Meanwhile this thread will continually set roots on a separate fork
-                        // and squash.
+                        // and squash/clean, purging the account entries from the minor forks
                         /*
                                     bank 0
                                 /         \
@@ -11926,8 +11940,16 @@ pub(crate) mod tests {
                         // Try to get cache flush/clean to overlap with the scan
                         current_major_fork_bank.force_flush_accounts_cache();
                         current_major_fork_bank.clean_accounts(false);
+                        // Move purge here so that Bank::drop()->purge_slots() doesn't race
+                        // with clean. Simulates the call from AccountsBackgroundService
+                        let is_abs_service = true;
+                        abs_request_handler
+                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
                     }
                 },
+                Some(Box::new(SendDroppedBankCallback::new(
+                    pruned_banks_sender.clone(),
+                ))),
             )
         }
     }
@@ -11971,6 +11993,7 @@ pub(crate) mod tests {
                         ));
                     }
                 },
+                None,
             );
         }
     }
