@@ -252,6 +252,8 @@ where
                             // call to `new_from_serialized_shred` is safe.
                             assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
                             let mut serialized_shred = packet.data.to_vec();
+                            // Truncate shred down to SHRED_PAYLOAD_SIZE to remove the nonce so
+                            // that the buffer is proper size for new_from_serialized_shred()
                             serialized_shred.truncate(SHRED_PAYLOAD_SIZE);
                             if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
                                 let repair_info = {
