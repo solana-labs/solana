@@ -11,7 +11,7 @@
 use crate::{
     cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
     contact_info::ContactInfo,
-    crds::{Crds, Cursor, VersionedCrdsValue},
+    crds::{Crds, Cursor},
     crds_gossip::{get_stake, get_weight},
     crds_gossip_error::CrdsGossipError,
     crds_value::CrdsValue,
@@ -169,7 +169,7 @@ impl CrdsGossipPush {
         from: &Pubkey,
         value: CrdsValue,
         now: u64,
-    ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
+    ) -> Result<(), CrdsGossipError> {
         self.num_total += 1;
         if !self.wallclock_window(now).contains(&value.wallclock()) {
             return Err(CrdsGossipError::PushMessageTimeout);
@@ -457,7 +457,7 @@ mod test {
         // push a new message
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Ok(None)
+            Ok(())
         );
         assert_eq!(crds.lookup(&label), Some(&value));
 
@@ -478,7 +478,7 @@ mod test {
         // push a new message
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
-            Ok(None)
+            Ok(())
         );
 
         // push an old version
@@ -522,19 +522,16 @@ mod test {
 
         // push a new message
         assert_eq!(
-            push.process_push_message(&mut crds, &Pubkey::default(), value_old.clone(), 0),
-            Ok(None)
+            push.process_push_message(&mut crds, &Pubkey::default(), value_old, 0),
+            Ok(())
         );
 
         // push an old version
         ci.wallclock = 1;
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
         assert_eq!(
-            push.process_push_message(&mut crds, &Pubkey::default(), value, 0)
-                .unwrap()
-                .unwrap()
-                .value,
-            value_old
+            push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
+            Ok(())
         );
     }
     #[test]
@@ -555,7 +552,7 @@ mod test {
             0,
         )));
 
-        assert_eq!(crds.insert(value1.clone(), now), Ok(None));
+        assert_eq!(crds.insert(value1.clone(), now), Ok(()));
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         assert!(push.active_set.get(&value1.label().pubkey()).is_some());
@@ -564,7 +561,7 @@ mod test {
             0,
         )));
         assert!(push.active_set.get(&value2.label().pubkey()).is_none());
-        assert_eq!(crds.insert(value2.clone(), now), Ok(None));
+        assert_eq!(crds.insert(value2.clone(), now), Ok(()));
         for _ in 0..30 {
             push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
             if push.active_set.get(&value2.label().pubkey()).is_some() {
@@ -577,7 +574,7 @@ mod test {
             let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(
                 ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
             ));
-            assert_eq!(crds.insert(value2.clone(), now), Ok(None));
+            assert_eq!(crds.insert(value2.clone(), now), Ok(()));
         }
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
         assert_eq!(push.active_set.len(), push.num_active);
@@ -735,7 +732,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer.clone(), now), Ok(None));
+        assert_eq!(crds.insert(peer.clone(), now), Ok(()));
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -746,7 +743,7 @@ mod test {
         expected.insert(peer.label().pubkey(), vec![new_msg.clone()]);
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg, 0),
-            Ok(None)
+            Ok(())
         );
         assert_eq!(push.active_set.len(), 1);
         assert_eq!(push.new_push_messages(&crds, 0), expected);
@@ -765,11 +762,11 @@ mod test {
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(peer))
             })
             .collect();
-        assert_eq!(crds.insert(peers[0].clone(), now), Ok(None));
-        assert_eq!(crds.insert(peers[1].clone(), now), Ok(None));
+        assert_eq!(crds.insert(peers[0].clone(), now), Ok(()));
+        assert_eq!(crds.insert(peers[1].clone(), now), Ok(()));
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), peers[2].clone(), now),
-            Ok(None)
+            Ok(())
         );
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
@@ -792,7 +789,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
+        assert_eq!(crds.insert(peer.clone(), 0), Ok(()));
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -802,7 +799,7 @@ mod test {
         let expected = HashMap::new();
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg.clone(), 0),
-            Ok(None)
+            Ok(())
         );
         push.process_prune_msg(
             &self_id,
@@ -819,7 +816,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        assert_eq!(crds.insert(peer, 0), Ok(None));
+        assert_eq!(crds.insert(peer, 0), Ok(()));
         push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
@@ -828,7 +825,7 @@ mod test {
         let expected = HashMap::new();
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg, 1),
-            Ok(None)
+            Ok(())
         );
         assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
@@ -844,7 +841,7 @@ mod test {
         // push a new message
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Ok(None)
+            Ok(())
         );
         assert_eq!(crds.lookup(&label), Some(&value));
 

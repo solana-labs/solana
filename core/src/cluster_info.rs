@@ -1745,18 +1745,15 @@ impl ClusterInfo {
             .chain(std::iter::once(self.id))
             .collect();
         let mut gossip = self.gossip.write().unwrap();
-        match gossip.crds.trim(cap, &keep, stakes) {
+        match gossip.crds.trim(cap, &keep, stakes, timestamp()) {
             Err(err) => {
                 self.stats.trim_crds_table_failed.add_relaxed(1);
                 error!("crds table trim failed: {:?}", err);
             }
-            Ok(purged_values) => {
-                let now = timestamp();
+            Ok(num_purged) => {
                 self.stats
                     .trim_crds_table_purged_values_count
-                    .add_relaxed(purged_values.len() as u64);
-                let purged_values = purged_values.into_iter().map(|v| (v.value_hash, now));
-                gossip.pull.purged_values.extend(purged_values);
+                    .add_relaxed(num_purged as u64);
             }
         }
     }
@@ -2380,8 +2377,7 @@ impl ClusterInfo {
         self.stats
             .skip_push_message_shred_version
             .add_relaxed(num_crds_values - num_filtered_crds_values);
-        // Origins' pubkeys of updated crds values.
-        // TODO: Should this also include origins of new crds values?
+        // Origins' pubkeys of upserted crds values.
         let origins: HashSet<_> = {
             let mut gossip =
                 self.time_gossip_write_lock("process_push", &self.stats.process_push_message);
@@ -2391,7 +2387,6 @@ impl ClusterInfo {
                 .flat_map(|(from, crds_values)| {
                     gossip.process_push_message(&from, crds_values, now)
                 })
-                .map(|v| v.value.pubkey())
                 .collect()
         };
         // Generate prune messages.
