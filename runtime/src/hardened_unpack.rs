@@ -1,3 +1,4 @@
+use solana_sdk::genesis_config::{DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE};
 use {
     bzip2::bufread::BzDecoder,
     log::*,
@@ -280,7 +281,7 @@ pub fn open_genesis_config(
     max_genesis_archive_unpacked_size: u64,
 ) -> GenesisConfig {
     GenesisConfig::load(&ledger_path).unwrap_or_else(|load_err| {
-        let genesis_package = ledger_path.join("genesis.tar.bz2");
+        let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
         unpack_genesis_archive(
             &genesis_package,
             ledger_path,
@@ -348,8 +349,8 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
     trace!("validating: {:?} {:?}", parts, kind);
     #[allow(clippy::match_like_matches_macro)]
     match (parts, kind) {
-        (["genesis.bin"], GNUSparse) => true,
-        (["genesis.bin"], Regular) => true,
+        ([DEFAULT_GENESIS_FILE], GNUSparse) => true,
+        ([DEFAULT_GENESIS_FILE], Regular) => true,
         (["rocksdb"], Directory) => true,
         (["rocksdb", _], GNUSparse) => true,
         (["rocksdb", _], Regular) => true,

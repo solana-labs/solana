@@ -28,7 +28,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
-    genesis_config::GenesisConfig,
+    genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
     hash::Hash,
     pubkey::Pubkey,
     sanitize::Sanitize,
@@ -3434,13 +3434,13 @@ pub fn create_new_ledger(
     // Explicitly close the blockstore before we create the archived genesis file
     drop(blockstore);
 
-    let archive_path = ledger_path.join("genesis.tar.bz2");
+    let archive_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
     let args = vec![
         "jcfhS",
         archive_path.to_str().unwrap(),
         "-C",
         ledger_path.to_str().unwrap(),
-        "genesis.bin",
+        DEFAULT_GENESIS_FILE,
         "rocksdb",
     ];
     let output = std::process::Command::new("tar")
@@ -3478,18 +3478,24 @@ pub fn create_new_ledger(
             let mut error_messages = String::new();
 
             fs::rename(
-                &ledger_path.join("genesis.tar.bz2"),
-                ledger_path.join("genesis.tar.bz2.failed"),
+                &ledger_path.join(DEFAULT_GENESIS_ARCHIVE),
+                ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_ARCHIVE)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!("/failed to stash problematic genesis.tar.bz2: {}", e)
+                error_messages += &format!(
+                    "/failed to stash problematic {}: {}",
+                    DEFAULT_GENESIS_ARCHIVE, e
+                )
             });
             fs::rename(
-                &ledger_path.join("genesis.bin"),
-                ledger_path.join("genesis.bin.failed"),
+                &ledger_path.join(DEFAULT_GENESIS_FILE),
+                ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_FILE)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!("/failed to stash problematic genesis.bin: {}", e)
+                error_messages += &format!(
+                    "/failed to stash problematic {}: {}",
+                    DEFAULT_GENESIS_FILE, e
+                )
             });
             fs::rename(
                 &ledger_path.join("rocksdb"),
