@@ -3451,9 +3451,12 @@ impl AccountsDb {
                 .filter(|remove_slot| {
                     let is_cache_flushing_slot = contended_slots.contains(remove_slot);
                     if !is_cache_flushing_slot {
-                        // Prevent cache from flushing this slot
+                        // Reserve the slots that we want to purge that aren't currently
+                        // being flushed to prevent cache from flushing those slots in
+                        // the future
                         contended_slots.insert(**remove_slot);
                     }
+                    // If the cache is currently flushing this slot, add it to the list
                     is_cache_flushing_slot
                 })
                 .cloned()
@@ -3462,14 +3465,20 @@ impl AccountsDb {
             // Wait for cache flushes to finish
             loop {
                 if !contended_cache_flush_slots.is_empty() {
+                    // Wait for the signal that the cache has finished flushing a slot
+                    //
                     // Don't wait if the contended_cache_flush_slots is empty, otherwise
-                    // we may never get a signal
+                    // we may never get a signal since there's no cache flush thread to
+                    // do the signaling
                     contended_slots = signal.wait(contended_slots).unwrap();
                 } else {
-                    // There are no slots being flushed to block on, it's safe to continue
-                    // to purging these slots
+                    // There are no slots being flushed to wait on, so it's safe to continue
+                    // to purging the slots we want to purge!
                     break;
                 }
+
+                // For each slot the cache flush has finished, mark that we're about to start
+                // purging these slots by reserving it in `contended_slots`.
                 contended_cache_flush_slots.retain(|flushing_slot| {
                     let is_being_flushed = contended_slots.contains(flushing_slot);
                     if !is_being_flushed {
