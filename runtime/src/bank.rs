@@ -5172,24 +5172,6 @@ impl Bank {
                 .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
         }
     }
-
-    /// Bank cleanup
-    ///
-    /// If the bank is unfrozen and then dropped, additional cleanup is needed.  In particular,
-    /// cleaning up the pubkeys that are only in this bank.  To do that, call into AccountsDb to
-    /// scan for dirty pubkeys and add them to the uncleaned pubkeys list so they will be cleaned
-    /// up in AccountsDb::clean_accounts().
-    fn cleanup(&self) {
-        if self.is_frozen() {
-            // nothing to do here
-            return;
-        }
-
-        self.rc
-            .accounts
-            .accounts_db
-            .scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(self.slot);
-    }
 }
 
 impl Drop for Bank {
@@ -5198,8 +5180,6 @@ impl Drop for Bank {
             return;
         }
 
-        self.cleanup();
-
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
@@ -5207,7 +5187,7 @@ impl Drop for Bank {
             // 1. Tests
             // 2. At startup when replaying blockstore and there's no
             // AccountsBackgroundService to perform cleanups yet.
-            self.rc.accounts.purge_slot(self.slot());
+            self.rc.accounts.purge_slot(self.slot(), false);
         }
     }
 }
@@ -5246,6 +5226,7 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::SHRINK_RATIO,
         accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
         ancestors::Ancestors,
@@ -5257,7 +5238,7 @@ pub(crate) mod tests {
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use crossbeam_channel::bounded;
+    use crossbeam_channel::{bounded, unbounded};
     use solana_sdk::{
         account::Account,
         account_utils::StateMut,
@@ -11826,8 +11807,11 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
-    fn test_store_scan_consistency<F: 'static>(accounts_db_caching_enabled: bool, update_f: F)
-    where
+    fn test_store_scan_consistency<F: 'static>(
+        accounts_db_caching_enabled: bool,
+        update_f: F,
+        drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
+    ) where
         F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
             + std::marker::Send,
     {
@@ -11844,6 +11828,7 @@ pub(crate) mod tests {
             AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled,
         ));
+        bank0.set_callback(drop_callback);
 
         // Set up pubkeys to write to
         let total_pubkeys = ITER_BATCH_SIZE * 10;
@@ -11940,9 +11925,18 @@ pub(crate) mod tests {
     #[test]
     fn test_store_scan_consistency_unrooted() {
         for accounts_db_caching_enabled in &[false, true] {
+            let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+            let abs_request_handler = AbsRequestHandler {
+                snapshot_request_handler: None,
+                pruned_banks_receiver,
+            };
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,
-                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                move |bank0,
+                      bank_to_scan_sender,
+                      pubkeys_to_modify,
+                      program_id,
+                      starting_lamports| {
                     let mut current_major_fork_bank = bank0;
                     loop {
                         let mut current_minor_fork_bank = current_major_fork_bank.clone();
@@ -11993,7 +11987,7 @@ pub(crate) mod tests {
 
                         // Send the last new bank to the scan thread to perform the scan.
                         // Meanwhile this thread will continually set roots on a separate fork
-                        // and squash.
+                        // and squash/clean, purging the account entries from the minor forks
                         /*
                                     bank 0
                                 /         \
@@ -12014,8 +12008,16 @@ pub(crate) mod tests {
                         // Try to get cache flush/clean to overlap with the scan
                         current_major_fork_bank.force_flush_accounts_cache();
                         current_major_fork_bank.clean_accounts(false, false);
+                        // Move purge here so that Bank::drop()->purge_slots() doesn't race
+                        // with clean. Simulates the call from AccountsBackgroundService
+                        let is_abs_service = true;
+                        abs_request_handler
+                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
                     }
                 },
+                Some(Box::new(SendDroppedBankCallback::new(
+                    pruned_banks_sender.clone(),
+                ))),
             )
         }
     }
@@ -12059,6 +12061,7 @@ pub(crate) mod tests {
                         ));
                     }
                 },
+                None,
             );
         }
     }
@@ -12752,7 +12755,6 @@ pub(crate) mod tests {
         let key3 = Keypair::new(); // touched in both bank1 and bank2
         let key4 = Keypair::new(); // in only bank1, and has zero lamports
         let key5 = Keypair::new(); // in both bank1 and bank2, and has zero lamports
-
         bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.freeze();
 
@@ -12779,12 +12781,7 @@ pub(crate) mod tests {
         bank2.clean_accounts(false, false);
 
         let expected_ref_count_for_cleaned_up_keys = 0;
-        let expected_ref_count_for_keys_only_in_slot_2 = bank2
-            .rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .ref_count_from_storage(&key2.pubkey());
+        let expected_ref_count_for_keys_in_both_slot1_and_slot2 = 1;
 
         assert_eq!(
             bank2
@@ -12820,7 +12817,7 @@ pub(crate) mod tests {
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key5.pubkey()),
-            expected_ref_count_for_keys_only_in_slot_2
+            expected_ref_count_for_keys_in_both_slot1_and_slot2,
         );
 
         assert_eq!(

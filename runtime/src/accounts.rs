@@ -912,8 +912,9 @@ impl Accounts {
 
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
-    pub fn purge_slot(&self, slot: Slot) {
-        self.accounts_db.purge_slot(slot);
+    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
+    pub fn purge_slot(&self, slot: Slot, is_from_abs: bool) {
+        self.accounts_db.purge_slot(slot, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged

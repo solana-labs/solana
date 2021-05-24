@@ -1388,6 +1388,20 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         slot < max_clean_root && slot != newest_root_in_slot_list
     }
 
+    /// Given a list of slots, return a new list of only the slots that are rooted
+    pub fn get_rooted_from_list<'a>(&self, slots: impl Iterator<Item = &'a Slot>) -> Vec<Slot> {
+        let roots_tracker = self.roots_tracker.read().unwrap();
+        slots
+            .filter_map(|s| {
+                if roots_tracker.roots.contains(s) {
+                    Some(*s)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn is_root(&self, slot: Slot) -> bool {
         self.roots_tracker.read().unwrap().roots.contains(&slot)
     }
