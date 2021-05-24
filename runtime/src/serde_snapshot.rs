@@ -337,6 +337,7 @@ where
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
     // but non-root stores should not be included in the snapshot
+    // bprumo TODO: move this retain into the big loop above: make it a filter() before collect()
     storage.retain(|_slot, stores| !stores.is_empty());
 
     // Process deserialized data, set necessary fields in self
