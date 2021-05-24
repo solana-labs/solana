@@ -1564,6 +1564,13 @@ pub fn main() {
                 .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
         )
         .arg(
+            Arg::with_name("rpc_scan_and_fix_roots")
+                .long("rpc-scan-and-fix-roots")
+                .takes_value(false)
+                .requires("enable_rpc_transaction_history")
+                .help("Verifies blockstore roots on boot and fixes any gaps"),
+        )
+        .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .long("halt-on-trusted-validators-accounts-hash-mismatch")
                 .requires("trusted_validators")
@@ -2050,6 +2057,7 @@ pub fn main() {
                 .ok()
                 .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
+            rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (

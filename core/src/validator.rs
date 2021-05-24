@@ -75,7 +75,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
-    thread::sleep,
+    thread::{sleep, Builder},
     time::Duration,
 };
 
@@ -1091,6 +1091,23 @@ fn new_banks_from_ledger(
         });
     }
 
+    let blockstore = Arc::new(blockstore);
+    let blockstore_root_scan = if config.rpc_addrs.is_some()
+        && config.rpc_config.enable_rpc_transaction_history
+        && config.rpc_config.rpc_scan_and_fix_roots
+    {
+        let blockstore = blockstore.clone();
+        let exit = exit.clone();
+        Some(
+            Builder::new()
+                .name("blockstore-root-scan".to_string())
+                .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+
     let process_options = blockstore_processor::ProcessOptions {
         bpf_jit: config.bpf_jit,
         poh_verify,
@@ -1103,7 +1120,6 @@ fn new_banks_from_ledger(
         ..blockstore_processor::ProcessOptions::default()
     };
 
-    let blockstore = Arc::new(blockstore);
     let transaction_history_services =
         if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
             initialize_rpc_transaction_history_services(
@@ -1195,6 +1211,12 @@ fn new_banks_from_ledger(
 
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
     bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
+
+    if let Some(blockstore_root_scan) = blockstore_root_scan {
+        if let Err(err) = blockstore_root_scan.join() {
+            warn!("blockstore_root_scan failed to join {:?}", err);
+        }
+    }
 
     (
         genesis_config,

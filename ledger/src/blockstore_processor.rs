@@ -976,7 +976,7 @@ fn load_frozen_forks(
                     ).and_then(|supermajority_root| {
                         if supermajority_root > *root {
                             // If there's a cluster confirmed root greater than our last
-                            // replayed root, then beccause the cluster confirmed root should
+                            // replayed root, then because the cluster confirmed root should
                             // be descended from our last root, it must exist in `all_banks`
                             let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
 
@@ -984,6 +984,21 @@ fn load_frozen_forks(
                             // is drastically wrong
                             assert!(cluster_root_bank.ancestors.contains_key(root));
                             info!("blockstore processor found new cluster confirmed root: {}, observed in bank: {}", cluster_root_bank.slot(), bank.slot());
+
+                            // Ensure cluster-confirmed root and parents are set as root in blockstore
+                            let mut rooted_slots = vec![];
+                            let mut new_root_bank = cluster_root_bank.clone();
+                            loop {
+                                if new_root_bank.slot() == *root { break; } // Found the last root in the chain, yay!
+                                assert!(new_root_bank.slot() > *root);
+
+                                rooted_slots.push(new_root_bank.slot());
+                                // As noted, the cluster confirmed root should be descended from
+                                // our last root; therefore parent should be set
+                                new_root_bank = new_root_bank.parent().unwrap();
+                            }
+                            inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
+                            blockstore.set_roots(&rooted_slots).expect("Blockstore::set_roots should succeed");
                             Some(cluster_root_bank)
                         } else {
                             None
