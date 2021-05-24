@@ -1087,19 +1087,21 @@ fn new_banks_from_ledger(
     }
 
     let blockstore = Arc::new(blockstore);
-    let blockstore_root_scan =
-        if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
-            let blockstore = blockstore.clone();
-            let exit = exit.clone();
-            Some(
-                Builder::new()
-                    .name("blockstore-root-scan".to_string())
-                    .spawn(move || blockstore.scan_and_fix_roots(&exit))
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
+    let blockstore_root_scan = if config.rpc_addrs.is_some()
+        && config.rpc_config.enable_rpc_transaction_history
+        && config.rpc_config.rpc_scan_and_fix_roots
+    {
+        let blockstore = blockstore.clone();
+        let exit = exit.clone();
+        Some(
+            Builder::new()
+                .name("blockstore-root-scan".to_string())
+                .spawn(move || blockstore.scan_and_fix_roots(&exit))
+                .unwrap(),
+        )
+    } else {
+        None
+    };
 
     let process_options = blockstore_processor::ProcessOptions {
         bpf_jit: config.bpf_jit,
