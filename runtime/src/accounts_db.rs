@@ -4085,7 +4085,7 @@ impl AccountsDb {
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
-        let mut scan = Measure::start("scan");
+        let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
@@ -4094,6 +4094,9 @@ impl AccountsDb {
             .keys()
             .cloned()
             .collect();
+        collect.stop();
+
+        let mut scan = Measure::start("scan");
         let mismatch_found = AtomicU64::new(0);
         // Pick a chunk size big enough to allow us to produce output vectors that are smaller than the overall size.
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
@@ -4185,6 +4188,7 @@ impl AccountsDb {
             ("accounts_scan", scan.as_us(), i64),
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
+            ("collect", collect.as_us(), i64),
         );
         Ok((accumulated_hash, total_lamports))
     }
