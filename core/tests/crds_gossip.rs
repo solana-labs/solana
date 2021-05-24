@@ -351,17 +351,14 @@ fn network_run_push(
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
-                    let updated = network
+                    let origins: HashSet<_> = network
                         .get(&to)
-                        .map(|node| {
-                            node.lock()
-                                .unwrap()
-                                .process_push_message(&from, msgs.clone(), now)
-                        })
-                        .unwrap();
-
-                    let origins: HashSet<_> =
-                        updated.into_iter().map(|u| u.value.pubkey()).collect();
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .process_push_message(&from, msgs.clone(), now)
+                        .into_iter()
+                        .collect();
                     let prunes_map = network
                         .get(&to)
                         .map(|node| node.lock().unwrap().prune_received_cache(origins, &stakes))
