@@ -283,6 +283,8 @@ fn reconstruct_accountsdb_from_fields<E>(
 where
     E: SerializableStorage,
 {
+    let mut measure_total = Measure::start("");
+
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
@@ -301,6 +303,7 @@ where
     let mut remaining_slots_to_process = storage.len();
 
     // Remap the deserialized AppendVec paths to point to correct local paths
+    let mut measure_appendvecs = Measure::start("");
     let mut storage = storage
         .into_iter()
         .map(|(slot, mut slot_storage)| {
@@ -336,6 +339,7 @@ where
             Ok((slot, new_slot_storage))
         })
         .collect::<Result<HashMap<Slot, _>, Error>>()?;
+    measure_appendvecs.stop();
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
@@ -355,6 +359,7 @@ where
         .max()
         .expect("At least one storage entry must exist from deserializing stream");
 
+    let mut measure_accountsdb = Measure::start("");
     {
         accounts_db.storage.0.extend(
             storage.into_iter().map(|(slot, slot_storage_entry)| {
@@ -362,6 +367,7 @@ where
             }),
         );
     }
+    measure_accountsdb.stop();
 
     if max_id > AppendVecId::MAX / 2 {
         panic!("Storage id {} larger than allowed max", max_id);
@@ -372,5 +378,14 @@ where
         .write_version
         .fetch_add(version, Ordering::Relaxed);
     accounts_db.generate_index();
+
+    measure_total.stop();
+    datapoint_error!(
+        "reconstruct_accountsdb_from_fields",
+        ("total", measure_total.as_us(), i64),
+        ("appendvecs", measure_appendvecs.as_us(), i64),
+        ("accountsdb", measure_accountsdb.as_us(), i64),
+    );
+
     Ok(accounts_db)
 }
