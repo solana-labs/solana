@@ -511,6 +511,25 @@ export type ConfirmedTransactionMeta = {
 };
 
 /**
+ * A processed transaction from the RPC API
+ */
+export type TransactionResponse = {
+  /** The slot during which the transaction was processed */
+  slot: number;
+  /** The transaction */
+  transaction: {
+    /** The transaction message */
+    message: Message;
+    /** The transaction signatures */
+    signatures: string[];
+  };
+  /** Metadata produced from the transaction */
+  meta: ConfirmedTransactionMeta | null;
+  /** The unix timestamp of when the transaction was processed */
+  blockTime?: number | null;
+};
+
+/**
  * A confirmed transaction on the ledger
  */
 export type ConfirmedTransaction = {
@@ -594,6 +613,43 @@ export type ParsedConfirmedTransaction = {
   meta: ParsedConfirmedTransactionMeta | null;
   /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
+};
+
+/**
+ * A processed block fetched from the RPC API
+ */
+export type BlockResponse = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of transactions with status meta and original message */
+  transactions: Array<{
+    /** The transaction */
+    transaction: {
+      /** The transaction message */
+      message: Message;
+      /** The transaction signatures */
+      signatures: string[];
+    };
+    /** Metadata produced from the transaction */
+    meta: ConfirmedTransactionMeta | null;
+  }>;
+  /** Vector of block rewards */
+  rewards?: Array<{
+    /** Public key of reward recipient */
+    pubkey: string;
+    /** Reward value in lamports */
+    lamports: number;
+    /** Account balance after reward is applied */
+    postBalance: number | null;
+    /** Type of reward received */
+    rewardType: string | null;
+  }>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
 };
 
 /**
@@ -1234,9 +1290,6 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
  */
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult(number());
 
-/**
- * @internal
- */
 const ConfirmedTransactionResult = pick({
   signatures: array(string()),
   message: pick({
@@ -1256,15 +1309,6 @@ const ConfirmedTransactionResult = pick({
     recentBlockhash: string(),
   }),
 });
-
-const TransactionFromConfirmed = coerce(
-  instance(Transaction),
-  ConfirmedTransactionResult,
-  result => {
-    const {message, signatures} = result;
-    return Transaction.populate(new Message(message), signatures);
-  },
-);
 
 const ParsedInstructionResult = pick({
   parsed: unknown(),
@@ -1395,7 +1439,7 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
       parentSlot: number(),
       transactions: array(
         pick({
-          transaction: TransactionFromConfirmed,
+          transaction: ConfirmedTransactionResult,
           meta: nullable(ConfirmedTransactionMetaResult),
         }),
       ),
@@ -1436,9 +1480,9 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
   nullable(
     pick({
       slot: number(),
-      transaction: TransactionFromConfirmed,
       meta: ConfirmedTransactionMetaResult,
       blockTime: optional(nullable(number())),
+      transaction: ConfirmedTransactionResult,
     }),
   ),
 );
@@ -2668,7 +2712,8 @@ export class Connection {
 
   /**
    * Fetch the current total currency supply of the cluster in lamports
-   * @deprecated Deprecated since v1.2.8. Use `Connection.getSupply()` instead.
+   *
+   * @deprecated Deprecated since v1.2.8. Please use {@link getSupply} instead.
    */
   async getTotalSupply(commitment?: Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
@@ -2870,24 +2915,99 @@ export class Connection {
   }
 
   /**
+   * Fetch a processed block from the cluster.
+   */
+  async getBlock(
+    slot: number,
+    opts?: {commitment?: Finality},
+  ): Promise<BlockResponse | null> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [slot],
+      opts && opts.commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
+    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+
+    if ('error' in res) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
+    }
+
+    const result = res.result;
+    if (!result) return result;
+
+    return {
+      ...result,
+      transactions: result.transactions.map(({transaction, meta}) => {
+        const message = new Message(transaction.message);
+        return {
+          meta,
+          transaction: {
+            ...transaction,
+            message,
+          },
+        };
+      }),
+    };
+  }
+
+  /**
+   * Fetch a processed transaction from the cluster.
+   */
+  async getTransaction(
+    signature: string,
+    opts?: {commitment?: Finality},
+  ): Promise<TransactionResponse | null> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [signature],
+      opts && opts.commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
+    const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
+    if ('error' in res) {
+      throw new Error(
+        'failed to get confirmed transaction: ' + res.error.message,
+      );
+    }
+
+    const result = res.result;
+    if (!result) return result;
+
+    return {
+      ...result,
+      transaction: {
+        ...result.transaction,
+        message: new Message(result.transaction.message),
+      },
+    };
+  }
+
+  /**
    * Fetch a list of Transactions and transaction statuses from the cluster
-   * for a confirmed block
+   * for a confirmed block.
+   *
+   * @deprecated Deprecated since v1.13.0. Please use {@link getBlock} instead.
    */
   async getConfirmedBlock(
     slot: number,
     commitment?: Finality,
   ): Promise<ConfirmedBlock> {
-    const args = this._buildArgsAtLeastConfirmed([slot], commitment);
-    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
-    if ('error' in res) {
-      throw new Error('failed to get confirmed block: ' + res.error.message);
-    }
-    const result = res.result;
+    const result = await this.getBlock(slot, {commitment});
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
     }
-    return result;
+
+    return {
+      ...result,
+      transactions: result.transactions.map(({transaction, meta}) => {
+        return {
+          meta,
+          transaction: Transaction.populate(
+            transaction.message,
+            transaction.signatures,
+          ),
+        };
+      }),
+    };
   }
 
   /**
@@ -2925,15 +3045,13 @@ export class Connection {
     signature: TransactionSignature,
     commitment?: Finality,
   ): Promise<ConfirmedTransaction | null> {
-    const args = this._buildArgsAtLeastConfirmed([signature], commitment);
-    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
-    if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed transaction: ' + res.error.message,
-      );
-    }
-    return res.result;
+    const result = await this.getTransaction(signature, {commitment});
+    if (!result) return result;
+    const {message, signatures} = result.transaction;
+    return {
+      ...result,
+      transaction: Transaction.populate(message, signatures),
+    };
   }
 
   /**
@@ -2994,7 +3112,8 @@ export class Connection {
   /**
    * Fetch a list of all the confirmed signatures for transactions involving an address
    * within a specified slot range. Max range allowed is 10,000 slots.
-   * @deprecated Deprecated since v1.3. Use `Connection.getConfirmedSignaturesForAddress2()` instead.
+   *
+   * @deprecated Deprecated since v1.3. Please use {@link getConfirmedSignaturesForAddress2} instead.
    *
    * @param address queried address
    * @param startSlot start slot, inclusive
