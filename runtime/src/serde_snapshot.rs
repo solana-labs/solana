@@ -305,7 +305,7 @@ where
     // Remap the deserialized AppendVec paths to point to correct local paths
     let mut measure_appendvecs = Measure::start("");
     let mut storage = storage
-        .into_par_iter()
+        .into_iter()
         .map(|(slot, mut slot_storage)| {
             let mut new_slot_storage = HashMap::new();
             for storage_entry in slot_storage.drain(..) {
@@ -337,7 +337,6 @@ where
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
     // but non-root stores should not be included in the snapshot
-    // bprumo TODO: move this retain into the big loop above: make it a filter() before collect()
     storage.retain(|_slot, stores| !stores.is_empty());
 
     // Process deserialized data, set necessary fields in self
@@ -358,10 +357,10 @@ where
         .insert(slot, bank_hash_info);
 
     let mut measure_accountsdb = Measure::start("accounts db");
-    accounts_db.storage.0.par_extend(
+    accounts_db.storage.0.extend(
         storage
-            .into_par_iter()
-            .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry)))),
+            .into_iter()
+            .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry))))
     );
     measure_accountsdb.stop();
 
