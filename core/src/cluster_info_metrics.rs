@@ -128,7 +128,7 @@ pub(crate) fn submit_gossip_stats(
         (
             gossip.crds.len(),
             gossip.crds.num_nodes(),
-            gossip.pull.purged_values.len(),
+            gossip.crds.num_purged(),
             gossip.pull.failed_inserts.len(),
         )
     };
