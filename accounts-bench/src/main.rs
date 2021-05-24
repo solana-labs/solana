@@ -89,9 +89,9 @@ fn main() {
         create_time
     );
     let mut ancestors = Vec::with_capacity(num_slots);
-    ancestors.push((0, 0));
+    ancestors.push(0);
     for i in 1..num_slots {
-        ancestors.push((i as u64, i - 1));
+        ancestors.push(i as u64);
         accounts.add_root(i as u64);
     }
     let ancestors = Ancestors::from(ancestors);

@@ -1031,7 +1031,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
     ) -> Self {
         let mut bank = Self::default();
-        bank.ancestors = Ancestors::from(vec![(bank.slot(), 0)]);
+        bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
@@ -1184,9 +1184,9 @@ impl Bank {
         );
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
-        ancestors.push((new.slot(), 0));
+        ancestors.push(new.slot());
         new.parents().iter().for_each(|p| {
-            ancestors.push((p.slot(), 0));
+            ancestors.push(p.slot());
         });
         new.ancestors = Ancestors::from(ancestors);
 
@@ -4351,7 +4351,7 @@ impl Bank {
         &self,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        let just_self: Ancestors = Ancestors::from(vec![(self.slot(), 0)]);
+        let just_self: Ancestors = Ancestors::from(vec![self.slot()]);
         if let Some((account, slot)) = self.load_slow_with_fixed_root(&just_self, pubkey) {
             if slot == self.slot() {
                 return Some((account, slot));

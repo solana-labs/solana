@@ -108,7 +108,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let num_accounts = 60_000;
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
-    let ancestors = Ancestors::from(vec![(0, 0)]);
+    let ancestors = Ancestors::from(vec![0]);
     let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(0, &ancestors);
     bencher.iter(|| assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports)));
 }
@@ -124,7 +124,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
-    let ancestors = Ancestors::from(vec![(0, 0)]);
+    let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
         accounts.accounts_db.update_accounts_hash(0, &ancestors);
     });
@@ -378,7 +378,7 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
-    let ancestors = Ancestors::from(vec![(0, 0)]);
+    let ancestors = Ancestors::from(vec![0]);
     b.iter(|| {
         accounts.load_largest_accounts(
             &ancestors,

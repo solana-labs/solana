@@ -76,7 +76,7 @@ fn test_bad_bank_hash() {
     let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;
-    let ancestors = Ancestors::from([(some_slot, 0usize)].iter().copied().collect::<Vec<_>>());
+    let ancestors = Ancestors::from(vec![some_slot]);
 
     let max_accounts = 200;
     let mut accounts_keys: Vec<_> = (0..max_accounts)
