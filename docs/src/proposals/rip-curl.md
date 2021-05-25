@@ -1,6 +1,6 @@
 # RiP Curl: low-latency, transaction-oriented RPC
 
-## Problem {#problem}
+## Problem
 
 Solana's initial RPC implementation was created for the purpose of allowing
 users to confirm transactions that had just recently been sent to the cluster.
@@ -20,7 +20,7 @@ limited, preventing them from making reasonable real-time decisions, such as
 recognizing a transaction is confirmed as soon as particular, trusted
 validators vote on it.
 
-## Proposed Solution {#proposed-solution}
+## Proposed Solution
 
 A web-friendly, transaction-oriented, streaming API built around the
 validator's ReplayStage.

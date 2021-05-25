@@ -8,7 +8,7 @@ The validator votes on its chosen fork by submitting a transaction that uses an 
 
 Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
 
-## Validators, Vote Signers, and Stakeholders {#validators-vote-signers-and-stakeholders}
+## Validators, Vote Signers, and Stakeholders
 
 When a validator receives multiple blocks for the same slot, it tracks all possible forks until it can determine a "best" one. A validator selects the best fork by submitting a vote to it, using a vote signer to minimize the possibility of its vote inadvertently violating a consensus rule and getting a stake slashed.
 
@@ -18,7 +18,7 @@ A stakeholder is an identity that has control of the staked capital. The stakeho
 
 Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
 
-## Signing service {#signing-service}
+## Signing service
 
 The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
 
@@ -38,22 +38,22 @@ The vote signing service consists of a JSON RPC server and a request processor. 
    - The service verifies the voting data
    - The service returns a signature for the transaction
 
-## Validator voting {#validator-voting}
+## Validator voting
 
 A validator node, at startup, creates a new vote account and registers it with the cluster by submitting a new "vote register" transaction. The other nodes on the cluster process this transaction and include the new validator in the active set. Subsequently, the validator submits a "new vote" transaction signed with the validator's voting private key on each voting event.
 
-### Configuration {#configuration}
+### Configuration
 
 The validator node is configured with the signing service's network endpoint \(IP/Port\).
 
-### Registration {#registration}
+### Registration
 
 At startup, the validator registers itself with its signing service using JSON RPC. The RPC call returns the voting public key for the validator node. The validator creates a new "vote register" transaction including this public key, and submits it to the cluster.
 
-### Vote Collection {#vote-collection}
+### Vote Collection
 
 The validator looks up the votes submitted by all the nodes in the cluster for the last voting period. This information is submitted to the signing service with a new vote signing request.
 
-### New Vote Signing {#new-vote-signing}
+### New Vote Signing
 
 The validator creates a "new vote" transaction and sends it to the signing service using JSON RPC. The RPC request also includes the vote verification data. On success, the RPC call returns the signature for the vote. On failure, RPC call returns the failure code.

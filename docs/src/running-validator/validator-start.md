@@ -2,7 +2,7 @@
 title: Starting a Validator
 ---
 
-## Configure Solana CLI {#configure-solana-cli}
+## Configure Solana CLI
 
 The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
@@ -14,7 +14,7 @@ solana config set --url http://api.devnet.solana.com
 While this section demonstrates how to connect to the Devnet cluster, the steps
 are similar for the other [Solana Clusters](../clusters.md).
 
-## Confirm The Cluster Is Reachable {#confirm-the-cluster-is-reachable}
+## Confirm The Cluster Is Reachable
 
 Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by fetching the transaction count:
@@ -26,7 +26,7 @@ solana transaction-count
 View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry) for more
 detail on cluster activity.
 
-## Confirm your Installation {#confirm-your-installation}
+## Confirm your Installation
 
 Try running following command to join the gossip network and view all the other
 nodes in the cluster:
@@ -36,7 +36,7 @@ solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
-## Enabling CUDA {#enabling-cuda}
+## Enabling CUDA
 
 If your machine has a GPU with CUDA installed \(Linux-only currently\), include
 the `--cuda` argument to `solana-validator`.
@@ -44,11 +44,11 @@ the `--cuda` argument to `solana-validator`.
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
-## System Tuning {#system-tuning}
+## System Tuning
 
-### Linux {#linux}
+### Linux
 
-#### Automatic {#automatic}
+#### Automatic
 
 The solana repo includes a daemon to adjust system settings to optimize performance
 (namely by increasing the OS UDP buffer and file mapping limits).
@@ -63,12 +63,12 @@ To run it:
 sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
-#### Manual {#manual}
+#### Manual
 
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
-##### **Increase UDP buffers** {#increase-udp-buffers}
+##### **Increase UDP buffers**
 
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
@@ -84,7 +84,7 @@ EOF"
 sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```
 
-##### **Increased memory mapped files limit** {#increased-memory-mapped-files-limit}
+##### **Increased memory mapped files limit**
 
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
@@ -127,7 +127,7 @@ EOF"
 ### Close all open sessions (log out then, in again) ###
 ```
 
-## Generate identity {#generate-identity}
+## Generate identity
 
 Create an identity keypair for your validator by running:
 
@@ -143,7 +143,7 @@ solana-keygen pubkey ~/validator-keypair.json
 
 > Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
 
-### Paper Wallet identity {#paper-wallet-identity}
+### Paper Wallet identity
 
 You can create a paper wallet for your identity file instead of writing the
 keypair file to disk with:
@@ -164,7 +164,7 @@ See [Paper Wallet Usage](../wallet-guide/paper-wallet.md) for more info.
 
 ---
 
-### Vanity Keypair {#vanity-keypair}
+### Vanity Keypair
 
 You can generate a custom vanity keypair using solana-keygen. For instance:
 
@@ -195,7 +195,7 @@ ALLOCATION OF SOL TOO.
 To back-up your validator identify keypair, **back-up your
 "validator-keypair.json” file or your seed phrase to a secure location.**
 
-## More Solana CLI Configuration {#more-solana-cli-configuration}
+## More Solana CLI Configuration
 
 Now that you have a keypair, set the solana configuration to use your validator
 keypair for all following commands:
@@ -214,7 +214,7 @@ Keypair Path: /home/solana/validator-keypair.json
 Commitment: confirmed
 ```
 
-## Airdrop & Check Validator Balance {#airdrop--check-validator-balance}
+## Airdrop & Check Validator Balance
 
 Airdrop yourself some SOL to get started:
 
@@ -239,7 +239,7 @@ solana balance --lamports
 
 Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
-## Create Vote Account {#create-vote-account}
+## Create Vote Account
 
 If you haven’t already done so, create a vote-account keypair and create the
 vote account on the network. If you have completed this step, you should see the
@@ -258,7 +258,7 @@ solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 
 Read more about [creating and managing a vote account](vote-accounts.md).
 
-## Trusted validators {#trusted-validators}
+## Trusted validators
 
 If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>`
 argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`.
@@ -272,7 +272,7 @@ set should be set to the same snapshot interval value or multiples of the same.
 It is highly recommended you use these options to prevent malicious snapshot state download or
 account state divergence.
 
-## Connect Your Validator {#connect-your-validator}
+## Connect Your Validator
 
 Connect to the cluster by running:
 
@@ -308,14 +308,14 @@ solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 
 If your validator is connected, its public key and IP address will appear in the list.
 
-### Controlling local network port allocation {#controlling-local-network-port-allocation}
+### Controlling local network port allocation
 
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`. For
 example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict
 the validator to ports 11000-11010.
 
-### Limiting ledger size to conserve disk space {#limiting-ledger-size-to-conserve-disk-space}
+### Limiting ledger size to conserve disk space
 
 The `--limit-ledger-size` parameter allows you to specify how many ledger
 [shreds](../terminology.md#shred) your node retains on disk. If you do not
@@ -329,7 +329,7 @@ if desired. Check `solana-validator --help` for the default limit value used by
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
-### Systemd Unit {#systemd-unit}
+### Systemd Unit
 
 Running the validator as a systemd unit is one easy way to manage running in the
 background.
@@ -368,9 +368,9 @@ Start the service with:
 $ sudo systemctl enable --now sol
 ```
 
-### Logging {#logging}
+### Logging
 
-#### Log output tuning {#log-output-tuning}
+#### Log output tuning
 
 The messages that a validator emits to the log can be controlled by the `RUST_LOG`
 environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging)
@@ -380,7 +380,7 @@ Note that if logging output is reduced, this may make it difficult to debug issu
 encountered later. Should support be sought from the team, any changes will need
 to be reverted and the issue reproduced before help can be provided.
 
-#### Log rotation {#log-rotation}
+#### Log rotation
 
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
@@ -393,7 +393,7 @@ launch the process with `exec` (`exec solana-validator ...`) when using logrotat
 This will prevent the `USR1` signal from being sent to the script's process
 instead of the validator's, which will kill them both.
 
-#### Using logrotate {#using-logrotate}
+#### Using logrotate
 
 An example setup for the `logrotate`, which assumes that the validator is
 running as a systemd service called `sol.service` and writes a log file at
@@ -416,13 +416,13 @@ sudo cp logrotate.sol /etc/logrotate.d/sol
 systemctl restart logrotate.service
 ```
 
-### Disable port checks to speed up restarts {#disable-port-checks-to-speed-up-restarts}
+### Disable port checks to speed up restarts
 
 Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
 `solana-validator` command-line.
 
-### Disable snapshot compression to reduce CPU usage {#disable-snapshot-compression-to-reduce-cpu-usage}
+### Disable snapshot compression to reduce CPU usage
 
 If you are not serving snapshots to other validators, snapshot compression can
 be disabled to reduce CPU load at the expense of slightly more disk usage for
@@ -431,7 +431,7 @@ local snapshot storage.
 Add the `--snapshot-compression none` argument to your `solana-validator`
 command-line arguments and restart the validator.
 
-### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear {#using-a-ramdisk-with-spill-over-into-swap-for-the-accounts-database-to-reduce-ssd-wear}
+### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
 If your machine has plenty of RAM, a tmpfs ramdisk
 ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold
@@ -465,7 +465,7 @@ Example configuration:
 Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
 command-line arguments and restart the validator.
 
-### Account indexing {#account-indexing}
+### Account indexing
 
 As the number of populated accounts on the cluster grows, account-data RPC
 requests that scan the entire account set -- like

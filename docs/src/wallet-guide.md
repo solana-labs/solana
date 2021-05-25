@@ -6,7 +6,7 @@ This document describes the different wallet options that are available to users
 of Solana who want to be able to send, receive and interact with
 SOL tokens on the Solana blockchain.
 
-## What is a Wallet? {#what-is-a-wallet}
+## What is a Wallet?
 
 A crypto wallet is a device or application that stores a collection of keys and
 can be used to send, receive,
@@ -47,7 +47,7 @@ of security and convenience.
 **If you want to be able to receive SOL tokens on the Solana blockchain,
 you first will need to create a wallet.**
 
-## Supported Wallets {#supported-wallets}
+## Supported Wallets
 
 Solana supports several types of wallets in the Solana native
 command-line app as well as wallets from third-parties.

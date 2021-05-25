@@ -6,7 +6,7 @@ At any given moment, a cluster expects only one validator to produce ledger entr
 
 Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that an entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
 
-## Leader Schedule Rotation {#leader-schedule-rotation}
+## Leader Schedule Rotation
 
 A validator rejects blocks that are not signed by the _slot leader_. The list of identities of all slot leaders is called a _leader schedule_. The leader schedule is recomputed locally and periodically. It assigns slot leaders for a duration of time called an _epoch_. The schedule must be computed far in advance of the slots it assigns, such that the ledger state it uses to compute the schedule is finalized. That duration is called the _leader schedule offset_. Solana sets the offset to the duration of slots until the next epoch. That is, the leader schedule for an epoch is calculated from the ledger state at the start of the previous epoch. The offset of one epoch is fairly arbitrary and assumed to be sufficiently long such that all validators will have finalized their ledger state before the next schedule is generated. A cluster may choose to shorten the offset to reduce the time between stake changes and leader schedule updates.
 
@@ -23,7 +23,7 @@ The epoch duration is 100 slots. The root fork is updated from fork computed at 
 
 No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
 
-### Leader Schedule Rotation with Epoch Sized Partitions. {#leader-schedule-rotation-with-epoch-sized-partitions}
+### Leader Schedule Rotation with Epoch Sized Partitions.
 
 The duration of the leader schedule offset has a direct relationship to the likelihood of a cluster having an inconsistent view of the correct leader schedule.
 
@@ -40,11 +40,11 @@ Each partition's schedule will diverge after the partition lasts more than an ep
 
 After observing the cluster for a sufficient amount of time, the leader schedule offset can be selected based on the median partition duration and its standard deviation. For example, an offset longer then the median partition duration plus six standard deviations would reduce the likelihood of an inconsistent ledger schedule in the cluster to 1 in 1 million.
 
-## Leader Schedule Generation at Genesis {#leader-schedule-generation-at-genesis}
+## Leader Schedule Generation at Genesis
 
 The genesis config declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis config as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
 
-## Leader Schedule Generation Algorithm {#leader-schedule-generation-algorithm}
+## Leader Schedule Generation Algorithm
 
 Leader schedule is generated using a predefined seed. The process is as follows:
 
@@ -54,13 +54,13 @@ Leader schedule is generated using a predefined seed. The process is as follows:
 4. Use the random seed to select nodes weighted by stake to create a stake-weighted ordering.
 5. This ordering becomes valid after a cluster-configured number of ticks.
 
-## Schedule Attack Vectors {#schedule-attack-vectors}
+## Schedule Attack Vectors
 
-### Seed {#seed}
+### Seed
 
 The seed that is selected is predictable but unbiasable. There is no grinding attack to influence its outcome.
 
-### Active Set {#active-set}
+### Active Set
 
 A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
 
@@ -69,17 +69,17 @@ A leader can bias the active set by censoring validator votes. Two possible ways
 
 To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
 
-### Staking {#staking}
+### Staking
 
 Leaders can censor new staking transactions or refuse to validate blocks with new stakes. This attack is similar to censorship of validator votes.
 
-### Validator operational key loss {#validator-operational-key-loss}
+### Validator operational key loss
 
 Leaders and validators are expected to use ephemeral keys for operation, and stake owners authorize the validators to do work with their stake via delegation.
 
 The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly by co-signing a validator vote even though the stake is currently delegated to a validator.
 
-## Appending Entries {#appending-entries}
+## Appending Entries
 
 The lifetime of a leader schedule is called an _epoch_. The epoch is split into _slots_, where each slot has a duration of `T` PoH ticks.
 

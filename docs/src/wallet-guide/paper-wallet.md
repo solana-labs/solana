@@ -7,7 +7,7 @@ tools.
 
 > We do not intend to advise on how to _securely_ create or manage paper wallets. Please research the security concerns carefully.
 
-## Overview {#overview}
+## Overview
 
 Solana provides a key generation tool to derive keys from BIP39 compliant seed
 phrases. Solana CLI commands for running a validator and staking tokens all
@@ -16,7 +16,7 @@ support keypair input via seed phrases.
 To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
 [here](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
 
-## Paper Wallet Usage {#paper-wallet-usage}
+## Paper Wallet Usage
 
 Solana commands can be run without ever saving a keypair to disk on a machine.
 If avoiding writing a private key to disk is a security concern of yours, you've
@@ -24,11 +24,11 @@ come to the right place.
 
 > Even using this secure input method, it's still possible that a private key gets written to disk by unencrypted memory swaps. It is the user's responsibility to protect against this scenario.
 
-## Before You Begin {#before-you-begin}
+## Before You Begin
 
 - [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
 
-### Check your installation {#check-your-installation}
+### Check your installation
 
 Check that `solana-keygen` is installed correctly by running:
 
@@ -36,7 +36,7 @@ Check that `solana-keygen` is installed correctly by running:
 solana-keygen --version
 ```
 
-## Creating a Paper Wallet {#creating-a-paper-wallet}
+## Creating a Paper Wallet
 
 Using the `solana-keygen` tool, it is possible to generate new seed phrases as
 well as derive a keypair from an existing seed phrase and (optional) passphrase.
@@ -46,7 +46,7 @@ access your account.
 
 > For more information about how seed phrases work, review this [Bitcoin Wiki page](https://en.bitcoin.it/wiki/Seed_phrase).
 
-### Seed Phrase Generation {#seed-phrase-generation}
+### Seed Phrase Generation
 
 Generating a new keypair can be done using the `solana-keygen new` command. The
 command will generate a random seed phrase, ask you to enter an optional
@@ -82,7 +82,7 @@ For full usage details run:
 solana-keygen new --help
 ```
 
-### Public Key Derivation {#public-key-derivation}
+### Public Key Derivation
 
 Public keys can be derived from a seed phrase and a passphrase if you choose to
 use one. This is useful for using an offline-generated seed phrase to derive a
@@ -120,7 +120,7 @@ For full usage details run:
 solana-keygen pubkey --help
 ```
 
-### Hierarchical Derivation {#hierarchical-derivation}
+### Hierarchical Derivation
 
 The solana-cli supports
 [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and
@@ -147,7 +147,7 @@ derivation-path indexes will be promoted to hardened indexes -- eg.
 `?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are
 included in the query-string input.
 
-## Verifying the Keypair {#verifying-the-keypair}
+## Verifying the Keypair
 
 To verify you control the private key of a paper wallet address, use
 `solana-keygen verify`:
@@ -163,7 +163,7 @@ phrase will not be displayed as you type. After entering your seed phrase, the
 command will output "Success" if the given public key matches the keypair
 generated from your seed phrase, and "Failed" otherwise.
 
-## Checking Account Balance {#checking-account-balance}
+## Checking Account Balance
 
 All that is needed to check an account balance is the public key of an account.
 To retrieve public keys securely from a paper wallet, follow the
@@ -185,7 +185,7 @@ Finally, to check the balance, run the following command:
 solana balance <PUBKEY>
 ```
 
-## Creating Multiple Paper Wallet Addresses {#creating-multiple-paper-wallet-addresses}
+## Creating Multiple Paper Wallet Addresses
 
 You can create as many wallet addresses as you like. Simply re-run the
 steps in [Seed Phrase Generation](#seed-phrase-generation) or
@@ -193,6 +193,6 @@ steps in [Seed Phrase Generation](#seed-phrase-generation) or
 Multiple wallet addresses can be useful if you want to transfer tokens between
 your own accounts for different purposes.
 
-## Support {#support}
+## Support
 
 Check out our [Wallet Support Page](support.md) for ways to get help.

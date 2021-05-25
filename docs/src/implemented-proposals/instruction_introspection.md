@@ -2,13 +2,13 @@
 title: instruction introspection
 ---
 
-## Problem {#problem}
+## Problem
 
 Some smart contract programs may want to verify that another Instruction is present in a
 given Message since that Instruction could be be performing a verification of certain data,
 in a precompiled function. (See secp256k1_instruction for an example).
 
-## Solution {#solution}
+## Solution
 
 Add a new sysvar Sysvar1nstructions1111111111111111111111111 that a program can reference
 and received the Message's instruction data inside, and also the index of the current instruction.

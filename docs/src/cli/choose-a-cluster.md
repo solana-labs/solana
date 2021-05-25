@@ -5,7 +5,7 @@ title: Connecting to a Cluster
 See [Solana Clusters](../clusters.md) for general information about the
 available clusters.
 
-## Configure the command-line tool {#configure-the-command-line-tool}
+## Configure the command-line tool
 
 You can check what cluster the Solana command-line tool (CLI) is currently targeting by
 running the following command:
@@ -24,7 +24,7 @@ For example to target the Devnet cluster, run:
 solana config set --url https://api.devnet.solana.com
 ```
 
-## Ensure Versions Match {#ensure-versions-match}
+## Ensure Versions Match
 
 Though not strictly necessary, the CLI will generally work best when its version
 matches the software version running on the cluster. To get the locally-installed

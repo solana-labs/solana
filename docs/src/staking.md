@@ -50,7 +50,7 @@ It is the goal of the network rewards and slashing to align both validators'
 and token holders' financial incentives, which in turn help keeps the network
 secure, robust and performing at its best.
 
-## How do I stake my SOL tokens? {#how-do-i-stake-my-sol-tokens}
+## How do I stake my SOL tokens?
 
 In order to stake tokens on Solana, you first will need to transfer some SOL
 into a wallet that supports staking, then follow the steps or instructions
@@ -58,7 +58,7 @@ provided by the wallet to create a stake account and delegate your stake.
 Different wallets will vary slightly in their process for this but the general
 description is below.
 
-#### Supported Wallets {#supported-wallets}
+#### Supported Wallets
 
 Staking operations are supported by the following wallet solutions:
 
@@ -79,7 +79,7 @@ Staking operations are supported by the following wallet solutions:
   Note that you cannot choose a validator with these services: they assign you
   to their partner validator.
 
-#### Create a Stake Account {#create-a-stake-account}
+#### Create a Stake Account
 
 A stake account is a different type of account from a wallet address
 that is used to simply send and receive SOL tokens to other addresses. If you
@@ -90,7 +90,7 @@ Depending on which wallet you are using the steps to create a stake account
 may vary slightly. Not all wallets support stake accounts, see
 [Supported Wallets](#supported-wallets).
 
-#### Select a Validator {#select-a-validator}
+#### Select a Validator
 
 After a stake account is created, you will likely want to delegate the SOL
 to a validator node. Below are a few places where you can get information about
@@ -118,13 +118,13 @@ To view block production statistics, use the Solana command-line tools:
 The Solana team does not make recommendations on how to interpret this
 information. Potential delegators should do their own due diligence.
 
-#### Delegate your Stake {#delegate-your-stake}
+#### Delegate your Stake
 
 Once you have decided to which validator or validators you will delegate, use
 a supported wallet to delegate your stake account to the validator's vote
 account address.
 
-## Stake Account Details {#stake-account-details}
+## Stake Account Details
 
 For more information about the operations and permissions associated with a
 stake account, please see [Stake Accounts](staking/stake-accounts.md)

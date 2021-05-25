@@ -10,7 +10,7 @@ Shreds are moved to a fork-able key space the tuple of `leader slot` + `shred in
 
 Repair requests for recent shreds are served out of RAM or recent files and out of deeper storage for less recent shreds, as implemented by the store backing Blockstore.
 
-## Functionalities of Blockstore {#functionalities-of-blockstore}
+## Functionalities of Blockstore
 
 1. Persistence: the Blockstore lives in the front of the nodes verification
 
@@ -38,7 +38,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
    the Blockstore.
 
-## Blockstore Design {#blockstore-design}
+## Blockstore Design
 
 1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
 2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
@@ -60,7 +60,7 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
 5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
 
-## Blockstore APIs {#blockstore-apis}
+## Blockstore APIs
 
 The Blockstore offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blockstore. These subscription API's are as follows: 1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
 
@@ -68,7 +68,7 @@ The Blockstore offers a subscription based API that ReplayStage uses to ask for 
 
 Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blockstore.
 
-## Interfacing with Bank {#interfacing-with-bank}
+## Interfacing with Bank
 
 The bank exposes to replay stage:
 
@@ -86,6 +86,6 @@ The bank exposes to replay stage:
 
 Replay stage uses Blockstore APIs to find the longest chain of entries it can hang off a previous vote. If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
 
-## Pruning Blockstore {#pruning-blockstore}
+## Pruning Blockstore
 
 Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.

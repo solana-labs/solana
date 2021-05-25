@@ -2,7 +2,7 @@
 title: Monitoring a Validator
 ---
 
-## Check Gossip {#check-gossip}
+## Check Gossip
 
 Confirm the IP address and **identity pubkey** of your validator is visible in
 the gossip network by running:
@@ -11,7 +11,7 @@ the gossip network by running:
 solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
-## Check Your Balance {#check-your-balance}
+## Check Your Balance
 
 Your account balance should decrease by the transaction fee amount as your
 validator submits votes, and increase after serving as the leader. Pass the
@@ -21,7 +21,7 @@ validator submits votes, and increase after serving as the leader. Pass the
 solana balance --lamports
 ```
 
-## Check Vote Activity {#check-vote-activity}
+## Check Vote Activity
 
 The `solana vote-account` command displays the recent voting activity from
 your validator:
@@ -30,7 +30,7 @@ your validator:
 solana vote-account ~/vote-account-keypair.json
 ```
 
-## Get Cluster Info {#get-cluster-info}
+## Get Cluster Info
 
 There are several useful JSON-RPC endpoints for monitoring your validator on the
 cluster, as well as the health of the cluster:

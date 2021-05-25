@@ -2,7 +2,7 @@
 title: SolFlare Web Wallet
 ---
 
-## Introduction {#introduction}
+## Introduction
 
 [SolFlare.com](https://solflare.com/) is a community-created web wallet built
 specifically for Solana.
@@ -18,15 +18,15 @@ site itself, but rather they are stored in an encrypted
 This guide describes how to set up a wallet using SolFlare, how to send and
 receive SOL tokens, and how to create and manage a stake account.
 
-## Getting Started {#getting-started}
+## Getting Started
 
 Go to https://www.solflare.com in a supported browser. Most popular web browsers
 should work when interacting with a Keystore File, but currently only
 Chrome and Brave are supported when interacting with a Ledger Nano.
 
-### Using a Keystore File {#using-a-keystore-file}
+### Using a Keystore File
 
-#### Create a new Keystore File {#create-a-new-keystore-file}
+#### Create a new Keystore File
 
 To create a wallet with a Keystore file, click on "Create a Wallet" and select
 "Using Keystore File". Follow the prompts to create a password which will be
@@ -42,7 +42,7 @@ You may want to consider saving a backup copy of your Keystore file on an
 external drive separate from your main computer, and storing your password in a
 separate location.
 
-#### Access your wallet with a Keystore File {#access-your-wallet-with-a-keystore-file}
+#### Access your wallet with a Keystore File
 
 To use SolFlare with a previously created Keystore file, click on
 "Access a Wallet" and select "Using Keystore File". If you just created a new
@@ -50,19 +50,19 @@ Keystore file, you will be taken to the Access page directly.
 You will be prompted to enter the password and upload your Keystore file,
 then you will be taken to the wallet interface main page.
 
-### Using a Ledger Nano hardware wallet {#using-a-ledger-nano-hardware-wallet}
+### Using a Ledger Nano hardware wallet
 
 _NOTE: Please see [known issues](ledger-live.md#known-issues) for any current
 limitations in using the Nano._
 
-#### Initial Device Setup {#initial-device-setup}
+#### Initial Device Setup
 
 To use a Ledger Nano with SolFlare, first ensure you have
 [set up your Nano](ledger-live.md) and have [installed the latest version of
 the Solana app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app)
 on your device.
 
-#### Select a Ledger address to access {#select-a-ledger-address-to-access}
+#### Select a Ledger address to access
 
 Plug in your Nano and open the Solana app so the device screen displays
 "Application is Ready".
@@ -86,7 +86,7 @@ make sure to access the same address when using SolFlare to be able to access
 those funds. If you connect to the incorrect address,
 simply click Logout and re-connect with the correct address.
 
-## Select a Network {#select-a-network}
+## Select a Network
 
 Solana maintains [three distinct networks](../clusters), each of which has
 its own purpose in supporting the Solana ecosystem. Mainnet Beta is selected by
@@ -96,9 +96,9 @@ of the currently selected network at the top of the wallet dashboard, either
 Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
 using.
 
-## Sending and Receiving SOL Tokens {#sending-and-receiving-sol-tokens}
+## Sending and Receiving SOL Tokens
 
-### Receiving {#receiving}
+### Receiving
 
 To receive tokens into your wallet, someone must transfer some to your wallet's
 address. The address is displayed at the top-left on the screen, and you can
@@ -107,7 +107,7 @@ tokens. If you hold tokens in a different wallet or on an exchange, you can
 withdraw to this address as well. Once the transfer is made, the balance shown
 on SolFlare should update within a few seconds.
 
-### Sending {#sending}
+### Sending
 
 Once you have some tokens at your wallet address, you can send them to any other
 wallet address or an exchange deposit address by clicking "Transfer SOL" in the
@@ -116,13 +116,13 @@ transfer and click "Submit". You will be prompted to confirm the details of the
 transaction before you [use your key to sign the transaction](#signing-a-transaction)
 and then it will be submitted to the network.
 
-## Staking SOL Tokens {#staking-sol-tokens}
+## Staking SOL Tokens
 
 SolFlare supports creating and managing stake accounts and delegations. To learn
 about how staking on Solana works in general, check out our
 [Staking Guide](../staking).
 
-### Create a Stake Account {#create-a-stake-account}
+### Create a Stake Account
 
 You can use some of the SOL tokens in your wallet to create a new stake account.
 From the wallet main page click "Staking" at the top of the page. In the upper-
@@ -141,7 +141,7 @@ Stake accounts created on SolFlare set your wallet address as the
 for your new account, which gives your wallet's key the authority to sign
 for any transactions related to the new stake account.
 
-### View your Stake Accounts {#view-your-stake-accounts}
+### View your Stake Accounts
 
 On the main Wallet dashboard page or on the Staking dashboard page, your stake
 accounts will be visible in the "Your Staking Accounts" box. Stake accounts
@@ -155,7 +155,7 @@ Stake accounts that were created outside of SolFlare will also be displayed and
 can be managed as long as the wallet you logged in with is assigned as the stake
 authority.
 
-### Delegate tokens in a Stake Account {#delegate-tokens-in-a-stake-account}
+### Delegate tokens in a Stake Account
 
 Once you have [selected a validator](../staking#select-a-validator), you may
 delegate the tokens in one of your stake accounts to them. From the Staking
@@ -167,7 +167,7 @@ To un-delegate your staked tokens (also called deactivating your stake), the
 process is similar. On the Staking page, at the right side of a delegated stake
 account, click the "Undelegate" button and follow the prompts.
 
-### Split a Stake Account {#split-a-stake-account}
+### Split a Stake Account
 
 You may split an existing stake account into two stake accounts. Click on the
 address of a stake account controlled by your wallet, and under the Actions bar,
@@ -178,18 +178,18 @@ allows you to delegate to multiple different validators with different amounts
 of tokens. You may split a stake account as many times as you want, to create
 as many stake accounts as you want.
 
-## Signing a Transaction {#signing-a-transaction}
+## Signing a Transaction
 
 Any time you submit a transaction such as sending tokens to another wallet or
 delegating stake, you need to use your private key to sign the transaction so
 it will be accepted by the network.
 
-### Using a Keystore File {#using-a-keystore-file-1}
+### Using a Keystore File
 
 If you accessed your wallet using a Keystore file, you will be prompted to enter
 your password any time the key is needed to sign a transaction.
 
-### Using a Ledger Nano {#using-a-ledger-nano}
+### Using a Ledger Nano
 
 If you accessed your wallet with a Ledger Nano, you will be prompted to
 confirm the pending transaction details on your device whenever the key is needed

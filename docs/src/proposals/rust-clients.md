@@ -2,7 +2,7 @@
 title: Rust Clients
 ---
 
-## Problem {#problem}
+## Problem
 
 High-level tests, such as bench-tps, are written in terms of the `Client`
 trait. When we execute these tests as part of the test suite, we use the
@@ -15,7 +15,7 @@ the network interface, we can expand the user-facing object to include all sorts
 of useful functionality, such as the "spinner" from RpcClient, without concern
 for needing to extend the trait and its implementations.
 
-## Proposed Solution {#proposed-solution}
+## Proposed Solution
 
 Instead of implementing the `Client` trait, `ThinClient` should be constructed
 with an implementation of it. That way, all utility functions currently in the
@@ -34,12 +34,12 @@ If higher-level components require more functionality than what could be
 implemented by `BankClient`, it should be implemented by a second object
 that implements a second trait, following the same pattern described here.
 
-### Error Handling {#error-handling}
+### Error Handling
 
 The `Client` should use the existing `TransportError` enum for errors, except
 that the `Custom(String)` field should be changed to `Custom(Box<dyn Error>)`.
 
-### Implementation Strategy {#implementation-strategy}
+### Implementation Strategy
 
 1. Add new object to `solana-sdk`, `RpcClientTng`, where the `Tng` suffix is
    temporary and stands for "The Next Generation"

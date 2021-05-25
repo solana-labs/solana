@@ -9,7 +9,7 @@ expensive. This proposal lays out a mechanism for such clients to confirm that
 their actions have been committed to the ledger state with minimal resource
 expenditure and third-party trust.
 
-## A Naive Approach {#a-naive-approach}
+## A Naive Approach
 
 Validators store the signatures of recently confirmed transactions for a short
 period of time to ensure that they are not processed more than once. Validators
@@ -27,7 +27,7 @@ transaction. Requiring multiple validator attestations further reduces trust in
 the validator, as it increases both the technical and economic difficulty of
 compromising several other network participants.
 
-## Light Clients {#light-clients}
+## Light Clients
 
 A 'light client' is a cluster participant that does not itself run a validator.
 This light client would provide a level of security greater than trusting a
@@ -49,13 +49,13 @@ Validators themselves may want to use light client APIs for performance reasons.
 For example, during the initial launch of a validator, the validator may use a
 cluster provided checkpoint of the state and verify it with a receipt.
 
-## Receipts {#receipts}
+## Receipts
 
 A receipt is a minimal proof that; a transaction has been included in a block,
 that the block has been voted on by the client's preferred set of validators
 and that the votes have reached the desired confirmation depth.
 
-### Transaction Inclusion Proof {#transaction-inclusion-proof}
+### Transaction Inclusion Proof
 
 A transaction inclusion proof is a data structure that contains a Merkle Path
 from a transaction, through an Entry-Merkle to a Block-Merkle, which is included
@@ -63,7 +63,7 @@ in a Bank-Hash with the required set of validator votes. A chain of PoH Entries
 containing subsequent validator votes, deriving from the Bank-Hash, is the proof
 of confirmation.
 
-#### Transaction Merkle {#transaction-merkle}
+#### Transaction Merkle
 
 An Entry-Merkle is a Merkle Root including all transactions in a given entry,
 sorted by signature. Each transaction in an entry is already merkled here:
@@ -93,7 +93,7 @@ in the block with bank hash `B`, we would need to provide all the entry hashes
 in the block. Ideally this Block-Merkle would be implmented, as the alternative
 is very inefficient.
 
-#### Block Headers {#block-headers}
+#### Block Headers
 
 In order to verify transaction inclusion proofs, light clients need to be able
 to infer the topology of the forks in the network
@@ -129,7 +129,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
 A good place to implement this logic along existing streaming logic in the
 validator's replay logic: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
 
-#### Optimistic Confirmation Proof {#optimistic-confirmation-proof}
+#### Optimistic Confirmation Proof
 
 Currently optimistic confirmation is detected via a listener that monitors
 gossip and the replay pipeline for votes:
@@ -171,7 +171,7 @@ block `B'`. This is why the headers in the `Block headers` section above are
 important, the client will need to verify that `B` is indeed an ancestor of
 `B'`.
 
-#### Proof of Stake Distribution {#proof-of-stake-distribution}
+#### Proof of Stake Distribution
 
 Once presented with the transaction merkle and optimistic confirmation proofs
 above, a client can verify a transaction `T` was optimistially confirmed in a
@@ -186,19 +186,19 @@ to that system account. Full nodes can then provide a merkle proving that the
 system account state was updated in some block `B`, and then show that the
 block `B` was optimistically confirmed/rooted.
 
-### Account State Verification {#account-state-verification}
+### Account State Verification
 
 An account's state (balance or other data) can be verified by submitting a
 transaction with a **_TBD_** Instruction to the cluster. The client can then
 use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify
 whether the cluster agrees that the acount has reached the expected state.
 
-### Validator Votes {#validator-votes}
+### Validator Votes
 
 Leaders should coalesce the validator votes by stake weight into a single entry.
 This will reduce the number of entries necessary to create a receipt.
 
-### Chain of Entries {#chain-of-entries}
+### Chain of Entries
 
 A receipt has a PoH link from the payment or state Merkle Path root to a list
 of consecutive validation votes.
@@ -235,7 +235,7 @@ Clients do not need the starting vote state. The
 such that only votes that appear after the transaction provide finality for the
 transaction, and finality is independent of the starting state.
 
-### Verification {#verification}
+### Verification
 
 A light client that is aware of the supermajority set validators can verify a
 receipt by following the Merkle Path to the PoH chain. The Block-Merkle is the
@@ -244,7 +244,7 @@ simulate [fork selection](../implemented-proposals/tower-bft.md) for the
 consecutive votes and verify that the receipt is confirmed at the desired
 lockout threshold.
 
-### Synthetic State {#synthetic-state}
+### Synthetic State
 
 Synthetic state should be computed into the Bank-Hash along with the bank
 generated state.

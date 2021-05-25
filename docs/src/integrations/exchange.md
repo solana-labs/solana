@@ -5,7 +5,7 @@ title: Add Solana to Your Exchange
 This guide describes how to add Solana's native token SOL to your cryptocurrency
 exchange.
 
-## Node Setup {#node-setup}
+## Node Setup
 
 We highly recommend setting up at least two nodes on high-grade computers/cloud
 instances, upgrading to newer versions promptly, and keeping an eye on service
@@ -62,7 +62,7 @@ Optional parameters to consider:
 - `--private-rpc` prevents your RPC port from being published for use by other nodes
 - `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
 
-### Automatic Restarts and Monitoring {#automatic-restarts-and-monitoring}
+### Automatic Restarts and Monitoring
 
 We recommend configuring each of your nodes to restart automatically on exit, to
 ensure you miss as little data as possible. Running the solana software as a
@@ -78,7 +78,7 @@ Discord, or Twillio. For details, run `solana-watchtower --help`.
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
-#### New Software Release Announcements {#new-software-release-announcements}
+#### New Software Release Announcements
 
 We release new software frequently (around 1 release / week).
 Sometimes newer versions include incompatible protocol changes, which
@@ -93,7 +93,7 @@ Like staked validators, we expect any exchange-operated validators to be updated
 at your earliest convenience within a business day or two after a normal release
 announcement. For security-related releases, more urgent action may be needed.
 
-### Ledger Continuity {#ledger-continuity}
+### Ledger Continuity
 
 By default, each of your nodes will boot from a snapshot provided by one of your
 trusted validators. This snapshot reflects the current state of the chain, but
@@ -114,7 +114,7 @@ able to catch up to the network and will need to download a new snapshot from a
 trusted validator. In doing so your validators will now have a gap in its
 historical ledger data that cannot be filled.
 
-### Minimizing Validator Port Exposure {#minimizing-validator-port-exposure}
+### Minimizing Validator Port Exposure
 
 The validator requires that various UDP and TCP ports be open for inbound
 traffic from all other Solana validators. While this is the most efficient mode of
@@ -144,7 +144,7 @@ target validator.
 Your validator should now only be communicating with the explicitly listed
 validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
 
-## Setting up Deposit Accounts {#setting-up-deposit-accounts}
+## Setting up Deposit Accounts
 
 Solana accounts do not require any on-chain initialization; once they contain
 some SOL, they exist. To set up a deposit account for your exchange, simply
@@ -164,18 +164,18 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
-### Offline Accounts {#offline-accounts}
+### Offline Accounts
 
 You may wish to keep the keys for one or more collection accounts offline for
 greater security. If so, you will need to move SOL to hot accounts using our
 [offline methods](../offline-signing.md).
 
-## Listening for Deposits {#listening-for-deposits}
+## Listening for Deposits
 
 When a user wants to deposit SOL into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
-### Poll for Blocks {#poll-for-blocks}
+### Poll for Blocks
 
 To track all the deposit accounts for your exchange, poll for each confirmed
 block and inspect for addresses of interest, using the JSON-RPC service of your
@@ -271,7 +271,7 @@ can request the block from RPC in binary format, and parse it using either our
 [Rust SDK](https://github.com/solana-labs/solana) or
 [Javascript SDK](https://github.com/solana-labs/solana-web3.js).
 
-### Address History {#address-history}
+### Address History
 
 You can also query the transaction history of a specific address. This is
 generally _not_ a viable method for tracking all your deposit addresses over all
@@ -371,13 +371,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-## Sending Withdrawals {#sending-withdrawals}
+## Sending Withdrawals
 
 To accommodate a user's request to withdraw SOL, you must generate a Solana
 transfer transaction, and send it to the api node to be forwarded to your
 cluster.
 
-### Synchronous {#synchronous}
+### Synchronous
 
 Sending a synchronous transfer to the Solana cluster allows you to easily ensure
 that a transfer is successful and finalized by the cluster.
@@ -396,7 +396,7 @@ offers a similar approach for the JS ecosystem. Use the `SystemProgram` to build
 a transfer transaction, and submit it using the `sendAndConfirmTransaction`
 method.
 
-### Asynchronous {#asynchronous}
+### Asynchronous
 
 For greater flexibility, you can submit withdrawal transfers asynchronously. In
 these cases, it is your responsibility to verify that the transaction succeeded
@@ -426,7 +426,7 @@ solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --b
 You can also build, sign, and serialize the transaction manually, and fire it off to
 the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
 
-#### Transaction Confirmations & Finality {#transaction-confirmations--finality}
+#### Transaction Confirmations & Finality
 
 Get the status of a batch of transactions using the
 [`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
@@ -466,7 +466,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 }
 ```
 
-#### Blockhash Expiration {#blockhash-expiration}
+#### Blockhash Expiration
 
 You can check whether a particular blockhash is still valid by sending a
 [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
@@ -474,13 +474,13 @@ request with the blockhash as a parameter. If the response value is `null`, the
 blockhash is expired, and the withdrawal transaction using that blockhash should
 never succeed.
 
-### Validating User-supplied Account Addresses for Withdrawals {#validating-user-supplied-account-addresses-for-withdrawals}
+### Validating User-supplied Account Addresses for Withdrawals
 
 As withdrawals are irreversible, it may be a good practice to validate a
 user-supplied account address before authorizing a withdrawal in order to
 prevent accidental loss of user funds.
 
-#### Basic verfication {#basic-verfication}
+#### Basic verfication
 
 Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
 results in an ASCII text string matching the following regular expression:
@@ -495,20 +495,20 @@ decoded and the resulting byte array's length confirmed to be 32. However, there
 are some addresses that can decode to 32 bytes despite a typo such as a single
 missing character, reversed characters and ignored case
 
-#### Advanced verification {#advanced-verification}
+#### Advanced verification
 
 Due to the vulnerability to typos described above, it is recommended that the
 balance be queried for candidate withdraw addresses and the user prompted to
 confirm their intentions if a non-zero balance is discovered.
 
-#### Valid ed25519 pubkey check {#valid-ed25519-pubkey-check}
+#### Valid ed25519 pubkey check
 
 The address of a normal account in Solana is a Base58-encoded string of a
 256-bit ed25519 public key. Not all bit patterns are valid public keys for the
 ed25519 curve, so it is possible to ensure user-supplied account addresses are
 at least correct ed25519 public keys.
 
-#### Java {#java}
+#### Java
 
 Here is a Java example of validating a user-supplied address as a valid ed25519
 public key:
@@ -566,7 +566,7 @@ public class PubkeyValidator
 }
 ```
 
-## Supporting the SPL Token Standard {#supporting-the-spl-token-standard}
+## Supporting the SPL Token Standard
 
 [SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
 token creation and exchange on the Solana blockchain.
@@ -574,14 +574,14 @@ token creation and exchange on the Solana blockchain.
 The SPL Token workflow is similar to that of native SOL tokens, but there are a
 few differences which will be discussed in this section.
 
-### Token Mints {#token-mints}
+### Token Mints
 
 Each _type_ of SPL Token is declared by creating a _mint_ account. This account
 stores metadata describing token features like the supply, number of decimals, and
 various authorities with control over the mint. Each SPL Token account references
 its associated mint and may only interact with SPL Tokens of that type.
 
-### Installing the `spl-token` CLI Tool {#installing-the-spl-token-cli-tool}
+### Installing the `spl-token` CLI Tool
 
 SPL Token accounts are queried and modified using the `spl-token` command line
 utility. The examples provided in this section depend upon having it installed
@@ -608,7 +608,7 @@ Which should result in something like
 spl-token-cli 2.0.1
 ```
 
-### Account Creation {#account-creation}
+### Account Creation
 
 SPL Token accounts carry additional requirements that native System Program
 accounts do not:
@@ -622,7 +622,7 @@ accounts do not:
    native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
    this amount is 0.00203928 SOL (2,039,280 lamports).
 
-#### Command Line {#command-line}
+#### Command Line
 
 To create an SPL Token account with the following properties:
 
@@ -633,7 +633,7 @@ To create an SPL Token account with the following properties:
 spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
-#### Example {#example}
+#### Example
 
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
@@ -650,22 +650,22 @@ Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
 ```
 
-### Checking an Account's Balance {#checking-an-accounts-balance}
+### Checking an Account's Balance
 
-#### Command Line {#command-line-1}
+#### Command Line
 
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
-#### Example {#example-1}
+#### Example
 
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
 ```
 
-### Token Transfers {#token-transfers}
+### Token Transfers
 
 The source account for a transfer is the actual token account that contains the
 amount.
@@ -675,13 +675,13 @@ token account for the given mint does not yet exist for that wallet, the
 transfer will create it provided that the `--fund-recipient` argument as
 provided.
 
-#### Command Line {#command-line-2}
+#### Command Line
 
 ```
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
-#### Example {#example-2}
+#### Example
 
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -691,7 +691,7 @@ Transfer 1 tokens
 Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
 ```
 
-### Depositing {#depositing}
+### Depositing
 
 Since each `(user, mint)` pair requires a separate account on chain, it is
 recommended that an exchange create batches of token accounts in advance and assign them
@@ -710,7 +710,7 @@ updates.
 made to exend the `preBalance` and `postBalance` transaction status metadata
 fields to include SPL Token balance transfers.
 
-### Withdrawing {#withdrawing}
+### Withdrawing
 
 The withdrawal address a user provides should be the same address used for
 regular SOL withdrawal.
@@ -732,9 +732,9 @@ Template `spl-token transfer` command for a withdrawal:
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
 
-### Other Considerations {#other-considerations}
+### Other Considerations
 
-#### Freeze Authority {#freeze-authority}
+#### Freeze Authority
 
 For regulatory compliance reasons, an SPL Token issuing entity may optionally
 choose to hold "Freeze Authority" over all accounts created in association with
@@ -743,7 +743,7 @@ the assets in a given account at will, rendering the account unusable until thaw
 If this feature is in use, the freeze authority's pubkey will be registered in
 the SPL Token's mint account.
 
-## Testing the Integration {#testing-the-integration}
+## Testing the Integration
 
 Be sure to test your complete workflow on Solana devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet

@@ -2,7 +2,7 @@
 title: Validator
 ---
 
-## History {#history}
+## History
 
 When we first started Solana, the goal was to de-risk our TPS claims. We knew
 that between optimistic concurrency control and sufficiently long leader slots,
@@ -16,7 +16,7 @@ believed was the most technically elegant cross-section of those technologies.
 In the context of leader rotation, the strong distinction between leading and
 validating is blurred.
 
-## Difference between validating and leading {#difference-between-validating-and-leading}
+## Difference between validating and leading
 
 The fundamental difference between the pipelines is when the PoH is present. In
 a leader, we process transactions, removing bad ones, and then tag the result
@@ -32,7 +32,7 @@ has one last step. Any time it finishes processing a block, it needs to weigh
 any forks it's observing, possibly cast a vote, and if so, reset its PoH hash
 to the block hash it just voted on.
 
-## Proposed Design {#proposed-design}
+## Proposed Design
 
 We unwrap the many abstraction layers and build a single pipeline that can
 toggle leader mode on whenever the validator's ID shows up in the leader
@@ -40,7 +40,7 @@ schedule.
 
 ![Validator block diagram](/img/validator-proposal.svg)
 
-## Notable changes {#notable-changes}
+## Notable changes
 
 - Hoist FetchStage and BroadcastStage out of TPU
 - BankForks renamed to Banktree

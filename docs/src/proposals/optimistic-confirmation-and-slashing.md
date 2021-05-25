@@ -13,7 +13,7 @@ acting maliciously. Applications can assume that 2/3+ votes observed in
 gossip confirm a block or that at least 4.66% of the network is violating
 the protocol.
 
-## How does it work? {#how-does-it-work}
+## How does it work?
 
 The general idea is that validators must continue voting following their
 last fork, unless the validator can construct a proof that their current
@@ -27,7 +27,7 @@ block, it is impossible for any of the validators to construct this proof,
 and therefore no validator is able to switch forks and this block will
 be eventually finalized.
 
-## Tradeoffs {#tradeoffs}
+## Tradeoffs
 
 The safety margin is 1/3+X, where X represents the minimum amount of stake
 that will be slashed in case the protocol is violated. The tradeoff is
@@ -43,7 +43,7 @@ which is primarily composed of high availability systems a 23.68% drop
 in availabilty seems unlinkely. 1:10^12 odds assuming five 4.7% staked
 nodes with 0.995 of uptime.
 
-## Security {#security}
+## Security
 
 Long term average votes per slot has been 670,000,000 votes / 12,000,000
 slots, or 55 out of 64 voting validators. This includes missed blocks due
@@ -51,7 +51,7 @@ to block producer failures. When a client sees 55/64, or ~86% confirming
 a block, it can expect that ~24% or `(86 - 66.666.. + 4.666..)%` of
 the network must be slashed for this block to fail full finalization.
 
-## Why Solana? {#why-solana}
+## Why Solana?
 
 This approach can be built on other networks, but the implementation
 complexity is significantly reduced on Solana because our votes
@@ -59,7 +59,7 @@ have provable VDF-based timeouts. It’s not clear if switching proofs
 can be easily constructed in networks with weak assumptions about
 time.
 
-## Slashing roadmap {#slashing-roadmap}
+## Slashing roadmap
 
 Slashing is a hard problem, and it becomes harder when the goal of
 the network is to have the lowest possible latency. The tradeoffs are

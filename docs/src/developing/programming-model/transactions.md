@@ -7,11 +7,11 @@ submitted to the cluster. The Solana runtime will execute a program to process
 each of the [instructions](terminology.md#instruction) contained in the
 transaction, in order, and atomically.
 
-## Anatomy of a Transaction {#anatomy-of-a-transaction}
+## Anatomy of a Transaction
 
 This section covers the binary format of a transaction.
 
-### Transaction Format {#transaction-format}
+### Transaction Format
 
 A transaction contains a [compact-array](#compact-array-format) of signatures,
 followed by a [message](#message-format). Each item in the signatures array is
@@ -21,18 +21,18 @@ runtime verifies that the number of signatures matches the number in the first
 each signature was signed by the private key corresponding to the public key at
 the same index in the message's account addresses array.
 
-#### Signature Format {#signature-format}
+#### Signature Format
 
 Each digital signature is in the ed25519 binary format and consumes 64 bytes.
 
-### Message Format {#message-format}
+### Message Format
 
 A message contains a [header](#message-header-format), followed by a
 compact-array of [account addresses](#account-addresses-format), followed by a
 recent [blockhash](#blockhash-format), followed by a compact-array of
 [instructions](#instruction-format).
 
-#### Message Header Format {#message-header-format}
+#### Message Header Format
 
 The message header contains three unsigned 8-bit values. The first value is the
 number of required signatures in the containing transaction. The second value
@@ -40,7 +40,7 @@ is the number of those corresponding account addresses that are read-only. The
 third value in the message header is the number of read-only account addresses
 not requiring signatures.
 
-#### Account Addresses Format {#account-addresses-format}
+#### Account Addresses Format
 
 The addresses that require signatures appear at the beginning of the account
 address array, with addresses requesting write access first and read-only
@@ -48,13 +48,13 @@ accounts following. The addresses that do not require signatures follow the
 addresses that do, again with read-write accounts first and read-only accounts
 following.
 
-#### Blockhash Format {#blockhash-format}
+#### Blockhash Format
 
 A blockhash contains a 32-byte SHA-256 hash. It is used to indicate when a
 client last observed the ledger. Validators will reject transactions when the
 blockhash is too old.
 
-### Instruction Format {#instruction-format}
+### Instruction Format
 
 An instruction contains a program id index, followed by a compact-array of
 account address indexes, followed by a compact-array of opaque 8-bit data. The
@@ -63,12 +63,12 @@ opaque data. The program id index is an unsigned 8-bit index to an account
 address in the message's array of account addresses. The account address
 indexes are each an unsigned 8-bit index into that same array.
 
-### Compact-Array Format {#compact-array-format}
+### Compact-Array Format
 
 A compact-array is serialized as the array length, followed by each array item.
 The array length is a special multi-byte encoding called compact-u16.
 
-#### Compact-u16 Format {#compact-u16-format}
+#### Compact-u16 Format
 
 A compact-u16 is a multi-byte encoding of 16 bits. The first byte contains the
 lower 7 bits of the value in its lower 7 bits. If the value is above 0x7f, the
@@ -77,13 +77,13 @@ bits of a second byte. If the value is above 0x3fff, the high bit is set and
 the remaining 2 bits of the value are placed into the lower 2 bits of a third
 byte.
 
-### Account Address Format {#account-address-format}
+### Account Address Format
 
 An account address is 32-bytes of arbitrary data. When the address requires a
 digital signature, the runtime interprets it as the public key of an ed25519
 keypair.
 
-## Instructions {#instructions}
+## Instructions
 
 Each [instruction](terminology.md#instruction) specifies a single program, a
 subset of the transaction's accounts that should be passed to the program, and a
@@ -126,7 +126,7 @@ Which can be found here:
 
 https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L220
 
-### Program Id {#program-id}
+### Program Id
 
 The instruction's [program id](terminology.md#program-id) specifies which
 program will process this instruction. The program's account's owner specifies
@@ -142,13 +142,13 @@ that are not executable.
 Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs)
 are handled differently in that they are built directly into the Solana runtime.
 
-### Accounts {#accounts}
+### Accounts
 
 The accounts referenced by an instruction represent on-chain state and serve as
 both the inputs and outputs of a program. More information about Accounts can be
 found in the [Accounts](accounts.md) section.
 
-### Instruction data {#instruction-data}
+### Instruction data
 
 Each instruction caries a general purpose byte array that is passed to the
 program along with the accounts. The contents of the instruction data is program
@@ -170,7 +170,7 @@ that this method only supports fixed sized types. Token utilizes the
 trait to encode/decode instruction data for both token instructions as well as
 token account states.
 
-### Multiple instructions in a single transaction {#multiple-instructions-in-a-single-transaction}
+### Multiple instructions in a single transaction
 
 A transaction can contain instructions in any order. This means a malicious
 user could craft transactions that may pose instructions in an order that the
@@ -190,7 +190,7 @@ assuming it will be deleted by the runtime. If the program does not zero out the
 account's data, a malicious user could trail this instruction with another that
 transfers the tokens a second time.
 
-## Signatures {#signatures}
+## Signatures
 
 Each transaction explicitly lists all account public keys referenced by the
 transaction's instructions. A subset of those public keys are each accompanied
@@ -200,7 +200,7 @@ authorization to permit debiting the account or modifying its data. More
 information about how the authorization is communicated to a program can be
 found in [Accounts](accounts.md#signers)
 
-## Recent Blockhash {#recent-blockhash}
+## Recent Blockhash
 
 A transaction includes a recent [blockhash](terminology.md#blockhash) to prevent
 duplication and to give transactions lifetimes. Any transaction that is

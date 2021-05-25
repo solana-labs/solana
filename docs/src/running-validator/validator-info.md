@@ -4,7 +4,7 @@ title: Publishing Validator Info
 
 You can publish your validator information to the chain to be publicly visible to other users.
 
-## Run solana validator-info {#run-solana-validator-info}
+## Run solana validator-info
 
 Run the solana CLI to populate a validator info account:
 
@@ -18,7 +18,7 @@ For details about optional fields for VALIDATOR_INFO_ARGS:
 solana validator-info publish --help
 ```
 
-## Example Commands {#example-commands}
+## Example Commands
 
 Example publish command:
 
@@ -40,7 +40,7 @@ Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
   Info: {"keybaseUsername":"elvis","name":"Elvis Validator","website":"https://elvis-validates.com"}
 ```
 
-## Keybase {#keybase}
+## Keybase
 
 Including a Keybase username allows client applications \(like the Solana
 Network Explorer\) to automatically pull in your validator public profile,

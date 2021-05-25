@@ -4,13 +4,13 @@ title: Rent
 
 Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
 
-## Two-tiered rent regime {#two-tiered-rent-regime}
+## Two-tiered rent regime
 
 Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
 
 Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
 
-## Timings of collecting rent {#timings-of-collecting-rent}
+## Timings of collecting rent
 
 There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
 
@@ -22,7 +22,7 @@ On the contrary, rent collection isn't applied to accounts that are directly man
 
 Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
 
-## Actual processing of collecting rent {#actual-processing-of-collecting-rent}
+## Actual processing of collecting rent
 
 Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
 
@@ -36,9 +36,9 @@ A percentage of the rent collected is destroyed. The rest is distributed to vali
 
 Finally, rent collection happens according to the protocol-level account updates like the rent distribution to validators, meaning there is no corresponding transaction for rent deductions. So, rent collection is rather invisible, only implicitly observable by a recent transaction or predetermined timing given its account address prefix.
 
-## Design considerations {#design-considerations}
+## Design considerations
 
-### Current design rationale {#current-design-rationale}
+### Current design rationale
 
 Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
@@ -48,7 +48,7 @@ As another side-effect of this choice, also note that this periodic rent collect
 
 As the overall consequence of this design, all accounts are stored equally as a validator's working set with the same performance characteristics, reflecting the uniform rent pricing structure.
 
-### Ad-hoc collection {#ad-hoc-collection}
+### Ad-hoc collection
 
 Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
 
@@ -60,7 +60,7 @@ Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/acces
 
   lest accounts that are loaded infrequently get a free ride
 
-### System instruction for collecting rent {#system-instruction-for-collecting-rent}
+### System instruction for collecting rent
 
 Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
 

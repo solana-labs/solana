@@ -7,12 +7,12 @@ To make debugging programs easier, developers can write unit tests that directly
 test their program's execution via the Solana runtime, or run a local cluster
 that will allow RPC clients to interact with their program.
 
-## Running unit tests {#running-unit-tests}
+## Running unit tests
 
 - [Testing with Rust](developing-rust.md#how-to-test)
 - [Testing with C](developing-c.md#how-to-test)
 
-## Logging {#logging}
+## Logging
 
 During program execution both the runtime and the program log status and error
 messages.
@@ -36,7 +36,7 @@ displayed in the form:
 
 `Program log: <user defined message>`
 
-## Error Handling {#error-handling}
+## Error Handling
 
 The amount of information that can be communicated via a transaction error is
 limited but there are many points of possible failures. The following are
@@ -73,7 +73,7 @@ this:
 
 `BPF program 4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM failed: out of bounds memory store (insn #615), addr 0x200001e38/8`
 
-## Monitoring Compute Budget Consumption {#monitoring-compute-budget-consumption}
+## Monitoring Compute Budget Consumption
 
 The program can log the remaining number of compute units it will be allowed
 before program execution is halted. Programs can use these logs to wrap
@@ -87,7 +87,7 @@ operations they wish to profile.
 See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
-## ELF Dump {#elf-dump}
+## ELF Dump
 
 The BPF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime.
@@ -95,7 +95,7 @@ insight into a program's composition and what it may be doing at runtime.
 - [Create a dump file of a Rust program](developing-rust.md#elf-dump)
 - [Create a dump file of a C program](developing-c.md#elf-dump)
 
-## Instruction Tracing {#instruction-tracing}
+## Instruction Tracing
 
 During execution the runtime BPF interpreter can be configured to log a trace
 message for each BPF instruction executed. This can be very helpful for things

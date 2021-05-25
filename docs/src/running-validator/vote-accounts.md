@@ -5,7 +5,7 @@ title: Vote Account Management
 This page describes how to set up an on-chain _vote account_. Creating a vote
 account is needed if you plan to run a validator node on Solana.
 
-## Create a Vote Account {#create-a-vote-account}
+## Create a Vote Account
 
 A vote account can be created with the
 [create-vote-account](../cli/usage.md#solana-create-vote-account) command.
@@ -14,7 +14,7 @@ running. All aspects of the vote account can be changed except for the
 [vote account address](#vote-account-address), which is fixed for the lifetime
 of the account.
 
-### Configure an Existing Vote Account {#configure-an-existing-vote-account}
+### Configure an Existing Vote Account
 
 - To change the [validator identity](#validator-identity), use
   [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
@@ -25,9 +25,9 @@ of the account.
 - To change the [commission](#commission), use
   [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
-## Vote Account Structure {#vote-account-structure}
+## Vote Account Structure
 
-### Vote Account Address {#vote-account-address}
+### Vote Account Address
 
 A vote account is created at an address that is either the public key of a
 keypair file, or at a derived address based on a keypair file's public key and
@@ -40,7 +40,7 @@ When someone wants to [delegate tokens in a stake account](../staking.md),
 the delegation command is pointed at the vote account address of the validator
 to whom the token-holder wants to delegate.
 
-### Validator Identity {#validator-identity}
+### Validator Identity
 
 The _validator identity_ is a system account that is used to pay for all the
 vote transaction fees submitted to the vote account.
@@ -64,7 +64,7 @@ The validator identity is required to be provided when a vote account is created
 The validator identity can also be changed after an account is created by using
 the [vote-update-validator](../cli/usage.md#solana-vote-update-validator) command.
 
-### Vote Authority {#vote-authority}
+### Vote Authority
 
 The _vote authority_ keypair is used to sign each vote transaction the validator
 node wants to submit to the cluster. This doesn't necessarily have to be unique
@@ -95,7 +95,7 @@ multiple times. This allows the validator process to keep voting successfully
 when the network reaches an epoch boundary at which the validator's vote
 authority account changes.
 
-### Withdraw Authority {#withdraw-authority}
+### Withdraw Authority
 
 The _withdraw authority_ keypair is used to withdraw funds from a vote account
 using the [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
@@ -118,7 +118,7 @@ The withdraw authority can be changed later with the
 [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
 command.
 
-### Commission {#commission}
+### Commission
 
 _Commission_ is the percent of network rewards earned by a validator that are
 deposited into the validator's vote account. The remainder of the rewards
@@ -148,12 +148,12 @@ When setting the commission, only integer values in the set [0-100] are accepted
 The integer represents the number of percentage points for the commission, so
 creating an account with `--commission 10` will set a 10% commission.
 
-## Key Rotation {#key-rotation}
+## Key Rotation
 
 Rotating the vote account authority keys require special handling when dealing
 with a live validator.
 
-### Vote Account Validator Identity {#vote-account-validator-identity}
+### Vote Account Validator Identity
 
 You will need access to the _withdraw authority_ keypair for the vote account to
 change the validator identity. The follow steps assume that
@@ -165,7 +165,7 @@ change the validator identity. The follow steps assume that
    to modify the validator identity in your vote account
 4. Restart your validator with the new identity keypair for the `--identity` argument
 
-### Vote Account Authorized Voter {#vote-account-authorized-voter}
+### Vote Account Authorized Voter
 
 The _vote authority_ keypair may only be changed at epoch boundaries and
 requires some additional arguments to `solana-validator` for a seamless
@@ -187,6 +187,6 @@ migration.
    `--authorized-voter ~/validator-keypair.json` argument and restart
    `solana-validator`, as the old vote authority keypair is no longer required.
 
-### Vote Account Authorized Withdrawer {#vote-account-authorized-withdrawer}
+### Vote Account Authorized Withdrawer
 
 No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.

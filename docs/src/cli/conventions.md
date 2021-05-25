@@ -27,7 +27,7 @@ with a number such as `42` or `100.42`. You can replace `<ACCOUNT_ADDRESS>` with
 the base58 encoding of your public key, such as
 `9grmKMwTiZwUHSExjtbFzHLPTdWoXgcg1bZkhvwTrTww`.
 
-## Keypair conventions {#keypair-conventions}
+## Keypair conventions
 
 Many commands using the CLI tools require a value for a `<KEYPAIR>`. The value
 you should use for the keypair depend on what type of
@@ -43,7 +43,7 @@ solana-keygen pubkey <KEYPAIR>
 Below, we show how to resolve what you should put in `<KEYPAIR>` depending
 on your wallet type.
 
-#### Paper Wallet {#paper-wallet}
+#### Paper Wallet
 
 In a paper wallet, the keypair is securely derived from the seed words and
 optional passphrase you entered when the wallet was created. To use a paper
@@ -57,7 +57,7 @@ To display the wallet address of a Paper Wallet:
 solana-keygen pubkey prompt://
 ```
 
-#### File System Wallet {#file-system-wallet}
+#### File System Wallet
 
 With a file system wallet, the keypair is stored in a file on your computer.
 Replace `<KEYPAIR>` with the complete file path to the keypair file.
@@ -69,7 +69,7 @@ For example, if the file system keypair file location is
 solana-keygen pubkey /home/solana/my_wallet.json
 ```
 
-#### Hardware Wallet {#hardware-wallet}
+#### Hardware Wallet
 
 If you chose a hardware wallet, use your
 [keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),

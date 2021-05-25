@@ -41,7 +41,7 @@ implementation may be a numerical approximation based on a First In, First Out
 It is likely that a reward will be offered as a % of the slashed amount to any
 node that submits proof of this slashing condition being violated to the PoH.
 
-### Partial Slashing {#partial-slashing}
+### Partial Slashing
 
 In the schema described so far, when a validator votes on a given PoH stream,
 they are committing themselves to that fork for a time determined by the vote

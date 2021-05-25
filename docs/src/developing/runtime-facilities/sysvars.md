@@ -14,7 +14,7 @@ the list of accounts in a transaction. The account can be read in your
 instruction processor like any other account. Access to sysvars accounts is
 always _readonly_.
 
-## Clock {#clock}
+## Clock
 
 The Clock sysvar contains data on cluster time, including the current slot,
 epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
@@ -45,7 +45,7 @@ epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
   elapsed time since the `epoch_start_timestamp` has deviated from the expected
   elapsed time by more than 25%.
 
-## EpochSchedule {#epochschedule}
+## EpochSchedule
 
 The EpochSchedule sysvar contains epoch scheduling constants that are set in
 genesis, and enables calculating the number of slots in a given epoch, the epoch
@@ -55,7 +55,7 @@ for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader s
 - Layout:
   [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
 
-## Fees {#fees}
+## Fees
 
 The Fees sysvar contains the fee calculator for the current slot. It is updated
 every slot, based on the fee-rate governor.
@@ -64,7 +64,7 @@ every slot, based on the fee-rate governor.
 - Layout:
   [Fees](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/fees/struct.Fees.html)
 
-## Instructions {#instructions}
+## Instructions
 
 The Instructions sysvar contains the serialized instructions in a Message while
 that Message is being processed. This allows program instructions to reference
@@ -75,7 +75,7 @@ other instructions in the same transaction. Read more information on
 - Layout:
   [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
 
-## RecentBlockhashes {#recentblockhashes}
+## RecentBlockhashes
 
 The RecentBlockhashes sysvar contains the active recent blockhashes as well as
 their associated fee calculators. It is updated every slot.
@@ -84,7 +84,7 @@ their associated fee calculators. It is updated every slot.
 - Layout:
   [RecentBlockhashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/recent_blockhashes/struct.RecentBlockhashes.html)
 
-## Rent {#rent}
+## Rent
 
 The Rent sysvar contains the rental rate. Currently, the rate is static and set
 in genesis. The Rent burn percentage is modified by manual feature activation.
@@ -93,7 +93,7 @@ in genesis. The Rent burn percentage is modified by manual feature activation.
 - Layout:
   [Rent](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/rent/struct.Rent.html)
 
-## SlotHashes {#slothashes}
+## SlotHashes
 
 The SlotHashes sysvar contains the most recent hashes of the slot's parent
 banks. It is updated every slot.
@@ -102,7 +102,7 @@ banks. It is updated every slot.
 - Layout:
   [SlotHashes](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_hashes/struct.SlotHashes.html)
 
-## SlotHistory {#slothistory}
+## SlotHistory
 
 The SlotHistory sysvar contains a bitvector of slots present over the last
 epoch. It is updated every slot.
@@ -111,7 +111,7 @@ epoch. It is updated every slot.
 - Layout:
   [SlotHistory](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/slot_history/struct.SlotHistory.html)
 
-## StakeHistory {#stakehistory}
+## StakeHistory
 
 The StakeHistory sysvar contains the history of cluster-wide stake activations
 and de-activations per epoch. It is updated at the start of every epoch.

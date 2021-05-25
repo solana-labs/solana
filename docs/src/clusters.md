@@ -12,7 +12,7 @@ Explorers:
 - [http://explorer.solana.com/](https://explorer.solana.com/).
 - [http://solanabeach.io/](http://solanabeach.io/).
 
-## Devnet {#devnet}
+## Devnet
 
 - Devnet serves as a playground for anyone who wants to take Solana for a
   test drive, as a user, token holder, app developer, or validator.
@@ -32,13 +32,13 @@ export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=s
 
 - RPC URL for Devnet: `https://api.devnet.solana.com`
 
-##### Example `solana` command-line configuration {#example-solana-command-line-configuration}
+##### Example `solana` command-line configuration
 
 ```bash
 solana config set --url https://api.devnet.solana.com
 ```
 
-##### Example `solana-validator` command-line {#example-solana-validator-command-line}
+##### Example `solana-validator` command-line
 
 ```bash
 $ solana-validator \
@@ -57,7 +57,7 @@ $ solana-validator \
 
 The `--trusted-validator`s is operated by Solana
 
-## Testnet {#testnet}
+## Testnet
 
 - Testnet is where we stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
@@ -79,13 +79,13 @@ export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=test
 
 - RPC URL for Testnet: `https://api.testnet.solana.com`
 
-##### Example `solana` command-line configuration {#example-solana-command-line-configuration-1}
+##### Example `solana` command-line configuration
 
 ```bash
 solana config set --url https://api.testnet.solana.com
 ```
 
-##### Example `solana-validator` command-line {#example-solana-validator-command-line-1}
+##### Example `solana-validator` command-line
 
 ```bash
 $ solana-validator \
@@ -114,7 +114,7 @@ The identity of the `--trusted-validator`s are:
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
-## Mainnet Beta {#mainnet-beta}
+## Mainnet Beta
 
 A permissionless, persistent cluster for early token holders and launch partners.
 Currently, rewards and inflation are disabled.
@@ -134,13 +134,13 @@ export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-be
 
 - RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
-##### Example `solana` command-line configuration {#example-solana-command-line-configuration-2}
+##### Example `solana` command-line configuration
 
 ```bash
 solana config set --url https://api.mainnet-beta.solana.com
 ```
 
-##### Example `solana-validator` command-line {#example-solana-validator-command-line-2}
+##### Example `solana-validator` command-line
 
 ```bash
 $ solana-validator \

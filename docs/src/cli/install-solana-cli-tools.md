@@ -9,9 +9,9 @@ depending on your preferred workflow:
 - [Download Prebuilt Binaries](#download-prebuilt-binaries)
 - [Build from Source](#build-from-source)
 
-## Use Solana's Install Tool {#use-solanas-install-tool}
+## Use Solana's Install Tool
 
-### MacOS & Linux {#macos--linux}
+### MacOS & Linux
 
 - Open your favorite Terminal application
 
@@ -58,7 +58,7 @@ solana --version
 
 ---
 
-### Windows {#windows}
+### Windows
 
 - Open a Command Prompt (`cmd.exe`) as an Administrator
 
@@ -97,12 +97,12 @@ solana --version
 - After a successful install, `solana-install update` may be used to easily
   update the Solana software to a newer version at any time.
 
-## Download Prebuilt Binaries {#download-prebuilt-binaries}
+## Download Prebuilt Binaries
 
 If you would rather not use `solana-install` to manage the install, you can
 manually download and install the binaries.
 
-### Linux {#linux}
+### Linux
 
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
@@ -115,7 +115,7 @@ cd solana-release/
 export PATH=$PWD/bin:$PATH
 ```
 
-### MacOS {#macos}
+### MacOS
 
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
@@ -128,7 +128,7 @@ cd solana-release/
 export PATH=$PWD/bin:$PATH
 ```
 
-### Windows {#windows-1}
+### Windows
 
 - Download the binaries by navigating to
   [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
@@ -143,7 +143,7 @@ cd solana-release/
 set PATH=%cd%/bin;%PATH%
 ```
 
-## Build From Source {#build-from-source}
+## Build From Source
 
 If you are unable to use the prebuilt binaries or prefer to build it yourself
 from source, navigate to

@@ -11,12 +11,12 @@ to send and receive SOL tokens, we recommend setting up a third-party
 
 To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
-## File System Wallet {#file-system-wallet}
+## File System Wallet
 
 A _file system wallet_, aka an FS wallet, is a directory in your computer's
 file system. Each file in the directory holds a keypair.
 
-### File System Wallet Security {#file-system-wallet-security}
+### File System Wallet Security
 
 A file system wallet is the most convenient and least secure form of wallet. It
 is convenient because the keypair is stored in a simple file. You can generate as
@@ -32,13 +32,13 @@ drive, such as FileVault on MacOS, minimizes that risk.
 
 [File System Wallet](file-system-wallet.md)
 
-## Paper Wallet {#paper-wallet}
+## Paper Wallet
 
 A _paper wallet_ is a collection of _seed phrases_ written on paper. A seed
 phrase is some number of words (typically 12 or 24) that can be used to
 regenerate a keypair on demand.
 
-### Paper Wallet Security {#paper-wallet-security}
+### Paper Wallet Security
 
 In terms of convenience versus security, a paper wallet sits at the opposite
 side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
@@ -51,12 +51,12 @@ of tokens for a long period of time.
 
 [Paper Wallets](paper-wallet.md)
 
-## Hardware Wallet {#hardware-wallet}
+## Hardware Wallet
 
 A hardware wallet is a small handheld device that stores keypairs and provides
 some interface for signing transactions.
 
-### Hardware Wallet Security {#hardware-wallet-security}
+### Hardware Wallet Security
 
 A hardware wallet, such as the
 [Ledger hardware wallet](https://www.ledger.com/), offers a great blend of

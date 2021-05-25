@@ -38,7 +38,7 @@ Some system design constraints:
 Based on these constraints, Google's BigTable product is selected as the data
 store.
 
-## Table Schema {#table-schema}
+## Table Schema
 
 A BigTable instance is used to hold all transaction data, broken up into
 different tables for quick searching.
@@ -61,14 +61,14 @@ The table layout s supports the existing RPC endpoints only. New RPC endpoints
 in the future may require additions to the schema and potentially iterating over
 all transactions to build up the necessary metadata.
 
-## Accessing BigTable {#accessing-bigtable}
+## Accessing BigTable
 
 BigTable has a gRPC endpoint that can be accessed using the
 [tonic](https://crates.io/crates/crate)] and the raw protobuf API, as currently no
 higher-level Rust crate for BigTable exists. Practically this makes parsing the
 results of BigTable queries more complicated but is not a significant issue.
 
-## Data Population {#data-population}
+## Data Population
 
 The ongoing population of instance data will occur on an epoch cadence through the
 use of a new `solana-ledger-tool` command that will convert rocksdb data for a
@@ -77,7 +77,7 @@ given slot range into the instance schema.
 The same process will be run once, manually, to backfill the existing ledger
 data.
 
-### Block Table: `block` {#block-table-block}
+### Block Table: `block`
 
 This table contains the compressed block data for a given slot.
 
@@ -88,7 +88,7 @@ block will always be first when the rows are listed. eg, The row key for slot
 
 The row data is a compressed `StoredConfirmedBlock` struct.
 
-### Account Address Transaction Signature Lookup Table: `tx-by-addr` {#account-address-transaction-signature-lookup-table-tx-by-addr}
+### Account Address Transaction Signature Lookup Table: `tx-by-addr`
 
 This table contains the transactions that affect a given address.
 
@@ -102,7 +102,7 @@ be listed first.
 Sysvar addresses are not indexed. However frequently used programs such as
 Vote or System are, and will likely have a row for every confirmed slot.
 
-### Transaction Signature Lookup Table: `tx` {#transaction-signature-lookup-table-tx}
+### Transaction Signature Lookup Table: `tx`
 
 This table maps a transaction signature to its confirmed block, and index within that block.
 

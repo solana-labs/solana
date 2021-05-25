@@ -5,7 +5,7 @@ title: Staking
 **By default your validator will have no stake.** This means it will be
 ineligible to become leader.
 
-## Monitoring Catch Up {#monitoring-catch-up}
+## Monitoring Catch Up
 
 To delegate stake, first make sure your validator is running and has caught up
 to the cluster. It may take some time to catch up after your validator boots.
@@ -22,7 +22,7 @@ Also if you find the cluster's slot advancing faster than yours, you will likely
 never catch up. This typically implies some kind of networking issue between
 your validator and the rest of the cluster.
 
-## Create Stake Keypair {#create-stake-keypair}
+## Create Stake Keypair
 
 If you haven’t already done so, create a staking keypair. If you have completed
 this step, you should see the “validator-stake-keypair.json” in your Solana
@@ -32,7 +32,7 @@ runtime directory.
 solana-keygen new -o ~/validator-stake-keypair.json
 ```
 
-## Delegate Stake {#delegate-stake}
+## Delegate Stake
 
 Now delegate 1 SOL to your validator by first creating your stake account:
 
@@ -76,7 +76,7 @@ before submitting a transaction.
 
 Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).
 
-## Validator Stake Warm-up {#validator-stake-warm-up}
+## Validator Stake Warm-up
 
 To combat various attacks on consensus, new stake delegations are subject to
 a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
@@ -91,7 +91,7 @@ Monitor a validator's stake during warmup by:
 - Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
 - Once your stake is warmed up, you will see a stake balance listed for your validator by running `solana validators`
 
-## Monitor Your Staked Validator {#monitor-your-staked-validator}
+## Monitor Your Staked Validator
 
 Confirm your validator becomes a [leader](../terminology.md#leader)
 
@@ -112,7 +112,7 @@ Helpful JSON-RPC methods:
 - `getVoteAccounts` This will tell you how much active stake your validator currently has. A % of the validator's stake is activated on an epoch boundary. You can learn more about staking on Solana [here](../cluster/stake-delegation-and-rewards.md).
 - `getLeaderSchedule` At any given moment, the network expects only one validator to produce ledger entries. The [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation) is called the “leader”. This will return the complete leader schedule \(on a slot-by-slot basis\) for currently activated stake, the identity pubkey will show up 1 or more times here.
 
-## Deactivating Stake {#deactivating-stake}
+## Deactivating Stake
 
 Before detaching your validator from the cluster, you should deactivate the
 stake that was previously delegated by running:

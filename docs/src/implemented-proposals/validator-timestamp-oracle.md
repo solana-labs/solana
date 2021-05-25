@@ -39,7 +39,7 @@ rooted yet, this timestamp would be unstable (potentially failing requirement
 for recent-block timestamping, it will be trivial to add the RPC apis in the
 future.
 
-## Recording Time {#recording-time}
+## Recording Time
 
 At regular intervals as it is voting on a particular slot, each validator
 records its observed time by including a timestamp in its Vote instruction
@@ -54,11 +54,11 @@ service that allows nodes to calculate the estimated timestamp immediately after
 the block is rooted, and cache that value in Blockstore. This provides
 persistent data and quick queries, while still meeting requirement 1) above.
 
-### Vote Accounts {#vote-accounts}
+### Vote Accounts
 
 A validator's vote account will hold its most recent slot-timestamp in VoteState.
 
-### Vote Program {#vote-program}
+### Vote Program
 
 The on-chain Vote program needs to be extended to process a timestamp sent with
 a Vote instruction from validators. In addition to its current process_vote
@@ -68,7 +68,7 @@ timestamp and corresponding slot to the currently stored values to verify that
 they are both monotonically increasing, and store the new slot and timestamp in
 the account.
 
-## Calculating Stake-Weighted Mean Timestamp {#calculating-stake-weighted-mean-timestamp}
+## Calculating Stake-Weighted Mean Timestamp
 
 In order to calculate the estimated timestamp for a particular block, a
 validator first needs to identify the most recently timestamped slot:
@@ -93,7 +93,7 @@ Any validator replaying the ledger should derive the same stake-weighted mean
 timestamp by processing the Timestamp transactions from the same number of
 slots.
 
-## Calculating Estimated Time for a Particular Block {#calculating-estimated-time-for-a-particular-block}
+## Calculating Estimated Time for a Particular Block
 
 Once the mean timestamp for a known slot is calculated, it is trivial to
 calculate the estimated timestamp for subsequent block N:

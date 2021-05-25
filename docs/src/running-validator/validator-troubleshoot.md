@@ -5,7 +5,7 @@ title: Troubleshooting
 There is a **\#validator-support** Discord channel available to reach other
 testnet participants, [https://discord.gg/pquxPsq](https://discord.gg/pquxPsq).
 
-## Useful Links & Discussion {#useful-links--discussion}
+## Useful Links & Discussion
 
 - [Network Explorer](http://explorer.solana.com/)
 - [Testnet Metrics Dashboard](https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge?refresh=60s&orgId=2)

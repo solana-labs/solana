@@ -4,13 +4,13 @@ title: Cluster Test Framework
 
 This document proposes the Cluster Test Framework \(CTF\). CTF is a test harness that allows tests to execute against a local, in-process cluster or a deployed cluster.
 
-## Motivation {#motivation}
+## Motivation
 
 The goal of CTF is to provide a framework for writing tests independent of where and how the cluster is deployed. Regressions can be captured in these tests and the tests can be run against deployed clusters to verify the deployment. The focus of these tests should be on cluster stability, consensus, fault tolerance, API stability.
 
 Tests should verify a single bug or scenario, and should be written with the least amount of internal plumbing exposed to the test.
 
-## Design Overview {#design-overview}
+## Design Overview
 
 Tests are provided an entry point, which is a `contact_info::ContactInfo` structure, and a keypair that has already been funded.
 
@@ -18,7 +18,7 @@ Each node in the cluster is configured with a `validator::ValidatorConfig` at bo
 
 Once booted, the test will discover the cluster through a gossip entry point and configure any runtime behaviors via validator RPC.
 
-## Test Interface {#test-interface}
+## Test Interface
 
 Each CTF test starts with an opaque entry point and a funded keypair. The test should not depend on how the cluster is deployed, and should be able to exercise all the cluster functionality through the publicly available interfaces.
 
@@ -32,7 +32,7 @@ pub fn test_this_behavior(
 )
 ```
 
-## Cluster Discovery {#cluster-discovery}
+## Cluster Discovery
 
 At test start, the cluster has already been established and is fully connected. The test can discover most of the available nodes over a few second.
 
@@ -43,7 +43,7 @@ use crate::gossip_service::discover_nodes;
 let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 ```
 
-## Cluster Configuration {#cluster-configuration}
+## Cluster Configuration
 
 To enable specific scenarios, the cluster needs to be booted with special configurations. These configurations can be captured in `validator::ValidatorConfig`.
 
@@ -59,7 +59,7 @@ let local = LocalCluster::new_with_config(
                 );
 ```
 
-## How to design a new test {#how-to-design-a-new-test}
+## How to design a new test
 
 For example, there is a bug that shows that the cluster fails when it is flooded with invalid advertised gossip nodes. Our gossip library and protocol may change, but the cluster still needs to stay resilient to floods of invalid advertised gossip nodes.
 

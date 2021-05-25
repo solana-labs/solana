@@ -16,7 +16,7 @@ a some desired MVP economic features to be available for early pre-testnet and
 testnet participants. Below is a rough sketch outlining basic economic
 functionality from which a more complete and functional system can be developed.
 
-## MVP Economic Features {#mvp-economic-features}
+## MVP Economic Features
 
 - Faucet to deliver testnet SOLs to validators for staking and application development.
 - Mechanism by which validators are rewarded via network inflation.

@@ -7,14 +7,14 @@ the Solana network, staking can be performed programmatically. The team
 and community have developed several on-chain and off-chain programs to make
 stakes easier to manage.
 
-#### Stake-o-matic aka Auto-delegation Bots {#stake-o-matic-aka-auto-delegation-bots}
+#### Stake-o-matic aka Auto-delegation Bots
 
 This off-chain program manages a large population of validators staked by a
 central authority. The Solana Foundation uses an auto-delegation bot to regularly delegate its
 stake to "non-delinquent" validators that meet specified performance requirements. More information can be found on the
 [official announcement](https://forums.solana.com/t/stake-o-matic-delegation-matching-program/790).
 
-#### Stake Pools {#stake-pools}
+#### Stake Pools
 
 This on-chain program pools together SOL to be staked by a manager, allowing SOL
 holders to stake and earn rewards without managing stakes.

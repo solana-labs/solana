@@ -10,9 +10,9 @@ you to operate on all accounts with single invocations. You can use it to
 sum up the balances of all accounts, move accounts to a new wallet, or set
 new authorities.
 
-## Usage {#usage}
+## Usage
 
-### Create a stake account {#create-a-stake-account}
+### Create a stake account
 
 Create and fund a derived stake account at the stake authority public key:
 
@@ -22,7 +22,7 @@ solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
-### Count accounts {#count-accounts}
+### Count accounts
 
 Count the number of derived accounts:
 
@@ -30,7 +30,7 @@ Count the number of derived accounts:
 solana-stake-accounts count <BASE_PUBKEY>
 ```
 
-### Get stake account balances {#get-stake-account-balances}
+### Get stake account balances
 
 Sum the balance of derived stake accounts:
 
@@ -38,7 +38,7 @@ Sum the balance of derived stake accounts:
 solana-stake-accounts balance <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Get stake account addresses {#get-stake-account-addresses}
+### Get stake account addresses
 
 List the address of each stake account derived from the given public key:
 
@@ -46,7 +46,7 @@ List the address of each stake account derived from the given public key:
 solana-stake-accounts addresses <BASE_PUBKEY> --num-accounts <NUMBER>
 ```
 
-### Set new authorities {#set-new-authorities}
+### Set new authorities
 
 Set new authorities on each derived stake account:
 
@@ -57,7 +57,7 @@ solana-stake-accounts authorize <BASE_PUBKEY> \
     --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
-### Relocate stake accounts {#relocate-stake-accounts}
+### Relocate stake accounts
 
 Relocate stake accounts:
 

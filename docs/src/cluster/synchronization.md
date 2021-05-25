@@ -10,7 +10,7 @@ Solana technically never sends a _block_, but uses the term to describe the sequ
 
 What's happening under the hood is that entries are streamed to validators as quickly as a leader node can batch a set of valid transactions into an entry. Validators process those entries long before it is time to vote on their validity. By processing the transactions optimistically, there is effectively no delay between the time the last entry is received and the time when the node can vote. In the event consensus is **not** achieved, a node simply rolls back its state. This optimisic processing technique was introduced in 1981 and called [Optimistic Concurrency Control](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735). It can be applied to blockchain architecture where a cluster votes on a hash that represents the full ledger up to some _block height_. In Solana, it is implemented trivially using the last entry's PoH hash.
 
-## Relationship to VDFs {#relationship-to-vdfs}
+## Relationship to VDFs
 
 The Proof of History technique was first described for use in blockchain by Solana in November of 2017. In June of the following year, a similar technique was described at Stanford and called a [verifiable delay function](https://eprint.iacr.org/2018/601.pdf) or _VDF_.
 
@@ -18,11 +18,11 @@ A desirable property of a VDF is that verification time is very fast. Solana's a
 
 Another difference between PoH and VDFs is that a VDF is used only for tracking duration. PoH's hash chain, on the other hand, includes hashes of any data the application observed. That data is a double-edged sword. On one side, the data "proves history" - that the data most certainly existed before hashes after it. On the other side, it means the application can manipulate the hash chain by changing _when_ the data is hashed. The PoH chain therefore does not serve as a good source of randomness whereas a VDF without that data could. Solana's [leader rotation algorithm](synchronization.md#leader-rotation), for example, is derived only from the VDF _height_ and not its hash at that height.
 
-## Relationship to Consensus Mechanisms {#relationship-to-consensus-mechanisms}
+## Relationship to Consensus Mechanisms
 
 Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus. It is also used to improve the performance of the data plane protocols.
 
-## More on Proof of History {#more-on-proof-of-history}
+## More on Proof of History
 
 - [water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
 - [Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)

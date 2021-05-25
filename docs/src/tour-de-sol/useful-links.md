@@ -8,7 +8,7 @@ description: Where to go after you've read this guide
 - [Core software repo](https://github.com/solana-labs/solana)
 - [Submit bugs and feedback in this repo](https://github.com/solana-labs/solana/issues)
 
-### Validator Discussions {#validator-discussions}
+### Validator Discussions
 
 The Solana Discord server is where all the action happens. Join the server by
 visiting https://solana.com/discord. Check out the "Testnet (Tour de SOL)" channel

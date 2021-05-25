@@ -7,7 +7,7 @@ fewer restrictions and more configuration options than the public offerings
 provide. This is easily achieved with the `solana-test-validator` binary, which
 starts a full-featured, single-node cluster on the developer's workstation.
 
-## Advantages {#advantages}
+## Advantages
 
 - No RPC rate-limits
 - No airdrop limits
@@ -18,12 +18,12 @@ starts a full-featured, single-node cluster on the developer's workstation.
 - Configurable epoch length (`--slots-per-epoch ...`)
 - Jump to an arbitrary slot (`--warp-slot ...`)
 
-## Installation {#installation}
+## Installation
 
 The `solana-test-validator` binary ships with the Solana CLI Tool Suite.
 [Install](/cli/install-solana-cli-tools) before continuing.
 
-## Running {#running}
+## Running
 
 First take a look at the configuration options
 
@@ -56,19 +56,19 @@ JSON RPC URL: http://127.0.0.1:8899
 Leave `solana-test-validator` running in its own terminal. When it is no longer
 needed, it can be stopped with ctrl-c.
 
-## Interacting {#interacting}
+## Interacting
 
 Open a new terminal to interact with a [running](#running) `solana-test-validator`
 instance using other binaries from the Solana CLI Tool Suite or your own client
 software.
 
-#### Configure the CLI Tool Suite to target a local cluster by default {#configure-the-cli-tool-suite-to-target-a-local-cluster-by-default}
+#### Configure the CLI Tool Suite to target a local cluster by default
 
 ```
 solana config set --url http://127.0.0.1:8899
 ```
 
-#### Verify the CLI Tool Suite configuration {#verify-the-cli-tool-suite-configuration}
+#### Verify the CLI Tool Suite configuration
 
 ```
 solana genesis-hash
@@ -77,7 +77,7 @@ solana genesis-hash
 - **NOTE:** The result should match the `Genesis Hash:` field in the
   `solana-test-validator` status output
 
-#### Check the wallet balance {#check-the-wallet-balance}
+#### Check the wallet balance
 
 ```
 solana balance
@@ -88,13 +88,13 @@ solana balance
 - **NOTE:** If the wallet has a zero SOL balance, airdrop some localnet SOL with
   `solana airdrop 10`
 
-#### Perform a basic transfer transaction {#perform-a-basic-transfer-transaction}
+#### Perform a basic transfer transaction
 
 ```
 solana transfer EPhgPANa5Rh2wa4V2jxt7YbtWa3Uyw4sTeZ13cQjDDB8 1
 ```
 
-#### Monitor `msg!()` output from on-chain programs {#monitor-msg-output-from-on-chain-programs}
+#### Monitor `msg!()` output from on-chain programs
 
 ```
 solana logs
@@ -103,7 +103,7 @@ solana logs
 - **NOTE:** This command needs to be running when the target transaction is
   executed. Run it in its own terminal
 
-## Appendix I: Status Output {#appendix-i-status-output}
+## Appendix I: Status Output
 
 ```
 Ledger location: test-ledger
