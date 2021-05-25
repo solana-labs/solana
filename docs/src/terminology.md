@@ -64,6 +64,10 @@ Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake
 
 See [vote credit](terminology.md#vote-credit).
 
+## cross-program invocation
+
+An [instruction](terminology.md#instruction) called from within an instruction. Put differently, it is how a program calls into another program. For more information, see [calling between programs](developing/programming-model/calling-between-programs.md).
+
 ## data plane
 
 A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
@@ -118,9 +122,13 @@ A digital fingerprint of a sequence of bytes.
 
 An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
 
+## inner instruction
+
+See [cross-program invocation](terminology.md#cross-program-invocation).
+
 ## instruction
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
+The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction). Within its processing code, an instruction may contain one or more [cross-program invocations](terminology.md#cross-program-invocation).
 
 ## keypair
 
