@@ -48,7 +48,7 @@ pub enum UiAccountData {
     Binary(String, UiAccountEncoding),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
     Binary, // Legacy. Retained for RPC backwards compatibility
@@ -62,7 +62,7 @@ pub enum UiAccountEncoding {
 impl UiAccount {
     pub fn encode<T: ReadableAccount>(
         pubkey: &Pubkey,
-        account: T,
+        account: &T,
         encoding: UiAccountEncoding,
         additional_data: Option<AccountAdditionalData>,
         data_slice_config: Option<UiDataSliceConfig>,
@@ -224,7 +224,7 @@ mod test {
     fn test_base64_zstd() {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
-            AccountSharedData::from(Account {
+            &AccountSharedData::from(Account {
                 data: vec![0; 1024],
                 ..Account::default()
             }),

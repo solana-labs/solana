@@ -3233,12 +3233,16 @@ Simulate sending a transaction
 #### Parameters:
 
 - `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
-- `<object>` - (optional) Configuration object containing the following field:
+- `<object>` - (optional) Configuration object containing the following fields:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false, conflicts with `replaceRecentBlockhash`)
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
   - `replaceRecentBlockhash: <bool>` - (optional) if true the transaction recent blockhash will be replaced with the most recent blockhash.
   (default: false, conflicts with `sigVerify`)
+  - `accounts: <object>` - (optional) Accounts configuration object containing the following fields:
+     - `encoding: <string>` - (optional) encoding for returned Account data, either  "base64" (default), "base64+zstd" or "jsonParsed".
+        "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+     - `addresses: <array>` - An array of accounts to return, as base-58 encoded strings
 
 #### Results:
 
@@ -3247,6 +3251,14 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 - `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+- `accounts: <array> | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
+  - `<null>` - if the account doesn't exist or if `err` is not null
+  - `<object>` - otherwise, a JSON object containing:
+    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+    - `data: <[string, encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -3273,6 +3285,7 @@ Result:
     },
     "value": {
       "err": null,
+      "accounts": null,
       "logs": [
         "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
       ]

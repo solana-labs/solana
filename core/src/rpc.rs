@@ -341,7 +341,7 @@ impl JsonRpcRequestProcessor {
 
         for pubkey in pubkeys {
             let response_account =
-                get_encoded_account(&bank, &pubkey, encoding.clone(), config.data_slice)?;
+                get_encoded_account(&bank, &pubkey, encoding, config.data_slice)?;
             accounts.push(response_account)
         }
         Ok(new_response(&bank, accounts))
@@ -387,8 +387,8 @@ impl JsonRpcRequestProcessor {
                         pubkey: pubkey.to_string(),
                         account: UiAccount::encode(
                             &pubkey,
-                            account,
-                            encoding.clone(),
+                            &account,
+                            encoding,
                             None,
                             data_slice_config,
                         ),
@@ -1639,8 +1639,8 @@ impl JsonRpcRequestProcessor {
                     pubkey: pubkey.to_string(),
                     account: UiAccount::encode(
                         &pubkey,
-                        account,
-                        encoding.clone(),
+                        &account,
+                        encoding,
                         None,
                         data_slice_config,
                     ),
@@ -1698,8 +1698,8 @@ impl JsonRpcRequestProcessor {
                     pubkey: pubkey.to_string(),
                     account: UiAccount::encode(
                         &pubkey,
-                        account,
-                        encoding.clone(),
+                        &account,
+                        encoding,
                         None,
                         data_slice_config,
                     ),
@@ -1949,7 +1949,7 @@ fn get_encoded_account(
             });
         } else {
             response = Some(UiAccount::encode(
-                pubkey, account, encoding, None, data_slice,
+                pubkey, &account, encoding, None, data_slice,
             ));
         }
     }
@@ -2962,12 +2962,13 @@ pub mod rpc_full {
                     }
                 }
 
-                if let (Err(err), logs) = preflight_bank.simulate_transaction(transaction.clone()) {
+                if let (Err(err), logs, _) = preflight_bank.simulate_transaction(&transaction) {
                     return Err(RpcCustomError::SendTransactionPreflightFailure {
                         message: format!("Transaction simulation failed: {}", err),
                         result: RpcSimulateTransactionResult {
                             err: Some(err),
                             logs: Some(logs),
+                            accounts: None,
                         },
                     }
                     .into());
@@ -3005,18 +3006,59 @@ pub mod rpc_full {
                     return Err(e);
                 }
             }
-
             let bank = &*meta.bank(config.commitment);
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
-            let (result, logs) = bank.simulate_transaction(transaction);
+            let (result, logs, post_simulation_accounts) = bank.simulate_transaction(&transaction);
+
+            let accounts = if let Some(config_accounts) = config.accounts {
+                let accounts_encoding = config_accounts
+                    .encoding
+                    .unwrap_or(UiAccountEncoding::Base64);
+
+                if accounts_encoding == UiAccountEncoding::Binary
+                    || accounts_encoding == UiAccountEncoding::Base58
+                {
+                    return Err(Error::invalid_params("base58 encoding not supported"));
+                }
+
+                if config_accounts.addresses.len() > post_simulation_accounts.len() {
+                    return Err(Error::invalid_params(format!(
+                        "Too many accounts provided; max {}",
+                        post_simulation_accounts.len()
+                    )));
+                }
+
+                let mut accounts = vec![];
+                for address_str in config_accounts.addresses {
+                    let address = verify_pubkey(&address_str)?;
+                    accounts.push(if result.is_err() {
+                        None
+                    } else {
+                        transaction
+                            .message
+                            .account_keys
+                            .iter()
+                            .position(|pubkey| *pubkey == address)
+                            .map(|i| post_simulation_accounts.get(i))
+                            .flatten()
+                            .map(|account| {
+                                UiAccount::encode(&address, account, accounts_encoding, None, None)
+                            })
+                    });
+                }
+                Some(accounts)
+            } else {
+                None
+            };
 
             Ok(new_response(
                 &bank,
                 RpcSimulateTransactionResult {
                     err: result.err(),
                     logs: Some(logs),
+                    accounts,
                 },
             ))
         }
@@ -4920,7 +4962,6 @@ pub mod tests {
 
     #[test]
     fn test_rpc_simulate_transaction() {
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler {
             io,
             meta,
@@ -4928,8 +4969,9 @@ pub mod tests {
             alice,
             bank,
             ..
-        } = start_rpc_handler_with_tx(&bob_pubkey);
+        } = start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
 
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mut tx = system_transaction::transfer(&alice, &bob_pubkey, 1234, blockhash);
         let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
         tx.signatures[0] = Signature::default();
@@ -4941,20 +4983,85 @@ pub mod tests {
 
         // Good signature with sigVerify=true
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "encoding": "jsonParsed",
+                       "addresses": ["{}", "{}"]
+                     }}
+                   }}
+                 ]
+            }}"#,
             tx_serialized_encoded,
+            solana_sdk::pubkey::new_rand(),
+            bob_pubkey,
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err":null, "logs":[
-                    "Program 11111111111111111111111111111111 invoke [1]",
-                    "Program 11111111111111111111111111111111 success"
-                ]}
+                "value":{
+                    "accounts": [
+                        null,
+                        {
+                            "data": ["", "base64"],
+                            "executable": false,
+                            "owner": "11111111111111111111111111111111",
+                            "lamports": 1234,
+                            "rentEpoch": 0
+                        }
+                    ],
+                    "err":null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ]
+                }
             },
             "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Too many input accounts...
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "addresses": [
+                          "11111111111111111111111111111111",
+                          "11111111111111111111111111111111",
+                          "11111111111111111111111111111111",
+                          "11111111111111111111111111111111"
+                        ]
+                     }}
+                   }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc":"2.0",
+            "error": {
+                "code": error::ErrorCode::InvalidParams.code(),
+                "message": "Too many accounts provided; max 3"
+            },
+            "id":1
         });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
@@ -4993,7 +5100,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err":null, "logs":[
+                "value":{"accounts": null, "err":null, "logs":[
                     "Program 11111111111111111111111111111111 invoke [1]",
                     "Program 11111111111111111111111111111111 success"
                 ]}
@@ -5016,7 +5123,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err":null, "logs":[
+                "value":{"accounts": null, "err":null, "logs":[
                     "Program 11111111111111111111111111111111 invoke [1]",
                     "Program 11111111111111111111111111111111 success"
                 ]}
@@ -5064,7 +5171,7 @@ pub mod tests {
             "jsonrpc":"2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err": "BlockhashNotFound", "logs":[]}
+                "value":{"err": "BlockhashNotFound", "accounts": null, "logs":[]}
             },
             "id":1
         });
@@ -5085,7 +5192,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err":null, "logs":[
+                "value":{"accounts": null, "err":null, "logs":[
                     "Program 11111111111111111111111111111111 invoke [1]",
                     "Program 11111111111111111111111111111111 success"
                 ]}
@@ -5415,7 +5522,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"err":"BlockhashNotFound","logs":[]}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[]}},"id":1}"#.to_string(),
             )
         );
 

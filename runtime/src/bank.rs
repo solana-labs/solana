@@ -2576,16 +2576,15 @@ impl Bank {
         TransactionBatch::new(lock_results, &self, Cow::Borrowed(hashed_txs))
     }
 
-    pub fn prepare_simulation_batch<'a, 'b>(
+    pub(crate) fn prepare_simulation_batch<'a, 'b>(
         &'a self,
-        txs: &'b [Transaction],
+        tx: &'b Transaction,
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results: Vec<_> = txs
-            .iter()
-            .map(|tx| tx.sanitize().map_err(|e| e.into()))
-            .collect();
-        let hashed_txs = txs.iter().map(HashedTransaction::from).collect();
-        let mut batch = TransactionBatch::new(lock_results, &self, hashed_txs);
+        let mut batch = TransactionBatch::new(
+            vec![tx.sanitize().map_err(|e| e.into())],
+            &self,
+            Cow::Owned(vec![HashedTransaction::from(tx)]),
+        );
         batch.needs_unlock = false;
         batch
     }
@@ -2593,17 +2592,16 @@ impl Bank {
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
         &self,
-        transaction: Transaction,
-    ) -> (Result<()>, TransactionLogMessages) {
+        transaction: &Transaction,
+    ) -> (Result<()>, TransactionLogMessages, Vec<AccountSharedData>) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        let txs = &[transaction];
-        let batch = self.prepare_simulation_batch(txs);
+        let batch = self.prepare_simulation_batch(&transaction);
 
         let mut timings = ExecuteTimings::default();
 
         let (
-            _loaded_accounts,
+            loaded_accounts,
             executed,
             _inner_instructions,
             log_messages,
@@ -2625,10 +2623,18 @@ impl Bank {
         let log_messages = log_messages
             .get(0)
             .map_or(vec![], |messages| messages.to_vec());
+        let post_transaction_accounts = loaded_accounts
+            .into_iter()
+            .next()
+            .unwrap()
+            .0
+            .ok()
+            .map(|loaded_transaction| loaded_transaction.accounts.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
 
         debug!("simulate_transaction: {:?}", timings);
 
-        (transaction_result, log_messages)
+        (transaction_result, log_messages, post_transaction_accounts)
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {

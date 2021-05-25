@@ -318,6 +318,7 @@ pub struct RpcSignatureConfirmation {
 pub struct RpcSimulateTransactionResult {
     pub err: Option<TransactionError>,
     pub logs: Option<Vec<String>>,
+    pub accounts: Option<Vec<Option<UiAccount>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
