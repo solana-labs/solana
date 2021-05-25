@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@bonfida/bot": "^0.5.0",
+    "@bonfida/bot": "^0.5.3",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.37",
     "@react-hook/debounce": "^3.0.0",
