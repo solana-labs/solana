@@ -1122,7 +1122,7 @@ fn process_show_account(
             pubkey: account_pubkey.to_string(),
             account: UiAccount::encode(
                 account_pubkey,
-                account,
+                &account,
                 UiAccountEncoding::Base64,
                 None,
                 None,
