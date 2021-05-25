@@ -383,9 +383,8 @@ describe('Connection', () => {
         value: [],
       });
 
-      const programAccountsDontMatchFilter = await connection.getProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDontMatchFilter =
+        await connection.getProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [
             {
@@ -395,8 +394,7 @@ describe('Connection', () => {
               },
             },
           ],
-        },
-      );
+        });
       expect(programAccountsDontMatchFilter).to.have.length(0);
     }
 
@@ -472,13 +470,11 @@ describe('Connection', () => {
         value: [],
       });
 
-      const programAccountsDontMatchFilter = await connection.getParsedProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDontMatchFilter =
+        await connection.getParsedProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [{dataSize: 2}],
-        },
-      );
+        });
       expect(programAccountsDontMatchFilter).to.have.length(0);
     }
 
@@ -525,9 +521,8 @@ describe('Connection', () => {
         ],
       });
 
-      const programAccountsDoMatchFilter = await connection.getParsedProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDoMatchFilter =
+        await connection.getParsedProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [
             {
@@ -537,8 +532,7 @@ describe('Connection', () => {
               },
             },
           ],
-        },
-      );
+        });
       expect(programAccountsDoMatchFilter).to.have.length(2);
     }
   });
@@ -889,8 +883,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -914,10 +907,8 @@ describe('Connection', () => {
       slot++;
       const block = await connection.getConfirmedBlock(slot);
       if (block.transactions.length > 0) {
-        const {
-          signature,
-          publicKey,
-        } = block.transactions[0].transaction.signatures[0];
+        const {signature, publicKey} =
+          block.transactions[0].transaction.signatures[0];
         if (signature) {
           address = publicKey;
           expectedSignature = bs58.encode(signature);
@@ -973,11 +964,12 @@ describe('Connection', () => {
       ],
     });
 
-    const confirmedSignatures = await connection.getConfirmedSignaturesForAddress(
-      address,
-      slot,
-      slot + 1,
-    );
+    const confirmedSignatures =
+      await connection.getConfirmedSignaturesForAddress(
+        address,
+        slot,
+        slot + 1,
+      );
     expect(confirmedSignatures.includes(expectedSignature)).to.be.true;
 
     const badSlot = Number.MAX_SAFE_INTEGER - 1;
@@ -1008,10 +1000,8 @@ describe('Connection', () => {
       ],
     });
 
-    const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
-      address,
-      {limit: 1},
-    );
+    const confirmedSignatures2 =
+      await connection.getConfirmedSignaturesForAddress2(address, {limit: 1});
     expect(confirmedSignatures2).to.have.length(1);
     if (mockServer) {
       expect(confirmedSignatures2[0].signature).to.eq(expectedSignature);
@@ -1066,8 +1056,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -1339,8 +1328,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -1391,8 +1379,7 @@ describe('Connection', () => {
             instructions: [
               {
                 accounts: [1, 2, 3],
-                data:
-                  '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                 programIdIndex: 4,
               },
             ],
@@ -1470,8 +1457,7 @@ describe('Connection', () => {
               instructions: [
                 {
                   accounts: ['va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf'],
-                  data:
-                    '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                  data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                   programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
                 },
               ],
@@ -1614,8 +1600,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
