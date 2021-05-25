@@ -28,7 +28,7 @@ impl From<Vec<Slot>> for Ancestors {
             });
             let range = result.range();
             if range > ANCESTORS_HASH_MAP_SIZE {
-                result.large_range_slots = source.into_iter().map(|(slot, _)| slot).collect();
+                result.large_range_slots = source.into_iter().collect();
                 result.min = 0;
                 result.max = 0;
             } else {
