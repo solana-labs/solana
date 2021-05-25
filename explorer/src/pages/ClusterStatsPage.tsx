@@ -218,12 +218,8 @@ function StatsCardBody() {
     return <StatsNotReady error={error} />;
   }
 
-  const {
-    avgSlotTime_1h,
-    avgSlotTime_1min,
-    epochInfo,
-    blockTime,
-  } = dashboardInfo;
+  const { avgSlotTime_1h, avgSlotTime_1min, epochInfo, blockTime } =
+    dashboardInfo;
   const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
   const averageSlotTime = Math.round(1000 * avgSlotTime_1min);
   const { slotIndex, slotsInEpoch } = epochInfo;

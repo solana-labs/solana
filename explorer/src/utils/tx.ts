@@ -20,7 +20,8 @@ import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 
-export type ProgramName = typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
+export type ProgramName =
+  typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
 
 export enum PROGRAM_NAMES {
   // native built-ins

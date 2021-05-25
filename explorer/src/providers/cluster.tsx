@@ -119,9 +119,8 @@ function parseQuery(query: URLSearchParams): Cluster {
 }
 
 type SetShowModal = React.Dispatch<React.SetStateAction<boolean>>;
-const ModalContext = React.createContext<[boolean, SetShowModal] | undefined>(
-  undefined
-);
+const ModalContext =
+  React.createContext<[boolean, SetShowModal] | undefined>(undefined);
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
