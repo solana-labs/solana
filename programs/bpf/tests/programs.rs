@@ -15,7 +15,10 @@ use solana_bpf_loader_program::{
     BpfError, ThisInstructionMeter,
 };
 use solana_cli_output::display::println_transaction;
-use solana_rbpf::vm::{Config, Executable, Tracer};
+use solana_rbpf::{
+    static_analysis::Analysis,
+    vm::{Config, Executable, Tracer}
+};
 use solana_runtime::{
     bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
@@ -242,27 +245,29 @@ fn run_program(
             if config.enable_instruction_tracing {
                 if i == 1 {
                     if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                        let mut tracer_display = String::new();
+                        let analysis = Analysis::from_executable(executable.as_ref());
+                        let stdout = std::io::stdout();
+                        println!("TRACE (interpreted):");
                         tracer
                             .as_ref()
                             .unwrap()
-                            .write(&mut tracer_display, vm.get_program())
+                            .write(&mut stdout.lock(), &analysis)
                             .unwrap();
-                        println!("TRACE (interpreted): {}", tracer_display);
-                        let mut tracer_display = String::new();
+                        println!("TRACE (jit):");
                         vm.get_tracer()
-                            .write(&mut tracer_display, vm.get_program())
+                            .write(&mut stdout.lock(), &analysis)
                             .unwrap();
-                        println!("TRACE (jit): {}", tracer_display);
                         assert!(false);
                     } else if log_enabled!(Trace) {
-                        let mut trace_buffer = String::new();
+                        let analysis = Analysis::from_executable(executable.as_ref());
+                        let mut trace_buffer = Vec::<u8>::new();
                         tracer
                             .as_ref()
                             .unwrap()
-                            .write(&mut trace_buffer, vm.get_program())
+                            .write(&mut trace_buffer, &analysis)
                             .unwrap();
-                        trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+                        let trace_string = String::from_utf8(trace_buffer).unwrap();
+                        trace!("BPF Program Instruction Trace:\n{}", trace_string);
                     }
                 }
                 tracer = Some(vm.get_tracer().clone());

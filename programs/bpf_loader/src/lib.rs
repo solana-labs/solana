@@ -21,6 +21,7 @@ use solana_rbpf::{
     ebpf::{HOST_ALIGN, MM_HEAP_START},
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
+    static_analysis::Analysis,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::message_processor::MessageProcessor;
@@ -794,11 +795,11 @@ impl Executor for BpfExecutor {
                 before
             );
             if log_enabled!(Trace) {
-                let mut trace_buffer = String::new();
-                vm.get_tracer()
-                    .write(&mut trace_buffer, vm.get_program())
-                    .unwrap();
-                trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+                let mut trace_buffer = Vec::<u8>::new();
+                let analysis = Analysis::from_executable(self.executable.as_ref());
+                vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
+                let trace_string = String::from_utf8(trace_buffer).unwrap();
+                trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             match result {
                 Ok(status) => {
@@ -896,9 +897,11 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
-
+        let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
+        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
         let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
             program,
+            bpf_functions,
             None,
             Config::default(),
         )
