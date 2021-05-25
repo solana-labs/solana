@@ -32,8 +32,8 @@ $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang m
 ## **2. Download the source code.**
 
 ```bash
-$ git clone https://github.com/Fair-Exchange/SAFE.git
-$ cd SAFE
+$ git clone https://github.com/Fair-Exchange/SAFECOIN.git
+$ cd SAFECOIN
 ```
 
 ## **3. Build.**

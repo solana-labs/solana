@@ -1718,7 +1718,7 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
-                is_stake_program_v2_enabled(rpc_client)?, // At v1.6, this check can be removed and simply passed as `true`
+                true,
             );
 
             if state.stake_type == CliStakeType::Stake {
