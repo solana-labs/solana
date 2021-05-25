@@ -106,11 +106,14 @@ To check an account's validity, the program should either check the account's
 address against a known value or check that the account is indeed owned
 correctly (usually owned by the program itself).
 
-One example is when programs read a sysvar. Unless the program checks the
-address or owner, it's impossible to be sure whether it's a real and valid
-sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks
-the sysvar's validity during
+One example is when programs use a sysvar account. Unless the program checks the
+account's address or owner, it's impossible to be sure whether it's a real and
+valid sysvar account merely by successful deserialization of the account's data.
+Accordingly, the Solana SDK [checks the sysvar account's validity during
 deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+A alternative and safer way to read a sysvar is via the sysvar's [`get()`
+function](https://github.com/solana-labs/solana/blob/64bfc14a75671e4ec3fe969ded01a599645080eb/sdk/program/src/sysvar/mod.rs#L73)
+which doesn't require these checks.
 
 If the program always modifies the account in question, the address/owner check
 isn't required because modifying an unowned (could be the malicious account with
