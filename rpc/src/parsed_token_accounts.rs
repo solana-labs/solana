@@ -28,7 +28,7 @@ pub fn get_parsed_token_account(
 
     UiAccount::encode(
         pubkey,
-        account,
+        &account,
         UiAccountEncoding::JsonParsed,
         additional_data,
         None,
@@ -55,7 +55,7 @@ where
 
         let maybe_encoded_account = UiAccount::encode(
             &pubkey,
-            account,
+            &account,
             UiAccountEncoding::JsonParsed,
             additional_data,
             None,

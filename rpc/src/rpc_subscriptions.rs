@@ -296,7 +296,7 @@ fn filter_account_result(
             Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
         } else {
             Box::new(iter::once(UiAccount::encode(
-                pubkey, account, encoding, None, None,
+                pubkey, &account, encoding, None, None,
             )))
         }
     } else {
@@ -347,7 +347,7 @@ fn filter_program_results(
         Box::new(
             keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
+                account: UiAccount::encode(&pubkey, &account, encoding, None, None),
             }),
         )
     };
