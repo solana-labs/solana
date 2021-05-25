@@ -1,5 +1,4 @@
 import * as nacl from 'tweetnacl';
-import type {SignKeyPair} from 'tweetnacl';
 
 import {PublicKey} from './publickey';
 
@@ -12,17 +11,32 @@ export interface Signer {
 }
 
 /**
+ * Ed25519 Keypair
+ */
+export interface Ed25519Keypair {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+}
+
+/**
  * An account keypair used for signing transactions.
  */
 export class Keypair {
+  private _keypair: Ed25519Keypair;
+
   /**
-   * @internal
-   *
-   * Create a new keypair instance from a {@link SignKeyPair}.
+   * Create a new keypair instance.
+   * Generate random keypair if no {@link Ed25519Keypair} is provided.
    *
    * @param keypair ed25519 keypair
    */
-  constructor(private keypair: SignKeyPair) {}
+  constructor(keypair?: Ed25519Keypair) {
+    if (keypair) {
+      this._keypair = keypair;
+    } else {
+      this._keypair = nacl.sign.keyPair();
+    }
+  }
 
   /**
    * Generate a new random keypair
@@ -72,13 +86,13 @@ export class Keypair {
    * The public key for this keypair
    */
   get publicKey(): PublicKey {
-    return new PublicKey(this.keypair.publicKey);
+    return new PublicKey(this._keypair.publicKey);
   }
 
   /**
    * The raw secret key for this keypair
    */
   get secretKey(): Uint8Array {
-    return this.keypair.secretKey;
+    return this._keypair.secretKey;
   }
 }
