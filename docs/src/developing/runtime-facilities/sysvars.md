@@ -9,7 +9,7 @@ known addresses published along with the account layouts in the
 crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
 and outlined below.
 
-There are two ways for a program to access a sysvar.  
+There are two ways for a program to access a sysvar.
 
 The first is to query the sysvar at runtime via the sysvar's `get()` function:
 
