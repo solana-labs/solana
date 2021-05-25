@@ -2978,7 +2978,7 @@ pub mod rpc_full {
             }
 
             let bank = &*meta.bank(config.commitment);
-            if config.use_most_recent_blockhash {
+            if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
             let (result, logs) = bank.simulate_transaction(transaction);

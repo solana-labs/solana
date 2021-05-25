@@ -29,7 +29,7 @@ pub struct RpcSimulateTransactionConfig {
     #[serde(default)]
     pub sig_verify: bool,
     #[serde(default)]
-    pub use_most_recent_blockhash: bool,
+    pub replace_recent_blockhash: bool,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub encoding: Option<UiTransactionEncoding>,

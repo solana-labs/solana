@@ -3206,7 +3206,7 @@ Simulate sending a transaction
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
-  - `useMostRecentBlockhash: <bool>` - (optional) if true the transaction recent blockhash will be ignored and overridden with the most recent blockhash. (default: false)
+  - `replaceRecentBlockhash: <bool>` - (optional) if true the transaction recent blockhash will be replaced with the most recent blockhash. (default: false)
 
 #### Results:
 
