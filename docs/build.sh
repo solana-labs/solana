@@ -8,14 +8,10 @@ source ../ci/env.sh
 
 : "${rust_stable_docker_image:=}" # Pacify shellcheck
 
-# Fixate master branch as only one to download translations & get its ref
-ONLY_TRANSLATE_ON='master'
-MASTER_REF="$(git rev-parse "$ONLY_TRANSLATE_ON")"
-# Get current ref
-CURRENT_REF="$(cat ../.git/HEAD)"
+eval "$(../ci/channel-info.sh)"
 
 # Synchronize translations with Crowdin only on master branch (ref)
-if [[ "$CURRENT_REF" = "$MASTER_REF" ]]; then
+if [ "$CHANNEL" = "$STABLE_CHANNEL" ]; then
   echo "Downloading & updating translations..."
   npm run crowdin:download
   npm run crowdin:upload
@@ -30,8 +26,6 @@ source ../ci/rust-version.sh
 # Build from /src into /build
 npm run build
 echo $?
-
-eval "$(../ci/channel-info.sh)"
 
 # Publish only from merge commits and beta release tags
 if [[ -n $CI ]]; then
