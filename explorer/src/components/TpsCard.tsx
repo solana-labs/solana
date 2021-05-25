@@ -147,9 +147,10 @@ function TpsBarChart({ performanceInfo }: TpsBarChartProps) {
   const averageTps = Math.round(avgTps).toLocaleString("en-US");
   const transactionCount = <AnimatedTransactionCount info={performanceInfo} />;
   const seriesData = perfHistory[series];
-  const chartOptions = React.useMemo(() => CHART_OPTIONS(historyMaxTps), [
-    historyMaxTps,
-  ]);
+  const chartOptions = React.useMemo(
+    () => CHART_OPTIONS(historyMaxTps),
+    [historyMaxTps]
+  );
 
   const seriesLength = seriesData.length;
   const chartData: Chart.ChartData = {

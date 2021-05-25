@@ -46,9 +46,8 @@ function reconcile(
 }
 
 export const StateContext = React.createContext<State | undefined>(undefined);
-export const DispatchContext = React.createContext<Dispatch | undefined>(
-  undefined
-);
+export const DispatchContext =
+  React.createContext<Dispatch | undefined>(undefined);
 
 type RewardsProviderProps = { children: React.ReactNode };
 
