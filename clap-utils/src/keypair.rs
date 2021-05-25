@@ -277,10 +277,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
                     _ => match Pubkey::from_str(source.as_str()) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        // Err(_) => Ok(SignerSource::new(SignerSourceKind::Filepath(source))),
-                        Err(_) => std::fs::metadata(source.as_str())
-                            .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
-                            .map_err(|err| err.into()),
+                        Err(_) => Ok(SignerSource::new(SignerSourceKind::Filepath(source))),
                     },
                 }
             }
@@ -337,7 +334,7 @@ pub fn signer_from_path_with_config(
         legacy,
     } = parse_signer_source(path)?;
     match kind {
-SignerSourceKind::Prompt => {
+        SignerSourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             Ok(Box::new(keypair_from_seed_phrase(
                 keypair_name,
