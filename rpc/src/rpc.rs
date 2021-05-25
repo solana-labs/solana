@@ -718,7 +718,7 @@ impl JsonRpcRequestProcessor {
             })
         } else {
             let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
-                let non_circulating_supply = calculate_non_circulating_supply(&bank);
+                let non_circulating_supply = calculate_non_circulating_supply(&bank)?;
                 let addresses = non_circulating_supply.accounts.into_iter().collect();
                 let address_filter = match filter {
                     RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
@@ -742,11 +742,14 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
+    fn get_supply(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcCustomResult<RpcResponse<RpcSupply>> {
         let bank = self.bank(commitment);
-        let non_circulating_supply = calculate_non_circulating_supply(&bank);
+        let non_circulating_supply = calculate_non_circulating_supply(&bank)?;
         let total_supply = bank.capitalization();
-        new_response(
+        Ok(new_response(
             &bank,
             RpcSupply {
                 total: total_supply,
@@ -758,7 +761,7 @@ impl JsonRpcRequestProcessor {
                     .map(|pubkey| pubkey.to_string())
                     .collect(),
             },
-        )
+        ))
     }
 
     fn get_vote_accounts(
@@ -2873,8 +2876,7 @@ pub mod rpc_full {
             config: Option<RpcLargestAccountsConfig>,
         ) -> Result<RpcResponse<Vec<RpcAccountBalance>>> {
             debug!("get_largest_accounts rpc request received");
-            let res = meta.get_largest_accounts(config)?;
-            Ok(res)
+            Ok(meta.get_largest_accounts(config)?)
         }
 
         fn get_supply(
@@ -2883,7 +2885,7 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcSupply>> {
             debug!("get_supply rpc request received");
-            Ok(meta.get_supply(commitment))
+            Ok(meta.get_supply(commitment)?)
         }
 
         fn request_airdrop(

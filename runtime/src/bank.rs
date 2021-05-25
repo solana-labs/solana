@@ -68,7 +68,7 @@ use solana_sdk::{
         AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
     },
     clock::{
-        Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
+        Epoch, Slot, SlotCount, SlotId, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
@@ -416,6 +416,8 @@ pub struct BankRc {
 
     /// Current slot
     pub(crate) slot: Slot,
+
+    pub(crate) slot_id_generator: Arc<AtomicU64>,
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -440,6 +442,7 @@ impl BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
             slot,
+            slot_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -909,6 +912,8 @@ pub struct Bank {
     /// Bank slot (i.e. block)
     slot: Slot,
 
+    slot_id: SlotId,
+
     /// Bank epoch
     epoch: Epoch,
 
@@ -1131,6 +1136,7 @@ impl Bank {
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
+            slot_id_generator: parent.rc.slot_id_generator.clone(),
         };
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
@@ -1139,10 +1145,12 @@ impl Bank {
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
+        let slot_id = rc.slot_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
             rc,
             src,
             slot,
+            slot_id,
             epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
@@ -1322,6 +1330,7 @@ impl Bank {
             slots_per_year: fields.slots_per_year,
             unused: genesis_config.unused,
             slot: fields.slot,
+            slot_id: 0,
             epoch: fields.epoch,
             block_height: fields.block_height,
             collector_id: fields.collector_id,
@@ -4341,7 +4350,7 @@ impl Bank {
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program(&self.ancestors, 0, program_id)
+            .load_by_program(&self.ancestors, self.slot_id, program_id)
     }
 
     pub fn get_filtered_program_accounts<F: Fn(&AccountSharedData) -> bool>(
@@ -4349,9 +4358,12 @@ impl Bank {
         program_id: &Pubkey,
         filter: F,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
-        self.rc
-            .accounts
-            .load_by_program_with_filter(&self.ancestors, 0, program_id, filter)
+        self.rc.accounts.load_by_program_with_filter(
+            &self.ancestors,
+            self.slot_id,
+            program_id,
+            filter,
+        )
     }
 
     pub fn get_filtered_indexed_accounts<F: Fn(&AccountSharedData) -> bool>(
@@ -4359,9 +4371,12 @@ impl Bank {
         index_key: &IndexKey,
         filter: F,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
-        self.rc
-            .accounts
-            .load_by_index_key_with_filter(&self.ancestors, 0, index_key, filter)
+        self.rc.accounts.load_by_index_key_with_filter(
+            &self.ancestors,
+            self.slot_id,
+            index_key,
+            filter,
+        )
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
@@ -4371,7 +4386,7 @@ impl Bank {
     pub fn get_all_accounts_with_modified_slots(
         &self,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
-        self.rc.accounts.load_all(&self.ancestors, 0)
+        self.rc.accounts.load_all(&self.ancestors, self.slot_id)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -4427,9 +4442,13 @@ impl Bank {
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> ScanResult<Vec<(Pubkey, u64)>> {
-        self.rc
-            .accounts
-            .load_largest_accounts(&self.ancestors, 0, num, filter_by_address, filter)
+        self.rc.accounts.load_largest_accounts(
+            &self.ancestors,
+            self.slot_id,
+            num,
+            filter_by_address,
+            filter,
+        )
     }
 
     pub fn transaction_count(&self) -> u64 {
