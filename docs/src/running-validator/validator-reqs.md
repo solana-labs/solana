@@ -2,7 +2,7 @@
 title: Validator Requirements
 ---
 
-## Minimum SOL requirements {#minimum-sol-requirements}
+## Minimum SOL requirements
 
 There is no strict minimum amount of SOL required to run a validator on Solana.
 
@@ -11,7 +11,7 @@ has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote
 transaction for each block the validator agrees with, which can cost up to
 1.1 SOL per day.
 
-## Hardware Recommendations {#hardware-recommendations}
+## Hardware Recommendations
 
 - CPU
   - 12 cores / 24 threads, or more
@@ -38,7 +38,21 @@ transaction for each block the validator agrees with, which can cost up to
   - Motherboard and power supply speced to add one or more high-end GPUs in the
     future suggested
 
-## Virtual machines on Cloud Platforms {#virtual-machines-on-cloud-platforms}
+### RPC Node Recommendations
+The [hardware recommendations](#hardware-recommendations) above should be considered
+bare minimums if the validator is intended to be employed as an RPC node. To provide
+full functionality and improved reliability, the following adjustments should be
+made.
+
+- CPU
+  - 16 cores / 32 threads, or more
+- RAM
+  - 256 GB, or more
+- Disk
+  - Consider a larger ledger disk if longer transaction history is required
+  - Accounts and ledger should not be stored on the same disk
+
+## Virtual machines on Cloud Platforms
 
 While you can run a validator on a cloud computing platform, it may not
 be cost-efficient over the long term.
@@ -56,7 +70,7 @@ For other cloud platforms, select instance types with similar specs.
 Also note that egress internet traffic usage may turn out to be high,
 especially for the case of running staked validators.
 
-## Docker {#docker}
+## Docker
 
 Running validator for live clusters (including mainnet-beta) inside Docker is
 not recommended and generally not supported. This is due to concerns of general
@@ -66,7 +80,7 @@ specially configured.
 We use Docker only for development purposes. Docker Hub contains images for all
 releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
-## Software {#software}
+## Software
 
 - We build and run on Ubuntu 20.04.
 - See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
@@ -77,7 +91,7 @@ NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.
 
-## GPU Requirements {#gpu-requirements}
+## GPU Requirements
 
 CUDA is required to make use of the GPU on your system. The provided Solana
 release binaries are built on Ubuntu 20.04 with [CUDA Toolkit 10.1 update 1](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using
