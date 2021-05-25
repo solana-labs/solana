@@ -2123,9 +2123,14 @@ fn test_optimistic_confirmation_violation_detection() {
             "Setting slot: {} on main fork as dead, should cause fork",
             prev_voted_slot
         );
-        // marking this voted slot as dead makes the saved tower garbage
-        // effectively. That's because its stray last vote becomes stale (= no
-        // ancestor in bank forks).
+        // Necessary otherwise tower will inform this validator that it's latest
+        // vote is on slot `prev_voted_slot`. This will then prevent this validator
+        // from resetting to the parent of `prev_voted_slot` to create an alternative fork because
+        // 1) Validator can't vote on earlier ancestor of last vote due to switch threshold (can't vote
+        // on ancestors of last vote)
+        // 2) Won't reset to this earlier ancestor becasue reset can only happen on same voted fork if
+        // it's for the last vote slot or later
+        remove_tower(&exited_validator_info.info.ledger_path, &entry_point_id);
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
     }
 
