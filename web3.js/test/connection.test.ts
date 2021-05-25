@@ -1328,8 +1328,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -1378,8 +1377,7 @@ describe('Connection', () => {
             instructions: [
               {
                 accounts: [1, 2, 3],
-                data:
-                  '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                 programIdIndex: 4,
               },
             ],
@@ -1750,8 +1748,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
