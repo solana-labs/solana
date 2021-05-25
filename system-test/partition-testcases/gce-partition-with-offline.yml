@@ -21,7 +21,7 @@ steps:
       TEST_TYPE: "partition"
       EXTRA_PRIMORDIAL_STAKES: 4
       WAIT_FOR_EQUAL_STAKE: "true"
-      NETWORK_WARMUP_BEFORE_TEST: 180
+      WARMUP_SLOTS_BEFORE_TEST: 400
       NUMBER_OF_OFFLINE_NODES: 1
     agents:
       - "queue=gce-deploy"

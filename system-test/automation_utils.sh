@@ -60,7 +60,7 @@ function analyze_packet_loss {
   )
 }
 
-function wait_for_bootstrap_validator_stake_drop {
+function wait_for_max_stake {
   max_stake="$1"
   if [[ $max_stake -eq 100 ]]; then
     return
@@ -79,13 +79,9 @@ function wait_for_equal_stake {
   loadConfigFile
 
   max_stake=$((100 / ${#validatorIpList[@]} + 1))
-  execution_step "Waiting for stake on all validators to fall below ${max_stake}%"
+  execution_step "Waiting for max stake to fall below ${max_stake}%"
 
-  # shellcheck disable=SC2154
-  for ip in "${validatorIpList[@]}"; do
-    # shellcheck disable=SC2029
-    ssh "${sshOptions[@]}" "$ip" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
-  done
+  wait_for_max_stake $max_stake
 }
 
 function get_slot {

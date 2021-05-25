@@ -146,7 +146,7 @@ function launch_testnet() {
     wait_for_equal_stake
   else
     execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
-    wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
+    wait_for_max_stake "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
   fi
 
   if [[ $NUMBER_OF_CLIENT_NODES -gt 0 ]]; then
@@ -157,9 +157,11 @@ function launch_testnet() {
     sleep 180
   fi
 
-  if [[ -n "$NETWORK_WARMUP_BEFORE_TEST" ]]; then
+  if [[ -n "$WARMUP_SLOTS_BEFORE_TEST" ]]; then
     # Allow the network to run for a bit before beginning the test
-    sleep "$NETWORK_WARMUP_BEFORE_TEST"
+    while [[ "$WARMUP_SLOTS_BEFORE_TEST" -gt $(get_slot) ]]; do
+      sleep 5
+    done
   fi
 
   # Stop the specified number of nodes
@@ -346,7 +348,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         APPLY_PARTITIONS \
                         NETEM_CONFIG_FILE \
                         WAIT_FOR_EQUAL_STAKE \
-                        NETWORK_WARMUP_BEFORE_TEST \
+                        WARMUP_SLOTS_BEFORE_TEST \
                         NUMBER_OF_OFFLINE_NODES \
                         PARTITION_ACTIVE_DURATION \
                         PARTITION_INACTIVE_DURATION \
