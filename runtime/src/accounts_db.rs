@@ -888,6 +888,7 @@ impl PurgeStats {
                         Ordering::Relaxed,
                         Ordering::Relaxed,
                     ) == Ok(last)
+                    && last != 0
             })
             .unwrap_or(true);
 
