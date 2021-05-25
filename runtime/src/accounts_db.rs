@@ -24,7 +24,7 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
+        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -48,7 +48,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, SlotId},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -2420,21 +2420,29 @@ impl AccountsDb {
         }
     }
 
-    pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    pub fn scan_accounts<F, A>(
+        &self,
+        ancestors: &Ancestors,
+        slot_id: SlotId,
+        scan_func: F,
+    ) -> ScanResult<A>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
     {
         let mut collector = A::default();
+
+        // This can error out if the slots being scanned over are aborted
         self.accounts_index
-            .scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+            .scan_accounts(ancestors, slot_id, |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
-            });
-        collector
+            })?;
+
+        Ok(collector)
     }
 
     pub fn unchecked_scan_accounts<F, A>(
@@ -2504,9 +2512,10 @@ impl AccountsDb {
     pub fn index_scan_accounts<F, A>(
         &self,
         ancestors: &Ancestors,
+        slot_id: SlotId,
         index_key: IndexKey,
         scan_func: F,
-    ) -> (A, bool)
+    ) -> ScanResult<(A, bool)>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
@@ -2519,12 +2528,14 @@ impl AccountsDb {
         if !self.account_indexes.include_key(key) {
             // the requested key was not indexed in the secondary index, so do a normal scan
             let used_index = false;
-            return (self.scan_accounts(ancestors, scan_func), used_index);
+            let scan_result = self.scan_accounts(ancestors, slot_id, scan_func)?;
+            return Ok((scan_result, used_index));
         }
 
         let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
+            slot_id,
             index_key,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
@@ -2533,9 +2544,9 @@ impl AccountsDb {
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
             },
-        );
+        )?;
         let used_index = true;
-        (collector, used_index)
+        Ok((collector, used_index))
     }
 
     /// Scan a specific slot through all the account storage in parallel
@@ -3627,6 +3638,16 @@ impl AccountsDb {
                     }
                     is_being_flushed
                 });
+            }
+        }
+
+        // Before purging, let all relevant ongoing scans know that their scans may be corrupt
+        {
+            let mut scan_slots_locked = self.accounts_index.tip_of_scanned_forks.lock().unwrap();
+            for remove_slot in remove_slots.iter() {
+                if let Some(removed_scan_slot) = scan_slots_locked.get_mut(remove_slot) {
+                    removed_scan_slot.mark_removed();
+                }
             }
         }
 
@@ -7515,11 +7536,13 @@ pub mod tests {
         // Secondary index should still find both pubkeys
         let mut found_accounts = HashSet::new();
         let index_key = IndexKey::SplTokenMint(mint_key);
+        let slot_id = 0;
         accounts
             .accounts_index
-            .index_scan_accounts(&Ancestors::default(), index_key, |key, _| {
+            .index_scan_accounts(&Ancestors::default(), slot_id, index_key, |key, _| {
                 found_accounts.insert(*key);
-            });
+            })
+            .unwrap();
         assert_eq!(found_accounts.len(), 2);
         assert!(found_accounts.contains(&pubkey1));
         assert!(found_accounts.contains(&pubkey2));
@@ -7530,13 +7553,16 @@ pub mod tests {
                 keys: [mint_key].iter().cloned().collect::<HashSet<Pubkey>>(),
             });
             // Secondary index can't be used - do normal scan: should still find both pubkeys
-            let found_accounts = accounts.index_scan_accounts(
-                &Ancestors::default(),
-                index_key,
-                |collection: &mut HashSet<Pubkey>, account| {
-                    collection.insert(*account.unwrap().0);
-                },
-            );
+            let found_accounts = accounts
+                .index_scan_accounts(
+                    &Ancestors::default(),
+                    slot_id,
+                    index_key,
+                    |collection: &mut HashSet<Pubkey>, account| {
+                        collection.insert(*account.unwrap().0);
+                    },
+                )
+                .unwrap();
             assert!(!found_accounts.1);
             assert_eq!(found_accounts.0.len(), 2);
             assert!(found_accounts.0.contains(&pubkey1));
@@ -7545,13 +7571,16 @@ pub mod tests {
             accounts.account_indexes.keys = None;
 
             // Secondary index can now be used since it isn't marked as excluded
-            let found_accounts = accounts.index_scan_accounts(
-                &Ancestors::default(),
-                index_key,
-                |collection: &mut HashSet<Pubkey>, account| {
-                    collection.insert(*account.unwrap().0);
-                },
-            );
+            let found_accounts = accounts
+                .index_scan_accounts(
+                    &Ancestors::default(),
+                    slot_id,
+                    index_key,
+                    |collection: &mut HashSet<Pubkey>, account| {
+                        collection.insert(*account.unwrap().0);
+                    },
+                )
+                .unwrap();
             assert!(found_accounts.1);
             assert_eq!(found_accounts.0.len(), 2);
             assert!(found_accounts.0.contains(&pubkey1));
@@ -7576,11 +7605,15 @@ pub mod tests {
 
         // Secondary index should have purged `pubkey1` as well
         let mut found_accounts = vec![];
-        accounts.accounts_index.index_scan_accounts(
-            &Ancestors::default(),
-            IndexKey::SplTokenMint(mint_key),
-            |key, _| found_accounts.push(*key),
-        );
+        accounts
+            .accounts_index
+            .index_scan_accounts(
+                &Ancestors::default(),
+                slot_id,
+                IndexKey::SplTokenMint(mint_key),
+                |key, _| found_accounts.push(*key),
+            )
+            .unwrap();
         assert_eq!(found_accounts, vec![pubkey2]);
     }
 
@@ -10054,6 +10087,7 @@ pub mod tests {
     fn setup_scan(
         db: Arc<AccountsDb>,
         scan_ancestors: Arc<Ancestors>,
+        slot_id: SlotId,
         stall_key: Pubkey,
     ) -> ScanTracker {
         let exit = Arc::new(AtomicBool::new(false));
@@ -10066,6 +10100,7 @@ pub mod tests {
             .spawn(move || {
                 db.scan_accounts(
                     &scan_ancestors,
+                    slot_id,
                     |_collector: &mut Vec<(Pubkey, AccountSharedData)>, maybe_account| {
                         ready_.store(true, Ordering::Relaxed);
                         if let Some((pubkey, _, _)) = maybe_account {
@@ -10080,7 +10115,8 @@ pub mod tests {
                             }
                         }
                     },
-                );
+                )
+                .unwrap();
             })
             .unwrap();
 
@@ -10126,7 +10162,8 @@ pub mod tests {
         let max_scan_root = 0;
         db.add_root(max_scan_root);
         let scan_ancestors: Arc<Ancestors> = Arc::new(vec![(0, 1), (1, 1)].into_iter().collect());
-        let scan_tracker = setup_scan(db.clone(), scan_ancestors.clone(), account_key2);
+        let slot_id = 0;
+        let scan_tracker = setup_scan(db.clone(), scan_ancestors.clone(), slot_id, account_key2);
 
         // Add a new root 2
         let new_root = 2;
@@ -10291,7 +10328,13 @@ pub mod tests {
             accounts_db.add_root(*slot as Slot);
             if Some(*slot) == scan_slot {
                 let ancestors = Arc::new(vec![(stall_slot, 1), (*slot, 1)].into_iter().collect());
-                scan_tracker = Some(setup_scan(accounts_db.clone(), ancestors, scan_stall_key));
+                let slot_id = 0;
+                scan_tracker = Some(setup_scan(
+                    accounts_db.clone(),
+                    ancestors,
+                    slot_id,
+                    scan_stall_key,
+                ));
                 assert_eq!(
                     accounts_db.accounts_index.min_ongoing_scan_root().unwrap(),
                     *slot

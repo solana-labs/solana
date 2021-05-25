@@ -388,10 +388,12 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
-    let ancestors = Ancestors::from(vec![0]);
+    let ancestors = Ancestors::from(vec![(0, 0)]);
+    let slot_id = 0;
     b.iter(|| {
         accounts.load_largest_accounts(
             &ancestors,
+            slot_id,
             20,
             &HashSet::new(),
             AccountAddressFilter::Exclude,

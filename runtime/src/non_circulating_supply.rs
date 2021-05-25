@@ -41,7 +41,10 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         )
     } else {
         bank.get_program_accounts(&solana_stake_program::id())
-    };
+    }
+    // TODO: Figure out how to properly handle errors here
+    .unwrap_or_default();
+
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = StakeState::from(account).unwrap_or_default();
         match stake_account {

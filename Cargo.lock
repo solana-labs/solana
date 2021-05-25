@@ -4476,6 +4476,7 @@ dependencies = [
  "solana-faucet",
  "solana-logger 1.8.0",
  "solana-net-utils",
+ "solana-runtime",
  "solana-sdk",
  "solana-transaction-status",
  "solana-version",

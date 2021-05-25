@@ -75,6 +75,10 @@ impl Ancestors {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn max(&self) -> Slot {
+        self.ancestors.max()
+    }
 }
 #[cfg(test)]
 pub mod tests {

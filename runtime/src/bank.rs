@@ -39,7 +39,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
-    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -4335,38 +4335,43 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, AccountSharedData)> {
+    pub fn get_program_accounts(
+        &self,
+        program_id: &Pubkey,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program(&self.ancestors, program_id)
+            .load_by_program(&self.ancestors, 0, program_id)
     }
 
     pub fn get_filtered_program_accounts<F: Fn(&AccountSharedData) -> bool>(
         &self,
         program_id: &Pubkey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program_with_filter(&self.ancestors, program_id, filter)
+            .load_by_program_with_filter(&self.ancestors, 0, program_id, filter)
     }
 
     pub fn get_filtered_indexed_accounts<F: Fn(&AccountSharedData) -> bool>(
         &self,
         index_key: &IndexKey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_index_key_with_filter(&self.ancestors, index_key, filter)
+            .load_by_index_key_with_filter(&self.ancestors, 0, index_key, filter)
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
         self.rc.accounts.account_indexes_include_key(key)
     }
 
-    pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, AccountSharedData, Slot)> {
-        self.rc.accounts.load_all(&self.ancestors)
+    pub fn get_all_accounts_with_modified_slots(
+        &self,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
+        self.rc.accounts.load_all(&self.ancestors, 0)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -4421,10 +4426,10 @@ impl Bank {
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
-    ) -> Vec<(Pubkey, u64)> {
+    ) -> ScanResult<Vec<(Pubkey, u64)>> {
         self.rc
             .accounts
-            .load_largest_accounts(&self.ancestors, num, filter_by_address, filter)
+            .load_largest_accounts(&self.ancestors, 0, num, filter_by_address, filter)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -9137,7 +9142,7 @@ pub(crate) mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         parent.restore_old_behavior_for_fragile_tests();
 
-        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
+        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots().unwrap();
         assert!(
             genesis_accounts
                 .iter()
@@ -9165,11 +9170,11 @@ pub(crate) mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         bank1.squash();
         assert_eq!(
-            bank0.get_program_accounts(&program_id),
+            bank0.get_program_accounts(&program_id).unwrap(),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
-            bank1.get_program_accounts(&program_id),
+            bank1.get_program_accounts(&program_id).unwrap(),
             vec![(pubkey0, account0)]
         );
         assert_eq!(
@@ -9188,8 +9193,8 @@ pub(crate) mod tests {
 
         let bank3 = Arc::new(new_from_parent(&bank2));
         bank3.squash();
-        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
-        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank1.get_program_accounts(&program_id).unwrap().len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).unwrap().len(), 2);
     }
 
     #[test]
@@ -9209,8 +9214,9 @@ pub(crate) mod tests {
         let account = AccountSharedData::new(1, 0, &program_id);
         bank.store_account(&address, &account);
 
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, account));
 
@@ -9221,12 +9227,14 @@ pub(crate) mod tests {
         let new_account = AccountSharedData::new(1, 0, &another_program_id);
         let bank = Arc::new(new_from_parent(&bank));
         bank.store_account(&address, &new_account);
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
 
@@ -9234,12 +9242,14 @@ pub(crate) mod tests {
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
                 account.owner() == &program_id
-            });
+            })
+            .unwrap();
         assert!(indexed_accounts.is_empty());
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
                 account.owner() == &another_program_id
-            });
+            })
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account));
     }
@@ -11954,7 +11964,7 @@ pub(crate) mod tests {
                 if let Ok(bank_to_scan) =
                     bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                 {
-                    let accounts = bank_to_scan.get_program_accounts(&program_id);
+                    let accounts = bank_to_scan.get_program_accounts(&program_id).unwrap();
                     // Should never see empty accounts because no slot ever deleted
                     // any of the original accounts, and the scan should reflect the
                     // account state at some frozen slot `X` (no partial updates).
@@ -12656,21 +12666,25 @@ pub(crate) mod tests {
 
         // Return only one largest account
         assert_eq!(
-            bank.get_largest_accounts(1, &pubkeys_hashset, AccountAddressFilter::Include),
+            bank.get_largest_accounts(1, &pubkeys_hashset, AccountAddressFilter::Include)
+                .unwrap(),
             vec![(pubkeys[4], sol_to_lamports(5.0))]
         );
         assert_eq!(
-            bank.get_largest_accounts(1, &HashSet::new(), AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(1, &HashSet::new(), AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![(pubkeys[4], sol_to_lamports(5.0))]
         );
         assert_eq!(
-            bank.get_largest_accounts(1, &exclude4, AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(1, &exclude4, AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![(pubkeys[3], sol_to_lamports(4.0))]
         );
 
         // Return all added accounts
-        let results =
-            bank.get_largest_accounts(10, &pubkeys_hashset, AccountAddressFilter::Include);
+        let results = bank
+            .get_largest_accounts(10, &pubkeys_hashset, AccountAddressFilter::Include)
+            .unwrap();
         assert_eq!(results.len(), sorted_accounts.len());
         for pubkey_balance in sorted_accounts.iter() {
             assert!(results.contains(pubkey_balance));
@@ -12680,7 +12694,9 @@ pub(crate) mod tests {
         assert_eq!(sorted_results, results);
 
         let expected_accounts = sorted_accounts[1..].to_vec();
-        let results = bank.get_largest_accounts(10, &exclude4, AccountAddressFilter::Exclude);
+        let results = bank
+            .get_largest_accounts(10, &exclude4, AccountAddressFilter::Exclude)
+            .unwrap();
         // results include 5 Bank builtins
         assert_eq!(results.len(), 10);
         for pubkey_balance in expected_accounts.iter() {
@@ -12692,14 +12708,18 @@ pub(crate) mod tests {
 
         // Return 3 added accounts
         let expected_accounts = sorted_accounts[0..4].to_vec();
-        let results = bank.get_largest_accounts(4, &pubkeys_hashset, AccountAddressFilter::Include);
+        let results = bank
+            .get_largest_accounts(4, &pubkeys_hashset, AccountAddressFilter::Include)
+            .unwrap();
         assert_eq!(results.len(), expected_accounts.len());
         for pubkey_balance in expected_accounts.iter() {
             assert!(results.contains(pubkey_balance));
         }
 
         let expected_accounts = expected_accounts[1..4].to_vec();
-        let results = bank.get_largest_accounts(3, &exclude4, AccountAddressFilter::Exclude);
+        let results = bank
+            .get_largest_accounts(3, &exclude4, AccountAddressFilter::Exclude)
+            .unwrap();
         assert_eq!(results.len(), expected_accounts.len());
         for pubkey_balance in expected_accounts.iter() {
             assert!(results.contains(pubkey_balance));
@@ -12711,7 +12731,8 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         assert_eq!(
-            bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![pubkeys_balances[3], pubkeys_balances[1]]
         );
     }
