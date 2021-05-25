@@ -91,8 +91,8 @@ impl CliSignerInfo {
 }
 #[derive(Debug)]
 pub struct DefaultSigner {
-    arg_name: String,
-    path: String,
+    pub arg_name: String,
+    pub path: String,
 }
 
 impl DefaultSigner {
