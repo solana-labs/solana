@@ -3704,7 +3704,7 @@ pub fn make_many_slot_entries(
 
 // Check shreds for equality, ignoring any zero padding that either may have
 // used for tests only
-pub fn shreds_equal_ignore_padding(shred1: &Shred, shred2: &Shred) -> bool {
+pub fn shred_payloads_equal_ignore_padding(shred1: &Shred, shred2: &Shred) -> bool {
     shred1.payload[..shred1.data_header.size as usize]
         == shred2.payload[..shred2.data_header.size as usize]
 }
@@ -3867,7 +3867,7 @@ pub mod tests {
             .unwrap();
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
 
-        assert!(shreds_equal_ignore_padding(
+        assert!(shred_payloads_equal_ignore_padding(
             &last_shred,
             &deserialized_shred
         ));
@@ -5774,7 +5774,7 @@ pub mod tests {
             .collect();
         assert_eq!(result.len(), slot_8_shreds.len());
         for (left, right) in result.iter().zip(slot_8_shreds.iter()) {
-            assert!(shreds_equal_ignore_padding(&left, &right));
+            assert!(shred_payloads_equal_ignore_padding(&left, &right));
         }
 
         drop(blockstore);
@@ -7657,7 +7657,7 @@ pub mod tests {
                         .unwrap(),
                 )
                 .unwrap();
-                assert!(shreds_equal_ignore_padding(&shred, &recovered_shred));
+                assert!(shred_payloads_equal_ignore_padding(&shred, &recovered_shred));
             }
 
             verify_index_integrity(&blockstore, slot);
