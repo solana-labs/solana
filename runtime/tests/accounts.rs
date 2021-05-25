@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_runtime::{
     accounts_db::{AccountsDb, LoadHint},
-    accounts_index::Ancestors,
+    ancestors::Ancestors,
 };
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::{
@@ -59,7 +59,7 @@ fn test_shrink_and_clean() {
 
         // let's dance.
         for _ in 0..10 {
-            accounts.clean_accounts(None);
+            accounts.clean_accounts(None, false);
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
@@ -76,7 +76,7 @@ fn test_bad_bank_hash() {
     let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;
-    let ancestors: Ancestors = [(some_slot, 0)].iter().copied().collect();
+    let ancestors = Ancestors::from(vec![some_slot]);
 
     let max_accounts = 200;
     let mut accounts_keys: Vec<_> = (0..max_accounts)

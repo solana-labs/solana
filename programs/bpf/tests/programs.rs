@@ -9,14 +9,16 @@ use solana_account_decoder::parse_bpf_loader::{
     parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
 };
 use solana_bpf_loader_program::{
-    BpfError,
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::register_syscalls,
-    ThisInstructionMeter,
+    BpfError, ThisInstructionMeter,
 };
 use solana_cli_output::display::println_transaction;
-use solana_rbpf::vm::{Config, Executable, Tracer};
+use solana_rbpf::{
+    static_analysis::Analysis,
+    vm::{Config, Executable, Tracer}
+};
 use solana_runtime::{
     bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
@@ -28,6 +30,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
+    account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::MAX_PROCESSING_AGE,
@@ -212,7 +215,8 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable = <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
 
@@ -241,27 +245,29 @@ fn run_program(
             if config.enable_instruction_tracing {
                 if i == 1 {
                     if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                        let mut tracer_display = String::new();
+                        let analysis = Analysis::from_executable(executable.as_ref());
+                        let stdout = std::io::stdout();
+                        println!("TRACE (interpreted):");
                         tracer
                             .as_ref()
                             .unwrap()
-                            .write(&mut tracer_display, vm.get_program())
+                            .write(&mut stdout.lock(), &analysis)
                             .unwrap();
-                        println!("TRACE (interpreted): {}", tracer_display);
-                        let mut tracer_display = String::new();
+                        println!("TRACE (jit):");
                         vm.get_tracer()
-                            .write(&mut tracer_display, vm.get_program())
+                            .write(&mut stdout.lock(), &analysis)
                             .unwrap();
-                        println!("TRACE (jit): {}", tracer_display);
                         assert!(false);
                     } else if log_enabled!(Trace) {
-                        let mut trace_buffer = String::new();
+                        let analysis = Analysis::from_executable(executable.as_ref());
+                        let mut trace_buffer = Vec::<u8>::new();
                         tracer
                             .as_ref()
                             .unwrap()
-                            .write(&mut trace_buffer, vm.get_program())
+                            .write(&mut trace_buffer, &analysis)
                             .unwrap();
-                        trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+                        let trace_string = String::from_utf8(trace_buffer).unwrap();
+                        trace!("BPF Program Instruction Trace:\n{}", trace_string);
                     }
                 }
                 tracer = Some(vm.get_tracer().clone());
@@ -1244,11 +1250,11 @@ fn assert_instruction_count() {
             ("alloc", 1137),
             ("bpf_to_bpf", 13),
             ("multiple_static", 8),
-            ("noop", 45),
-            ("noop++", 45),
+            ("noop", 5),
+            ("noop++", 5),
             ("relative_call", 10),
-            ("sanity", 175),
-            ("sanity++", 177),
+            ("sanity", 169),
+            ("sanity++", 168),
             ("sha", 694),
             ("struct_pass", 8),
             ("struct_ret", 22),
@@ -1257,19 +1263,19 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 572),
-            ("solana_bpf_rust_alloc", 8906),
-            ("solana_bpf_rust_custom_heap", 516),
+            ("solana_bpf_rust_128bit", 584),
+            ("solana_bpf_rust_alloc", 4967),
+            ("solana_bpf_rust_custom_heap", 365),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 498),
-            ("solana_bpf_rust_iter", 724),
-            ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_mem", 2297),
-            ("solana_bpf_rust_noop", 472),
+            ("solana_bpf_rust_external_spend", 334),
+            ("solana_bpf_rust_iter", 8),
+            ("solana_bpf_rust_many_args", 189),
+            ("solana_bpf_rust_mem", 1665),
+            ("solana_bpf_rust_noop", 322),
             ("solana_bpf_rust_param_passing", 46),
-            ("solana_bpf_rust_rand", 475),
-            ("solana_bpf_rust_sanity", 894),
-            ("solana_bpf_rust_sha", 29099),
+            ("solana_bpf_rust_rand", 325),
+            ("solana_bpf_rust_sanity", 587),
+            ("solana_bpf_rust_sha", 22417),
         ]);
     }
 
@@ -1987,6 +1993,17 @@ fn test_program_bpf_upgrade_via_cpi() {
         &authority_keypair,
         "solana_bpf_rust_upgradeable",
     );
+    let program_account = bank_client.get_account(&program_id).unwrap().unwrap();
+    let programdata_address = match program_account.state() {
+        Ok(bpf_loader_upgradeable::UpgradeableLoaderState::Program {
+            programdata_address,
+        }) => programdata_address,
+        _ => unreachable!(),
+    };
+    let original_programdata = bank_client
+        .get_account_data(&programdata_address)
+        .unwrap()
+        .unwrap();
 
     let mut instruction = Instruction::new_with_bytes(
         invoke_and_return,
@@ -1999,7 +2016,7 @@ fn test_program_bpf_upgrade_via_cpi() {
         ],
     );
 
-    // Call the upgraded program
+    // Call the upgradable program
     instruction.data[0] += 1;
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
@@ -2046,6 +2063,13 @@ fn test_program_bpf_upgrade_via_cpi() {
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(43))
     );
+
+    // Validate that the programdata was actually overwritten
+    let programdata = bank_client
+        .get_account_data(&programdata_address)
+        .unwrap()
+        .unwrap();
+    assert_ne!(programdata, original_programdata);
 }
 
 #[cfg(feature = "bpf_rust")]

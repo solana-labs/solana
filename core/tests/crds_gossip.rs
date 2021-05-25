@@ -180,13 +180,9 @@ fn ring_network_create(num: usize) -> Network {
         let start_info = {
             let start = &network[&keys[k]];
             let start_id = start.lock().unwrap().id;
-            start
-                .lock()
-                .unwrap()
-                .crds
-                .lookup(&CrdsValueLabel::ContactInfo(start_id))
-                .unwrap()
-                .clone()
+            let label = CrdsValueLabel::ContactInfo(start_id);
+            let gossip = start.gossip.lock().unwrap();
+            gossip.crds.get(&label).unwrap().value.clone()
         };
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
         end.lock()
@@ -226,7 +222,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             let start = &network[k].lock().unwrap();
             let start_id = start.id;
             let start_label = CrdsValueLabel::ContactInfo(start_id);
-            start.crds.lookup(&start_label).unwrap().clone()
+            start.crds.get(&start_label).unwrap().value.clone()
         })
         .collect();
     for end in network.values_mut() {
@@ -275,11 +271,9 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
         // push a message to the network
         network_values.par_iter().for_each(|locked_node| {
             let node = &mut locked_node.lock().unwrap();
-            let mut m = node
-                .crds
-                .lookup(&CrdsValueLabel::ContactInfo(node.id))
-                .and_then(|v| v.contact_info().cloned())
-                .unwrap();
+            let label = CrdsValueLabel::ContactInfo(node.id);
+            let entry = node.crds.get(&label).unwrap();
+            let mut m = entry.value.contact_info().cloned().unwrap();
             m.wallclock = now;
             node.process_push_message(
                 &Pubkey::default(),
@@ -333,7 +327,10 @@ fn network_run_push(
             .par_iter()
             .map(|node| {
                 let mut node_lock = node.lock().unwrap();
-                let timeouts = node_lock.make_timeouts_test();
+                let timeouts = node_lock.make_timeouts(
+                    &HashMap::default(), // stakes
+                    Duration::from_millis(node_lock.pull.crds_timeout),
+                );
                 node_lock.purge(thread_pool, now, &timeouts);
                 (node_lock.id, node_lock.new_push_messages(vec![], now))
             })
@@ -348,17 +345,14 @@ fn network_run_push(
                 for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
-                    let updated = network
+                    let origins: HashSet<_> = network
                         .get(&to)
-                        .map(|node| {
-                            node.lock()
-                                .unwrap()
-                                .process_push_message(&from, msgs.clone(), now)
-                        })
-                        .unwrap();
-
-                    let origins: HashSet<_> =
-                        updated.into_iter().map(|u| u.value.pubkey()).collect();
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .process_push_message(&from, msgs.clone(), now)
+                        .into_iter()
+                        .collect();
                     let prunes_map = network
                         .get(&to)
                         .map(|node| node.lock().unwrap().prune_received_cache(origins, &stakes))

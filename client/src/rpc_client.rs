@@ -1163,11 +1163,11 @@ impl RpcClient {
         self.get_program_accounts_with_config(
             pubkey,
             RpcProgramAccountsConfig {
-                filters: None,
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64Zstd),
                     ..RpcAccountInfoConfig::default()
                 },
+                ..RpcProgramAccountsConfig::default()
             },
         )
     }

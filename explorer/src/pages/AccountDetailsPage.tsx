@@ -33,6 +33,7 @@ import { Identicon } from "components/common/Identicon";
 import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
+import { RewardsCard } from "components/account/RewardsCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -54,11 +55,23 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       path: "/largest",
     },
   ],
+  stake: [
+    {
+      slug: "rewards",
+      title: "Rewards",
+      path: "/rewards",
+    },
+  ],
   vote: [
     {
       slug: "vote-history",
       title: "Vote History",
       path: "/vote-history",
+    },
+    {
+      slug: "rewards",
+      title: "Rewards",
+      path: "/rewards",
     },
   ],
   "sysvar:recentBlockhashes": [
@@ -280,7 +293,8 @@ export type MoreTabs =
   | "stake-history"
   | "blockhashes"
   | "transfers"
-  | "instructions";
+  | "instructions"
+  | "rewards";
 
 function MoreSection({
   account,
@@ -325,6 +339,7 @@ function MoreSection({
       {tab === "transfers" && <TokenTransfersCard pubkey={pubkey} />}
       {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
+      {tab === "rewards" && <RewardsCard pubkey={pubkey} />}
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}

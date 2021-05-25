@@ -60,9 +60,8 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   } catch (err) {}
 
   const status = useTransactionStatus(signature);
-  const [zeroConfirmationRetries, setZeroConfirmationRetries] = React.useState(
-    0
-  );
+  const [zeroConfirmationRetries, setZeroConfirmationRetries] =
+    React.useState(0);
 
   let autoRefresh = AutoRefresh.Inactive;
 

@@ -1,5 +1,5 @@
 use crate::{
-    accounts::Accounts, accounts_index::Ancestors, instruction_recorder::InstructionRecorder,
+    accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
     log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
@@ -266,7 +266,8 @@ pub struct ThisInvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
     ancestors: &'a Ancestors,
-    sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    #[allow(clippy::type_complexity)]
+    sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -314,7 +315,7 @@ impl<'a> ThisInvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             account_db,
             ancestors,
-            sysvars: vec![],
+            sysvars: RefCell::new(vec![]),
         };
         invoke_context
             .invoke_stack
@@ -353,27 +354,19 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     .chain(self.message.account_keys.iter())
                     .position(|key| key == *search_key)
                     .map(|mut index| {
-                        if index < self.account_deps.len() {
-                            (
-                                *is_signer,
-                                *is_writable,
-                                &self.account_deps[index].0,
-                                &self.account_deps[index].1 as &RefCell<AccountSharedData>,
-                            )
+                        // TODO
+                        // Currently we are constructing new accounts on the stack
+                        // before calling MessageProcessor::process_cross_program_instruction
+                        // Ideally we would recycle the existing accounts here.
+                        let key = if index < self.account_deps.len() {
+                            &self.account_deps[index].0
+                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
                         } else {
                             index = index.saturating_sub(self.account_deps.len());
-                            (
-                                *is_signer,
-                                *is_writable,
-                                &self.message.account_keys[index],
-                                // TODO
-                                // Currently we are constructing new accounts on the stack
-                                // before calling MessageProcessor::process_cross_program_instruction
-                                // Ideally we would recycle the existing accounts here like this:
-                                // &self.accounts[index] as &RefCell<AccountSharedData>,
-                                transmute_lifetime(*account),
-                            )
-                        }
+                            &self.message.account_keys[index]
+                            // &self.accounts[index] as &RefCell<AccountSharedData>,
+                        };
+                        (*is_signer, *is_writable, key, transmute_lifetime(*account))
                     })
             })
             .collect::<Option<Vec<_>>>()
@@ -509,22 +502,25 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        // Try share from cache
-        let mut result =
-            self.sysvars
+    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+        if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
+            // Try share from cache
+            let mut result = sysvars
                 .iter()
                 .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-        if result.is_none() {
-            // Load it
-            result = self
-                .account_db
-                .load_with_fixed_root(self.ancestors, id)
-                .map(|(account, _)| Rc::new(account.data().to_vec()));
-            // Cache it
-            self.sysvars.push((*id, result.clone()));
+            if result.is_none() {
+                // Load it
+                result = self
+                    .account_db
+                    .load_with_fixed_root(self.ancestors, id)
+                    .map(|(account, _)| Rc::new(account.data().to_vec()));
+                // Cache it
+                sysvars.push((*id, result.clone()));
+            }
+            result
+        } else {
+            None
         }
-        result
     }
 }
 pub struct ThisLogger {

@@ -4550,6 +4550,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-genesis-utils"
+version = "1.7.0"
+dependencies = [
+ "solana-download-utils",
+ "solana-runtime",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-gossip"
 version = "1.7.0"
 dependencies = [
@@ -5442,6 +5451,7 @@ dependencies = [
  "solana-core",
  "solana-download-utils",
  "solana-faucet",
+ "solana-genesis-utils",
  "solana-ledger",
  "solana-logger 1.7.0",
  "solana-metrics",
@@ -5508,9 +5518,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.8"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fcec120278017a67e2dd98494dfdd8e565f53f1d05ab558d1656c369c5dd95e"
+checksum = "7c1c5bdfa63c68d848d95024c7f4335bae4b1917f7df2e48e2d945f4664a8b45"
 dependencies = [
  "byteorder",
  "combine",
@@ -5519,6 +5529,7 @@ dependencies = [
  "libc",
  "log 0.4.11",
  "rand 0.7.3",
+ "rustc-demangle",
  "scroll",
  "thiserror",
  "time 0.1.43",

@@ -2,7 +2,8 @@ use crate::{
     accounts_db::{
         AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
     },
@@ -25,7 +26,7 @@ use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
     hash::Hash,
-    message::Message,
+    message::{Message, MessageProgramIdsCache},
     native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
@@ -204,9 +205,9 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let demote_sysvar_write_locks =
                 feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
-
+            let mut key_check = MessageProgramIdsCache::new(&message);
             for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if message.is_non_loader_key(key, i) {
+                let account = if key_check.is_non_loader_key(key, i) {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
@@ -911,8 +912,9 @@ impl Accounts {
 
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
-    pub fn purge_slot(&self, slot: Slot) {
-        self.accounts_db.purge_slot(slot);
+    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
+    pub fn purge_slot(&self, slot: Slot, is_from_abs: bool) {
+        self.accounts_db.purge_slot(slot, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -2059,7 +2061,7 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts(None);
+        accounts.accounts_db.clean_accounts(None, false);
     }
 
     fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {

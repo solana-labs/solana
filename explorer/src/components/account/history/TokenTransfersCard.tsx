@@ -47,10 +47,10 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
 
   const { tokenRegistry } = useTokenRegistry();
 
-  const mintDetails = React.useMemo(() => tokenRegistry.get(address), [
-    address,
-    tokenRegistry,
-  ]);
+  const mintDetails = React.useMemo(
+    () => tokenRegistry.get(address),
+    [address, tokenRegistry]
+  );
 
   const transactionRows = React.useMemo(() => {
     if (history?.data?.fetched) {

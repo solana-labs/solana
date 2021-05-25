@@ -63,11 +63,12 @@ describe('shortvec', () => {
 
     checkEncodedArray(array, 0x7fff, (prevLength += 3), 3, [0xff, 0xff, 0x01]);
 
-    checkEncodedArray(array, 0x200000, (prevLength += 4), 4, [
-      0x80,
-      0x80,
-      0x80,
-      0x01,
-    ]);
+    checkEncodedArray(
+      array,
+      0x200000,
+      (prevLength += 4),
+      4,
+      [0x80, 0x80, 0x80, 0x01],
+    );
   });
 });

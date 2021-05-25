@@ -82,6 +82,10 @@ pub fn load(
                     deserialized_bank.get_accounts_hash(),
                 );
 
+                if process_options.accounts_db_test_hash_calculation {
+                    deserialized_bank.update_accounts_hash_with_index_option(false, true);
+                }
+
                 if deserialized_snapshot_hash != (archive_slot, archive_snapshot_hash) {
                     error!(
                         "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",

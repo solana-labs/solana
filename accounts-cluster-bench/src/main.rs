@@ -657,14 +657,14 @@ fn main() {
     let rpc_addr = if !skip_gossip {
         info!("Finding cluster entry: {:?}", entrypoint_addr);
         let (gossip_nodes, _validators) = discover(
-            None,
+            None, // keypair
             Some(&entrypoint_addr),
-            None,
-            Some(60),
-            None,
-            Some(&entrypoint_addr),
-            None,
-            0,
+            None,                    // num_nodes
+            Duration::from_secs(60), // timeout
+            None,                    // find_node_by_pubkey
+            Some(&entrypoint_addr),  // find_node_by_gossip_addr
+            None,                    // my_gossip_addr
+            0,                       // my_shred_version
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);

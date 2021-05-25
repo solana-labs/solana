@@ -21,6 +21,7 @@ use solana_rbpf::{
     ebpf::{HOST_ALIGN, MM_HEAP_START},
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
+    static_analysis::Analysis,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::message_processor::MessageProcessor;
@@ -148,7 +149,7 @@ pub fn create_vm<'a>(
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
-    let heap = AlignedMemory::new(DEFAULT_HEAP_SIZE, HOST_ALIGN);
+    let heap = AlignedMemory::new_with_size(DEFAULT_HEAP_SIZE, HOST_ALIGN);
     let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
     syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
@@ -310,8 +311,6 @@ fn process_loader_upgradeable_instruction(
             let buffer = keyed_account_at_index(keyed_accounts, 3)?;
             let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 4)?)?;
             let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 5)?)?;
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            // let _system = keyed_account_at_index(keyed_accounts, 6)?;
             let authority = keyed_account_at_index(keyed_accounts, 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
@@ -796,11 +795,11 @@ impl Executor for BpfExecutor {
                 before
             );
             if log_enabled!(Trace) {
-                let mut trace_buffer = String::new();
-                vm.get_tracer()
-                    .write(&mut trace_buffer, vm.get_program())
-                    .unwrap();
-                trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+                let mut trace_buffer = Vec::<u8>::new();
+                let analysis = Analysis::from_executable(self.executable.as_ref());
+                vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
+                let trace_string = String::from_utf8(trace_buffer).unwrap();
+                trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             match result {
                 Ok(status) => {
@@ -898,9 +897,11 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
-
+        let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
+        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
         let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
             program,
+            bpf_functions,
             None,
             Config::default(),
         )

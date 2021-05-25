@@ -1,4 +1,4 @@
-use crate::accounts_index::Ancestors;
+use crate::ancestors::Ancestors;
 
 use log::*;
 use rand::{thread_rng, Rng};
@@ -143,7 +143,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(stored_forks) = keymap.get(key_slice) {
             let res = stored_forks
                 .iter()
-                .find(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
+                .find(|(f, _)| ancestors.get(f) || self.roots.get(f).is_some())
                 .cloned();
             if res.is_some() {
                 return res;

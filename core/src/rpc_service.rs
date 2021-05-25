@@ -26,7 +26,10 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     snapshot_utils,
 };
-use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
+use solana_sdk::{
+    genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash, native_token::lamports_to_sol,
+    pubkey::Pubkey,
+};
 use std::{
     collections::HashSet,
     net::SocketAddr,
@@ -101,7 +104,7 @@ impl RpcRequestMiddleware {
 
     fn is_file_get_path(&self, path: &str) -> bool {
         match path {
-            "/genesis.tar.bz2" => true,
+            DEFAULT_GENESIS_DOWNLOAD_PATH => true,
             _ => {
                 if self.snapshot_config.is_some() {
                     self.snapshot_archive_path_regex.is_match(path)
@@ -136,7 +139,7 @@ impl RpcRequestMiddleware {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
-                "/genesis.tar.bz2" => {
+                DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
                     self.ledger_path.join(stem)
                 }
@@ -488,7 +491,10 @@ mod tests {
         bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion,
         snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
     };
-    use solana_sdk::{genesis_config::ClusterType, signature::Signer};
+    use solana_sdk::{
+        genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
+        signature::Signer,
+    };
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -592,8 +598,8 @@ mod tests {
             RpcHealth::stub(),
         );
 
-        assert!(rrm.is_file_get_path("/genesis.tar.bz2"));
-        assert!(!rrm.is_file_get_path("genesis.tar.bz2"));
+        assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
+        assert!(!rrm.is_file_get_path(DEFAULT_GENESIS_ARCHIVE));
 
         assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
 
@@ -629,7 +635,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         std::fs::create_dir(&ledger_path).unwrap();
 
-        let genesis_path = ledger_path.join("genesis.tar.bz2");
+        let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
         let rrm = RpcRequestMiddleware::new(
             ledger_path.clone(),
             None,
@@ -638,7 +644,7 @@ mod tests {
         );
 
         // File does not exist => request should fail.
-        let action = rrm.process_file_get("/genesis.tar.bz2");
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
         if let RequestMiddlewareAction::Respond { response, .. } = action {
             let response = runtime.block_on(response);
             let response = response.unwrap();
@@ -653,7 +659,7 @@ mod tests {
         }
 
         // Normal file exist => request should succeed.
-        let action = rrm.process_file_get("/genesis.tar.bz2");
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
         if let RequestMiddlewareAction::Respond { response, .. } = action {
             let response = runtime.block_on(response);
             let response = response.unwrap();
@@ -672,7 +678,7 @@ mod tests {
             symlink::symlink_file("wrong", &genesis_path).unwrap();
 
             // File is a symbolic link => request should fail.
-            let action = rrm.process_file_get("/genesis.tar.bz2");
+            let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
             if let RequestMiddlewareAction::Respond { response, .. } = action {
                 let response = runtime.block_on(response);
                 let response = response.unwrap();

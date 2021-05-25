@@ -154,7 +154,7 @@ impl SnapshotRequestHandler {
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts(true);
+                snapshot_root_bank.clean_accounts(true, false);
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -263,11 +263,12 @@ impl AbsRequestHandler {
             })
     }
 
-    pub fn handle_pruned_banks(&self, bank: &Bank) -> usize {
+    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
+    pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
         let mut count = 0;
         for pruned_slot in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.purge_slot(pruned_slot);
+            bank.rc.accounts.purge_slot(pruned_slot, is_from_abs);
         }
 
         count
@@ -372,7 +373,7 @@ impl AccountsBackgroundService {
                             // slots >= bank.slot()
                             bank.force_flush_accounts_cache();
                         }
-                        bank.clean_accounts(true);
+                        bank.clean_accounts(true, false);
                         last_cleaned_block_height = bank.block_height();
                     }
                 }
@@ -393,7 +394,7 @@ impl AccountsBackgroundService {
         total_remove_slots_time: &mut u64,
     ) {
         let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += request_handler.handle_pruned_banks(&bank);
+        *removed_slots_count += request_handler.handle_pruned_banks(&bank, true);
         remove_slots_time.stop();
         *total_remove_slots_time += remove_slots_time.as_us();
 

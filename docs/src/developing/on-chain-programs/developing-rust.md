@@ -5,7 +5,7 @@ title: "Developing with Rust"
 Solana supports writing on-chain programs using the
 [Rust](https://www.rust-lang.org/) programming language.
 
-## Project Layout {#project-layout}
+## Project Layout
 
 Solana Rust programs follow the typical [Rust project
 layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
@@ -47,7 +47,7 @@ using the `exclude_entrypoint` feature.
 - [Include without
   entrypoint](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token-swap/program/Cargo.toml#L19)
 
-## Project Dependencies {#project-dependencies}
+## Project Dependencies
 
 At a minimum, Solana Rust programs must pull in the
 [solana-program](https://crates.io/crates/solana-program) crate.
@@ -67,7 +67,7 @@ For example:
   included in the program itself. For more information refer to
   [Stack](overview.md#stack).
 
-## How to Build {#how-to-build}
+## How to Build
 
 First setup the environment:
 
@@ -90,7 +90,7 @@ $ cd <the program directory>
 $ cargo build-bpf
 ```
 
-## How to Test {#how-to-test}
+## How to Test
 
 Solana programs can be unit tested via the traditional `cargo test` mechanism by
 exercising program functions directly.
@@ -106,7 +106,7 @@ example](https://github.com/solana-labs/solana-program-library/blob/master/examp
 shows how an instruction containing syavar account is sent and processed by the
 program.
 
-## Program Entrypoint {#program-entrypoint}
+## Program Entrypoint
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
 calls when invoking a program. Solana supports multiple [versions of the BPF
@@ -152,7 +152,7 @@ Refer to [helloworld's use of the
 entrypoint](https://github.com/solana-labs/example-helloworld/blob/c1a7247d87cd045f574ed49aec5d160aefc45cf2/src/program-rust/src/lib.rs#L15)
 as an example of how things fit together.
 
-### Parameter Deserialization {#parameter-deserialization}
+### Parameter Deserialization
 
 Each loader provides a helper function that deserializes the program's input
 parameters into Rust types. The entrypoint macros automatically calls the
@@ -175,7 +175,7 @@ the program wishes to commit be written back into the input byte array.
 Details on how the loader serializes the program inputs can be found in the
 [Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
 
-### Data Types {#data-types}
+### Data Types
 
 The loader's entrypoint macros call the program defined instruction processor
 function with the following parameters:
@@ -211,7 +211,7 @@ The instruction data is the general purpose byte array from the [instruction's
 instruction data](developing/programming-model/transactions.md#instruction-data)
 being processed.
 
-## Heap {#heap}
+## Heap
 
 Rust programs implement the heap directly by defining a custom
 [`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
@@ -219,7 +219,7 @@ Rust programs implement the heap directly by defining a custom
 Programs may implement their own `global_allocator` based on its specific needs.
 Refer to the [custom heap example](#examples) for more information.
 
-## Restrictions {#restrictions}
+## Restrictions
 
 On-chain Rust programs support most of Rust's libstd, libcore, and liballoc, as
 well as many 3rd party crates.
@@ -252,7 +252,7 @@ single-threaded environment, and must be deterministic:
   [computation budget](developing/programming-model/runtime.md#compute-budget) for more
   information.
 
-## Depending on Rand {#depending-on-rand}
+## Depending on Rand
 
 Programs are constrained to run deterministically, so random numbers are not
 available. Sometimes a program may depend on a crate that depends itself on
@@ -278,7 +278,13 @@ program's `Cargo.toml`:
 getrandom = { version = "0.1.14", features = ["dummy"] }
 ```
 
-## Logging {#logging}
+or if the dependency is on getrandom v0.2 add:
+
+```
+getrandom = { version = "0.2.2", features = ["custom"] }
+```
+
+## Logging
 
 Rust's `println!` macro is computationally expensive and not supported. Instead
 the helper macro
@@ -307,7 +313,7 @@ msg!("Some variable: {:?}", variable);
 The [debugging](debugging.md#logging) section has more information about working
 with program logs the [Rust examples](#examples) contains a logging example.
 
-## Panicking {#panicking}
+## Panicking
 
 Rust's `panic!`, `assert!`, and internal panic results are printed to the
 [program logs](debugging.md#logging) by default.
@@ -322,7 +328,7 @@ INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 uni
 INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
-### Custom Panic Handler {#custom-panic-handler}
+### Custom Panic Handler
 
 Programs can override the default panic handler by providing their own
 implementation.
@@ -366,7 +372,7 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 }
 ```
 
-## Compute Budget {#compute-budget}
+## Compute Budget
 
 Use the system call
 [`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102)
@@ -376,7 +382,7 @@ may consume before execution is halted
 See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
-## ELF Dump {#elf-dump}
+## ELF Dump
 
 The BPF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime. The
@@ -393,7 +399,7 @@ $ cd <program directory>
 $ cargo build-bpf --dump
 ```
 
-## Examples {#examples}
+## Examples
 
 The [Solana Program Library
 github](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)

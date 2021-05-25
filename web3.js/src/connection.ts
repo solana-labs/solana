@@ -3020,9 +3020,8 @@ export class Connection {
           'finalized',
         );
         if (block.signatures.length > 0) {
-          options.until = block.signatures[
-            block.signatures.length - 1
-          ].toString();
+          options.until =
+            block.signatures[block.signatures.length - 1].toString();
         }
       } catch (err) {
         if (err.message.includes('skipped')) {
@@ -3043,9 +3042,8 @@ export class Connection {
       try {
         const block = await this.getConfirmedBlockSignatures(endSlot);
         if (block.signatures.length > 0) {
-          options.before = block.signatures[
-            block.signatures.length - 1
-          ].toString();
+          options.before =
+            block.signatures[block.signatures.length - 1].toString();
         }
       } catch (err) {
         if (err.message.includes('skipped')) {
