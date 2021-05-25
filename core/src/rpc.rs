@@ -2972,6 +2972,12 @@ pub mod rpc_full {
             let (_, mut transaction) = deserialize_transaction(data, encoding)?;
 
             if config.sig_verify {
+                if config.replace_recent_blockhash {
+                    return Err(Error::invalid_params(
+                        "sigVerify may not be used with replaceRecentBlockhash",
+                    ));
+                }
+
                 if let Err(e) = verify_transaction(&transaction) {
                     return Err(e);
                 }
@@ -4907,6 +4913,8 @@ pub mod tests {
         let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
         tx.signatures[0] = Signature::default();
         let tx_badsig_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        tx.message.recent_blockhash = Hash::default();
+        let tx_invalid_recent_blockhash = bs58::encode(serialize(&tx).unwrap()).into_string();
 
         bank.freeze(); // Ensure the root bank is frozen, `start_rpc_handler_with_tx()` doesn't do this
 
@@ -4982,6 +4990,75 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}"]}}"#,
             tx_serialized_encoded,
         );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"err":null, "logs":[
+                    "Program 11111111111111111111111111111111 invoke [1]",
+                    "Program 11111111111111111111111111111111 success"
+                ]}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Enabled both sigVerify=true and replaceRecentBlockhash=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {}]}}"#,
+            tx_serialized_encoded,
+            json!({
+                "sigVerify": true,
+                "replaceRecentBlockhash": true,
+            })
+            .to_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc":"2.0",
+            "error": {
+                "code": ErrorCode::InvalidParams,
+                "message": "sigVerify may not be used with replaceRecentBlockhash"
+            },
+            "id":1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad recent blockhash with replaceRecentBlockhash=false
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": false}}]}}"#,
+            tx_invalid_recent_blockhash,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc":"2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"err": "BlockhashNotFound", "logs":[]}
+            },
+            "id":1
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad recent blockhash with replaceRecentBlockhash=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": true}}]}}"#,
+            tx_invalid_recent_blockhash,
+        );
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -4994,6 +5071,7 @@ pub mod tests {
             },
             "id": 1,
         });
+
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
