@@ -247,6 +247,13 @@ impl Shred {
         packet.meta.size = len;
     }
 
+    pub fn copy_from_packet(packet: &Packet) -> Result<Self> {
+        let mut serialized_shred = vec![0; SHRED_PAYLOAD_SIZE];
+        // TODO: assert packet.data.len() >= SHRED_PAYLOAD_SIZE / == PACKET_DATA_SIZE ?
+        serialized_shred.copy_from_slice(&packet.data[..SHRED_PAYLOAD_SIZE]);
+        Shred::new_from_serialized_shred(serialized_shred)
+    }
+
     pub fn new_from_data(
         slot: Slot,
         index: u32,
@@ -1924,10 +1931,7 @@ pub mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        // We are responsible for ensuring that we don't pass an oversized buffer so truncate here
-        let mut serialized_packet = packet.data.to_vec();
-        serialized_packet.truncate(SHRED_PAYLOAD_SIZE);
-        let shred_res = Shred::new_from_serialized_shred(serialized_packet);
+        let shred_res = Shred::copy_from_packet(&packet);
         assert_matches!(
             shred_res,
             Err(ShredError::InvalidParentOffset {
@@ -1990,5 +1994,14 @@ pub mod tests {
 
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.bad_shred_type);
+    }
+
+    #[test]
+    fn test_shred_copy_to_from_packet() {
+        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        let mut packet = Packet::default();
+        shred.copy_to_packet(&mut packet);
+        let copied_shred = Shred::copy_from_packet(&packet).unwrap();
+        assert_eq!(shred, copied_shred);
     }
 }

@@ -20,7 +20,7 @@ use rayon::ThreadPool;
 use solana_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
-    shred::{Nonce, Shred, SHRED_PAYLOAD_SIZE},
+    shred::{Nonce, Shred},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
@@ -247,15 +247,11 @@ where
                             );
                             None
                         } else {
-                            // shred fetch stage should be sending packets
-                            // with sufficiently large buffers. Needed to ensure
-                            // call to `new_from_serialized_shred` is safe.
+                            // shred fetch stage should be sending packets with
+                            // sufficiently large buffers. Needed to ensure call
+                            // to `copy_from_packet` (which deserializes shred) is safe.
                             assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
-                            let mut serialized_shred = packet.data.to_vec();
-                            // Truncate shred down to SHRED_PAYLOAD_SIZE to remove the nonce so
-                            // that the buffer is proper size for new_from_serialized_shred()
-                            serialized_shred.truncate(SHRED_PAYLOAD_SIZE);
-                            if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
+                            if let Ok(shred) = Shred::copy_from_packet(&packet) {
                                 let repair_info = {
                                     if packet.meta.repair {
                                         if let Some(nonce) = repair_response::nonce(&packet.data) {
