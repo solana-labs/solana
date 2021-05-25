@@ -5,7 +5,7 @@
   "dependencies": {
     "@bonfida/bot": "^0.5.0",
     "@metamask/jazzicon": "^2.0.0",
-    "@project-serum/serum": "^0.13.34",
+    "@project-serum/serum": "^0.13.37",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.4.1",
     "@solana/spl-token-registry": "^0.2.71",
