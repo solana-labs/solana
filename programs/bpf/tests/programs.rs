@@ -431,6 +431,7 @@ fn test_program_bpf_sanity() {
         programs.extend_from_slice(&[
             ("alloc", true),
             ("bpf_to_bpf", true),
+            ("float", true),
             ("multiple_static", true),
             ("noop", true),
             ("noop++", true),
