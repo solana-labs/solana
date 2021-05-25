@@ -190,7 +190,7 @@ where
     }
 }
 
-// Map from AppendVec file name to unpacked file system location
+/// Map from AppendVec file name to unpacked file system location
 pub type UnpackedAppendVecMap = HashMap<String, PathBuf>;
 
 pub fn unpack_snapshot<A: Read>(
