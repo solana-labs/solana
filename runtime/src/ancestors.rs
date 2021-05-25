@@ -16,13 +16,13 @@ pub struct Ancestors {
 // that we prefer to implement them in a sparse HashMap
 const ANCESTORS_HASH_MAP_SIZE: u64 = 10_000;
 
-impl From<Vec<(Slot, usize)>> for Ancestors {
-    fn from(source: Vec<(Slot, usize)>) -> Ancestors {
+impl From<Vec<Slot>> for Ancestors {
+    fn from(source: Vec<Slot>) -> Ancestors {
         let mut result = Ancestors::default();
         if !source.is_empty() {
             result.min = Slot::MAX;
             result.max = Slot::MIN;
-            source.iter().for_each(|(slot, _)| {
+            source.iter().for_each(|slot| {
                 result.min = std::cmp::min(result.min, *slot);
                 result.max = std::cmp::max(result.max, *slot + 1);
             });
@@ -33,12 +33,12 @@ impl From<Vec<(Slot, usize)>> for Ancestors {
                 result.max = 0;
             } else {
                 result.slots = vec![None; range as usize];
-                source.into_iter().for_each(|(slot, size)| {
+                source.into_iter().for_each(|slot| {
                     let slot = result.slot_index(&slot);
                     if result.slots[slot].is_none() {
                         result.count += 1;
                     }
-                    result.slots[slot] = Some(size);
+                    result.slots[slot] = Some(0);
                 });
             }
         }
@@ -181,6 +181,11 @@ pub mod tests {
         }
     }
 
+    impl From<Vec<(Slot, usize)>> for Ancestors {
+        fn from(source: Vec<(Slot, usize)>) -> Ancestors {
+            Ancestors::from(source.into_iter().map(|(slot, _)| slot).collect::<Vec<_>>())
+        }
+    }
     impl Ancestors {
         pub fn insert(&mut self, mut slot: Slot, size: usize) {
             if self.large_range_slots.is_empty() {
