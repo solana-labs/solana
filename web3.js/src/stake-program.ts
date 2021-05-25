@@ -710,13 +710,8 @@ export class StakeProgram {
    * Generate a Transaction that withdraws deactivated Stake tokens.
    */
   static withdraw(params: WithdrawStakeParams): Transaction {
-    const {
-      stakePubkey,
-      authorizedPubkey,
-      toPubkey,
-      lamports,
-      custodianPubkey,
-    } = params;
+    const {stakePubkey, authorizedPubkey, toPubkey, lamports, custodianPubkey} =
+      params;
     const type = STAKE_INSTRUCTION_LAYOUTS.Withdraw;
     const data = encodeData(type, {lamports});
 
