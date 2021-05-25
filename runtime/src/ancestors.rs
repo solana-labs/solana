@@ -1,5 +1,5 @@
 use solana_sdk::clock::Slot;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub type AncestorsForSerialization = HashMap<Slot, usize>;
 
@@ -9,7 +9,7 @@ pub struct Ancestors {
     slots: Vec<Option<usize>>,
     count: usize,
     max: Slot,
-    large_range_slots: HashMap<Slot, usize>,
+    large_range_slots: HashSet<Slot>,
 }
 
 // some tests produce ancestors ranges that are too large such
@@ -28,7 +28,7 @@ impl From<Vec<(Slot, usize)>> for Ancestors {
             });
             let range = result.range();
             if range > ANCESTORS_HASH_MAP_SIZE {
-                result.large_range_slots = source.into_iter().collect();
+                result.large_range_slots = source.into_iter().map(|(slot, _)| slot).collect();
                 result.min = 0;
                 result.max = 0;
             } else {
@@ -59,8 +59,7 @@ impl From<&HashMap<Slot, usize>> for Ancestors {
             });
             let range = result.range();
             if range > ANCESTORS_HASH_MAP_SIZE {
-                result.large_range_slots =
-                    source.iter().map(|(slot, size)| (*slot, *size)).collect();
+                result.large_range_slots = source.iter().map(|(slot, _size)| *slot).collect();
                 result.min = 0;
                 result.max = 0;
             } else {
@@ -98,7 +97,7 @@ impl Ancestors {
                 .filter_map(|(size, i)| i.map(|_| size as u64 + self.min))
                 .collect::<Vec<_>>()
         } else {
-            self.large_range_slots.keys().copied().collect::<Vec<_>>()
+            self.large_range_slots.iter().copied().collect::<Vec<_>>()
         }
     }
 
@@ -137,7 +136,7 @@ impl Ancestors {
             let slot = self.slot_index(slot);
             self.slots[slot].is_some()
         } else {
-            self.large_range_slots.contains_key(slot)
+            self.large_range_slots.contains(slot)
         }
     }
 
@@ -209,7 +208,7 @@ pub mod tests {
                 }
                 self.slots[slot as usize] = Some(size);
             } else {
-                self.large_range_slots.insert(slot, size);
+                self.large_range_slots.insert(slot);
             }
         }
     }
