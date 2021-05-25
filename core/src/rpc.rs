@@ -2969,7 +2969,7 @@ pub mod rpc_full {
             debug!("simulate_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (_, transaction) = deserialize_transaction(data, encoding)?;
+            let (_, mut transaction) = deserialize_transaction(data, encoding)?;
 
             if config.sig_verify {
                 if let Err(e) = verify_transaction(&transaction) {
@@ -2978,6 +2978,9 @@ pub mod rpc_full {
             }
 
             let bank = &*meta.bank(config.commitment);
+            if config.use_most_recent_blockhash {
+                transaction.message.recent_blockhash = bank.last_blockhash();
+            }
             let (result, logs) = bank.simulate_transaction(transaction);
 
             Ok(new_response(
