@@ -610,6 +610,10 @@ impl JsonRpcRequestProcessor {
         self.bank(commitment).slot()
     }
 
+    fn get_block_height(&self, commitment: Option<CommitmentConfig>) -> u64 {
+        self.bank(commitment).block_height()
+    }
+
     fn get_max_retransmit_slot(&self) -> Slot {
         self.max_slots.retransmit.load(Ordering::Relaxed)
     }
@@ -2098,6 +2102,13 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<Slot>;
 
+        #[rpc(meta, name = "getBlockHeight")]
+        fn get_block_height(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64>;
+
         #[rpc(meta, name = "getSnapshotSlot")]
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
@@ -2184,6 +2195,15 @@ pub mod rpc_minimal {
         ) -> Result<Slot> {
             debug!("get_slot rpc request received");
             Ok(meta.get_slot(commitment))
+        }
+
+        fn get_block_height(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64> {
+            debug!("get_block_height rpc request received");
+            Ok(meta.get_block_height(commitment))
         }
 
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
