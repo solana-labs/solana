@@ -57,8 +57,7 @@ pub fn download_file<'a, 'b>(
     destination_file: &Path,
     use_progress_bar: bool,
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
-) -> Result<(), String>
-{
+) -> Result<(), String> {
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
     }
@@ -114,8 +113,7 @@ pub fn download_file<'a, 'b>(
         info!("Downloading {} bytes from {}", download_size, url);
     }
 
-    struct DownloadProgress<'e, 'f, R>
-    {
+    struct DownloadProgress<'e, 'f, R> {
         progress_bar: ProgressBar,
         response: R,
         last_print: Instant,
@@ -128,8 +126,7 @@ pub fn download_file<'a, 'b>(
         notification_count: u64,
     }
 
-    impl<'e, 'f, R: Read> Read for DownloadProgress<'e, 'f, R>
-    {
+    impl<'e, 'f, R: Read> Read for DownloadProgress<'e, 'f, R> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             let n = self.response.read(buf)?;
 
@@ -254,8 +251,7 @@ pub fn download_snapshot<'a, 'b>(
     use_progress_bar: bool,
     maximum_snapshots_to_retain: usize,
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
-) -> Result<(), String>
-{
+) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir, maximum_snapshots_to_retain);
 
     for compression in &[
