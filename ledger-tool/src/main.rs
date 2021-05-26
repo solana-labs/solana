@@ -771,6 +771,12 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let limit_load_slot_count_from_snapshot_arg = Arg::with_name("limit_load_slot_count_from_snapshot")
+        .long("limit-load-slot-count-from-snapshot")
+        .value_name("SLOT")
+        .validator(is_slot)
+        .takes_value(true)
+        .help("For debugging and profiling with large snapshots, artificially limit how many slots are loaded from a snapshot.");
     let hard_forks_arg = Arg::with_name("hard_forks")
         .long("hard-fork")
         .value_name("SLOT")
@@ -1040,6 +1046,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -1744,6 +1751,12 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 bpf_jit: !matches.is_present("no_bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                limit_load_slot_count_from_snapshot: value_t!(
+                    arg_matches,
+                    "limit_load_slot_count_from_snapshot",
+                    usize
+                )
+                .ok(),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
                     .is_present("accounts_db_test_hash_calculation"),

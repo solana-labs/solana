@@ -5123,12 +5123,15 @@ impl AccountsDb {
     }
 
     #[allow(clippy::needless_collect)]
-    pub fn generate_index(&self) {
+    pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>) {
         type AccountsMap<'a> =
             HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
+        if let Some(limit) = limit_load_slot_count_from_snapshot {
+            slots.truncate(limit); // get rid of the newer slots and keep just the older
+        }
         let total_processed_slots_across_all_threads = AtomicU64::new(0);
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot

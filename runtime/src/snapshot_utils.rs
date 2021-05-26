@@ -603,6 +603,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     additional_builtins: Option<&Builtins>,
     account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
 ) -> Result<Bank> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
@@ -633,6 +634,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         additional_builtins,
         account_indexes,
         accounts_db_caching_enabled,
+        limit_load_slot_count_from_snapshot,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -791,6 +793,7 @@ fn rebuild_bank_from_snapshots(
     additional_builtins: Option<&Builtins>,
     account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
 ) -> Result<Bank> {
     info!("snapshot version: {}", snapshot_version);
 
@@ -826,6 +829,7 @@ fn rebuild_bank_from_snapshots(
                 additional_builtins,
                 account_indexes,
                 accounts_db_caching_enabled,
+                limit_load_slot_count_from_snapshot,
             ),
         }?)
     })?;
