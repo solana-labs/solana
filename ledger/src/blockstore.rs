@@ -7657,7 +7657,10 @@ pub mod tests {
                         .unwrap(),
                 )
                 .unwrap();
-                assert!(shred_payloads_equal_ignore_padding(&shred, &recovered_shred));
+                assert!(shred_payloads_equal_ignore_padding(
+                    &shred,
+                    &recovered_shred
+                ));
             }
 
             verify_index_integrity(&blockstore, slot);
