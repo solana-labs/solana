@@ -215,12 +215,33 @@ pub fn create_program_address(
     seeds: &[&[u8]],
     program_id: &Pubkey,
 ) -> Result<Pubkey, PubkeyError>
+
+/// Find a valid off-curve derived program address and its bump seed
+///     * seeds, symbolic keywords used to derive the key
+///     * program_id, program that the address is derived for
+pub fn find_program_address(
+    seeds: &[&[u8]],
+    program_id: &Pubkey,
+) -> Option<(Pubkey, u8)> {
+    let mut bump_seed = [std::u8::MAX];
+    for _ in 0..std::u8::MAX {
+        let mut seeds_with_bump = seeds.to_vec();
+        seeds_with_bump.push(&bump_seed);
+        if let Ok(address) = create_program_address(&seeds_with_bump, program_id) {
+            return Some((address, bump_seed[0]));
+        }
+        bump_seed[0] -= 1;
+    }
+    None
+}
 ```
 
 ### Using program addresses
 
 Clients can use the `create_program_address` function to generate a destination
-address.
+address. In this example, we assume that
+`create_program_address(&[&["escrow]], &escrow_program_id)` generates a valid
+program address that is off the curve.
 
 ```rust,ignore
 // deterministically derive the escrow key
@@ -261,12 +282,60 @@ fn transfer_one_token_from_escrow(
 }
 ```
 
+Note that the address generated using `create_program_address` is not guaranteed
+to be a valid program address off the curve. For example, let's assume that the
+seed `"escrow2"` does not generate a valid program address.
+
+To generate a valid program address using `"escrow2` as a seed, use
+`find_program_address`, iterating through possible bump seeds until a valid
+combination is found. The preceding example becomes:
+
+```rust,ignore
+// find the escrow key and valid bump seed
+let (escrow_pubkey2, escrow_bump_seed) = find_program_address(&[&["escrow2"]], &escrow_program_id);
+
+// construct a transfer message using that key
+let message = Message::new(vec![
+    token_instruction::transfer(&alice_pubkey, &escrow_pubkey2, 1),
+]);
+
+// process the message which transfer one 1 token to the escrow
+client.send_and_confirm_message(&[&alice_keypair], &message);
+```
+
+Within the program, this becomes:
+
+```rust,ignore
+fn transfer_one_token_from_escrow2(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    // User supplies the destination
+    let alice_pubkey = keyed_accounts[1].unsigned_key();
+
+    // Iteratively derive the escrow pubkey
+    let (escrow_pubkey2, bump_seed) = find_program_address(&[&["escrow2"]], program_id);
+
+    // Create the transfer instruction
+    let instruction = token_instruction::transfer(&escrow_pubkey2, &alice_pubkey, 1);
+
+    // Include the generated bump seed to the list of all seeds
+    invoke_signed(&instruction, accounts, &[&["escrow2", &[bump_seed]]])
+}
+```
+
+Since `find_program_address` requires iterating over a number of calls to
+`create_program_address`, it may use more
+[compute budget](developing/programming-model/runtime.md#compute-budget) when
+used on-chain. To reduce the compute cost, use `find_program_address` off-chain
+and pass the resulting bump seed to the program.
+
 ### Instructions that require signers
 
-The addresses generated with `create_program_address` are indistinguishable from
-any other public key. The only way for the runtime to verify that the address
-belongs to a program is for the program to supply the seeds used to generate the
-address.
+The addresses generated with `create_program_address` and `find_program_address`
+are indistinguishable from any other public key. The only way for the runtime to
+verify that the address belongs to a program is for the program to supply the
+seeds used to generate the address.
 
 The runtime will internally call `create_program_address`, and compare the
 result against the addresses supplied in the instruction.
