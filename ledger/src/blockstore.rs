@@ -139,6 +139,7 @@ pub struct Blockstore {
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+    block_height_cf: LedgerColumn<cf::BlockHeight>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -309,6 +310,7 @@ impl Blockstore {
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
         let perf_samples_cf = db.column();
+        let block_height_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -356,6 +358,7 @@ impl Blockstore {
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
+            block_height_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -1775,6 +1778,28 @@ impl Blockstore {
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
         if self.get_block_time(slot).unwrap_or_default().is_none() {
             self.blocktime_cf.put(slot, &timestamp)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_block_height".to_string(), String)
+        );
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+        self.block_height_cf.get(slot)
+    }
+
+    pub fn cache_block_height(&self, slot: Slot, block_height: u64) -> Result<()> {
+        if self.get_block_time(slot).unwrap_or_default().is_none() {
+            self.block_height_cf.put(slot, &block_height)
         } else {
             Ok(())
         }
