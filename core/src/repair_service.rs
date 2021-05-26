@@ -559,7 +559,7 @@ impl RepairService {
 
     #[allow(dead_code)]
     fn process_new_duplicate_slots(
-        new_duplicate_slots: &[Slot],
+        new_duplicate_slots: &[(Slot, SlotId)],
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
         root_bank: &Bank,
@@ -568,7 +568,7 @@ impl RepairService {
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         repair_validators: &Option<HashSet<Pubkey>>,
     ) {
-        for slot in new_duplicate_slots {
+        for (slot, slot_id) in new_duplicate_slots {
             warn!(
                 "Cluster confirmed slot: {}, dumping our current version and repairing",
                 slot
@@ -577,7 +577,7 @@ impl RepairService {
             root_bank.clear_slot_signatures(*slot);
 
             // Clear the accounts for this slot
-            root_bank.remove_unrooted_slots(&[*slot]);
+            root_bank.remove_unrooted_slots(&[(*slot, *slot_id)]);
 
             // Clear the slot-related data in blockstore. This will:
             // 1) Clear old shreds allowing new ones to be inserted
@@ -1139,6 +1139,7 @@ mod test {
         );
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let bank9 = Bank::new_from_parent(&bank0, &Pubkey::default(), duplicate_slot);
+        let duplicate_slot_id = bank9.slot_id();
         let old_balance = bank9.get_balance(&keypairs.node_keypair.pubkey());
         bank9
             .transfer(10_000, &mint_keypair, &keypairs.node_keypair.pubkey())
@@ -1156,7 +1157,7 @@ mod test {
         assert!(bank9.get_signature_status(&vote_tx.signatures[0]).is_some());
 
         RepairService::process_new_duplicate_slots(
-            &[duplicate_slot],
+            &[(duplicate_slot, duplicate_slot_id)],
             &mut duplicate_slot_repair_statuses,
             &cluster_slots,
             &bank9,

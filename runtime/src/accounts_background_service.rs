@@ -268,7 +268,9 @@ impl AbsRequestHandler {
         let mut count = 0;
         for pruned_slot in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.purge_slot(pruned_slot, is_from_abs);
+            bank.rc
+                .accounts
+                .purge_slot(pruned_slot, bank.slot_id(), is_from_abs);
         }
 
         count

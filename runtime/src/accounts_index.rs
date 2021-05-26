@@ -16,7 +16,7 @@ use solana_sdk::{
 use std::{
     collections::{
         btree_map::{self, BTreeMap},
-        HashMap, HashSet,
+        HashSet,
     },
     ops::{
         Bound,
@@ -625,7 +625,11 @@ pub struct AccountsIndex<T> {
     // is abandoned, all of the slots on that fork up to `S` will be removed via
     // `AccountsDb::remove_unrooted_slots()`. When the scan finishes, it'll realize that the
     // results of the scan may have been corrupted by `remove_unrooted_slots` and abort its results.
-    pub tip_of_scanned_forks: Mutex<HashMap<SlotId, ScanSlotTracker>>,
+    //
+    // `removed_slot_ids` tracks all the slot ids that were removed via `remove_unrooted_slots()` so any attempted scans
+    // on any of these slots fails. This is safe to purge once the associated Bank is dropped and
+    // scanning the fork with that Bank at the tip is no longer possible.
+    pub removed_slot_ids: Mutex<HashSet<SlotId>>,
     zero_lamport_pubkeys: DashSet<Pubkey>,
 }
 
@@ -644,7 +648,7 @@ impl<T> Default for AccountsIndex<T> {
             ),
             roots_tracker: RwLock::<RootsTracker>::default(),
             ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
-            tip_of_scanned_forks: Mutex::<HashMap<SlotId, ScanSlotTracker>>::default(),
+            removed_slot_ids: Mutex::<HashSet<SlotId>>::default(),
             zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
         }
     }
@@ -670,6 +674,16 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
+        {
+            let locked_removed_slot_ids = self.removed_slot_ids.lock().unwrap();
+            if locked_removed_slot_ids.contains(&scan_slot_id) {
+                return Err(ScanError::SlotRemoved {
+                    slot: ancestors.max(),
+                    slot_id: scan_slot_id,
+                });
+            }
+        }
+
         let max_root = {
             let mut w_ongoing_scan_roots = self
                 // This lock is also grabbed by clean_accounts(), so clean
@@ -688,12 +702,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
             max_root
         };
-
-        {
-            let mut w_tip_of_scanned_forks = self.tip_of_scanned_forks.lock().unwrap();
-            let tracker = w_tip_of_scanned_forks.entry(scan_slot_id).or_default();
-            tracker.ref_count += 1;
-        }
 
         // First we show that for any bank `B` that is a descendant of
         // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
@@ -853,20 +861,15 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             }
         }
 
-        let is_scan_aborted = {
-            let mut w_tip_of_scanned_forks = self.tip_of_scanned_forks.lock().unwrap();
-            let tracker = w_tip_of_scanned_forks
-                .get_mut(&scan_slot_id)
-                .expect("Cannot have removed this scan_slot_id while scan was stil in progress");
-            let is_scan_aborted = tracker.is_removed();
-            tracker.ref_count -= 1;
-            if tracker.ref_count == 0 {
-                w_tip_of_scanned_forks.remove(&scan_slot_id);
-            }
-            is_scan_aborted
-        };
+        // If the fork with tip at bank `scan_slot_id` was removed durin our scan, then the scan
+        // may have been corrupted, so abort the results.
+        let was_scan_corrupted = self
+            .removed_slot_ids
+            .lock()
+            .unwrap()
+            .contains(&scan_slot_id);
 
-        if is_scan_aborted {
+        if was_scan_corrupted {
             Err(ScanError::SlotRemoved {
                 slot: ancestors.max(),
                 slot_id: scan_slot_id,

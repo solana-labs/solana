@@ -1450,6 +1450,10 @@ impl Bank {
         self.slot
     }
 
+    pub fn slot_id(&self) -> SlotId {
+        self.slot_id
+    }
+
     pub fn epoch(&self) -> Epoch {
         self.epoch
     }
@@ -2667,7 +2671,7 @@ impl Bank {
         }
     }
 
-    pub fn remove_unrooted_slots(&self, slots: &[Slot]) {
+    pub fn remove_unrooted_slots(&self, slots: &[(Slot, SlotId)]) {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
@@ -5282,7 +5286,9 @@ impl Drop for Bank {
             // 1. Tests
             // 2. At startup when replaying blockstore and there's no
             // AccountsBackgroundService to perform cleanups yet.
-            self.rc.accounts.purge_slot(self.slot(), false);
+            self.rc
+                .accounts
+                .purge_slot(self.slot(), self.slot_id(), false);
         }
     }
 }
@@ -12169,6 +12175,52 @@ pub(crate) mod tests {
                             &solana_sdk::pubkey::new_rand(),
                             current_bank.slot() + 1,
                         ));
+                    }
+                },
+                None,
+            );
+        }
+    }
+
+    #[test]
+    fn test_remove_unrooted_scan_consistency() {
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                    loop {
+                        let mut bank_at_fork_tip = bank0.clone();
+                        let num_banks_on_fork = 100;
+                        let mut slots_to_remove = Vec::with_capacity(num_banks_on_fork);
+                        for _ in 0..num_banks_on_fork {
+                            bank_at_fork_tip = Arc::new(Bank::new_from_parent(
+                                &bank_at_fork_tip,
+                                &solana_sdk::pubkey::new_rand(),
+                                bank_at_fork_tip.slot() + 1,
+                            ));
+                            let lamports_this_round =
+                                bank_at_fork_tip.slot() + starting_lamports + 1;
+                            let account =
+                                AccountSharedData::new(lamports_this_round, 0, &program_id);
+                            for key in pubkeys_to_modify.iter() {
+                                bank_at_fork_tip.store_account(key, &account);
+                            }
+                            bank_at_fork_tip.freeze();
+                            slots_to_remove
+                                .push((bank_at_fork_tip.slot(), bank_at_fork_tip.slot_id()));
+                        }
+                        // Send the previous bank to the scan thread to perform the scan.
+                        //
+                        // The capacity of the channel is 1 so that this thread will wait for the scan to
+                        // finish before starting the next iteration, allowing the scan to stay in sync with
+                        // these updates such that every scan will see these slot being removed
+                        if bank_to_scan_sender.send(bank_at_fork_tip.clone()).is_err() {
+                            // Channel was disconnected, exit
+                            return;
+                        }
+
+                        // Remove account state for all banks on the fork
+                        bank_at_fork_tip.remove_unrooted_slots(&slots_to_remove);
                     }
                 },
                 None,
