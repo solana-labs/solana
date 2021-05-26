@@ -16,6 +16,7 @@ pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
 pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
+pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -44,6 +45,7 @@ pub enum RpcCustomError {
     KeyExcludedFromSecondaryIndex {
         index_key: String,
     },
+    TransactionHistoryNotAvailable,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -130,6 +132,13 @@ impl From<RpcCustomError> for Error {
                     this RPC method unavailable for key",
                     index_key
                 ),
+                data: None,
+            },
+            RpcCustomError::TransactionHistoryNotAvailable => Self {
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE,
+                ),
+                message: "Transaction history is not available from this node".to_string(),
                 data: None,
             },
         }
