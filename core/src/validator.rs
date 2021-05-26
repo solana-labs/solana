@@ -2,7 +2,7 @@
 
 use crate::{
     broadcast_stage::BroadcastStageType,
-    cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
+    cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
@@ -259,8 +259,8 @@ struct TransactionHistoryServices {
     max_complete_transaction_status_slot: Arc<AtomicU64>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
-    cache_block_time_sender: Option<CacheBlockTimeSender>,
-    cache_block_time_service: Option<CacheBlockTimeService>,
+    cache_block_meta_sender: Option<CacheBlockMetaSender>,
+    cache_block_meta_service: Option<CacheBlockMetaService>,
 }
 
 pub struct Validator {
@@ -270,7 +270,7 @@ pub struct Validator {
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
-    cache_block_time_service: Option<CacheBlockTimeService>,
+    cache_block_meta_service: Option<CacheBlockMetaService>,
     sample_performance_service: Option<SamplePerformanceService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
@@ -396,8 +396,8 @@ impl Validator {
                 max_complete_transaction_status_slot,
                 rewards_recorder_sender,
                 rewards_recorder_service,
-                cache_block_time_sender,
-                cache_block_time_service,
+                cache_block_meta_sender,
+                cache_block_meta_service,
             },
             tower,
         ) = new_banks_from_ledger(
@@ -724,7 +724,7 @@ impl Validator {
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
             rewards_recorder_sender,
-            cache_block_time_sender,
+            cache_block_meta_sender,
             snapshot_config_and_pending_package,
             vote_tracker.clone(),
             retransmit_slots_sender,
@@ -787,7 +787,7 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
-            cache_block_time_service,
+            cache_block_meta_service,
             sample_performance_service,
             snapshot_packager_service,
             completed_data_sets_service,
@@ -867,10 +867,10 @@ impl Validator {
                 .expect("rewards_recorder_service");
         }
 
-        if let Some(cache_block_time_service) = self.cache_block_time_service {
-            cache_block_time_service
+        if let Some(cache_block_meta_service) = self.cache_block_meta_service {
+            cache_block_meta_service
                 .join()
-                .expect("cache_block_time_service");
+                .expect("cache_block_meta_service");
         }
 
         if let Some(sample_performance_service) = self.sample_performance_service {
@@ -1144,7 +1144,7 @@ fn new_banks_from_ledger(
             .transaction_status_sender
             .as_ref(),
         transaction_history_services
-            .cache_block_time_sender
+            .cache_block_meta_sender
             .as_ref(),
     )
     .unwrap_or_else(|err| {
@@ -1331,10 +1331,10 @@ fn initialize_rpc_transaction_history_services(
         exit,
     ));
 
-    let (cache_block_time_sender, cache_block_time_receiver) = unbounded();
-    let cache_block_time_sender = Some(cache_block_time_sender);
-    let cache_block_time_service = Some(CacheBlockTimeService::new(
-        cache_block_time_receiver,
+    let (cache_block_meta_sender, cache_block_meta_receiver) = unbounded();
+    let cache_block_meta_sender = Some(cache_block_meta_sender);
+    let cache_block_meta_service = Some(CacheBlockMetaService::new(
+        cache_block_meta_receiver,
         blockstore,
         exit,
     ));
@@ -1344,8 +1344,8 @@ fn initialize_rpc_transaction_history_services(
         max_complete_transaction_status_slot,
         rewards_recorder_sender,
         rewards_recorder_service,
-        cache_block_time_sender,
-        cache_block_time_service,
+        cache_block_meta_sender,
+        cache_block_meta_service,
     }
 }
 

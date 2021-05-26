@@ -2,7 +2,7 @@
 
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
-    cache_block_time_service::CacheBlockTimeSender,
+    cache_block_meta_service::CacheBlockMetaSender,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
     },
@@ -123,7 +123,7 @@ pub struct ReplayStageConfig {
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
-    pub cache_block_time_sender: Option<CacheBlockTimeSender>,
+    pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
 }
@@ -305,7 +305,7 @@ impl ReplayStage {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
-            cache_block_time_sender,
+            cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
         } = config;
@@ -375,7 +375,7 @@ impl ReplayStage {
                         &vote_account,
                         &mut progress,
                         transaction_status_sender.as_ref(),
-                        cache_block_time_sender.as_ref(),
+                        cache_block_meta_sender.as_ref(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
                         &replay_vote_sender,
@@ -1626,7 +1626,7 @@ impl ReplayStage {
         vote_account: &Pubkey,
         progress: &mut ProgressMap,
         transaction_status_sender: Option<&TransactionStatusSender>,
-        cache_block_time_sender: Option<&CacheBlockTimeSender>,
+        cache_block_meta_sender: Option<&CacheBlockMetaSender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         replay_vote_sender: &ReplayVoteSender,
@@ -1751,7 +1751,7 @@ impl ReplayStage {
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
-                blockstore_processor::cache_block_time(&bank, cache_block_time_sender);
+                blockstore_processor::cache_block_meta(&bank, cache_block_meta_sender);
 
                 let bank_hash = bank.hash();
                 if let Some(new_frozen_voters) =

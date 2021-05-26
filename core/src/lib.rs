@@ -11,7 +11,7 @@ pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod bigtable_upload_service;
 pub mod broadcast_stage;
-pub mod cache_block_time_service;
+pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
 pub mod cluster_slot_state_verifier;
 pub mod cluster_slots;
