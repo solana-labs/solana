@@ -6,14 +6,15 @@
 use crate::{
     cluster_info::Ping,
     contact_info::ContactInfo,
-    crds::{Crds, VersionedCrdsValue},
+    crds::Crds,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
-    crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
+    crds_value::{CrdsData, CrdsValue},
     duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
     ping_pong::PingCache,
 };
+use itertools::Itertools;
 use rayon::ThreadPool;
 use solana_ledger::shred::Shred;
 use solana_sdk::{
@@ -26,10 +27,8 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::Mutex,
+    time::Duration,
 };
-
-///The min size for bloom filters
-pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
 
 pub struct CrdsGossip {
     pub crds: Crds,
@@ -60,41 +59,44 @@ impl CrdsGossip {
     }
 
     /// process a push message to the network
+    /// Returns origins' pubkeys of upserted values.
     pub fn process_push_message(
         &mut self,
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
-    ) -> Vec<VersionedCrdsValue> {
+    ) -> Vec<Pubkey> {
         values
             .into_iter()
-            .filter_map(|val| {
-                let old = self
-                    .push
+            .flat_map(|val| {
+                let origin = val.pubkey();
+                self.push
                     .process_push_message(&mut self.crds, from, val, now)
                     .ok()?;
-                self.pull.record_old_hash(old.as_ref()?.value_hash, now);
-                old
+                Some(origin)
             })
             .collect()
     }
 
     /// remove redundant paths in the network
-    pub fn prune_received_cache(
+    pub fn prune_received_cache<I>(
         &mut self,
-        labels: Vec<CrdsValueLabel>,
+        origins: I, // Unique pubkeys of crds values' owners.
         stakes: &HashMap<Pubkey, u64>,
-    ) -> HashMap<Pubkey, HashSet<Pubkey>> {
-        let id = &self.id;
-        let push = &mut self.push;
-        let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        for origin in labels.iter().map(|k| k.pubkey()) {
-            let peers = push.prune_received_cache(id, &origin, stakes);
-            for from in peers {
-                prune_map.entry(from).or_default().insert(origin);
-            }
-        }
-        prune_map
+    ) -> HashMap</*gossip peer:*/ Pubkey, /*origins:*/ Vec<Pubkey>>
+    where
+        I: IntoIterator<Item = Pubkey>,
+    {
+        let self_pubkey = self.id;
+        origins
+            .into_iter()
+            .flat_map(|origin| {
+                self.push
+                    .prune_received_cache(&self_pubkey, &origin, stakes)
+                    .into_iter()
+                    .zip(std::iter::repeat(origin))
+            })
+            .into_group_map()
     }
 
     pub fn new_push_messages(
@@ -296,16 +298,12 @@ impl CrdsGossip {
         );
     }
 
-    pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
-        self.make_timeouts(&HashMap::new(), self.pull.crds_timeout)
-    }
-
     pub fn make_timeouts(
         &self,
         stakes: &HashMap<Pubkey, u64>,
-        epoch_ms: u64,
+        epoch_duration: Duration,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.make_timeouts(&self.id, stakes, epoch_ms)
+        self.pull.make_timeouts(self.id, stakes, epoch_duration)
     }
 
     pub fn purge(
@@ -321,17 +319,14 @@ impl CrdsGossip {
         }
         if now > self.pull.crds_timeout {
             //sanity check
-            let min = self.pull.crds_timeout;
             assert_eq!(timeouts[&self.id], std::u64::MAX);
-            assert_eq!(timeouts[&Pubkey::default()], min);
+            assert!(timeouts.contains_key(&Pubkey::default()));
             rv = self
                 .pull
                 .purge_active(thread_pool, &mut self.crds, now, &timeouts);
         }
-        if now > 5 * self.pull.crds_timeout {
-            let min = now - 5 * self.pull.crds_timeout;
-            self.pull.purge_purged(min);
-        }
+        self.crds
+            .trim_purged(now.saturating_sub(5 * self.pull.crds_timeout));
         self.pull.purge_failed_inserts(now);
         rv
     }

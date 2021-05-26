@@ -2045,7 +2045,7 @@ Returns all accounts owned by the provided program Pubkey
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
-
+  - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
 ##### Filters:
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
   - `offset: <usize>` - offset into program account data to start comparison
@@ -2055,13 +2055,15 @@ Returns all accounts owned by the provided program Pubkey
 
 #### Results:
 
-The result field will be an array of JSON objects, which will contain:
+By default the result field will be an array of JSON objects. If `withContext` flag is set the array will be wrapped in an RpcResponse JSON object.
+
+The array will contain:
 
 - `pubkey: <string>` - the account Pubkey as base-58 encoded string
 - `account: <object>` - a JSON object, with the following sub fields:
    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+   - `data: <[string,encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
@@ -2990,7 +2992,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.9"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.6.11"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -3229,9 +3231,11 @@ Simulate sending a transaction
 
 - `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
-  - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+  - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false, conflicts with `replaceRecentBlockhash`)
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+  - `replaceRecentBlockhash: <bool>` - (optional) if true the transaction recent blockhash will be replaced with the most recent blockhash.
+  (default: false, conflicts with `sigVerify`)
 
 #### Results:
 

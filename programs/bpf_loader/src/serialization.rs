@@ -231,7 +231,7 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&keyed_account.try_account_ref()?.data())
                 .map_err(|_| InstructionError::InvalidArgument)?;
-            v.fill(
+            v.resize(
                 MAX_PERMITTED_DATA_INCREASE
                     + (v.write_index() as *const u8).align_offset(align_of::<u128>()),
                 0,

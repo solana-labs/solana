@@ -13,6 +13,7 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
+use serde::{Deserialize, Serialize};
 use solana_account_decoder::{
     parse_account_data::AccountAdditionalData,
     parse_token::{
@@ -45,7 +46,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
-    accounts_index::{AccountIndex, IndexKey},
+    accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -104,6 +105,16 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     Response { context, value }
 }
 
+/// Wrapper for rpc return types of methods that provide responses both with and without context.
+/// Main purpose of this is to fix methods that lack context information in their return type,
+/// without breaking backwards compatibility.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptionalContext<T> {
+    Context(RpcResponse<T>),
+    NoContext(T),
+}
+
 fn is_finalized(
     block_commitment_cache: &BlockCommitmentCache,
     bank: &Bank,
@@ -124,10 +135,11 @@ pub struct JsonRpcConfig {
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
     pub max_multiple_accounts: Option<usize>,
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
     pub rpc_bigtable_timeout: Option<Duration>,
     pub minimal_api: bool,
+    pub rpc_scan_and_fix_roots: bool,
 }
 
 #[derive(Clone)]
@@ -350,7 +362,8 @@ impl JsonRpcRequestProcessor {
         program_id: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
         filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<RpcKeyedAccount>> {
+        with_context: bool,
+    ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
@@ -358,16 +371,16 @@ impl JsonRpcRequestProcessor {
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
-                self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
+                self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)?
             } else if let Some(mint) = get_spl_token_mint_filter(program_id, &filters) {
-                self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+                self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)?
             } else {
-                self.get_filtered_program_accounts(&bank, program_id, filters)
+                self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
         let result =
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                get_parsed_token_accounts(bank, keyed_accounts.into_iter()).collect()
+                get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
             } else {
                 keyed_accounts
                     .into_iter()
@@ -383,7 +396,10 @@ impl JsonRpcRequestProcessor {
                     })
                     .collect()
             };
-        Ok(result)
+        Ok(result).map(|result| match with_context {
+            true => OptionalContext::Context(new_response(&bank, result)),
+            false => OptionalContext::NoContext(result),
+        })
     }
 
     pub fn get_inflation_reward(
@@ -1558,7 +1574,7 @@ impl JsonRpcRequestProcessor {
             ));
         }
         let mut token_balances: Vec<RpcTokenAccountBalance> = self
-            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
+            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])?
             .into_iter()
             .map(|(address, account)| {
                 let amount = TokenAccount::unpack(&account.data())
@@ -1606,7 +1622,8 @@ impl JsonRpcRequestProcessor {
             }));
         }
 
-        let keyed_accounts = self.get_filtered_spl_token_accounts_by_owner(&bank, owner, filters);
+        let keyed_accounts =
+            self.get_filtered_spl_token_accounts_by_owner(&bank, owner, filters)?;
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
@@ -1658,13 +1675,13 @@ impl JsonRpcRequestProcessor {
         ];
         // Optional filter on Mint address, uses mint account index for scan
         let keyed_accounts = if let Some(mint) = mint {
-            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)?
         } else {
             // Filter on Token Account state
             filters.push(RpcFilterType::DataSize(
                 TokenAccount::get_packed_len() as u64
             ));
-            self.get_filtered_program_accounts(&bank, &token_program_id, filters)
+            self.get_filtered_program_accounts(&bank, &token_program_id, filters)?
         };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
@@ -1692,7 +1709,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         program_id: &Pubkey,
         filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
                 RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
@@ -1704,16 +1721,24 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::ProgramId)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
-                // The program-id account index checks for Account owner on inclusion. However, due
-                // to the current AccountsDb implementation, an account may remain in storage as a
-                // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
-                // updates. We include the redundant filters here to avoid returning these
-                // accounts.
-                account.owner == *program_id && filter_closure(account)
-            })
+            if !self.config.account_indexes.include_key(program_id) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: program_id.to_string(),
+                }
+                .into());
+            }
+            Ok(
+                bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
+                    // The program-id account index checks for Account owner on inclusion. However, due
+                    // to the current AccountsDb implementation, an account may remain in storage as a
+                    // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
+                    // updates. We include the redundant filters here to avoid returning these
+                    // accounts.
+                    account.owner == *program_id && filter_closure(account)
+                }),
+            )
         } else {
-            bank.get_filtered_program_accounts(program_id, filter_closure)
+            Ok(bank.get_filtered_program_accounts(program_id, filter_closure))
         }
     }
 
@@ -1723,7 +1748,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         // The by-owner accounts index checks for Token Account state and Owner address on
         // inclusion. However, due to the current AccountsDb implementation, an account may remain
         // in storage as a zero-lamport AccountSharedData::Default() after being wiped and reinitialized in
@@ -1745,13 +1770,22 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenOwner)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                account.owner == spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
+            if !self.config.account_indexes.include_key(owner_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: owner_key.to_string(),
+                }
+                .into());
+            }
+            Ok(bank.get_filtered_indexed_accounts(
+                &IndexKey::SplTokenOwner(*owner_key),
+                |account| {
+                    account.owner == spl_token_id_v2_0()
+                        && filters.iter().all(|filter_type| match filter_type {
+                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                        })
+                },
+            ))
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -1763,7 +1797,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
         // However, due to the current AccountsDb implementation, an account may remain in storage
         // as be zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
@@ -1784,13 +1818,21 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenMint)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                account.owner == spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
+            if !self.config.account_indexes.include_key(mint_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: mint_key.to_string(),
+                }
+                .into());
+            }
+            Ok(
+                bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
+                    account.owner == spl_token_id_v2_0()
+                        && filters.iter().all(|filter_type| match filter_type {
+                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                        })
+                }),
+            )
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -2354,7 +2396,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             program_id_str: String,
             config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<Vec<RpcKeyedAccount>>;
+        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
 
         #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
         fn get_minimum_balance_for_rent_exemption(
@@ -2708,19 +2750,20 @@ pub mod rpc_full {
             meta: Self::Metadata,
             program_id_str: String,
             config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<Vec<RpcKeyedAccount>> {
+        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
             debug!(
                 "get_program_accounts rpc request received: {:?}",
                 program_id_str
             );
             let program_id = verify_pubkey(&program_id_str)?;
-            let (config, filters) = if let Some(config) = config {
+            let (config, filters, with_context) = if let Some(config) = config {
                 (
                     Some(config.account_config),
                     config.filters.unwrap_or_default(),
+                    config.with_context.unwrap_or_default(),
                 )
             } else {
-                (None, vec![])
+                (None, vec![], false)
             };
             if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
                 return Err(Error::invalid_params(format!(
@@ -2731,7 +2774,7 @@ pub mod rpc_full {
             for filter in &filters {
                 verify_filter(filter)?;
             }
-            meta.get_program_accounts(&program_id, config, filters)
+            meta.get_program_accounts(&program_id, config, filters, with_context)
         }
 
         fn get_inflation_governor(
@@ -2818,6 +2861,7 @@ pub mod rpc_full {
                             rpc: valid_address_or_none(&contact_info.rpc),
                             version,
                             feature_set,
+                            shred_version: Some(my_shred_version),
                         })
                     } else {
                         None // Exclude spy nodes
@@ -3097,15 +3141,24 @@ pub mod rpc_full {
             debug!("simulate_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (_, transaction) = deserialize_transaction(data, encoding)?;
+            let (_, mut transaction) = deserialize_transaction(data, encoding)?;
 
             if config.sig_verify {
+                if config.replace_recent_blockhash {
+                    return Err(Error::invalid_params(
+                        "sigVerify may not be used with replaceRecentBlockhash",
+                    ));
+                }
+
                 if let Err(e) = verify_transaction(&transaction) {
                     return Err(e);
                 }
             }
 
             let bank = &*meta.bank(config.commitment);
+            if config.replace_recent_blockhash {
+                transaction.message.recent_blockhash = bank.last_blockhash();
+            }
             let (result, logs) = bank.simulate_transaction(transaction);
 
             Ok(new_response(
@@ -3895,7 +3948,7 @@ pub mod tests {
             .expect("actual response deserialization");
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}", "version": null, "featureSet": null}}],"id":1}}"#,
+            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "shredVersion": 0, "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}", "version": null, "featureSet": null}}],"id":1}}"#,
             leader_pubkey,
             rpc_port::DEFAULT_RPC_PORT
         );
@@ -4620,6 +4673,26 @@ pub mod tests {
             .expect("actual response deserialization");
         assert_eq!(expected, result);
 
+        // Test returns context
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{
+                    "withContext": true
+                }}]
+            }}"#,
+            system_program::id(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response")).unwrap();
+        let contains_slot = result["result"]["context"]
+            .as_object()
+            .expect("must contain context")
+            .contains_key("slot");
+        assert!(contains_slot);
+
         // Set up nonce accounts to test filters
         let nonce_keypair0 = Keypair::new();
         let instruction = system_instruction::create_nonce_account(
@@ -4790,6 +4863,8 @@ pub mod tests {
         let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
         tx.signatures[0] = Signature::default();
         let tx_badsig_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        tx.message.recent_blockhash = Hash::default();
+        let tx_invalid_recent_blockhash = bs58::encode(serialize(&tx).unwrap()).into_string();
 
         bank.freeze(); // Ensure the root bank is frozen, `start_rpc_handler_with_tx()` doesn't do this
 
@@ -4865,6 +4940,75 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}"]}}"#,
             tx_serialized_encoded,
         );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"err":null, "logs":[
+                    "Program 11111111111111111111111111111111 invoke [1]",
+                    "Program 11111111111111111111111111111111 success"
+                ]}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Enabled both sigVerify=true and replaceRecentBlockhash=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {}]}}"#,
+            tx_serialized_encoded,
+            json!({
+                "sigVerify": true,
+                "replaceRecentBlockhash": true,
+            })
+            .to_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc":"2.0",
+            "error": {
+                "code": ErrorCode::InvalidParams,
+                "message": "sigVerify may not be used with replaceRecentBlockhash"
+            },
+            "id":1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad recent blockhash with replaceRecentBlockhash=false
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": false}}]}}"#,
+            tx_invalid_recent_blockhash,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc":"2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"err": "BlockhashNotFound", "logs":[]}
+            },
+            "id":1
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad recent blockhash with replaceRecentBlockhash=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"replaceRecentBlockhash": true}}]}}"#,
+            tx_invalid_recent_blockhash,
+        );
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -4877,6 +5021,7 @@ pub mod tests {
             },
             "id": 1,
         });
+
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

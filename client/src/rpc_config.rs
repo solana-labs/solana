@@ -28,6 +28,8 @@ pub struct RpcSendTransactionConfig {
 pub struct RpcSimulateTransactionConfig {
     #[serde(default)]
     pub sig_verify: bool,
+    #[serde(default)]
+    pub replace_recent_blockhash: bool,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub encoding: Option<UiTransactionEncoding>,
@@ -127,6 +129,7 @@ pub struct RpcProgramAccountsConfig {
     pub filters: Option<Vec<RpcFilterType>>,
     #[serde(flatten)]
     pub account_config: RpcAccountInfoConfig,
+    pub with_context: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

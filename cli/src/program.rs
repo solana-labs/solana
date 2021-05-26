@@ -1102,6 +1102,7 @@ fn get_buffers(
                 data_slice: Some(UiDataSliceConfig { offset: 0, length }),
                 ..RpcAccountInfoConfig::default()
             },
+            ..RpcProgramAccountsConfig::default()
         },
     )?;
     Ok(results)
@@ -1406,6 +1407,7 @@ fn process_close(
                     data_slice: Some(UiDataSliceConfig { offset: 0, length }),
                     ..RpcAccountInfoConfig::default()
                 },
+                ..RpcProgramAccountsConfig::default()
             },
         )?;
 
@@ -2129,10 +2131,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file.clone());
 
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2340,10 +2339,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file.clone());
 
         // defaults
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -2491,10 +2487,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file.clone());
 
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
@@ -2602,10 +2595,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file.clone());
 
         let buffer_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
@@ -2662,10 +2652,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file,
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file);
 
         // defaults
         let buffer_pubkey = Pubkey::new_unique();
@@ -2764,10 +2751,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new(keypair_file.clone());
 
         // defaults
         let buffer_pubkey = Pubkey::new_unique();

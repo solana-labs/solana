@@ -9,10 +9,23 @@ known addresses published along with the account layouts in the
 crate](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/index.html),
 and outlined below.
 
-To include sysvar data in program operations, pass the sysvar account address in
-the list of accounts in a transaction. The account can be read in your
-instruction processor like any other account. Access to sysvars accounts is
+There are two ways for a program to access a sysvar.
+
+The first is to query the sysvar at runtime via the sysvar's `get()` function:
+
+```
+let clock = Clock::get()
+```
+
+The second is to pass the sysvar to the program as an account by including its address as one of the accounts in the `Instruction` and then deserializing the data during execution.  Access to sysvars accounts is
 always _readonly_.
+
+```
+let clock_sysvar_info = next_account_info(account_info_iter)?;
+let clock = Clock::from_account_info(&clock_sysvar_info)?;
+```
+
+The first method is more efficient and does not require that the sysvar account be passed to the program, or specified in the `Instruction` the program is processing.
 
 ## Clock
 

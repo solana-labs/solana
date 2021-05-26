@@ -179,9 +179,28 @@ impl Meta {
         &mut self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
-        if !signers.contains(&self.lockup.custodian) {
-            return Err(InstructionError::MissingRequiredSignature);
+        match clock {
+            None => {
+                // pre-stake_program_v4 behavior: custodian can set lockups at any time
+                if !signers.contains(&self.lockup.custodian) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+            }
+            Some(clock) => {
+                // post-stake_program_v4 behavior:
+                // * custodian can update the lockup while in force
+                // * withdraw authority can set a new lockup
+                //
+                if self.lockup.is_in_force(clock, None) {
+                    if !signers.contains(&self.lockup.custodian) {
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                } else if !signers.contains(&self.authorized.withdrawer) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+            }
         }
         if let Some(unix_timestamp) = lockup.unix_timestamp {
             self.lockup.unix_timestamp = unix_timestamp;
@@ -755,13 +774,28 @@ impl Stake {
         clock: &Clock,
         stake_history: &StakeHistory,
         config: &Config,
+        can_reverse_deactivation: bool,
     ) -> Result<(), StakeError> {
-        // can't redelegate if stake is active.  either the stake
-        //  is freshly activated or has fully de-activated.  redelegation
-        //  implies re-activation
+        // If stake is currently active:
         if self.stake(clock.epoch, Some(stake_history), true) != 0 {
-            return Err(StakeError::TooSoonToRedelegate);
+            // If pubkey of new voter is the same as current,
+            // and we are scheduled to start deactivating this epoch,
+            // we rescind deactivation
+            if self.delegation.voter_pubkey == *voter_pubkey
+                && clock.epoch == self.delegation.deactivation_epoch
+                && can_reverse_deactivation
+            {
+                self.delegation.deactivation_epoch = std::u64::MAX;
+                return Ok(());
+            } else {
+                // can't redelegate to another pubkey if stake is active.
+                return Err(StakeError::TooSoonToRedelegate);
+            }
         }
+        // Either the stake is freshly activated, is active but has been
+        // deactivated this epoch, or has fully de-activated.
+        // Redelegation implies either re-activation or un-deactivation
+
         self.delegation.stake = stake_lamports;
         self.delegation.activation_epoch = clock.epoch;
         self.delegation.deactivation_epoch = std::u64::MAX;
@@ -852,12 +886,14 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
+        can_reverse_deactivation: bool,
     ) -> Result<(), InstructionError>;
     fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError>;
     fn set_lockup(
         &self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError>;
     fn split(
         &self,
@@ -872,6 +908,7 @@ pub trait StakeAccount {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
+        can_merge_expired_lockups: bool,
     ) -> Result<(), InstructionError>;
     fn withdraw(
         &self,
@@ -881,6 +918,7 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError>;
 }
 
@@ -988,6 +1026,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
+        can_reverse_deactivation: bool,
     ) -> Result<(), InstructionError> {
         if vote_account.owner()? != solana_vote_program::id() {
             return Err(InstructionError::IncorrectProgramId);
@@ -1014,6 +1053,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     clock,
                     stake_history,
                     config,
+                    can_reverse_deactivation,
                 )?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
@@ -1034,14 +1074,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &self,
         lockup: &LockupArgs,
         signers: &HashSet<Pubkey>,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
         match self.state()? {
             StakeState::Initialized(mut meta) => {
-                meta.set_lockup(lockup, signers)?;
+                meta.set_lockup(lockup, signers, clock)?;
                 self.set_state(&StakeState::Initialized(meta))
             }
             StakeState::Stake(mut meta, stake) => {
-                meta.set_lockup(lockup, signers)?;
+                meta.set_lockup(lockup, signers, clock)?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
             _ => Err(InstructionError::InvalidAccountData),
@@ -1170,6 +1211,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
+        can_merge_expired_lockups: bool,
     ) -> Result<(), InstructionError> {
         // Ensure source isn't spoofed
         if source_account.owner()? != id() {
@@ -1192,8 +1234,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         let source_merge_kind =
             MergeKind::get_if_mergeable(invoke_context, source_account, clock, stake_history)?;
 
+        let clock = if can_merge_expired_lockups {
+            Some(clock)
+        } else {
+            None
+        };
+
         ic_msg!(invoke_context, "Merging stake accounts");
-        if let Some(merged_state) = stake_merge_kind.merge(invoke_context, source_merge_kind)? {
+        if let Some(merged_state) =
+            stake_merge_kind.merge(invoke_context, source_merge_kind, clock)?
+        {
             self.set_state(&merged_state)?;
         }
 
@@ -1215,6 +1265,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         withdraw_authority: &KeyedAccount,
         custodian: Option<&KeyedAccount>,
+        prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::new();
         let withdraw_authority_pubkey = withdraw_authority
@@ -1244,8 +1295,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Initialized(meta) => {
                 meta.authorized
                     .check(&signers, StakeAuthorize::Withdrawer)?;
+                let reserve = if prevent_withdraw_to_zero {
+                    checked_add(meta.rent_exempt_reserve, 1)? // stake accounts must have a balance > rent_exempt_reserve
+                } else {
+                    meta.rent_exempt_reserve
+                };
 
-                (meta.lockup, meta.rent_exempt_reserve, false)
+                (meta.lockup, reserve, false)
             }
             StakeState::Uninitialized => {
                 if !signers.contains(&self.unsigned_key()) {
@@ -1351,13 +1407,24 @@ impl MergeKind {
         invoke_context: &dyn InvokeContext,
         stake: &Meta,
         source: &Meta,
+        clock: Option<&Clock>,
     ) -> Result<(), InstructionError> {
+        let can_merge_lockups = match clock {
+            // pre-v4 behavior. lockups must match, even when expired
+            None => stake.lockup == source.lockup,
+            // v4 behavior. lockups may mismatch so long as both have expired
+            Some(clock) => {
+                stake.lockup == source.lockup
+                    || (!stake.lockup.is_in_force(clock, None)
+                        && !source.lockup.is_in_force(clock, None))
+            }
+        };
         // `rent_exempt_reserve` has no bearing on the mergeability of accounts,
         // as the source account will be culled by runtime once the operation
         // succeeds. Considering it here would needlessly prevent merging stake
         // accounts with differing data lengths, which already exist in the wild
         // due to an SDK bug
-        if stake.authorized == source.authorized && stake.lockup == source.lockup {
+        if stake.authorized == source.authorized && can_merge_lockups {
             Ok(())
         } else {
             ic_msg!(invoke_context, "Unable to merge due to metadata mismatch");
@@ -1410,8 +1477,9 @@ impl MergeKind {
         self,
         invoke_context: &dyn InvokeContext,
         source: Self,
+        clock: Option<&Clock>,
     ) -> Result<Option<StakeState>, InstructionError> {
-        Self::metas_can_merge(invoke_context, self.meta(), source.meta())?;
+        Self::metas_can_merge(invoke_context, self.meta(), source.meta(), clock)?;
         self.active_stake()
             .zip(source.active_stake())
             .map(|(stake, source)| Self::active_stakes_can_merge(invoke_context, stake, source))
@@ -1900,9 +1968,15 @@ mod tests {
         };
 
         let vote_pubkey = solana_sdk::pubkey::new_rand();
+        let vote_pubkey_2 = solana_sdk::pubkey::new_rand();
+
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
             vote_state.process_slot_vote_unchecked(i);
+        }
+        let mut vote_state_2 = VoteState::default();
+        for i in 0..1000 {
+            vote_state_2.process_slot_vote_unchecked(i);
         }
 
         let vote_account = RefCell::new(vote_state::create_account(
@@ -1911,10 +1985,22 @@ mod tests {
             0,
             100,
         ));
+        let vote_account_2 = RefCell::new(vote_state::create_account(
+            &vote_pubkey_2,
+            &solana_sdk::pubkey::new_rand(),
+            0,
+            100,
+        ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
+        let vote_keyed_account_2 = KeyedAccount::new(&vote_pubkey_2, false, &vote_account_2);
+
         let vote_state_credits = vote_state.credits();
         vote_keyed_account
             .set_state(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        let vote_state_credits_2 = vote_state_2.credits();
+        vote_keyed_account_2
+            .set_state(&VoteStateVersions::new_current(vote_state_2))
             .unwrap();
 
         let stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -1944,6 +2030,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1958,6 +2045,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             )
             .is_ok());
 
@@ -1979,14 +2067,63 @@ mod tests {
 
         clock.epoch += 1;
 
-        // verify that delegate fails if stake is still active
+        // verify that delegate fails as stake is active and not deactivating
         assert_eq!(
             stake_keyed_account.delegate(
                 &vote_keyed_account,
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true
+            ),
+            Err(StakeError::TooSoonToRedelegate.into())
+        );
+
+        // deactivate
+        stake_keyed_account.deactivate(&clock, &signers).unwrap();
+
+        // verify that delegate to a different vote account fails
+        // during deactivation
+        assert_eq!(
+            stake_keyed_account.delegate(
+                &vote_keyed_account_2,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
+            ),
+            Err(StakeError::TooSoonToRedelegate.into())
+        );
+
+        // verify that delegate succeeds to same vote account
+        // when stake is deactivating
+        stake_keyed_account
+            .delegate(
+                &vote_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
+            )
+            .unwrap();
+
+        // verify that deactivation has been cleared
+        let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
+        assert_eq!(stake.delegation.deactivation_epoch, std::u64::MAX);
+
+        // verify that delegate to a different vote account fails
+        // if stake is still active
+        assert_eq!(
+            stake_keyed_account.delegate(
+                &vote_keyed_account_2,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+                true,
             ),
             Err(StakeError::TooSoonToRedelegate.into())
         );
@@ -1997,21 +2134,23 @@ mod tests {
         // without stake history, cool down is instantaneous
         clock.epoch += 1;
 
-        // verify that delegate can be called twice, 2nd is redelegate
+        // verify that delegate can be called to new vote account, 2nd is redelegate
         assert!(stake_keyed_account
             .delegate(
-                &vote_keyed_account,
+                &vote_keyed_account_2,
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             )
             .is_ok());
 
         // signed but faked vote account
-        let faked_vote_account = vote_account.clone();
+        let faked_vote_account = vote_account_2.clone();
         faked_vote_account.borrow_mut().owner = solana_sdk::pubkey::new_rand();
-        let faked_vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &faked_vote_account);
+        let faked_vote_keyed_account =
+            KeyedAccount::new(&vote_pubkey_2, false, &faked_vote_account);
         assert_eq!(
             stake_keyed_account.delegate(
                 &faked_vote_keyed_account,
@@ -2019,6 +2158,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Err(solana_sdk::instruction::InstructionError::IncorrectProgramId)
         );
@@ -2029,13 +2169,13 @@ mod tests {
             stake,
             Stake {
                 delegation: Delegation {
-                    voter_pubkey: vote_pubkey,
+                    voter_pubkey: vote_pubkey_2,
                     stake: stake_lamports,
                     activation_epoch: clock.epoch,
                     deactivation_epoch: std::u64::MAX,
                     ..Delegation::default()
                 },
-                credits_observed: vote_state_credits,
+                credits_observed: vote_state_credits_2,
             }
         );
 
@@ -2049,7 +2189,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             )
             .is_err());
     }
@@ -2825,7 +2966,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &signers
+                &signers,
+                true,
             ),
             Ok(())
         );
@@ -2863,7 +3005,7 @@ mod tests {
         // wrong state, should fail
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
         assert_eq!(
-            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default()),
+            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default(), None),
             Err(InstructionError::InvalidAccountData)
         );
 
@@ -2882,7 +3024,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default()),
+            stake_keyed_account.set_lockup(&LockupArgs::default(), &HashSet::default(), None),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -2893,7 +3035,8 @@ mod tests {
                     epoch: Some(1),
                     custodian: Some(custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -2918,6 +3061,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &vec![stake_pubkey].into_iter().collect(),
+                true,
             )
             .unwrap();
 
@@ -2929,6 +3073,7 @@ mod tests {
                     custodian: Some(custodian),
                 },
                 &HashSet::default(),
+                None
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2939,14 +3084,15 @@ mod tests {
                     epoch: Some(1),
                     custodian: Some(custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
     }
 
     #[test]
-    fn test_optional_lockup() {
+    fn test_optional_lockup_for_stake_program_v3_and_earlier() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_ref_data_with_space(
@@ -2978,7 +3124,8 @@ mod tests {
                     epoch: None,
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -2990,7 +3137,8 @@ mod tests {
                     epoch: None,
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3012,7 +3160,8 @@ mod tests {
                     epoch: Some(3),
                     custodian: None,
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3035,7 +3184,8 @@ mod tests {
                     epoch: None,
                     custodian: Some(new_custodian),
                 },
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Ok(())
         );
@@ -3053,9 +3203,101 @@ mod tests {
         assert_eq!(
             stake_keyed_account.set_lockup(
                 &LockupArgs::default(),
-                &vec![custodian].into_iter().collect()
+                &vec![custodian].into_iter().collect(),
+                None
             ),
             Err(InstructionError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn test_optional_lockup_for_stake_program_v4() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
+
+        let custodian = solana_sdk::pubkey::new_rand();
+        stake_keyed_account
+            .initialize(
+                &Authorized::auto(&stake_pubkey),
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &Rent::free(),
+            )
+            .unwrap();
+
+        // Lockup in force: authorized withdrawer cannot change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(2),
+                    epoch: None,
+                    custodian: None
+                },
+                &vec![stake_pubkey].into_iter().collect(),
+                Some(&Clock::default())
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Lockup in force: custodian can change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(2),
+                    epoch: None,
+                    custodian: None
+                },
+                &vec![custodian].into_iter().collect(),
+                Some(&Clock::default())
+            ),
+            Ok(())
+        );
+
+        // Lockup expired: custodian cannot change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(3),
+                    epoch: None,
+                    custodian: None,
+                },
+                &vec![custodian].into_iter().collect(),
+                Some(&Clock {
+                    unix_timestamp: UnixTimestamp::MAX,
+                    epoch: Epoch::MAX,
+                    ..Clock::default()
+                })
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Lockup expired: authorized withdrawer can change it
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs {
+                    unix_timestamp: Some(3),
+                    epoch: None,
+                    custodian: None,
+                },
+                &vec![stake_pubkey].into_iter().collect(),
+                Some(&Clock {
+                    unix_timestamp: UnixTimestamp::MAX,
+                    epoch: Epoch::MAX,
+                    ..Clock::default()
+                })
+            ),
+            Ok(())
         );
     }
 
@@ -3087,6 +3329,7 @@ mod tests {
                 &StakeHistory::default(),
                 &to_keyed_account, // unsigned account as withdraw authority
                 None,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3102,6 +3345,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3137,6 +3381,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3161,6 +3406,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Ok(())
         );
@@ -3178,6 +3424,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3195,6 +3442,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3214,6 +3462,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3228,6 +3477,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3284,6 +3534,7 @@ mod tests {
                 &StakeHistory::default(),
                 &authority_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds),
         );
@@ -3332,6 +3583,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             ),
             Ok(())
         );
@@ -3355,6 +3607,7 @@ mod tests {
                 &stake_history,
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -3384,6 +3637,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -3426,6 +3680,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(StakeError::LockupInForce.into())
         );
@@ -3441,6 +3696,7 @@ mod tests {
                     &StakeHistory::default(),
                     &stake_keyed_account,
                     Some(&custodian_keyed_account),
+                    true,
                 ),
                 Ok(())
             );
@@ -3459,6 +3715,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -3502,6 +3759,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account,
                 None,
+                true,
             ),
             Err(StakeError::LockupInForce.into())
         );
@@ -3516,11 +3774,108 @@ mod tests {
                     &StakeHistory::default(),
                     &stake_keyed_account,
                     Some(&custodian_keyed_account),
+                    true,
                 ),
                 Ok(())
             );
             assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
         }
+    }
+
+    #[test]
+    fn test_withdraw_rent_exempt() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let clock = Clock::default();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake = 42;
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            stake + rent_exempt_reserve,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&stake_pubkey)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let to = solana_sdk::pubkey::new_rand();
+        let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+
+        // Withdrawing account down to only rent-exempt reserve should succeed before feature, and
+        // fail after
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                false,
+            ),
+            Ok(())
+        );
+        stake_account.borrow_mut().lamports += stake; // top up account
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Withdrawal that would leave less than rent-exempt reserve should fail
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + 1,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                false,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + 1,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // Withdrawal of complete account should succeed
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                stake + rent_exempt_reserve,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+                true,
+            ),
+            Ok(())
+        );
     }
 
     #[test]
@@ -3959,6 +4314,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account, // old signer
                 None,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3975,6 +4331,7 @@ mod tests {
                 &StakeHistory::default(),
                 &stake_keyed_account2,
                 None,
+                true,
             ),
             Ok(())
         );
@@ -5147,7 +5504,8 @@ mod tests {
                         &source_stake_keyed_account,
                         &Clock::default(),
                         &StakeHistory::default(),
-                        &HashSet::new()
+                        &HashSet::new(),
+                        false,
                     ),
                     Err(InstructionError::MissingRequiredSignature)
                 );
@@ -5158,7 +5516,8 @@ mod tests {
                         &source_stake_keyed_account,
                         &Clock::default(),
                         &StakeHistory::default(),
-                        &signers
+                        &signers,
+                        false,
                     ),
                     Ok(())
                 );
@@ -5250,6 +5609,7 @@ mod tests {
                 &Clock::default(),
                 &StakeHistory::default(),
                 &signers,
+                false,
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -5307,6 +5667,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &wrong_signers,
+                        false,
                     ),
                     Err(InstructionError::MissingRequiredSignature)
                 );
@@ -5318,6 +5679,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &signers,
+                        false,
                     ),
                     Err(StakeError::MergeMismatch.into())
                 );
@@ -5370,6 +5732,7 @@ mod tests {
                         &Clock::default(),
                         &StakeHistory::default(),
                         &signers,
+                        false,
                     ),
                     Err(InstructionError::InvalidAccountData)
                 );
@@ -5418,7 +5781,8 @@ mod tests {
                 &source_stake_keyed_account,
                 &Clock::default(),
                 &StakeHistory::default(),
-                &signers
+                &signers,
+                false,
             ),
             Err(InstructionError::IncorrectProgramId)
         );
@@ -5515,6 +5879,7 @@ mod tests {
                 clock,
                 stake_history,
                 signers,
+                false,
             );
             if result.is_ok() {
                 assert_eq!(test_source_keyed.state(), Ok(StakeState::Uninitialized),);
@@ -5803,6 +6168,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &signers,
+                true,
             )
             .unwrap();
 
@@ -5850,6 +6216,7 @@ mod tests {
                 &StakeHistory::default(),
                 &Config::default(),
                 &other_signers,
+                true,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -5862,7 +6229,8 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &Config::default(),
-                &new_signers
+                &new_signers,
+                true,
             ),
             Ok(())
         );
@@ -5915,6 +6283,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
 
@@ -5922,6 +6291,7 @@ mod tests {
         stake_keyed_account.deactivate(&clock, &signers).unwrap();
 
         clock.epoch += 1;
+        // Once deactivated, we withdraw stake to new keyed account
         let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
@@ -5934,6 +6304,7 @@ mod tests {
                 &stake_history,
                 &stake_keyed_account,
                 None,
+                true,
             )
             .unwrap();
         let expected_balance = rent_exempt_reserve + initial_lamports - withdraw_lamports;
@@ -5947,6 +6318,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
         let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
@@ -5969,6 +6341,7 @@ mod tests {
                 &stake_history,
                 &config,
                 &signers,
+                true,
             )
             .unwrap();
         let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
@@ -6238,11 +6611,19 @@ mod tests {
             &good_delegation
         )
         .is_err());
+    }
 
+    #[test]
+    fn test_metas_can_merge_pre_v4() {
+        let invoke_context = MockInvokeContext::default();
         // Identical Metas can merge
-        assert!(
-            MergeKind::metas_can_merge(&invoke_context, &Meta::default(), &Meta::default()).is_ok()
-        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &Meta::default(),
+            None,
+        )
+        .is_ok());
 
         let mismatched_rent_exempt_reserve_ok = Meta {
             rent_exempt_reserve: 42,
@@ -6255,13 +6636,15 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_rent_exempt_reserve_ok
+            &mismatched_rent_exempt_reserve_ok,
+            None,
         )
         .is_ok());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_rent_exempt_reserve_ok,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_ok());
 
@@ -6279,13 +6662,15 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_authorized_fails
+            &mismatched_authorized_fails,
+            None,
         )
         .is_err());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_authorized_fails,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_err());
 
@@ -6301,15 +6686,163 @@ mod tests {
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &Meta::default(),
-            &mismatched_lockup_fails
+            &mismatched_lockup_fails,
+            None,
         )
         .is_err());
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
             &mismatched_lockup_fails,
-            &Meta::default()
+            &Meta::default(),
+            None,
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_metas_can_merge_v4() {
+        let invoke_context = MockInvokeContext::default();
+        // Identical Metas can merge
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_ok());
+
+        let mismatched_rent_exempt_reserve_ok = Meta {
+            rent_exempt_reserve: 42,
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_rent_exempt_reserve_ok.rent_exempt_reserve,
+            Meta::default().rent_exempt_reserve,
+        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &mismatched_rent_exempt_reserve_ok,
+            Some(&Clock::default())
+        )
+        .is_ok());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &mismatched_rent_exempt_reserve_ok,
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_ok());
+
+        let mismatched_authorized_fails = Meta {
+            authorized: Authorized {
+                staker: Pubkey::new_unique(),
+                withdrawer: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_authorized_fails.authorized,
+            Meta::default().authorized,
+        );
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &Meta::default(),
+            &mismatched_authorized_fails,
+            Some(&Clock::default())
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &mismatched_authorized_fails,
+            &Meta::default(),
+            Some(&Clock::default())
+        )
+        .is_err());
+
+        let lockup1_timestamp = 42;
+        let lockup2_timestamp = 4242;
+        let lockup1_epoch = 4;
+        let lockup2_epoch = 42;
+        let metas_with_lockup1 = Meta {
+            lockup: Lockup {
+                unix_timestamp: lockup1_timestamp,
+                epoch: lockup1_epoch,
+                custodian: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        let metas_with_lockup2 = Meta {
+            lockup: Lockup {
+                unix_timestamp: lockup2_timestamp,
+                epoch: lockup2_epoch,
+                custodian: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+
+        // Mismatched lockups fail when both in force
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&Clock::default())
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&Clock::default())
+        )
+        .is_err());
+
+        let clock = Clock {
+            epoch: lockup1_epoch + 1,
+            unix_timestamp: lockup1_timestamp + 1,
+            ..Clock::default()
+        };
+
+        // Mismatched lockups fail when either in force
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&clock)
+        )
+        .is_err());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&clock)
+        )
+        .is_err());
+
+        let clock = Clock {
+            epoch: lockup2_epoch + 1,
+            unix_timestamp: lockup2_timestamp + 1,
+            ..Clock::default()
+        };
+
+        // Mismatched lockups succeed when both expired
+        assert_ne!(metas_with_lockup1.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup1,
+            &metas_with_lockup2,
+            Some(&clock)
+        )
+        .is_ok());
+        assert!(MergeKind::metas_can_merge(
+            &invoke_context,
+            &metas_with_lockup2,
+            &metas_with_lockup1,
+            Some(&clock)
+        )
+        .is_ok());
     }
 
     #[test]
@@ -6567,37 +7100,37 @@ mod tests {
         assert_eq!(
             inactive
                 .clone()
-                .merge(&invoke_context, inactive.clone())
+                .merge(&invoke_context, inactive.clone(), None)
                 .unwrap(),
             None
         );
         assert_eq!(
             inactive
                 .clone()
-                .merge(&invoke_context, activation_epoch.clone())
+                .merge(&invoke_context, activation_epoch.clone(), None)
                 .unwrap(),
             None
         );
         assert!(inactive
             .clone()
-            .merge(&invoke_context, fully_active.clone())
+            .merge(&invoke_context, fully_active.clone(), None)
             .is_err());
         assert!(activation_epoch
             .clone()
-            .merge(&invoke_context, fully_active.clone())
+            .merge(&invoke_context, fully_active.clone(), None)
             .is_err());
         assert!(fully_active
             .clone()
-            .merge(&invoke_context, inactive.clone())
+            .merge(&invoke_context, inactive.clone(), None)
             .is_err());
         assert!(fully_active
             .clone()
-            .merge(&invoke_context, activation_epoch.clone())
+            .merge(&invoke_context, activation_epoch.clone(), None)
             .is_err());
 
         let new_state = activation_epoch
             .clone()
-            .merge(&invoke_context, inactive)
+            .merge(&invoke_context, inactive, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();
@@ -6605,7 +7138,7 @@ mod tests {
 
         let new_state = activation_epoch
             .clone()
-            .merge(&invoke_context, activation_epoch)
+            .merge(&invoke_context, activation_epoch, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();
@@ -6616,7 +7149,7 @@ mod tests {
 
         let new_state = fully_active
             .clone()
-            .merge(&invoke_context, fully_active)
+            .merge(&invoke_context, fully_active, None)
             .unwrap()
             .unwrap();
         let delegation = new_state.delegation().unwrap();

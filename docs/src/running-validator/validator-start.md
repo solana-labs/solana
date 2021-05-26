@@ -8,7 +8,7 @@ The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
 
 ```bash
-solana config set --url http://devnet.solana.com
+solana config set --url http://api.devnet.solana.com
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
@@ -207,9 +207,11 @@ solana config set --keypair ~/validator-keypair.json
 You should see the following output:
 
 ```text
-Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://devnet.solana.com
-* keypair: /home/solana/validator-keypair.json
+Config File: /home/solana/.config/solana/cli/config.yml
+RPC URL: http://api.devnet.solana.com
+WebSocket URL: ws://api.devnet.solana.com/ (computed)
+Keypair Path: /home/solana/validator-keypair.json
+Commitment: confirmed
 ```
 
 ## Airdrop & Check Validator Balance

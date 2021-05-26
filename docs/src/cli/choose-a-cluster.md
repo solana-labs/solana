@@ -21,7 +21,7 @@ cluster.
 For example to target the Devnet cluster, run:
 
 ```bash
-solana config set --url https://devnet.solana.com
+solana config set --url https://api.devnet.solana.com
 ```
 
 ## Ensure Versions Match

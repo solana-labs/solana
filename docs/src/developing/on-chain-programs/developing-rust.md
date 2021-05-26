@@ -233,7 +233,6 @@ single-threaded environment, and must be deterministic:
   - `std::net`
   - `std::os`
   - `std::future`
-  - `std::net`
   - `std::process`
   - `std::sync`
   - `std::task`
@@ -277,6 +276,12 @@ program's `Cargo.toml`:
 
 ```
 getrandom = { version = "0.1.14", features = ["dummy"] }
+```
+
+or if the dependency is on getrandom v0.2 add:
+
+```
+getrandom = { version = "0.2.2", features = ["custom"] }
 ```
 
 ## Logging

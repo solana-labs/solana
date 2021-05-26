@@ -89,13 +89,33 @@ impl CliSignerInfo {
             .collect()
     }
 }
-
+#[derive(Debug)]
 pub struct DefaultSigner {
     pub arg_name: String,
     pub path: String,
 }
 
 impl DefaultSigner {
+    pub fn new(path: String) -> Self {
+        Self {
+            arg_name: "keypair".to_string(),
+            path,
+        }
+    }
+    pub fn from_path(path: String) -> Result<Self, Box<dyn error::Error>> {
+        std::fs::metadata(&path)
+            .map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                    "No default signer found, run \"solana-keygen new -o {}\" to create a new one",
+                    path
+                ),
+                )
+                .into()
+            })
+            .map(|_| Self::new(path))
+    }
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
@@ -211,7 +231,17 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
     source: S,
 ) -> Result<SignerSource, SignerSourceError> {
     let source = source.as_ref();
-    match uriparse::URIReference::try_from(source) {
+    let source = {
+        #[cfg(target_family = "windows")]
+        {
+            source.replace("\\", "/")
+        }
+        #[cfg(not(target_family = "windows"))]
+        {
+            source.to_string()
+        }
+    };
+    match uriparse::URIReference::try_from(source.as_str()) {
         Err(_) => Err(SignerSourceError::UnrecognizedSource),
         Ok(uri) => {
             if let Some(scheme) = uri.scheme() {
@@ -231,19 +261,23 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                         legacy: false,
                     }),
                     SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    _ => Err(SignerSourceError::UnrecognizedSource),
+                    _ => {
+                        #[cfg(target_family = "windows")]
+                        // On Windows, an absolute path's drive letter will be parsed as the URI
+                        // scheme. Assume a filepath source in case of a single character shceme.
+                        if scheme.len() == 1 {
+                            return Ok(SignerSource::new(SignerSourceKind::Filepath(source)));
+                        }
+                        Err(SignerSourceError::UnrecognizedSource)
+                    }
                 }
             } else {
-                match source {
+                match source.as_str() {
                     "-" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
-                    _ => match Pubkey::from_str(source) {
+                    _ => match Pubkey::from_str(source.as_str()) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        Err(_) => std::fs::metadata(source)
-                            .map(|_| {
-                                SignerSource::new(SignerSourceKind::Filepath(source.to_string()))
-                            })
-                            .map_err(|err| err.into()),
+                        Err(_) => Ok(SignerSource::new(SignerSourceKind::Filepath(source))),
                     },
                 }
             }
@@ -717,10 +751,6 @@ mod tests {
         // Catchall into SignerSource::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(
-            parse_signer_source(&junk),
-            Err(SignerSourceError::IoError(_))
-        ));
 
         let prompt = "prompt:".to_string();
         assert!(matches!(
