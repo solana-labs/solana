@@ -13,14 +13,16 @@ use solana_client::{
 };
 use solana_core::{
     broadcast_stage::BroadcastStageType,
-    cluster_info::{self, VALIDATOR_PORT_RANGE},
     consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
-    crds_value::{self, CrdsData, CrdsValue},
-    gossip_service::discover_cluster,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
 use solana_download_utils::{download_snapshot, DownloadProgressRecord};
+use solana_gossip::{
+    cluster_info::{self, VALIDATOR_PORT_RANGE},
+    crds_value::{self, CrdsData, CrdsValue},
+    gossip_service::discover_cluster,
+};
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
     blockstore::{Blockstore, PurgeType},
@@ -1393,7 +1395,7 @@ fn test_mainnet_beta_cluster_type() {
 
     let client = create_client(
         cluster.entry_point_info.client_facing_addr(),
-        solana_core::cluster_info::VALIDATOR_PORT_RANGE,
+        VALIDATOR_PORT_RANGE,
     );
 
     // Programs that are available at epoch 0

@@ -1,17 +1,21 @@
 #![allow(clippy::integer_arithmetic)]
-use rayon::iter::ParallelIterator;
-use rayon::prelude::*;
-use serial_test::serial;
-use solana_core::cluster_info::{compute_retransmit_peers, ClusterInfo};
-use solana_core::contact_info::ContactInfo;
-use solana_sdk::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::channel;
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Instant;
+use {
+    rayon::{iter::ParallelIterator, prelude::*},
+    serial_test::serial,
+    solana_gossip::{
+        cluster_info::{compute_retransmit_peers, ClusterInfo},
+        contact_info::ContactInfo,
+    },
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::{
+            mpsc::{channel, Receiver, Sender, TryRecvError},
+            Arc, Mutex,
+        },
+        time::Instant,
+    },
+};
 
 type Nodes = HashMap<Pubkey, (bool, HashSet<i32>, Receiver<(i32, bool)>)>;
 

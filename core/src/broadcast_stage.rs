@@ -5,17 +5,19 @@ use self::{
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
-use crate::contact_info::ContactInfo;
-use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::weighted_shuffle::weighted_best;
 use crate::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
     poh_recorder::WorkingBankEntry,
     result::{Error, Result},
 };
 use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
+};
+use solana_gossip::{
+    cluster_info::{self, ClusterInfo, ClusterInfoError},
+    contact_info::ContactInfo,
+    crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+    weighted_shuffle::weighted_best,
 };
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
@@ -363,7 +365,6 @@ pub fn get_broadcast_peers(
     cluster_info: &ClusterInfo,
     stakes: Option<&HashMap<Pubkey, u64>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
-    use crate::cluster_info;
     let mut peers = cluster_info.tvu_peers();
     let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
     (peers, peers_and_stakes)
@@ -440,8 +441,8 @@ fn num_live_peers(peers: &[ContactInfo]) -> i64 {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
     use crossbeam_channel::unbounded;
+    use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{
         blockstore::{make_slot_entries, Blockstore},
         entry::create_ticks,

@@ -39,11 +39,8 @@ mod tests {
     use crossbeam_channel::unbounded;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
-    use solana_core::{
-        cluster_info::ClusterInfo,
-        contact_info::ContactInfo,
-        snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    };
+    use solana_core::snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService};
+    use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
     use solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestHandler},
         accounts_db,

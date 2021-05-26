@@ -1,8 +1,11 @@
-use crate::crds::VersionedCrdsValue;
-use crate::crds_gossip_pull::CrdsFilter;
-use indexmap::map::IndexMap;
-use std::cmp::Ordering;
-use std::ops::{Index, IndexMut};
+use {
+    crate::{crds::VersionedCrdsValue, crds_gossip_pull::CrdsFilter},
+    indexmap::map::IndexMap,
+    std::{
+        cmp::Ordering,
+        ops::{Index, IndexMut},
+    },
+};
 
 #[derive(Clone)]
 pub struct CrdsShards {
@@ -129,11 +132,13 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{crds::Crds, crds_value::CrdsValue};
-    use rand::{thread_rng, Rng};
-    use solana_sdk::timing::timestamp;
-    use std::{collections::HashSet, iter::repeat_with, ops::Index};
+    use {
+        super::*,
+        crate::{crds::Crds, crds_value::CrdsValue},
+        rand::{thread_rng, Rng},
+        solana_sdk::timing::timestamp,
+        std::{collections::HashSet, iter::repeat_with, ops::Index},
+    };
 
     fn new_test_crds_value<R: Rng>(rng: &mut R) -> VersionedCrdsValue {
         let value = CrdsValue::new_rand(rng, None);

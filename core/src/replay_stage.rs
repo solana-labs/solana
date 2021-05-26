@@ -3,7 +3,6 @@
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
     },
@@ -25,6 +24,7 @@ use crate::{
     window_service::DuplicateSlotReceiver,
 };
 use solana_client::rpc_response::SlotUpdate;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
@@ -2473,15 +2473,14 @@ impl ReplayStage {
 pub(crate) mod tests {
     use super::*;
     use crate::{
-        cluster_info::Node,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
-        crds::Cursor,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
+    use solana_gossip::{cluster_info::Node, crds::Cursor};
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},

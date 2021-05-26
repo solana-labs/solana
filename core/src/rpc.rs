@@ -1,8 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo,
-    contact_info::ContactInfo,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
     validator::ValidatorExit,
@@ -32,6 +30,7 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
+use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
 use solana_ledger::{
     blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path,
     leader_schedule_cache::LeaderScheduleCache,
@@ -3719,14 +3718,12 @@ pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Valida
 #[cfg(test)]
 pub mod tests {
     use super::{rpc_full::*, rpc_minimal::*, *};
-    use crate::{
-        contact_info::ContactInfo,
-        replay_stage::tests::create_test_transactions_and_populate_blockstore,
-    };
+    use crate::replay_stage::tests::create_test_transactions_and_populate_blockstore;
     use bincode::deserialize;
     use jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value};
     use jsonrpc_core_client::transports::local;
     use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes};
+    use solana_gossip::{contact_info::ContactInfo, socketaddr};
     use solana_ledger::{
         blockstore_meta::PerfSample,
         blockstore_processor::fill_blockstore_slot_with_ticks,

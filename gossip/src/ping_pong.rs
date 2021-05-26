@@ -1,14 +1,20 @@
-use bincode::{serialize, Error};
-use lru::LruCache;
-use rand::{AsByteSliceMut, CryptoRng, Rng};
-use serde::Serialize;
-use solana_sdk::hash::{self, Hash};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
-use solana_sdk::signature::{Keypair, Signable, Signature, Signer};
-use std::borrow::Cow;
-use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use {
+    bincode::{serialize, Error},
+    lru::LruCache,
+    rand::{AsByteSliceMut, CryptoRng, Rng},
+    serde::Serialize,
+    solana_sdk::{
+        hash::{self, Hash},
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        signature::{Keypair, Signable, Signature, Signer},
+    },
+    std::{
+        borrow::Cow,
+        net::SocketAddr,
+        time::{Duration, Instant},
+    },
+};
 
 #[derive(AbiExample, Debug, Deserialize, Serialize)]
 pub struct Ping<T> {
@@ -252,10 +258,14 @@ impl PingCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::collections::HashSet;
-    use std::iter::repeat_with;
-    use std::net::{Ipv4Addr, SocketAddrV4};
+    use {
+        super::*,
+        std::{
+            collections::HashSet,
+            iter::repeat_with,
+            net::{Ipv4Addr, SocketAddrV4},
+        },
+    };
 
     type Token = [u8; 32];
 

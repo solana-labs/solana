@@ -1,21 +1,23 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
-use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
-    SubCommand,
-};
-use solana_clap_utils::{
-    input_parsers::keypair_of,
-    input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
-};
-use solana_core::{contact_info::ContactInfo, gossip_service::discover};
-use solana_sdk::pubkey::Pubkey;
-use std::{
-    error,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    process::exit,
-    sync::Arc,
-    time::Duration,
+use {
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
+        SubCommand,
+    },
+    solana_clap_utils::{
+        input_parsers::keypair_of,
+        input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
+    },
+    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        error,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        process::exit,
+        sync::Arc,
+        time::Duration,
+    },
 };
 
 fn parse_matches() -> ArgMatches<'static> {

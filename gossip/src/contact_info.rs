@@ -1,12 +1,14 @@
-use crate::crds_value::MAX_WALLCLOCK;
-use solana_sdk::pubkey::Pubkey;
-#[cfg(test)]
-use solana_sdk::rpc_port;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
-#[cfg(test)]
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::timing::timestamp;
-use std::net::{IpAddr, SocketAddr};
+use {
+    crate::crds_value::MAX_WALLCLOCK,
+    solana_sdk::{
+        pubkey::Pubkey,
+        rpc_port,
+        sanitize::{Sanitize, SanitizeError},
+        signature::{Keypair, Signer},
+        timing::timestamp,
+    },
+    std::net::{IpAddr, SocketAddr},
+};
 
 /// Structure representing a node on the network
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize)]
@@ -132,8 +134,8 @@ impl ContactInfo {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
+    // Used in tests
+    pub fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
         fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
             let mut nxt_addr = *addr;
             nxt_addr.set_port(addr.port() + nxt);
@@ -166,8 +168,8 @@ impl ContactInfo {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
+    // Used in tests
+    pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
         let keypair = Keypair::new();
         Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }

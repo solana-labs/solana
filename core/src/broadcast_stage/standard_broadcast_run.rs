@@ -494,7 +494,7 @@ impl BroadcastRun for StandardBroadcastRun {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
+    use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::genesis_utils::create_genesis_config;
     use solana_ledger::{
         blockstore::Blockstore, entry::create_ticks, get_tmp_ledger_path,

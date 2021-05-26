@@ -1,7 +1,4 @@
 use crate::{
-    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    crds::Cursor,
-    crds_value::CrdsValueLabel,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     poh_recorder::PohRecorder,
     replay_stage::DUPLICATE_THRESHOLD,
@@ -15,6 +12,11 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
+use solana_gossip::{
+    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+    crds::Cursor,
+    crds_value::CrdsValueLabel,
+};
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};

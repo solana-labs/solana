@@ -1,7 +1,5 @@
-use crate::{
-    cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, crds_value::CrdsValueLabel,
-    result::Result,
-};
+use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
+use solana_gossip::crds_value::CrdsValueLabel;
 use solana_perf::packet::Packets;
 use solana_sdk::clock::Slot;
 use std::{

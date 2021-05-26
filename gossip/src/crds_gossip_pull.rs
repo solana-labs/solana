@@ -9,32 +9,37 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
-use crate::{
-    cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
-    contact_info::ContactInfo,
-    crds::Crds,
-    crds_gossip::{get_stake, get_weight},
-    crds_gossip_error::CrdsGossipError,
-    crds_value::CrdsValue,
-    ping_pong::PingCache,
-};
-use itertools::Itertools;
-use lru::LruCache;
-use rand::distributions::{Distribution, WeightedIndex};
-use rand::Rng;
-use rayon::{prelude::*, ThreadPool};
-use solana_runtime::bloom::{AtomicBloom, Bloom};
-use solana_sdk::{
-    hash::{hash, Hash},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    convert::TryInto,
-    net::SocketAddr,
-    sync::Mutex,
-    time::{Duration, Instant},
+use {
+    crate::{
+        cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
+        contact_info::ContactInfo,
+        crds::Crds,
+        crds_gossip::{get_stake, get_weight},
+        crds_gossip_error::CrdsGossipError,
+        crds_value::CrdsValue,
+        ping_pong::PingCache,
+    },
+    itertools::Itertools,
+    lru::LruCache,
+    rand::{
+        distributions::{Distribution, WeightedIndex},
+        Rng,
+    },
+    rayon::{prelude::*, ThreadPool},
+    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_sdk::{
+        hash::{hash, Hash},
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    std::{
+        collections::{HashMap, HashSet, VecDeque},
+        convert::TryInto,
+        iter::repeat_with,
+        net::SocketAddr,
+        sync::Mutex,
+        time::{Duration, Instant},
+    },
 };
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
@@ -140,11 +145,10 @@ impl CrdsFilterSet {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = CrdsFilter::max_items(max_bits, FALSE_RATE, KEYS);
         let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items as f64);
-        let filters = std::iter::repeat_with(|| {
-            Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize).into()
-        })
-        .take(1 << mask_bits)
-        .collect();
+        let filters =
+            repeat_with(|| Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize).into())
+                .take(1 << mask_bits)
+                .collect();
         Self { filters, mask_bits }
     }
 
@@ -238,7 +242,7 @@ impl CrdsGossipPull {
             let num_samples = peers.len() * 2;
             let index = WeightedIndex::new(weights).unwrap();
             let sample_peer = move || peers[index.sample(&mut rng)];
-            std::iter::repeat_with(sample_peer).take(num_samples)
+            repeat_with(sample_peer).take(num_samples)
         };
         let peer = {
             let mut rng = rand::thread_rng();
@@ -607,20 +611,23 @@ impl CrdsGossipPull {
 }
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use crate::cluster_info::MAX_BLOOM_SIZE;
-    use crate::contact_info::ContactInfo;
-    use crate::crds_value::{CrdsData, Vote};
-    use itertools::Itertools;
-    use rand::{seq::SliceRandom, thread_rng};
-    use rayon::ThreadPoolBuilder;
-    use solana_perf::test_tx::test_tx;
-    use solana_sdk::{
-        hash::{hash, HASH_BYTES},
-        packet::PACKET_DATA_SIZE,
-        timing::timestamp,
+    use {
+        super::*,
+        crate::{
+            cluster_info::MAX_BLOOM_SIZE,
+            contact_info::ContactInfo,
+            crds_value::{CrdsData, Vote},
+        },
+        itertools::Itertools,
+        rand::{seq::SliceRandom, thread_rng},
+        rayon::ThreadPoolBuilder,
+        solana_perf::test_tx::test_tx,
+        solana_sdk::{
+            hash::{hash, HASH_BYTES},
+            packet::PACKET_DATA_SIZE,
+            timing::timestamp,
+        },
     };
-    use std::{iter::repeat_with, time::Duration};
 
     #[cfg(debug_assertions)]
     pub(crate) const MIN_NUM_BLOOM_FILTERS: usize = 1;
@@ -816,7 +823,7 @@ pub(crate) mod tests {
         let mut rng = thread_rng();
         let crds_filter_set =
             CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        let hash_values: Vec<_> = std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
+        let hash_values: Vec<_> = repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
             .take(1024)
             .collect();
         for hash_value in &hash_values {

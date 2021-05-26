@@ -6,11 +6,11 @@ use crate::{
 use itertools::izip;
 use log::*;
 use solana_client::thin_client::{create_client, ThinClient};
-use solana_core::{
+use solana_core::validator::{Validator, ValidatorConfig, ValidatorStartProgress};
+use solana_gossip::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
-    validator::{Validator, ValidatorConfig, ValidatorStartProgress},
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
@@ -628,7 +628,7 @@ impl Cluster for LocalCluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>) {
+    ) -> (Node, Option<ContactInfo>) {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();

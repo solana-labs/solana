@@ -5,7 +5,6 @@ use crate::{
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
         VerifiedVoteReceiver, VoteTracker,
@@ -24,6 +23,7 @@ use crate::{
     snapshot_packager_service::PendingSnapshotPackage,
 };
 use crossbeam_channel::unbounded;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
@@ -338,11 +338,9 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        banking_stage::create_test_recorder,
-        cluster_info::{ClusterInfo, Node},
-    };
+    use crate::banking_stage::create_test_recorder;
     use serial_test::serial;
+    use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{
         blockstore::BlockstoreSignals,
         create_new_tmp_ledger,

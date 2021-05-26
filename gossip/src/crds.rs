@@ -24,19 +24,27 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
-use crate::contact_info::ContactInfo;
-use crate::crds_shards::CrdsShards;
-use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot};
-use bincode::serialize;
-use indexmap::map::{rayon::ParValues, Entry, IndexMap};
-use indexmap::set::IndexSet;
-use rayon::{prelude::*, ThreadPool};
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::pubkey::Pubkey;
-use std::{
-    cmp::Ordering,
-    collections::{hash_map, BTreeMap, HashMap, VecDeque},
-    ops::{Bound, Index, IndexMut},
+use {
+    crate::{
+        contact_info::ContactInfo,
+        crds_shards::CrdsShards,
+        crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot},
+    },
+    bincode::serialize,
+    indexmap::{
+        map::{rayon::ParValues, Entry, IndexMap},
+        set::IndexSet,
+    },
+    rayon::{prelude::*, ThreadPool},
+    solana_sdk::{
+        hash::{hash, Hash},
+        pubkey::Pubkey,
+    },
+    std::{
+        cmp::Ordering,
+        collections::{hash_map, BTreeMap, HashMap, VecDeque},
+        ops::{Bound, Index, IndexMut},
+    },
 };
 
 const CRDS_SHARDS_BITS: u32 = 8;
@@ -539,16 +547,18 @@ impl Crds {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{
-        contact_info::ContactInfo,
-        crds_value::{new_rand_timestamp, NodeInstance},
+    use {
+        super::*,
+        crate::{
+            contact_info::ContactInfo,
+            crds_value::{new_rand_timestamp, NodeInstance},
+        },
+        rand::{thread_rng, Rng, SeedableRng},
+        rand_chacha::ChaChaRng,
+        rayon::ThreadPoolBuilder,
+        solana_sdk::signature::{Keypair, Signer},
+        std::{collections::HashSet, iter::repeat_with},
     };
-    use rand::{thread_rng, Rng, SeedableRng};
-    use rand_chacha::ChaChaRng;
-    use rayon::ThreadPoolBuilder;
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::{collections::HashSet, iter::repeat_with};
 
     #[test]
     fn test_insert() {

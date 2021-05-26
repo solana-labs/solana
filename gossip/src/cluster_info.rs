@@ -12,74 +12,77 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::{
-    cluster_info_metrics::{submit_gossip_stats, Counter, GossipStats, ScopedTimer},
-    contact_info::ContactInfo,
-    crds::Cursor,
-    crds_gossip::CrdsGossip,
-    crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-        SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+use {
+    crate::{
+        cluster_info_metrics::{submit_gossip_stats, Counter, GossipStats, ScopedTimer},
+        contact_info::ContactInfo,
+        crds::Cursor,
+        crds_gossip::CrdsGossip,
+        crds_gossip_error::CrdsGossipError,
+        crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+        crds_value::{
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
+            SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+        },
+        data_budget::DataBudget,
+        epoch_slots::EpochSlots,
+        gossip_error::GossipError,
+        ping_pong::{self, PingCache, Pong},
+        socketaddr, socketaddr_any,
+        weighted_shuffle::weighted_shuffle,
     },
-    data_budget::DataBudget,
-    epoch_slots::EpochSlots,
-    ping_pong::{self, PingCache, Pong},
-    result::{Error, Result},
-    weighted_shuffle::weighted_shuffle,
-};
-use rand::{seq::SliceRandom, CryptoRng, Rng};
-use solana_ledger::shred::Shred;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
-
-use bincode::{serialize, serialized_size};
-use itertools::Itertools;
-use rand::thread_rng;
-use rayon::prelude::*;
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use serde::ser::Serialize;
-use solana_measure::measure::Measure;
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_net_utils::{
-    bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
-    multi_bind_in_range, PortRange,
-};
-use solana_perf::packet::{
-    limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
-    PACKET_DATA_SIZE,
-};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
-    feature_set::{self, FeatureSet},
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signable, Signature, Signer},
-    timing::timestamp,
-    transaction::Transaction,
-};
-use solana_streamer::packet;
-use solana_streamer::sendmmsg::multicast;
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    fs::{self, File},
-    io::BufReader,
-    iter::repeat,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
-    ops::{Deref, DerefMut, Div},
-    path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    bincode::{serialize, serialized_size},
+    itertools::Itertools,
+    rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
+    rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
+    serde::ser::Serialize,
+    solana_ledger::shred::Shred,
+    solana_measure::measure::Measure,
+    solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
+    solana_net_utils::{
+        bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
+        multi_bind_in_range, PortRange,
     },
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    solana_perf::packet::{
+        limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
+        PACKET_DATA_SIZE,
+    },
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
+        feature_set::{self, FeatureSet},
+        hash::Hash,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        signature::{Keypair, Signable, Signature, Signer},
+        timing::timestamp,
+        transaction::Transaction,
+    },
+    solana_streamer::{
+        packet,
+        sendmmsg::multicast,
+        streamer::{PacketReceiver, PacketSender},
+    },
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    std::{
+        borrow::Cow,
+        collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+        fmt::Debug,
+        fs::{self, File},
+        io::BufReader,
+        iter::repeat,
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+        ops::{Deref, DerefMut, Div},
+        path::{Path, PathBuf},
+        result::Result,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+        },
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
@@ -209,7 +212,7 @@ pub struct ClusterInfo {
     /// The network
     pub gossip: RwLock<CrdsGossip>,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
-    pub(crate) keypair: Arc<Keypair>,
+    pub keypair: Arc<Keypair>,
     /// Network entrypoints
     entrypoints: RwLock<Vec<ContactInfo>>,
     outbound_budget: DataBudget,
@@ -267,7 +270,7 @@ impl PruneData {
 }
 
 impl Sanitize for PruneData {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
             return Err(SanitizeError::ValueOutOfBounds);
         }
@@ -323,7 +326,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "CH5BWuhAyvUiUQYgu2Lcwu7eoiW6bQitvtLS1yFsdmrE")]
+#[frozen_abi(digest = "GANv3KVkTYF84kmg1bAuWEZd9MaiYzPquuu13hup3379")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -408,7 +411,7 @@ impl Protocol {
 }
 
 impl Sanitize for Protocol {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
             Protocol::PullRequest(filter, val) => {
                 filter.sanitize()?;
@@ -894,7 +897,7 @@ impl ClusterInfo {
         }
     }
 
-    pub(crate) fn push_epoch_slots(&self, mut update: &[Slot]) {
+    pub fn push_epoch_slots(&self, mut update: &[Slot]) {
         let current_slots: Vec<_> = {
             let gossip =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
@@ -968,7 +971,7 @@ impl ClusterInfo {
         GossipWriteLock::new(self.gossip.write().unwrap(), label, counter)
     }
 
-    pub(crate) fn push_message(&self, message: CrdsValue) {
+    pub fn push_message(&self, message: CrdsValue) {
         self.local_message_pending_push_queue
             .lock()
             .unwrap()
@@ -1094,7 +1097,11 @@ impl ClusterInfo {
         }
     }
 
-    pub fn send_vote(&self, vote: &Transaction, tpu: Option<SocketAddr>) -> Result<()> {
+    pub fn send_vote(
+        &self,
+        vote: &Transaction,
+        tpu: Option<SocketAddr>,
+    ) -> Result<(), GossipError> {
         let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
         let buf = serialize(vote)?;
         self.socket.send_to(&buf, &tpu)?;
@@ -1119,7 +1126,11 @@ impl ClusterInfo {
         (labels, txs)
     }
 
-    pub(crate) fn push_duplicate_shred(&self, shred: &Shred, other_payload: &[u8]) -> Result<()> {
+    pub fn push_duplicate_shred(
+        &self,
+        shred: &Shred,
+        other_payload: &[u8],
+    ) -> Result<(), GossipError> {
         self.gossip.write().unwrap().push_duplicate_shred(
             &self.keypair,
             shred,
@@ -1154,7 +1165,7 @@ impl ClusterInfo {
             .map(map)
     }
 
-    pub(crate) fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
+    pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
@@ -1203,7 +1214,7 @@ impl ClusterInfo {
     }
 
     // All nodes in gossip (including spy nodes) and the last time we heard about them
-    pub(crate) fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
+    pub fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
         self.gossip
             .read()
             .unwrap()
@@ -1376,7 +1387,7 @@ impl ClusterInfo {
         packet: &Packet,
         s: &UdpSocket,
         forwarded: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         trace!("retransmit orders {}", peers.len());
         let dests: Vec<_> = if forwarded {
             peers
@@ -1398,7 +1409,7 @@ impl ClusterInfo {
                         1
                     );
                     error!("retransmit result {:?}", e);
-                    return Err(Error::Io(e));
+                    return Err(GossipError::Io(e));
                 }
             }
         }
@@ -1561,7 +1572,7 @@ impl ClusterInfo {
         let mut push_queue = self.local_message_pending_push_queue.lock().unwrap();
         std::mem::take(&mut *push_queue)
     }
-    #[cfg(test)]
+    // Used in tests
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
@@ -1649,7 +1660,7 @@ impl ClusterInfo {
         sender: &PacketSender,
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
@@ -2491,7 +2502,7 @@ impl ClusterInfo {
         feature_set: Option<&FeatureSet>,
         epoch_duration: Duration,
         should_check_duplicate_instance: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
         self.stats
             .packets_received_count
@@ -2517,7 +2528,7 @@ impl ClusterInfo {
             if should_check_duplicate_instance {
                 for value in values {
                     if self.instance.check_duplicate(value) {
-                        return Err(Error::DuplicateNodeInstance);
+                        return Err(GossipError::DuplicateNodeInstance);
                     }
                 }
             }
@@ -2605,7 +2616,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
         should_check_duplicate_instance: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
@@ -2678,7 +2689,7 @@ impl ClusterInfo {
                         should_check_duplicate_instance,
                     ) {
                         match err {
-                            Error::RecvTimeoutError(_) => {
+                            GossipError::RecvTimeoutError(_) => {
                                 let table_size = self.gossip.read().unwrap().crds.len();
                                 debug!(
                                     "{}: run_listen timeout, table size: {}",
@@ -2686,7 +2697,7 @@ impl ClusterInfo {
                                     table_size,
                                 );
                             }
-                            Error::DuplicateNodeInstance => {
+                            GossipError::DuplicateNodeInstance => {
                                 error!(
                                     "duplicate running instances of the same validator node: {}",
                                     self.id()
@@ -3013,7 +3024,7 @@ pub fn push_messages_to_peer(
     messages: Vec<CrdsValue>,
     self_id: Pubkey,
     peer_gossip: SocketAddr,
-) -> Result<()> {
+) -> Result<(), GossipError> {
     let reqs: Vec<_> = ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, messages)
         .map(move |payload| (peer_gossip, Protocol::PushMessage(self_id, payload)))
         .collect();
@@ -3033,21 +3044,25 @@ pub fn stake_weight_peers(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
-        crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
-        duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+    use {
+        super::*,
+        crate::{
+            crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
+            crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+            duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+        },
+        itertools::izip,
+        rand::{seq::SliceRandom, SeedableRng},
+        rand_chacha::ChaChaRng,
+        solana_ledger::shred::Shredder,
+        solana_sdk::signature::{Keypair, Signer},
+        solana_vote_program::{vote_instruction, vote_state::Vote},
+        std::{
+            iter::repeat_with,
+            net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4},
+            sync::Arc,
+        },
     };
-    use itertools::izip;
-    use rand::{seq::SliceRandom, SeedableRng};
-    use rand_chacha::ChaChaRng;
-    use solana_ledger::shred::Shredder;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::iter::repeat_with;
-    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4};
-    use std::sync::Arc;
 
     #[test]
     fn test_gossip_node() {

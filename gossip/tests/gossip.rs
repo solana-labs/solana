@@ -2,28 +2,33 @@
 #[macro_use]
 extern crate log;
 
-use rayon::iter::*;
-use solana_core::{
-    cluster_info::{ClusterInfo, Node},
-    crds::Cursor,
-    gossip_service::GossipService,
+use {
+    rayon::iter::*,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        crds::Cursor,
+        gossip_service::GossipService,
+    },
+    solana_perf::packet::Packet,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        timing::timestamp,
+        transaction::Transaction,
+    },
+    solana_vote_program::{vote_instruction, vote_state::Vote},
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::sleep,
+        time::Duration,
+    },
 };
-use solana_runtime::bank_forks::BankForks;
-
-use solana_perf::packet::Packet;
-use solana_sdk::{
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    timing::timestamp,
-    transaction::Transaction,
-};
-use solana_vote_program::{vote_instruction, vote_state::Vote};
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());

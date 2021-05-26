@@ -2,15 +2,17 @@
 
 extern crate test;
 
-use rand::{thread_rng, Rng};
-use solana_core::{
-    crds::{Crds, VersionedCrdsValue},
-    crds_shards::CrdsShards,
-    crds_value::CrdsValue,
+use {
+    rand::{thread_rng, Rng},
+    solana_gossip::{
+        crds::{Crds, VersionedCrdsValue},
+        crds_shards::CrdsShards,
+        crds_value::CrdsValue,
+    },
+    solana_sdk::timing::timestamp,
+    std::iter::repeat_with,
+    test::Bencher,
 };
-use solana_sdk::timing::timestamp;
-use std::iter::repeat_with;
-use test::Bencher;
 
 const CRDS_SHARDS_BITS: u32 = 8;
 

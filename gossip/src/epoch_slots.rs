@@ -1,11 +1,17 @@
-use crate::cluster_info::MAX_CRDS_OBJECT_SIZE;
-use crate::crds_value::{self, MAX_SLOT, MAX_WALLCLOCK};
-use bincode::serialized_size;
-use bv::BitVec;
-use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
-use solana_sdk::clock::Slot;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
+use {
+    crate::{
+        cluster_info::MAX_CRDS_OBJECT_SIZE,
+        crds_value::{self, MAX_SLOT, MAX_WALLCLOCK},
+    },
+    bincode::serialized_size,
+    bv::BitVec,
+    flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress},
+    solana_sdk::{
+        clock::Slot,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+    },
+};
 
 const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]

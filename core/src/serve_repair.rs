@@ -1,15 +1,17 @@
 use crate::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
     cluster_slots::ClusterSlots,
-    contact_info::ContactInfo,
     repair_response,
     repair_service::{OutstandingRepairs, RepairStats},
     request_response::RequestResponse,
     result::{Error, Result},
-    weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
 use rand::distributions::{Distribution, WeightedIndex};
+use solana_gossip::{
+    cluster_info::{ClusterInfo, ClusterInfoError},
+    contact_info::ContactInfo,
+    weighted_shuffle::weighted_best,
+};
 use solana_ledger::{
     blockstore::Blockstore,
     shred::{Nonce, Shred},
@@ -607,6 +609,7 @@ impl ServeRepair {
 mod tests {
     use super::*;
     use crate::{repair_response, result::Error};
+    use solana_gossip::{socketaddr, socketaddr_any};
     use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::{
         blockstore::make_many_slot_entries,

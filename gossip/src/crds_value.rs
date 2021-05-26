@@ -1,28 +1,30 @@
-use crate::{
-    cluster_info::MAX_SNAPSHOT_HASHES,
-    contact_info::ContactInfo,
-    deprecated,
-    duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
-    epoch_slots::EpochSlots,
-};
-use bincode::{serialize, serialized_size};
-use rand::{CryptoRng, Rng};
-use serde::de::{Deserialize, Deserializer};
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
-use solana_sdk::timing::timestamp;
-use solana_sdk::{
-    clock::Slot,
-    hash::Hash,
-    pubkey::{self, Pubkey},
-    signature::{Keypair, Signable, Signature, Signer},
-    transaction::Transaction,
-};
-use solana_vote_program::vote_transaction::parse_vote_transaction;
-use std::{
-    borrow::{Borrow, Cow},
-    cmp::Ordering,
-    collections::{hash_map::Entry, BTreeSet, HashMap},
-    fmt,
+use {
+    crate::{
+        cluster_info::MAX_SNAPSHOT_HASHES,
+        contact_info::ContactInfo,
+        deprecated,
+        duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
+        epoch_slots::EpochSlots,
+    },
+    bincode::{serialize, serialized_size},
+    rand::{CryptoRng, Rng},
+    serde::de::{Deserialize, Deserializer},
+    solana_sdk::sanitize::{Sanitize, SanitizeError},
+    solana_sdk::timing::timestamp,
+    solana_sdk::{
+        clock::Slot,
+        hash::Hash,
+        pubkey::{self, Pubkey},
+        signature::{Keypair, Signable, Signature, Signer},
+        transaction::Transaction,
+    },
+    solana_vote_program::vote_transaction::parse_vote_transaction,
+    std::{
+        borrow::{Borrow, Cow},
+        cmp::Ordering,
+        collections::{hash_map::Entry, BTreeSet, HashMap},
+        fmt,
+    },
 };
 
 pub const MAX_WALLCLOCK: u64 = 1_000_000_000_000_000;
@@ -684,17 +686,20 @@ pub(crate) fn sanitize_wallclock(wallclock: u64) -> Result<(), SanitizeError> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::contact_info::ContactInfo;
-    use bincode::{deserialize, Options};
-    use rand::SeedableRng;
-    use rand_chacha::ChaChaRng;
-    use solana_perf::test_tx::test_tx;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_sdk::timing::timestamp;
-    use solana_vote_program::{vote_instruction, vote_state};
-    use std::cmp::Ordering;
-    use std::iter::repeat_with;
+    use {
+        super::*,
+        crate::contact_info::ContactInfo,
+        bincode::{deserialize, Options},
+        rand::SeedableRng,
+        rand_chacha::ChaChaRng,
+        solana_perf::test_tx::test_tx,
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
+        solana_vote_program::{vote_instruction, vote_state},
+        std::{cmp::Ordering, iter::repeat_with},
+    };
 
     #[test]
     fn test_keys_and_values() {

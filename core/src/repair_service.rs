@@ -1,7 +1,6 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     outstanding_requests::OutstandingRequests,
@@ -10,6 +9,7 @@ use crate::{
     serve_repair::{RepairType, ServeRepair},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     blockstore::{Blockstore, SlotMeta},
     shred::Nonce,
@@ -668,8 +668,8 @@ impl RepairService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::Node;
     use crossbeam_channel::unbounded;
+    use solana_gossip::cluster_info::Node;
     use solana_ledger::blockstore::{
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };

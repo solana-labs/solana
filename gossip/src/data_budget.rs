@@ -87,8 +87,7 @@ impl DataBudget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::time::Duration;
+    use {super::*, std::time::Duration};
 
     #[test]
     fn test_data_budget() {

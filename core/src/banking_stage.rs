@@ -2,7 +2,6 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
-    cluster_info::ClusterInfo,
     packet_hasher::PacketHasher,
     poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
     poh_service::{self, PohService},
@@ -11,6 +10,7 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
 use retain_mut::RetainMut;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
@@ -1435,11 +1435,12 @@ pub fn create_test_recorder(
 mod tests {
     use super::*;
     use crate::{
-        cluster_info::Node, poh_recorder::Record, poh_recorder::WorkingBank,
+        poh_recorder::Record, poh_recorder::WorkingBank,
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
+    use solana_gossip::cluster_info::Node;
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},

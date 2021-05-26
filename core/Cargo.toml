@@ -55,6 +55,7 @@ solana-banks-server = { path = "../banks-server", version = "=1.7.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.7.0" }
 solana-client = { path = "../client", version = "=1.7.0" }
 solana-faucet = { path = "../faucet", version = "=1.7.0" }
+solana-gossip = { path = "../gossip", version = "=1.7.0" }
 solana-ledger = { path = "../ledger", version = "=1.7.0" }
 solana-logger = { path = "../logger", version = "=1.7.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "=1.7.0" }
@@ -102,13 +103,7 @@ name = "banking_stage"
 name = "blockstore"
 
 [[bench]]
-name = "crds"
-
-[[bench]]
-name = "crds_gossip_pull"
-
-[[bench]]
-name = "crds_shards"
+name = "cluster_info"
 
 [[bench]]
 name = "gen_keys"
@@ -121,9 +116,6 @@ name = "poh"
 
 [[bench]]
 name = "retransmit_stage"
-
-[[bench]]
-name = "cluster_info"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
