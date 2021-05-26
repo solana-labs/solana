@@ -586,7 +586,7 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                     tx_by_addr::TransactionErrorType::InstructionError
                 }
                 TransactionError::AccountBorrowOutstanding => {
-                    tx_by_addr::TransactionErrorType::AccountBorrowOutstanding
+                    tx_by_addr::TransactionErrorType::AccountBorrowOutstandingTx
                 }
             } as i32,
             instruction_error: match transaction_error {
