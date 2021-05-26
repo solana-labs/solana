@@ -11,6 +11,11 @@ pub enum RpcRequest {
     DeregisterNode,
     GetAccountInfo,
     GetBalance,
+<<<<<<< HEAD
+=======
+    GetBlock,
+    GetBlockHeight,
+>>>>>>> e9bc1c6b0 (Add last valid block height to rpc Fees (#17506))
     GetBlockProduction,
     GetBlockTime,
     GetClusterNodes,
@@ -84,6 +89,11 @@ impl fmt::Display for RpcRequest {
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
+<<<<<<< HEAD
+=======
+            RpcRequest::GetBlock => "getBlock",
+            RpcRequest::GetBlockHeight => "getBlockHeight",
+>>>>>>> e9bc1c6b0 (Add last valid block height to rpc Fees (#17506))
             RpcRequest::GetBlockProduction => "getBlockProduction",
             RpcRequest::GetBlockTime => "getBlockTime",
             RpcRequest::GetClusterNodes => "getClusterNodes",

@@ -20,6 +20,11 @@ gives a convenient interface for the RPC methods.
 
 - [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 - [getBalance](jsonrpc-api.md#getbalance)
+<<<<<<< HEAD
+=======
+- [getBlock](jsonrpc-api.md#getblock)
+- [getBlockHeight](jsonrpc-api.md#getblockheight)
+>>>>>>> e9bc1c6b0 (Add last valid block height to rpc Fees (#17506))
 - [getBlockProduction](jsonrpc-api.md#getblockproduction)
 - [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 - [getBlockTime](jsonrpc-api.md#getblocktime)
@@ -681,6 +686,36 @@ The JSON structure of token balances is defined as a list of objects in the foll
   - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
   - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
 
+<<<<<<< HEAD
+=======
+
+### getBlockHeight
+
+Returns the current block height of the node
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `<u64>` - Current block height
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockHeight"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":1233,"id":1}
+```
+
+>>>>>>> e9bc1c6b0 (Add last valid block height to rpc Fees (#17506))
 ### getBlockProduction
 
 Returns recent block production information from the current or previous epoch.
@@ -1329,6 +1364,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 - `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which a blockhash will be valid
 
 #### Example:
 
@@ -1352,7 +1388,8 @@ Result:
       "feeCalculator": {
         "lamportsPerSignature": 5000
       },
-      "lastValidSlot": 297
+      "lastValidSlot": 297,
+      "lastValidBlockHeight": 296
     }
   },
   "id": 1
