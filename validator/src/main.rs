@@ -898,7 +898,7 @@ fn rpc_bootstrap(
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
-                                &Some(|download_progress: &DownloadProgressRecord| {
+                                &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
                                     debug!("Download progress: {:?}", download_progress);
 
                                     if download_progress.last_throughput <  minimal_snapshot_download_speed
@@ -922,16 +922,14 @@ fn rpc_bootstrap(
                                                and try a different node. Abort count: {}, Progress detail: {:?}",
                                                download_progress.last_throughput, minimal_snapshot_download_speed,
                                                download_abort_count, download_progress);
+                                        download_abort_count += 1;
                                         false
                                     } else {
                                         true
                                     }
-                                }),
+                                })),
                             );
 
-                            if ret.is_err() {
-                                download_abort_count += 1;
-                            }
                             gossip_service.join().unwrap();
                             ret
                         })
