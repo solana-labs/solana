@@ -89,13 +89,33 @@ impl CliSignerInfo {
             .collect()
     }
 }
-
+#[derive(Debug)]
 pub struct DefaultSigner {
     pub arg_name: String,
     pub path: String,
 }
 
 impl DefaultSigner {
+    pub fn new(path: String) -> Self {
+        Self {
+            arg_name: "keypair".to_string(),
+            path,
+        }
+    }
+    pub fn from_path(path: String) -> Result<Self, Box<dyn error::Error>> {
+        std::fs::metadata(&path)
+            .map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                    "No default signer found, run \"solana-keygen new -o {}\" to create a new one",
+                    path
+                ),
+                )
+                .into()
+            })
+            .map(|_| Self::new(path))
+    }
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
@@ -257,9 +277,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
                     _ => match Pubkey::from_str(source.as_str()) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        Err(_) => std::fs::metadata(source.as_str())
-                            .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
-                            .map_err(|err| err.into()),
+                        Err(_) => Ok(SignerSource::new(SignerSourceKind::Filepath(source))),
                     },
                 }
             }
@@ -733,10 +751,6 @@ mod tests {
         // Catchall into SignerSource::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(
-            parse_signer_source(&junk),
-            Err(SignerSourceError::IoError(_))
-        ));
 
         let prompt = "prompt:".to_string();
         assert!(matches!(
