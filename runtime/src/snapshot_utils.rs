@@ -737,9 +737,7 @@ pub fn purge_old_snapshot_archives<P: AsRef<Path>>(
         maximum_snapshots_to_retain
     );
     let mut archives = get_snapshot_archives(snapshot_output_dir);
-    // Keep the oldest snapshot so we can always play the ledger from it.
-    archives.pop();
-    let max_snaps = max(1, maximum_snapshots_to_retain);
+    let max_snaps = max(1, maximum_snapshots_to_retain); // Always keep at least one snapshot
     for old_archive in archives.into_iter().skip(max_snaps) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
