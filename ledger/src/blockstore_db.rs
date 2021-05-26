@@ -357,6 +357,18 @@ impl Rocks {
         Ok(opt)
     }
 
+    fn get_padded_cf(&self, cf: &ColumnFamily, key: &[u8], size: usize) -> Result<Option<Vec<u8>>> {
+        let opt = self.0.get_cf(cf, key)?.map(|db_vec| {
+            let mut bytes = vec![0; size];
+            {
+                let (data, _padding) = bytes.split_at_mut(db_vec.len());
+                data.copy_from_slice(&db_vec[..]);
+            }
+            bytes
+        });
+        Ok(opt)
+    }
+
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
         Ok(())
@@ -845,6 +857,12 @@ where
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         self.backend.get_cf(self.handle(), &C::key(key))
+    }
+
+    // Similar to get_bytes, but will zero pad vector (if necessary) out to size bytes
+    pub fn get_padded_bytes(&self, key: C::Index, size: usize) -> Result<Option<Vec<u8>>> {
+        self.backend
+            .get_padded_cf(self.handle(), &C::key(key), size)
     }
 
     pub fn iter(

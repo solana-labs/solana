@@ -551,16 +551,7 @@ impl Blockstore {
             if index.data().is_present(i) {
                 if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
                     let some_data = data_cf
-                        .get_bytes((slot, i))
-                        .map(|data| {
-                            data.map(|mut d| {
-                                // Only data_header.size bytes stored in the blockstore so pad the
-                                // payload out to SHRED_PAYLOAD_SIZE. The zero padding is required
-                                // for erasure to work correctly
-                                d.resize(cmp::max(d.len(), crate::shred::SHRED_PAYLOAD_SIZE), 0);
-                                d
-                            })
-                        })
+                        .get_padded_bytes((slot, i), crate::shred::SHRED_PAYLOAD_SIZE)
                         .expect("Database failure, could not fetch data shred");
                     if let Some(data) = some_data {
                         Shred::new_from_serialized_shred(data).ok()
@@ -1488,16 +1479,9 @@ impl Blockstore {
     }
 
     /// Gets a shred from the blockstore with zero padding out to SHRED_PAYLOAD_SIZE bytes
-    pub fn get_data_shred_padded(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
-            data.map(|mut d| {
-                // Only data_header.size bytes stored in the blockstore so pad the
-                // payload out to SHRED_PAYLOAD_SIZE. Having the zero padding may
-                // be useful / needed, such as for erasure or duplicate detection
-                d.resize(cmp::max(d.len(), crate::shred::SHRED_PAYLOAD_SIZE), 0);
-                d
-            })
-        })
+    pub fn get_padded_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
+        self.data_shred_cf
+            .get_padded_bytes((slot, index), crate::shred::SHRED_PAYLOAD_SIZE)
     }
 
     pub fn get_data_shreds_for_slot(
@@ -2713,6 +2697,7 @@ impl Blockstore {
         let last_shred = data_shreds.last().unwrap();
         assert!(last_shred.data_complete() || last_shred.last_in_slot());
 
+        // Shreds are combined back into entry, no need for the zero padding in shreds here
         let deshred_payload = Shredder::deshred(&data_shreds).map_err(|e| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
                 "Could not reconstruct data block from constituent shreds, error: {:?}",
@@ -2869,7 +2854,7 @@ impl Blockstore {
         is_data: bool,
     ) -> Option<Vec<u8>> {
         let res = if is_data {
-            self.get_data_shred_padded(slot, index as u64)
+            self.get_padded_data_shred(slot, index as u64)
                 .expect("fetch from DuplicateSlots column family failed")
         } else {
             self.get_coding_shred(slot, index as u64)
