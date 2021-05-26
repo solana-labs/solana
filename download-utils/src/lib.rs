@@ -46,18 +46,18 @@ pub struct DownloadProgressRecord {
     pub notification_count: u64,
 }
 
+type DownloadProgressCallback<'a> = Box<dyn FnMut(&DownloadProgressRecord) -> bool + 'a>;
+type DownloadProgressCallbackOption<'a> = Option<DownloadProgressCallback<'a>>;
+
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
 /// Return "true" to continue the download
 /// Return "false" to abort the download
-pub fn download_file<F>(
+pub fn download_file<'a, 'b>(
     url: &str,
     destination_file: &Path,
     use_progress_bar: bool,
-    progress_notify_callback: &Option<F>,
-) -> Result<(), String>
-where
-    F: Fn(&DownloadProgressRecord) -> bool,
-{
+    progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
+) -> Result<(), String> {
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
     }
@@ -113,10 +113,7 @@ where
         info!("Downloading {} bytes from {}", download_size, url);
     }
 
-    struct DownloadProgress<R, F>
-    where
-        F: Fn(&DownloadProgressRecord) -> bool,
-    {
+    struct DownloadProgress<'e, 'f, R> {
         progress_bar: ProgressBar,
         response: R,
         last_print: Instant,
@@ -125,14 +122,11 @@ where
         download_size: f32,
         use_progress_bar: bool,
         start_time: Instant,
-        callback: Option<F>,
+        callback: &'f mut DownloadProgressCallbackOption<'e>,
         notification_count: u64,
     }
 
-    impl<R: Read, F> Read for DownloadProgress<R, F>
-    where
-        F: Fn(&DownloadProgressRecord) -> bool,
-    {
+    impl<'e, 'f, R: Read> Read for DownloadProgress<'e, 'f, R> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             let n = self.response.read(buf)?;
 
@@ -178,7 +172,7 @@ where
                 );
             }
 
-            if let Some(callback) = &self.callback {
+            if let Some(callback) = self.callback {
                 if to_update_progress && !callback(&progress_record) {
                     info!("Download is aborted by the caller");
                     return Err(io::Error::new(
@@ -192,7 +186,7 @@ where
         }
     }
 
-    let mut source = DownloadProgress {
+    let mut source = DownloadProgress::<'b, 'a> {
         progress_bar,
         response,
         last_print: Instant::now(),
@@ -201,7 +195,7 @@ where
         download_size: (download_size as f32).max(1f32),
         use_progress_bar,
         start_time: Instant::now(),
-        callback: progress_notify_callback.as_ref(),
+        callback: progress_notify_callback,
         notification_count: 0,
     };
 
@@ -241,7 +235,7 @@ pub fn download_genesis_if_missing(
             &format!("http://{}/{}", rpc_addr, DEFAULT_GENESIS_ARCHIVE),
             &tmp_genesis_package,
             use_progress_bar,
-            &None::<fn(&DownloadProgressRecord) -> bool>,
+            &mut None,
         )?;
 
         Ok(tmp_genesis_package)
@@ -250,17 +244,14 @@ pub fn download_genesis_if_missing(
     }
 }
 
-pub fn download_snapshot<F>(
+pub fn download_snapshot<'a, 'b>(
     rpc_addr: &SocketAddr,
     snapshot_output_dir: &Path,
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
     maximum_snapshots_to_retain: usize,
-    progress_notify_callback: &Option<F>,
-) -> Result<(), String>
-where
-    F: Fn(&DownloadProgressRecord) -> bool,
-{
+    progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
+) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(snapshot_output_dir, maximum_snapshots_to_retain);
 
     for compression in &[
@@ -290,7 +281,7 @@ where
             ),
             &desired_snapshot_package,
             use_progress_bar,
-            &progress_notify_callback,
+            progress_notify_callback,
         )
         .is_ok()
         {

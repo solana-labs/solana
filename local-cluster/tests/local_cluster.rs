@@ -17,7 +17,7 @@ use solana_core::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
-use solana_download_utils::{download_snapshot, DownloadProgressRecord};
+use solana_download_utils::download_snapshot;
 use solana_gossip::{
     cluster_info::{self, VALIDATOR_PORT_RANGE},
     crds_value::{self, CrdsData, CrdsValue},
@@ -1687,7 +1687,7 @@ fn test_snapshot_download() {
         archive_snapshot_hash,
         false,
         snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
-        &None::<fn(&DownloadProgressRecord) -> bool>,
+        &mut None,
     )
     .unwrap();
 

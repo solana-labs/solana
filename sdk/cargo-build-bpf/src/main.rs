@@ -4,7 +4,7 @@ use {
         crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
     },
     regex::Regex,
-    solana_download_utils::{download_file, DownloadProgressRecord},
+    solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
         collections::HashMap,
@@ -112,12 +112,7 @@ fn install_if_missing(
         url.push_str(version);
         url.push('/');
         url.push_str(file.to_str().unwrap());
-        download_file(
-            &url.as_str(),
-            &file,
-            true,
-            &None::<fn(&DownloadProgressRecord) -> bool>,
-        )?;
+        download_file(&url.as_str(), &file, true, &mut None)?;
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let zip = File::open(&file).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
