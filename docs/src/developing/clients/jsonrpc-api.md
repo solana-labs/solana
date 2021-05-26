@@ -836,6 +836,8 @@ The result field will be an array of JSON objects, each with the following sub f
 - `tpu: <string>` - TPU network address for the node
 - `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
 - `version: <string>|null` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <number>|null` - The unique identifier of the node's feature set
+- `shredVersion: <number>|null` - The shred version the node has been configured to use
 
 #### Example:
 
