@@ -43,6 +43,7 @@ message TransactionStatusMeta {
     repeated string log_messages = 6;
     repeated TokenBalance pre_token_balances = 7;
     repeated TokenBalance post_token_balances = 8;
+    repeated Reward rewards = 9;
 }
 
 message TransactionError {

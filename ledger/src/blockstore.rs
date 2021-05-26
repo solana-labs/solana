@@ -5985,6 +5985,7 @@ pub mod tests {
                     log_messages: Some(vec![]),
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
+                    rewards: Some(vec![]),
                 }
                 .into();
                 ledger
@@ -6000,6 +6001,7 @@ pub mod tests {
                     log_messages: Some(vec![]),
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
+                    rewards: Some(vec![]),
                 }
                 .into();
                 ledger
@@ -6015,6 +6017,7 @@ pub mod tests {
                     log_messages: Some(vec![]),
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
+                    rewards: Some(vec![]),
                 }
                 .into();
                 ledger
@@ -6032,6 +6035,7 @@ pub mod tests {
                         log_messages: Some(vec![]),
                         pre_token_balances: Some(vec![]),
                         post_token_balances: Some(vec![]),
+                        rewards: Some(vec![]),
                     }),
                 }
             })
@@ -6126,6 +6130,7 @@ pub mod tests {
             let log_messages_vec = vec![String::from("Test message\n")];
             let pre_token_balances_vec = vec![];
             let post_token_balances_vec = vec![];
+            let rewards_vec = vec![];
 
             // result not found
             assert!(transaction_status_cf
@@ -6149,6 +6154,7 @@ pub mod tests {
                 log_messages: Some(log_messages_vec.clone()),
                 pre_token_balances: Some(pre_token_balances_vec.clone()),
                 post_token_balances: Some(post_token_balances_vec.clone()),
+                rewards: Some(rewards_vec.clone()),
             }
             .into();
             assert!(transaction_status_cf
@@ -6165,6 +6171,7 @@ pub mod tests {
                 log_messages,
                 pre_token_balances,
                 post_token_balances,
+                rewards,
             } = transaction_status_cf
                 .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                     0,
@@ -6183,6 +6190,7 @@ pub mod tests {
             assert_eq!(log_messages.unwrap(), log_messages_vec);
             assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
             assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
+            assert_eq!(rewards.unwrap(), rewards_vec);
 
             // insert value
             let status = TransactionStatusMeta {
@@ -6194,6 +6202,7 @@ pub mod tests {
                 log_messages: Some(log_messages_vec.clone()),
                 pre_token_balances: Some(pre_token_balances_vec.clone()),
                 post_token_balances: Some(post_token_balances_vec.clone()),
+                rewards: Some(rewards_vec.clone()),
             }
             .into();
             assert!(transaction_status_cf
@@ -6210,6 +6219,7 @@ pub mod tests {
                 log_messages,
                 pre_token_balances,
                 post_token_balances,
+                rewards,
             } = transaction_status_cf
                 .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                     0,
@@ -6230,6 +6240,7 @@ pub mod tests {
             assert_eq!(log_messages.unwrap(), log_messages_vec);
             assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
             assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
+            assert_eq!(rewards.unwrap(), rewards_vec);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -6460,6 +6471,7 @@ pub mod tests {
                 log_messages: Some(vec![]),
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
+                rewards: Some(vec![]),
             }
             .into();
 
@@ -6661,6 +6673,7 @@ pub mod tests {
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);
                 let post_token_balances = Some(vec![]);
+                let rewards = Some(vec![]);
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -6671,6 +6684,7 @@ pub mod tests {
                     log_messages: log_messages.clone(),
                     pre_token_balances: pre_token_balances.clone(),
                     post_token_balances: post_token_balances.clone(),
+                    rewards: rewards.clone(),
                 }
                 .into();
                 blockstore
@@ -6688,6 +6702,7 @@ pub mod tests {
                         log_messages,
                         pre_token_balances,
                         post_token_balances,
+                        rewards,
                     }),
                 }
             })
@@ -6757,6 +6772,7 @@ pub mod tests {
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);
                 let post_token_balances = Some(vec![]);
+                let rewards = Some(vec![]);
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -6767,6 +6783,7 @@ pub mod tests {
                     log_messages: log_messages.clone(),
                     pre_token_balances: pre_token_balances.clone(),
                     post_token_balances: post_token_balances.clone(),
+                    rewards: rewards.clone(),
                 }
                 .into();
                 blockstore
@@ -6784,6 +6801,7 @@ pub mod tests {
                         log_messages,
                         pre_token_balances,
                         post_token_balances,
+                        rewards,
                     }),
                 }
             })
@@ -7511,6 +7529,7 @@ pub mod tests {
                     log_messages: Some(vec![]),
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
+                    rewards: Some(vec![]),
                 }
                 .into();
                 transaction_status_cf
@@ -8044,6 +8063,12 @@ pub mod tests {
                         amount: "11".to_string(),
                         ui_amount_string: "1.1".to_string(),
                     },
+                }]),
+                rewards: Some(vec![Reward {
+                    pubkey: "My11111111111111111111111111111111111111111".to_string(),
+                    lamports: -42,
+                    post_balance: 42,
+                    reward_type: Some(RewardType::Rent),
                 }]),
             };
             let deprecated_status: StoredTransactionStatusMeta = status.clone().into();

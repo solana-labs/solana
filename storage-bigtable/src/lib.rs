@@ -188,6 +188,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             log_messages: None,
             pre_token_balances: None,
             post_token_balances: None,
+            rewards: None,
         }
     }
 }

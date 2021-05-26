@@ -484,6 +484,7 @@ pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
+    pub rent_debits: Vec<RentDebits>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
@@ -3389,7 +3390,7 @@ impl Bank {
             self.fix_recent_blockhashes_sysvar_delay(),
             self.demote_sysvar_write_locks(),
         );
-        self.collect_rent(executed, loaded_accounts);
+        let rent_debits = self.collect_rent(executed, loaded_accounts);
 
         let overwritten_vote_accounts = self.update_cached_accounts(
             hashed_txs.as_transactions_iter(),
@@ -3413,6 +3414,7 @@ impl Bank {
             fee_collection_results,
             execution_results: executed.to_vec(),
             overwritten_vote_accounts,
+            rent_debits,
         }
     }
 
@@ -3575,24 +3577,24 @@ impl Bank {
         &self,
         res: &[TransactionExecutionResult],
         loaded_accounts: &mut [TransactionLoadResult],
-    ) {
+    ) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
+        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_accounts.len());
         for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter_mut().enumerate() {
             let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
+                rent_debits.push(RentDebits::default());
                 continue;
             }
 
             let loaded_transaction = raccs.as_mut().unwrap();
 
             collected_rent += loaded_transaction.rent;
-            self.rewards
-                .write()
-                .unwrap()
-                .append(&mut loaded_transaction.rent_debits.0);
+            rent_debits.push(mem::take(&mut loaded_transaction.rent_debits));
         }
 
         self.collected_rent.fetch_add(collected_rent, Relaxed);
+        rent_debits
     }
 
     fn run_incinerator(&self) {

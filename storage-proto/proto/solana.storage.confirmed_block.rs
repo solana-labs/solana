@@ -65,6 +65,8 @@ pub struct TransactionStatusMeta {
     pub pre_token_balances: ::prost::alloc::vec::Vec<TokenBalance>,
     #[prost(message, repeated, tag = "8")]
     pub post_token_balances: ::prost::alloc::vec::Vec<TokenBalance>,
+    #[prost(message, repeated, tag = "9")]
+    pub rewards: ::prost::alloc::vec::Vec<Reward>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionError {

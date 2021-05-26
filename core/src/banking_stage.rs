@@ -815,6 +815,7 @@ impl BankingStage {
                     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
                     inner_instructions,
                     transaction_logs,
+                    tx_results.rent_debits,
                 );
             }
         }

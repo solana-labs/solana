@@ -185,6 +185,8 @@ pub struct TransactionStatusMeta {
     pub pre_token_balances: Option<Vec<TransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub rewards: Option<Rewards>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -198,6 +200,7 @@ impl Default for TransactionStatusMeta {
             log_messages: None,
             pre_token_balances: None,
             post_token_balances: None,
+            rewards: None,
         }
     }
 }
@@ -215,6 +218,7 @@ pub struct UiTransactionStatusMeta {
     pub log_messages: Option<Vec<String>>,
     pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
+    pub rewards: Option<Rewards>,
 }
 
 impl UiTransactionStatusMeta {
@@ -237,6 +241,7 @@ impl UiTransactionStatusMeta {
             post_token_balances: meta
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
+            rewards: meta.rewards,
         }
     }
 }
@@ -259,6 +264,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             post_token_balances: meta
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
+            rewards: meta.rewards,
         }
     }
 }
