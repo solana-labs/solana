@@ -267,6 +267,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -290,6 +291,11 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .into_iter()
             .map(|balance| balance.into())
             .collect();
+        let rewards = rewards
+            .unwrap_or_default()
+            .into_iter()
+            .map(|reward| reward.into())
+            .collect();
 
         Self {
             err,
@@ -300,6 +306,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         }
     }
 }
@@ -324,6 +331,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -348,6 +356,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .map(|balance| balance.into())
                 .collect(),
         );
+        let rewards = Some(rewards.into_iter().map(|reward| reward.into()).collect());
         Ok(Self {
             status,
             fee,
@@ -357,6 +366,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         })
     }
 }
