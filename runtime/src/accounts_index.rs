@@ -56,7 +56,7 @@ impl IsCached for u64 {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {slot_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, slot_id: SlotId },
@@ -678,7 +678,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             let locked_removed_slot_ids = self.removed_slot_ids.lock().unwrap();
             if locked_removed_slot_ids.contains(&scan_slot_id) {
                 return Err(ScanError::SlotRemoved {
-                    slot: ancestors.max(),
+                    slot: ancestors.max_slot(),
                     slot_id: scan_slot_id,
                 });
             }
@@ -871,7 +871,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
         if was_scan_corrupted {
             Err(ScanError::SlotRemoved {
-                slot: ancestors.max(),
+                slot: ancestors.max_slot(),
                 slot_id: scan_slot_id,
             })
         } else {

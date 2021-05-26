@@ -76,8 +76,8 @@ impl Ancestors {
         self.len() == 0
     }
 
-    pub fn max(&self) -> Slot {
-        self.ancestors.max()
+    pub fn max_slot(&self) -> Slot {
+        self.ancestors.max() - 1
     }
 }
 #[cfg(test)]

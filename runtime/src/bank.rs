@@ -970,8 +970,6 @@ pub struct Bank {
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
 
-    pub skip_drop: AtomicBool,
-
     pub cluster_type: Option<ClusterType>,
 
     pub lazy_rent_collection: AtomicBool,
@@ -1192,7 +1190,6 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
             rewards: RwLock::new(vec![]),
-            skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             no_stake_rewrite: AtomicBool::new(parent.no_stake_rewrite.load(Relaxed)),
@@ -1350,7 +1347,6 @@ impl Bank {
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
-            skip_drop: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             no_stake_rewrite: new(),
@@ -5275,10 +5271,6 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if self.skip_drop.load(Relaxed) {
-            return;
-        }
-
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
@@ -5329,7 +5321,9 @@ pub(crate) mod tests {
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
+        accounts_index::{
+            AccountIndex, AccountMap, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE,
+        },
         ancestors::Ancestors,
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
@@ -11922,10 +11916,17 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
+    enum AcceptableScanResults {
+        DroppedSlotError,
+        NoFailure,
+        Both,
+    }
+
     fn test_store_scan_consistency<F: 'static>(
         accounts_db_caching_enabled: bool,
         update_f: F,
         drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
+        acceptable_scan_results: AcceptableScanResults,
     ) where
         F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
             + std::marker::Send,
@@ -11989,7 +11990,24 @@ pub(crate) mod tests {
                 if let Ok(bank_to_scan) =
                     bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                 {
-                    let accounts = bank_to_scan.get_program_accounts(&program_id).unwrap();
+                    let accounts_result = bank_to_scan.get_program_accounts(&program_id);
+                    let accounts = {
+                        match (&acceptable_scan_results, accounts_result.is_err()) {
+                            (AcceptableScanResults::DroppedSlotError, _)
+                            | (AcceptableScanResults::Both, true) => {
+                                assert_eq!(
+                                    accounts_result,
+                                    Err(ScanError::SlotRemoved {
+                                        slot: bank_to_scan.slot(),
+                                        slot_id: bank_to_scan.slot_id()
+                                    })
+                                );
+                                continue;
+                            }
+                            (AcceptableScanResults::NoFailure, _)
+                            | (AcceptableScanResults::Both, false) => accounts_result.unwrap(),
+                        }
+                    };
                     // Should never see empty accounts because no slot ever deleted
                     // any of the original accounts, and the scan should reflect the
                     // account state at some frozen slot `X` (no partial updates).
@@ -12134,6 +12152,7 @@ pub(crate) mod tests {
                 Some(Box::new(SendDroppedBankCallback::new(
                     pruned_banks_sender.clone(),
                 ))),
+                AcceptableScanResults::NoFailure,
             )
         }
     }
@@ -12178,52 +12197,98 @@ pub(crate) mod tests {
                     }
                 },
                 None,
+                AcceptableScanResults::NoFailure,
             );
         }
     }
 
+    fn setup_banks_on_fork_to_remove(
+        bank0: Arc<Bank>,
+        pubkeys_to_modify: Arc<HashSet<Pubkey>>,
+        program_id: &Pubkey,
+        starting_lamports: u64,
+    ) -> (Arc<Bank>, Vec<(Slot, SlotId)>) {
+        let mut bank_at_fork_tip = bank0;
+        let num_banks_on_fork = 100;
+        let mut slots_to_remove = Vec::with_capacity(num_banks_on_fork);
+        for _ in 0..num_banks_on_fork {
+            bank_at_fork_tip = Arc::new(Bank::new_from_parent(
+                &bank_at_fork_tip,
+                &solana_sdk::pubkey::new_rand(),
+                bank_at_fork_tip.slot() + 1,
+            ));
+            let lamports_this_round = bank_at_fork_tip.slot() + starting_lamports + 1;
+            let account = AccountSharedData::new(lamports_this_round, 0, program_id);
+            for key in pubkeys_to_modify.iter() {
+                bank_at_fork_tip.store_account(key, &account);
+            }
+            bank_at_fork_tip.freeze();
+            slots_to_remove.push((bank_at_fork_tip.slot(), bank_at_fork_tip.slot_id()));
+        }
+
+        (bank_at_fork_tip, slots_to_remove)
+    }
+
     #[test]
-    fn test_remove_unrooted_scan_consistency() {
+    fn test_remove_unrooted_scan_consistency_remove_before_scan() {
         for accounts_db_caching_enabled in &[false, true] {
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,
                 |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
                     loop {
-                        let mut bank_at_fork_tip = bank0.clone();
-                        let num_banks_on_fork = 100;
-                        let mut slots_to_remove = Vec::with_capacity(num_banks_on_fork);
-                        for _ in 0..num_banks_on_fork {
-                            bank_at_fork_tip = Arc::new(Bank::new_from_parent(
-                                &bank_at_fork_tip,
-                                &solana_sdk::pubkey::new_rand(),
-                                bank_at_fork_tip.slot() + 1,
-                            ));
-                            let lamports_this_round =
-                                bank_at_fork_tip.slot() + starting_lamports + 1;
-                            let account =
-                                AccountSharedData::new(lamports_this_round, 0, &program_id);
-                            for key in pubkeys_to_modify.iter() {
-                                bank_at_fork_tip.store_account(key, &account);
-                            }
-                            bank_at_fork_tip.freeze();
-                            slots_to_remove
-                                .push((bank_at_fork_tip.slot(), bank_at_fork_tip.slot_id()));
-                        }
-                        // Send the previous bank to the scan thread to perform the scan.
-                        //
-                        // The capacity of the channel is 1 so that this thread will wait for the scan to
-                        // finish before starting the next iteration, allowing the scan to stay in sync with
-                        // these updates such that every scan will see these slot being removed
+                        let (bank_at_fork_tip, slots_on_fork) = setup_banks_on_fork_to_remove(
+                            bank0.clone(),
+                            pubkeys_to_modify.clone(),
+                            &program_id,
+                            starting_lamports,
+                        );
+                        // Test removing the slot before the scan starts, should error every time
+                        bank_at_fork_tip.remove_unrooted_slots(&slots_on_fork);
                         if bank_to_scan_sender.send(bank_at_fork_tip.clone()).is_err() {
-                            // Channel was disconnected, exit
                             return;
                         }
-
-                        // Remove account state for all banks on the fork
-                        bank_at_fork_tip.remove_unrooted_slots(&slots_to_remove);
                     }
                 },
                 None,
+                // Test removing the slot before the scan starts, should error every time
+                AcceptableScanResults::DroppedSlotError,
+            );
+        }
+    }
+
+    #[test]
+    fn test_remove_unrooted_scan_consistency_remove_and_recreate_same_slot_before_scan() {
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                    let mut prev_bank = bank0.clone();
+                    loop {
+                        let (bank_at_fork_tip, slots_on_fork) = setup_banks_on_fork_to_remove(
+                            bank0.clone(),
+                            pubkeys_to_modify.clone(),
+                            &program_id,
+                            starting_lamports,
+                        );
+                        // Remove the fork. Then we'll recreate the slots and only after we've
+                        // recreated the slots, do we send this old bank for scanning.
+                        bank_at_fork_tip.remove_unrooted_slots(&slots_on_fork);
+                        // Skip scanning bank 0 on first iteration of loop, since those accounts
+                        // aren't being removed
+                        if prev_bank.slot() != 0
+                            // Now after we've recreated the slots removed in the previous loop
+                            // iteration, send the previous bank, should fail even though the
+                            // same slots were recreated
+                            && bank_to_scan_sender.send(prev_bank.clone()).is_err()
+                        {
+                            continue;
+                        }
+                        prev_bank = bank_at_fork_tip;
+                    }
+                },
+                None,
+                // Test removing the slot before the scan starts, should error every time
+                AcceptableScanResults::DroppedSlotError,
             );
         }
     }

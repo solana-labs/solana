@@ -3295,12 +3295,29 @@ impl AccountsDb {
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
+    /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
+    /// comment below for why
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, slot_id: SlotId, is_from_abs: bool) {
         if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
             panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
         }
-        self.purge_slots(std::iter::once(&(slot, slot_id)));
+        // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
+        // we know that there are no longer any ongoing scans on this bank, because scans require
+        // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
+        // safe to remove this slot_id from the `removed_slot_ids` list at this point.
+        if self
+            .accounts_index
+            .removed_slot_ids
+            .lock()
+            .unwrap()
+            .remove(&slot_id)
+        {
+            // If this slot was already cleaned up, no need to do any further cleans
+            return;
+        }
+
+        self.purge_slots(std::iter::once(&slot));
     }
 
     fn recycle_slot_stores(
@@ -3333,18 +3350,15 @@ impl AccountsDb {
 
     /// Purges every slot in `removed_slots` from both the cache and storage. This includes
     /// entries in the accounts index, cache entries, and any backing storage entries.
-    ///
-    /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
-    /// comment below for why
     fn purge_slots_from_cache_and_store<'a>(
         &self,
-        removed_slots: impl Iterator<Item = &'a (Slot, SlotId)>,
+        removed_slots: impl Iterator<Item = &'a Slot>,
         purge_stats: &PurgeStats,
     ) {
         let mut remove_cache_elapsed_across_slots = 0;
         let mut num_cached_slots_removed = 0;
         let mut total_removed_cached_bytes = 0;
-        for (remove_slot, remove_slot_id) in removed_slots {
+        for remove_slot in removed_slots {
             // This function is only currently safe with respect to `flush_slot_cache()` because
             // both functions run serially in AccountsBackgroundService.
             let mut remove_cache_elapsed = Measure::start("remove_cache_elapsed");
@@ -3362,19 +3376,6 @@ impl AccountsDb {
             // It should not be possible that a slot is neither in the cache or storage. Even in
             // a slot with all ticks, `Bank::new_from_parent()` immediately stores some sysvars
             // on bank creation.
-
-            // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
-            // we know that there are no longer any ongoing scans on this bank, because scans require
-            // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
-            // safe to remove this slot_id from the `removed_slot_ids` list at this point.
-            //
-            // This could be folded into handle_reclaims() -> accounts_index.clean_dead_slot(), but
-            // that requires plumbing slot id's through the regular store/clean path as well.
-            self.accounts_index
-                .removed_slot_ids
-                .lock()
-                .unwrap()
-                .remove(&remove_slot_id);
         }
 
         purge_stats
@@ -3556,7 +3557,7 @@ impl AccountsDb {
     }
 
     #[allow(clippy::needless_collect)]
-    fn purge_slots<'a>(&self, slots: impl Iterator<Item = &'a (Slot, SlotId)>) {
+    fn purge_slots<'a>(&self, slots: impl Iterator<Item = &'a Slot>) {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
         let non_roots = slots
@@ -3569,7 +3570,7 @@ impl AccountsDb {
             // Also note roots are never removed via `remove_unrooted_slot()`, so
             // it's safe to filter them out here as they won't need deletion from
             // self.accounts_index.removed_slot_ids in `purge_slots_from_cache_and_store()`.
-            .filter(|(slot, _)| !self.accounts_index.is_root(*slot));
+            .filter(|slot| !self.accounts_index.is_root(**slot));
         safety_checks_elapsed.stop();
         self.external_purge_slots_stats
             .safety_checks_elapsed
@@ -3660,7 +3661,10 @@ impl AccountsDb {
         }
 
         let remove_unrooted_purge_stats = PurgeStats::default();
-        self.purge_slots_from_cache_and_store(remove_slots.iter(), &remove_unrooted_purge_stats);
+        self.purge_slots_from_cache_and_store(
+            remove_slots.iter().map(|(slot, _)| slot),
+            &remove_unrooted_purge_stats,
+        );
         remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
 
         let mut currently_contended_slots = slots_under_contention.lock().unwrap();
