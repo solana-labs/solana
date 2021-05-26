@@ -1798,7 +1798,7 @@ impl Blockstore {
     }
 
     pub fn cache_block_height(&self, slot: Slot, block_height: u64) -> Result<()> {
-        if self.get_block_time(slot).unwrap_or_default().is_none() {
+        if self.get_block_height(slot).unwrap_or_default().is_none() {
             self.block_height_cf.put(slot, &block_height)
         } else {
             Ok(())
@@ -1883,6 +1883,7 @@ impl Blockstore {
                     .unwrap_or_default()
                     .into();
                 let block_time = self.blocktime_cf.get(slot)?;
+                let block_height = self.block_height_cf.get(slot)?;
 
                 let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
@@ -1892,6 +1893,7 @@ impl Blockstore {
                         .map_transactions_to_statuses(slot, slot_transaction_iterator),
                     rewards,
                     block_time,
+                    block_height,
                 };
                 return Ok(block);
             }
@@ -6084,6 +6086,7 @@ pub mod tests {
             previous_blockhash: Hash::default().to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(confirmed_block, expected_block);
 
@@ -6097,6 +6100,7 @@ pub mod tests {
             previous_blockhash: blockhash.to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(confirmed_block, expected_block);
 
@@ -6113,13 +6117,17 @@ pub mod tests {
             previous_blockhash: blockhash.to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(complete_block, expected_complete_block);
 
-        // Test block_time returns, if available
+        // Test block_time & block_height return, if available
         let timestamp = 1_576_183_541;
         ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
         expected_block.block_time = Some(timestamp);
+        let block_height = slot - 2;
+        ledger.block_height_cf.put(slot + 1, &block_height).unwrap();
+        expected_block.block_height = Some(block_height);
 
         let confirmed_block = ledger.get_rooted_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block, expected_block);
@@ -6127,6 +6135,9 @@ pub mod tests {
         let timestamp = 1_576_183_542;
         ledger.blocktime_cf.put(slot + 2, &timestamp).unwrap();
         expected_complete_block.block_time = Some(timestamp);
+        let block_height = slot - 1;
+        ledger.block_height_cf.put(slot + 2, &block_height).unwrap();
+        expected_complete_block.block_height = Some(block_height);
 
         let complete_block = ledger.get_complete_block(slot + 2, true).unwrap();
         assert_eq!(complete_block, expected_complete_block);
