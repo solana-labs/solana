@@ -198,7 +198,7 @@ function ClusterToggle() {
           >
             {`${clusterName(net)}: `}
             <span className="text-muted d-inline-block">
-              {clusterUrl(net, customUrl)}
+              {clusterUrl(net, customUrl).replace("explorer-", "")}
             </span>
           </Link>
         );
