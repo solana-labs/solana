@@ -7,7 +7,7 @@ use solana_ledger::{
 use solana_runtime::bank::{
     Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
 };
-use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
+use solana_transaction_status::{InnerInstructions, Reward, TransactionStatusMeta};
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -62,6 +62,7 @@ impl TransactionStatusService {
                 token_balances,
                 inner_instructions,
                 transaction_logs,
+                rent_debits,
             }) => {
                 let slot = bank.slot();
                 let inner_instructions_iter: Box<
@@ -86,6 +87,7 @@ impl TransactionStatusService {
                     post_token_balances,
                     inner_instructions,
                     log_messages,
+                    rent_debits,
                 ) in izip!(
                     &transactions,
                     statuses,
@@ -94,7 +96,8 @@ impl TransactionStatusService {
                     token_balances.pre_token_balances,
                     token_balances.post_token_balances,
                     inner_instructions_iter,
-                    transaction_logs_iter
+                    transaction_logs_iter,
+                    rent_debits.into_iter(),
                 ) {
                     if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                         let fee_calculator = nonce_rollback
@@ -123,6 +126,18 @@ impl TransactionStatusService {
                         let log_messages = Some(log_messages);
                         let pre_token_balances = Some(pre_token_balances);
                         let post_token_balances = Some(post_token_balances);
+                        let rewards = Some(
+                            rent_debits
+                                .0
+                                .into_iter()
+                                .map(|(pubkey, reward_info)| Reward {
+                                    pubkey: pubkey.to_string(),
+                                    lamports: reward_info.lamports,
+                                    post_balance: reward_info.post_balance,
+                                    reward_type: Some(reward_info.reward_type),
+                                })
+                                .collect(),
+                        );
 
                         blockstore
                             .write_transaction_status(
@@ -139,6 +154,7 @@ impl TransactionStatusService {
                                     log_messages,
                                     pre_token_balances,
                                     post_token_balances,
+                                    rewards,
                                 },
                             )
                             .expect("Expect database write to succeed");

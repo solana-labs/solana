@@ -100,14 +100,13 @@ pub type TransactionAccounts = Vec<AccountSharedData>;
 pub type TransactionAccountDeps = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData)>>;
-pub type TransactionRentDebits = RentDebits;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
     pub account_deps: TransactionAccountDeps,
     pub loaders: TransactionLoaders,
     pub rent: TransactionRent,
-    pub rent_debits: TransactionRentDebits,
+    pub rent_debits: RentDebits,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);

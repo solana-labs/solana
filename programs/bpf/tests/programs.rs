@@ -397,6 +397,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                 post_token_balances: Some(post_token_balances),
                 inner_instructions,
                 log_messages: Some(log_messages),
+                rewards: None,
             };
 
             ConfirmedTransaction {

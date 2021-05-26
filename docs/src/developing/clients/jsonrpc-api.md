@@ -2803,6 +2803,12 @@ Returns transaction details for a confirmed transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
+    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+      - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+      - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+      - `postBalance: <u64>` - account balance in lamports after the reward was applied
+      - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
+
 
 #### Example:
 Request:
