@@ -394,6 +394,7 @@ The result field will be an object with the following fields:
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
+  - `blockHeight: <u64 | null>` - the number of blocks beneath this block
 
 #### Example:
 
@@ -409,6 +410,7 @@ Result:
 {
   "jsonrpc": "2.0",
   "result": {
+    "blockHeight": 428,
     "blockTime": null,
     "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
     "parentSlot": 429,
@@ -492,6 +494,7 @@ Result:
 {
   "jsonrpc": "2.0",
   "result": {
+    "blockHeight": 428,
     "blockTime": null,
     "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
     "parentSlot": 429,
