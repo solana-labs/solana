@@ -426,6 +426,20 @@ impl RpcClient {
         )
     }
 
+    pub fn get_block_height(&self) -> ClientResult<u64> {
+        self.get_block_height_with_commitment(self.commitment_config)
+    }
+
+    pub fn get_block_height_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
+        self.send(
+            RpcRequest::GetBlockHeight,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        )
+    }
+
     pub fn get_slot_leaders(&self, start_slot: Slot, limit: u64) -> ClientResult<Vec<Pubkey>> {
         self.send(RpcRequest::GetSlotLeaders, json!([start_slot, limit]))
             .and_then(|slot_leaders: Vec<String>| {
@@ -1230,12 +1244,26 @@ impl RpcClient {
                     blockhash,
                     fee_calculator,
                     last_valid_slot,
+                    ..
                 },
         }) = self
             .send::<Response<RpcFees>>(
                 RpcRequest::GetFees,
                 json!([self.maybe_map_commitment(commitment_config)?]),
             ) {
+            (context, blockhash, fee_calculator, last_valid_slot)
+        } else if let Ok(Response {
+            context,
+            value:
+                DeprecatedRpcFees {
+                    blockhash,
+                    fee_calculator,
+                    last_valid_slot,
+                },
+        }) = self.send::<Response<DeprecatedRpcFees>>(
+            RpcRequest::GetFees,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        ) {
             (context, blockhash, fee_calculator, last_valid_slot)
         } else if let Ok(Response {
             context,

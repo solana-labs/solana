@@ -545,12 +545,16 @@ impl JsonRpcRequestProcessor {
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
             .expect("bank blockhash queue should contain blockhash");
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
         new_response(
             &bank,
             RpcFees {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
                 last_valid_slot,
+                last_valid_block_height,
             },
         )
     }
@@ -604,6 +608,10 @@ impl JsonRpcRequestProcessor {
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Slot {
         self.bank(commitment).slot()
+    }
+
+    fn get_block_height(&self, commitment: Option<CommitmentConfig>) -> u64 {
+        self.bank(commitment).block_height()
     }
 
     fn get_max_retransmit_slot(&self) -> Slot {
@@ -2094,6 +2102,13 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<Slot>;
 
+        #[rpc(meta, name = "getBlockHeight")]
+        fn get_block_height(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64>;
+
         #[rpc(meta, name = "getSnapshotSlot")]
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
@@ -2180,6 +2195,15 @@ pub mod rpc_minimal {
         ) -> Result<Slot> {
             debug!("get_slot rpc request received");
             Ok(meta.get_slot(commitment))
+        }
+
+        fn get_block_height(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64> {
+            debug!("get_block_height rpc request received");
+            Ok(meta.get_block_height(commitment))
         }
 
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
@@ -5215,6 +5239,7 @@ pub mod tests {
                     "lamportsPerSignature": 0,
                 },
                 "lastValidSlot": MAX_RECENT_BLOCKHASHES,
+                "lastValidBlockHeight": MAX_RECENT_BLOCKHASHES,
             }},
             "id": 1
         });

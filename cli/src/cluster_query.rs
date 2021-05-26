@@ -1093,8 +1093,8 @@ pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessR
 }
 
 pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
-    Ok(epoch_info.block_height.to_string())
+    let block_height = rpc_client.get_block_height()?;
+    Ok(block_height.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
