@@ -960,6 +960,8 @@ impl JsonRpcRequestProcessor {
                     }));
                 }
             }
+        } else {
+            return Err(RpcCustomError::TransactionHistoryNotAvailable.into());
         }
         Err(RpcCustomError::BlockNotAvailable { slot }.into())
     }
@@ -1180,6 +1182,10 @@ impl JsonRpcRequestProcessor {
             .unwrap_or(false);
         let bank = self.bank(Some(CommitmentConfig::processed()));
 
+        if search_transaction_history && !self.config.enable_rpc_transaction_history {
+            return Err(RpcCustomError::TransactionHistoryNotAvailable.into());
+        }
+
         for signature in signatures {
             let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
                 Some(status)
@@ -1315,6 +1321,8 @@ impl JsonRpcRequestProcessor {
                     }
                 }
             }
+        } else {
+            return Err(RpcCustomError::TransactionHistoryNotAvailable.into());
         }
         Ok(None)
     }
@@ -1417,7 +1425,7 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect())
         } else {
-            Ok(vec![])
+            Err(RpcCustomError::TransactionHistoryNotAvailable.into())
         }
     }
 
@@ -5187,7 +5195,7 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler {
             io,
-            meta,
+            mut meta,
             blockhash,
             alice,
             confirmed_block_signatures,
@@ -5226,7 +5234,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             confirmed_block_signatures[1]
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let expected_res: transaction::Result<()> = Err(TransactionError::InstructionError(
             0,
             InstructionError::Custom(1),
@@ -5236,6 +5244,20 @@ pub mod tests {
             serde_json::from_value(json["result"]["value"][0].clone())
                 .expect("actual response deserialization");
         assert_eq!(expected_res, result.as_ref().unwrap().status);
+
+        // disable rpc-tx-history, but attempt historical query
+        meta.config.enable_rpc_transaction_history = false;
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"], {{"searchTransactionHistory": true}}]}}"#,
+            confirmed_block_signatures[1]
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"Transaction history is not available from this node"},"id":1}"#.to_string(),
+            )
+        );
     }
 
     #[test]
@@ -5812,7 +5834,7 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler {
             io,
-            meta,
+            mut meta,
             confirmed_block_signatures,
             blockhash,
             ..
@@ -5863,8 +5885,13 @@ pub mod tests {
             }
         }
 
+<<<<<<< HEAD
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,"binary"]}"#;
         let res = io.handle_request_sync(&req, meta);
+=======
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,"binary"]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+>>>>>>> 6abe08974 (Add custom error for tx-history queries when node does not support (#17494))
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_block: Option<EncodedConfirmedBlock> =
@@ -5905,6 +5932,17 @@ pub mod tests {
                 }
             }
         }
+
+        // disable rpc-tx-history
+        meta.config.enable_rpc_transaction_history = false;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0]}"#;
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"Transaction history is not available from this node"},"id":1}"#.to_string(),
+            )
+        );
     }
 
     #[test]
