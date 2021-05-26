@@ -545,12 +545,16 @@ impl JsonRpcRequestProcessor {
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
             .expect("bank blockhash queue should contain blockhash");
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
         new_response(
             &bank,
             RpcFees {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
                 last_valid_slot,
+                last_valid_block_height,
             },
         )
     }
@@ -5215,6 +5219,7 @@ pub mod tests {
                     "lamportsPerSignature": 0,
                 },
                 "lastValidSlot": MAX_RECENT_BLOCKHASHES,
+                "lastValidBlockHeight": MAX_RECENT_BLOCKHASHES,
             }},
             "id": 1
         });

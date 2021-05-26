@@ -1230,12 +1230,26 @@ impl RpcClient {
                     blockhash,
                     fee_calculator,
                     last_valid_slot,
+                    ..
                 },
         }) = self
             .send::<Response<RpcFees>>(
                 RpcRequest::GetFees,
                 json!([self.maybe_map_commitment(commitment_config)?]),
             ) {
+            (context, blockhash, fee_calculator, last_valid_slot)
+        } else if let Ok(Response {
+            context,
+            value:
+                DeprecatedRpcFees {
+                    blockhash,
+                    fee_calculator,
+                    last_valid_slot,
+                },
+        }) = self.send::<Response<DeprecatedRpcFees>>(
+            RpcRequest::GetFees,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        ) {
             (context, blockhash, fee_calculator, last_valid_slot)
         } else if let Ok(Response {
             context,
