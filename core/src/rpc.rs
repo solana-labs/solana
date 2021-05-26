@@ -958,7 +958,8 @@ impl JsonRpcRequestProcessor {
                             || confirmed_block.block_height.is_none()
                         {
                             let r_bank_forks = self.bank_forks.read().unwrap();
-                            if let Some(bank) = r_bank_forks.get(slot) {
+                            let bank = r_bank_forks.get(slot).cloned();
+                            if let Some(bank) = bank {
                                 if confirmed_block.block_time.is_none() {
                                     confirmed_block.block_time = Some(bank.clock().unix_timestamp);
                                 }

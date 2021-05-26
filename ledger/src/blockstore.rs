@@ -1776,11 +1776,7 @@ impl Blockstore {
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
-        if self.get_block_time(slot).unwrap_or_default().is_none() {
-            self.blocktime_cf.put(slot, &timestamp)
-        } else {
-            Ok(())
-        }
+        self.blocktime_cf.put(slot, &timestamp)
     }
 
     pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
@@ -1798,11 +1794,7 @@ impl Blockstore {
     }
 
     pub fn cache_block_height(&self, slot: Slot, block_height: u64) -> Result<()> {
-        if self.get_block_height(slot).unwrap_or_default().is_none() {
-            self.block_height_cf.put(slot, &block_height)
-        } else {
-            Ok(())
-        }
+        self.block_height_cf.put(slot, &block_height)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
@@ -1882,6 +1874,10 @@ impl Blockstore {
                     .get_protobuf_or_bincode::<StoredExtendedRewards>(slot)?
                     .unwrap_or_default()
                     .into();
+
+                // The Blocktime and BlockHeight column families are updated asynchronously; they
+                // may not be written by the time the complete slot entries are available. In this
+                // case, these fields will be `None`.
                 let block_time = self.blocktime_cf.get(slot)?;
                 let block_height = self.block_height_cf.get(slot)?;
 
