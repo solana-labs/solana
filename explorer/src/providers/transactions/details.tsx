@@ -3,7 +3,7 @@ import {
   Connection,
   TransactionSignature,
   ParsedConfirmedTransaction,
-  ConfirmedTransaction,
+  Transaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
@@ -12,7 +12,7 @@ import { reportError } from "utils/sentry";
 
 export interface Details {
   transaction?: ParsedConfirmedTransaction | null;
-  raw?: ConfirmedTransaction | null;
+  raw?: Transaction | null;
 }
 
 type State = Cache.State<Details>;
@@ -128,17 +128,23 @@ async function fetchRawTransaction(
   url: string
 ) {
   let fetchStatus;
-  let transaction;
   try {
-    transaction = await new Connection(url).getConfirmedTransaction(signature);
+    const response = await new Connection(url).getTransaction(signature);
     fetchStatus = FetchStatus.Fetched;
+
+    let data: Details = { raw: null };
+    if (response !== null) {
+      const { message, signatures } = response.transaction;
+      data = {
+        raw: Transaction.populate(message, signatures),
+      };
+    }
+
     dispatch({
       type: ActionType.Update,
       status: fetchStatus,
       key: signature,
-      data: {
-        raw: transaction,
-      },
+      data,
       url,
     });
   } catch (error) {

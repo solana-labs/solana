@@ -38,10 +38,12 @@ export function InstructionCard({
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
   const signature = useContext(SignatureContext);
   const details = useTransactionDetails(signature);
+
   let raw: TransactionInstruction | undefined = undefined;
   if (details && childIndex === undefined) {
-    raw = details?.data?.raw?.transaction.instructions[index];
+    raw = details?.data?.raw?.instructions[index];
   }
+
   const fetchRaw = useFetchRawTransaction();
   const fetchRawTrigger = () => fetchRaw(signature);
 

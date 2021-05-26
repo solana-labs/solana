@@ -1,5 +1,5 @@
 import React from "react";
-import { ConfirmedBlock, PublicKey } from "@solana/web3.js";
+import { BlockResponse, PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 
 type AccountStats = {
@@ -9,18 +9,19 @@ type AccountStats = {
 
 const PAGE_SIZE = 25;
 
-export function BlockAccountsCard({ block }: { block: ConfirmedBlock }) {
+export function BlockAccountsCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(10);
   const totalTransactions = block.transactions.length;
 
   const accountStats = React.useMemo(() => {
     const statsMap = new Map<string, AccountStats>();
     block.transactions.forEach((tx) => {
+      const message = tx.transaction.message;
       const txSet = new Map<string, boolean>();
-      tx.transaction.instructions.forEach((ix) => {
-        ix.keys.forEach((key) => {
-          const address = key.pubkey.toBase58();
-          txSet.set(address, key.isWritable);
+      message.instructions.forEach((ix) => {
+        ix.accounts.forEach((index) => {
+          const address = message.accountKeys[index].toBase58();
+          txSet.set(address, message.isAccountWritable(index));
         });
       });
 

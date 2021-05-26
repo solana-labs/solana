@@ -7,7 +7,6 @@ import {
   PartiallyDecodedInstruction,
   PublicKey,
   SignatureResult,
-  Transaction,
   TransactionSignature,
 } from "@solana/web3.js";
 import { BpfLoaderDetailsCard } from "components/instruction/bpf-loader/BpfLoaderDetailsCard";
@@ -59,8 +58,6 @@ export function InstructionsSection({ signature }: SignatureProps) {
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
 
-  const raw = details.data.raw?.transaction;
-
   const { transaction } = details.data.transaction;
   const { meta } = details.data.transaction;
 
@@ -106,7 +103,6 @@ export function InstructionsSection({ signature }: SignatureProps) {
             signature,
             tx: transaction,
             childIndex,
-            raw,
           });
 
           innerCards.push(res);
@@ -120,7 +116,6 @@ export function InstructionsSection({ signature }: SignatureProps) {
         signature,
         tx: transaction,
         innerCards,
-        raw,
       });
     }
   );
@@ -147,7 +142,6 @@ function renderInstructionCard({
   signature,
   innerCards,
   childIndex,
-  raw,
 }: {
   ix: ParsedInstruction | PartiallyDecodedInstruction;
   tx: ParsedTransaction;
@@ -156,7 +150,6 @@ function renderInstructionCard({
   signature: TransactionSignature;
   innerCards?: JSX.Element[];
   childIndex?: number;
-  raw?: Transaction;
 }) {
   const key = `${index}-${childIndex}`;
 
