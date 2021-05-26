@@ -98,6 +98,27 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RentDebits(pub Vec<(Pubkey, RewardInfo)>);
+
+impl RentDebits {
+    pub fn push(&mut self, account: &Pubkey, rent: u64, post_balance: u64) {
+        if rent != 0 {
+            let rent_debit = i64::try_from(rent).ok().and_then(|r| r.checked_neg());
+            if let Some(rent_debit) = rent_debit {
+                let reward_info = RewardInfo {
+                    reward_type: RewardType::Rent,
+                    lamports: rent_debit,
+                    post_balance,
+                };
+                self.0.push((*account, reward_info));
+            } else {
+                warn!("out of range rent debit from {}: {}", account, rent);
+            }
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct ExecuteTimings {
     pub check_us: u64,
@@ -3420,18 +3441,22 @@ impl Bank {
     fn collect_rent(
         &self,
         res: &[TransactionExecutionResult],
-        loaded_accounts: &[TransactionLoadResult],
+        loaded_accounts: &mut [TransactionLoadResult],
     ) {
         let mut collected_rent: u64 = 0;
-        for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter().enumerate() {
+        for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter_mut().enumerate() {
             let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;
             }
 
-            let loaded_transaction = raccs.as_ref().unwrap();
+            let loaded_transaction = raccs.as_mut().unwrap();
 
             collected_rent += loaded_transaction.rent;
+            self.rewards
+                .write()
+                .unwrap()
+                .append(&mut loaded_transaction.rent_debits.0);
         }
 
         self.collected_rent.fetch_add(collected_rent, Relaxed);
@@ -3501,16 +3526,20 @@ impl Bank {
         let account_count = accounts.len();
 
         // parallelize?
-        let mut rent = 0;
+        let mut total_rent = 0;
+        let mut rent_debits = RentDebits::default();
         for (pubkey, mut account) in accounts {
-            rent += self
+            let rent = self
                 .rent_collector
                 .collect_from_existing_account(&pubkey, &mut account);
+            total_rent += rent;
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
+            rent_debits.push(&pubkey, rent, account.lamports());
         }
-        self.collected_rent.fetch_add(rent, Relaxed);
+        self.collected_rent.fetch_add(total_rent, Relaxed);
+        self.rewards.write().unwrap().append(&mut rent_debits.0);
 
         datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
@@ -5909,13 +5938,17 @@ pub(crate) mod tests {
                 .unwrap()
                 .iter()
                 .map(|(address, reward)| {
-                    assert_eq!(reward.reward_type, RewardType::Rent);
-                    if *address == validator_2_pubkey {
-                        assert_eq!(reward.post_balance, validator_2_portion + 42 - tweak_2);
-                    } else if *address == validator_3_pubkey {
-                        assert_eq!(reward.post_balance, validator_3_portion + 42);
+                    if reward.lamports > 0 {
+                        assert_eq!(reward.reward_type, RewardType::Rent);
+                        if *address == validator_2_pubkey {
+                            assert_eq!(reward.post_balance, validator_2_portion + 42 - tweak_2);
+                        } else if *address == validator_3_pubkey {
+                            assert_eq!(reward.post_balance, validator_3_portion + 42);
+                        }
+                        reward.lamports as u64
+                    } else {
+                        0
                     }
-                    reward.lamports as u64
                 })
                 .sum::<u64>()
         );
@@ -12464,5 +12497,26 @@ pub(crate) mod tests {
                 InstructionError::ReadonlyDataModified
             ))
         );
+    }
+
+    #[test]
+    fn test_rent_debits() {
+        let mut rent_debits = RentDebits::default();
+
+        // No entry for 0 rewards
+        rent_debits.push(&Pubkey::default(), 0, 0);
+        assert_eq!(rent_debits.0.len(), 0);
+
+        // Doesn't fit an `i64`, no entry. (we'll die elsewhere)
+        rent_debits.push(&Pubkey::default(), u64::MAX, 0);
+        assert_eq!(rent_debits.0.len(), 0);
+
+        // Since we're casting from `u64` the `i64::checked_neg()` is infallible
+
+        // Some that actually work
+        rent_debits.push(&Pubkey::default(), 1, 0);
+        assert_eq!(rent_debits.0.len(), 1);
+        rent_debits.push(&Pubkey::default(), i64::MAX as u64, 0);
+        assert_eq!(rent_debits.0.len(), 2);
     }
 }

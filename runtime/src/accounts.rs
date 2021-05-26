@@ -2,7 +2,8 @@ use crate::{
     accounts_db::{AccountsDb, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
     accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
     bank::{
-        NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
+        NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
+        TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
     rent_collector::RentCollector,
@@ -96,12 +97,14 @@ pub type TransactionAccounts = Vec<AccountSharedData>;
 pub type TransactionAccountDeps = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData)>>;
+pub type TransactionRentDebits = RentDebits;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
     pub account_deps: TransactionAccountDeps,
     pub loaders: TransactionLoaders,
     pub rent: TransactionRent,
+    pub rent_debits: TransactionRentDebits,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);
@@ -202,6 +205,7 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let demote_sysvar_write_locks =
                 feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
+            let mut rent_debits = RentDebits::default();
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -254,6 +258,8 @@ impl Accounts {
                         }
 
                         tx_rent += rent;
+                        rent_debits.push(key, rent, account.lamports);
+
                         account
                     }
                 } else {
@@ -313,6 +319,7 @@ impl Accounts {
                             account_deps,
                             loaders,
                             rent: tx_rent,
+                            rent_debits,
                         })
                     }
                 }
@@ -970,8 +977,11 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == INITIAL_RENT_EPOCH {
-                        loaded_transaction.rent +=
-                            rent_collector.collect_from_created_account(&key, account);
+                        let rent = rent_collector.collect_from_created_account(&key, account);
+                        loaded_transaction.rent += rent;
+                        loaded_transaction
+                            .rent_debits
+                            .push(key, rent, account.lamports);
                     }
                     accounts.push((key, &*account));
                 }
@@ -1943,6 +1953,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders0,
                 rent: transaction_rent0,
+                rent_debits: RentDebits::default(),
             }),
             None,
         );
@@ -1956,6 +1967,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders1,
                 rent: transaction_rent1,
+                rent_debits: RentDebits::default(),
             }),
             None,
         );
@@ -2338,6 +2350,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
+                rent_debits: RentDebits::default(),
             }),
             nonce_rollback,
         );
@@ -2453,6 +2466,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
+                rent_debits: RentDebits::default(),
             }),
             nonce_rollback,
         );
