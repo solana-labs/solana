@@ -4304,6 +4304,7 @@ impl AccountsDb {
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
+        let sort_time = AtomicU64::new(0);
         stats.num_snapshot_storage = storage.len();
         let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
             storage,
@@ -4337,11 +4338,19 @@ impl AccountsDb {
                     accum.extend(vec![Vec::new(); bins]);
                 }
                 accum[pubkey_to_bin_index].push(source_item);
-            },
-            Self::sort_and_simplify,
+            }, |input|
+            {
+                let mut m = Measure::start("");
+            let result = Self::sort_and_simplify(input);
+            m.stop();
+            sort_time.fetch_add(m.as_us(), Ordering::Relaxed);
+            result
+            }
         );
         time.stop();
         stats.scan_time_total_us += time.as_us();
+        let st = sort_time.load(Ordering::Relaxed);
+        error!("hash_total, sort_and_smplify: {}, diff: {}", st, stats.scan_time_total_us);
         result
     }
 
