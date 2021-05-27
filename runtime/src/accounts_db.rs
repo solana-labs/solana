@@ -21,7 +21,10 @@
 use crate::{
     accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-    accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
+    accounts_hash::{
+        AccountsHash, CalculateHashIntermediate, CalculateHashIntermediate2, HashStats,
+        PreviousPass,
+    },
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
@@ -4133,6 +4136,7 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = account_info.lamports;
+                
                                             if check_hash {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
@@ -4207,13 +4211,16 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, B>(
+    fn scan_account_storage_no_bank<F, F2, B, C>(
         snapshot_storages: &SortedStorages,
         scan_func: F,
-    ) -> Vec<B>
+        after_func: F2,
+    ) -> Vec<C>
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        F2: Fn(B) -> C + Send + Sync,
         B: Send + Default,
+        C: Send + Default,
     {
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -4237,7 +4244,7 @@ impl AccountsDb {
                         }
                     }
                 }
-                retval
+                after_func(retval)
             })
             .collect()
     }
@@ -4292,13 +4299,13 @@ impl AccountsDb {
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
-    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+    ) -> Vec<Vec<Vec<CalculateHashIntermediate2>>> {
         let max_plus_1 = std::u8::MAX as usize + 1;
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.len();
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
             storage,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
@@ -4331,12 +4338,45 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
+            Self::sort_and_simplify,
         );
         time.stop();
         stats.scan_time_total_us += time.as_us();
         result
     }
 
+    fn sort_and_simplify(
+        accum: Vec<Vec<CalculateHashIntermediate>>,
+    ) -> Vec<Vec<CalculateHashIntermediate2>> {
+        accum
+            .into_iter()
+            .map(|mut items| {
+                items.par_sort_unstable_by(AccountsHash::compare_two_hash_entries);
+                let mut result = Vec::with_capacity(items.len());
+                if !items.is_empty() {
+                    for i in 0..items.len() {
+                        let item = &items[i];
+                        let new_item = CalculateHashIntermediate2::new(
+                            item.hash,
+                            item.lamports,
+                            item.pubkey,
+                        );
+                        if i > 0 && items[i - 1].pubkey == item.pubkey {
+                            let len = result.len();
+                            // pubkey found a second time in this batch of slots, so only take the last one - most recent slot or most recent write version
+                            result[len - 1] = new_item;
+
+                        }
+                        else {
+                            result.push(new_item);
+                        }
+                    }
+                }
+                result
+            })
+            .collect()
+    }
+    
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -4386,6 +4426,7 @@ impl AccountsDb {
                     &mut stats,
                     pass == num_scan_passes - 1,
                     previous_pass,
+                    &bounds,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
@@ -5646,28 +5687,24 @@ pub mod tests {
                 version: 0,
                 hash: Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
                 lamports: 1,
-                slot: SLOT,
                 pubkey: pubkey0,
             },
             CalculateHashIntermediate {
                 version: 1,
                 hash: Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
                 lamports: 128,
-                slot: SLOT,
                 pubkey: pubkey127,
             },
             CalculateHashIntermediate {
                 version: 2,
                 hash: Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
                 lamports: 129,
-                slot: SLOT,
                 pubkey: pubkey128,
             },
             CalculateHashIntermediate {
                 version: 3,
                 hash: Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
                 lamports: 256,
-                slot: SLOT,
                 pubkey: pubkey255,
             },
         ];
@@ -5982,6 +6019,7 @@ pub mod tests {
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
+            |a| a,
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
