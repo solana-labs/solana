@@ -159,6 +159,7 @@ impl From<u64> for ProgramError {
             ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
             MAX_SEED_LENGTH_EXCEEDED => ProgramError::MaxSeedLengthExceeded,
             INVALID_SEEDS => ProgramError::InvalidSeeds,
+            ACCOUNT_NOT_RENT_EXEMPT => ProgramError::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => ProgramError::UnsupportedSysvar,
             CUSTOM_ZERO => ProgramError::Custom(0),
             _ => ProgramError::Custom(error as u32),
@@ -184,6 +185,7 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::NotEnoughAccountKeys => Ok(Self::NotEnoughAccountKeys),
             Self::Error::AccountBorrowFailed => Ok(Self::AccountBorrowFailed),
             Self::Error::MaxSeedLengthExceeded => Ok(Self::MaxSeedLengthExceeded),
+            Self::Error::InvalidSeeds => Ok(Self::InvalidSeeds),
             Self::Error::BorshIoError(err) => Ok(Self::BorshIoError(err)),
             Self::Error::AccountNotRentExempt => Ok(Self::AccountNotRentExempt),
             Self::Error::UnsupportedSysvar => Ok(Self::UnsupportedSysvar),
@@ -213,6 +215,7 @@ where
             ACCOUNT_BORROW_FAILED => InstructionError::AccountBorrowFailed,
             MAX_SEED_LENGTH_EXCEEDED => InstructionError::MaxSeedLengthExceeded,
             INVALID_SEEDS => InstructionError::InvalidSeeds,
+            ACCOUNT_NOT_RENT_EXEMPT => InstructionError::AccountNotRentExempt,
             UNSUPPORTED_SYSVAR => InstructionError::UnsupportedSysvar,
             _ => {
                 // A valid custom error has no bits set in the upper 32
