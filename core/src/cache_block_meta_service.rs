@@ -1,4 +1,4 @@
-pub use solana_ledger::blockstore_processor::CacheBlockTimeSender;
+pub use solana_ledger::blockstore_processor::CacheBlockMetaSender;
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
     solana_ledger::blockstore::Blockstore,
@@ -14,18 +14,18 @@ use {
     },
 };
 
-pub type CacheBlockTimeReceiver = Receiver<Arc<Bank>>;
+pub type CacheBlockMetaReceiver = Receiver<Arc<Bank>>;
 
-pub struct CacheBlockTimeService {
+pub struct CacheBlockMetaService {
     thread_hdl: JoinHandle<()>,
 }
 
 const CACHE_BLOCK_TIME_WARNING_MS: u64 = 150;
 
-impl CacheBlockTimeService {
+impl CacheBlockMetaService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        cache_block_time_receiver: CacheBlockTimeReceiver,
+        cache_block_meta_receiver: CacheBlockMetaReceiver,
         blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -36,19 +36,19 @@ impl CacheBlockTimeService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                let recv_result = cache_block_time_receiver.recv_timeout(Duration::from_secs(1));
+                let recv_result = cache_block_meta_receiver.recv_timeout(Duration::from_secs(1));
                 match recv_result {
                     Err(RecvTimeoutError::Disconnected) => {
                         break;
                     }
                     Ok(bank) => {
-                        let mut cache_block_time_timer = Measure::start("cache_block_time_timer");
-                        Self::cache_block_time(bank, &blockstore);
-                        cache_block_time_timer.stop();
-                        if cache_block_time_timer.as_ms() > CACHE_BLOCK_TIME_WARNING_MS {
+                        let mut cache_block_meta_timer = Measure::start("cache_block_meta_timer");
+                        Self::cache_block_meta(bank, &blockstore);
+                        cache_block_meta_timer.stop();
+                        if cache_block_meta_timer.as_ms() > CACHE_BLOCK_TIME_WARNING_MS {
                             warn!(
-                                "cache_block_time operation took: {}ms",
-                                cache_block_time_timer.as_ms()
+                                "cache_block_meta operation took: {}ms",
+                                cache_block_meta_timer.as_ms()
                             );
                         }
                     }
@@ -59,9 +59,12 @@ impl CacheBlockTimeService {
         Self { thread_hdl }
     }
 
-    fn cache_block_time(bank: Arc<Bank>, blockstore: &Arc<Blockstore>) {
+    fn cache_block_meta(bank: Arc<Bank>, blockstore: &Arc<Blockstore>) {
         if let Err(e) = blockstore.cache_block_time(bank.slot(), bank.clock().unix_timestamp) {
             error!("cache_block_time failed: slot {:?} {:?}", bank.slot(), e);
+        }
+        if let Err(e) = blockstore.cache_block_height(bank.slot(), bank.block_height()) {
+            error!("cache_block_height failed: slot {:?} {:?}", bank.slot(), e);
         }
     }
 

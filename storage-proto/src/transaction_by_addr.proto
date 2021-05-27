@@ -30,7 +30,7 @@ enum TransactionErrorType {
     PROGRAM_ACCOUNT_NOT_FOUND = 3;
     INSUFFICIENT_FUNDS_FOR_FEE = 4;
     INVALID_ACCOUNT_FOR_FEE = 5;
-    DUPLICATE_SIGNATURE = 6;
+    ALREADY_PROCESSED = 6;
     BLOCKHASH_NOT_FOUND = 7;
     INSTRUCTION_ERROR = 8;
     CALL_CHAIN_TOO_DEEP = 9;
@@ -40,6 +40,7 @@ enum TransactionErrorType {
     INVALID_PROGRAM_FOR_EXECUTION = 13;
     SANITIZE_FAILURE = 14;
     CLUSTER_MAINTENANCE = 15;
+    ACCOUNT_BORROW_OUTSTANDING_TX = 16;
 }
 
 message InstructionError {
@@ -97,6 +98,7 @@ enum InstructionErrorType {
     ACCOUNT_NOT_RENT_EXEMPT = 45;
     INVALID_ACCOUNT_OWNER = 46;
     ARITHMETIC_OVERFLOW = 47;
+    UNSUPPORTED_SYSVAR = 48;
 }
 
 message UnixTimestamp {

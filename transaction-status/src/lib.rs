@@ -352,6 +352,7 @@ pub struct ConfirmedBlock {
     pub transactions: Vec<TransactionWithStatusMeta>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
 }
 
 impl ConfirmedBlock {
@@ -367,6 +368,7 @@ impl ConfirmedBlock {
                 .collect(),
             rewards: self.rewards,
             block_time: self.block_time,
+            block_height: self.block_height,
         }
     }
 
@@ -409,6 +411,7 @@ impl ConfirmedBlock {
                 None
             },
             block_time: self.block_time,
+            block_height: self.block_height,
         }
     }
 }
@@ -422,6 +425,7 @@ pub struct EncodedConfirmedBlock {
     pub transactions: Vec<EncodedTransactionWithStatusMeta>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -437,6 +441,7 @@ pub struct UiConfirmedBlock {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rewards: Option<Rewards>,
     pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
 }
 
 impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
@@ -449,6 +454,7 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
             signatures: None,
             rewards: Some(block.rewards),
             block_time: block.block_time,
+            block_height: block.block_height,
         }
     }
 }
@@ -462,6 +468,7 @@ impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
             transactions: block.transactions.unwrap_or_default(),
             rewards: block.rewards.unwrap_or_default(),
             block_time: block.block_time,
+            block_height: block.block_height,
         }
     }
 }

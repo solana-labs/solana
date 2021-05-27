@@ -118,6 +118,7 @@ impl From<ConfirmedBlock> for generated::ConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Self {
@@ -127,6 +128,7 @@ impl From<ConfirmedBlock> for generated::ConfirmedBlock {
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
             block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
+            block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
         }
     }
 }
@@ -143,6 +145,7 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Ok(Self {
@@ -155,6 +158,7 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
                 .collect::<std::result::Result<Vec<TransactionWithStatusMeta>, Self::Error>>()?,
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
             block_time: block_time.map(|generated::UnixTimestamp { timestamp }| timestamp),
+            block_height: block_height.map(|generated::BlockHeight { block_height }| block_height),
         })
     }
 }
@@ -596,7 +600,7 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                     tx_by_addr::TransactionErrorType::InstructionError
                 }
                 TransactionError::AccountBorrowOutstanding => {
-                    tx_by_addr::TransactionErrorType::AccountBorrowOutstanding
+                    tx_by_addr::TransactionErrorType::AccountBorrowOutstandingTx
                 }
             } as i32,
             instruction_error: match transaction_error {
