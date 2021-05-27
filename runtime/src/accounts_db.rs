@@ -4358,7 +4358,7 @@ impl AccountsDb {
         accum: Vec<Vec<CalculateHashIntermediate>>,
     ) -> Vec<Vec<CalculateHashIntermediate2>> {
         accum
-            .into_iter()
+            .into_par_iter()
             .map(|mut items| {
                 items.par_sort_unstable_by(AccountsHash::compare_two_hash_entries);
                 let mut result = Vec::with_capacity(items.len());
