@@ -1015,6 +1015,11 @@ Returns transaction details for a confirmed transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
+    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+      - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+      - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+      - `postBalance: <u64>` - account balance in lamports after the reward was applied
+      - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
 
 #### Example:
 Request:
@@ -2979,33 +2984,7 @@ Returns the current Transaction count from the ledger
 
 #### Results:
 
-<<<<<<< HEAD
 - `<u64>` - count
-=======
-- `<null>` - if transaction is not found or not confirmed
-- `<object>` - if transaction is confirmed, an object with the following fields:
-  - `slot: <u64>` - the slot this transaction was processed in
-  - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
-  - `meta: <object | null>` - transaction status metadata object:
-    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
-    - `fee: <u64>` - fee this transaction was charged, as u64 integer
-    - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
-    - `postBalances: <array>` - array of u64 account balances after the transaction was processed
-    - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
-    - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-    - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
-    - DEPRECATED: `status: <object>` - Transaction status
-      - `"Ok": <null>` - Transaction was successful
-      - `"Err": <ERR>` - Transaction failed with TransactionError
-    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
-      - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
-      - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
-      - `postBalance: <u64>` - account balance in lamports after the reward was applied
-      - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
-
->>>>>>> 9541411c1 (Plumb transaction-level rewards (aka "rent debits") into the `getTransaction` RPC method)
 
 #### Example:
 
