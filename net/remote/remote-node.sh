@@ -47,6 +47,7 @@ airdropsEnabled=true
 if [[ -n $maybeDisableAirdrops ]]; then
   airdropsEnabled=false
 fi
+
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
@@ -135,6 +136,10 @@ EOF
     set -x
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
+
+      # The CLI tools now require a default wallet, create it early
+      default_wallet_path="$(solana config get | sed -e 's/^Config File: //;t;d')"
+      [[ -e "$default_wallet_path" ]] || solana-keygen new --no-passphrase -s
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/validator-balances.yml
@@ -329,6 +334,10 @@ EOF
       net/scripts/rsync-retry.sh -vPrc \
         "$entrypointIp":~/solana/config/faucet.json "$SOLANA_CONFIG_DIR"/faucet.json
     fi
+
+    # The CLI tools now require a default wallet, create it early
+    default_wallet_path="$(solana config get | sed -e 's/^Config File: //;t;d')"
+    [[ -e "$default_wallet_path" ]] || solana-keygen new --no-passphrase -s
 
     args=(
       --entrypoint "$entrypointIp:8001"
