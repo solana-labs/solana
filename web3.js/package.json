@@ -113,7 +113,7 @@
     "eslint": "^7.19.0",
     "eslint-config-prettier": "^8.0.0",
     "eslint-plugin-import": "2.23.3",
-    "eslint-plugin-mocha": "^8.0.0",
+    "eslint-plugin-mocha": "^9.0.0",
     "eslint-plugin-prettier": "^3.0.0",
     "esm": "^3.2.25",
     "flow-bin": "^0.150.0",
