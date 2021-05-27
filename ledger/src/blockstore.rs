@@ -6736,6 +6736,7 @@ pub mod tests {
                 log_messages: Some(vec![]),
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
+                rewards: Some(vec![]),
             }
             .into();
 

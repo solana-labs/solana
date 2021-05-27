@@ -338,7 +338,7 @@ impl Rocks {
         );
         let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
             BlockHeight::NAME,
-            get_cf_options::<BlockHeight>(&access_type)
+            get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
         );
 
         let cfs = vec![
