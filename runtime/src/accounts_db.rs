@@ -4394,7 +4394,7 @@ impl AccountsDb {
             let mut stats = HashStats::default();
             // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
             // More bins means smaller vectors to sort, copy, etc.
-            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 64;
+            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 256;
 
             // # of passes should be a function of the total # of accounts that are active.
             // higher passes = slower total time, lower dynamic memory usage
