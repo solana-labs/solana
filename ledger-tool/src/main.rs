@@ -51,7 +51,6 @@ use solana_vote_program::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    convert::TryInto,
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, BufRead, BufReader, Write},
@@ -76,12 +75,27 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
         if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
             if !rewards.is_empty() {
                 println!("  Rewards:");
+                println!(
+                    "    {:<44}  {:^15}  {:<15}  {:<20}",
+                    "Address", "Type", "Amount", "New Balance"
+                );
+
                 for reward in rewards {
+                    let sign = if reward.lamports < 0 { "-" } else { "" };
                     println!(
-                        "    Account {}: {}{} SOL",
+                        "    {:<44}  {:^15}  {:<15}  {}",
                         reward.pubkey,
-                        if reward.lamports < 0 { '-' } else { ' ' },
-                        lamports_to_sol(reward.lamports.abs().try_into().unwrap())
+                        if let Some(reward_type) = reward.reward_type {
+                            format!("{}", reward_type)
+                        } else {
+                            "-".to_string()
+                        },
+                        format!(
+                            "{}◎{:<14.9}",
+                            sign,
+                            lamports_to_sol(reward.lamports.abs() as u64)
+                        ),
+                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance))
                     );
                 }
             }

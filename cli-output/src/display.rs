@@ -322,7 +322,38 @@ pub fn write_transaction<W: io::Write>(
             if !log_messages.is_empty() {
                 writeln!(w, "{}Log Messages:", prefix,)?;
                 for log_message in log_messages {
-                    writeln!(w, "{}  {}", prefix, log_message,)?;
+                    writeln!(w, "{}  {}", prefix, log_message)?;
+                }
+            }
+        }
+
+        if let Some(rewards) = &transaction_status.rewards {
+            if !rewards.is_empty() {
+                writeln!(w, "{}Rewards:", prefix,)?;
+                writeln!(
+                    w,
+                    "{}  {:<44}  {:^15}  {:<15}  {:<20}",
+                    prefix, "Address", "Type", "Amount", "New Balance"
+                )?;
+                for reward in rewards {
+                    let sign = if reward.lamports < 0 { "-" } else { "" };
+                    writeln!(
+                        w,
+                        "{}  {:<44}  {:^15}  {:<15}  {}",
+                        prefix,
+                        reward.pubkey,
+                        if let Some(reward_type) = reward.reward_type {
+                            format!("{}", reward_type)
+                        } else {
+                            "-".to_string()
+                        },
+                        format!(
+                            "{}◎{:<14.9}",
+                            sign,
+                            lamports_to_sol(reward.lamports.abs() as u64)
+                        ),
+                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance),)
+                    )?;
                 }
             }
         }

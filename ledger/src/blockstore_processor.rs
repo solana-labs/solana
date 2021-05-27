@@ -18,7 +18,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     accounts_index::AccountSecondaryIndexes,
     bank::{
-        Bank, ExecuteTimings, InnerInstructionsList, TransactionBalancesSet,
+        Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
         TransactionExecutionResult, TransactionLogMessages, TransactionResults,
     },
     bank_forks::BankForks,
@@ -130,6 +130,7 @@ fn execute_batch(
     let TransactionResults {
         fee_collection_results,
         execution_results,
+        rent_debits,
         ..
     } = tx_results;
 
@@ -152,6 +153,7 @@ fn execute_batch(
             token_balances,
             inner_instructions,
             transaction_logs,
+            rent_debits,
         );
     }
 
@@ -1164,6 +1166,7 @@ pub struct TransactionStatusBatch {
     pub token_balances: TransactionTokenBalancesSet,
     pub inner_instructions: Option<Vec<Option<InnerInstructionsList>>>,
     pub transaction_logs: Option<Vec<TransactionLogMessages>>,
+    pub rent_debits: Vec<RentDebits>,
 }
 
 #[derive(Clone)]
@@ -1182,6 +1185,7 @@ impl TransactionStatusSender {
         token_balances: TransactionTokenBalancesSet,
         inner_instructions: Vec<Option<InnerInstructionsList>>,
         transaction_logs: Vec<TransactionLogMessages>,
+        rent_debits: Vec<RentDebits>,
     ) {
         let slot = bank.slot();
         let (inner_instructions, transaction_logs) = if !self.enable_cpi_and_log_storage {
@@ -1199,6 +1203,7 @@ impl TransactionStatusSender {
                 token_balances,
                 inner_instructions,
                 transaction_logs,
+                rent_debits,
             }))
         {
             trace!(
