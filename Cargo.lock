@@ -596,10 +596,42 @@ dependencies = [
  "ansi_term",
  "atty",
  "bitflags",
- "strsim",
- "textwrap",
+ "strsim 0.8.0",
+ "textwrap 0.11.0",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "clap"
+version = "3.0.0-beta.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bd1061998a501ee7d4b6d449020df3266ca3124b941ec56cf2005c3779ca142"
+dependencies = [
+ "atty",
+ "bitflags",
+ "clap_derive",
+ "indexmap",
+ "lazy_static",
+ "os_str_bytes",
+ "strsim 0.10.0",
+ "termcolor",
+ "textwrap 0.12.1",
+ "unicode-width",
+ "vec_map",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.0.0-beta.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "370f715b81112975b1b69db93e0b56ea4cd4e5002ac43b2da8474106a54096a1"
+dependencies = [
+ "heck",
+ "proc-macro-error",
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.60",
 ]
 
 [[package]]
@@ -1635,6 +1667,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87cbf45460356b7deeb5e3415b5563308c0a9b057c85e12b06ad551f98d0a6ac"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2644,6 +2685,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_str_bytes"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afb2e1c3ee07430c2cf76151675e583e0f19985fa6efae47d6848a3e2c824f85"
+
+[[package]]
 name = "ouroboros"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2958,6 +3005,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6ea3c4595b96363c13943497db34af4460fb474a95c43f4446ad341b8c9785"
 dependencies = [
  "toml",
+]
+
+[[package]]
+name = "proc-macro-error"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
+dependencies = [
+ "proc-macro-error-attr",
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.60",
+ "version_check 0.9.2",
+]
+
+[[package]]
+name = "proc-macro-error-attr"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "version_check 0.9.2",
 ]
 
 [[package]]
@@ -3292,6 +3363,19 @@ dependencies = [
  "crossbeam-utils 0.8.1",
  "lazy_static",
  "num_cpus",
+]
+
+[[package]]
+name = "rbpf-cli"
+version = "1.8.0"
+dependencies = [
+ "clap 3.0.0-beta.2",
+ "serde",
+ "serde_json",
+ "solana-bpf-loader-program",
+ "solana-logger 1.8.0",
+ "solana-sdk",
+ "solana_rbpf",
 ]
 
 [[package]]
@@ -3886,7 +3970,7 @@ dependencies = [
 name = "solana-accounts-bench"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "crossbeam-channel 0.4.4",
  "log 0.4.11",
  "rand 0.7.3",
@@ -3902,7 +3986,7 @@ dependencies = [
 name = "solana-accounts-cluster-bench"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -3927,7 +4011,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "crossbeam-channel 0.4.4",
  "log 0.4.11",
  "rand 0.7.3",
@@ -3997,7 +4081,7 @@ dependencies = [
 name = "solana-bench-exchange"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "itertools",
  "log 0.4.11",
  "num-derive",
@@ -4026,7 +4110,7 @@ dependencies = [
 name = "solana-bench-streamer"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "solana-clap-utils",
  "solana-logger 1.8.0",
  "solana-net-utils",
@@ -4039,7 +4123,7 @@ name = "solana-bench-tps"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "rayon",
  "serde_json",
@@ -4103,7 +4187,7 @@ version = "1.8.0"
 dependencies = [
  "bzip2",
  "cargo_metadata",
- "clap",
+ "clap 2.33.3",
  "regex",
  "solana-download-utils",
  "solana-sdk",
@@ -4115,7 +4199,7 @@ name = "solana-cargo-test-bpf"
 version = "1.8.0"
 dependencies = [
  "cargo_metadata",
- "clap",
+ "clap 2.33.3",
 ]
 
 [[package]]
@@ -4123,7 +4207,7 @@ name = "solana-clap-utils"
 version = "1.8.0"
 dependencies = [
  "chrono",
- "clap",
+ "clap 2.33.3",
  "rpassword",
  "solana-remote-wallet",
  "solana-sdk",
@@ -4142,7 +4226,7 @@ dependencies = [
  "bincode",
  "bs58",
  "chrono",
- "clap",
+ "clap 2.33.3",
  "console 0.14.1",
  "criterion-stats",
  "ctrlc",
@@ -4224,7 +4308,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bs58",
- "clap",
+ "clap 2.33.3",
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -4376,7 +4460,7 @@ name = "solana-dos"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -4437,7 +4521,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder",
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "serde",
  "serde_derive",
@@ -4519,7 +4603,7 @@ version = "1.8.0"
 dependencies = [
  "base64 0.12.3",
  "chrono",
- "clap",
+ "clap 2.33.3",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4552,7 +4636,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "bv",
- "clap",
+ "clap 2.33.3",
  "flate2",
  "indexmap",
  "itertools",
@@ -4596,7 +4680,7 @@ dependencies = [
  "bincode",
  "bzip2",
  "chrono",
- "clap",
+ "clap 2.33.3",
  "console 0.14.1",
  "ctrlc",
  "dirs-next",
@@ -4626,7 +4710,7 @@ name = "solana-keygen"
 version = "1.8.0"
 dependencies = [
  "bs58",
- "clap",
+ "clap 2.33.3",
  "dirs-next",
  "num_cpus",
  "solana-clap-utils",
@@ -4701,7 +4785,7 @@ dependencies = [
  "assert_cmd",
  "bs58",
  "bytecount",
- "clap",
+ "clap 2.33.3",
  "csv",
  "futures 0.3.8",
  "futures-util",
@@ -4764,7 +4848,7 @@ name = "solana-log-analyzer"
 version = "1.8.0"
 dependencies = [
  "byte-unit",
- "clap",
+ "clap 2.33.3",
  "serde",
  "serde_json",
  "solana-clap-utils",
@@ -4805,7 +4889,7 @@ dependencies = [
 name = "solana-merkle-root-bench"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -4842,7 +4926,7 @@ dependencies = [
 name = "solana-net-shaper"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -4855,7 +4939,7 @@ name = "solana-net-utils"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "nix 0.19.0",
  "rand 0.7.3",
@@ -4924,7 +5008,7 @@ dependencies = [
 name = "solana-poh-bench"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -5235,7 +5319,7 @@ dependencies = [
 name = "solana-stake-accounts"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
@@ -5249,7 +5333,7 @@ dependencies = [
 name = "solana-stake-monitor"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "console 0.14.1",
  "log 0.4.11",
  "serde",
@@ -5335,7 +5419,7 @@ dependencies = [
 name = "solana-store-tool"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "log 0.4.11",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -5363,7 +5447,7 @@ dependencies = [
 name = "solana-sys-tuner"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "libc",
  "log 0.4.11",
  "nix 0.19.0",
@@ -5381,7 +5465,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "chrono",
- "clap",
+ "clap 2.33.3",
  "console 0.14.1",
  "csv",
  "ctrlc",
@@ -5447,7 +5531,7 @@ dependencies = [
  "base64 0.12.3",
  "bincode",
  "chrono",
- "clap",
+ "clap 2.33.3",
  "console 0.14.1",
  "core_affinity",
  "fd-lock",
@@ -5521,7 +5605,7 @@ dependencies = [
 name = "solana-watchtower"
 version = "1.8.0"
 dependencies = [
- "clap",
+ "clap 2.33.3",
  "humantime",
  "log 0.4.11",
  "solana-clap-utils",
@@ -5668,6 +5752,12 @@ name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
+
+[[package]]
+name = "strsim"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "subtle"
@@ -5840,6 +5930,15 @@ name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
+dependencies = [
+ "unicode-width",
+]
+
+[[package]]
+name = "textwrap"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "203008d98caf094106cfaba70acfed15e18ed3ddb7d94e49baec153a2b462789"
 dependencies = [
  "unicode-width",
 ]
@@ -6514,6 +6613,12 @@ checksum = "a13e63ab62dbe32aeee58d1c5408d35c36c392bba5d9d3142287219721afe606"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb0d2e7be6ae3a5fa87eed5fb451aff96f2573d2694942e40543ae0bbe19c796"
 
 [[package]]
 name = "unicode-width"

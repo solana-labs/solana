@@ -46,7 +46,30 @@ fn main() {
     let matches = App::new("Solana BPF CLI")
         .version(crate_version!())
         .author("Solana Maintainers <maintainers@solana.foundation>")
-        .about("CLI to test and analyze eBPF programs")
+        .about(
+            r##"CLI to test and analyze eBPF programs.
+
+The tool executes eBPF programs in a mocked environment.
+Some features, such as sysvars syscall and CPI, are not
+available for the programs executed by the CLI tool.
+
+The input data for a program execution have to be in JSON format
+and the following fields are required
+{
+    "accounts": [
+        {
+            "lamports": 1000,
+            "data": [0, 0, 0, 3],
+            "owner": [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        }
+    ],
+    "insndata": []
+}
+"##,
+        )
         .arg(
             Arg::new("PROGRAM")
                 .about(
