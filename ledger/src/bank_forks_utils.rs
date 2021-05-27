@@ -65,7 +65,7 @@ pub fn load(
                 snapshot_config,
                 process_options,
                 transaction_status_sender,
-                cache_block_time_sender,
+                cache_block_meta_sender,
                 archive_filename,
                 archive_slot,
                 archive_hash,
@@ -83,7 +83,7 @@ pub fn load(
         &blockstore,
         account_paths,
         process_options,
-        cache_block_time_sender,
+        cache_block_meta_sender,
     )
 }
 
@@ -92,7 +92,7 @@ fn load_from_genesis(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     process_options: ProcessOptions,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> LoadResult {
     info!("Processing ledger from genesis");
     to_loadresult(
@@ -116,7 +116,7 @@ fn load_from_snapshot(
     snapshot_config: &SnapshotConfig,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     archive_filename: PathBuf,
     archive_slot: Slot,
     archive_hash: Hash,
@@ -172,7 +172,7 @@ fn load_from_snapshot(
             &process_options,
             &VerifyRecyclers::default(),
             transaction_status_sender,
-            cache_block_time_sender,
+            cache_block_meta_sender,
         ),
         Some(deserialized_bank_slot_and_hash),
     )
