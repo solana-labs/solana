@@ -11998,24 +11998,18 @@ pub(crate) mod tests {
             .spawn(move || {
                 let mut num_banks_scanned = 0;
                 loop {
-                    println!("starting scan loop");
+                    info!("starting scan iteration");
                     if exit_.load(Relaxed) {
-                        println!("scan exiting");
+                        info!("scan exiting");
                         return num_banks_scanned;
                     }
                     if let Ok(bank_to_scan) =
                         bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                     {
-                        println!("scanning program accounts");
+                        info!("scanning program accounts for slot {}", bank_to_scan.slot());
                         let accounts_result = bank_to_scan.get_program_accounts(&program_id);
                         let _ = scan_finished_sender.send(bank_to_scan.slot_id());
                         num_banks_scanned += 1;
-                        println!(
-                            "results: {:?} {:?} {}",
-                            acceptable_scan_results,
-                            accounts_result.is_err(),
-                            num_banks_scanned
-                        );
                         match (&acceptable_scan_results, accounts_result.is_err()) {
                             (AcceptableScanResults::DroppedSlotError, _)
                             | (AcceptableScanResults::Both, true) => {
@@ -12037,7 +12031,6 @@ pub(crate) mod tests {
                         // any of the original accounts, and the scan should reflect the
                         // account state at some frozen slot `X` (no partial updates).
                         if let Ok(accounts) = accounts_result {
-                            println!("Scan found {} accounts", accounts.len());
                             assert!(!accounts.is_empty());
                             let mut expected_lamports = None;
                             let mut target_accounts_found = HashSet::new();
@@ -12081,7 +12074,6 @@ pub(crate) mod tests {
 
         // Let threads run for a while, check the scans didn't see any mixed slots
         std::thread::sleep(Duration::new(5, 0));
-        println!("storing exit");
         exit.store(true, Relaxed);
         let min_expected_number_of_scans = 5;
         let num_banks_scanned = scan_thread.join().unwrap();
@@ -12371,13 +12363,13 @@ pub(crate) mod tests {
                                 10,
                                 2,
                             );
-                        println!("setting up banks elapsed: {}", start.elapsed().as_millis());
+                        info!("setting up banks elapsed: {}", start.elapsed().as_millis());
                         // Remove the fork. Then we'll recreate the slots and only after we've
                         // recreated the slots, do we send this old bank for scanning.
                         // Skip scanning bank 0 on first iteration of loop, since those accounts
                         // aren't being removed
                         if prev_bank.slot() != 0 {
-                            println!(
+                            info!(
                                 "sending bank with slot: {:?}, elapsed: {}",
                                 prev_bank.slot(),
                                 start.elapsed().as_millis()
@@ -12392,8 +12384,7 @@ pub(crate) mod tests {
                             // Now after we've recreated the slots removed in the previous loop
                             // iteration, send the previous bank, should fail even though the
                             // same slots were recreated
-                            if let Err(e) = bank_to_scan_sender.send(prev_bank.clone()) {
-                                println!("returning because of error: {:?}", e);
+                            if bank_to_scan_sender.send(prev_bank.clone()).is_err() {
                                 return;
                             }
 
@@ -12447,15 +12438,14 @@ pub(crate) mod tests {
                         // Now after we've recreated the slots removed in the previous loop
                         // iteration, send the previous bank, should fail even though the
                         // same slots were recreated
-                        if let Err(e) = bank_to_scan_sender.send(bank_at_fork_tip.clone()) {
-                            println!("returning because of error: {:?}", e);
+                        if bank_to_scan_sender.send(bank_at_fork_tip.clone()).is_err() {
                             return;
                         }
 
                         // Remove 1 < `step_size` of the *latest* slots while the scan is happening.
                         // This should create inconsistency between the account balances of accounts
                         // stored in that slot, and the accounts stored in earlier slots
-                        let slot_to_remove = slots_on_fork.last().unwrap().clone();
+                        let slot_to_remove = *slots_on_fork.last().unwrap();
                         bank_at_fork_tip.remove_unrooted_slots(&[slot_to_remove]);
 
                         // Wait for scan to finish before starting next iteration

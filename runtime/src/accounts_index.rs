@@ -870,7 +870,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             .contains(&scan_slot_id);
 
         if was_scan_corrupted {
-            println!("Scan was corrupted");
             Err(ScanError::SlotRemoved {
                 slot: ancestors.max_slot(),
                 slot_id: scan_slot_id,
@@ -916,7 +915,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
-        let mut num_found = 0;
         for pubkey_list in self.iter(range) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
@@ -932,7 +930,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     latest_slot_elapsed += latest_slot_timer.as_us();
                     let mut load_account_timer = Measure::start("load_account");
                     func(&pubkey, (&list_r[index].1, list_r[index].0));
-                    num_found += 1;
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
                 }
@@ -940,7 +937,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             iterator_timer = Measure::start("iterator_elapsed");
         }
 
-        println!("Scan found {} keys", num_found);
         total_elapsed_timer.stop();
         if !metric_name.is_empty() {
             datapoint_info!(
