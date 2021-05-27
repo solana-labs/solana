@@ -2126,6 +2126,9 @@ impl fmt::Display for CliBlock {
         if let Some(block_time) = self.encoded_confirmed_block.block_time {
             writeln!(f, "Block Time: {:?}", Local.timestamp(block_time, 0))?;
         }
+        if let Some(block_height) = self.encoded_confirmed_block.block_height {
+            writeln!(f, "Block Height: {:?}", block_height)?;
+        }
         if !self.encoded_confirmed_block.rewards.is_empty() {
             let mut rewards = self.encoded_confirmed_block.rewards.clone();
             rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));

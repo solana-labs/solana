@@ -55,6 +55,8 @@ const REWARDS_CF: &str = "rewards";
 const BLOCKTIME_CF: &str = "blocktime";
 /// Column family for Performance Samples
 const PERF_SAMPLES_CF: &str = "perf_samples";
+/// Column family for BlockHeight
+const BLOCK_HEIGHT_CF: &str = "block_height";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -151,6 +153,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The performance samples column
     pub struct PerfSamples;
+
+    #[derive(Debug)]
+    /// The block height column
+    pub struct BlockHeight;
 }
 
 pub enum AccessType {
@@ -212,9 +218,9 @@ impl Rocks {
         recovery_mode: Option<BlockstoreRecoveryMode>,
     ) -> Result<Rocks> {
         use columns::{
-            AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
-            TransactionStatusIndex,
+            AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
+            Index, Orphans, PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta,
+            TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -259,6 +265,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
         let perf_samples_cf_descriptor =
             ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
+        let block_height_cf_descriptor =
+            ColumnFamilyDescriptor::new(BlockHeight::NAME, get_cf_options(&access_type));
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -279,6 +287,7 @@ impl Rocks {
             (Rewards::NAME, rewards_cf_descriptor),
             (Blocktime::NAME, blocktime_cf_descriptor),
             (PerfSamples::NAME, perf_samples_cf_descriptor),
+            (BlockHeight::NAME, block_height_cf_descriptor),
         ];
 
         // Open the database
@@ -316,9 +325,9 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
-            TransactionStatusIndex,
+            AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
+            Index, Orphans, PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta,
+            TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
@@ -337,6 +346,7 @@ impl Rocks {
             Rewards::NAME,
             Blocktime::NAME,
             PerfSamples::NAME,
+            BlockHeight::NAME,
         ]
     }
 
@@ -577,6 +587,14 @@ impl ColumnName for columns::PerfSamples {
 }
 impl TypedColumn for columns::PerfSamples {
     type Type = blockstore_meta::PerfSample;
+}
+
+impl SlotColumn for columns::BlockHeight {}
+impl ColumnName for columns::BlockHeight {
+    const NAME: &'static str = BLOCK_HEIGHT_CF;
+}
+impl TypedColumn for columns::BlockHeight {
+    type Type = u64;
 }
 
 impl Column for columns::ShredCode {
