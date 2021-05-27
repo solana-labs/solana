@@ -4362,10 +4362,8 @@ impl AccountsDb {
                             item.pubkey,
                         );
                         if i > 0 && items[i - 1].pubkey == item.pubkey {
-                            let len = result.len();
-                            // pubkey found a second time in this batch of slots, so only take the last one - most recent slot or most recent write version
-                            result[len - 1] = new_item;
-
+                            // pubkey found a second time in this batch of slots, so only take the first one - most recent slot or most recent write version of the same slot - sort order is -slot, -write_version
+                            // don't push result
                         }
                         else {
                             result.push(new_item);

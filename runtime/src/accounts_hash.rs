@@ -522,13 +522,6 @@ impl AccountsHash {
         }
     }
 
-    pub fn compare_two_hash_entries2(
-        a: &CalculateHashIntermediate2,
-        b: &CalculateHashIntermediate2,
-    ) -> std::cmp::Ordering {
-        a.pubkey.partial_cmp(&b.pubkey).unwrap()
-    }
-
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
         balance
             .try_into()
@@ -609,17 +602,17 @@ impl AccountsHash {
                             first_items.remove(min_index); // stop looking in this vector - we exhausted it
                             first_item_index -= 1;
                             max_len -= 1;
-        } else {
+                        } else {
                             // still more items where we found the previous key, so just increment the index for that slot group
                             first_items[min_index] = (&bin[index].pubkey, division_index);
                             indexes[division_index] = index;
-                }
+                        }
                     }
                     min_index = first_item_index;
                     min_pubkey = key;
                 }
                 first_item_index += 1;
-    }
+            }
             let first_item = first_items[min_index];
             let division_index = first_item.1;
 
@@ -632,15 +625,15 @@ impl AccountsHash {
                     item.lamports as u128 + overall_sum as u128,
                 );
                 hashes.push(item.hash);
-                }
+            }
             index += 1;
             if index >= bin.len() {
                 first_items.remove(min_index); // stop looking in this vector - we exhausted it
-                    } else {
+            } else {
                 first_items[min_index] = (&bin[index].pubkey, division_index);
                 indexes[division_index] = index;
-                    }
-                }
+            }
+        }
         (hashes, overall_sum)
     }
 
@@ -861,27 +854,6 @@ pub mod tests {
         (result, sum)
     }
 
-    /*    fn sort_hash_intermediate(
-            data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
-            _stats: &mut HashStats,
-        ) -> Vec<Vec<CalculateHashIntermediate2>> {
-            data_by_pubkey
-            /*
-            // sort each PUBKEY_DIVISION vec
-            let mut sort_time = Measure::start("sort");
-            let sorted_data_by_pubkey: Vec<Vec<_>> = data_by_pubkey
-                .into_par_iter()
-                .map(|mut pk_range| {
-                    pk_range.par_sort_unstable_by(Self::compare_two_hash_entries);
-                    pk_range
-                })
-                .collect();
-            sort_time.stop();
-            stats.sort_time_total_us += sort_time.as_us();
-            sorted_data_by_pubkey
-            */
-        }
-    */
     #[test]
     fn test_accountsdb_div_ceil() {
         assert_eq!(AccountsHash::div_ceil(10, 3), 4);
