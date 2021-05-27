@@ -4250,6 +4250,9 @@ impl AccountsDb {
                 &combined_maps,
                 Some(&self.thread_pool_clean),
                 check_hash,
+                Some(ancestors),
+                Some(self.accounts_index.max_root()),
+                Some(slot),
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -4366,6 +4369,9 @@ impl AccountsDb {
         storages: &[SnapshotStorage],
         thread_pool: Option<&ThreadPool>,
         check_hash: bool,
+        _ancestors: Option<&Ancestors>,
+        _max_root: Option<Slot>,
+        _slot: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let scan_and_hash = || {
             let mut stats = HashStats::default();
@@ -5940,8 +5946,10 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result =
-            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages, None, false, None, None, None,
+        )
+        .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5956,8 +5964,10 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result =
-            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages, None, false, None, None, None,
+        )
+        .unwrap();
 
         assert_eq!(result, (expected_hash, sum));
     }
