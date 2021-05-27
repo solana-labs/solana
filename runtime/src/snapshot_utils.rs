@@ -197,10 +197,10 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 
 fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
     match archive_format {
-        ArchiveFormat::TarBzip2 => ".tar.bz2",
-        ArchiveFormat::TarGzip => ".tar.gz",
-        ArchiveFormat::TarZstd => ".tar.zst",
-        ArchiveFormat::Tar => ".tar",
+        ArchiveFormat::TarBzip2 => "tar.bz2",
+        ArchiveFormat::TarGzip => "tar.gz",
+        ArchiveFormat::TarZstd => "tar.zst",
+        ArchiveFormat::Tar => "tar",
     }
 }
 
@@ -304,7 +304,7 @@ pub fn archive_snapshot_package(
     //
     // system `tar` program is used for -S (sparse file support)
     let archive_path = tar_dir.join(format!(
-        "{}{}{}",
+        "{}{}.{}",
         TMP_SNAPSHOT_PREFIX, snapshot_package.slot, file_ext
     ));
 
@@ -652,7 +652,7 @@ pub fn get_snapshot_archive_path(
     archive_format: ArchiveFormat,
 ) -> PathBuf {
     snapshot_output_dir.join(format!(
-        "snapshot-{}-{}{}",
+        "snapshot-{}-{}.{}",
         snapshot_hash.0,
         snapshot_hash.1,
         get_archive_ext(archive_format),
@@ -669,27 +669,27 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
     }
 }
 
-fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, ArchiveFormat)> {
-    let snapshot_filename_regex =
-        Regex::new(r"^snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
+/// Parse a snapshot archive filename into its Slot, Hash, and Archive Format
+fn parse_snapshot_archive_filename(archive_filename: &str) -> Option<(Slot, Hash, ArchiveFormat)> {
+    let snapshot_archive_filename_regex =
+        Regex::new(r"^snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$");
 
-    if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
-        let slot_str = captures.get(1).unwrap().as_str();
-        let hash_str = captures.get(2).unwrap().as_str();
-        let ext = captures.get(3).unwrap().as_str();
+    snapshot_archive_filename_regex
+        .ok()?
+        .captures(archive_filename)
+        .and_then(|captures| {
+            let slot = captures.get(1).map(|x| x.as_str().parse::<Slot>())?.ok()?;
+            let hash = captures.get(2).map(|x| x.as_str().parse::<Hash>())?.ok()?;
+            let archive_format = captures
+                .get(3)
+                .map(|x| archive_format_from_str(x.as_str()))??;
 
-        if let (Ok(slot), Ok(hash), Some(archive_format)) = (
-            slot_str.parse::<Slot>(),
-            hash_str.parse::<Hash>(),
-            archive_format_from_str(ext),
-        ) {
-            return Some((slot, hash, archive_format));
-        }
-    }
-    None
+            Some((slot, hash, archive_format))
+        })
 }
 
-pub fn get_snapshot_archives<P: AsRef<Path>>(
+/// Get a list of the snapshot archives in a directory, sorted by Slot in descending order
+fn get_snapshot_archives<P: AsRef<Path>>(
     snapshot_output_dir: P,
 ) -> Vec<(PathBuf, (Slot, Hash, ArchiveFormat))> {
     match fs::read_dir(&snapshot_output_dir) {
@@ -703,9 +703,9 @@ pub fn get_snapshot_archives<P: AsRef<Path>>(
                     if let Ok(entry) = entry {
                         let path = entry.path();
                         if path.is_file() {
-                            if let Some(snapshot_hash) =
-                                snapshot_hash_of(path.file_name().unwrap().to_str().unwrap())
-                            {
+                            if let Some(snapshot_hash) = parse_snapshot_archive_filename(
+                                path.file_name().unwrap().to_str().unwrap(),
+                            ) {
                                 return Some((path, snapshot_hash));
                             }
                         }
@@ -720,6 +720,7 @@ pub fn get_snapshot_archives<P: AsRef<Path>>(
     }
 }
 
+/// Get the snapshot archive with the highest Slot in a directory
 pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     snapshot_output_dir: P,
 ) -> Option<(PathBuf, (Slot, Hash, ArchiveFormat))> {
@@ -1146,21 +1147,57 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_hash_of() {
+    fn test_parse_snapshot_archive_filename() {
         assert_eq!(
-            snapshot_hash_of(&format!("snapshot-42-{}.tar.bz2", Hash::default())),
+            parse_snapshot_archive_filename(&format!("snapshot-42-{}.tar.bz2", Hash::default())),
             Some((42, Hash::default(), ArchiveFormat::TarBzip2))
         );
         assert_eq!(
-            snapshot_hash_of(&format!("snapshot-43-{}.tar.zst", Hash::default())),
+            parse_snapshot_archive_filename(&format!("snapshot-43-{}.tar.zst", Hash::default())),
             Some((43, Hash::default(), ArchiveFormat::TarZstd))
         );
         assert_eq!(
-            snapshot_hash_of(&format!("snapshot-42-{}.tar", Hash::default())),
+            parse_snapshot_archive_filename(&format!("snapshot-42-{}.tar", Hash::default())),
             Some((42, Hash::default(), ArchiveFormat::Tar))
         );
 
-        assert!(snapshot_hash_of("invalid").is_none());
+        assert!(parse_snapshot_archive_filename("invalid").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-bad!slot-bad!hash.bad!ext").is_none());
+
+        assert!(parse_snapshot_archive_filename("snapshot-12345678-bad!hash.bad!ext").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-12345678-HASH1234.bad!ext").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-12345678-bad!hash.tar").is_none());
+
+        assert!(parse_snapshot_archive_filename("snapshot-bad!slot-HASH1234.bad!ext").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-12345678-HASH1234.bad!ext").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-bad!slot-HASH1234.tar").is_none());
+
+        assert!(parse_snapshot_archive_filename("snapshot-bad!slot-bad!hash.tar").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-12345678-bad!hash.tar").is_none());
+        assert!(parse_snapshot_archive_filename("snapshot-bad!slot-HASH1234.tar").is_none());
+    }
+
+    #[test]
+    fn test_get_snapshot_archives() {
+        let temp_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+
+        let min_slot = 123;
+        let max_slot = 456;
+        for slot in min_slot..max_slot {
+            let snapshot_filename = format!("snapshot-{}-{}.tar", slot, Hash::default());
+            let snapshot_filepath = temp_snapshot_archives_dir.path().join(snapshot_filename);
+            File::create(snapshot_filepath).unwrap();
+        }
+
+        // Add in a snapshot with a bad filename and high slot to ensure filename are filtered and
+        // sorted correctly
+        let bad_filename = format!("snapshot-{}-{}.bad!ext", max_slot + 1, Hash::default());
+        let bad_filepath = temp_snapshot_archives_dir.path().join(bad_filename);
+        File::create(bad_filepath).unwrap();
+
+        let results = get_snapshot_archives(temp_snapshot_archives_dir);
+        assert_eq!(results.len(), max_slot - min_slot);
+        assert_eq!(results[0].1 .0 as usize, max_slot - 1);
     }
 
     fn common_test_purge_old_snapshot_archives(
