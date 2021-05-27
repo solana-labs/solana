@@ -426,6 +426,8 @@ The result field will be an array of JSON objects, each with the following sub f
 - `tpu: <string>` - TPU network address for the node
 - `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
 - `version: <string>|null` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <number>|null` - The unique identifier of the node's feature set
+- `shredVersion: <number>|null` - The shred version the node has been configured to use
 
 #### Example:
 
@@ -913,7 +915,6 @@ address backwards in time from the provided signature or most recent confirmed b
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
-<<<<<<< HEAD
 The result field will be an array of transaction signature information, ordered
 from newest to oldest transaction:
 * `<object>`
@@ -922,18 +923,6 @@ from newest to oldest transaction:
   * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
-=======
-
-The result field will be an array of JSON objects, each with the following sub fields:
-
-- `pubkey: <string>` - Node public key, as base-58 encoded string
-- `gossip: <string>` - Gossip network address for the node
-- `tpu: <string>` - TPU network address for the node
-- `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
-- `version: <string>|null` - The software version of the node, or `null` if the version information is not available
-- `featureSet: <number>|null` - The unique identifier of the node's feature set
-- `shredVersion: <number>|null` - The shred version the node has been configured to use
->>>>>>> 3d40ec3c8 (Add missing fields from getClusterNodes documentation)
 
 #### Example:
 Request:
