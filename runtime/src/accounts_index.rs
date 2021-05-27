@@ -674,7 +674,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
-        {
+        /*{
             let locked_removed_slot_ids = self.removed_slot_ids.lock().unwrap();
             if locked_removed_slot_ids.contains(&scan_slot_id) {
                 return Err(ScanError::SlotRemoved {
@@ -682,7 +682,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     slot_id: scan_slot_id,
                 });
             }
-        }
+        }*/
 
         let max_root = {
             let mut w_ongoing_scan_roots = self
@@ -863,7 +863,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
         // If the fork with tip at bank `scan_slot_id` was removed durin our scan, then the scan
         // may have been corrupted, so abort the results.
-        let was_scan_corrupted = self
+        /*let was_scan_corrupted = self
             .removed_slot_ids
             .lock()
             .unwrap()
@@ -876,7 +876,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             })
         } else {
             Ok(())
-        }
+        }*/
+        Ok(())
     }
 
     fn do_unchecked_scan_accounts<F, R>(
@@ -915,6 +916,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
+        let mut num_found = 0;
         for pubkey_list in self.iter(range) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
@@ -930,6 +932,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     latest_slot_elapsed += latest_slot_timer.as_us();
                     let mut load_account_timer = Measure::start("load_account");
                     func(&pubkey, (&list_r[index].1, list_r[index].0));
+                    num_found += 1;
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
                 }
@@ -937,6 +940,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             iterator_timer = Measure::start("iterator_elapsed");
         }
 
+        println!("Scan found {} keys", num_found);
         total_elapsed_timer.stop();
         if !metric_name.is_empty() {
             datapoint_info!(
