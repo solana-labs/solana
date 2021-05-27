@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-bpf-rust-noop"
 edition = "2018"
 
 [dependencies]
-num-derive = "0.2"
+num-derive = "0.3"
 num-traits = "0.2"
 solana-program = "1.4.16"
 thiserror = "1.0"
