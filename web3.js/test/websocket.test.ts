@@ -4,7 +4,7 @@ import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
 import {Connection} from '../src';
-import {url} from './url';
+import {url, wsUrl} from './url';
 import {sleep} from '../src/util/sleep';
 
 use(chaiAsPromised);
@@ -62,6 +62,22 @@ if (process.env.TEST_LIVE) {
       // wait for websocket to disconnect
       await sleep(1100);
       expect(connection._rpcWebSocketIdleTimeout).to.eq(null);
+    });
+
+    it('connect by websocket endpoint from options', async () => {
+      let connection = new Connection('', {
+        wsEndpoint: wsUrl,
+      });
+
+      const testSignature = bs58.encode(Buffer.alloc(64));
+      const id = connection.onSignature(testSignature, () => {});
+
+      // wait for websocket to connect
+      await sleep(100);
+      expect(connection._rpcWebSocketConnected).to.be.true;
+      expect(connection._rpcWebSocketHeartbeat).not.to.eq(null);
+
+      await connection.removeSignatureListener(id);
     });
   });
 }
