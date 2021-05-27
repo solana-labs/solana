@@ -102,7 +102,10 @@ Operate a configured testnet
    --cluster-type development|devnet|testnet|mainnet-beta
                                       - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
                                         or various other live clusters' feature set (default: development)
-   --warp-slot WARP_SLOT              - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
+   --slots-per-epoch SLOTS
+                                      - Override the number of slots in an epoch
+   --warp-slot WARP_SLOT
+                                      - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -820,6 +823,9 @@ while [[ -n $1 ]]; do
           exit 1
           ;;
       esac
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --slots-per-epoch ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
