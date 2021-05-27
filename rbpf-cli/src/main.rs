@@ -18,7 +18,7 @@ use solana_sdk::{
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, fs::File, io::Read, path::Path};
+use std::{cell::RefCell, fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
@@ -48,22 +48,13 @@ fn main() {
         .author("Solana Maintainers <maintainers@solana.foundation>")
         .about("CLI to test and analyze eBPF programs")
         .arg(
-            Arg::new("assembler")
-                .about("Assemble and load eBPF executable")
-                .short('a')
-                .long("asm")
-                .value_name("FILE")
-                .takes_value(true)
-                .required_unless_present("elf"),
-        )
-        .arg(
-            Arg::new("elf")
-                .about("Load ELF as eBPF executable")
-                .short('e')
-                .long("elf")
-                .value_name("FILE")
-                .takes_value(true)
-                .required_unless_present("assembler"),
+            Arg::new("PROGRAM")
+                .about(
+                    "Program file to use. This is either an ELF shared-object file to be executed, \
+                     or an assembly file to be assembled and executed.",
+                )
+                .required(true)
+                .index(1)
         )
         .arg(
             Arg::new("input")
@@ -81,7 +72,7 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
             Arg::new("memory")
                 .about("Heap memory for the program to run on")
                 .short('m')
-                .long("mem")
+                .long("memory")
                 .value_name("BYTES")
                 .takes_value(true)
                 .default_value("0"),
@@ -97,14 +88,15 @@ native machine code before execting it in the virtual machine.",
                 .short('u')
                 .long("use")
                 .takes_value(true)
+                .value_name("VALUE")
                 .possible_values(&["cfg", "disassembler", "interpreter", "jit"])
-                .required(true),
+                .default_value("interpreter"),
         )
         .arg(
             Arg::new("instruction limit")
                 .about("Limit the number of instructions to execute")
                 .short('l')
-                .long("lim")
+                .long("limit")
                 .takes_value(true)
                 .value_name("COUNT")
                 .default_value(&std::i64::MAX.to_string()),
@@ -119,13 +111,13 @@ native machine code before execting it in the virtual machine.",
             Arg::new("profile")
                 .about("Output profile to 'profile.dot' file using tracing instrumentation")
                 .short('p')
-                .long("prof"),
+                .long("profile"),
         )
         .arg(
             Arg::new("verify")
                 .about("Run the verifier before execution or disassembly")
                 .short('v')
-                .long("veri"),
+                .long("verify"),
         )
         .get_matches();
 
@@ -162,26 +154,26 @@ native machine code before execting it in the virtual machine.",
     let logger = invoke_context.logger.clone();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
-    let mut executable = match matches.value_of("assembler") {
-        Some(asm_file_name) => {
-            let mut file = File::open(&Path::new(asm_file_name)).unwrap();
-            let mut source = Vec::new();
-            file.read_to_end(&mut source).unwrap();
-            assemble::<BpfError, ThisInstructionMeter>(
-                std::str::from_utf8(source.as_slice()).unwrap(),
-                None,
-                config,
-            )
-        }
-        None => {
-            let mut file = File::open(&Path::new(matches.value_of("elf").unwrap())).unwrap();
-            let mut elf = Vec::new();
-            file.read_to_end(&mut elf).unwrap();
-            <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, config)
-                .map_err(|err| format!("Executable constructor failed: {:?}", err))
-        }
+
+    let program = matches.value_of("PROGRAM").unwrap();
+    let mut file = File::open(&Path::new(program)).unwrap();
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents).unwrap();
+    let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&contents, None, config)
+            .map_err(|err| format!("Executable constructor failed: {:?}", err))
+    } else {
+        assemble::<BpfError, ThisInstructionMeter>(
+            std::str::from_utf8(contents.as_slice()).unwrap(),
+            None,
+            config,
+        )
     }
     .unwrap();
+
     if matches.is_present("verify") {
         let (_, elf_bytes) = executable.get_text_bytes().unwrap();
         check(elf_bytes).unwrap();
