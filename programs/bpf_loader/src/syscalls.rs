@@ -19,9 +19,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
+        cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
+        keccak256_syscall_enabled, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+        update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -1169,7 +1169,6 @@ trait SyscallInvokeSigned<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1246,7 +1245,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1368,7 +1366,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
         get_translated_accounts(
             account_keys,
-            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1585,7 +1582,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1689,7 +1685,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
         get_translated_accounts(
             account_keys,
-            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1779,7 +1774,6 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 
 fn get_translated_accounts<'a, T, F>(
     account_keys: &[Pubkey],
-    caller_write_privileges: &[bool],
     program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
@@ -1801,11 +1795,7 @@ where
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?;
 
-        if i == program_account_index
-            || account.borrow().executable()
-            || (invoke_context.is_feature_active(&cpi_share_ro_and_exec_accounts::id())
-                && !caller_write_privileges[i])
-        {
+        if i == program_account_index || account.borrow().executable() {
             // Use the known account
             accounts.push(account);
             refs.push(None);
@@ -2000,7 +1990,6 @@ fn call<'a>(
         check_authorized_program(&callee_program_id, &instruction.data, &invoke_context)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
-            &caller_write_privileges,
             callee_program_id_index,
             account_infos_addr,
             account_infos_len,

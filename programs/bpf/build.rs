@@ -83,6 +83,7 @@ fn main() {
             "param_passing",
             "rand",
             "ro_modify",
+            "ro_account_modify",
             "sanity",
             "sha",
             "spoof1",
