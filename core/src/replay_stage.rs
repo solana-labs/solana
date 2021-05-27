@@ -2,12 +2,8 @@
 
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
-<<<<<<< HEAD
-    cache_block_time_service::CacheBlockTimeSender,
-    cluster_info::ClusterInfo,
-=======
     cache_block_meta_service::CacheBlockMetaSender,
->>>>>>> ab581dafc (Add block height to ConfirmedBlock structs (#17523))
+    cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
     },

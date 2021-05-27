@@ -2,15 +2,11 @@
 
 use crate::{
     broadcast_stage::BroadcastStageType,
-<<<<<<< HEAD
-    cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
+    cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
     cluster_info::{
         ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
         DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
     },
-=======
-    cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
->>>>>>> ab581dafc (Add block height to ConfirmedBlock structs (#17523))
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
