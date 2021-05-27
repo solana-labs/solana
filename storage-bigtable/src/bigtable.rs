@@ -694,6 +694,7 @@ mod tests {
             previous_blockhash: Hash::default().to_string(),
             rewards: vec![],
             block_time: Some(1_234_567_890),
+            block_height: Some(1),
         };
         let bincode_block = compress_best(
             &bincode::serialize::<StoredConfirmedBlock>(&block.clone().into()).unwrap(),

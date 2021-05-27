@@ -4,7 +4,7 @@
 use crate::{
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
-    cache_block_time_service::CacheBlockTimeSender,
+    cache_block_meta_service::CacheBlockMetaSender,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
         VerifiedVoteReceiver, VoteTracker,
@@ -116,7 +116,7 @@ impl Tvu {
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
-        cache_block_time_sender: Option<CacheBlockTimeSender>,
+        cache_block_meta_sender: Option<CacheBlockMetaSender>,
         snapshot_config_and_pending_package: Option<(SnapshotConfig, PendingSnapshotPackage)>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -267,7 +267,7 @@ impl Tvu {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
-            cache_block_time_sender,
+            cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
         };

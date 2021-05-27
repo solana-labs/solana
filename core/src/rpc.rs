@@ -953,7 +953,21 @@ impl JsonRpcRequestProcessor {
                             .load(Ordering::SeqCst)
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return Ok(result.ok().map(|confirmed_block| {
+                    return Ok(result.ok().map(|mut confirmed_block| {
+                        if confirmed_block.block_time.is_none()
+                            || confirmed_block.block_height.is_none()
+                        {
+                            let r_bank_forks = self.bank_forks.read().unwrap();
+                            let bank = r_bank_forks.get(slot).cloned();
+                            if let Some(bank) = bank {
+                                if confirmed_block.block_time.is_none() {
+                                    confirmed_block.block_time = Some(bank.clock().unix_timestamp);
+                                }
+                                if confirmed_block.block_height.is_none() {
+                                    confirmed_block.block_height = Some(bank.block_height());
+                                }
+                            }
+                        }
                         confirmed_block.configure(encoding, transaction_details, show_rewards)
                     }));
                 }

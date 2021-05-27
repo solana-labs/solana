@@ -9,6 +9,7 @@ message ConfirmedBlock {
     repeated ConfirmedTransaction transactions = 4;
     repeated Reward rewards = 5;
     UnixTimestamp block_time = 6;
+    BlockHeight block_height = 7;
 }
 
 message ConfirmedTransaction {
@@ -95,4 +96,8 @@ message Rewards {
 
 message UnixTimestamp {
     int64 timestamp = 1;
+}
+
+message BlockHeight {
+    uint64 block_height = 1;
 }

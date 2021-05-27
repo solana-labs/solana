@@ -380,7 +380,7 @@ pub fn process_blockstore(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -409,7 +409,7 @@ pub fn process_blockstore(
         blockstore,
         &opts,
         &recyclers,
-        cache_block_time_sender,
+        cache_block_meta_sender,
     );
     do_process_blockstore_from_root(
         blockstore,
@@ -417,7 +417,7 @@ pub fn process_blockstore(
         &opts,
         &recyclers,
         None,
-        cache_block_time_sender,
+        cache_block_meta_sender,
     )
 }
 
@@ -428,7 +428,7 @@ pub(crate) fn process_blockstore_from_root(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
         blockstore,
@@ -436,7 +436,7 @@ pub(crate) fn process_blockstore_from_root(
         opts,
         recyclers,
         transaction_status_sender,
-        cache_block_time_sender,
+        cache_block_meta_sender,
     )
 }
 
@@ -446,7 +446,7 @@ fn do_process_blockstore_from_root(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
 
@@ -507,7 +507,7 @@ fn do_process_blockstore_from_root(
                 opts,
                 recyclers,
                 transaction_status_sender,
-                cache_block_time_sender,
+                cache_block_meta_sender,
                 &mut timing,
             )?;
             initial_forks.sort_by_key(|bank| bank.slot());
@@ -815,7 +815,7 @@ fn process_bank_0(
     blockstore: &Blockstore,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
@@ -831,7 +831,7 @@ fn process_bank_0(
     )
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
-    cache_block_time(bank0, cache_block_time_sender);
+    cache_block_meta(bank0, cache_block_meta_sender);
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -899,7 +899,7 @@ fn load_frozen_forks(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
     let mut initial_forks = HashMap::new();
@@ -954,7 +954,7 @@ fn load_frozen_forks(
                 recyclers,
                 &mut progress,
                 transaction_status_sender,
-                cache_block_time_sender,
+                cache_block_meta_sender,
                 None,
                 timing,
             )
@@ -1128,7 +1128,7 @@ fn process_single_slot(
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
@@ -1148,7 +1148,7 @@ fn process_single_slot(
     })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
-    cache_block_time(bank, cache_block_time_sender);
+    cache_block_meta(bank, cache_block_meta_sender);
 
     Ok(())
 }
@@ -1226,13 +1226,13 @@ impl TransactionStatusSender {
     }
 }
 
-pub type CacheBlockTimeSender = Sender<Arc<Bank>>;
+pub type CacheBlockMetaSender = Sender<Arc<Bank>>;
 
-pub fn cache_block_time(bank: &Arc<Bank>, cache_block_time_sender: Option<&CacheBlockTimeSender>) {
-    if let Some(cache_block_time_sender) = cache_block_time_sender {
-        cache_block_time_sender
+pub fn cache_block_meta(bank: &Arc<Bank>, cache_block_meta_sender: Option<&CacheBlockMetaSender>) {
+    if let Some(cache_block_meta_sender) = cache_block_meta_sender {
+        cache_block_meta_sender
             .send(bank.clone())
-            .unwrap_or_else(|err| warn!("cache_block_time_sender failed: {:?}", err));
+            .unwrap_or_else(|err| warn!("cache_block_meta_sender failed: {:?}", err));
     }
 }
 

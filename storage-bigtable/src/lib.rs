@@ -89,6 +89,7 @@ struct StoredConfirmedBlock {
     transactions: Vec<StoredConfirmedBlockTransaction>,
     rewards: StoredConfirmedBlockRewards,
     block_time: Option<UnixTimestamp>,
+    block_height: Option<u64>,
 }
 
 impl From<ConfirmedBlock> for StoredConfirmedBlock {
@@ -100,6 +101,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Self {
@@ -109,6 +111,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
+            block_height,
         }
     }
 }
@@ -122,6 +125,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Self {
@@ -131,6 +135,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
+            block_height,
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     blockstore::Blockstore,
     blockstore_processor::{
-        self, BlockstoreProcessorError, BlockstoreProcessorResult, CacheBlockTimeSender,
+        self, BlockstoreProcessorError, BlockstoreProcessorResult, CacheBlockMetaSender,
         ProcessOptions, TransactionStatusSender,
     },
     entry::VerifyRecyclers,
@@ -37,7 +37,7 @@ pub fn load(
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
+    cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -102,7 +102,7 @@ pub fn load(
                         &process_options,
                         &VerifyRecyclers::default(),
                         transaction_status_sender,
-                        cache_block_time_sender,
+                        cache_block_meta_sender,
                     ),
                     Some(deserialized_snapshot_hash),
                 );
@@ -120,7 +120,7 @@ pub fn load(
             &blockstore,
             account_paths,
             process_options,
-            cache_block_time_sender,
+            cache_block_meta_sender,
         ),
         None,
     )

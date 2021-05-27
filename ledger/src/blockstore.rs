@@ -139,6 +139,7 @@ pub struct Blockstore {
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+    block_height_cf: LedgerColumn<cf::BlockHeight>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -309,6 +310,7 @@ impl Blockstore {
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
         let perf_samples_cf = db.column();
+        let block_height_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -356,6 +358,7 @@ impl Blockstore {
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
+            block_height_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -1773,11 +1776,25 @@ impl Blockstore {
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
-        if self.get_block_time(slot).unwrap_or_default().is_none() {
-            self.blocktime_cf.put(slot, &timestamp)
-        } else {
-            Ok(())
+        self.blocktime_cf.put(slot, &timestamp)
+    }
+
+    pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_block_height".to_string(), String)
+        );
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
+            return Err(BlockstoreError::SlotCleanedUp);
         }
+        self.block_height_cf.get(slot)
+    }
+
+    pub fn cache_block_height(&self, slot: Slot, block_height: u64) -> Result<()> {
+        self.block_height_cf.put(slot, &block_height)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
@@ -1857,7 +1874,12 @@ impl Blockstore {
                     .get_protobuf_or_bincode::<StoredExtendedRewards>(slot)?
                     .unwrap_or_default()
                     .into();
+
+                // The Blocktime and BlockHeight column families are updated asynchronously; they
+                // may not be written by the time the complete slot entries are available. In this
+                // case, these fields will be `None`.
                 let block_time = self.blocktime_cf.get(slot)?;
+                let block_height = self.block_height_cf.get(slot)?;
 
                 let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
@@ -1867,6 +1889,7 @@ impl Blockstore {
                         .map_transactions_to_statuses(slot, slot_transaction_iterator),
                     rewards,
                     block_time,
+                    block_height,
                 };
                 return Ok(block);
             }
@@ -6063,6 +6086,7 @@ pub mod tests {
             previous_blockhash: Hash::default().to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(confirmed_block, expected_block);
 
@@ -6076,6 +6100,7 @@ pub mod tests {
             previous_blockhash: blockhash.to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(confirmed_block, expected_block);
 
@@ -6092,13 +6117,17 @@ pub mod tests {
             previous_blockhash: blockhash.to_string(),
             rewards: vec![],
             block_time: None,
+            block_height: None,
         };
         assert_eq!(complete_block, expected_complete_block);
 
-        // Test block_time returns, if available
+        // Test block_time & block_height return, if available
         let timestamp = 1_576_183_541;
         ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
         expected_block.block_time = Some(timestamp);
+        let block_height = slot - 2;
+        ledger.block_height_cf.put(slot + 1, &block_height).unwrap();
+        expected_block.block_height = Some(block_height);
 
         let confirmed_block = ledger.get_rooted_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block, expected_block);
@@ -6106,6 +6135,9 @@ pub mod tests {
         let timestamp = 1_576_183_542;
         ledger.blocktime_cf.put(slot + 2, &timestamp).unwrap();
         expected_complete_block.block_time = Some(timestamp);
+        let block_height = slot - 1;
+        ledger.block_height_cf.put(slot + 2, &block_height).unwrap();
+        expected_complete_block.block_height = Some(block_height);
 
         let complete_block = ledger.get_complete_block(slot + 2, true).unwrap();
         assert_eq!(complete_block, expected_complete_block);

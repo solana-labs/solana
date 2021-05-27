@@ -8,10 +8,10 @@ use std::{
 use tokio::runtime::Runtime;
 
 // Delay uploading the largest confirmed root for this many slots.  This is done in an attempt to
-// ensure that the `CacheBlockTimeService` has had enough time to add the block time for the root
+// ensure that the `CacheBlockMetaService` has had enough time to add the block time for the root
 // before it's uploaded to BigTable.
 //
-// A more direct connection between CacheBlockTimeService and BigTableUploadService would be
+// A more direct connection between CacheBlockMetaService and BigTableUploadService would be
 // preferable...
 const LARGEST_CONFIRMED_ROOT_UPLOAD_DELAY: usize = 100;
 
