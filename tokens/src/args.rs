@@ -1,5 +1,18 @@
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
 
+pub struct SenderStakeArgs {
+    pub stake_account_address: Pubkey,
+    pub stake_authority: Box<dyn Signer>,
+    pub withdraw_authority: Box<dyn Signer>,
+    pub lockup_authority: Option<Box<dyn Signer>>,
+}
+
+pub struct StakeArgs {
+    pub unlocked_sol: u64,
+    pub lockup_authority: Option<Pubkey>,
+    pub sender_stake_args: Option<SenderStakeArgs>,
+}
+
 pub struct DistributeTokensArgs {
     pub input_csv: String,
     pub transaction_db: String,
@@ -10,14 +23,6 @@ pub struct DistributeTokensArgs {
     pub stake_args: Option<StakeArgs>,
     pub spl_token_args: Option<SplTokenArgs>,
     pub transfer_amount: Option<u64>,
-}
-
-pub struct StakeArgs {
-    pub unlocked_sol: u64,
-    pub stake_account_address: Pubkey,
-    pub stake_authority: Box<dyn Signer>,
-    pub withdraw_authority: Box<dyn Signer>,
-    pub lockup_authority: Option<Box<dyn Signer>>,
 }
 
 #[derive(Default)]
