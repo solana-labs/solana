@@ -4537,10 +4537,7 @@ impl Bank {
     }
 
     pub fn get_snapshot_storages(&self) -> SnapshotStorages {
-        self.rc
-            .get_snapshot_storages(self.slot())
-            .into_iter()
-            .collect()
+        self.rc.get_snapshot_storages(self.slot())
     }
 
     #[must_use]
