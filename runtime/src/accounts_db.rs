@@ -274,6 +274,33 @@ impl<'a> LoadedAccountAccessor<'a> {
         }
     }
 
+    fn get_loaded_account_logged(&mut self, pubkey: &Pubkey, slot: Slot) -> Option<LoadedAccount> {
+        match self {
+            LoadedAccountAccessor::Cached(cached_account) => {
+                let i = cached_account.take();
+                if i.is_none() {
+                    println!("Failed to get {} {}", pubkey, slot);
+                }
+                let cached_account: (Pubkey, Cow<'a, CachedAccount>) = i.expect(
+                    "Cache flushed/purged should be handled before trying to fetch account",
+                );
+                Some(LoadedAccount::Cached(cached_account))
+            }
+            LoadedAccountAccessor::Stored(maybe_storage_entry) => {
+                // storage entry may not be present if slot was cleaned up in
+                // between reading the accounts index and calling this function to
+                // get account meta from the storage entry here
+                maybe_storage_entry
+                    .as_ref()
+                    .and_then(|(storage_entry, offset)| {
+                        storage_entry
+                            .get_stored_account_meta(*offset)
+                            .map(LoadedAccount::Stored)
+                    })
+            }
+        }
+    }
+
     fn get_loaded_account(&mut self) -> Option<LoadedAccount> {
         match self {
             LoadedAccountAccessor::Cached(cached_account) => {
@@ -1583,6 +1610,7 @@ impl AccountsDb {
 
         self.accounts_index
             .handle_dead_keys(&dead_keys, &self.account_indexes);
+        println!("purging keys: {:?}", dead_keys);
         reclaims
     }
 
@@ -2437,7 +2465,7 @@ impl AccountsDb {
             .scan_accounts(ancestors, slot_id, |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
-                    .get_loaded_account()
+                    .get_loaded_account_logged(&pubkey, slot)
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
             })?;
@@ -3296,7 +3324,7 @@ impl AccountsDb {
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
-    /// comment below for why
+    /// comment below for why        
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, slot_id: SlotId, is_from_abs: bool) {
         if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
@@ -3314,6 +3342,7 @@ impl AccountsDb {
             .remove(&slot_id)
         {
             // If this slot was already cleaned up, no need to do any further cleans
+            println!("purge_slot() slot_id: {}", slot_id);
             return;
         }
 
@@ -3362,7 +3391,11 @@ impl AccountsDb {
             // This function is only currently safe with respect to `flush_slot_cache()` because
             // both functions run serially in AccountsBackgroundService.
             let mut remove_cache_elapsed = Measure::start("remove_cache_elapsed");
-            if let Some(slot_cache) = self.accounts_cache.remove_slot(*remove_slot) {
+            // Note: we cannot remove this slot from the slot cache until we've removed its
+            // entries from the accounts index first. This is because `scan_accounts()` relies on
+            // holding the index lock, finding the index entry, and then looking up the entry
+            // in the cache. If it fails to find that entry, it will panic in `get_loaded_account()`
+            if let Some(slot_cache) = self.accounts_cache.slot_cache(*remove_slot) {
                 // If the slot is still in the cache, remove the backing storages for
                 // the slot and from the Accounts Index
                 num_cached_slots_removed += 1;
@@ -3370,6 +3403,8 @@ impl AccountsDb {
                 self.purge_slot_cache(*remove_slot, slot_cache);
                 remove_cache_elapsed.stop();
                 remove_cache_elapsed_across_slots += remove_cache_elapsed.as_us();
+                // Nobody else shoud have removed the slot cache entry yet
+                assert!(self.accounts_cache.remove_slot(*remove_slot).is_some());
             } else {
                 self.purge_slot_storage(*remove_slot, purge_stats);
             }
@@ -3655,7 +3690,11 @@ impl AccountsDb {
         // their results
         {
             let mut locked_removed_slot_ids = self.accounts_index.removed_slot_ids.lock().unwrap();
-            for (_, remove_slot_id) in remove_slots.iter() {
+            for (slot, remove_slot_id) in remove_slots.iter() {
+                println!(
+                    "remove_unrooted_slots slot: {}, id: {}",
+                    slot, remove_slot_id
+                );
                 locked_removed_slot_ids.insert(*remove_slot_id);
             }
         }

@@ -674,7 +674,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
-        /*{
+        {
             let locked_removed_slot_ids = self.removed_slot_ids.lock().unwrap();
             if locked_removed_slot_ids.contains(&scan_slot_id) {
                 return Err(ScanError::SlotRemoved {
@@ -682,7 +682,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     slot_id: scan_slot_id,
                 });
             }
-        }*/
+        }
 
         let max_root = {
             let mut w_ongoing_scan_roots = self
@@ -863,21 +863,21 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
         // If the fork with tip at bank `scan_slot_id` was removed durin our scan, then the scan
         // may have been corrupted, so abort the results.
-        /*let was_scan_corrupted = self
+        let was_scan_corrupted = self
             .removed_slot_ids
             .lock()
             .unwrap()
             .contains(&scan_slot_id);
 
         if was_scan_corrupted {
+            println!("Scan was corrupted");
             Err(ScanError::SlotRemoved {
                 slot: ancestors.max_slot(),
                 slot_id: scan_slot_id,
             })
         } else {
             Ok(())
-        }*/
-        Ok(())
+        }
     }
 
     fn do_unchecked_scan_accounts<F, R>(
