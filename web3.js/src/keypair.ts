@@ -1,4 +1,5 @@
 import * as nacl from 'tweetnacl';
+const txt = require('text-encoder');
 
 import {PublicKey} from './publickey';
 
@@ -63,7 +64,7 @@ export class Keypair {
   ): Keypair {
     const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
     if (!options || !options.skipValidation) {
-      const encoder = new TextEncoder();
+      const encoder = new txt.TextEncoder();
       const signData = encoder.encode('@solana/web3.js-validation-v1');
       const signature = nacl.sign.detached(signData, keypair.secretKey);
       if (!nacl.sign.detached.verify(signData, signature, keypair.publicKey)) {

@@ -75,6 +75,7 @@
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
     "superstruct": "^0.14.2",
+    "text-encoder": "0.0.4",
     "tweetnacl": "^1.0.0"
   },
   "devDependencies": {
