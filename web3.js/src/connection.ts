@@ -1,7 +1,7 @@
 import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import {parse as urlParse, format as urlFormat} from 'url';
+import {parse as urlParse} from 'url';
 import fetch, {Response} from 'node-fetch';
 import {
   type as pick,
@@ -36,6 +36,7 @@ import {Message} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
+import {makeWebsocketUrl} from './util/url';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -1917,6 +1918,8 @@ export type FetchMiddleware = (
 export type ConnectionConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
+  /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
+  wsEndpoint?: string;
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional fetch middleware callback */
@@ -1929,6 +1932,7 @@ export type ConnectionConfig = {
 export class Connection {
   /** @internal */ _commitment?: Commitment;
   /** @internal */ _rpcEndpoint: string;
+  /** @internal */ _rpcWsEndpoint: string;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
   /** @internal */ _rpcBatchRequest: RpcBatchRequest;
@@ -1948,6 +1952,11 @@ export class Connection {
     lastFetch: number;
     simulatedSignatures: Array<string>;
     transactionSignatures: Array<string>;
+  } = {
+    recentBlockhash: null,
+    lastFetch: 0,
+    transactionSignatures: [],
+    simulatedSignatures: [],
   };
 
   /** @internal */ _accountChangeSubscriptionCounter: number = 0;
@@ -1995,20 +2004,23 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    this._rpcEndpoint = endpoint;
-
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
+    let wsEndpoint;
     let httpHeaders;
     let fetchMiddleware;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
       this._commitment = commitmentOrConfig.commitment;
+      wsEndpoint = commitmentOrConfig.wsEndpoint;
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
     }
+
+    this._rpcEndpoint = endpoint;
+    this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
       url.href,
@@ -2019,26 +2031,7 @@ export class Connection {
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
 
-    this._blockhashInfo = {
-      recentBlockhash: null,
-      lastFetch: 0,
-      transactionSignatures: [],
-      simulatedSignatures: [],
-    };
-
-    url.protocol = useHttps ? 'wss:' : 'ws:';
-    url.host = '';
-    // Only shift the port by +1 as a convention for ws(s) only if given endpoint
-    // is explictly specifying the endpoint port (HTTP-based RPC), assuming
-    // we're directly trying to connect to solana-validator's ws listening port.
-    // When the endpoint omits the port, we're connecting to the protocol
-    // default ports: http(80) or https(443) and it's assumed we're behind a reverse
-    // proxy which manages WebSocket upgrade and backend port redirection.
-    if (url.port !== null) {
-      url.port = String(Number(url.port) + 1);
-    }
-
-    this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
+    this._rpcWebSocket = new RpcWebSocketClient(this._rpcWsEndpoint, {
       autoconnect: false,
       max_reconnects: Infinity,
     });
