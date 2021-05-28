@@ -41,10 +41,10 @@ $ npm install --save @solana/web3.js
 ### Browser bundle
 ```html
 <!-- Development (un-minified) -->
-<script src="https://unpkg.com/@solana/web3.js@0.92.0/lib/index.iife.js"></script>
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
 <!-- Production (un-minified) -->
-<script src="https://unpkg.com/@solana/web3.js@0.92.0/lib/index.iife.min.js"></script>
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 ```
 
 ## Development Environment Setup
@@ -82,8 +82,8 @@ console.log(solanaWeb3);
 ## Flow
 
 A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-[module.flow.js](https://github.com/solana-labs/solana-web3.js/tree/master/module.flow.js).
-Add the following line under the [libs] section of your project's .flowconfig to
+https://unpkg.com/@solana/web3.js@latest/module.flow.js.
+Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
 activate it:
 ```ini
 [libs]
@@ -96,4 +96,4 @@ and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js)
 
 Each Github release features a tarball containing API documentation and a
 minified version of the module suitable for direct use in a browser environment
-(&lt;script&gt; tag)
+(`<script>` tag)
