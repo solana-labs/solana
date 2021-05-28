@@ -1158,11 +1158,10 @@ mod tests {
     fn test_hashset_is_empty() {
         solana_logger::setup();
 
-        let hs : HashSet<u32> = HashSet::new();
+        let hs: HashSet<u32> = HashSet::new();
 
         let start = std::time::Instant::now();
-        for _n in 0..100_000_000 {
-        }
+        for _n in 0..100_000_000 {}
         let duration = start.elapsed();
         info!("spin duration {:?}", duration);
 
