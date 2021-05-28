@@ -3009,9 +3009,9 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-ro-account_modify"
-version = "1.8.0"
+version = "1.7.0"
 dependencies = [
- "solana-program 1.8.0",
+ "solana-program 1.7.0",
 ]
 
 [[package]]
