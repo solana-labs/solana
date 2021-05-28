@@ -3008,6 +3008,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-ro-account_modify"
+version = "1.7.0"
+dependencies = [
+ "solana-program 1.7.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-ro-modify"
 version = "1.7.0"
 dependencies = [

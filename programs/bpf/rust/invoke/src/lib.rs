@@ -29,6 +29,7 @@ const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
 const TEST_RETURN_ERROR: u8 = 11;
 const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
 const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
+const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -354,27 +355,6 @@ fn process_instruction(
                 }
             }
 
-            msg!("Test writable deescalation");
-            {
-                const NUM_BYTES: usize = 10;
-                let mut buffer = [0; NUM_BYTES];
-                buffer.copy_from_slice(
-                    &accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES],
-                );
-
-                let instruction = create_instruction(
-                    *accounts[INVOKED_PROGRAM_INDEX].key,
-                    &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
-                    vec![WRITE_ACCOUNT, NUM_BYTES as u8],
-                );
-                let _ = invoke(&instruction, accounts);
-
-                assert_eq!(
-                    buffer,
-                    accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]
-                );
-            }
-
             msg!("Create account and init data");
             {
                 let from_lamports = accounts[FROM_INDEX].lamports();
@@ -602,6 +582,25 @@ fn process_instruction(
                 vec![VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE],
             );
             invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_WRITABLE_DEESCALATION_WRITABLE => {
+            msg!("Test writable deescalation writable");
+            const NUM_BYTES: usize = 10;
+            let mut buffer = [0; NUM_BYTES];
+            buffer
+                .copy_from_slice(&accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]);
+
+            let instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                vec![WRITE_ACCOUNT, NUM_BYTES as u8],
+            );
+            let _ = invoke(&instruction, accounts);
+
+            assert_eq!(
+                buffer,
+                accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]
+            );
         }
         _ => panic!(),
     }

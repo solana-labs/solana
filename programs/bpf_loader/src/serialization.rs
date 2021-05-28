@@ -40,12 +40,11 @@ pub fn deserialize_parameters(
     loader_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
-    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
-        deserialize_parameters_unaligned(keyed_accounts, buffer, skip_ro_deserialization)
+        deserialize_parameters_unaligned(keyed_accounts, buffer)
     } else {
-        deserialize_parameters_aligned(keyed_accounts, buffer, skip_ro_deserialization)
+        deserialize_parameters_aligned(keyed_accounts, buffer)
     }
 }
 
@@ -127,33 +126,28 @@ pub fn serialize_parameters_unaligned(
 pub fn deserialize_parameters_unaligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
-    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
         start += 1; // is_dup
         if !is_dup {
-            if keyed_account.is_writable() || !skip_ro_deserialization {
-                start += size_of::<u8>(); // is_signer
-                start += size_of::<u8>(); // is_writable
-                start += size_of::<Pubkey>(); // key
-                keyed_account
-                    .try_account_ref_mut()?
-                    .set_lamports(LittleEndian::read_u64(&buffer[start..]));
-                start += size_of::<u64>() // lamports
+            start += size_of::<u8>(); // is_signer
+            start += size_of::<u8>(); // is_writable
+            start += size_of::<Pubkey>(); // key
+            keyed_account
+                .try_account_ref_mut()?
+                .set_lamports(LittleEndian::read_u64(&buffer[start..]));
+            start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-                let end = start + keyed_account.data_len()?;
-                keyed_account
-                    .try_account_ref_mut()?
-                    .set_data_from_slice(&buffer[start..end]);
-                start += keyed_account.data_len()? // data
+            let end = start + keyed_account.data_len()?;
+            keyed_account
+                .try_account_ref_mut()?
+                .set_data_from_slice(&buffer[start..end]);
+            start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
-            } else {
-                start += get_serialized_account_size_unaligned(keyed_account)?;
-            }
         }
     }
     Ok(())
@@ -253,7 +247,6 @@ pub fn serialize_parameters_aligned(
 pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
-    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -261,7 +254,7 @@ pub fn deserialize_parameters_aligned(
         start += size_of::<u8>(); // position
         if is_dup {
             start += 7; // padding to 64-bit aligned
-        } else if keyed_account.is_writable() || !skip_ro_deserialization {
+        } else {
             let mut account = keyed_account.try_account_ref_mut()?;
             start += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
@@ -286,8 +279,6 @@ pub fn deserialize_parameters_aligned(
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch
-        } else {
-            start += get_serialized_account_size_aligned(keyed_account)?;
         }
     }
     Ok(())
@@ -454,24 +445,13 @@ mod tests {
                 }
             })
             .collect();
-        deserialize_parameters(
-            &bpf_loader::id(),
-            &de_keyed_accounts,
-            serialized.as_slice(),
-            true,
-        )
-        .unwrap();
+        deserialize_parameters(&bpf_loader::id(), &de_keyed_accounts, serialized.as_slice())
+            .unwrap();
         for ((account, de_keyed_account), key) in
             accounts.iter().zip(de_keyed_accounts).zip(keys.clone())
         {
             assert_eq!(key, *de_keyed_account.unsigned_key());
             let account = account.borrow();
-            assert_eq!(account.lamports(), de_keyed_account.lamports().unwrap());
-            assert_eq!(
-                account.data(),
-                de_keyed_account.try_account_ref().unwrap().data()
-            );
-            assert_eq!(*account.owner(), de_keyed_account.owner().unwrap());
             assert_eq!(account.executable(), de_keyed_account.executable().unwrap());
             assert_eq!(account.rent_epoch(), de_keyed_account.rent_epoch().unwrap());
         }
@@ -517,7 +497,6 @@ mod tests {
             &bpf_loader_deprecated::id(),
             &de_keyed_accounts,
             serialized.as_slice(),
-            true,
         )
         .unwrap();
         for ((account, de_keyed_account), key) in

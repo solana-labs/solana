@@ -70,6 +70,7 @@ members = [
     "rust/param_passing_dep",
     "rust/rand",
     "rust/ro_modify",
+    "rust/ro_account_modify",
     "rust/sanity",
     "rust/sha",
     "rust/spoof1",
