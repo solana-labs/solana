@@ -576,42 +576,46 @@ impl AccountsHash {
                 let sub = &bins[bin];
                 if !sub.is_empty() {
                     item_len += bins[bin].len();
-                    first_items.push((&bins[bin][0].pubkey, i));
+                    first_items.push((bins[bin][0].pubkey, i));
                 }
             }
         });
         let mut overall_sum = 0;
         let mut hashes: Vec<Hash> = Vec::with_capacity(item_len);
 
+        let mut decrement = Vec::with_capacity(len);
         while !first_items.is_empty() {
-            let mut min_pubkey = &max_pubkey;
+            let mut min_pubkey = max_pubkey;
             let mut min_index = usize::MAX;
-            let mut first_item_index = 0;
-            let mut max_len = first_items.len();
-            while first_item_index < max_len {
-                let (key, _) = first_items[first_item_index];
-                if min_pubkey >= key {
-                    if min_index != usize::MAX && min_pubkey == key {
-                        // we found an item that was masked by a later slot, so skip it
-                        let first_item = first_items[min_index];
-                        let division_index = first_item.1;
-                        let bin = &pubkey_division[division_index][bin];
-                        let mut index = indexes[division_index];
-                        index += 1;
-                        if index >= bin.len() {
-                            first_items.remove(min_index); // stop looking in this vector - we exhausted it
-                            first_item_index -= 1;
-                            max_len -= 1;
-                        } else {
-                            // still more items where we found the previous key, so just increment the index for that slot group
-                            first_items[min_index] = (&bin[index].pubkey, division_index);
-                            indexes[division_index] = index;
-                        }
+            for first_item_index in 0..first_items.len() {
+                let mut equal = false;
+                {
+                    let (key, _) = &first_items[first_item_index];
+                    let compare = key.as_ref().cmp(min_pubkey.as_ref());
+                    match compare {
+                        std::cmp::Ordering::Equal => {equal = min_index != usize::MAX;},
+                        std::cmp::Ordering::Greater => (),
+                        std::cmp::Ordering::Less => {continue;},
                     }
-                    min_index = first_item_index;
-                    min_pubkey = key;
+
+                    min_pubkey = *key;
                 }
-                first_item_index += 1;
+                if equal {
+                    // we found an item that was masked by a later slot, so skip it
+                    let first_item = first_items[min_index];
+                    let division_index = first_item.1;
+                    let bin = &pubkey_division[division_index][bin];
+                    let mut index = indexes[division_index];
+                    index += 1;
+                    if index >= bin.len() {
+                        decrement.push(min_index); // stop looking in this vector - we exhausted it
+                    } else {
+                        // still more items where we found the previous key, so just increment the index for that slot group
+                        first_items[min_index] = (bin[index].pubkey, division_index);
+                        indexes[division_index] = index;
+                    }
+                }
+                min_index = first_item_index;
             }
             let first_item = first_items[min_index];
             let division_index = first_item.1;
@@ -628,10 +632,17 @@ impl AccountsHash {
             }
             index += 1;
             if index >= bin.len() {
-                first_items.remove(min_index); // stop looking in this vector - we exhausted it
+                decrement.push(min_index); // stop looking in this vector - we exhausted it
             } else {
-                first_items[min_index] = (&bin[index].pubkey, division_index);
+                first_items[min_index] = (bin[index].pubkey, division_index);
                 indexes[division_index] = index;
+            }
+
+            if !decrement.is_empty() {
+                for exhausted_index in (0..decrement.len()).rev() {
+                    first_items.remove(decrement[exhausted_index]);
+                }
+                decrement.truncate(0);
             }
         }
         (hashes, overall_sum)
