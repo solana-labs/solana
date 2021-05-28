@@ -223,7 +223,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, AbiExample, Clone)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,
@@ -232,9 +232,26 @@ pub struct RollingBitField {
     count: usize,
     // These are items that are true and lower than min.
     // They would cause us to exceed max_width if we stored them in our bit field.
-    // We only expect these items in conditions where there is some other bug in the system.
+    // We only expect these items in conditions where there is some other bug in the system
+    //  or in testing when large ranges are created.
     excess: HashSet<u64>,
 }
+
+impl PartialEq<RollingBitField> for RollingBitField {
+    fn eq(&self, other: &Self) -> bool {
+        // 2 instances could have different internal data for the same values,
+        // so we have to compare data.
+        self.len() == other.len() && {
+            for item in self.get_all() {
+                if !other.contains(&item) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+}
+
 // functionally similar to a hashset
 // Relies on there being a sliding window of key values. The key values continue to increase.
 // Old key values are removed from the lesser values and do not accumulate.
@@ -264,7 +281,7 @@ impl RollingBitField {
     }
 
     pub fn insert(&mut self, key: u64) {
-        let bits_empty = self.count == 0 || self.count == self.excess.len();
+        let mut bits_empty = self.count == 0 || self.all_items_in_excess();
         let update_bits = if bits_empty {
             true // nothing in bits, so in range
         } else if key < self.min {
@@ -293,6 +310,12 @@ impl RollingBitField {
                 let address = self.get_address(&key);
                 self.bits.set(address, false);
                 self.purge(&key);
+
+                if self.all_items_in_excess() {
+                    // if we moved the last existing item to excess, then we are ready to insert the new item in the bits
+                    bits_empty = true;
+                    break;
+                }
             }
 
             true // moved things to excess if necessary, so update bits with the new entry
@@ -309,6 +332,13 @@ impl RollingBitField {
                 } else {
                     self.min = std::cmp::min(self.min, key);
                     self.max = std::cmp::max(self.max, key + 1);
+                    assert!(
+                        self.min + self.max_width >= self.max,
+                        "min: {}, max: {}, max_width: {}",
+                        self.min,
+                        self.max,
+                        self.max_width
+                    );
                 }
                 self.count += 1;
             }
@@ -340,9 +370,13 @@ impl RollingBitField {
         }
     }
 
+    fn all_items_in_excess(&self) -> bool {
+        self.excess.len() == self.count
+    }
+
     // after removing 'key' where 'key' = min, make min the correct new min value
     fn purge(&mut self, key: &u64) {
-        if self.count > 0 {
+        if self.count > 0 && !self.all_items_in_excess() {
             if key == &self.min {
                 let start = self.min + 1; // min just got removed
                 for key in start..self.max {
@@ -353,8 +387,18 @@ impl RollingBitField {
                 }
             }
         } else {
-            self.min = Slot::default();
-            self.max = Slot::default();
+            // The idea is that there are no items in the bitfield anymore.
+            // But, there MAY be items in excess. The model works such that items < min go into excess.
+            // So, after purging all items from bitfield, we hold max to be what it previously was, but set min to max.
+            // Thus, if we lookup >= max, answer is always false without having to look in excess.
+            // If we changed max here to 0, we would lose the ability to know the range of items in excess (if any).
+            // So, now, with min updated = max:
+            // If we lookup < max, then we first check min.
+            // If >= min, then we look in bitfield.
+            // Otherwise, we look in excess since the request is < min.
+            // So, resetting min like this after a remove results in the correct behavior for the model.
+            // Later, if we insert and there are 0 items total (excess + bitfield), then we reset min/max to reflect the new item only.
+            self.min = self.max;
         }
     }
 
@@ -364,9 +408,12 @@ impl RollingBitField {
         self.bits.get(address)
     }
 
+    // This is the 99% use case.
+    // This needs be fast for the most common case of asking for key >= min.
     pub fn contains(&self, key: &u64) -> bool {
         if key < &self.max {
             if key >= &self.min {
+                // in the bitfield range
                 self.contains_assume_in_range(key)
             } else {
                 self.excess.contains(key)
@@ -1630,6 +1677,78 @@ pub mod tests {
     }
 
     #[test]
+    fn test_bitfield_delete_non_excess() {
+        solana_logger::setup();
+        let len = 16;
+        let mut bitfield = RollingBitField::new(len);
+
+        bitfield.insert(0);
+        let too_big = len + 1;
+        bitfield.insert(too_big);
+        assert!(bitfield.contains(&0));
+        assert!(bitfield.contains(&too_big));
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.excess.len(), 1);
+        assert_eq!(bitfield.min, too_big);
+        assert_eq!(bitfield.max, too_big + 1);
+
+        // delete the thing that is NOT in excess
+        bitfield.remove(&too_big);
+        assert_eq!(bitfield.min, too_big + 1);
+        assert_eq!(bitfield.max, too_big + 1);
+        let too_big_times_2 = too_big * 2;
+        bitfield.insert(too_big_times_2);
+        assert!(bitfield.contains(&0));
+        assert!(bitfield.contains(&too_big_times_2));
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.excess.len(), 1);
+        assert_eq!(bitfield.min, too_big_times_2);
+        assert_eq!(bitfield.max, too_big_times_2 + 1);
+
+        bitfield.remove(&0);
+        bitfield.remove(&too_big_times_2);
+        assert!(bitfield.is_empty());
+        let other = 5;
+        bitfield.insert(other);
+        assert!(bitfield.contains(&other));
+        assert!(bitfield.excess.is_empty());
+        assert_eq!(bitfield.min, other);
+        assert_eq!(bitfield.max, other + 1);
+    }
+
+    #[test]
+    fn test_bitfield_insert_excess() {
+        solana_logger::setup();
+        let len = 16;
+        let mut bitfield = RollingBitField::new(len);
+
+        bitfield.insert(0);
+        let too_big = len + 1;
+        bitfield.insert(too_big);
+        assert!(bitfield.contains(&0));
+        assert!(bitfield.contains(&too_big));
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.excess.len(), 1);
+        assert!(bitfield.excess.contains(&0));
+        assert_eq!(bitfield.min, too_big);
+        assert_eq!(bitfield.max, too_big + 1);
+
+        // delete the thing that IS in excess
+        // this does NOT affect min/max
+        bitfield.remove(&0);
+        assert_eq!(bitfield.min, too_big);
+        assert_eq!(bitfield.max, too_big + 1);
+        // re-add to excess
+        bitfield.insert(0);
+        assert!(bitfield.contains(&0));
+        assert!(bitfield.contains(&too_big));
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.excess.len(), 1);
+        assert_eq!(bitfield.min, too_big);
+        assert_eq!(bitfield.max, too_big + 1);
+    }
+
+    #[test]
     fn test_bitfield_permutations() {
         solana_logger::setup();
         let mut bitfield = RollingBitField::new(2097152);
@@ -1934,7 +2053,7 @@ pub mod tests {
         assert!(!tester.remove(&slot));
     }
 
-    fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
+    fn compare_internal(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
         assert_eq!(hashset.len(), bitfield.len());
         assert_eq!(hashset.is_empty(), bitfield.is_empty());
         if !bitfield.is_empty() {
@@ -1965,6 +2084,14 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
+        compare_internal(hashset, bitfield);
+        let clone = bitfield.clone();
+        compare_internal(hashset, &clone);
+        assert!(clone.eq(&bitfield));
+        assert_eq!(clone, *bitfield);
     }
 
     #[test]
