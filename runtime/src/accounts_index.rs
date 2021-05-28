@@ -311,7 +311,7 @@ impl RollingBitField {
                 self.bits.set(address, false);
                 self.purge(&key);
 
-                if self.count == self.excess.len() {
+                if self.all_items_in_excess() {
                     // if we moved the last existing item to excess, then we are ready to insert the new item in the bits
                     bits_empty = true;
                     break;
@@ -2091,6 +2091,7 @@ pub mod tests {
         let clone = bitfield.clone();
         compare_internal(hashset, &clone);
         assert!(clone.eq(&bitfield));
+        assert_eq!(clone, *bitfield);
     }
 
     #[test]
