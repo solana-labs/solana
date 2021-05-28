@@ -5068,7 +5068,7 @@ dependencies = [
  "blake3",
  "borsh",
  "borsh-derive",
- "bs58 0.3.1",
+ "bs58 0.4.0",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5151,7 +5151,7 @@ dependencies = [
 name = "solana-rpc"
 version = "1.8.0"
 dependencies = [
- "bs58 0.3.1",
+ "bs58 0.4.0",
  "crossbeam-channel 0.4.4",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -5301,7 +5301,7 @@ dependencies = [
 name = "solana-sdk-macro"
 version = "1.8.0"
 dependencies = [
- "bs58 0.3.1",
+ "bs58 0.4.0",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
