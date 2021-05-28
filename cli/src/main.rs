@@ -173,12 +173,16 @@ pub fn parse_args<'a>(
         matches.value_of("json_rpc_url").unwrap_or(""),
         &config.json_rpc_url,
     );
+    let default_signer_arg_name = "keypair".to_string();
     let (_, default_signer_path) = CliConfig::compute_keypair_path_setting(
-        matches.value_of("keypair").unwrap_or(""),
+        matches.value_of(&default_signer_arg_name).unwrap_or(""),
         &config.keypair_path,
     );
 
-    let default_signer = DefaultSigner::from_path(default_signer_path.clone())?;
+    let default_signer = DefaultSigner {
+        arg_name: default_signer_arg_name,
+        path: default_signer_path.clone(),
+    };
 
     let CliCommandInfo {
         command,
