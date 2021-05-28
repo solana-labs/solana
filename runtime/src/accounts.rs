@@ -1155,6 +1155,33 @@ mod tests {
     }
 
     #[test]
+    fn test_hashset_is_empty() {
+        solana_logger::setup();
+
+        let hs : HashSet<u32> = HashSet::new();
+
+        let start = std::time::Instant::now();
+        for _n in 0..100_000_000 {
+        }
+        let duration = start.elapsed();
+        info!("spin duration {:?}", duration);
+
+        let start = std::time::Instant::now();
+        for _n in 0..100_000_000 {
+            hs.is_empty();
+        }
+        let duration = start.elapsed();
+        info!("HashSet is_empty duration {:?}", duration);
+
+        let start = std::time::Instant::now();
+        for n in 0..100_000_000 {
+            hs.contains(&n);
+        }
+        let duration = start.elapsed();
+        info!("HashSet contains duration {:?}", duration);
+    }
+
+    #[test]
     fn test_load_accounts_no_key() {
         let accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
