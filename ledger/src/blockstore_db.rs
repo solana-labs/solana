@@ -5,9 +5,13 @@ use log::*;
 use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
-    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+    self,
+    compaction_filter::CompactionFilter,
+    compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
+    ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
+    DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
+
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_runtime::hardened_unpack::UnpackError;
@@ -17,7 +21,17 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_storage_proto::convert::generated;
-use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    ffi::{CStr, CString},
+    fs,
+    marker::PhantomData,
+    path::Path,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 use thiserror::Error;
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
@@ -57,6 +71,9 @@ const BLOCKTIME_CF: &str = "blocktime";
 const PERF_SAMPLES_CF: &str = "perf_samples";
 /// Column family for BlockHeight
 const BLOCK_HEIGHT_CF: &str = "block_height";
+
+// 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
+const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -208,8 +225,30 @@ impl From<BlockstoreRecoveryMode> for DBRecoveryMode {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+struct OldestSlot(Arc<AtomicU64>);
+
+impl OldestSlot {
+    pub fn set(&self, oldest_slot: Slot) {
+        // this is independently used for compaction_filter without any data dependency.
+        // also, compaction_filters are created via its factories, creating short-lived copies of
+        // this atomic value for the single job of compaction. So, Relaxed store can be justified
+        // in total
+        self.0.store(oldest_slot, Ordering::Relaxed);
+    }
+
+    pub fn get(&self) -> Slot {
+        // copy from the AtomicU64 as a general precaution so that the oldest_slot can not mutate
+        // across single run of compaction for simpler reasoning although this isn't strict
+        // requirement at the moment
+        // also eventual propagation (very Relaxed) load is Ok, because compaction by nature doesn't
+        // require strictly synchronized semantics in this regard
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
 #[derive(Debug)]
-struct Rocks(rocksdb::DB, ActualAccessType);
+struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
 
 impl Rocks {
     fn open(
@@ -234,39 +273,73 @@ impl Rocks {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
 
+        let oldest_slot = OldestSlot::default();
+
         // Column family names
-        let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
-        let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(&access_type));
-        let duplicate_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options(&access_type));
-        let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(&access_type));
-        let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(&access_type));
-        let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(&access_type));
-        let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(&access_type));
-        let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(&access_type));
-        let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(&access_type));
-        let transaction_status_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options(&access_type));
-        let address_signatures_cf_descriptor =
-            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options(&access_type));
-        let transaction_status_index_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options(&access_type));
-        let rewards_cf_descriptor =
-            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options(&access_type));
-        let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
-        let perf_samples_cf_descriptor =
-            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
-        let block_height_cf_descriptor =
-            ColumnFamilyDescriptor::new(BlockHeight::NAME, get_cf_options(&access_type));
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            SlotMeta::NAME,
+            get_cf_options::<SlotMeta>(&access_type, &oldest_slot),
+        );
+        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DeadSlots::NAME,
+            get_cf_options::<DeadSlots>(&access_type, &oldest_slot),
+        );
+        let duplicate_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DuplicateSlots::NAME,
+            get_cf_options::<DuplicateSlots>(&access_type, &oldest_slot),
+        );
+        let erasure_meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            ErasureMeta::NAME,
+            get_cf_options::<ErasureMeta>(&access_type, &oldest_slot),
+        );
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(
+            Orphans::NAME,
+            get_cf_options::<Orphans>(&access_type, &oldest_slot),
+        );
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(
+            Root::NAME,
+            get_cf_options::<Root>(&access_type, &oldest_slot),
+        );
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(
+            Index::NAME,
+            get_cf_options::<Index>(&access_type, &oldest_slot),
+        );
+        let shred_data_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredData::NAME,
+            get_cf_options::<ShredData>(&access_type, &oldest_slot),
+        );
+        let shred_code_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredCode::NAME,
+            get_cf_options::<ShredCode>(&access_type, &oldest_slot),
+        );
+        let transaction_status_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatus::NAME,
+            get_cf_options::<TransactionStatus>(&access_type, &oldest_slot),
+        );
+        let address_signatures_cf_descriptor = ColumnFamilyDescriptor::new(
+            AddressSignatures::NAME,
+            get_cf_options::<AddressSignatures>(&access_type, &oldest_slot),
+        );
+        let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatusIndex::NAME,
+            get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
+        );
+        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(
+            Rewards::NAME,
+            get_cf_options::<Rewards>(&access_type, &oldest_slot),
+        );
+        let blocktime_cf_descriptor = ColumnFamilyDescriptor::new(
+            Blocktime::NAME,
+            get_cf_options::<Blocktime>(&access_type, &oldest_slot),
+        );
+        let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(
+            PerfSamples::NAME,
+            get_cf_options::<PerfSamples>(&access_type, &oldest_slot),
+        );
+        let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
+            BlockHeight::NAME,
+            get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
+        );
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -289,18 +362,18 @@ impl Rocks {
             (PerfSamples::NAME, perf_samples_cf_descriptor),
             (BlockHeight::NAME, block_height_cf_descriptor),
         ];
+        let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 
         // Open the database
         let db = match access_type {
             AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
                 DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
                 ActualAccessType::Primary,
+                oldest_slot,
             ),
             AccessType::TryPrimaryThenSecondary => {
-                let names: Vec<_> = cfs.iter().map(|c| c.0).collect();
-
                 match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
-                    Ok(db) => Rocks(db, ActualAccessType::Primary),
+                    Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
 
@@ -312,13 +385,75 @@ impl Rocks {
                         db_options.set_max_open_files(-1);
 
                         Rocks(
-                            DB::open_cf_as_secondary(&db_options, path, &secondary_path, names)?,
+                            DB::open_cf_as_secondary(
+                                &db_options,
+                                path,
+                                &secondary_path,
+                                cf_names.clone(),
+                            )?,
                             ActualAccessType::Secondary,
+                            oldest_slot,
                         )
                     }
                 }
             }
         };
+        // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
+        if matches!(access_type, AccessType::PrimaryOnly) {
+            for cf_name in cf_names {
+                // this special column family must be excluded from LedgerCleanupService's rocksdb
+                // compactions
+                if cf_name == TransactionStatusIndex::NAME {
+                    continue;
+                }
+
+                // This is the crux of our write-stall-free storage cleaning strategy with consistent
+                // state view for higher-layers
+                //
+                // For the consistent view, we commit delete_range on pruned slot range by LedgerCleanupService.
+                // simple story here.
+                //
+                // For actual storage cleaning, we employ RocksDB compaction. But default RocksDB compaction
+                // settings don't work well for us. That's because we're using it rather like a really big
+                // (100 GBs) ring-buffer. RocksDB is basically assuming uniform data write over the key space for
+                // efficient compaction, which isn't true for our use as a ring buffer.
+                //
+                // So, we customize the compaction strategy with 2 combined tweaks:
+                // (1) compaction_filter and (2) shortening its periodic cycles.
+                //
+                // Via the compaction_filter, we finally reclaim previously delete_range()-ed storage occupied
+                // by pruned slots. When compaction_filter is set, each SST files are re-compacted periodically
+                // to hunt for keys newly expired by the compaction_filter re-evaluation. But RocksDb's default
+                // `periodic_compaction_seconds` is 30 days, which is too long for our case. So, we
+                // shorten it to a day (24 hours).
+                //
+                // As we write newer SST files over time at rather consistent rate of speed, this
+                // effectively makes each newly-created ssts be re-compacted for the filter at
+                // well-dispersed different timings.
+                // As a whole, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
+                // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
+                // amortization.
+                // So, there is a bit inefficiency here because we'll rewrite not-so-old SST files
+                // too. But longer period would introduce higher variance of ledger storage sizes over
+                // the long period. And it's much better than the daily IO spike caused by compact_range() by
+                // previous implementation.
+                //
+                // `ttl` and `compact_range`(`ManualCompaction`), doesn't work nicely. That's
+                // because its original intention is delete_range()s to reclaim disk space. So it tries to merge
+                // them with N+1 SST files all way down to the bottommost SSTs, often leading to vastly large amount
+                // (= all) of invalidated SST files, when combined with newer writes happening at the opposite
+                // edge of the key space. This causes a long and heavy disk IOs and possible write
+                // stall and ultimately, the deadly Replay/Banking stage stall at higher layers.
+                db.0.set_options_cf(
+                    db.cf_handle(cf_name),
+                    &[(
+                        "periodic_compaction_seconds",
+                        &format!("{}", PERIODIC_COMPACTION_SECONDS),
+                    )],
+                )
+                .unwrap();
+            }
+        }
 
         Ok(db)
     }
@@ -415,9 +550,13 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    fn primary_index(index: Self::Index) -> Slot;
+    // this return Slot or some u64
+    fn primary_index(index: Self::Index) -> u64;
     #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index;
+    fn slot(index: Self::Index) -> Slot {
+        Self::primary_index(index)
+    }
 }
 
 pub trait ColumnName {
@@ -491,6 +630,10 @@ impl Column for columns::TransactionStatus {
         index.0
     }
 
+    fn slot(index: Self::Index) -> Slot {
+        index.2
+    }
+
     #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
@@ -528,6 +671,10 @@ impl Column for columns::AddressSignatures {
         index.0
     }
 
+    fn slot(index: Self::Index) -> Slot {
+        index.2
+    }
+
     #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
@@ -553,6 +700,10 @@ impl Column for columns::TransactionStatusIndex {
 
     fn primary_index(index: u64) -> u64 {
         index
+    }
+
+    fn slot(_index: Self::Index) -> Slot {
+        unimplemented!()
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -855,6 +1006,10 @@ impl Database {
     pub fn is_primary_access(&self) -> bool {
         self.backend.is_primary_access()
     }
+
+    pub fn set_oldest_slot(&self, oldest_slot: Slot) {
+        self.backend.2.set(oldest_slot);
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1032,7 +1187,63 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn get_cf_options(access_type: &AccessType) -> Options {
+struct PurgedSlotFilter<C: Column + ColumnName> {
+    oldest_slot: Slot,
+    name: CString,
+    _phantom: PhantomData<C>,
+}
+
+impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
+    fn filter(&mut self, _level: u32, key: &[u8], _value: &[u8]) -> CompactionDecision {
+        use rocksdb::CompactionDecision::*;
+
+        let slot_in_key = C::slot(C::index(key));
+        // Refer to a comment about periodic_compaction_seconds, especially regarding implicit
+        // periodic execution of compaction_filters
+        if slot_in_key >= self.oldest_slot {
+            Keep
+        } else {
+            Remove
+        }
+    }
+
+    fn name(&self) -> &CStr {
+        &self.name
+    }
+}
+
+struct PurgedSlotFilterFactory<C: Column + ColumnName> {
+    oldest_slot: OldestSlot,
+    name: CString,
+    _phantom: PhantomData<C>,
+}
+
+impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory<C> {
+    type Filter = PurgedSlotFilter<C>;
+
+    fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
+        let copied_oldest_slot = self.oldest_slot.get();
+        PurgedSlotFilter::<C> {
+            oldest_slot: copied_oldest_slot,
+            name: CString::new(format!(
+                "purged_slot_filter({}, {:?})",
+                C::NAME,
+                copied_oldest_slot
+            ))
+            .unwrap(),
+            _phantom: PhantomData::default(),
+        }
+    }
+
+    fn name(&self) -> &CStr {
+        &self.name
+    }
+}
+
+fn get_cf_options<C: 'static + Column + ColumnName>(
+    access_type: &AccessType,
+    oldest_slot: &OldestSlot,
+) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
@@ -1046,6 +1257,19 @@ fn get_cf_options(access_type: &AccessType) -> Options {
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
+
+    // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
+    // compactions....
+    if matches!(access_type, AccessType::PrimaryOnly)
+        && C::NAME != columns::TransactionStatusIndex::NAME
+    {
+        options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
+            oldest_slot: oldest_slot.clone(),
+            name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
+            _phantom: PhantomData::default(),
+        });
+    }
+
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
     }
@@ -1076,4 +1300,58 @@ fn get_db_options(access_type: &AccessType) -> Options {
     }
 
     options
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::blockstore_db::columns::ShredData;
+
+    #[test]
+    fn test_compaction_filter() {
+        // this doesn't implement Clone...
+        let dummy_compaction_filter_context = || CompactionFilterContext {
+            is_full_compaction: true,
+            is_manual_compaction: true,
+        };
+        let oldest_slot = OldestSlot::default();
+
+        let mut factory = PurgedSlotFilterFactory::<ShredData> {
+            oldest_slot: oldest_slot.clone(),
+            name: CString::new("test compaction filter").unwrap(),
+            _phantom: PhantomData::default(),
+        };
+        let mut compaction_filter = factory.create(dummy_compaction_filter_context());
+
+        let dummy_level = 0;
+        let key = ShredData::key(ShredData::as_index(0));
+        let dummy_value = vec![];
+
+        // we can't use assert_matches! because CompactionDecision doesn't implement Debug
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        ));
+
+        // mutating oledst_slot doen't affect existing compaction filters...
+        oldest_slot.set(1);
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        ));
+
+        // recreating compaction filter starts to expire the key
+        let mut compaction_filter = factory.create(dummy_compaction_filter_context());
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Remove
+        ));
+
+        // newer key shouldn't be removed
+        let key = ShredData::key(ShredData::as_index(1));
+        matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        );
+    }
 }

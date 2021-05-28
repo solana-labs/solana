@@ -1636,9 +1636,11 @@ mod tests {
             }
             drop(blockstore);
 
+            // this purges and compacts all slots greater than or equal to 5
             backup_and_clear_blockstore(&blockstore_path, 5, 2);
 
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            // assert that slots less than 5 aren't affected
             assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
             for i in 5..10 {
                 assert!(blockstore

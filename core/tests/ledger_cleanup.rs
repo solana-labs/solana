@@ -39,6 +39,8 @@ mod tests {
         pub cleanup_blockstore: bool,
         pub emit_cpu_info: bool,
         pub assert_compaction: bool,
+        pub compaction_interval: Option<u64>,
+        pub no_compaction: bool,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -154,6 +156,11 @@ mod tests {
         let emit_cpu_info = read_env("EMIT_CPU_INFO", true);
         // set default to `true` once compaction is merged
         let assert_compaction = read_env("ASSERT_COMPACTION", false);
+        let compaction_interval = match read_env("COMPACTION_INTERVAL", 0) {
+            maybe_zero if maybe_zero == 0 => None,
+            non_zero => Some(non_zero),
+        };
+        let no_compaction = read_env("NO_COMPACTION", false);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -166,6 +173,8 @@ mod tests {
             cleanup_blockstore,
             emit_cpu_info,
             assert_compaction,
+            compaction_interval,
+            no_compaction,
         }
     }
 
@@ -211,8 +220,13 @@ mod tests {
     fn test_ledger_cleanup_compaction() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         let config = get_benchmark_config();
+        if config.no_compaction {
+            blockstore.set_no_compaction(true);
+        }
+        let blockstore = Arc::new(blockstore);
+
         eprintln!("BENCHMARK CONFIG: {:?}", config);
         eprintln!("LEDGER_PATH: {:?}", &blockstore_path);
 
@@ -223,6 +237,8 @@ mod tests {
         let stop_size_bytes = config.stop_size_bytes;
         let stop_size_iterations = config.stop_size_iterations;
         let pre_generate_data = config.pre_generate_data;
+        let compaction_interval = config.compaction_interval;
+
         let batches = benchmark_slots / batch_size;
 
         let (sender, receiver) = channel();
@@ -232,7 +248,7 @@ mod tests {
             blockstore.clone(),
             max_ledger_shreds,
             &exit,
-            None,
+            compaction_interval,
             None,
         );
 
