@@ -8,10 +8,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{
-        cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks, instructions_sysvar_enabled,
-        FeatureSet,
-    },
+    feature_set::{demote_sysvar_write_locks, instructions_sysvar_enabled, FeatureSet},
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
@@ -254,7 +251,6 @@ pub struct ThisInvokeContext<'a> {
     rent: Rent,
     message: &'a Message,
     pre_accounts: Vec<PreAccount>,
-    executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
@@ -301,7 +297,6 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             message,
             pre_accounts,
-            executable_accounts,
             account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -454,41 +449,22 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        if self.is_feature_active(&cpi_share_ro_and_exec_accounts::id()) {
-            if let Some((_, account)) = self
-                .executable_accounts
-                .iter()
-                .find(|(key, _)| key == pubkey)
-            {
-                Some(account.clone())
-            } else if let Some((_, account)) =
-                self.account_deps.iter().find(|(key, _)| key == pubkey)
-            {
+        if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
+            if pre.key == *pubkey {
+                Some(pre.account.clone())
+            } else {
+                None
+            }
+        }) {
+            return Some(account);
+        }
+        self.account_deps.iter().find_map(|(key, account)| {
+            if key == pubkey {
                 Some(account.clone())
             } else {
-                self.pre_accounts
-                    .iter()
-                    .find(|pre| pre.key == *pubkey)
-                    .map(|pre| pre.account.clone())
+                None
             }
-        } else {
-            if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
-                if pre.key == *pubkey {
-                    Some(pre.account.clone())
-                } else {
-                    None
-                }
-            }) {
-                return Some(account);
-            }
-            self.account_deps.iter().find_map(|(key, account)| {
-                if key == pubkey {
-                    Some(account.clone())
-                } else {
-                    None
-                }
-            })
-        }
+        })
     }
     fn update_timing(
         &mut self,
