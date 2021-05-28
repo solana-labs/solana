@@ -591,7 +591,7 @@ impl AccountsHash {
                 let mut equal = false;
                 {
                     let (key, _) = &first_items[first_item_index];
-                    let compare = key.as_ref().cmp(min_pubkey.as_ref());
+                    let compare = min_pubkey.as_ref().cmp(key.as_ref());
                     match compare {
                         std::cmp::Ordering::Equal => {equal = min_index != usize::MAX;},
                         std::cmp::Ordering::Greater => (),
