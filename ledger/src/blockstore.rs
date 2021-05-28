@@ -54,7 +54,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
-        Arc, Mutex, RwLock,
+        Arc, Mutex, RwLock, RwLockWriteGuard,
     },
 };
 use thiserror::Error;
@@ -92,6 +92,7 @@ type CompletedRanges = Vec<(u32, u32)>;
 pub enum PurgeType {
     Exact,
     PrimaryIndex,
+    CompactionFilter,
 }
 
 #[derive(Error, Debug)]
@@ -144,7 +145,7 @@ pub struct Blockstore {
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
-    pub lowest_cleanup_slot: Arc<RwLock<u64>>,
+    pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
 }
 
@@ -1956,18 +1957,24 @@ impl Blockstore {
             batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
             Ok(None)
         } else {
-            let result = if index0.frozen && to_slot > index0.max_slot {
-                debug!("Pruning transaction index 0 at slot {}", index0.max_slot);
+            let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
+                info!(
+                    "Pruning expired primary index 0 up to slot {} (max requested: {})",
+                    index0.max_slot, to_slot
+                );
                 Some(0)
             } else if index1.frozen && to_slot > index1.max_slot {
-                debug!("Pruning transaction index 1 at slot {}", index1.max_slot);
+                info!(
+                    "Pruning expired primary index 1 up to slot {} (max requested: {})",
+                    index1.max_slot, to_slot
+                );
                 Some(1)
             } else {
                 None
             };
 
-            if result.is_some() {
-                *w_active_transaction_status_index = if index0.frozen { 0 } else { 1 };
+            if let Some(purge_target_primary_index) = purge_target_primary_index {
+                *w_active_transaction_status_index = purge_target_primary_index;
                 if index0.frozen {
                     index0.max_slot = 0
                 };
@@ -1980,16 +1987,17 @@ impl Blockstore {
                 batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
             }
 
-            Ok(result)
+            Ok(purge_target_primary_index)
         }
     }
 
-    fn get_primary_index(
+    fn get_primary_index_to_write(
         &self,
         slot: Slot,
-        w_active_transaction_status_index: &mut u64,
+        // take WriteGuard to require critical section semantics at call site
+        w_active_transaction_status_index: &RwLockWriteGuard<Slot>,
     ) -> Result<u64> {
-        let i = *w_active_transaction_status_index;
+        let i = **w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
             assert!(!index_meta.frozen);
@@ -2028,9 +2036,10 @@ impl Blockstore {
         let status = status.into();
         // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
         // writes to that column
-        let mut w_active_transaction_status_index =
+        let w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
-        let primary_index = self.get_primary_index(slot, &mut w_active_transaction_status_index)?;
+        let primary_index =
+            self.get_primary_index_to_write(slot, &w_active_transaction_status_index)?;
         self.transaction_status_cf
             .put_protobuf((primary_index, signature, slot), &status)?;
         for address in writable_keys {
@@ -2048,6 +2057,21 @@ impl Blockstore {
         Ok(())
     }
 
+    fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
+        // Ensures consistent result by using lowest_cleanup_slot as the lower bound
+        // for reading columns that do not employ strong read consistency with slot-based
+        // delete_range
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        let lowest_available_slot = (*lowest_cleanup_slot)
+            .checked_add(1)
+            .expect("overflow from trusted value");
+
+        // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
+        // needed slots here at any given moment.
+        // Blockstore callers, like rpc, can process concurrent read queries
+        (lowest_cleanup_slot, lowest_available_slot)
+    }
+
     // Returns a transaction status, as well as a loop counter for unit testing
     fn get_transaction_status_with_counter(
         &self,
@@ -2055,9 +2079,15 @@ impl Blockstore {
         confirmed_unrooted_slots: &[Slot],
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
+        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (transaction_status_cf_primary_index, signature, 0),
+                (
+                    transaction_status_cf_primary_index,
+                    signature,
+                    lowest_available_slot,
+                ),
                 IteratorDirection::Forward,
             ))?;
             for ((i, sig, slot), _data) in index_iterator {
@@ -2076,6 +2106,8 @@ impl Blockstore {
                 return Ok((status, counter));
             }
         }
+        drop(lock);
+
         Ok((None, counter))
     }
 
@@ -2199,13 +2231,15 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
+        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    start_slot,
+                    start_slot.max(lowest_available_slot),
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
@@ -2220,6 +2254,7 @@ impl Blockstore {
                 }
             }
         }
+        drop(lock);
         signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
         Ok(signatures)
     }
@@ -2232,13 +2267,14 @@ impl Blockstore {
         pubkey: Pubkey,
         slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
+        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    slot,
+                    slot.max(lowest_available_slot),
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
@@ -2253,6 +2289,7 @@ impl Blockstore {
                 signatures.push((slot, signature));
             }
         }
+        drop(lock);
         signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
         Ok(signatures)
     }
@@ -6674,6 +6711,176 @@ pub mod tests {
             assert_eq!(counter, 2);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    fn do_test_lowest_cleanup_slot_and_special_cfs(
+        simulate_compaction: bool,
+        simulate_ledger_cleanup_service: bool,
+    ) {
+        solana_logger::setup();
+
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            // TransactionStatus column opens initialized with one entry at index 2
+            let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
+
+            let pre_balances_vec = vec![1, 2, 3];
+            let post_balances_vec = vec![3, 2, 1];
+            let status = TransactionStatusMeta {
+                status: solana_sdk::transaction::Result::<()>::Ok(()),
+                fee: 42u64,
+                pre_balances: pre_balances_vec,
+                post_balances: post_balances_vec,
+                inner_instructions: Some(vec![]),
+                log_messages: Some(vec![]),
+                pre_token_balances: Some(vec![]),
+                post_token_balances: Some(vec![]),
+                rewards: Some(vec![]),
+            }
+            .into();
+
+            let signature1 = Signature::new(&[2u8; 64]);
+            let signature2 = Signature::new(&[3u8; 64]);
+
+            // Insert rooted slots 0..=3 with no fork
+            let meta0 = SlotMeta::new(0, 0);
+            blockstore.meta_cf.put(0, &meta0).unwrap();
+            let meta1 = SlotMeta::new(1, 0);
+            blockstore.meta_cf.put(1, &meta1).unwrap();
+            let meta2 = SlotMeta::new(2, 1);
+            blockstore.meta_cf.put(2, &meta2).unwrap();
+            let meta3 = SlotMeta::new(3, 2);
+            blockstore.meta_cf.put(3, &meta3).unwrap();
+
+            blockstore.set_roots(&[0, 1, 2, 3]).unwrap();
+
+            let lowest_cleanup_slot = 1;
+            let lowest_available_slot = lowest_cleanup_slot + 1;
+
+            transaction_status_cf
+                .put_protobuf((0, signature1, lowest_cleanup_slot), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put_protobuf((0, signature2, lowest_available_slot), &status)
+                .unwrap();
+
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
+            blockstore
+                .write_transaction_status(
+                    lowest_cleanup_slot,
+                    signature1,
+                    vec![&address0],
+                    vec![],
+                    TransactionStatusMeta::default(),
+                )
+                .unwrap();
+            blockstore
+                .write_transaction_status(
+                    lowest_available_slot,
+                    signature2,
+                    vec![&address1],
+                    vec![],
+                    TransactionStatusMeta::default(),
+                )
+                .unwrap();
+
+            let check_for_missing = || {
+                (
+                    blockstore
+                        .get_transaction_status_with_counter(signature1, &[])
+                        .unwrap()
+                        .0
+                        .is_none(),
+                    blockstore
+                        .find_address_signatures_for_slot(address0, lowest_cleanup_slot)
+                        .unwrap()
+                        .is_empty(),
+                    blockstore
+                        .find_address_signatures(address0, lowest_cleanup_slot, lowest_cleanup_slot)
+                        .unwrap()
+                        .is_empty(),
+                )
+            };
+
+            let assert_existing_always = || {
+                let are_existing_always = (
+                    blockstore
+                        .get_transaction_status_with_counter(signature2, &[])
+                        .unwrap()
+                        .0
+                        .is_some(),
+                    !blockstore
+                        .find_address_signatures_for_slot(address1, lowest_available_slot)
+                        .unwrap()
+                        .is_empty(),
+                    !blockstore
+                        .find_address_signatures(
+                            address1,
+                            lowest_available_slot,
+                            lowest_available_slot,
+                        )
+                        .unwrap()
+                        .is_empty(),
+                );
+                assert_eq!(are_existing_always, (true, true, true));
+            };
+
+            let are_missing = check_for_missing();
+            // should never be missing before the conditional compaction & simulation...
+            assert_eq!(are_missing, (false, false, false));
+            assert_existing_always();
+
+            if simulate_compaction {
+                blockstore.set_max_expired_slot(lowest_cleanup_slot);
+                // force compaction filters to run across whole key range.
+                blockstore
+                    .compact_storage(Slot::min_value(), Slot::max_value())
+                    .unwrap();
+            }
+
+            if simulate_ledger_cleanup_service {
+                *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+            }
+
+            let are_missing = check_for_missing();
+            if simulate_compaction || simulate_ledger_cleanup_service {
+                // ... when either simulation (or both) is effective, we should observe to be missing
+                // consistently
+                assert_eq!(are_missing, (true, true, true));
+            } else {
+                // ... otherwise, we should observe to be existing...
+                assert_eq!(are_missing, (false, false, false));
+            }
+            assert_existing_always();
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_with_ledger_cleanup_service_simulation(
+    ) {
+        do_test_lowest_cleanup_slot_and_special_cfs(true, true);
+    }
+
+    #[test]
+    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_without_ledger_cleanup_service_simulation(
+    ) {
+        do_test_lowest_cleanup_slot_and_special_cfs(true, false);
+    }
+
+    #[test]
+    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_with_ledger_cleanup_service_simulation(
+    ) {
+        do_test_lowest_cleanup_slot_and_special_cfs(false, true);
+    }
+
+    #[test]
+    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_without_ledger_cleanup_service_simulation(
+    ) {
+        do_test_lowest_cleanup_slot_and_special_cfs(false, false);
     }
 
     #[test]
