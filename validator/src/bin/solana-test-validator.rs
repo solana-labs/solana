@@ -42,6 +42,8 @@ use {
  */
 const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
 
+const DEFAULT_FAUCET_SOL: f64 = 1_000_000.;
+
 #[derive(PartialEq)]
 enum Output {
     None,
@@ -53,6 +55,7 @@ fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
     let default_faucet_port = FAUCET_PORT.to_string();
     let default_limit_ledger_size = DEFAULT_MAX_LEDGER_SHREDS.to_string();
+    let default_faucet_sol = DEFAULT_FAUCET_SOL.to_string();
 
     let matches = App::new("solana-test-validator")
         .about("Test Validator")
@@ -264,6 +267,17 @@ fn main() {
                 .default_value(default_limit_ledger_size.as_str())
                 .help("Keep this amount of shreds in root slots."),
         )
+        .arg(
+            Arg::with_name("faucet_sol")
+                .long("faucet-sol")
+                .takes_value(true)
+                .value_name("SOL")
+                .default_value(default_faucet_sol.as_str())
+                .help(
+                    "Give the faucet address this much SOL in genesis. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
         .get_matches();
 
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
@@ -429,7 +443,7 @@ fn main() {
     };
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    let faucet_lamports = sol_to_lamports(1_000_000.);
+    let faucet_lamports = sol_to_lamports(value_of(&matches, "faucet_sol").unwrap());
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(
@@ -470,6 +484,7 @@ fn main() {
             ("clone_account", "--clone"),
             ("mint_address", "--mint"),
             ("slots_per_epoch", "--slots-per-epoch"),
+            ("faucet_sol", "--faucet-sol"),
         ] {
             if matches.is_present(name) {
                 println!("{} argument ignored, ledger already exists", long);
