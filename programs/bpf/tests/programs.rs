@@ -753,6 +753,7 @@ fn test_program_bpf_invoke_sanity() {
     const TEST_RETURN_ERROR: u8 = 11;
     const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
     const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
+    const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -870,12 +871,10 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
-                invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
                 solana_sdk::system_program::id(),
                 solana_sdk::system_program::id(),
-                invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
@@ -993,6 +992,12 @@ fn test_program_bpf_invoke_sanity() {
         do_invoke_failure_test_local(
             TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
+            &[invoked_program_id.clone()],
+        );
+
+        do_invoke_failure_test_local(
+            TEST_WRITABLE_DEESCALATION_WRITABLE,
+            TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified),
             &[invoked_program_id.clone()],
         );
 
