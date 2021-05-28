@@ -82,8 +82,8 @@ console.log(solanaWeb3);
 ## Flow
 
 A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-`module.flow.js`.
-Add the following line under the [libs] section of your project's `.flowconfig` to
+https://unpkg.com/@solana/web3.js@latest/module.flow.js.
+Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
 activate it:
 ```ini
 [libs]
