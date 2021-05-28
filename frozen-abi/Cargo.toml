@@ -10,7 +10,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-bs58 = "0.3.1"
+bs58 = "0.4.0"
 bv = { version = "0.11.1", features = ["serde"] }
 log = "0.4.11"
 serde = "1.0.122"

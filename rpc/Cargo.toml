@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-rpc"
 edition = "2018"
 
 [dependencies]
-bs58 = "0.3.1"
+bs58 = "0.4.0"
 crossbeam-channel = "0.4"
 jsonrpc-core = "17.0.0"
 jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }

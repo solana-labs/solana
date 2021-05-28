@@ -399,6 +399,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
+name = "bs58"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
+
+[[package]]
 name = "bstr"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3951,7 +3957,7 @@ dependencies = [
  "Inflector",
  "base64 0.12.3",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "lazy_static",
  "serde",
@@ -4224,7 +4230,7 @@ version = "1.8.0"
 dependencies = [
  "Inflector",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "chrono",
  "clap 2.33.3",
  "console 0.14.1",
@@ -4307,7 +4313,7 @@ dependencies = [
  "assert_matches",
  "base64 0.13.0",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "clap 2.33.3",
  "indicatif",
  "jsonrpc-core",
@@ -4357,7 +4363,7 @@ dependencies = [
  "base64 0.12.3",
  "bincode",
  "blake3",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "byteorder",
  "chrono",
@@ -4542,7 +4548,7 @@ version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f81ac3925c8995d935d3af27390cf7b748a81837a29feb75a00e115f40dae6dc"
 dependencies = [
- "bs58",
+ "bs58 0.3.1",
  "bv",
  "generic-array 0.14.3",
  "log 0.4.11",
@@ -4560,7 +4566,7 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.8.0"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "generic-array 0.14.3",
  "log 0.4.11",
@@ -4709,7 +4715,7 @@ dependencies = [
 name = "solana-keygen"
 version = "1.8.0"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "clap 2.33.3",
  "dirs-next",
  "num_cpus",
@@ -4783,7 +4789,7 @@ name = "solana-ledger-tool"
 version = "1.8.0"
 dependencies = [
  "assert_cmd",
- "bs58",
+ "bs58 0.4.0",
  "bytecount",
  "clap 2.33.3",
  "csv",
@@ -5030,7 +5036,7 @@ dependencies = [
  "bincode",
  "borsh",
  "borsh-derive",
- "bs58",
+ "bs58 0.3.1",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5062,7 +5068,7 @@ dependencies = [
  "blake3",
  "borsh",
  "borsh-derive",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5145,7 +5151,7 @@ dependencies = [
 name = "solana-rpc"
 version = "1.8.0"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "crossbeam-channel 0.4.4",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -5235,7 +5241,7 @@ version = "1.8.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "byteorder",
  "chrono",
@@ -5284,7 +5290,7 @@ version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c805f1e32677f8ec0cc0b2f470833a0d5ab0922f068e52be3a4a93b468c9c70"
 dependencies = [
- "bs58",
+ "bs58 0.3.1",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
@@ -5295,7 +5301,7 @@ dependencies = [
 name = "solana-sdk-macro"
 version = "1.8.0"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
@@ -5406,7 +5412,7 @@ name = "solana-storage-proto"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "prost",
  "serde",
  "serde_derive",
@@ -5500,7 +5506,7 @@ dependencies = [
  "Inflector",
  "base64 0.12.3",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "lazy_static",
  "serde",
  "serde_derive",

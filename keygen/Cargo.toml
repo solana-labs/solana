@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-keygen"
 edition = "2018"
 
 [dependencies]
-bs58 = "0.3.1"
+bs58 = "0.4.0"
 clap = "2.33"
 dirs-next = "2.0.0"
 num_cpus = "1.13.0"
