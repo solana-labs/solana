@@ -172,6 +172,8 @@ impl Tvu {
         let compaction_interval = tvu_config.rocksdb_compaction_interval;
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
+        let (duplicate_slot_repair_request_sender, duplicate_slot_repair_request_receiver) =
+            unbounded();
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
@@ -197,6 +199,7 @@ impl Tvu {
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
             ancestor_hashes_replay_update_receiver,
+            duplicate_slot_repair_request_receiver,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -322,6 +325,7 @@ impl Tvu {
             cluster_slots_update_sender,
             cost_update_sender,
             voting_sender,
+            duplicate_slot_repair_request_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {

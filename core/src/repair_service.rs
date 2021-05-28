@@ -37,6 +37,8 @@ use std::{
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
+pub type DuplicateSlotRepairRequestSender = CrossbeamSender<Slot>;
+pub type DuplicateSlotRepairRequestReceiver = CrossbeamReceiver<Slot>;
 pub type ConfirmedSlotsSender = CrossbeamSender<Vec<Slot>>;
 pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
 pub type OutstandingShredRepairs = OutstandingRequests<ShredRepairType>;
@@ -162,6 +164,7 @@ impl RepairService {
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        duplicate_slot_repair_request_receiver: DuplicateSlotRepairRequestReceiver,
     ) -> Self {
         let t_repair = {
             let blockstore = blockstore.clone();
@@ -177,6 +180,7 @@ impl RepairService {
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
+                        duplicate_slot_repair_request_receiver,
                     )
                 })
                 .unwrap()
@@ -204,6 +208,7 @@ impl RepairService {
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
+        duplicate_slot_repair_request_receiver: DuplicateSlotRepairRequestReceiver,
     ) {
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let serve_repair = ServeRepair::new(repair_info.cluster_info.clone());
@@ -211,7 +216,7 @@ impl RepairService {
         let mut repair_stats = RepairStats::default();
         let mut repair_timing = RepairTiming::default();
         let mut last_stats = Instant::now();
-        let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
+        let mut duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
@@ -256,6 +261,25 @@ impl RepairService {
                     root_bank.epoch_schedule(),
                 );
                 add_votes_elapsed.stop();
+
+                Self::process_new_duplicate_slot_repair_request_receiver_from_channel(
+                    &duplicate_slot_repair_request_receiver,
+                    &mut duplicate_slot_repair_statuses,
+                    &repair_info.cluster_slots,
+                    &serve_repair,
+                    &repair_info.repair_validators,
+                );
+
+                Self::generate_and_send_duplicate_repairs(
+                    &mut duplicate_slot_repair_statuses,
+                    &repair_info.cluster_slots,
+                    blockstore,
+                    &serve_repair,
+                    &mut repair_stats,
+                    repair_socket,
+                    &repair_info.repair_validators,
+                    outstanding_requests,
+                );
 
                 repair_weight.get_best_weighted_repairs(
                     blockstore,
@@ -474,7 +498,6 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
     fn generate_duplicate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -499,7 +522,6 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -550,7 +572,6 @@ impl RepairService {
         })
     }
 
-    #[allow(dead_code)]
     fn serialize_and_send_request(
         repair_type: &ShredRepairType,
         repair_socket: &UdpSocket,
@@ -566,7 +587,6 @@ impl RepairService {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn update_duplicate_slot_repair_addr(
         slot: Slot,
         status: &mut DuplicateSlotRepairStatus,
@@ -588,7 +608,29 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
+    fn process_new_duplicate_slot_repair_request_receiver_from_channel(
+        duplicate_slot_repair_request_receiver: &DuplicateSlotRepairRequestReceiver,
+        duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
+        cluster_slots: &ClusterSlots,
+        serve_repair: &ServeRepair,
+        repair_validators: &Option<HashSet<Pubkey>>,
+    ) {
+        for duplicate_slot in duplicate_slot_repair_request_receiver.try_iter() {
+            // TODO: When we get to the point where we ALSO support a specific version of
+            // a slot hash to repair, then it's of note that we could feasibly get the same
+            // duplicate slot, but a more specific hash to repair via this channel if the
+            // state of this slot were to go from EpochSlotsFrozen (Hash::default()) to
+            // DuplicateConfirmed (a specific hash) in ReplayStage.
+            Self::initiate_repair_for_duplicate_slot(
+                duplicate_slot,
+                duplicate_slot_repair_statuses,
+                cluster_slots,
+                serve_repair,
+                repair_validators,
+            );
+        }
+    }
+
     fn initiate_repair_for_duplicate_slot(
         slot: Slot,
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,

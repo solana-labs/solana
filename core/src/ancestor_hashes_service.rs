@@ -1368,6 +1368,8 @@ mod test {
         // Simulate Replay dumping this slot
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         duplicate_slots_to_repair.insert(dead_slot, Hash::new_unique());
+        let (duplicate_slot_repair_request_sender, _duplicate_slot_repair_request_receiver) =
+            unbounded();
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
             &mut bank_forks.read().unwrap().ancestors(),
@@ -1376,6 +1378,7 @@ mod test {
             &bank_forks,
             &requester_blockstore,
             None,
+            &duplicate_slot_repair_request_sender,
         );
 
         // Simulate making a request

@@ -7,7 +7,9 @@ use {
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
+        repair_service::{
+            DuplicateSlotRepairRequestReceiver, OutstandingShredRepairs, RepairInfo, RepairService,
+        },
         result::{Error, Result},
     },
     crossbeam_channel::{
@@ -428,6 +430,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        duplicate_slot_repair_request_receiver: DuplicateSlotRepairRequestReceiver,
     ) -> WindowService
     where
         F: 'static
@@ -449,6 +452,7 @@ impl WindowService {
             verified_vote_receiver,
             outstanding_requests.clone(),
             ancestor_hashes_replay_update_receiver,
+            duplicate_slot_repair_request_receiver,
         );
 
         let (insert_sender, insert_receiver) = unbounded();

@@ -18,7 +18,7 @@ use {
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap, PropagatedStats},
-        repair_service::DuplicateSlotsResetReceiver,
+        repair_service::{DuplicateSlotRepairRequestSender, DuplicateSlotsResetReceiver},
         rewards_recorder_service::RewardsRecorderSender,
         tower_storage::{SavedTower, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -324,6 +324,7 @@ impl ReplayStage {
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         cost_update_sender: Sender<ExecuteTimings>,
         voting_sender: Sender<VoteOp>,
+        duplicate_slot_repair_request_sender: DuplicateSlotRepairRequestSender,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -751,7 +752,7 @@ impl ReplayStage {
                     //
                     // Has to be before `maybe_start_leader()`. Otherwise, `ancestors` and `descendants`
                     // will be outdated, and we cannot assume `poh_bank` will be in either of these maps.
-                    Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()));
+                    Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()), &duplicate_slot_repair_request_sender);
                     dump_then_repair_correct_slots_time.stop();
 
                     // From this point on, its not safe to use ancestors/descendants since maybe_start_leader
@@ -889,6 +890,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         blockstore: &Blockstore,
         poh_bank_slot: Option<Slot>,
+        duplicate_slot_repair_request_sender: &DuplicateSlotRepairRequestSender,
     ) {
         if duplicate_slots_to_repair.is_empty() {
             return;
@@ -961,6 +963,11 @@ impl ReplayStage {
                         "Notifying repair service to repair duplicate slot: {}",
                         *duplicate_slot,
                     );
+                    datapoint_info!(
+                        "replay_stage-repair-dumped-slot-request",
+                        ("duplicate_slot", *duplicate_slot, i64),
+                    );
+                    let _ = duplicate_slot_repair_request_sender.send(*duplicate_slot);
                     true
                 // TODO: Send signal to repair to repair the correct version of
                 // `duplicate_slot` with hash == `correct_hash`
@@ -4936,6 +4943,179 @@ pub mod tests {
     }
 
     #[test]
+    fn test_dead_slot_then_multiple_epoch_slots_frozen_signals() {
+        /*
+            Build fork structure:
+
+                  slot 0
+                    |
+                  slot 1
+                 /      \
+        slot 2 (dead)    |
+                      slot 3 (dead)
+        */
+
+        let tree = tr(0) / tr(1);
+        let ReplayBlockstoreComponents {
+            rpc_subscriptions,
+            blockstore,
+            vote_simulator,
+            ..
+        } = replay_blockstore_components(Some(tree), 1, None::<GenerateVotes>);
+
+        let VoteSimulator {
+            mut progress,
+            bank_forks,
+            ..
+        } = vote_simulator;
+
+        // Create situation where slots with *common ancestors* are marked dead,
+        // but then we detect the rest of the cluster has frozen the slot via EpochSlots.
+        // There should not be multiple repair requests generated for the common ancestors.
+        let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new((0, Hash::default()));
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+
+        let dead_slots = vec![2, 3];
+        let common_parent_bank = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
+        for dead_slot in &dead_slots {
+            // Create dead slots
+            let dead_bank =
+                Bank::new_from_parent(&common_parent_bank, &Pubkey::default(), *dead_slot);
+            bank_forks.write().unwrap().insert(dead_bank);
+            let dead_bank = bank_forks.read().unwrap().get(*dead_slot).unwrap().clone();
+            progress.insert(
+                *dead_slot,
+                ForkProgress::new_from_bank(
+                    &dead_bank,
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    Some(0),
+                    0,
+                    0,
+                ),
+            );
+            let dead_bank = bank_forks.read().unwrap().get(*dead_slot).unwrap().clone();
+            ReplayStage::mark_dead_slot(
+                &blockstore,
+                &dead_bank,
+                0,
+                &BlockstoreProcessorError::InvalidBlock(BlockError::InvalidEntryHash),
+                &rpc_subscriptions,
+                &mut duplicate_slots_tracker,
+                &gossip_duplicate_confirmed_slots,
+                &mut epoch_slots_frozen_slots,
+                &mut progress,
+                &mut heaviest_subtree_fork_choice,
+                &mut duplicate_slots_to_repair,
+                &ancestor_hashes_replay_update_sender,
+            );
+        }
+
+        // Simulate the cluster notifying us over EpochSlots that the slot was frozen
+        let (epoch_slots_frozen_sender, epoch_slots_frozen_receiver) = unbounded();
+
+        // Simulate getting multiple signals from EpochSlots about the same slots,
+        // we should only send the repair signal once if the slot hasn't been dumped + replayed
+        // more than once
+        let num_replay_iterations = 10;
+        // Before this signal, we had no idea we needed to repair this slot
+        assert!(duplicate_slots_to_repair.is_empty());
+        // `expected_repair_results` is what we expect in `duplicate_slots_to_repair`.
+        let mut expected_repair_results: HashMap<Slot, Hash> = HashMap::new();
+        let mut actual_repair_requests_count_per_slot: HashMap<Slot, usize> = HashMap::new();
+        for i in 0..num_replay_iterations {
+            // Send repetitve frozen signals from EpochSlots for all the ancestors of the dead
+            // slots
+            let mut ancestors = bank_forks.read().unwrap().ancestors();
+            for slot in &dead_slots {
+                // Sorted from greatest slot to smallest slot
+                let empty = HashSet::new();
+                let slot_ancestors: &HashSet<Slot> = ancestors.get(slot).unwrap_or(&empty);
+                let correct_ancestor_hashes: Vec<(Slot, Hash)> = std::iter::once(slot)
+                    .chain(slot_ancestors.iter())
+                    .map(|slot| {
+                        // Create a mismatch on every ancestor
+                        let correct_hash = expected_repair_results
+                            .get(slot)
+                            .cloned()
+                            .unwrap_or_else(Hash::new_unique);
+                        if *slot > 0 {
+                            // Don't insert the mismatched root hash into the correct
+                            // versions, as the root should not be mismatched
+                            expected_repair_results.insert(*slot, correct_hash);
+                        }
+                        (*slot, correct_hash)
+                    })
+                    .collect();
+                epoch_slots_frozen_sender
+                    .send(correct_ancestor_hashes)
+                    .unwrap();
+            }
+            ReplayStage::process_epoch_slots_frozen_dead_slots(
+                &Pubkey::default(),
+                &blockstore,
+                &epoch_slots_frozen_receiver,
+                &mut duplicate_slots_tracker,
+                &gossip_duplicate_confirmed_slots,
+                &mut epoch_slots_frozen_slots,
+                &mut progress,
+                &mut heaviest_subtree_fork_choice,
+                &bank_forks,
+                &mut duplicate_slots_to_repair,
+                &ancestor_hashes_replay_update_sender,
+            );
+
+            if i == 0 {
+                // Now that we know *some* version of this slot is playable, make sure
+                // the repair requests are for the correct hashes
+                assert_eq!(duplicate_slots_to_repair, expected_repair_results,)
+            } else {
+                // Should not make the same repair requests again after the first iteration,
+                // since no new versions of the dumped slots have been replayed yet.
+                assert!(duplicate_slots_to_repair.is_empty());
+            }
+
+            // After we process the `duplicate_slots_to_repair`, and send a signal to repair this slot,
+            // we should not send the signal again on the next iteration
+            let (duplicate_slot_repair_request_sender, duplicate_slot_repair_request_receiver) =
+                unbounded();
+            let mut descendants = bank_forks.read().unwrap().descendants().clone();
+            ReplayStage::dump_then_repair_correct_slots(
+                &mut duplicate_slots_to_repair,
+                &mut ancestors,
+                &mut descendants,
+                &mut progress,
+                &bank_forks,
+                &blockstore,
+                None,
+                &duplicate_slot_repair_request_sender,
+            );
+            for slot in duplicate_slot_repair_request_receiver.try_iter() {
+                *actual_repair_requests_count_per_slot
+                    .entry(slot)
+                    .or_default() += 1;
+            }
+        }
+
+        // Every slot on the dead forks were mismatched so there should have been a request
+        // made for each.
+        assert_eq!(
+            actual_repair_requests_count_per_slot.len(),
+            expected_repair_results.len()
+        );
+
+        // Exactly one request for each ancestor should have made.
+        for slot in expected_repair_results.keys() {
+            assert_eq!(*actual_repair_requests_count_per_slot.get(slot).unwrap(), 1);
+        }
+    }
+
+    #[test]
     fn test_unconfirmed_duplicate_slots_and_lockouts() {
         /*
             Build fork structure:
@@ -5130,6 +5310,8 @@ pub mod tests {
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         duplicate_slots_to_repair.insert(1, Hash::new_unique());
         duplicate_slots_to_repair.insert(2, Hash::new_unique());
+        let (duplicate_slot_repair_request_sender, _duplicate_slot_repair_request_receiver) =
+            unbounded();
 
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
@@ -5139,6 +5321,7 @@ pub mod tests {
             bank_forks,
             blockstore,
             None,
+            &duplicate_slot_repair_request_sender,
         );
 
         let r_bank_forks = bank_forks.read().unwrap();
@@ -5242,6 +5425,9 @@ pub mod tests {
         let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let old_descendants_of_2 = descendants.get(&2).unwrap().clone();
 
+        let (duplicate_slot_repair_request_sender, _duplicate_slot_repair_request_receiver) =
+            unbounded();
+
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
             &mut ancestors,
@@ -5250,6 +5436,7 @@ pub mod tests {
             bank_forks,
             blockstore,
             None,
+            &duplicate_slot_repair_request_sender,
         );
 
         // Check everything was purged properly
