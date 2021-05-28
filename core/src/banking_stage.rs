@@ -1056,9 +1056,7 @@ impl BankingStage {
         // Making a snapshot of shared cost_tracker by clone(), drop lock immediately.
         // Local copy `cost_tracker` is used to filter transactions by cost.
         // Shared cost_tracker is updated later by processed transactions confirmed by bank.
-        let guard = cost_tracker.lock().unwrap();
-        let mut cost_tracker = guard.clone();
-        drop(guard);
+        let mut cost_tracker = cost_tracker.lock().unwrap().clone();
 
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
         let (filtered_transactions, filter_transaction_packet_indexes) = transaction_indexes
