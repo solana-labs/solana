@@ -24,9 +24,11 @@ use {
         },
     },
     std::{
+        cell::RefCell,
         convert::TryFrom,
         error,
         io::{stdin, stdout, Write},
+        ops::Deref,
         process::exit,
         str::FromStr,
         sync::Arc,
@@ -90,12 +92,48 @@ impl CliSignerInfo {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct DefaultSigner {
     pub arg_name: String,
     pub path: String,
+    is_path_checked: RefCell<bool>,
 }
 
 impl DefaultSigner {
+    pub fn new<AN: AsRef<str>, P: AsRef<str>>(arg_name: AN, path: P) -> Self {
+        let arg_name = arg_name.as_ref().to_string();
+        let path = path.as_ref().to_string();
+        Self {
+            arg_name,
+            path,
+            ..Self::default()
+        }
+    }
+
+    fn path(&self) -> Result<&str, Box<dyn std::error::Error>> {
+        if !self.is_path_checked.borrow().deref() {
+            parse_signer_source(&self.path)
+                .and_then(|s| {
+                    if let SignerSourceKind::Filepath(path) = &s.kind {
+                        std::fs::metadata(path).map(|_| ()).map_err(|e| e.into())
+                    } else {
+                        Ok(())
+                    }
+                })
+                .map_err(|_| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!(
+                        "No default signer found, run \"solana-keygen new -o {}\" to create a new one",
+                        self.path
+                    ),
+                    )
+                })?;
+            *self.is_path_checked.borrow_mut() = true;
+        }
+        Ok(&self.path)
+    }
+
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
@@ -125,7 +163,7 @@ impl DefaultSigner {
         matches: &ArgMatches,
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
-        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
+        signer_from_path(matches, self.path()?, &self.arg_name, wallet_manager)
     }
 
     pub fn signer_from_path_with_config(
@@ -134,7 +172,13 @@ impl DefaultSigner {
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
         config: &SignerFromPathConfig,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
-        signer_from_path_with_config(matches, &self.path, &self.arg_name, wallet_manager, config)
+        signer_from_path_with_config(
+            matches,
+            self.path()?,
+            &self.arg_name,
+            wallet_manager,
+            config,
+        )
     }
 }
 
