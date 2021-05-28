@@ -5,6 +5,22 @@ title: Mobile App Wallets
 Solana is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
+## Zelcore
+
+[Zelcore](https://zelcore.io) is a multi-currency wallet now supporting SOL and all Solana tokens (SPL). Each Zelcore account has 3 separate addresses for each asset.
+Store, transact, connect to dapps, and (soon) DEX trade in a single app and hold SOL tokens alongside BTC, ETH, and 270+ other cryptos.
+
+Zelcore is available for [Desktop](https://zelcore.io), [iOS](https://apps.apple.com/us/app/zelcore/id1436296839), and [Android](https://play.google.com/store/apps/details?id=com.zelcash.zelcore&hl=en_US&gl=US). One account for all your cryptos, all your devices.
+
+Zelcore also uses a custom Sollet-based wallet adapter solution so users can connect to all their dapps with a single browser tab to keep things tidy.
+
+__**DEVS**__: integrate Zelcore wallet into your products by implementing Sollet solution using "link.zelcore.io" as connection URL.
+
+### Zelcore Wallet Security
+Zelcore utilizes a username/password schema to derive private keys for all assets. Security layers include blockchain-based 2FA PIN, mobile device biometrics, and passphrases to allow users to set up as much or as little security as they like. All hashing functions done on-device, and no login/account info is stored nor transmitted off your device. The private keys only exist on-device while logged in, upon logging out there is no digital footprint left of your PKs.
+
+**Treat your username, password, d2FA PIN, passphrases, etc. with utmost care, just like your private keys. Never give these to anyone!**
+
 ## Exodus
 
 Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
