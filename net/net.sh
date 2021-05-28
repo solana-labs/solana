@@ -705,7 +705,7 @@ stopNode() {
   declare pid=$!
   ln -sf "stop-validator-$ipAddress.log" "$netLogDir/stop-validator-$pid.log"
   if $block; then
-    wait $pid
+    wait $pid || true
   else
     pids+=("$pid")
   fi
