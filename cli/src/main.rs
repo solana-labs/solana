@@ -179,10 +179,7 @@ pub fn parse_args<'a>(
         &config.keypair_path,
     );
 
-    let default_signer = DefaultSigner {
-        arg_name: default_signer_arg_name,
-        path: default_signer_path.clone(),
-    };
+    let default_signer = DefaultSigner::new(default_signer_arg_name, &default_signer_path);
 
     let CliCommandInfo {
         command,
