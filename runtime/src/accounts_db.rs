@@ -5693,20 +5693,26 @@ pub mod tests {
             },
         ];
 
-        let raw_accounts = vec![
-            AccountSharedData::new(
-                    raw_expected[0].lamports,
-                    1,
-                    AccountSharedData::default().owner(),
-                ),
-            AccountSharedData::new(128, 1, AccountSharedData::default().owner()),
-            AccountSharedData::new(129, 1, AccountSharedData::default().owner()),
-            AccountSharedData::new(256, 1, AccountSharedData::default().owner()),
+        let expected_hashes = vec![
+            Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
+            Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
+            Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
+            Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
         ];
 
+        let mut raw_accounts = Vec::default();
+
         for i in 0..raw_expected.len() {
-            raw_expected[i].hash =
-                AccountsDb::hash_account(slot, &raw_accounts[i], &raw_expected[i].pubkey);
+            raw_accounts.push(AccountSharedData::new(
+                raw_expected[i].lamports,
+                1,
+                AccountSharedData::default().owner(),
+            ));
+            let hash = AccountsDb::hash_account(slot, &raw_accounts[i], &raw_expected[i].pubkey);
+            if slot == 1 {
+                assert_eq!(hash, expected_hashes[i]);
+            }
+            raw_expected[i].hash = hash;
         }
 
         let to_store = raw_accounts
