@@ -2098,7 +2098,10 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner::new(default_keypair_file);
+        let default_signer = DefaultSigner {
+            path: default_keypair_file,
+            arg_name: String::new(),
+        };
 
         let test_cluster_version = test_commands
             .clone()
