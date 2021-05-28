@@ -51,6 +51,7 @@ members = [
     "programs/ownable",
     "programs/stake",
     "programs/vote",
+    "rbpf-cli",
     "remote-wallet",
     "runtime",
     "runtime/store-tool",
