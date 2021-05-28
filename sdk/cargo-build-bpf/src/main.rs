@@ -377,7 +377,9 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-
+    let mut rust_flags = String::from("-C lto=no");
+    rust_flags.push_str(" -C opt-level=2");
+    env::set_var("RUSTFLAGS", rust_flags);
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+bpf",
