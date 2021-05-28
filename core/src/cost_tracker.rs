@@ -42,13 +42,13 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    fn would_fit(&self, keys: &[Pubkey], cost: &u32) -> Result<bool, &'static str> {
+    fn would_fit(&self, keys: &[Pubkey], cost: &u32) -> Result<(), &'static str> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
             return Err("would exceed block cost limit");
         }
 
-        // chech if the transaction itself is more costly than the account_cost_limit
+        // check if the transaction itself is more costly than the account_cost_limit
         if *cost > self.account_cost_limit {
             return Err("Transaction is too expansive, exceeds account cost limit");
         }
@@ -67,7 +67,7 @@ impl CostTracker {
             }
         }
 
-        Ok(true)
+        Ok(())
     }
 
     fn add_transaction(&mut self, keys: &[Pubkey], cost: &u32) {

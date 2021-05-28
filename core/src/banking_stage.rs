@@ -1045,6 +1045,7 @@ impl BankingStage {
     // This function deserializes packets into transactions, computes the blake3 hash of transaction messages,
     // and verifies secp256k1 instructions. A list of valid transactions are returned with their message hashes
     // and packet indexes.
+    // Also returned is packet indexes for transaction should be retried due to cost limits.
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
@@ -1052,7 +1053,9 @@ impl BankingStage {
         cost_model: &Arc<CostModel>,
         cost_tracker: &Arc<Mutex<CostTracker>>,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
-        // make a copy of cost_tracker to statically check limit for this batch of packets
+        // Making a snapshot of shared cost_tracker by clone(), drop lock immediately.
+        // Local copy `cost_tracker` is used to filter transactions by cost.
+        // Shared cost_tracker is updated later by processed transactions confirmed by bank.
         let guard = cost_tracker.lock().unwrap();
         let mut cost_tracker = guard.clone();
         drop(guard);
@@ -1067,8 +1070,10 @@ impl BankingStage {
                     tx.verify_precompiles().ok()?;
                 }
 
-                // get transaction cost via immutable cost_model; try to add cost to tracker
-                // synchronizlysynchronously. Check result before continue;
+                // Get transaction cost via immutable cost_model; try to add cost to
+                // local copy of cost_tracker, if suceeded, local copy is updated
+                // and transaction added to valid list; otherwise, transaction is
+                // added to retry list. No locking here.
                 let tx_cost = cost_model.calculate_cost(&tx);
                 let result = cost_tracker.try_add(tx_cost);
                 if result.is_err() {
@@ -1177,7 +1182,7 @@ impl BankingStage {
         process_tx_time.stop();
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
 
-        // applying cost of processed transactions to tracker
+        // applying cost of processed transactions to shared cost_tracker
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
                 let tx_cost = cost_model.calculate_cost(&tx.transaction());

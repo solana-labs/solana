@@ -28,7 +28,7 @@ const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u32 = COST_UNIT * 10;
 const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u32 = COST_UNIT * 2;
 const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u32 = COST_UNIT * 5;
 const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u32 = COST_UNIT;
-// running 'ledger-tool compute-cost' over mainnet ledger, the alrgest block cost
+// running 'ledger-tool compute-cost' over mainnet ledger, the largest block cost
 // is 575_687, and the largest chain cost (eg account cost) is 559_000
 // Configuring cost model to have larger block limit and smaller account limit
 // to encourage packing parallelizable transactions in block.
@@ -38,7 +38,7 @@ pub const BLOCK_MAX_COST: u32 = COST_UNIT * 10_000_000;
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
 // account_access_cost is the sum of read/write/sign all accounts included in the transaction
-//     read is cheaper thna write.
+//     read is cheaper than write.
 // execution_cost is the sum of all instructions execution cost, which is
 //     observed during runtime and feedback by Replay
 #[derive(Default, Debug)]
