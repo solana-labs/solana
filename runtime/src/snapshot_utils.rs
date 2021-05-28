@@ -1002,7 +1002,9 @@ pub fn process_accounts_package_pre(
         let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
             &accounts_package.storages,
             thread_pool,
-        );
+            false,
+        )
+        .unwrap();
 
         assert_eq!(accounts_package.expected_capitalization, lamports);
 
