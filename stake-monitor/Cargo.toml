@@ -29,7 +29,7 @@ solana-version = { path = "../version", version = "=1.8.0" }
 serial_test = "0.4.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.8.0" }
 solana-core = { path = "../core", version = "=1.8.0" }
-tempfile = "3.1.0"
+tempfile = "3.2.0"
 
 [[bin]]
 name = "solana-stake-monitor"

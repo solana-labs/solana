@@ -77,7 +77,7 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.8.0"
 solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
-tempfile = "3.1.0"
+tempfile = "3.2.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }
