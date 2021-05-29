@@ -755,7 +755,7 @@ impl RecycleStores {
 }
 
 #[derive(Debug, Default)]
-struct RemoveUnrootedSlots {
+struct RemoveUnrootedSlotsSynchronization {
     // slots being flushed from the cache or being purged
     slots_under_contention: Mutex<HashSet<Slot>>,
     signal: Condvar,
@@ -843,7 +843,7 @@ pub struct AccountsDb {
     // Set of slots currently being flushed by `flush_slot_cache()` or removed
     // by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     // can safely clear the set of unrooted slots `slots`.
-    remove_unrooted_slots: RemoveUnrootedSlots,
+    remove_unrooted_slots: RemoveUnrootedSlotsSynchronization,
 }
 
 #[derive(Debug, Default)]
@@ -1286,7 +1286,7 @@ impl Default for AccountsDb {
             #[cfg(test)]
             load_limit: AtomicU64::default(),
             is_bank_drop_callback_enabled: AtomicBool::default(),
-            remove_unrooted_slots: RemoveUnrootedSlots::default(),
+            remove_unrooted_slots: RemoveUnrootedSlotsSynchronization::default(),
         }
     }
 }
@@ -3435,7 +3435,7 @@ impl AccountsDb {
             );
         }
 
-        let RemoveUnrootedSlots {
+        let RemoveUnrootedSlotsSynchronization {
             slots_under_contention,
             signal,
         } = &self.remove_unrooted_slots;
