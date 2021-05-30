@@ -843,7 +843,7 @@ pub struct AccountsDb {
     // Set of slots currently being flushed by `flush_slot_cache()` or removed
     // by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     // can safely clear the set of unrooted slots `slots`.
-    remove_unrooted_slots: RemoveUnrootedSlotsSynchronization,
+    remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
 }
 
 #[derive(Debug, Default)]
@@ -1286,7 +1286,7 @@ impl Default for AccountsDb {
             #[cfg(test)]
             load_limit: AtomicU64::default(),
             is_bank_drop_callback_enabled: AtomicBool::default(),
-            remove_unrooted_slots: RemoveUnrootedSlotsSynchronization::default(),
+            remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
         }
     }
 }
@@ -3438,7 +3438,7 @@ impl AccountsDb {
         let RemoveUnrootedSlotsSynchronization {
             slots_under_contention,
             signal,
-        } = &self.remove_unrooted_slots;
+        } = &self.remove_unrooted_slots_synchronization;
 
         {
             // Slots that are currently being flushed by flush_slot_cache()
@@ -3964,25 +3964,25 @@ impl AccountsDb {
     ) -> Option<FlushStats> {
         self.accounts_cache.slot_cache(slot).and_then(|slot_cache| {
             let is_being_purged = {
-                let mut remove_unrooted_slots = self
-                    .remove_unrooted_slots
+                let mut slots_under_contention = self
+                    .remove_unrooted_slots_synchronization
                     .slots_under_contention
                     .lock()
                     .unwrap();
                 // If we're purging this slot, don't flush it here
-                if remove_unrooted_slots.contains(&slot) {
+                if slots_under_contention.contains(&slot) {
                     true
                 } else {
-                    remove_unrooted_slots.insert(slot);
+                    slots_under_contention.insert(slot);
                     false
                 }
             };
             if !is_being_purged {
                 let flush_stats = self.do_flush_slot_cache(slot, &slot_cache, should_flush_f);
                 // Nobody else should have been purging this slot, so should not have been removed
-                // from `self.remove_unrooted_slots`.
+                // from `self.remove_unrooted_slots_synchronization`.
                 assert!(self
-                    .remove_unrooted_slots
+                    .remove_unrooted_slots_synchronization
                     .slots_under_contention
                     .lock()
                     .unwrap()
@@ -3990,7 +3990,9 @@ impl AccountsDb {
 
                 // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
                 // flushing
-                self.remove_unrooted_slots.signal.notify_all();
+                self.remove_unrooted_slots_synchronization
+                    .signal
+                    .notify_all();
                 Some(flush_stats)
             } else {
                 None
