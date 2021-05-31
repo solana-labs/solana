@@ -60,7 +60,7 @@ the latest recommended settings are applied.
 To run it:
 
 ```bash
-sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+sudo $(command -v solana-sys-tuner) --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Manual
