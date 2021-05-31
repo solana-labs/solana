@@ -2296,7 +2296,7 @@ mod tests {
         let default_keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
 
-        let default_signer = DefaultSigner::new(default_keypair_file);
+        let default_signer = DefaultSigner::new("keypair", &default_keypair_file);
 
         let signer_info = default_signer
             .generate_unique_signers(vec![], &matches, &mut None)
@@ -2374,7 +2374,7 @@ mod tests {
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
         let keypair = read_keypair_file(&keypair_file).unwrap();
-        let default_signer = DefaultSigner::new(keypair_file.clone());
+        let default_signer = DefaultSigner::new("", &keypair_file);
         // Test Airdrop Subcommand
         let test_airdrop =
             test_commands
@@ -2902,7 +2902,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let default_keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
-        let default_signer = DefaultSigner::new(default_keypair_file.clone());
+        let default_signer = DefaultSigner::new("", &default_keypair_file);
 
         //Test Transfer Subcommand, SOL
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
