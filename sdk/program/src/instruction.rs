@@ -379,7 +379,6 @@ impl CompiledInstruction {
 
 #[cfg(test)]
 mod test {
-    use crate::borsh::try_from_slice_unchecked;
 
     use super::*;
 
@@ -411,13 +410,13 @@ mod test {
         let instruction = Instruction {
             program_id: Pubkey::new_unique(),
             accounts: vec![AccountMeta::new(Pubkey::new_unique(), false)],
-            data: vec![1,2,3],
+            data: vec![1, 2, 3],
         };
 
         let instruction_serialized = instruction.try_to_vec().unwrap();
+        let mut data = &instruction_serialized[..];
 
-        let instruction_deserialized: Instruction =
-            try_from_slice_unchecked(&instruction_serialized[..]).unwrap();
+        let instruction_deserialized: Instruction = Instruction::deserialize(&mut data).unwrap();
 
         assert_eq!(instruction, instruction_deserialized);
     }
