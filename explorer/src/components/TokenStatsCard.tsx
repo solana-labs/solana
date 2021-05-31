@@ -6,10 +6,9 @@ import {
   COIN_GECKO_SOLANA_CATEGORY,
 } from "utils/coingecko";
 
-import { TableCardBody } from "./common/TableCardBody";
+import { formatDollarValue } from "utils";
 
-const formatDollarValue = (value: number, decimals: number): string =>
-  "$" + Number(value.toFixed(decimals)).toLocaleString("en-US");
+import { TableCardBody } from "./common/TableCardBody";
 
 export function TokenStatsCard() {
   const [error, loading, categoryStats] = useCoinGeckoCategoryStats(
