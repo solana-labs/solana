@@ -1,150 +1,33 @@
 import React from "react";
-// import { Link } from "react-router-dom";
 import { Line } from "react-chartjs-2";
 import { LoadingCard } from "./common/LoadingCard";
-// import { Location } from "history";
-// import { AccountBalancePair } from "@solana/web3.js";
-// import { useRichList, useFetchRichList, Status } from "providers/richList";
-// import { LoadingCard } from "./common/LoadingCard";
-// import { ErrorCard } from "./common/ErrorCard";
-// import { lamportsToSolString } from "utils";
-// import { useQuery } from "utils/url";
-// import { useSupply } from "providers/supply";
-import { useCoinGeckoTokens } from "utils/coingecko";
-// import { normalizeTokenAmount } from "utils";
-// import { Address } from "./common/Address";
+import { ErrorCard } from "./common/ErrorCard";
+import {
+  useCoinGeckoCategoryTokens,
+  COIN_GECKO_SOLANA_CATEGORY,
+} from "utils/coingecko";
 
 export function TokensCard() {
-  const tokens = useCoinGeckoTokens();
+  const [error, loading, tokens] = useCoinGeckoCategoryTokens(
+    COIN_GECKO_SOLANA_CATEGORY
+  );
 
-  //   if (richList === Status.Disconnected) {
-  //     return <ErrorCard text="Not connected to the cluster" />;
-  //   }
+  if (error) return <ErrorCard text={error.toString()} />;
 
-  //   if (richList === Status.Connecting) {
-  //     return <LoadingCard />;
-  //   }
+  if (loading) return <LoadingCard />;
 
-  //   if (typeof richList === "string") {
-  //     return <ErrorCard text={richList} retry={fetchRichList} />;
-  //   }
-
-  //   let supplyCount: number;
-  //   let accounts, header;
-
-  //   if (richList !== Status.Idle) {
-  //     switch (filter) {
-  //       case "nonCirculating": {
-  //         accounts = richList.nonCirculating;
-  //         supplyCount = supply.nonCirculating;
-  //         header = "Non-Circulating";
-  //         break;
-  //       }
-  //       case "all": {
-  //         accounts = richList.total;
-  //         supplyCount = supply.total;
-  //         header = "Total";
-  //         break;
-  //       }
-  //       case "circulating":
-  //       default: {
-  //         accounts = richList.circulating;
-  //         supplyCount = supply.circulating;
-  //         header = "Circulating";
-  //         break;
-  //       }
-  //     }
-  //   }
-
-  //   const chartOptions = {
-  //     responsive: false,
-  //     legend: {
-  //       display: false,
-  //     },
-  //     elements: {
-  //       line: {
-  //         borderColor: "#19be56",
-  //         borderWidth: 1,
-  //       },
-  //       point: {
-  //         radius: 0,
-  //       },
-  //     },
-  //     tooltips: {
-  //       enabled: false,
-  //     },
-  //     scales: {
-  //       yAxes: [
-  //         {
-  //           display: false,
-  //         },
-  //       ],
-  //       xAxes: [
-  //         {
-  //           display: false,
-  //         },
-  //       ],
-  //     },
-  //     maintainAspectRatio: false,
-  //   };
-
-  //   const chartData = {
-  //     labels: [
-  //       "Jan",
-  //       "Feb",
-  //       "Mar",
-  //       "Apr",
-  //       "May",
-  //       "Jun",
-  //       "Jul",
-  //       "Aug",
-  //       "Sep",
-  //       "Oct",
-  //       "Nov",
-  //       "Dec",
-  //     ],
-  //     datasets: [
-  //       {
-  //         data: [435, 321, 532, 801, 1231, 1098, 732, 321, 451, 482, 513, 397],
-  //       },
-  //     ],
-  //   };
-
-  return (
-    <>
-      {/* {showDropdown && (
-        <div className="dropdown-exit" onClick={() => setDropdown(false)} />
-      )} */}
-      {tokens.length ? (
+  if (tokens.length)
+    return (
+      <>
         <div className="card">
           <div className="card-header">
             <div className="row align-items-center">
               <div className="col">
                 <h4 className="card-header-title">Tokens</h4>
               </div>
-
-              <div className="col-auto">
-                {/* <FilterDropdown
-                filter={filter}
-                toggle={() => setDropdown((show) => !show)}
-                show={showDropdown}
-              /> */}
-              </div>
             </div>
           </div>
 
-          {/* {richList === Status.Idle && (
-          <div className="card-body">
-            <span
-              className="btn btn-white ml-3 d-none d-md-inline"
-              onClick={fetchRichList}
-            >
-              Load Largest Accounts
-            </span>
-          </div>
-        )} */}
-
-          {/* {accounts && ( */}
           <div className="table-responsive mb-0">
             <table className="table table-sm table-nowrap card-table">
               <thead>
@@ -288,9 +171,8 @@ export function TokensCard() {
             </table>
           </div>
         </div>
-      ) : (
-        <LoadingCard />
-      )}
-    </>
-  );
+      </>
+    );
+
+  return null;
 }

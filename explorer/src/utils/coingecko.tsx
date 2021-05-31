@@ -3,7 +3,6 @@ import React from "react";
 import * as CoinGecko from "coingecko-api";
 
 const PRICE_REFRESH = 10000;
-const SOLANA_STATS_REFRESH = 10000;
 
 export const COIN_GECKO_SOLANA_CATEGORY = "solana-ecosystem";
 
@@ -91,22 +90,79 @@ export function useCoinGecko(coinId?: string): CoinGeckoResult | undefined {
   return coinInfo;
 }
 
-export function useCoinGeckoTokens() {
-  const [tokens, setTokens] = React.useState([]);
+export type CoinGeckoTokenStats = {
+  id: string;
+  symbol: string;
+  name: string;
+  image: string;
+  current_price: number;
+  market_cap: number;
+  market_cap_rank: number;
+  fully_diluted_valuation: number;
+  total_volume: number;
+  high_24h: number;
+  low_24h: number;
+  price_change_24h: number;
+  price_change_percentage_24h: number;
+  market_cap_change_24h: number;
+  market_cap_change_percentage_24h: number;
+  circulating_supply: number;
+  total_supply: number;
+  max_supply: number;
+  ath: number;
+  ath_change_percentage: number;
+  ath_date: Date;
+  atl: number;
+  atl_change_percentage: number;
+  atl_date: Date;
+  last_updated: Date;
+  sparkline_in_7d: {
+    price: Array<number>;
+  };
+  price_change_percentage_1h_in_currency: number;
+  price_change_percentage_24h_in_currency: number;
+  price_change_percentage_7d_in_currency: number;
+};
+
+export function useCoinGeckoCategoryTokens(
+  categoryId: string
+): [Error | null, Boolean, Array<CoinGeckoTokenStats>] {
+  const [tokens, setTokens] = React.useState<Array<CoinGeckoTokenStats>>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
-    CoinGeckoClient.coins
-      .markets({
-        category: COIN_GECKO_SOLANA_CATEGORY,
-        price_change_percentage: "1h,24h,7d",
-        sparkline: true,
-      })
-      .then((coins: any) => {
-        setTokens(coins.data);
-        // console.log({ coins });
-      });
-  }, []);
-  return tokens;
+    let interval: NodeJS.Timeout | undefined;
+    const fetchSolanaStats = () => {
+      setError(null);
+      setLoading(true);
+      return CoinGeckoClient.coins
+        .markets({
+          category: categoryId,
+          price_change_percentage: "1h,24h,7d",
+          sparkline: true,
+        })
+        .then(({ data }: { data: Array<CoinGeckoTokenStats> }) => {
+          setLoading(false);
+          setTokens(data);
+        })
+        .catch((error: any) => {
+          setLoading(false);
+          setError(error);
+        });
+    };
+
+    fetchSolanaStats();
+    interval = setInterval(() => {
+      fetchSolanaStats();
+    }, PRICE_REFRESH);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [categoryId]);
+  return [error, loading, tokens];
 }
 
 export type CoinGeckoCategoryStats = {
@@ -115,7 +171,7 @@ export type CoinGeckoCategoryStats = {
   market_cap: number;
   market_cap_change_24h: number;
   volume_24h: number;
-  updated_at: string;
+  updated_at: Date;
 };
 
 export function useCoinGeckoCategoryStats(
@@ -128,7 +184,7 @@ export function useCoinGeckoCategoryStats(
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
-    const fetchSolanaStats = () => {
+    const fetchCategoryStats = () => {
       setError(null);
       setLoading(true);
       return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
@@ -150,14 +206,15 @@ export function useCoinGeckoCategoryStats(
           }
         })
         .catch((error) => {
+          setLoading(false);
           setError(error);
         });
     };
 
-    fetchSolanaStats();
+    fetchCategoryStats();
     interval = setInterval(() => {
-      fetchSolanaStats();
-    }, SOLANA_STATS_REFRESH);
+      fetchCategoryStats();
+    }, PRICE_REFRESH);
     return () => {
       if (interval) {
         clearInterval(interval);
