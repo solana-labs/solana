@@ -10,6 +10,7 @@ import { SearchBar } from "components/SearchBar";
 import { AccountDetailsPage } from "pages/AccountDetailsPage";
 import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
+import { TokensPage } from "pages/TokensPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
 
@@ -28,6 +29,9 @@ function App() {
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
             <SupplyPage />
+          </Route>
+          <Route exact path={["/tokens"]}>
+            <TokensPage />
           </Route>
           <Route
             exact

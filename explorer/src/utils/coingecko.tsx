@@ -87,3 +87,46 @@ export function useCoinGecko(coinId?: string): CoinGeckoResult | undefined {
 
   return coinInfo;
 }
+
+export function useCoinGeckoTokens() {
+  const [tokens, setTokens] = React.useState([]);
+
+  React.useEffect(() => {
+    CoinGeckoClient.coins
+      .markets({
+        category: "solana-ecosystem",
+        price_change_percentage: "1h,24h,7d",
+        sparkline: true,
+      })
+      .then((coins: any) => {
+        setTokens(coins.data);
+        // console.log({ coins });
+      });
+  }, []);
+  return tokens;
+}
+
+export function useCoinGeckoTokenStats() {
+  const [tokenStats, setTokenStats] = React.useState([]);
+
+  React.useEffect(() => {
+    // CoinGeckoClient.coins
+    //   .categories({
+    //     category: "solana-ecosystem",
+    //     price_change_percentage: "1h,24h,7d",
+    //     sparkline: true,
+    //   })
+    //   .then((coins: any) => {
+    //     console.log(coins)
+    //     setTokens(coins.data);
+    //     // console.log({ coins });
+    //   });
+
+    fetch(`https://api.coingecko.com/api/v3/coins/categories`)
+      .then((response) => response.json())
+      .then((data) => {
+        setTokenStats(data);
+      });
+  }, []);
+  return tokenStats;
+}
