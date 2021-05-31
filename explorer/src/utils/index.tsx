@@ -119,3 +119,7 @@ export function camelToTitleCase(str: string): string {
 export function formatDollarValue(value: number, decimals: number): string {
   return "$" + Number(value.toFixed(decimals)).toLocaleString("en-US");
 }
+
+export function normalizePercentage(value: number, decimals: number): string {
+  return value ? value.toFixed(decimals) + "%" : "";
+}

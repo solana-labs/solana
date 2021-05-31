@@ -1,11 +1,84 @@
 import React from "react";
-import { Line } from "react-chartjs-2";
+import classNames from "classnames";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
+import { Sparkline, Direction } from "./Sparkline";
+import { normalizePercentage } from "utils";
 import {
   useCoinGeckoCategoryTokens,
   COIN_GECKO_SOLANA_CATEGORY,
+  CoinGeckoToken,
 } from "utils/coingecko";
+
+export function TokenRow({
+  token,
+  rank,
+}: {
+  token: CoinGeckoToken;
+  rank: number;
+}) {
+  return (
+    <tr>
+      <td>
+        <span className="badge badge-soft-gray badge-pill">{rank}</span>
+      </td>
+      <td className="">
+        <img className="token-icon mr-3" src={token.image} alt={token.name} />
+        {token.name}
+      </td>
+      <td className="text-muted">{token.symbol.toUpperCase()}</td>
+      <td className="text-right">
+        {token.current_price && "$" + token.current_price}
+      </td>
+      <td
+        className={classNames(
+          "text-right",
+          token.price_change_percentage_1h_in_currency > 0
+            ? "change-positive"
+            : "change-negative"
+        )}
+      >
+        {normalizePercentage(token.price_change_percentage_1h_in_currency, 2)}
+      </td>
+      <td
+        className={classNames(
+          "text-right",
+          token.price_change_percentage_1h_in_currency > 0
+            ? "change-positive"
+            : "change-negative"
+        )}
+      >
+        {normalizePercentage(token.price_change_percentage_24h, 2)}
+      </td>
+      <td
+        className={classNames(
+          "text-right",
+          token.price_change_percentage_1h_in_currency > 0
+            ? "change-positive"
+            : "change-negative"
+        )}
+      >
+        {normalizePercentage(token.price_change_percentage_7d_in_currency, 2)}
+      </td>
+      <td className="text-right">
+        {token.total_volume?.toLocaleString("en-US")}
+      </td>
+      <td className="text-right">
+        {token.market_cap?.toLocaleString("en-US")}
+      </td>
+      <td>
+        <Sparkline
+          values={token.sparkline_in_7d.price}
+          direction={
+            token.price_change_percentage_7d_in_currency > 0
+              ? Direction.Positive
+              : Direction.Negative
+          }
+        />
+      </td>
+    </tr>
+  );
+}
 
 export function TokensCard() {
   const [error, loading, tokens] = useCoinGeckoCategoryTokens(
@@ -45,128 +118,9 @@ export function TokensCard() {
                 </tr>
               </thead>
               <tbody className="list">
-                {tokens &&
-                  tokens.map((token: any, index) => {
-                    return (
-                      <tr key={index}>
-                        <td>
-                          <span className="badge badge-soft-gray badge-pill">
-                            {index + 1}
-                          </span>
-                        </td>
-                        <td className="">
-                          <img
-                            className="token-icon mr-3"
-                            src={token.image}
-                            alt=""
-                          />
-                          {token.name}
-                        </td>
-                        <td className="text-muted">
-                          {token.symbol.toUpperCase()}
-                        </td>
-                        <td className="text-right">
-                          {token.current_price ? `$${token.current_price}` : ""}
-                        </td>
-                        <td
-                          className={`text-right ${
-                            token.price_change_percentage_1h_in_currency > 0
-                              ? "change-positive"
-                              : "change-negative"
-                          }`}
-                        >
-                          {token.price_change_percentage_1h_in_currency
-                            ? `${token.price_change_percentage_1h_in_currency.toFixed(
-                                2
-                              )}%`
-                            : ""}
-                        </td>
-                        <td
-                          className={`text-right ${
-                            token.price_change_percentage_24h > 0
-                              ? "change-positive"
-                              : "change-negative"
-                          }`}
-                        >
-                          {token.price_change_percentage_24h
-                            ? `${parseInt(
-                                token.price_change_percentage_24h
-                              ).toFixed(2)}%`
-                            : ""}
-                        </td>
-                        <td
-                          className={`text-right ${
-                            token.price_change_percentage_7d_in_currency > 0
-                              ? "change-positive"
-                              : "change-negative"
-                          }`}
-                        >
-                          {token.price_change_percentage_7d_in_currency
-                            ? `${parseInt(
-                                token.price_change_percentage_7d_in_currency
-                              ).toFixed(2)}%`
-                            : ""}
-                        </td>
-                        <td className="text-right">
-                          {token.total_volume?.toLocaleString("en-US", {
-                            //   minimumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td className="text-right">
-                          {token.market_cap?.toLocaleString("en-US")}
-                        </td>
-                        <td className="">
-                          <Line
-                            width={75}
-                            height={35}
-                            data={{
-                              labels: token.sparkline_in_7d.price,
-                              datasets: [
-                                {
-                                  data: token.sparkline_in_7d.price,
-                                },
-                              ],
-                            }}
-                            options={{
-                              responsive: false,
-                              legend: {
-                                display: false,
-                              },
-                              elements: {
-                                line: {
-                                  borderColor:
-                                    token.price_change_percentage_7d_in_currency >
-                                    0
-                                      ? "#26e97e"
-                                      : "#fa62fc",
-                                  borderWidth: 1,
-                                },
-                                point: {
-                                  radius: 0,
-                                },
-                              },
-                              tooltips: {
-                                enabled: false,
-                              },
-                              scales: {
-                                yAxes: [
-                                  {
-                                    display: false,
-                                  },
-                                ],
-                                xAxes: [
-                                  {
-                                    display: false,
-                                  },
-                                ],
-                              },
-                              maintainAspectRatio: false,
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
+                {tokens.map((token, index) => (
+                  <TokenRow key={index} token={token} rank={index + 1} />
+                ))}
               </tbody>
             </table>
           </div>

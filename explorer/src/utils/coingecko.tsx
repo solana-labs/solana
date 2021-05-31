@@ -90,7 +90,7 @@ export function useCoinGecko(coinId?: string): CoinGeckoResult | undefined {
   return coinInfo;
 }
 
-export type CoinGeckoTokenStats = {
+export type CoinGeckoToken = {
   id: string;
   symbol: string;
   name: string;
@@ -126,8 +126,8 @@ export type CoinGeckoTokenStats = {
 
 export function useCoinGeckoCategoryTokens(
   categoryId: string
-): [Error | null, Boolean, Array<CoinGeckoTokenStats>] {
-  const [tokens, setTokens] = React.useState<Array<CoinGeckoTokenStats>>([]);
+): [Error | null, Boolean, Array<CoinGeckoToken>] {
+  const [tokens, setTokens] = React.useState<Array<CoinGeckoToken>>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
@@ -142,7 +142,7 @@ export function useCoinGeckoCategoryTokens(
           price_change_percentage: "1h,24h,7d",
           sparkline: true,
         })
-        .then(({ data }: { data: Array<CoinGeckoTokenStats> }) => {
+        .then(({ data }: { data: Array<CoinGeckoToken> }) => {
           setLoading(false);
           setTokens(data);
         })
