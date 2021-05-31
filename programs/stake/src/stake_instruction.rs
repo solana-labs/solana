@@ -186,7 +186,7 @@ pub struct AuthorizeWithSeedArgs {
     pub authority_owner: Pubkey,
 }
 
-fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
+pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
     Instruction::new_with_bincode(
         id(),
         &StakeInstruction::Initialize(*authorized, *lockup),
