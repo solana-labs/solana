@@ -4,7 +4,7 @@
 use crate::sanitize::Sanitize;
 use crate::{pubkey::Pubkey, short_vec};
 use bincode::serialize;
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -235,7 +235,9 @@ pub enum InstructionError {
     // conversions must also be added
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize, BorshSchema,
+)]
 pub struct Instruction {
     /// Pubkey of the instruction processor that executes this instruction
     pub program_id: Pubkey,
@@ -294,7 +296,9 @@ pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
 }
 
 /// Account metadata used to define Instructions
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize, BorshSchema,
+)]
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,
@@ -375,6 +379,8 @@ impl CompiledInstruction {
 
 #[cfg(test)]
 mod test {
+    use crate::borsh::try_from_slice_unchecked;
+
     use super::*;
 
     #[test]
@@ -398,5 +404,21 @@ mod test {
         assert_eq!((6, 6), do_work(&[0, 1, 2, 3, 3]));
         assert_eq!((6, 6), do_work(&[0, 0, 1, 1, 2, 2, 3, 3]));
         assert_eq!((0, 2), do_work(&[2, 2]));
+    }
+
+    #[test]
+    fn test_instruction_borsh_serialization() {
+        let instruction = Instruction {
+            program_id: Pubkey::new_unique(),
+            accounts: vec![AccountMeta::new(Pubkey::new_unique(), false)],
+            data: vec![1,2,3],
+        };
+
+        let instruction_serialized = instruction.try_to_vec().unwrap();
+
+        let instruction_deserialized: Instruction =
+            try_from_slice_unchecked(&instruction_serialized[..]).unwrap();
+
+        assert_eq!(instruction, instruction_deserialized);
     }
 }
