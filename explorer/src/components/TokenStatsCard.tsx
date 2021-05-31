@@ -1,78 +1,52 @@
 import React from "react";
-// import { useSupply, useFetchSupply, Status } from "providers/supply";
 import { LoadingCard } from "./common/LoadingCard";
-// import { ErrorCard } from "./common/ErrorCard";
-// import { lamportsToSolString } from "utils";
-import { useCoinGeckoTokenStats } from "utils/coingecko";
+import { ErrorCard } from "./common/ErrorCard";
+import {
+  useCoinGeckoCategoryStats,
+  COIN_GECKO_SOLANA_CATEGORY,
+} from "utils/coingecko";
+
 import { TableCardBody } from "./common/TableCardBody";
 
+const formatDollarValue = (value: number, decimals: number): string =>
+  "$" + Number(value.toFixed(decimals)).toLocaleString("en-US");
+
 export function TokenStatsCard() {
-  //   const supply = useSupply();
-  //   const fetchSupply = useFetchSupply();
+  const [error, loading, categoryStats] = useCoinGeckoCategoryStats(
+    COIN_GECKO_SOLANA_CATEGORY
+  );
 
-  const tokenStats = useCoinGeckoTokenStats();
+  if (error) return <ErrorCard text={error.toString()} />;
 
-  const solanaEcosystemStats = tokenStats.find(
-    ({ id }) => id === "solana-ecosystem"
-  ) as any;
+  if (loading) return <LoadingCard />;
 
-  //   // Fetch supply on load
-  //   React.useEffect(() => {
-  //     if (supply === Status.Idle) fetchSupply();
-  //   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  //   if (supply === Status.Disconnected) {
-  //     return <ErrorCard text="Not connected to the cluster" />;
-  //   }
-
-  //   if (supply === Status.Idle || supply === Status.Connecting)
-  //     return <LoadingCard />;
-
-  //   if (typeof supply === "string") {
-  //     return <ErrorCard text={supply} retry={fetchSupply} />;
-  //   }
-
-  return (
-    <div className="card">
-      {renderHeader()}
-
-      {solanaEcosystemStats ? (
+  if (categoryStats)
+    return (
+      <div className="card">
+        <div className="card-header">
+          <div className="row align-items-center">
+            <div className="col">
+              <h4 className="card-header-title">Token Stats</h4>
+            </div>
+          </div>
+        </div>
         <TableCardBody>
           <tr>
             <td className="w-100">Market Capitalization</td>
             <td className="text-lg-right">
-              {/* {lamportsToSolString(supply.total, 0)} */}$
-              {Number(
-                solanaEcosystemStats?.market_cap?.toFixed(0)
-              ).toLocaleString("en-US")}
+              {formatDollarValue(categoryStats.market_cap, 0)}
             </td>
           </tr>
 
           <tr>
             <td className="w-100">Trading Volume</td>
             <td className="text-lg-right">
-              {/* {lamportsToSolString(supply.circulating, 0)} */}$
-              {Number(
-                solanaEcosystemStats?.volume_24h?.toFixed(0)
-              ).toLocaleString("en-US")}
+              {formatDollarValue(categoryStats.volume_24h, 0)}
             </td>
           </tr>
         </TableCardBody>
-      ) : (
-        <LoadingCard />
-      )}
-    </div>
-  );
-}
-
-const renderHeader = () => {
-  return (
-    <div className="card-header">
-      <div className="row align-items-center">
-        <div className="col">
-          <h4 className="card-header-title">Token Stats</h4>
-        </div>
       </div>
-    </div>
-  );
-};
+    );
+
+  return null;
+}

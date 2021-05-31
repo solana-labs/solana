@@ -3,6 +3,9 @@ import React from "react";
 import * as CoinGecko from "coingecko-api";
 
 const PRICE_REFRESH = 10000;
+const SOLANA_STATS_REFRESH = 10000;
+
+export const COIN_GECKO_SOLANA_CATEGORY = "solana-ecosystem";
 
 const CoinGeckoClient = new CoinGecko();
 
@@ -94,7 +97,7 @@ export function useCoinGeckoTokens() {
   React.useEffect(() => {
     CoinGeckoClient.coins
       .markets({
-        category: "solana-ecosystem",
+        category: COIN_GECKO_SOLANA_CATEGORY,
         price_change_percentage: "1h,24h,7d",
         sparkline: true,
       })
@@ -106,27 +109,60 @@ export function useCoinGeckoTokens() {
   return tokens;
 }
 
-export function useCoinGeckoTokenStats() {
-  const [tokenStats, setTokenStats] = React.useState([]);
+export type CoinGeckoCategoryStats = {
+  id: string;
+  name: string;
+  market_cap: number;
+  market_cap_change_24h: number;
+  volume_24h: number;
+  updated_at: string;
+};
+
+export function useCoinGeckoCategoryStats(
+  categoryId: string
+): [Error | null, Boolean, CoinGeckoCategoryStats | undefined] {
+  const [categoryStats, setCategoryStats] =
+    React.useState<CoinGeckoCategoryStats>();
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
-    // CoinGeckoClient.coins
-    //   .categories({
-    //     category: "solana-ecosystem",
-    //     price_change_percentage: "1h,24h,7d",
-    //     sparkline: true,
-    //   })
-    //   .then((coins: any) => {
-    //     console.log(coins)
-    //     setTokens(coins.data);
-    //     // console.log({ coins });
-    //   });
+    let interval: NodeJS.Timeout | undefined;
+    const fetchSolanaStats = () => {
+      setError(null);
+      setLoading(true);
+      return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
+        .then((response) => response.json())
+        .then((data: Array<CoinGeckoCategoryStats>) => {
+          setLoading(false);
 
-    fetch(`https://api.coingecko.com/api/v3/coins/categories`)
-      .then((response) => response.json())
-      .then((data) => {
-        setTokenStats(data);
-      });
-  }, []);
-  return tokenStats;
+          // CoinGecko doesn't have an API (yet) that lets us
+          // fetch stats for a category so we fetch all of them
+          // and filter on the client
+          const statsForCategory = data.find(
+            (category: CoinGeckoCategoryStats) => category.id === categoryId
+          );
+
+          if (statsForCategory) {
+            setCategoryStats(statsForCategory);
+          } else {
+            throw new Error(`Couldn't fetch stats for ${categoryId}`);
+          }
+        })
+        .catch((error) => {
+          setError(error);
+        });
+    };
+
+    fetchSolanaStats();
+    interval = setInterval(() => {
+      fetchSolanaStats();
+    }, SOLANA_STATS_REFRESH);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [categoryId]);
+  return [error, loading, categoryStats];
 }
