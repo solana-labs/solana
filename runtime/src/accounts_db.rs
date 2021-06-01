@@ -3440,12 +3440,11 @@ impl AccountsDb {
         let rooted_slots = self
             .accounts_index
             .get_rooted_from_list(remove_slots.iter());
-        if !rooted_slots.is_empty() {
-            panic!(
-                "Trying to remove accounts for rooted slots {:?}",
-                rooted_slots
-            );
-        }
+        assert!(
+            rooted_slots.is_empty(),
+            "Trying to remove accounts for rooted slots {:?}",
+            rooted_slots
+        );
 
         let RemoveUnrootedSlotsSynchronization {
             slots_under_contention,
@@ -3454,35 +3453,40 @@ impl AccountsDb {
 
         {
             // Slots that are currently being flushed by flush_slot_cache()
-            let mut contended_slots = slots_under_contention.lock().unwrap();
+            let mut currently_contended_slots = slots_under_contention.lock().unwrap();
 
             // Slots that are currently being flushed by flush_slot_cache() AND
             // we want to remove in this function
-            let mut contended_cache_flush_slots: Vec<Slot> = remove_slots
+            let mut remaining_contended_flush_slots: Vec<Slot> = remove_slots
                 .iter()
                 .filter(|remove_slot| {
-                    let is_cache_flushing_slot = contended_slots.contains(remove_slot);
-                    if !is_cache_flushing_slot {
+                    let is_being_flushed = currently_contended_slots.contains(remove_slot);
+                    if !is_being_flushed {
                         // Reserve the slots that we want to purge that aren't currently
                         // being flushed to prevent cache from flushing those slots in
-                        // the future
-                        contended_slots.insert(**remove_slot);
+                        // the future.
+                        //
+                        // Note that the single replay thread has to remove a specific slot `N`
+                        // before another version of the same slot can be replayed. This means
+                        // multiple threads should not call `remove_unrooted_slots()` simultaneously
+                        // with the same slot.
+                        currently_contended_slots.insert(**remove_slot);
                     }
                     // If the cache is currently flushing this slot, add it to the list
-                    is_cache_flushing_slot
+                    is_being_flushed
                 })
                 .cloned()
                 .collect();
 
             // Wait for cache flushes to finish
             loop {
-                if !contended_cache_flush_slots.is_empty() {
+                if !remaining_contended_flush_slots.is_empty() {
                     // Wait for the signal that the cache has finished flushing a slot
                     //
-                    // Don't wait if the contended_cache_flush_slots is empty, otherwise
+                    // Don't wait if the remaining_contended_flush_slots is empty, otherwise
                     // we may never get a signal since there's no cache flush thread to
                     // do the signaling
-                    contended_slots = signal.wait(contended_slots).unwrap();
+                    currently_contended_slots = signal.wait(currently_contended_slots).unwrap();
                 } else {
                     // There are no slots being flushed to wait on, so it's safe to continue
                     // to purging the slots we want to purge!
@@ -3490,12 +3494,12 @@ impl AccountsDb {
                 }
 
                 // For each slot the cache flush has finished, mark that we're about to start
-                // purging these slots by reserving it in `contended_slots`.
-                contended_cache_flush_slots.retain(|flushing_slot| {
-                    let is_being_flushed = contended_slots.contains(flushing_slot);
+                // purging these slots by reserving it in `currently_contended_slots`.
+                remaining_contended_flush_slots.retain(|flush_slot| {
+                    let is_being_flushed = currently_contended_slots.contains(flush_slot);
                     if !is_being_flushed {
                         // Mark that we're about to delete this slot now
-                        contended_slots.insert(*flushing_slot);
+                        currently_contended_slots.insert(*flush_slot);
                     }
                     !is_being_flushed
                 });
@@ -3506,9 +3510,9 @@ impl AccountsDb {
         self.purge_slots_from_cache_and_store(remove_slots.iter(), &remove_unrooted_purge_stats);
         remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
 
-        let mut contended_slots = slots_under_contention.lock().unwrap();
+        let mut currently_contended_slots = slots_under_contention.lock().unwrap();
         for slot in remove_slots {
-            assert!(contended_slots.remove(slot));
+            assert!(currently_contended_slots.remove(slot));
         }
     }
 
