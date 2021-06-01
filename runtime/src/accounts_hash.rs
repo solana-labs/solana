@@ -835,7 +835,7 @@ pub mod tests {
     fn test_accountsdb_rest_of_hash_calculation() {
         solana_logger::setup();
 
-        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+        let mut account_maps = Vec::new();
 
         let key = Pubkey::new(&[11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
@@ -903,7 +903,7 @@ pub mod tests {
         // 1: NON-empty, empty final
         // 2: NON-empty, empty, empty final
         for pass in 0..3 {
-            let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+            let mut account_maps = Vec::new();
 
             let key = Pubkey::new(&[11u8; 32]);
             let hash = Hash::new(&[1u8; 32]);
@@ -990,7 +990,7 @@ pub mod tests {
     fn test_accountsdb_multi_pass_rest_of_hash_calculation_partial() {
         solana_logger::setup();
 
-        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+        let mut account_maps = Vec::new();
 
         let key = Pubkey::new(&[11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
@@ -1064,7 +1064,7 @@ pub mod tests {
     fn test_accountsdb_multi_pass_rest_of_hash_calculation_partial_hashes() {
         solana_logger::setup();
 
-        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+        let mut account_maps = Vec::new();
 
         const TARGET_FANOUT_LEVEL: usize = 3;
         let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
@@ -1506,7 +1506,7 @@ pub mod tests {
 
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
-        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+        let mut account_maps = Vec::new();
         let val = CalculateHashIntermediate::new(0, hash, 1, Slot::default(), key);
         account_maps.push(val.clone());
 
