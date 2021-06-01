@@ -744,10 +744,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpuid-bool"
-version = "0.1.2"
+name = "cpufeatures"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8aebca1129a03dc6dc2b127edd729435bbc4a37e1d5f4d7513165089ceb02634"
+checksum = "ed00c67cb5d0a7d64a44f6ad2668db7e7530311dd53ea79bcd4fb022c64911c8"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "crc32fast"
@@ -1148,7 +1151,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_bytes",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "zeroize",
 ]
 
@@ -1162,7 +1165,7 @@ dependencies = [
  "ed25519-dalek",
  "failure",
  "hmac 0.9.0",
- "sha2 0.9.2",
+ "sha2 0.9.5",
 ]
 
 [[package]]
@@ -3857,13 +3860,13 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.9.2"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e7aab86fe2149bad8c507606bdb3f4ef5e7b2380eb92350f56122cca72a42a8"
+checksum = "b362ae5752fd2137731f9fa25fd4d9058af34666ca1966fb969119cc35719f12"
 dependencies = [
  "block-buffer 0.9.0",
  "cfg-if 1.0.0",
- "cpuid-bool",
+ "cpufeatures",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
 ]
@@ -4574,7 +4577,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "solana-frozen-abi-macro 1.6.4",
  "solana-logger 1.6.4",
  "thiserror",
@@ -4592,7 +4595,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
  "thiserror",
@@ -4776,7 +4779,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_bytes",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-budget-program",
@@ -5069,7 +5072,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "solana-frozen-abi 1.6.4",
  "solana-frozen-abi-macro 1.6.4",
  "solana-logger 1.6.4",
@@ -5102,7 +5105,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "sha3",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
@@ -5289,7 +5292,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "sha3",
  "solana-crate-features",
  "solana-frozen-abi 1.8.0",
@@ -6069,7 +6072,7 @@ dependencies = [
  "pbkdf2 0.4.0",
  "rand 0.7.3",
  "rustc-hash",
- "sha2 0.9.2",
+ "sha2 0.9.5",
  "thiserror",
  "unicode-normalization",
  "zeroize",
