@@ -30,6 +30,7 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     native_loader, nonce,
+    nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -891,6 +892,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         rent_for_sysvars: bool,
+        merge_nonce_error_into_system_error: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -899,6 +901,7 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             rent_for_sysvars,
+            merge_nonce_error_into_system_error,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -923,6 +926,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         rent_for_sysvars: bool,
+        merge_nonce_error_into_system_error: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), tx)) in loaded.iter_mut().zip(txs).enumerate() {
@@ -935,13 +939,19 @@ impl Accounts {
                     let pubkey = nonce_rollback.nonce_address();
                     let acc = nonce_rollback.nonce_account();
                     let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account))
+                    Some((pubkey, acc, maybe_fee_account, true))
                 }
-                (Err(TransactionError::InstructionError(_, _)), Some(nonce_rollback)) => {
+                (Err(TransactionError::InstructionError(index, _)), Some(nonce_rollback)) => {
+                    let nonce_marker_ix_failed = if merge_nonce_error_into_system_error {
+                        // Don't advance stored blockhash when the nonce marker ix fails
+                        *index == NONCED_TX_MARKER_IX_INDEX
+                    } else {
+                        false
+                    };
                     let pubkey = nonce_rollback.nonce_address();
                     let acc = nonce_rollback.nonce_account();
                     let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account))
+                    Some((pubkey, acc, maybe_fee_account, !nonce_marker_ix_failed))
                 }
                 (Ok(_), _nonce_rollback) => None,
                 (Err(_), _nonce_rollback) => continue,
@@ -972,11 +982,11 @@ impl Accounts {
                     if res.is_err() {
                         match (is_nonce_account, is_fee_payer, maybe_nonce_rollback) {
                             // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, true, Some((_, _, None))) => (),
+                            (true, true, Some((_, _, None, _))) => (),
                             // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, false, Some((_, _, Some(_)))) => (),
+                            (true, false, Some((_, _, Some(_), _))) => (),
                             // not nonce, but fee-payer. rollback to cached state
-                            (false, true, Some((_, _, Some(fee_payer_account)))) => {
+                            (false, true, Some((_, _, Some(fee_payer_account), _))) => {
                                 *account = fee_payer_account.clone();
                             }
                             _ => panic!("unexpected nonce_rollback condition"),
@@ -1005,15 +1015,28 @@ pub fn prepare_if_nonce_account(
     account: &mut AccountSharedData,
     account_pubkey: &Pubkey,
     tx_result: &Result<()>,
-    maybe_nonce_rollback: Option<(&Pubkey, &AccountSharedData, Option<&AccountSharedData>)>,
+    maybe_nonce_rollback: Option<(
+        &Pubkey,
+        &AccountSharedData,
+        Option<&AccountSharedData>,
+        bool,
+    )>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
 ) -> bool {
-    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce_rollback {
+    if let Some((nonce_key, nonce_acc, _maybe_fee_account, advance_blockhash)) =
+        maybe_nonce_rollback
+    {
         if account_pubkey == nonce_key {
             if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
                 // its account state
                 *account = nonce_acc.clone();
+            }
+
+            if advance_blockhash {
+                // Advance the stored blockhash to prevent fee theft by replaying
+                // transactions that have failed with an `InstructionError`
+
                 // Since hash_age_kind is DurableNonce, unwrap is safe here
                 let state = StateMut::<nonce::state::Versions>::state(nonce_acc)
                     .unwrap()
@@ -1975,6 +1998,7 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2102,18 +2126,23 @@ mod tests {
         account: &mut AccountSharedData,
         account_pubkey: &Pubkey,
         tx_result: &Result<()>,
-        maybe_nonce_rollback: Option<(&Pubkey, &AccountSharedData, Option<&AccountSharedData>)>,
+        maybe_nonce_rollback: Option<(
+            &Pubkey,
+            &AccountSharedData,
+            Option<&AccountSharedData>,
+            bool,
+        )>,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
         match maybe_nonce_rollback {
-            Some((nonce_pubkey, _nonce_account, _maybe_fee_account))
+            Some((nonce_pubkey, _nonce_account, _maybe_fee_account, _))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
                 assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
             }
-            Some((nonce_pubkey, nonce_account, _maybe_fee_account))
+            Some((nonce_pubkey, nonce_account, _maybe_fee_account, _))
                 if nonce_pubkey == account_pubkey =>
             {
                 assert_ne!(expect_account, nonce_account)
@@ -2156,7 +2185,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                false,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2207,7 +2237,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                true,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2247,7 +2278,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                true,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2344,6 +2376,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2460,6 +2493,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

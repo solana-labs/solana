@@ -10,6 +10,7 @@ use solana_cli_output::{QuietDisplay, VerboseDisplay};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
+    account::Account,
     clock::Slot,
     feature::{self, Feature},
     feature_set::FEATURE_NAMES,
@@ -312,6 +313,31 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
     Ok(feature_activation_allowed)
 }
 
+fn status_from_account(account: Account) -> Option<CliFeatureStatus> {
+    feature::from_account(&account).map(|feature| match feature.activated_at {
+        None => CliFeatureStatus::Pending,
+        Some(activation_slot) => CliFeatureStatus::Active(activation_slot),
+    })
+}
+
+fn get_feature_status(
+    rpc_client: &RpcClient,
+    feature_id: &Pubkey,
+) -> Result<Option<CliFeatureStatus>, Box<dyn std::error::Error>> {
+    rpc_client
+        .get_account(feature_id)
+        .map(status_from_account)
+        .map_err(|e| e.into())
+}
+
+pub fn get_feature_is_active(
+    rpc_client: &RpcClient,
+    feature_id: &Pubkey,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    get_feature_status(rpc_client, feature_id)
+        .map(|status| matches!(status, Some(CliFeatureStatus::Active(_))))
+}
+
 fn process_status(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -327,11 +353,7 @@ fn process_status(
         let feature_id = &feature_ids[i];
         let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
         if let Some(account) = account {
-            if let Some(feature) = feature::from_account(&account) {
-                let feature_status = match feature.activated_at {
-                    None => CliFeatureStatus::Pending,
-                    Some(activation_slot) => CliFeatureStatus::Active(activation_slot),
-                };
+            if let Some(feature_status) = status_from_account(account) {
                 features.push(CliFeature {
                     id: feature_id.to_string(),
                     description: feature_name.to_string(),

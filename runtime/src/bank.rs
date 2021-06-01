@@ -3534,6 +3534,7 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.rent_for_sysvars(),
+            self.merge_nonce_error_into_system_error(),
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
@@ -5220,6 +5221,11 @@ impl Bank {
     pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
+    }
+
+    pub fn merge_nonce_error_into_system_error(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -10192,6 +10198,60 @@ pub(crate) mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::BlockhashNotFound),
         );
+    }
+
+    #[test]
+    fn test_nonce_authority() {
+        solana_logger::setup();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let bad_nonce_authority_keypair = Keypair::new();
+        let bad_nonce_authority = bad_nonce_authority_keypair.pubkey();
+        let custodian_account = bank.get_account(&custodian_pubkey).unwrap();
+
+        debug!("alice: {}", alice_pubkey);
+        debug!("custodian: {}", custodian_pubkey);
+        debug!("nonce: {}", nonce_pubkey);
+        debug!("nonce account: {:?}", bank.get_account(&nonce_pubkey));
+        debug!("cust: {:?}", custodian_account);
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
+
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .activate_feature(&feature_set::merge_nonce_error_into_system_error::id());
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        let durable_tx = Transaction::new_signed_with_payer(
+            &[
+                system_instruction::advance_nonce_account(&nonce_pubkey, &bad_nonce_authority),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 42),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &bad_nonce_authority_keypair],
+            nonce_hash,
+        );
+        debug!("{:?}", durable_tx);
+        let initial_custodian_balance = custodian_account.lamports();
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::MissingRequiredSignature,
+            ))
+        );
+        /* Check fee charged and nonce has *not* advanced */
+        assert_eq!(
+            bank.get_balance(&custodian_pubkey),
+            initial_custodian_balance - 10_000
+        );
+        assert_eq!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
 
     #[test]
