@@ -1,9 +1,10 @@
 use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+        log_instruction_custom_error, log_instruction_custom_error_ex, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult,
     },
+    feature::get_feature_is_active,
     memo::WithMemo,
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
@@ -20,16 +21,19 @@ use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
+    feature_set::merge_nonce_error_into_system_error,
     hash::Hash,
+    instruction::InstructionError,
     message::Message,
     nonce::{self, State},
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_nonce_account,
-        create_nonce_account_with_seed, withdraw_nonce_account, NonceError, SystemError,
+        create_nonce_account_with_seed, instruction_to_nonce_error, withdraw_nonce_account,
+        NonceError, SystemError,
     },
     system_program,
-    transaction::Transaction,
+    transaction::{Transaction, TransactionError},
 };
 use std::sync::Arc;
 
@@ -367,8 +371,21 @@ pub fn process_authorize_nonce_account(
         &tx.message,
         config.commitment,
     )?;
+    let merge_errors =
+        get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<NonceError>(result, config)
+
+    if merge_errors {
+        log_instruction_custom_error::<SystemError>(result, config)
+    } else {
+        log_instruction_custom_error_ex::<NonceError, _>(result, config, |ix_error| {
+            if let InstructionError::Custom(_) = ix_error {
+                instruction_to_nonce_error(ix_error, merge_errors)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 pub fn process_create_nonce_account(
@@ -452,8 +469,40 @@ pub fn process_create_nonce_account(
 
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
+    let merge_errors =
+        get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, config)
+
+    let err_ix_index = if let Err(err) = &result {
+        err.get_transaction_error().and_then(|tx_err| {
+            if let TransactionError::InstructionError(ix_index, _) = tx_err {
+                Some(ix_index)
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
+
+    match err_ix_index {
+        // SystemInstruction::InitializeNonceAccount failed
+        Some(1) => {
+            if merge_errors {
+                log_instruction_custom_error::<SystemError>(result, config)
+            } else {
+                log_instruction_custom_error_ex::<NonceError, _>(result, config, |ix_error| {
+                    if let InstructionError::Custom(_) = ix_error {
+                        instruction_to_nonce_error(ix_error, merge_errors)
+                    } else {
+                        None
+                    }
+                })
+            }
+        }
+        // SystemInstruction::CreateAccount{,WithSeed} failed
+        _ => log_instruction_custom_error::<SystemError>(result, config),
+    }
 }
 
 pub fn process_get_nonce(
@@ -506,8 +555,21 @@ pub fn process_new_nonce(
         &tx.message,
         config.commitment,
     )?;
+    let merge_errors =
+        get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, config)
+
+    if merge_errors {
+        log_instruction_custom_error::<SystemError>(result, config)
+    } else {
+        log_instruction_custom_error_ex::<NonceError, _>(result, config, |ix_error| {
+            if let InstructionError::Custom(_) = ix_error {
+                instruction_to_nonce_error(ix_error, merge_errors)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 pub fn process_show_nonce_account(
@@ -569,8 +631,21 @@ pub fn process_withdraw_from_nonce_account(
         &tx.message,
         config.commitment,
     )?;
+    let merge_errors =
+        get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<NonceError>(result, config)
+
+    if merge_errors {
+        log_instruction_custom_error::<SystemError>(result, config)
+    } else {
+        log_instruction_custom_error_ex::<NonceError, _>(result, config, |ix_error| {
+            if let InstructionError::Custom(_) = ix_error {
+                instruction_to_nonce_error(ix_error, merge_errors)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 #[cfg(test)]
