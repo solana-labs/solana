@@ -65,9 +65,7 @@ describe('Transaction', () => {
 
     it('validation', () => {
       const payer = Keypair.generate();
-      const other = Keypair.generate();
       const recentBlockhash = Keypair.generate().publicKey.toBase58();
-      const programId = Keypair.generate().publicKey;
 
       const transaction = new Transaction();
       expect(() => {
@@ -75,18 +73,6 @@ describe('Transaction', () => {
       }).to.throw('Transaction recentBlockhash required');
 
       transaction.recentBlockhash = recentBlockhash;
-
-      expect(() => {
-        transaction.compileMessage();
-      }).to.throw('No instructions provided');
-
-      transaction.add({
-        keys: [
-          {pubkey: other.publicKey, isSigner: true, isWritable: true},
-          {pubkey: payer.publicKey, isSigner: true, isWritable: true},
-        ],
-        programId,
-      });
 
       expect(() => {
         transaction.compileMessage();
