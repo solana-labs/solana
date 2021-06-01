@@ -4244,11 +4244,19 @@ impl AccountsDb {
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
+            let mut time = Measure::start("collect");
             let combined_maps = self.get_snapshot_storages(slot);
+            time.stop();
+
+            let timings = HashStats {
+                collect_snapshots_us: time.as_us(),
+                ..HashStats::default()
+            };
 
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
                 Some(&self.thread_pool_clean),
+                timings,
                 check_hash,
             )
         } else {
@@ -4365,10 +4373,10 @@ impl AccountsDb {
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
         thread_pool: Option<&ThreadPool>,
+        mut stats: HashStats,
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let scan_and_hash = || {
-            let mut stats = HashStats::default();
+        let mut scan_and_hash = move || {
             // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
             // More bins means smaller vectors to sort, copy, etc.
             const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 64;
@@ -5951,8 +5959,13 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result =
-            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages,
+            None,
+            HashStats::default(),
+            false,
+        )
+        .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5967,8 +5980,13 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result =
-            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages,
+            None,
+            HashStats::default(),
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, (expected_hash, sum));
     }
