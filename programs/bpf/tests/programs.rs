@@ -439,7 +439,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_external_spend", false),
             ("solana_bpf_rust_iter", true),
             ("solana_bpf_rust_many_args", true),
-            ("solana_bpf_rust_mem", true),
+            ("solana_bpf_rust_membuiltins", true),
             ("solana_bpf_rust_noop", true),
             ("solana_bpf_rust_panic", false),
             ("solana_bpf_rust_param_passing", true),
@@ -1291,6 +1291,11 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_external_spend", 521),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
+<<<<<<< HEAD
+=======
+            ("solana_bpf_rust_mem", 3143),
+            ("solana_bpf_rust_membuiltins", 4069),
+>>>>>>> 2b5052926 (Add memory operation syscalls (#16447))
             ("solana_bpf_rust_noop", 495),
             ("solana_bpf_rust_param_passing", 46),
             ("solana_bpf_rust_sanity", 917),
