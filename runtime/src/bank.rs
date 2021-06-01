@@ -444,7 +444,10 @@ impl BankRc {
     }
 
     pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
-        self.accounts.accounts_db.get_snapshot_storages(slot, None)
+        self.accounts
+            .accounts_db
+            .get_snapshot_storages(slot, None)
+            .0
     }
 }
 
