@@ -94,7 +94,7 @@ fn download_to_temp(
     let client = reqwest::blocking::Client::new();
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!("{}Downloading...", TRUCK));
+    progress_bar.set_message(format!("{}Downloading...", TRUCK));
 
     let response = client.get(url.as_str()).send()?;
     let download_size = {
@@ -114,7 +114,7 @@ fn download_to_temp(
             )
             .progress_chars("=> "),
     );
-    progress_bar.set_message(&format!("{}Downloading", TRUCK));
+    progress_bar.set_message(format!("{}Downloading", TRUCK));
 
     struct DownloadProgress<R> {
         progress_bar: ProgressBar,
@@ -158,7 +158,7 @@ fn extract_release_archive(
     use tar::Archive;
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!("{}Extracting...", PACKAGE));
+    progress_bar.set_message(format!("{}Extracting...", PACKAGE));
 
     if extract_dir.exists() {
         let _ = fs::remove_dir_all(&extract_dir);
@@ -694,7 +694,7 @@ pub fn deploy(
     // Confirm the `json_rpc_url` is good and that `from_keypair` is a valid account
     let rpc_client = RpcClient::new(json_rpc_url.to_string());
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!("{}Checking cluster...", LOOKING_GLASS));
+    progress_bar.set_message(format!("{}Checking cluster...", LOOKING_GLASS));
     let balance = rpc_client
         .get_balance(&from_keypair.pubkey())
         .map_err(|err| {
@@ -743,7 +743,7 @@ pub fn deploy(
     println_name_value("Update target:", &release_target);
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!("{}Deploying update...", PACKAGE));
+    progress_bar.set_message(format!("{}Deploying update...", PACKAGE));
 
     // Construct an update manifest for the release
     let mut update_manifest = SignedUpdateManifest {
@@ -825,7 +825,7 @@ pub fn gc(config_file: &str) -> Result<(), String> {
                     .template("{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
                     .progress_chars("=> "),
             );
-            progress_bar.set_message(&format!("{}Removing old releases", RECYCLING));
+            progress_bar.set_message(format!("{}Removing old releases", RECYCLING));
             for (release, _modified_type) in old_releases {
                 progress_bar.inc(1);
                 let _ = fs::remove_dir_all(&release);
@@ -919,7 +919,7 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         match explicit_release {
             ExplicitRelease::Semver(current_release_semver) => {
                 let progress_bar = new_spinner_progress_bar();
-                progress_bar.set_message(&format!("{}Checking for updates...", LOOKING_GLASS));
+                progress_bar.set_message(format!("{}Checking for updates...", LOOKING_GLASS));
 
                 let github_release = check_for_newer_github_release(
                     semver::VersionReq::parse(&format!(
@@ -1041,7 +1041,7 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
         }
     } else {
         let progress_bar = new_spinner_progress_bar();
-        progress_bar.set_message(&format!("{}Checking for updates...", LOOKING_GLASS));
+        progress_bar.set_message(format!("{}Checking for updates...", LOOKING_GLASS));
         let rpc_client = RpcClient::new(config.json_rpc_url.clone());
         let update_manifest = get_update_manifest(&rpc_client, &config.update_manifest_pubkey)?;
         progress_bar.finish_and_clear();

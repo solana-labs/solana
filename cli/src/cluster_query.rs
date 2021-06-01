@@ -737,12 +737,10 @@ pub fn process_catchup(
                     if let Some(rpc_addr) = contact_info.rpc {
                         break rpc_addr;
                     }
-                    progress_bar.set_message(&format!("RPC service not found for {}", node_pubkey));
+                    progress_bar.set_message(format!("RPC service not found for {}", node_pubkey));
                 } else {
-                    progress_bar.set_message(&format!(
-                        "Contact information not found for {}",
-                        node_pubkey
-                    ));
+                    progress_bar
+                        .set_message(format!("Contact information not found for {}", node_pubkey));
                 }
                 sleep(Duration::from_secs(sleep_interval as u64));
             };
@@ -758,7 +756,7 @@ pub fn process_catchup(
             Ok(reported_node_pubkey) => break reported_node_pubkey,
             Err(err) => {
                 if let ClientErrorKind::Reqwest(err) = err.kind() {
-                    progress_bar.set_message(&format!("Connection failed: {}", err));
+                    progress_bar.set_message(format!("Connection failed: {}", err));
                     sleep(Duration::from_secs(sleep_interval as u64));
                     continue;
                 }
@@ -858,7 +856,7 @@ pub fn process_catchup(
             }
         };
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "{} slot(s) {} (us:{} them:{}){}",
             slot_distance.abs(),
             if slot_distance >= 0 {
@@ -1134,7 +1132,7 @@ pub fn process_show_block_production(
     };
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!(
+    progress_bar.set_message(format!(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
     ));
@@ -1197,7 +1195,7 @@ pub fn process_show_block_production(
     let mut leader_slot_count = HashMap::new();
     let mut leader_skipped_slots = HashMap::new();
 
-    progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
+    progress_bar.set_message(format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
         .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::finalized())?;
     if leader_schedule.is_none() {
@@ -1216,7 +1214,7 @@ pub fn process_show_block_production(
         }
     }
 
-    progress_bar.set_message(&format!(
+    progress_bar.set_message(format!(
         "Processing {} slots containing {} blocks and {} empty slots...",
         total_slots, total_blocks_produced, total_slots_skipped
     ));
@@ -1610,9 +1608,8 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                         "{:?} | root slot advancing at {:.2} slots/second",
                         new_info, slots_per_second
                     )
-                }
-                .to_owned();
-                slot_progress.set_message(&message);
+                };
+                slot_progress.set_message(message.clone());
 
                 if let Some(previous) = current {
                     let slot_delta: i64 = new_info.slot as i64 - previous.slot as i64;

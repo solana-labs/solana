@@ -143,7 +143,7 @@ impl Dashboard {
                             )
                         };
 
-                        progress_bar.set_message(&format!(
+                        progress_bar.set_message(format!(
                             "{}{}{}| \
                                     Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
                                     Snapshot Slot: {} | \
@@ -172,7 +172,7 @@ impl Dashboard {
                     }
                     Err(err) => {
                         progress_bar
-                            .abandon_with_message(&format!("RPC connection failure: {}", err));
+                            .abandon_with_message(format!("RPC connection failure: {}", err));
                         break;
                     }
                 }
@@ -197,7 +197,7 @@ async fn wait_for_validator_startup(
             match admin_rpc_service::connect(&ledger_path).await {
                 Ok(new_admin_client) => admin_client = Some(new_admin_client),
                 Err(err) => {
-                    progress_bar.set_message(&format!("Unable to connect to validator: {}", err));
+                    progress_bar.set_message(format!("Unable to connect to validator: {}", err));
                     thread::sleep(refresh_interval);
                     continue;
                 }
@@ -216,22 +216,21 @@ async fn wait_for_validator_startup(
                     }
                     .await
                     {
-                        Ok((None, _)) => progress_bar.set_message(&"RPC service not available"),
+                        Ok((None, _)) => progress_bar.set_message("RPC service not available"),
                         Ok((Some(rpc_addr), start_time)) => return Some((rpc_addr, start_time)),
                         Err(err) => {
                             progress_bar
-                                .set_message(&format!("Failed to get validator info: {}", err));
+                                .set_message(format!("Failed to get validator info: {}", err));
                         }
                     }
                 } else {
-                    progress_bar
-                        .set_message(&format!("Validator startup: {:?}...", start_progress));
+                    progress_bar.set_message(format!("Validator startup: {:?}...", start_progress));
                 }
             }
             Err(err) => {
                 admin_client = None;
                 progress_bar
-                    .set_message(&format!("Failed to get validator start progress: {}", err));
+                    .set_message(format!("Failed to get validator start progress: {}", err));
             }
         }
         thread::sleep(refresh_interval);
