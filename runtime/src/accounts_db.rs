@@ -5653,82 +5653,83 @@ pub mod tests {
         AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false).unwrap();
     }
 
-    fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+    fn sample_storages_and_account_in_slot(
+        slot: Slot,
+    ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
         let pubkey255 = Pubkey::new(&[0xffu8; 32]);
 
-        const SLOT: Slot = 1;
-
-        let raw_expected = vec![
+        let mut raw_expected = vec![
             CalculateHashIntermediate {
                 version: 0,
-                hash: Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
+                hash: Hash::default(),
                 lamports: 1,
-                slot: SLOT,
+                slot,
                 pubkey: pubkey0,
             },
             CalculateHashIntermediate {
                 version: 1,
-                hash: Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
+                hash: Hash::default(),
                 lamports: 128,
-                slot: SLOT,
+                slot,
                 pubkey: pubkey127,
             },
             CalculateHashIntermediate {
                 version: 2,
-                hash: Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
+                hash: Hash::default(),
                 lamports: 129,
-                slot: SLOT,
+                slot,
                 pubkey: pubkey128,
             },
             CalculateHashIntermediate {
                 version: 3,
-                hash: Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
+                hash: Hash::default(),
                 lamports: 256,
-                slot: SLOT,
+                slot,
                 pubkey: pubkey255,
             },
         ];
 
-        accounts.store_uncached(
-            SLOT,
-            &[(
-                &pubkey0,
-                &AccountSharedData::new(
-                    raw_expected[0].lamports,
-                    1,
-                    AccountSharedData::default().owner(),
-                ),
-            )],
-        );
-        accounts.store_uncached(
-            SLOT,
-            &[(
-                &pubkey127,
-                &AccountSharedData::new(128, 1, AccountSharedData::default().owner()),
-            )],
-        );
-        accounts.store_uncached(
-            SLOT,
-            &[(
-                &pubkey128,
-                &AccountSharedData::new(129, 1, AccountSharedData::default().owner()),
-            )],
-        );
-        accounts.store_uncached(
-            SLOT,
-            &[(
-                &pubkey255,
-                &AccountSharedData::new(256, 1, AccountSharedData::default().owner()),
-            )],
-        );
-        accounts.add_root(SLOT);
+        let expected_hashes = vec![
+            Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
+            Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
+            Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
+            Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
+        ];
 
-        let storages = accounts.get_snapshot_storages(SLOT);
+        let mut raw_accounts = Vec::default();
+
+        for i in 0..raw_expected.len() {
+            raw_accounts.push(AccountSharedData::new(
+                raw_expected[i].lamports,
+                1,
+                AccountSharedData::default().owner(),
+            ));
+            let hash = AccountsDb::hash_account(slot, &raw_accounts[i], &raw_expected[i].pubkey);
+            if slot == 1 {
+                assert_eq!(hash, expected_hashes[i]);
+            }
+            raw_expected[i].hash = hash;
+        }
+
+        let to_store = raw_accounts
+            .iter()
+            .zip(raw_expected.iter())
+            .map(|(account, intermediate)| (&intermediate.pubkey, account))
+            .collect::<Vec<_>>();
+
+        accounts.store_uncached(slot, &to_store[..]);
+        accounts.add_root(slot);
+
+        let storages = accounts.get_snapshot_storages(slot);
         (storages, raw_expected)
+    }
+
+    fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+        sample_storages_and_account_in_slot(1)
     }
 
     fn get_storage_refs(input: &[SnapshotStorage]) -> &[SnapshotStorage] {
