@@ -754,6 +754,9 @@ impl RecycleStores {
     }
 }
 
+/// Removing unrooted slots in Accounts Background Service needs to be synchronized with flushing
+/// slots from the Accounts Cache.  This keeps track of those slots and the Mutex + Condvar for
+/// synchronization.
 #[derive(Debug, Default)]
 struct RemoveUnrootedSlotsSynchronization {
     // slots being flushed from the cache or being purged
@@ -840,9 +843,9 @@ pub struct AccountsDb {
 
     is_bank_drop_callback_enabled: AtomicBool,
 
-    // Set of slots currently being flushed by `flush_slot_cache()` or removed
-    // by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
-    // can safely clear the set of unrooted slots `slots`.
+    /// Set of slots currently being flushed by `flush_slot_cache()` or removed
+    /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
+    /// can safely clear the set of unrooted slots `slots`.
     remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
 }
 
@@ -3424,6 +3427,15 @@ impl AccountsDb {
     }
 
     // TODO: This is currently unsafe with scan because it can remove a slot in the middle
+    /// Remove the set of slots in `remove_slots` from both the cache and storage. This requires
+    /// we know the contents of the slot are either:
+    ///
+    /// 1) Completely in the cache
+    /// 2) Have been completely flushed from the cache
+    ///
+    /// in order to guarantee that when this function returns, the contents of the slot have
+    /// been completely and not only partially removed. Thus synchronization with `flush_slot_cache()`
+    /// through `self.remove_unrooted_slots_synchronization` is necessary.
     pub fn remove_unrooted_slots(&self, remove_slots: &[Slot]) {
         let rooted_slots = self
             .accounts_index
@@ -3954,9 +3966,9 @@ impl AccountsDb {
         }
     }
 
-    // `should_flush_f` is an optional closure that determines whether a given
-    // account should be flushed. Passing `None` will by default flush all
-    // accounts
+    /// `should_flush_f` is an optional closure that determines whether a given
+    /// account should be flushed. Passing `None` will by default flush all
+    /// accounts
     fn flush_slot_cache(
         &self,
         slot: Slot,
