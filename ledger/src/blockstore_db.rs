@@ -235,6 +235,7 @@ impl Rocks {
         }
 
         // Column family names
+<<<<<<< HEAD
         let meta_cf_descriptor =
             ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
         let dead_slots_cf_descriptor =
@@ -267,6 +268,74 @@ impl Rocks {
             ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
         let block_height_cf_descriptor =
             ColumnFamilyDescriptor::new(BlockHeight::NAME, get_cf_options(&access_type));
+=======
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            SlotMeta::NAME,
+            get_cf_options::<SlotMeta>(&access_type, &oldest_slot),
+        );
+        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DeadSlots::NAME,
+            get_cf_options::<DeadSlots>(&access_type, &oldest_slot),
+        );
+        let duplicate_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DuplicateSlots::NAME,
+            get_cf_options::<DuplicateSlots>(&access_type, &oldest_slot),
+        );
+        let erasure_meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            ErasureMeta::NAME,
+            get_cf_options::<ErasureMeta>(&access_type, &oldest_slot),
+        );
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(
+            Orphans::NAME,
+            get_cf_options::<Orphans>(&access_type, &oldest_slot),
+        );
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(
+            Root::NAME,
+            get_cf_options::<Root>(&access_type, &oldest_slot),
+        );
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(
+            Index::NAME,
+            get_cf_options::<Index>(&access_type, &oldest_slot),
+        );
+        let shred_data_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredData::NAME,
+            get_cf_options::<ShredData>(&access_type, &oldest_slot),
+        );
+        let shred_code_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredCode::NAME,
+            get_cf_options::<ShredCode>(&access_type, &oldest_slot),
+        );
+        let transaction_status_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatus::NAME,
+            get_cf_options::<TransactionStatus>(&access_type, &oldest_slot),
+        );
+        let address_signatures_cf_descriptor = ColumnFamilyDescriptor::new(
+            AddressSignatures::NAME,
+            get_cf_options::<AddressSignatures>(&access_type, &oldest_slot),
+        );
+        let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatusIndex::NAME,
+            get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
+        );
+        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(
+            Rewards::NAME,
+            get_cf_options::<Rewards>(&access_type, &oldest_slot),
+        );
+        let blocktime_cf_descriptor = ColumnFamilyDescriptor::new(
+            Blocktime::NAME,
+            get_cf_options::<Blocktime>(&access_type, &oldest_slot),
+        );
+        let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(
+            PerfSamples::NAME,
+            get_cf_options::<PerfSamples>(&access_type, &oldest_slot),
+        );
+        let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
+            BlockHeight::NAME,
+            get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
+        );
+        // Don't forget to add to both run_purge_with_stats() and
+        // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
+>>>>>>> 96cdbfdcc (Purge expired BlockHeight data from blockstore (#17634))
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
