@@ -149,6 +149,14 @@ where
                         .help("Keypair to fund accounts"),
                 )
                 .arg(
+                    Arg::with_name("unlocked_sol")
+                        .default_value("1.0")
+                        .long("unlocked-sol")
+                        .takes_value(true)
+                        .value_name("SOL_AMOUNT")
+                        .help("Amount of SOL to put in system account to pay for fees"),
+                )
+                .arg(
                     Arg::with_name("lockup_authority")
                         .long("lockup-authority")
                         .takes_value(true)
