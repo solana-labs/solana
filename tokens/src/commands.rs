@@ -1,5 +1,5 @@
 use crate::{
-    args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
+    args::{BalancesArgs, DistributeTokensArgs, SenderStakeArgs, StakeArgs, TransactionLogArgs},
     db::{self, TransactionInfo},
     spl_token::*,
     token_display::Token,
@@ -178,77 +178,108 @@ fn distribution_instructions(
     lockup_date: Option<DateTime<Utc>>,
     do_create_associated_token_account: bool,
 ) -> Vec<Instruction> {
-    if args.stake_args.is_none() && args.spl_token_args.is_none() {
-        let from = args.sender_keypair.pubkey();
-        let to = allocation.recipient.parse().unwrap();
-        let lamports = allocation.amount;
-        let instruction = system_instruction::transfer(&from, &to, lamports);
-        return vec![instruction];
-    }
-
     if args.spl_token_args.is_some() {
         return build_spl_token_instructions(allocation, args, do_create_associated_token_account);
     }
 
-    let stake_args = args.stake_args.as_ref().unwrap();
-    let unlocked_sol = stake_args.unlocked_sol;
-    let sender_pubkey = args.sender_keypair.pubkey();
-    let stake_authority = stake_args.stake_authority.pubkey();
-    let withdraw_authority = stake_args.withdraw_authority.pubkey();
+    match &args.stake_args {
+        // No stake args; a simple token transfer.
+        None => {
+            let from = args.sender_keypair.pubkey();
+            let to = allocation.recipient.parse().unwrap();
+            let lamports = allocation.amount;
+            let instruction = system_instruction::transfer(&from, &to, lamports);
+            vec![instruction]
+        }
 
-    let mut instructions = stake_instruction::split(
-        &stake_args.stake_account_address,
-        &stake_authority,
-        allocation.amount - unlocked_sol,
-        &new_stake_account_address,
-    );
+        // Stake args provided, so create a recipient stake account.
+        Some(stake_args) => {
+            let unlocked_sol = stake_args.unlocked_sol;
+            let sender_pubkey = args.sender_keypair.pubkey();
+            let recipient = allocation.recipient.parse().unwrap();
 
-    let recipient = allocation.recipient.parse().unwrap();
+            let mut instructions = match &stake_args.sender_stake_args {
+                // No source stake account, so create a recipient stake account directly.
+                None => {
+                    // Make the recipient both the new stake and withdraw authority
+                    let authorized = Authorized {
+                        staker: recipient,
+                        withdrawer: recipient,
+                    };
+                    let mut lockup = Lockup::default();
+                    if let Some(lockup_date) = lockup_date {
+                        lockup.unix_timestamp = lockup_date.timestamp();
+                    }
+                    if let Some(lockup_authority) = stake_args.lockup_authority {
+                        lockup.custodian = lockup_authority;
+                    }
+                    stake_instruction::create_account(
+                        &sender_pubkey,
+                        &new_stake_account_address,
+                        &authorized,
+                        &lockup,
+                        allocation.amount - unlocked_sol,
+                    )
+                }
 
-    // Make the recipient the new stake authority
-    instructions.push(stake_instruction::authorize(
-        &new_stake_account_address,
-        &stake_authority,
-        &recipient,
-        StakeAuthorize::Staker,
-        None,
-    ));
+                // A sender stake account was provided, so create a recipient stake account by
+                // splitting the sender account.
+                Some(sender_stake_args) => {
+                    let stake_authority = sender_stake_args.stake_authority.pubkey();
+                    let withdraw_authority = sender_stake_args.withdraw_authority.pubkey();
+                    let mut instructions = stake_instruction::split(
+                        &sender_stake_args.stake_account_address,
+                        &stake_authority,
+                        allocation.amount - unlocked_sol,
+                        &new_stake_account_address,
+                    );
 
-    // Make the recipient the new withdraw authority
-    instructions.push(stake_instruction::authorize(
-        &new_stake_account_address,
-        &withdraw_authority,
-        &recipient,
-        StakeAuthorize::Withdrawer,
-        None,
-    ));
+                    // Make the recipient the new stake authority
+                    instructions.push(stake_instruction::authorize(
+                        &new_stake_account_address,
+                        &stake_authority,
+                        &recipient,
+                        StakeAuthorize::Staker,
+                        None,
+                    ));
 
-    // Add lockup
-    if let Some(lockup_date) = lockup_date {
-        let lockup_authority = stake_args
-            .lockup_authority
-            .as_ref()
-            .map(|signer| signer.pubkey())
-            .unwrap();
-        let lockup = LockupArgs {
-            unix_timestamp: Some(lockup_date.timestamp()),
-            epoch: None,
-            custodian: None,
-        };
-        instructions.push(stake_instruction::set_lockup(
-            &new_stake_account_address,
-            &lockup,
-            &lockup_authority,
-        ));
+                    // Make the recipient the new withdraw authority
+                    instructions.push(stake_instruction::authorize(
+                        &new_stake_account_address,
+                        &withdraw_authority,
+                        &recipient,
+                        StakeAuthorize::Withdrawer,
+                        None,
+                    ));
+
+                    // Add lockup
+                    if let Some(lockup_date) = lockup_date {
+                        let lockup = LockupArgs {
+                            unix_timestamp: Some(lockup_date.timestamp()),
+                            epoch: None,
+                            custodian: None,
+                        };
+                        instructions.push(stake_instruction::set_lockup(
+                            &new_stake_account_address,
+                            &lockup,
+                            &stake_args.lockup_authority.unwrap(),
+                        ));
+                    }
+
+                    instructions
+                }
+            };
+
+            // Transfer some unlocked tokens to recipient, which they can use for transaction fees.
+            instructions.push(system_instruction::transfer(
+                &sender_pubkey,
+                &recipient,
+                unlocked_sol,
+            ));
+
+            instructions
+        }
     }
-
-    instructions.push(system_instruction::transfer(
-        &sender_pubkey,
-        &recipient,
-        unlocked_sol,
-    ));
-
-    instructions
 }
 
 fn build_messages(
@@ -336,14 +367,17 @@ fn send_messages(
 
         let mut signers = vec![&*args.fee_payer, &*args.sender_keypair];
         if let Some(stake_args) = &args.stake_args {
-            signers.push(&*stake_args.stake_authority);
-            signers.push(&*stake_args.withdraw_authority);
             signers.push(&new_stake_account_keypair);
-            if !allocation.lockup_date.is_empty() {
-                if let Some(lockup_authority) = &stake_args.lockup_authority {
-                    signers.push(&**lockup_authority);
-                } else {
-                    return Err(Error::MissingLockupAuthority);
+            if let Some(sender_stake_args) = &stake_args.sender_stake_args {
+                signers.push(&*sender_stake_args.stake_authority);
+                signers.push(&*sender_stake_args.withdraw_authority);
+                signers.push(&new_stake_account_keypair);
+                if !allocation.lockup_date.is_empty() {
+                    if let Some(lockup_authority) = &sender_stake_args.lockup_authority {
+                        signers.push(&**lockup_authority);
+                    } else {
+                        return Err(Error::MissingLockupAuthority);
+                    }
                 }
             }
         }
@@ -366,12 +400,14 @@ fn send_messages(
         };
         match result {
             Ok((transaction, last_valid_slot)) => {
+                let new_stake_account_address_option =
+                    args.stake_args.as_ref().map(|_| &new_stake_account_address);
                 db::set_transaction_info(
                     db,
                     &allocation.recipient.parse().unwrap(),
                     allocation.amount,
                     &transaction,
-                    args.stake_args.as_ref().map(|_| &new_stake_account_address),
+                    new_stake_account_address_option,
                     false,
                     last_valid_slot,
                     lockup_date,
@@ -708,8 +744,13 @@ fn check_payer_balances(
     let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
         let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
         undistributed_tokens -= total_unlocked_sol;
+        let from_pubkey = if let Some(sender_stake_args) = &stake_args.sender_stake_args {
+            sender_stake_args.stake_account_address
+        } else {
+            args.sender_keypair.pubkey()
+        };
         (
-            stake_args.stake_account_address,
+            from_pubkey,
             Some((args.sender_keypair.pubkey(), total_unlocked_sol)),
         )
     } else {
@@ -909,7 +950,7 @@ pub fn test_process_distribute_tokens_with_client(
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
-pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keypair: Keypair) {
+pub fn test_process_create_stake_with_client(client: &RpcClient, sender_keypair: Keypair) {
     let exit = Arc::new(AtomicBool::default());
     let fee_payer = Keypair::new();
     let transaction = transfer(
@@ -975,11 +1016,137 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let output_path = output_file.path().to_str().unwrap().to_string();
 
     let stake_args = StakeArgs {
+        lockup_authority: None,
+        unlocked_sol: sol_to_lamports(1.0),
+        sender_stake_args: None,
+    };
+    let args = DistributeTokensArgs {
+        fee_payer: Box::new(fee_payer),
+        dry_run: false,
+        input_csv,
+        transaction_db: transaction_db.clone(),
+        output_path: Some(output_path.clone()),
+        stake_args: Some(stake_args),
+        spl_token_args: None,
+        sender_keypair: Box::new(sender_keypair),
+        transfer_amount: None,
+    };
+    let confirmations = process_allocations(client, &args, exit.clone()).unwrap();
+    assert_eq!(confirmations, None);
+
+    let transaction_infos =
+        db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey);
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(1.0),
+    );
+    let new_stake_account_address = transaction_infos[0].new_stake_account_address.unwrap();
+    assert_eq!(
+        client.get_balance(&new_stake_account_address).unwrap(),
+        expected_amount - sol_to_lamports(1.0),
+    );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+
+    // Now, run it again, and check there's no double-spend.
+    process_allocations(client, &args, exit).unwrap();
+    let transaction_infos =
+        db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey);
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(1.0),
+    );
+    assert_eq!(
+        client.get_balance(&new_stake_account_address).unwrap(),
+        expected_amount - sol_to_lamports(1.0),
+    );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+}
+
+pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keypair: Keypair) {
+    let exit = Arc::new(AtomicBool::default());
+    let fee_payer = Keypair::new();
+    let transaction = transfer(
+        client,
+        sol_to_lamports(1.0),
+        &sender_keypair,
+        &fee_payer.pubkey(),
+    )
+    .unwrap();
+    client
+        .send_and_confirm_transaction_with_spinner(&transaction)
+        .unwrap();
+
+    let stake_account_keypair = Keypair::new();
+    let stake_account_address = stake_account_keypair.pubkey();
+    let stake_authority = Keypair::new();
+    let withdraw_authority = Keypair::new();
+
+    let authorized = Authorized {
+        staker: stake_authority.pubkey(),
+        withdrawer: withdraw_authority.pubkey(),
+    };
+    let lockup = Lockup::default();
+    let instructions = stake_instruction::create_account(
+        &sender_keypair.pubkey(),
+        &stake_account_address,
+        &authorized,
+        &lockup,
+        sol_to_lamports(3000.0),
+    );
+    let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
+    let signers = [&sender_keypair, &stake_account_keypair];
+    let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
+    let transaction = Transaction::new(&signers, message, blockhash);
+    client
+        .send_and_confirm_transaction_with_spinner(&transaction)
+        .unwrap();
+
+    let expected_amount = sol_to_lamports(1000.0);
+    let alice_pubkey = solana_sdk::pubkey::new_rand();
+    let file = NamedTempFile::new().unwrap();
+    let input_csv = file.path().to_str().unwrap().to_string();
+    let mut wtr = csv::WriterBuilder::new().from_writer(file);
+    wtr.write_record(&["recipient", "amount", "lockup_date"])
+        .unwrap();
+    wtr.write_record(&[
+        alice_pubkey.to_string(),
+        lamports_to_sol(expected_amount).to_string(),
+        "".to_string(),
+    ])
+    .unwrap();
+    wtr.flush().unwrap();
+
+    let dir = tempdir().unwrap();
+    let transaction_db = dir
+        .path()
+        .join("transactions.db")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let output_file = NamedTempFile::new().unwrap();
+    let output_path = output_file.path().to_str().unwrap().to_string();
+
+    let sender_stake_args = SenderStakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         lockup_authority: None,
+    };
+    let stake_args = StakeArgs {
         unlocked_sol: sol_to_lamports(1.0),
+        lockup_authority: None,
+        sender_stake_args: Some(sender_stake_args),
     };
     let args = DistributeTokensArgs {
         fee_payer: Box::new(fee_payer),
@@ -1059,6 +1226,16 @@ mod tests {
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
+    }
+
+    #[test]
+    fn test_create_stake_allocations() {
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
+        let url = test_validator.rpc_url();
+
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
+        test_process_create_stake_with_client(&client, alice);
     }
 
     #[test]
@@ -1293,7 +1470,7 @@ mod tests {
     const SET_LOCKUP_INDEX: usize = 4;
 
     #[test]
-    fn test_set_stake_lockup() {
+    fn test_set_split_stake_lockup() {
         let lockup_date_str = "2021-01-07T00:00:00Z";
         let allocation = Allocation {
             recipient: Pubkey::default().to_string(),
@@ -1303,12 +1480,17 @@ mod tests {
         let stake_account_address = solana_sdk::pubkey::new_rand();
         let new_stake_account_address = solana_sdk::pubkey::new_rand();
         let lockup_authority = Keypair::new();
-        let stake_args = StakeArgs {
+        let lockup_authority_address = lockup_authority.pubkey();
+        let sender_stake_args = SenderStakeArgs {
             stake_account_address,
             stake_authority: Box::new(Keypair::new()),
             withdraw_authority: Box::new(Keypair::new()),
             lockup_authority: Some(Box::new(lockup_authority)),
+        };
+        let stake_args = StakeArgs {
+            lockup_authority: Some(lockup_authority_address),
             unlocked_sol: sol_to_lamports(1.0),
+            sender_stake_args: Some(sender_stake_args),
         };
         let args = DistributeTokensArgs {
             fee_payer: Box::new(Keypair::new()),
@@ -1558,12 +1740,17 @@ mod tests {
             .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
-        StakeArgs {
+        let sender_stake_args = SenderStakeArgs {
             stake_account_address,
             stake_authority: Box::new(stake_authority),
             withdraw_authority: Box::new(withdraw_authority),
             lockup_authority: None,
+        };
+
+        StakeArgs {
+            lockup_authority: None,
             unlocked_sol,
+            sender_stake_args: Some(sender_stake_args),
         }
     }
 
