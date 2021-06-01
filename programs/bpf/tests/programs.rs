@@ -1293,7 +1293,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 572),
+            ("solana_bpf_rust_128bit", 584),
             ("solana_bpf_rust_alloc", 8906),
             ("solana_bpf_rust_dep_crate", 2),
             ("solana_bpf_rust_external_spend", 521),
