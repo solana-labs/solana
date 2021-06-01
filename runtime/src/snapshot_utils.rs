@@ -11,6 +11,7 @@ use {
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
+        sorted_storages::SortedStorages,
     },
     bincode::{config::Options, serialize_into},
     bzip2::bufread::BzDecoder,
@@ -999,8 +1000,9 @@ pub fn process_accounts_package_pre(
 
     let hash = accounts_package.hash; // temporarily remaining here
     if let Some(expected_hash) = accounts_package.hash_for_testing {
+        let sorted_storages = SortedStorages::new(&accounts_package.storages);
         let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
-            &accounts_package.storages,
+            &sorted_storages,
             thread_pool,
             crate::accounts_hash::HashStats::default(),
             false,

@@ -4378,17 +4378,22 @@ impl AccountsDb {
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
-            let mut time = Measure::start("collect");
-            let combined_maps = self.get_snapshot_storages(slot, Some(ancestors)).0;
-            time.stop();
+            let mut collect_time = Measure::start("collect");
+            let (combined_maps, slots) = self.get_snapshot_storages(slot, Some(ancestors));
+            collect_time.stop();
+
+            let mut sort_time = Measure::start("sort_storages");
+            let storages = SortedStorages::new_with_slots(&combined_maps, &slots);
+            sort_time.stop();
 
             let timings = HashStats {
-                collect_snapshots_us: time.as_us(),
+                collect_snapshots_us: collect_time.as_us(),
+                storage_sort_us: sort_time.as_us(),
                 ..HashStats::default()
             };
 
             Self::calculate_accounts_hash_without_index(
-                &combined_maps,
+                &storages,
                 Some(&self.thread_pool_clean),
                 timings,
                 check_hash,
@@ -4438,7 +4443,7 @@ impl AccountsDb {
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
-        stats.num_snapshot_storage = storage.len();
+        stats.num_snapshot_storage = storage.slot_count();
         let mismatch_found = AtomicU64::new(0);
 
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
@@ -4505,7 +4510,7 @@ impl AccountsDb {
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
-        storages: &[SnapshotStorage],
+        storages: &SortedStorages,
         thread_pool: Option<&ThreadPool>,
         mut stats: HashStats,
         check_hash: bool,
@@ -4528,11 +4533,6 @@ impl AccountsDb {
             ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
-
-            let mut sort_time = Measure::start("sort_storages");
-            let storages = SortedStorages::new(storages);
-            sort_time.stop();
-            stats.storage_sort_us = sort_time.as_us();
 
             for pass in 0..num_scan_passes {
                 let bounds = Range {
@@ -6225,7 +6225,7 @@ pub mod tests {
 
         let (storages, _size, _slot_expected) = sample_storage();
         let result = AccountsDb::calculate_accounts_hash_without_index(
-            &storages,
+            &get_storage_refs(&storages),
             None,
             HashStats::default(),
             false,
@@ -6246,7 +6246,7 @@ pub mod tests {
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let result = AccountsDb::calculate_accounts_hash_without_index(
-            &storages,
+            &get_storage_refs(&storages),
             None,
             HashStats::default(),
             false,

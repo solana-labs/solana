@@ -7,7 +7,7 @@ use std::ops::Range;
 pub struct SortedStorages<'a> {
     range: Range<Slot>,
     storages: Vec<Option<&'a SnapshotStorage>>,
-    count: usize,
+    slot_count: usize,
 }
 
 impl<'a> SortedStorages<'a> {
@@ -28,35 +28,42 @@ impl<'a> SortedStorages<'a> {
         &self.range
     }
 
-    pub fn len(&self) -> usize {
-        self.count
+    pub fn slot_count(&self) -> usize {
+        self.slot_count
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
+    // Currently only called when a testing CLI option is enabled.
+    // assumptions:
+    // 1. each SnapshotStorage.!is_empty()
+    // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
     pub fn new(source: &'a [SnapshotStorage]) -> Self {
-        let mut min = Slot::MAX;
-        let mut max = Slot::MIN;
-        let mut count = 0;
-        let mut time = Measure::start("get slot");
         let slots = source
             .iter()
             .map(|storages| {
-                count += storages.len();
-                if !storages.is_empty() {
-                    storages.first().map(|storage| {
-                        let slot = storage.slot();
-                        min = std::cmp::min(slot, min);
-                        max = std::cmp::max(slot + 1, max);
-                        slot
-                    })
-                } else {
-                    None
-                }
+                let first = storages.first();
+                assert!(first.is_some(), "SnapshotStorage.is_empty()");
+                let storage = first.unwrap();
+                storage.slot() // this must be unique. Will be enforced in new_with_slots
             })
             .collect::<Vec<_>>();
+        Self::new_with_slots(source, &slots)
+    }
+
+    // source[i] is in slot slots[i]
+    // assumptions:
+    // 1. slots contains unique items
+    // 2. slots and source are the same len
+    pub fn new_with_slots(source: &'a [SnapshotStorage], slots: &[Slot]) -> Self {
+        assert_eq!(source.len(), slots.len());
+        let mut min = Slot::MAX;
+        let mut max = Slot::MIN;
+        let slot_count = source.len();
+        let mut time = Measure::start("get slot");
+        slots.iter().for_each(|slot| {
+            let slot = *slot;
+            min = std::cmp::min(slot, min);
+            max = std::cmp::max(slot + 1, max);
+        });
         time.stop();
         let mut time2 = Measure::start("sort");
         let range;
@@ -75,11 +82,9 @@ impl<'a> SortedStorages<'a> {
                 .iter()
                 .zip(slots)
                 .for_each(|(original_storages, slot)| {
-                    if let Some(slot) = slot {
-                        let index = (slot - min) as usize;
-                        assert!(storages[index].is_none());
-                        storages[index] = Some(original_storages);
-                    }
+                    let index = (slot - min) as usize;
+                    assert!(storages[index].is_none()); // we should not encounter the same slot twice
+                    storages[index] = Some(original_storages);
                 });
         }
         time2.stop();
@@ -87,7 +92,7 @@ impl<'a> SortedStorages<'a> {
         Self {
             range,
             storages,
-            count,
+            slot_count,
         }
     }
 }
@@ -102,7 +107,7 @@ pub mod tests {
                 start: min,
                 end: min + len as Slot,
             };
-            let count = source.len();
+            let slot_count = source.len();
             for (storage, slot) in source {
                 storages[*slot as usize] = Some(*storage);
             }
@@ -110,7 +115,7 @@ pub mod tests {
             Self {
                 range,
                 storages,
-                count,
+                slot_count,
             }
         }
     }
