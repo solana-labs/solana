@@ -1,5 +1,5 @@
 [package]
-name = "solana-bpf-rust-mem"
+name = "solana-bpf-rust-membuiltins"
 version = "1.8.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
@@ -9,18 +9,12 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bpf-rust-mem"
 edition = "2018"
 
-[features]
-no-entrypoint = []
-
 [dependencies]
+solana-bpf-rust-mem = { path = "../mem", version = "=1.8.0", features = [ "no-entrypoint" ] }
 solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
 
-[dev-dependencies]
-solana-program-test = { path = "../../../../program-test", version = "=1.8.0" }
-solana-sdk = { path = "../../../../sdk", version = "=1.8.0" }
-
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

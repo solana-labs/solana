@@ -20,8 +20,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
-        update_data_on_realloc,
+        keccak256_syscall_enabled, memory_ops_syscalls, set_upgrade_authority_via_cpi_enabled,
+        sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -74,6 +74,8 @@ pub enum SyscallError {
     InstructionTooLarge(usize, usize),
     #[error("Too many accounts passed to inner instruction")]
     TooManyAccounts,
+    #[error("Overlapping copy")]
+    CopyOverlapping,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -145,10 +147,20 @@ pub fn register_syscalls(
             .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
     }
 
+    if invoke_context.is_feature_active(&memory_ops_syscalls::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
+    }
+
+    // Cross-program invocation syscalls
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+
+    // Memory allocator
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     Ok(syscall_registry)
@@ -268,6 +280,43 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemcpy {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemmove {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemcmp {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemset {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
     let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
@@ -322,7 +371,6 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
 
     // Memory allocator
-
     vm.bind_syscall_context_object(
         Box::new(SyscallAllocFree {
             aligned: *loader_id != bpf_loader_deprecated::id(),
@@ -1133,6 +1181,150 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
             }
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
+        *result = Ok(0);
+    }
+}
+
+/// memcpy
+pub struct SyscallMemcpy<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
+    fn call(
+        &mut self,
+        dst_addr: u64,
+        src_addr: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        // cannot be overlapping
+        if dst_addr + n > src_addr && src_addr > dst_addr {
+            *result = Err(SyscallError::CopyOverlapping.into());
+            return;
+        }
+
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let dst = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
+            result
+        );
+        let src = question_mark!(
+            translate_slice::<u8>(memory_mapping, src_addr, n, self.loader_id, true),
+            result
+        );
+        unsafe {
+            std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), n as usize);
+        }
+        *result = Ok(0);
+    }
+}
+/// memcpy
+pub struct SyscallMemmove<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
+    fn call(
+        &mut self,
+        dst_addr: u64,
+        src_addr: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let dst = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
+            result
+        );
+        let src = question_mark!(
+            translate_slice::<u8>(memory_mapping, src_addr, n, self.loader_id, true),
+            result
+        );
+        unsafe {
+            std::ptr::copy(src.as_ptr(), dst.as_mut_ptr(), n as usize);
+        }
+        *result = Ok(0);
+    }
+}
+/// memcmp
+pub struct SyscallMemcmp<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
+    fn call(
+        &mut self,
+        s1_addr: u64,
+        s2_addr: u64,
+        n: u64,
+        cmp_result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let s1 = question_mark!(
+            translate_slice::<u8>(memory_mapping, s1_addr, n, self.loader_id, true),
+            result
+        );
+        let s2 = question_mark!(
+            translate_slice::<u8>(memory_mapping, s2_addr, n, self.loader_id, true),
+            result
+        );
+        let cmp_result = question_mark!(
+            translate_type_mut::<i32>(memory_mapping, cmp_result_addr, self.loader_id, true),
+            result
+        );
+        let mut i = 0;
+        while i < n as usize {
+            let a = s1[i];
+            let b = s2[i];
+            if a != b {
+                *cmp_result = a as i32 - b as i32;
+                *result = Ok(0);
+                return;
+            }
+            i += 1;
+        }
+        *cmp_result = 0;
+        *result = Ok(0);
+    }
+}
+/// memset
+pub struct SyscallMemset<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
+    fn call(
+        &mut self,
+        s_addr: u64,
+        c: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let s = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, s_addr, n, self.loader_id, true),
+            result
+        );
+        for val in s.iter_mut().take(n as usize) {
+            *val = c as u8;
+        }
         *result = Ok(0);
     }
 }
