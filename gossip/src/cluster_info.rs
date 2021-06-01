@@ -2063,20 +2063,19 @@ impl ClusterInfo {
                 .map(|r| ((r.caller, r.filter), r.from_addr))
                 .unzip()
         };
-        let now = timestamp();
-        let self_id = self.id();
-
-        let mut pull_responses = self
-            .time_gossip_read_lock(
+        let mut pull_responses = {
+            let gossip = self.time_gossip_read_lock(
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
-            )
-            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
+            );
+            gossip.generate_pull_responses(&caller_and_filters, output_size_limit, timestamp())
+        };
         if require_stake_for_gossip {
             for resp in &mut pull_responses {
                 retain_staked(resp, stakes);
             }
         }
+        let now = timestamp();
         let (responses, scores): (Vec<_>, Vec<_>) = addrs
             .iter()
             .zip(pull_responses)
@@ -2107,6 +2106,7 @@ impl ClusterInfo {
             rand::thread_rng().fill(&mut seed[..]);
             weighted_shuffle(&scores, seed).into_iter()
         };
+        let self_id = self.id();
         let mut total_bytes = 0;
         let mut sent = 0;
         for (addr, response) in shuffle.map(|i| &responses[i]) {

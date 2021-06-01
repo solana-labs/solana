@@ -160,7 +160,8 @@ impl CrdsGossipPush {
             .collect()
     }
 
-    fn wallclock_window(&self, now: u64) -> impl RangeBounds<u64> {
+    // Returns wallclock window of values which are pushed between nodes.
+    pub(crate) fn wallclock_window(&self, now: u64) -> impl RangeBounds<u64> {
         now.saturating_sub(self.msg_timeout)..=now.saturating_add(self.msg_timeout)
     }
 

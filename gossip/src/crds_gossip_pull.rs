@@ -16,7 +16,7 @@ use {
         crds::{Crds, VersionedCrdsValue},
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
-        crds_value::CrdsValue,
+        crds_value::{CrdsData, CrdsValue},
         ping_pong::PingCache,
     },
     itertools::Itertools,
@@ -37,6 +37,7 @@ use {
         convert::TryInto,
         iter::repeat_with,
         net::SocketAddr,
+        ops::RangeBounds,
         sync::Mutex,
         time::{Duration, Instant},
     },
@@ -340,9 +341,17 @@ impl CrdsGossipPull {
         crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
         output_size_limit: usize, // Limit number of crds values returned.
+        // Wallclock window of values which are still pushed between nodes.
+        push_wallclock_window: impl RangeBounds<u64>,
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        self.filter_crds_values(crds, requests, output_size_limit, now)
+        self.filter_crds_values(
+            crds,
+            requests,
+            output_size_limit,
+            push_wallclock_window,
+            now,
+        )
     }
 
     // Checks if responses should be inserted and
@@ -479,8 +488,25 @@ impl CrdsGossipPull {
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
         mut output_size_limit: usize, // Limit number of crds values returned.
+        // Wallclock window of values which are still pushed between nodes.
+        push_wallclock_window: impl RangeBounds<u64>,
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
+        // Skip values which are are recent enough that are still pushed
+        // between nodes; except for:
+        // Contact-infos: since when starting a validator, it does not receive
+        // any push-messages until it adopts entrypoint shred version.
+        // Node-instances: since it is best to broadcast duplicate instances
+        // through all possible channels as soon as possible.
+        let skip = |caller_wallclock: u64, value: &CrdsValue| {
+            let value_wallclock = value.wallclock();
+            value_wallclock > caller_wallclock
+                || push_wallclock_window.contains(&value_wallclock)
+                    && !matches!(
+                        value.data,
+                        CrdsData::ContactInfo(_) | CrdsData::NodeInstance(_)
+                    )
+        };
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let jitter = rand::thread_rng().gen_range(0, msg_timeout / 4);
         //skip filters from callers that are too old
@@ -504,7 +530,7 @@ impl CrdsGossipPull {
                 let pred = |entry: &&VersionedCrdsValue| {
                     debug_assert!(filter.test_mask(&entry.value_hash));
                     // Skip values that are too new.
-                    if entry.value.wallclock() > caller_wallclock {
+                    if skip(caller_wallclock, &entry.value) {
                         total_skipped += 1;
                         false
                     } else {
@@ -1110,8 +1136,9 @@ pub(crate) mod tests {
         let rsp = dest.generate_pull_responses(
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            0,
+            usize::MAX, // output_size_limit
+            0..0,       // push_wallclock_window
+            0,          // now
         );
 
         assert_eq!(rsp[0].len(), 0);
@@ -1128,8 +1155,9 @@ pub(crate) mod tests {
         let rsp = dest.generate_pull_responses(
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            usize::MAX,                      // output_size_limit
+            0..0,                            // push_wallclock_window
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS, // now
         );
         assert_eq!(rsp[0].len(), 0);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS);
@@ -1146,8 +1174,9 @@ pub(crate) mod tests {
         let rsp = dest.generate_pull_responses(
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            usize::MAX,                      // output_size_limit
+            0..0,                            // push_wallclock_window
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS, // now
         );
         assert_eq!(rsp.len(), 2 * MIN_NUM_BLOOM_FILTERS);
         // There should be only one non-empty response in the 2nd half.
@@ -1198,8 +1227,9 @@ pub(crate) mod tests {
         let rsp = dest.generate_pull_responses(
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            0,
+            usize::MAX, // output_size_limit
+            0..0,       // push_wallclock_window
+            0,          // now
         );
         dest.process_pull_requests(
             &mut dest_crds,
@@ -1270,8 +1300,9 @@ pub(crate) mod tests {
             let rsp = dest.generate_pull_responses(
                 &dest_crds,
                 &filters,
-                /*output_size_limit=*/ usize::MAX,
-                0,
+                usize::MAX, // output_size_limit
+                0..0,       // push_wallclock_window
+                0,          // now
             );
             dest.process_pull_requests(
                 &mut dest_crds,

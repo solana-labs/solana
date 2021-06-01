@@ -2544,7 +2544,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     cluster.restart_node(&validator_c_pubkey, validator_c_info);
 
     let mut votes_on_c_fork = std::collections::BTreeSet::new(); // S4 and S5
-    for _ in 0..100 {
+    for _ in 0..900 {
         sleep(Duration::from_millis(100));
 
         if let Some((last_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {

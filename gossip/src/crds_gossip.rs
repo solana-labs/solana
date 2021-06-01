@@ -260,8 +260,13 @@ impl CrdsGossip {
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        self.pull
-            .generate_pull_responses(&self.crds, filters, output_size_limit, now)
+        self.pull.generate_pull_responses(
+            &self.crds,
+            filters,
+            output_size_limit,
+            self.push.wallclock_window(now),
+            now,
+        )
     }
 
     pub fn filter_pull_responses(
