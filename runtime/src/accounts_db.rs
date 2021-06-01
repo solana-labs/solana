@@ -4228,6 +4228,7 @@ impl AccountsDb {
         (0..chunks)
             .into_par_iter()
             .map(|chunk| {
+                let chunk = chunks - chunk; // we want reverse order in groups so that the latest slots are in group[0]
                 let mut retval = B::default();
                 let start = snapshot_storages.range().start + chunk * MAX_ITEMS_PER_CHUNK;
                 let end = std::cmp::min(start + MAX_ITEMS_PER_CHUNK, snapshot_storages.range().end);
@@ -4397,19 +4398,17 @@ impl AccountsDb {
             .map(|mut items| {
                 items.par_sort_unstable_by(AccountsHash::compare_two_hash_entries);
                 let mut result = Vec::with_capacity(items.len());
-                if !items.is_empty() {
-                    for i in 0..items.len() {
-                        let item = &items[i];
+                for i in 0..items.len() {
+                    let item = &items[i];
+                    if i > 0 && items[i - 1].pubkey == item.pubkey {
+                        // pubkey found a second time in this batch of slots, so only take the first one - most recent slot or most recent write version of the same slot - sort order is -slot, -write_version
+                        // don't push result
+                    } else {
                         let new_item =
                             CalculateHashIntermediate2::new(item.hash, item.lamports, item.pubkey);
-                        if i > 0 && items[i - 1].pubkey == item.pubkey {
-                            // pubkey found a second time in this batch of slots, so only take the first one - most recent slot or most recent write version of the same slot - sort order is -slot, -write_version
-                            // don't push result
-                        } else {
-                            result.push(new_item);
-                        }
+                        result.push(new_item);
                     }
-                }
+            }
                 result
             })
             .collect()
