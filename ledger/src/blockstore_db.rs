@@ -340,6 +340,7 @@ impl Rocks {
             BlockHeight::NAME,
             get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
         );
+        // Don't forget to add to run_purge_with_stats() in ledger/src/blockstore/blockstore_purge.rs!!
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
