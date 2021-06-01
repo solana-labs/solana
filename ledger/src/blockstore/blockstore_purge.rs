@@ -291,6 +291,10 @@ impl Blockstore {
             && self
                 .perf_samples_cf
                 .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .block_height_cf
+                .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         compact_timer.stop();
         if !result {
