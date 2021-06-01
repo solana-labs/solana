@@ -10629,4 +10629,90 @@ pub mod tests {
         assert!(uncleaned_pubkeys.contains(&pubkey2));
         assert!(uncleaned_pubkeys.contains(&pubkey3));
     }
+
+    #[test]
+    fn test_sort_and_simplify() {
+        solana_logger::setup();
+        let key = Pubkey::new_unique();
+        let hash = Hash::new_unique();
+        let val = CalculateHashIntermediate::new(1, hash, 1, 1, key);
+
+        // slot same, version <
+        let hash2 = Hash::new_unique();
+        let val2 = CalculateHashIntermediate::new(0, hash2, 4, 1, key);
+        let val3 = CalculateHashIntermediate::new(3, hash2, 4, 1, key);
+        let val4 = CalculateHashIntermediate::new(4, hash2, 4, 1, key);
+
+        let src = vec![vec![val2.clone()], vec![val.clone()]];
+        let result = AccountsDb::sort_and_simplify(src.clone());
+        assert_eq!(result, src);
+
+        let src = vec![
+            vec![val2.clone(), val.clone()],
+            vec![val3.clone(), val4.clone()],
+        ];
+        let sorted = vec![vec![val, val2], vec![val4, val3]];
+        let result = AccountsDb::sort_and_simplify(src);
+        assert_eq!(result, sorted);
+
+        let src = vec![vec![]];
+        let result = AccountsDb::sort_and_simplify(src.clone());
+        assert_eq!(result, src);
+
+        let src = vec![];
+        let result = AccountsDb::sort_and_simplify(src.clone());
+        assert_eq!(result, src);
+    }
+
+    #[test]
+    fn test_accountsdb_compare_two_hash_entries() {
+        solana_logger::setup();
+        let key = Pubkey::new_unique();
+        let hash = Hash::new_unique();
+        let val = CalculateHashIntermediate::new(1, hash, 1, 1, key);
+
+        // slot same, version <
+        let hash2 = Hash::new_unique();
+        let val2 = CalculateHashIntermediate::new(0, hash2, 4, 1, key);
+        assert_eq!(
+            std::cmp::Ordering::Less,
+            AccountsHash::compare_two_hash_entries(&val, &val2)
+        );
+
+        let list = vec![val.clone(), val2.clone()];
+        let mut list_bkup = list.clone();
+        list_bkup.sort_by(AccountsHash::compare_two_hash_entries);
+        let list = AccountsDb::sort_and_simplify(vec![list]);
+        assert_eq!(list, vec![list_bkup]);
+
+        let list = vec![val2, val.clone()]; // reverse args
+        let mut list_bkup = list.clone();
+        list_bkup.sort_by(AccountsHash::compare_two_hash_entries);
+        let list = AccountsDb::sort_and_simplify(vec![list]);
+        assert_eq!(list, vec![list_bkup]);
+
+        // slot same, vers =
+        let hash3 = Hash::new_unique();
+        let val3 = CalculateHashIntermediate::new(1, hash3, 2, 1, key);
+        assert_eq!(
+            std::cmp::Ordering::Equal,
+            AccountsHash::compare_two_hash_entries(&val, &val3)
+        );
+
+        // slot same, vers >
+        let hash4 = Hash::new_unique();
+        let val4 = CalculateHashIntermediate::new(2, hash4, 6, 1, key);
+        assert_eq!(
+            std::cmp::Ordering::Greater,
+            AccountsHash::compare_two_hash_entries(&val, &val4)
+        );
+
+        // slot >, version <
+        let hash5 = Hash::new_unique();
+        let val5 = CalculateHashIntermediate::new(0, hash5, 8, 2, key);
+        assert_eq!(
+            std::cmp::Ordering::Greater,
+            AccountsHash::compare_two_hash_entries(&val, &val5)
+        );
+    }
 }
