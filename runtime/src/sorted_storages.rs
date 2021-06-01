@@ -20,7 +20,7 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    pub fn range_width(&self) -> u64 {
+    pub fn range_width(&self) -> Slot {
         self.range.end - self.range.start
     }
 
