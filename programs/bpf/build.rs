@@ -78,6 +78,7 @@ fn main() {
             "iter",
             "many_args",
             "mem",
+            "membuiltins",
             "noop",
             "panic",
             "param_passing",

@@ -64,6 +64,7 @@ members = [
     "rust/many_args",
     "rust/many_args_dep",
     "rust/mem",
+    "rust/membuiltins",
     "rust/noop",
     "rust/panic",
     "rust/param_passing",
