@@ -21,7 +21,10 @@
 use crate::{
     accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-    accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
+    accounts_hash::{
+        AccountsHash, CalculateHashIntermediate, CalculateHashIntermediate2, HashStats,
+        PreviousPass,
+    },
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
@@ -4207,13 +4210,16 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, B>(
+    fn scan_account_storage_no_bank<F, F2, B, C>(
         snapshot_storages: &SortedStorages,
         scan_func: F,
-    ) -> Vec<B>
+        after_func: F2,
+    ) -> Vec<C>
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        F2: Fn(B) -> C + Send + Sync,
         B: Send + Default,
+        C: Send + Default,
     {
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -4237,7 +4243,7 @@ impl AccountsDb {
                         }
                     }
                 }
-                retval
+                after_func(retval)
             })
             .collect()
     }
@@ -4305,15 +4311,16 @@ impl AccountsDb {
         bins: usize,
         bin_range: &Range<usize>,
         check_hash: bool,
-    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate2>>>, BankHashVerificationError> {
         let max_plus_1 = std::u8::MAX as usize + 1;
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
+        let sort_time = AtomicU64::new(0);
         stats.num_snapshot_storage = storage.len();
         let mismatch_found = AtomicU64::new(0);
 
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
             storage,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
@@ -4358,6 +4365,13 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
+            |input| {
+                let mut m = Measure::start("");
+                let result = Self::sort_and_simplify(input);
+                m.stop();
+                sort_time.fetch_add(m.as_us(), Ordering::Relaxed);
+                result
+            },
         );
 
         if check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
@@ -4370,10 +4384,36 @@ impl AccountsDb {
 
         time.stop();
         stats.scan_time_total_us += time.as_us();
-
+        let st = sort_time.load(Ordering::Relaxed);
+        info!("sort_and_simplify: {}", st);
         Ok(result)
     }
 
+    fn sort_and_simplify(
+        accum: Vec<Vec<CalculateHashIntermediate>>,
+    ) -> Vec<Vec<CalculateHashIntermediate2>> {
+        accum
+            .into_par_iter()
+            .map(|mut items| {
+                items.par_sort_unstable_by(AccountsHash::compare_two_hash_entries);
+                let mut result = Vec::with_capacity(items.len());
+                if !items.is_empty() {
+                    for i in 0..items.len() {
+                        let item = &items[i];
+                        let new_item =
+                            CalculateHashIntermediate2::new(item.hash, item.lamports, item.pubkey);
+                        if i > 0 && items[i - 1].pubkey == item.pubkey {
+                            // pubkey found a second time in this batch of slots, so only take the first one - most recent slot or most recent write version of the same slot - sort order is -slot, -write_version
+                            // don't push result
+                        } else {
+                            result.push(new_item);
+                        }
+                    }
+                }
+                result
+            })
+            .collect()
+    }
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -6069,6 +6109,7 @@ pub mod tests {
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
+            |a| a,
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);

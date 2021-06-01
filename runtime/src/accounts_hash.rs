@@ -86,6 +86,35 @@ impl CalculateHashIntermediate {
     }
 }
 
+impl PartialEq<CalculateHashIntermediate> for CalculateHashIntermediate2 {
+    fn eq(&self, other: &CalculateHashIntermediate) -> bool {
+        self.hash == other.hash && self.lamports == other.lamports && self.pubkey == other.pubkey
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Clone)]
+pub struct CalculateHashIntermediate2 {
+    pub hash: Hash,
+    pub lamports: u64,
+    pub pubkey: Pubkey,
+}
+
+impl CalculateHashIntermediate2 {
+    pub fn new(hash: Hash, lamports: u64, pubkey: Pubkey) -> Self {
+        Self {
+            hash,
+            lamports,
+            pubkey,
+        }
+    }
+}
+
+impl From<CalculateHashIntermediate> for CalculateHashIntermediate2 {
+    fn from(source: CalculateHashIntermediate) -> Self {
+        Self::new(source.hash, source.lamports, source.pubkey)
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct CumulativeOffset {
     pub index: Vec<usize>,
@@ -558,16 +587,24 @@ impl AccountsHash {
         }
     }
 
+    pub fn compare_two_hash_entries2(
+        a: &CalculateHashIntermediate2,
+        b: &CalculateHashIntermediate2,
+    ) -> std::cmp::Ordering {
+        // note partial_cmp only returns None with floating point comparisons
+        a.pubkey.partial_cmp(&b.pubkey).unwrap()
+    }
+
     fn sort_hash_intermediate(
-        data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
         stats: &mut HashStats,
-    ) -> Vec<Vec<CalculateHashIntermediate>> {
+    ) -> Vec<Vec<CalculateHashIntermediate2>> {
         // sort each PUBKEY_DIVISION vec
         let mut sort_time = Measure::start("sort");
         let sorted_data_by_pubkey: Vec<Vec<_>> = data_by_pubkey
             .into_par_iter()
             .map(|mut pk_range| {
-                pk_range.par_sort_unstable_by(Self::compare_two_hash_entries);
+                pk_range.par_sort_by(Self::compare_two_hash_entries2);
                 pk_range
             })
             .collect();
@@ -583,7 +620,7 @@ impl AccountsHash {
     }
 
     fn de_dup_and_eliminate_zeros(
-        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate2>>,
         stats: &mut HashStats,
     ) -> (Vec<Vec<Vec<Hash>>>, u64) {
         // 1. eliminate zero lamport accounts
@@ -616,7 +653,7 @@ impl AccountsHash {
     //   vec: sorted sections from parallelism, in pubkey order
     //     vec: individual hashes in pubkey order
     fn de_dup_accounts_in_parallel(
-        pubkey_division: &[CalculateHashIntermediate],
+        pubkey_division: &[CalculateHashIntermediate2],
         chunk_count: usize,
     ) -> (Vec<Vec<Hash>>, u64) {
         let len = pubkey_division.len();
@@ -659,7 +696,7 @@ impl AccountsHash {
 
     fn de_dup_accounts_from_stores(
         is_first_slice: bool,
-        slice: &[CalculateHashIntermediate],
+        slice: &[CalculateHashIntermediate2],
     ) -> (Vec<Hash>, u128) {
         let len = slice.len();
         let mut result: Vec<Hash> = Vec::with_capacity(len);
@@ -687,14 +724,6 @@ impl AccountsHash {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
-                    } else {
-                        let prev = &slice[k - 1];
-                        assert!(
-                            !(prev.slot == now.slot
-                                && prev.version == now.version
-                                && (prev.hash != now.hash || prev.lamports != now.lamports)),
-                            "Conflicting store data. Pubkey: {}, Slot: {}, Version: {}, Hashes: {}, {}, Lamports: {}, {}", now.pubkey, now.slot, now.version, prev.hash, now.hash, prev.lamports, now.lamports
-                        );
                     }
                 }
 
@@ -710,7 +739,7 @@ impl AccountsHash {
     //     vec: [..] - items which fit in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     pub fn rest_of_hash_calculation(
-        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
+        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate2>>>,
         mut stats: &mut HashStats,
         is_last_pass: bool,
         mut previous_state: PreviousPass,
