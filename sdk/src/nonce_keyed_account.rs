@@ -1,12 +1,12 @@
 use crate::{
-    account_utils::State as AccountUtilsState, ic_msg, keyed_account::KeyedAccount,
+    account_utils::State as AccountUtilsState, feature_set, ic_msg, keyed_account::KeyedAccount,
     nonce_account::create_account, process_instruction::InvokeContext,
 };
 use solana_program::{
     instruction::{checked_add, InstructionError},
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
-    system_instruction::NonceError,
+    system_instruction::{nonce_to_instruction_error, NonceError},
     sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
 };
 use std::collections::HashSet;
@@ -49,12 +49,17 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         if recent_blockhashes.is_empty() {
             ic_msg!(
                 invoke_context,
                 "Advance nonce account: recent blockhash list is empty",
             );
-            return Err(NonceError::NoRecentBlockhashes.into());
+            return Err(nonce_to_instruction_error(
+                NonceError::NoRecentBlockhashes,
+                merge_nonce_error_into_system_error,
+            ));
         }
 
         let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
@@ -74,7 +79,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                         invoke_context,
                         "Advance nonce account: nonce can only advance once per slot"
                     );
-                    return Err(NonceError::NotExpired.into());
+                    return Err(nonce_to_instruction_error(
+                        NonceError::NotExpired,
+                        merge_nonce_error_into_system_error,
+                    ));
                 }
 
                 let new_data = nonce::state::Data {
@@ -90,7 +98,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Advance nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -104,6 +115,8 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         let signer = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 if lamports > self.lamports()? {
@@ -124,7 +137,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                             invoke_context,
                             "Withdraw nonce account: nonce can only advance once per slot"
                         );
-                        return Err(NonceError::NotExpired.into());
+                        return Err(nonce_to_instruction_error(
+                            NonceError::NotExpired,
+                            merge_nonce_error_into_system_error,
+                        ));
                     }
                     self.set_state(&Versions::new_current(State::Uninitialized))?;
                 } else {
@@ -172,12 +188,17 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         rent: &Rent,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         if recent_blockhashes.is_empty() {
             ic_msg!(
                 invoke_context,
                 "Initialize nonce account: recent blockhash list is empty",
             );
-            return Err(NonceError::NoRecentBlockhashes.into());
+            return Err(nonce_to_instruction_error(
+                NonceError::NoRecentBlockhashes,
+                merge_nonce_error_into_system_error,
+            ));
         }
 
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
@@ -205,7 +226,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Initialize nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -216,6 +240,8 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Initialized(data) => {
                 if !signers.contains(&data.authority) {
@@ -238,7 +264,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Authorize nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -264,7 +293,7 @@ mod test {
         nonce::{self, State},
         nonce_account::verify_nonce_account,
         process_instruction::MockInvokeContext,
-        system_instruction::NonceError,
+        system_instruction::SystemError,
         sysvar::recent_blockhashes::create_test_recent_blockhashes,
     };
     use solana_program::hash::Hash;
@@ -447,7 +476,7 @@ mod test {
                 &signers,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
+            assert_eq!(result, Err(SystemError::NonceNoRecentBlockhashes.into()));
         })
     }
 
@@ -476,7 +505,7 @@ mod test {
                 &signers,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::NotExpired.into()));
+            assert_eq!(result, Err(SystemError::NonceBlockhashNotExpired.into()));
         })
     }
 
@@ -496,7 +525,7 @@ mod test {
                 &signers,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
@@ -834,7 +863,7 @@ mod test {
                     &signers,
                     &mut MockInvokeContext::default(),
                 );
-                assert_eq!(result, Err(NonceError::NotExpired.into()));
+                assert_eq!(result, Err(SystemError::NonceBlockhashNotExpired.into()));
             })
         })
     }
@@ -1000,7 +1029,7 @@ mod test {
                 &rent,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
+            assert_eq!(result, Err(SystemError::NonceNoRecentBlockhashes.into()));
         })
     }
 
@@ -1029,7 +1058,7 @@ mod test {
                 &rent,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
@@ -1107,7 +1136,7 @@ mod test {
                 &signers,
                 &mut MockInvokeContext::default(),
             );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
