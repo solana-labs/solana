@@ -4251,7 +4251,7 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let mut time = Measure::start("collect");
-            let combined_maps = self.get_snapshot_storages(slot);
+            let combined_maps = self.get_snapshot_storages(slot, Some(ancestors));
             time.stop();
 
             let timings = HashStats {
@@ -5144,7 +5144,11 @@ impl AccountsDb {
         }
     }
 
-    pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
+    pub fn get_snapshot_storages(
+        &self,
+        snapshot_slot: Slot,
+        _ancestors: Option<&Ancestors>,
+    ) -> SnapshotStorages {
         self.storage
             .0
             .iter()
@@ -5743,7 +5747,7 @@ pub mod tests {
         accounts.store_uncached(slot, &to_store[..]);
         accounts.add_root(slot);
 
-        let storages = accounts.get_snapshot_storages(slot);
+        let storages = accounts.get_snapshot_storages(slot, None);
         (storages, raw_expected)
     }
 
@@ -8153,7 +8157,7 @@ pub mod tests {
     #[test]
     fn test_get_snapshot_storages_empty() {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
-        assert!(db.get_snapshot_storages(0).is_empty());
+        assert!(db.get_snapshot_storages(0, None).is_empty());
     }
 
     #[test]
@@ -8168,10 +8172,10 @@ pub mod tests {
 
         db.add_root(base_slot);
         db.store_uncached(base_slot, &[(&key, &account)]);
-        assert!(db.get_snapshot_storages(before_slot).is_empty());
+        assert!(db.get_snapshot_storages(before_slot, None).is_empty());
 
-        assert_eq!(1, db.get_snapshot_storages(base_slot).len());
-        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(base_slot, None).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot, None).len());
     }
 
     #[test]
@@ -8191,10 +8195,10 @@ pub mod tests {
             .unwrap()
             .clear();
         db.add_root(base_slot);
-        assert!(db.get_snapshot_storages(after_slot).is_empty());
+        assert!(db.get_snapshot_storages(after_slot, None).is_empty());
 
         db.store_uncached(base_slot, &[(&key, &account)]);
-        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot, None).len());
     }
 
     #[test]
@@ -8207,10 +8211,10 @@ pub mod tests {
         let after_slot = base_slot + 1;
 
         db.store_uncached(base_slot, &[(&key, &account)]);
-        assert!(db.get_snapshot_storages(after_slot).is_empty());
+        assert!(db.get_snapshot_storages(after_slot, None).is_empty());
 
         db.add_root(base_slot);
-        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot, None).len());
     }
 
     #[test]
@@ -8224,7 +8228,7 @@ pub mod tests {
 
         db.store_uncached(base_slot, &[(&key, &account)]);
         db.add_root(base_slot);
-        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot, None).len());
 
         db.storage
             .get_slot_stores(0)
@@ -8235,7 +8239,7 @@ pub mod tests {
             .next()
             .unwrap()
             .remove_account(0, true);
-        assert!(db.get_snapshot_storages(after_slot).is_empty());
+        assert!(db.get_snapshot_storages(after_slot, None).is_empty());
     }
 
     #[test]
@@ -8399,7 +8403,7 @@ pub mod tests {
         accounts.store_uncached(current_slot, &[(&pubkey2, &zero_lamport_account)]);
         accounts.store_uncached(current_slot, &[(&pubkey3, &zero_lamport_account)]);
 
-        let snapshot_stores = accounts.get_snapshot_storages(current_slot);
+        let snapshot_stores = accounts.get_snapshot_storages(current_slot, None);
         let total_accounts: usize = snapshot_stores
             .iter()
             .flatten()
