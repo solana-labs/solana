@@ -2012,7 +2012,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     .ok();
             }
             pending_transactions.insert(transaction.signatures[0], transaction);
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Transactions sent",
                 pending_transactions.len(),
                 num_transactions
@@ -2050,7 +2050,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 }
 
                 slot = rpc_client.get_slot()?;
-                progress_bar.set_message(&format!(
+                progress_bar.set_message(format!(
                     "[{}/{}] Transactions confirmed. Retrying in {} slots",
                     num_transactions - pending_transactions.len(),
                     num_transactions,

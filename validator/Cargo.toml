@@ -18,7 +18,7 @@ clap = "2.33.1"
 console = "0.14.1"
 core_affinity = "0.5.10"
 fd-lock = "2.0.0"
-indicatif = "0.15.0"
+indicatif = "0.16.2"
 jsonrpc-core = "17.0.0"
 jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "17.0.0"

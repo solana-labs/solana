@@ -5,7 +5,7 @@ use {
     console::style,
     indicatif::{ProgressDrawTarget, ProgressStyle},
     log::*,
-    std::{env, process::exit, thread::JoinHandle},
+    std::{borrow::Cow, env, fmt::Display, process::exit, thread::JoinHandle},
 };
 
 pub mod admin_rpc_service;
@@ -117,7 +117,7 @@ pub struct ProgressBar {
 }
 
 impl ProgressBar {
-    pub fn set_message(&self, msg: &str) {
+    pub fn set_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {
         if self.is_term {
             self.progress_bar.set_message(msg);
         } else {
@@ -125,7 +125,7 @@ impl ProgressBar {
         }
     }
 
-    pub fn abandon_with_message(&self, msg: &str) {
+    pub fn abandon_with_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {
         if self.is_term {
             self.progress_bar.abandon_with_message(msg);
         } else {

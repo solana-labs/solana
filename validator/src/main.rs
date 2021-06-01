@@ -160,7 +160,7 @@ fn wait_for_restart_window(
             None => true,
             Some(current_epoch) => current_epoch != epoch_info.epoch,
         } {
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "Fetching leader schedule for epoch {}...",
                 epoch_info.epoch
             ));
@@ -285,7 +285,7 @@ fn wait_for_restart_window(
             }
         };
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "{} | Processed Slot: {} | Snapshot Slot: {} | {:.2}% delinquent stake | {}",
             {
                 let elapsed =

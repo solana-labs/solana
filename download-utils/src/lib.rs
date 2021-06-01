@@ -78,7 +78,7 @@ pub fn download_file<'a, 'b>(
 
     let progress_bar = new_spinner_progress_bar();
     if use_progress_bar {
-        progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
+        progress_bar.set_message(format!("{}Downloading {}...", TRUCK, url));
     }
 
     let response = reqwest::blocking::Client::new()
@@ -108,7 +108,7 @@ pub fn download_file<'a, 'b>(
                 )
                 .progress_chars("=> "),
         );
-        progress_bar.set_message(&format!("{}Downloading~ {}", TRUCK, url));
+        progress_bar.set_message(format!("{}Downloading~ {}", TRUCK, url));
     } else {
         info!("Downloading {} bytes from {}", download_size, url);
     }

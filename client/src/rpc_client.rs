@@ -1846,7 +1846,7 @@ impl RpcClient {
 
         let progress_bar = new_spinner_progress_bar();
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, signature,
         ));
@@ -1899,7 +1899,7 @@ impl RpcClient {
                 return Ok(());
             }
 
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Finalizing transaction {}",
                 min(confirmations + 1, desired_confirmations),
                 desired_confirmations,

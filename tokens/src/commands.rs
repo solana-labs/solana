@@ -593,7 +593,7 @@ fn finalize_transactions(
 
     while opt_confirmations.is_some() {
         if let Some(confirmations) = opt_confirmations {
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Finalizing transactions",
                 confirmations, 32,
             ));
