@@ -1,47 +1,34 @@
+use crate::accounts_index::RollingBitField;
 use solana_sdk::clock::Slot;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub type AncestorsForSerialization = HashMap<Slot, usize>;
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Debug, Clone, PartialEq, AbiExample)]
 pub struct Ancestors {
-    min: Slot,
-    slots: Vec<Option<usize>>,
-    count: usize,
-    max: Slot,
-    large_range_slots: HashSet<Slot>,
+    ancestors: RollingBitField,
 }
 
 // some tests produce ancestors ranges that are too large such
 // that we prefer to implement them in a sparse HashMap
-const ANCESTORS_HASH_MAP_SIZE: u64 = 10_000;
+const ANCESTORS_HASH_MAP_SIZE: u64 = 8192;
+
+impl Default for Ancestors {
+    fn default() -> Self {
+        Self {
+            ancestors: RollingBitField::new(ANCESTORS_HASH_MAP_SIZE),
+        }
+    }
+}
 
 impl From<Vec<Slot>> for Ancestors {
-    fn from(source: Vec<Slot>) -> Ancestors {
+    fn from(mut source: Vec<Slot>) -> Ancestors {
+        // bitfield performs optimally when we insert the minimum value first so that it knows the correct start/end values
+        source.sort_unstable();
         let mut result = Ancestors::default();
-        if !source.is_empty() {
-            result.min = Slot::MAX;
-            result.max = Slot::MIN;
-            source.iter().for_each(|slot| {
-                result.min = std::cmp::min(result.min, *slot);
-                result.max = std::cmp::max(result.max, *slot + 1);
-            });
-            let range = result.range();
-            if range > ANCESTORS_HASH_MAP_SIZE {
-                result.large_range_slots = source.into_iter().collect();
-                result.min = 0;
-                result.max = 0;
-            } else {
-                result.slots = vec![None; range as usize];
-                source.into_iter().for_each(|slot| {
-                    let slot = result.slot_index(&slot);
-                    if result.slots[slot].is_none() {
-                        result.count += 1;
-                    }
-                    result.slots[slot] = Some(0);
-                });
-            }
-        }
+        source.into_iter().for_each(|slot| {
+            result.ancestors.insert(slot);
+        });
 
         result
     }
@@ -49,32 +36,8 @@ impl From<Vec<Slot>> for Ancestors {
 
 impl From<&HashMap<Slot, usize>> for Ancestors {
     fn from(source: &HashMap<Slot, usize>) -> Ancestors {
-        let mut result = Ancestors::default();
-        if !source.is_empty() {
-            result.min = Slot::MAX;
-            result.max = Slot::MIN;
-            source.iter().for_each(|(slot, _)| {
-                result.min = std::cmp::min(result.min, *slot);
-                result.max = std::cmp::max(result.max, *slot + 1);
-            });
-            let range = result.range();
-            if range > ANCESTORS_HASH_MAP_SIZE {
-                result.large_range_slots = source.iter().map(|(slot, _size)| *slot).collect();
-                result.min = 0;
-                result.max = 0;
-            } else {
-                result.slots = vec![None; range as usize];
-                source.iter().for_each(|(slot, size)| {
-                    let slot = result.slot_index(&slot);
-                    if result.slots[slot].is_none() {
-                        result.count += 1;
-                    }
-                    result.slots[slot] = Some(*size);
-                });
-            }
-        }
-
-        result
+        let vec = source.iter().map(|(slot, _)| *slot).collect::<Vec<_>>();
+        Ancestors::from(vec)
     }
 }
 
@@ -90,74 +53,27 @@ impl From<&Ancestors> for HashMap<Slot, usize> {
 
 impl Ancestors {
     pub fn keys(&self) -> Vec<Slot> {
-        if self.large_range_slots.is_empty() {
-            self.slots
-                .iter()
-                .enumerate()
-                .filter_map(|(size, i)| i.map(|_| size as u64 + self.min))
-                .collect::<Vec<_>>()
-        } else {
-            self.large_range_slots.iter().copied().collect::<Vec<_>>()
-        }
+        self.ancestors.get_all()
     }
 
     pub fn get(&self, slot: &Slot) -> bool {
-        if self.large_range_slots.is_empty() {
-            if slot < &self.min || slot >= &self.max {
-                return false;
-            }
-            let slot = self.slot_index(slot);
-            self.slots[slot].is_some()
-        } else {
-            self.large_range_slots.get(slot).is_some()
-        }
+        self.ancestors.contains(slot)
     }
 
     pub fn remove(&mut self, slot: &Slot) {
-        if self.large_range_slots.is_empty() {
-            if slot < &self.min || slot >= &self.max {
-                return;
-            }
-            let slot = self.slot_index(slot);
-            if self.slots[slot].is_some() {
-                self.count -= 1;
-                self.slots[slot] = None;
-            }
-        } else {
-            self.large_range_slots.remove(slot);
-        }
+        self.ancestors.remove(slot);
     }
 
     pub fn contains_key(&self, slot: &Slot) -> bool {
-        if self.large_range_slots.is_empty() {
-            if slot < &self.min || slot >= &self.max {
-                return false;
-            }
-            let slot = self.slot_index(slot);
-            self.slots[slot].is_some()
-        } else {
-            self.large_range_slots.contains(slot)
-        }
+        self.ancestors.contains(slot)
     }
 
     pub fn len(&self) -> usize {
-        if self.large_range_slots.is_empty() {
-            self.count
-        } else {
-            self.large_range_slots.len()
-        }
+        self.ancestors.len()
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    fn slot_index(&self, slot: &Slot) -> usize {
-        (slot - self.min) as usize
-    }
-
-    fn range(&self) -> Slot {
-        self.max - self.min
     }
 }
 #[cfg(test)]
@@ -187,34 +103,8 @@ pub mod tests {
         }
     }
     impl Ancestors {
-        pub fn insert(&mut self, mut slot: Slot, size: usize) {
-            if self.large_range_slots.is_empty() {
-                if slot < self.min || slot >= self.max {
-                    let new_min = std::cmp::min(self.min, slot);
-                    let new_max = std::cmp::max(self.max, slot + 1);
-                    let new_range = new_max - new_min;
-                    if new_min == self.min {
-                        self.max = slot + 1;
-                        self.slots.resize(new_range as usize, None);
-                    } else {
-                        // min changed
-                        let mut new_slots = vec![None; new_range as usize];
-                        self.slots.iter().enumerate().for_each(|(i, size)| {
-                            new_slots[i as usize + self.min as usize - slot as usize] = *size
-                        });
-                        self.slots = new_slots;
-                        self.min = slot;
-                        // fall through and set this value in
-                    }
-                }
-                slot -= self.min;
-                if self.slots[slot as usize].is_none() {
-                    self.count += 1;
-                }
-                self.slots[slot as usize] = Some(size);
-            } else {
-                self.large_range_slots.insert(slot);
-            }
+        pub fn insert(&mut self, slot: Slot, _size: usize) {
+            self.ancestors.insert(slot);
         }
     }
 
