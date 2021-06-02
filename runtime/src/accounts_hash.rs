@@ -669,7 +669,8 @@ impl AccountsHash {
             .map(|chunk_index| {
                 let mut start_index = chunk_index * chunk_size;
                 let mut end_index = start_index + chunk_size;
-                if chunk_index == max - 1 {
+                let last = chunk_index == max - 1;
+                if last {
                     end_index = len;
                 }
 
@@ -682,7 +683,7 @@ impl AccountsHash {
                 let (result, sum) = Self::de_dup_accounts_from_stores(
                     chunk_index == 0,
                     &pubkey_division[start_index..end_index],
-                    chunk_index + 1 == chunk_count,
+                    last,
                 );
                 let mut overall = overall_sum.lock().unwrap();
                 *overall = Self::checked_cast_for_capitalization(sum + *overall as u128);
@@ -715,9 +716,11 @@ impl AccountsHash {
             if !is_first_slice {
                 if len == 1 {
                     insert_item = true;
+                    panic!("hit");
                 }
             }
             if is_last_slice && len == i + 1 {
+                panic!("hit2");
                 insert_item = true;
             }
             'outer: loop {
@@ -731,7 +734,11 @@ impl AccountsHash {
                         sum += now.lamports as u128;
                         insert_item = false;
                     }
+                    if i + 1 == len {
+                        break;
+                    }
                     i += 1;
+                    now = &slice[i]
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last {
