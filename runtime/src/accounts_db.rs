@@ -1080,6 +1080,8 @@ struct ShrinkStats {
     recycle_stores_write_elapsed: AtomicU64,
     accounts_removed: AtomicUsize,
     bytes_removed: AtomicU64,
+    bytes_written: AtomicU64,
+    skipped_shrink: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1169,6 +1171,16 @@ impl ShrinkStats {
                 (
                     "bytes_removed",
                     self.bytes_removed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "bytes_written",
+                    self.bytes_written.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "skipped_shrink",
+                    self.skipped_shrink.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -1971,6 +1983,7 @@ impl AccountsDb {
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
+        let mut num_stores = 0;
         for store in stores {
             let mut start = 0;
             original_bytes += store.total_bytes();
@@ -1994,10 +2007,12 @@ impl AccountsDb {
                 }
                 start = next;
             }
+            num_stores += 1;
         }
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let mut alive_total = 0;
+
         let accounts_index_map_lock = if is_startup {
             // at startup, there is nobody else to contend with the accounts_index read lock, so it is more efficient for us to keep it held
             Some(self.accounts_index.get_account_maps_read_lock())
@@ -2006,51 +2021,61 @@ impl AccountsDb {
         };
         let accounts_index_map_lock_ref = accounts_index_map_lock.as_ref();
 
-        let alive_accounts: Vec<_> = stored_accounts
-            .iter()
-            .filter(|(pubkey, stored_account)| {
-                let lookup = if is_startup {
-                    self.accounts_index.get_account_read_entry_with_lock(
-                        pubkey,
-                        accounts_index_map_lock_ref.unwrap(),
-                    )
+        let mut alive_accounts: Vec<_> = Vec::with_capacity(stored_accounts.len());
+        let mut unrefed_pubkeys = vec![];
+        for (pubkey, stored_account) in &stored_accounts {
+            let lookup = if is_startup {
+                self.accounts_index
+                    .get_account_read_entry_with_lock(pubkey, accounts_index_map_lock_ref.unwrap())
+            } else {
+                self.accounts_index.get_account_read_entry(pubkey)
+            };
+            if let Some(locked_entry) = lookup {
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                    i.store_id == stored_account.store_id
+                        && i.offset == stored_account.account.offset
+                });
+                if !is_alive {
+                    // This pubkey was found in the storage, but no longer exists in the index.
+                    // It would have had a ref to the storage from the initial store, but it will
+                    // not exist in the re-written slot. Unref it to keep the index consistent with
+                    // rewriting the storage entries.
+                    unrefed_pubkeys.push(pubkey);
+                    locked_entry.unref()
                 } else {
-                    self.accounts_index.get_account_read_entry(pubkey)
-                };
-
-                if let Some(locked_entry) = lookup {
-                    let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                        i.store_id == stored_account.store_id
-                            && i.offset == stored_account.account.offset
-                    });
-                    if !is_alive {
-                        // This pubkey was found in the storage, but no longer exists in the index.
-                        // It would have had a ref to the storage from the initial store, but it will
-                        // not exist in the re-written slot. Unref it to keep the index consistent with
-                        // rewriting the storage entries.
-                        locked_entry.unref()
-                    } else {
-                        alive_total += stored_account.account_size as u64;
-                    }
-                    is_alive
-                } else {
-                    false
+                    alive_accounts.push((pubkey, stored_account));
+                    alive_total += stored_account.account_size;
                 }
-            })
-            .collect();
+            }
+        }
+
         drop(accounts_index_map_lock);
         index_read_elapsed.stop();
-        let aligned_total: u64 = self.page_align(alive_total);
+        let aligned_total: u64 = Self::page_align(alive_total as u64);
+
+        // This shouldn't happen if alive_bytes/approx_stored_count are accurate
+        if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
+            self.shrink_stats
+                .skipped_shrink
+                .fetch_add(1, Ordering::Relaxed);
+            for pubkey in unrefed_pubkeys {
+                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                    locked_entry.addref();
+                }
+            }
+            return 0;
+        }
 
         let total_starting_accounts = stored_accounts.len();
         let total_accounts_after_shrink = alive_accounts.len();
         debug!(
-            "shrinking: slot: {}, total_starting_accounts: {} => total_accounts_after_shrink: {} ({} bytes; aligned to: {})",
+            "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}",
             slot,
             total_starting_accounts,
             total_accounts_after_shrink,
             alive_total,
-            aligned_total
+            aligned_total,
+            original_bytes,
         );
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
@@ -2190,6 +2215,10 @@ impl AccountsDb {
             original_bytes.saturating_sub(aligned_total),
             Ordering::Relaxed,
         );
+        self.shrink_stats
+            .bytes_written
+            .fetch_add(aligned_total, Ordering::Relaxed);
+
         self.shrink_stats.report();
 
         total_accounts_after_shrink
@@ -2203,23 +2232,10 @@ impl AccountsDb {
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
             let stores: Vec<Arc<AccountStorageEntry>> =
                 stores_lock.read().unwrap().values().cloned().collect();
-            let mut alive_count = 0;
-            let mut stored_count = 0;
-            for store in &stores {
-                alive_count += store.count();
-                stored_count += store.approx_stored_count();
-            }
-            if alive_count == stored_count && stores.len() == 1 {
-                trace!(
-                    "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} / {}",
-                    slot,
-                    alive_count,
-                    stored_count,
-                );
+            if !Self::is_shrinking_productive(slot, &stores) {
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter(), is_startup);
-            alive_count
+            self.do_shrink_slot_stores(slot, stores.iter(), is_startup)
         } else {
             0
         }
@@ -3030,7 +3046,7 @@ impl AccountsDb {
         store
     }
 
-    fn page_align(&self, size: u64) -> u64 {
+    fn page_align(size: u64) -> u64 {
         (size + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
     }
 
@@ -3058,7 +3074,7 @@ impl AccountsDb {
         let store = Arc::new(self.new_storage_entry(
             slot,
             &Path::new(&paths[path_index]),
-            self.page_align(size),
+            Self::page_align(size),
         ));
 
         if store.append_vec_id() == CACHE_VIRTUAL_STORAGE_ID {
@@ -3844,7 +3860,7 @@ impl AccountsDb {
             );
 
             if !is_dead_slot {
-                let aligned_total_size = self.page_align(total_size);
+                let aligned_total_size = Self::page_align(total_size);
                 // This ensures that all updates are written to an AppendVec, before any
                 // updates to the index happen, so anybody that sees a real entry in the index,
                 // will be able to find the account in storage
@@ -4605,6 +4621,41 @@ impl AccountsDb {
         reclaims
     }
 
+    fn should_not_shrink(aligned_bytes: u64, total_bytes: u64, num_stores: usize) -> bool {
+        aligned_bytes + PAGE_SIZE > total_bytes && num_stores == 1
+    }
+
+    fn is_shrinking_productive(slot: Slot, stores: &[Arc<AccountStorageEntry>]) -> bool {
+        let mut alive_count = 0;
+        let mut stored_count = 0;
+        let mut alive_bytes = 0;
+        let mut total_bytes = 0;
+
+        for store in stores {
+            alive_count += store.count();
+            stored_count += store.approx_stored_count();
+            alive_bytes += store.alive_bytes();
+            total_bytes += store.total_bytes();
+        }
+
+        let aligned_bytes = Self::page_align(alive_bytes as u64);
+        if Self::should_not_shrink(aligned_bytes, total_bytes, stores.len()) {
+            trace!(
+                "shrink_slot_forced ({}, {}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
+                slot,
+                stores.len(),
+                alive_count,
+                stored_count,
+                aligned_bytes,
+                total_bytes,
+                total_bytes.saturating_sub(aligned_bytes),
+            );
+            return false;
+        }
+
+        true
+    }
+
     fn remove_dead_accounts(
         &self,
         reclaims: SlotSlice<AccountInfo>,
@@ -4639,7 +4690,8 @@ impl AccountsDb {
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && (self.page_align(store.alive_bytes() as u64) as f64
+                    && Self::is_shrinking_productive(*slot, &[store.clone()])
+                    && (Self::page_align(store.alive_bytes() as u64) as f64
                         / store.total_bytes() as f64)
                         < SHRINK_RATIO
                 {
@@ -4662,10 +4714,24 @@ impl AccountsDb {
                 let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
                 for (slot, slot_shrink_candidates) in new_shrink_candidates {
                     for (store_id, store) in slot_shrink_candidates {
-                        shrink_candidate_slots
-                            .entry(slot)
-                            .or_default()
-                            .insert(store_id, store);
+                        // count could be == 0 if multiple accounts are removed
+                        // at once
+                        if store.count() != 0 {
+                            debug!(
+                                "adding: {} {} to shrink candidates: count: {}/{} bytes: {}/{}",
+                                store_id,
+                                slot,
+                                store.approx_stored_count(),
+                                store.count(),
+                                store.alive_bytes(),
+                                store.total_bytes()
+                            );
+
+                            shrink_candidate_slots
+                                .entry(slot)
+                                .or_default()
+                                .insert(store_id, store);
+                        }
                     }
                 }
             }
@@ -10644,5 +10710,30 @@ pub mod tests {
         assert!(uncleaned_pubkeys.contains(&pubkey1));
         assert!(uncleaned_pubkeys.contains(&pubkey2));
         assert!(uncleaned_pubkeys.contains(&pubkey3));
+    }
+
+    #[test]
+    fn test_shrink_productive() {
+        solana_logger::setup();
+        let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, 1024);
+        let stores = vec![Arc::new(s1)];
+        assert!(!AccountsDb::is_shrinking_productive(0, &stores));
+
+        let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, PAGE_SIZE * 4);
+        let stores = vec![Arc::new(s1)];
+        stores[0].add_account((3 * PAGE_SIZE as usize) - 1);
+        stores[0].add_account(10);
+        stores[0].remove_account(10, false);
+        assert!(AccountsDb::is_shrinking_productive(0, &stores));
+
+        stores[0].add_account(PAGE_SIZE as usize);
+        assert!(!AccountsDb::is_shrinking_productive(0, &stores));
+
+        let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, PAGE_SIZE + 1);
+        s1.add_account(PAGE_SIZE as usize);
+        let s2 = AccountStorageEntry::new(Path::new("."), 0, 1, PAGE_SIZE + 1);
+        s2.add_account(PAGE_SIZE as usize);
+        let stores = vec![Arc::new(s1), Arc::new(s2)];
+        assert!(AccountsDb::is_shrinking_productive(0, &stores));
     }
 }
