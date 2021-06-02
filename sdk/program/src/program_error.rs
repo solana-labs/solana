@@ -111,6 +111,8 @@ pub const INVALID_SEEDS: u64 = to_builtin!(14);
 pub const BORSH_IO_ERROR: u64 = to_builtin!(15);
 pub const ACCOUNT_NOT_RENT_EXEMPT: u64 = to_builtin!(16);
 pub const UNSUPPORTED_SYSVAR: u64 = to_builtin!(17);
+// Note: Any new errors added here must also be added to the below conversions
+// and an equivilent one added to InstructionError
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
