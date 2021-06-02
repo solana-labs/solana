@@ -731,6 +731,7 @@ impl AccountsHash {
                         sum += now.lamports as u128;
                         insert_item = false;
                     }
+                    i += 1;
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last {
