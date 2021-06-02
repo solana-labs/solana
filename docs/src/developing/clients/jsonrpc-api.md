@@ -350,7 +350,7 @@ Result:
 ### getBlock
 
 **NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getBlock](jsonrpc-api.md#getblock) for solana-core v1.6**
+[getConfirmedBlock](jsonrpc-api.md#getconfirmedblock) for solana-core v1.6**
 
 Returns identity and transaction information about a confirmed block in the ledger
 
