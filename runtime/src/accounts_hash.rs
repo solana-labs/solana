@@ -676,14 +676,14 @@ impl AccountsHash {
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
                 let now = &slice[i];
-                let last = now.pubkey;
+                let last = &now.pubkey;
                 if !look_for_first_key && now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
                     // first entry for this key that starts in our slice
                     result.push(now.hash);
                     sum += now.lamports as u128;
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
-                    if now.pubkey != last {
+                    if &now.pubkey != last {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
