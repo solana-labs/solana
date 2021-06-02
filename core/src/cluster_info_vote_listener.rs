@@ -1,6 +1,5 @@
 use crate::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    poh_recorder::PohRecorder,
     replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
     sigverify,
@@ -20,6 +19,7 @@ use solana_gossip::{
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     rpc_subscriptions::RpcSubscriptions,

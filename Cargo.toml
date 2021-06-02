@@ -39,6 +39,7 @@ members = [
     "metrics",
     "net-shaper",
     "notifier",
+    "poh",
     "poh-bench",
     "program-test",
     "programs/secp256k1",

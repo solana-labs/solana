@@ -14,6 +14,7 @@ use crate::poh_service::PohService;
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
+use log::*;
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -726,10 +727,50 @@ impl PohRecorder {
         })
     }
 
-    #[cfg(test)]
+    // Used in tests
     pub fn schedule_dummy_max_height_reached_failure(&mut self) {
         self.reset(Hash::default(), 1, None);
     }
+}
+
+pub fn create_test_recorder(
+    bank: &Arc<Bank>,
+    blockstore: &Arc<Blockstore>,
+    poh_config: Option<PohConfig>,
+) -> (
+    Arc<AtomicBool>,
+    Arc<Mutex<PohRecorder>>,
+    PohService,
+    Receiver<WorkingBankEntry>,
+) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let poh_config = Arc::new(poh_config.unwrap_or_default());
+    let (mut poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
+        bank.tick_height(),
+        bank.last_blockhash(),
+        bank.slot(),
+        Some((4, 4)),
+        bank.ticks_per_slot(),
+        &Pubkey::default(),
+        blockstore,
+        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+        &poh_config,
+        exit.clone(),
+    );
+    poh_recorder.set_bank(&bank);
+
+    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &poh_config,
+        &exit,
+        bank.ticks_per_slot(),
+        crate::poh_service::DEFAULT_PINNED_CPU_CORE,
+        crate::poh_service::DEFAULT_HASHES_PER_BATCH,
+        record_receiver,
+    );
+
+    (exit, poh_recorder, poh_service, entry_receiver)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::{PohRecorder, Record};
 use crossbeam_channel::Receiver;
+use log::*;
 use solana_ledger::poh::Poh;
 use solana_measure::measure::Measure;
 use solana_sdk::poh_config::PohConfig;

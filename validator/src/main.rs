@@ -22,7 +22,6 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
-        poh_service,
         rpc::JsonRpcConfig,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
@@ -38,6 +37,7 @@ use {
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
+    solana_poh::poh_service,
     solana_rpc::rpc_pubsub_service::PubSubConfig,
     solana_runtime::{
         accounts_index::{

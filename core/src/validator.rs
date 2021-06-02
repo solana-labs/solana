@@ -6,8 +6,6 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
-    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    poh_service::{self, PohService},
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     rpc::JsonRpcConfig,
     rpc_service::JsonRpcService,
@@ -41,6 +39,10 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
+use solana_poh::{
+    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    poh_service::{self, PohService},
+};
 use solana_rpc::{
     max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{

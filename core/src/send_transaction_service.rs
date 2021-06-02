@@ -1,8 +1,8 @@
 // TODO: Merge this implementation with the one at `banks-server/src/send_transaction_service.rs`
-use crate::poh_recorder::PohRecorder;
 use log::*;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_poh::poh_recorder::PohRecorder;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},

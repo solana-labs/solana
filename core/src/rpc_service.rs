@@ -2,7 +2,6 @@
 
 use crate::{
     bigtable_upload_service::BigTableUploadService,
-    poh_recorder::PohRecorder,
     rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
     send_transaction_service::{LeaderInfo, SendTransactionService},
@@ -17,6 +16,7 @@ use solana_client::rpc_cache::LargestAccountsCache;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
 use solana_metrics::inc_new_counter_info;
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
 };

@@ -13,7 +13,6 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
-    poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
     rewards_recorder_service::RewardsRecorderSender,
@@ -29,6 +28,7 @@ use solana_ledger::{
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -341,7 +341,6 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
     use serial_test::serial;
     use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{
@@ -349,6 +348,7 @@ pub mod tests {
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
+    use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
