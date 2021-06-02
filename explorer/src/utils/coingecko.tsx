@@ -207,7 +207,12 @@ export function useCoinGeckoCategoryStats(
       setError(null);
       if (displayLoading) setLoading(true);
       return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
-        .then((response) => response.json())
+        .then((response) => {
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error(`Couldn't fetch stats for ${categoryId}`);
+        })
         .then((data?: Array<CoinGeckoCategoryStats>) => {
           if (displayLoading) setLoading(false);
 
