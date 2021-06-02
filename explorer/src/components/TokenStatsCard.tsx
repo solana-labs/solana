@@ -7,8 +7,7 @@ import {
 } from "utils/coingecko";
 
 import { formatDollarValue } from "utils";
-
-import { TableCardBody } from "./common/TableCardBody";
+import { displayTimestampWithoutDate } from "utils/date";
 
 export function TokenStatsCard() {
   const [error, loading, categoryStats] = useCoinGeckoCategoryStats(
@@ -21,29 +20,28 @@ export function TokenStatsCard() {
 
   if (categoryStats)
     return (
-      <div className="card">
-        <div className="card-header">
-          <div className="row align-items-center">
-            <div className="col">
-              <h4 className="card-header-title">Token Stats</h4>
+      <div className="card staking-card">
+        <div className="card-body">
+          <div className="d-flex flex-md-row flex-column">
+            <div className="p-2 flex-fill">
+              <h4>Market Capitalization</h4>
+              <h1>
+                <em>{formatDollarValue(categoryStats.market_cap)}</em>
+              </h1>
+            </div>
+            <hr className="hidden-sm-up" />
+            <div className="p-2 flex-fill">
+              <h4>Trading Volume</h4>
+              <h1>
+                <em>{formatDollarValue(categoryStats.volume_24h)}</em>
+              </h1>
             </div>
           </div>
+          <p className="updated-time text-muted mb-0">
+            Updated at{" "}
+            {displayTimestampWithoutDate(categoryStats.updated_at.getTime())}
+          </p>
         </div>
-        <TableCardBody>
-          <tr>
-            <td className="w-100">Market Capitalization</td>
-            <td className="text-lg-right">
-              {formatDollarValue(categoryStats.market_cap, 0)}
-            </td>
-          </tr>
-
-          <tr>
-            <td className="w-100">Trading Volume</td>
-            <td className="text-lg-right">
-              {formatDollarValue(categoryStats.volume_24h, 0)}
-            </td>
-          </tr>
-        </TableCardBody>
       </div>
     );
 

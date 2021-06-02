@@ -214,11 +214,15 @@ export function useCoinGeckoCategoryStats(
           // CoinGecko doesn't have an API (yet) that lets us
           // fetch stats for a category so we fetch all of them
           // and filter on the client
-          const statsForCategory = data.find(
+          let statsForCategory = data.find(
             (category: CoinGeckoCategoryStats) => category.id === categoryId
           );
 
           if (statsForCategory) {
+            statsForCategory = {
+              ...statsForCategory,
+              updated_at: new Date(statsForCategory.updated_at),
+            };
             setCategoryStats(statsForCategory);
           } else {
             throw new Error(`Couldn't fetch stats for ${categoryId}`);
