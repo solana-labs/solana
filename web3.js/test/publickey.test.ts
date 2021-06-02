@@ -228,4 +228,11 @@ describe('PublicKey', function () {
     const decoded = PublicKey.decode(encoded);
     expect(decoded.equals(publicKey)).to.be.true;
   });
+
+  it('canBeDeserializedUncheckedWithBorsh', () => {
+    const publicKey = Keypair.generate().publicKey;
+    const encoded = Buffer.concat([publicKey.encode(), new Uint8Array(10)]);
+    const decoded = PublicKey.decodeUnchecked(encoded);
+    expect(decoded.equals(publicKey)).to.be.true;
+  });
 });
