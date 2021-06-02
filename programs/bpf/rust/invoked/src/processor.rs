@@ -202,21 +202,24 @@ fn process_instruction(
             msg!("nested invoke");
             const ARGUMENT_INDEX: usize = 0;
             const INVOKED_ARGUMENT_INDEX: usize = 1;
-            const INVOKED_PROGRAM_INDEX: usize = 3;
+            const INVOKED_PROGRAM_INDEX: usize = 2;
 
             assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(instruction_data.len() > 1);
 
             **accounts[INVOKED_ARGUMENT_INDEX].lamports.borrow_mut() -= 1;
             **accounts[ARGUMENT_INDEX].lamports.borrow_mut() += 1;
-            if accounts.len() > 2 {
+            let remaining_invokes = instruction_data[1];
+            if remaining_invokes > 1 {
                 msg!("Invoke again");
                 let invoked_instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
                     &[
                         (accounts[ARGUMENT_INDEX].key, true, true),
                         (accounts[INVOKED_ARGUMENT_INDEX].key, true, true),
+                        (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
                     ],
-                    vec![NESTED_INVOKE],
+                    vec![NESTED_INVOKE, remaining_invokes - 1],
                 );
                 invoke(&invoked_instruction, accounts)?;
             } else {

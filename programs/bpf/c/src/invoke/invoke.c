@@ -18,6 +18,7 @@ static const uint8_t TEST_RETURN_ERROR = 11;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
 static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 14;
+static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 15;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -30,6 +31,35 @@ static const int DERIVED_KEY2_INDEX = 7;
 static const int DERIVED_KEY3_INDEX = 8;
 static const int SYSTEM_PROGRAM_INDEX = 9;
 static const int FROM_INDEX = 10;
+
+uint64_t do_nested_invokes(uint64_t num_nested_invokes,
+                           SolAccountInfo *accounts, uint64_t num_accounts) {
+  sol_assert(accounts[ARGUMENT_INDEX].is_signer);
+
+  *accounts[ARGUMENT_INDEX].lamports -= 5;
+  *accounts[INVOKED_ARGUMENT_INDEX].lamports += 5;
+
+  SolAccountMeta arguments[] = {
+      {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
+      {accounts[ARGUMENT_INDEX].key, true, true},
+      {accounts[INVOKED_PROGRAM_INDEX].key, false, false}};
+  uint8_t data[] = {NESTED_INVOKE, num_nested_invokes};
+  const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                      arguments, SOL_ARRAY_SIZE(arguments),
+                                      data, SOL_ARRAY_SIZE(data)};
+
+  sol_log("First invoke");
+  sol_assert(SUCCESS == sol_invoke(&instruction, accounts, num_accounts));
+  sol_log("2nd invoke from first program");
+  sol_assert(SUCCESS == sol_invoke(&instruction, accounts, num_accounts));
+
+  sol_assert(*accounts[ARGUMENT_INDEX].lamports ==
+             42 - 5 + (2 * num_nested_invokes));
+  sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports ==
+             10 + 5 - (2 * num_nested_invokes));
+
+  return SUCCESS;
+}
 
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("Invoke C program");
@@ -203,32 +233,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
                  sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
     }
 
-    sol_log("Test invoke");
+    sol_log("Test nested invoke");
     {
-      sol_assert(accounts[ARGUMENT_INDEX].is_signer);
-
-      *accounts[ARGUMENT_INDEX].lamports -= 5;
-      *accounts[INVOKED_ARGUMENT_INDEX].lamports += 5;
-
-      SolAccountMeta arguments[] = {
-          {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
-          {accounts[ARGUMENT_INDEX].key, true, true},
-          {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
-      uint8_t data[] = {NESTED_INVOKE};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-
-      sol_log("First invoke");
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-      sol_log("2nd invoke from first program");
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-
-      sol_assert(*accounts[ARGUMENT_INDEX].lamports == 42 - 5 + 1 + 1 + 1 + 1);
-      sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports ==
-                 10 + 5 - 1 - 1 - 1 - 1);
+      sol_assert(SUCCESS == do_nested_invokes(4, accounts, params.ka_num));
     }
 
     sol_log("Test privilege deescalation");
@@ -505,24 +512,29 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
   case TEST_WRITABLE_DEESCALATION_WRITABLE: {
-  sol_log("Test writable deescalation");
-      uint8_t buffer[10];
-      for (int i = 0; i < 10; i++) {
-        buffer[i] = accounts[INVOKED_ARGUMENT_INDEX].data[i];
-      }
-      SolAccountMeta arguments[] = {
-          {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
-      uint8_t data[] = {WRITE_ACCOUNT, 10};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-      sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
-
-      for (int i = 0; i < 10; i++) {
-        sol_assert(buffer[i] == accounts[INVOKED_ARGUMENT_INDEX].data[i]);
-      }
-      break;
+    sol_log("Test writable deescalation");
+    uint8_t buffer[10];
+    for (int i = 0; i < 10; i++) {
+      buffer[i] = accounts[INVOKED_ARGUMENT_INDEX].data[i];
     }
+    SolAccountMeta arguments[] = {
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
+    uint8_t data[] = {WRITE_ACCOUNT, 10};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+
+    for (int i = 0; i < 10; i++) {
+      sol_assert(buffer[i] == accounts[INVOKED_ARGUMENT_INDEX].data[i]);
+    }
+    break;
+  }
+  case TEST_NESTED_INVOKE_TOO_DEEP: {
+    do_nested_invokes(5, accounts, params.ka_num);
+    break;
+  }
+
   default:
     sol_panic();
   }

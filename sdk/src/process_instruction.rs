@@ -163,7 +163,7 @@ pub struct BpfComputeBudget {
     /// Number of compute units consumed by an invoke call (not including the cost incurred by
     /// the called program)
     pub invoke_units: u64,
-    /// Maximum cross-program invocation depth allowed including the original caller
+    /// Maximum cross-program invocation depth allowed
     pub max_invoke_depth: usize,
     /// Base number of compute units consumed to call SHA256
     pub sha256_base_cost: u64,

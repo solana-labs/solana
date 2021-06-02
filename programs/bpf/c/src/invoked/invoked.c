@@ -228,16 +228,17 @@ extern uint64_t entrypoint(const uint8_t *input) {
     *accounts[INVOKED_ARGUMENT_INDEX].lamports -= 1;
     *accounts[ARGUMENT_INDEX].lamports += 1;
 
-    if (params.ka_num == 3) {
+    uint8_t remaining_invokes = params.data[1];
+    if (remaining_invokes > 1) {
+      sol_log("Invoke again");
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
-          {accounts[ARGUMENT_INDEX].key, true, true}};
-      uint8_t data[] = {NESTED_INVOKE};
+          {accounts[ARGUMENT_INDEX].key, true, true},
+          {accounts[INVOKED_PROGRAM_INDEX].key, false, false}};
+      uint8_t data[] = {NESTED_INVOKE, remaining_invokes - 1};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
-
-      sol_log("Invoke again");
       sol_assert(SUCCESS == sol_invoke(&instruction, accounts, params.ka_num));
     } else {
       sol_log("Last invoked");
