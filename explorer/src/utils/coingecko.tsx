@@ -3,6 +3,7 @@ import React from "react";
 import * as CoinGecko from "coingecko-api";
 
 const PRICE_REFRESH = 10000;
+const COIN_GECKO_CATEGORY_REFRESH = 30000;
 
 export const COIN_GECKO_SOLANA_CATEGORY = "solana-ecosystem";
 
@@ -209,9 +210,7 @@ export function useCoinGeckoCategoryStats(
           if (response.ok) {
             return response.json();
           }
-          throw new Error(
-            `Couldn't fetch stats for ${categoryId} from CoinGecko`
-          );
+          throw new Error(`Couldn't fetch stats from CoinGecko`);
         })
         .then((data?: Array<CoinGeckoCategoryStats>) => {
           setError(null);
@@ -231,9 +230,7 @@ export function useCoinGeckoCategoryStats(
             };
             setCategoryStats(statsForCategory);
           } else {
-            throw new Error(
-              `Couldn't fetch stats for ${categoryId} from CoinGecko`
-            );
+            throw new Error(`Couldn't fetch stats from CoinGecko`);
           }
         })
         .catch((error) => {
@@ -245,7 +242,7 @@ export function useCoinGeckoCategoryStats(
     fetchCategoryStats();
     interval = setInterval(() => {
       fetchCategoryStats({ displayLoading: false });
-    }, PRICE_REFRESH);
+    }, COIN_GECKO_CATEGORY_REFRESH);
     return () => {
       if (interval) {
         clearInterval(interval);
