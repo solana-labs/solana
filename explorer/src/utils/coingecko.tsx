@@ -208,13 +208,13 @@ export function useCoinGeckoCategoryStats(
       if (displayLoading) setLoading(true);
       return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
         .then((response) => response.json())
-        .then((data: Array<CoinGeckoCategoryStats>) => {
+        .then((data?: Array<CoinGeckoCategoryStats>) => {
           if (displayLoading) setLoading(false);
 
           // CoinGecko doesn't have an API (yet) that lets us
           // fetch stats for a category so we fetch all of them
           // and filter on the client
-          let statsForCategory = data.find(
+          let statsForCategory = data?.find(
             (category: CoinGeckoCategoryStats) => category.id === categoryId
           );
 
