@@ -32,7 +32,8 @@ use solana_client::{
         RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionConfig,
         RpcTransactionLogsFilter,
     },
-    rpc_response::RpcKeyedAccount,
+    rpc_request::{RpcError, RpcResponseErrorData},
+    rpc_response::{RpcKeyedAccount, RpcSimulateTransactionResult},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1956,6 +1957,28 @@ where
 {
     match result {
         Err(err) => {
+            // If transaction simulation returns a known Custom InstructionError, decode it
+            if let ClientErrorKind::RpcError(RpcError::RpcResponseError {
+                data:
+                    RpcResponseErrorData::SendTransactionPreflightFailure(
+                        RpcSimulateTransactionResult {
+                            err:
+                                Some(TransactionError::InstructionError(
+                                    _,
+                                    InstructionError::Custom(code),
+                                )),
+                            ..
+                        },
+                    ),
+                ..
+            }) = err.kind()
+            {
+                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
+                    return Err(specific_error.into());
+                }
+            }
+            // If the transaction was instead submitted and returned a known Custom
+            // InstructionError, decode it
             if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
                 InstructionError::Custom(code),
