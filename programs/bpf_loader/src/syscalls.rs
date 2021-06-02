@@ -21,7 +21,7 @@ use solana_sdk::{
     feature_set::{
         cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
         keccak256_syscall_enabled, memory_ops_syscalls, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        sysvar_via_syscall, update_data_on_realloc, ecrecover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -132,6 +132,10 @@ pub fn register_syscalls(
 
     if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    }
+
+    if invoke_context.is_feature_active(&ecrecover_syscall_enabled::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_ecrecover", SyscallEcrecover::call)?;
     }
 
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
@@ -312,6 +316,16 @@ pub fn bind_syscall_context_objects<'a>(
         invoke_context.is_feature_active(&memory_ops_syscalls::id()),
         Box::new(SyscallMemset {
             cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&ecrecover_syscall_enabled::id()),
+        Box::new(SyscallEcrecover {
+            base_cost: bpf_compute_budget.ecrecover_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1325,6 +1339,91 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
         for val in s.iter_mut().take(n as usize) {
             *val = c as u8;
         }
+        *result = Ok(0);
+    }
+}
+
+// Ecrecover
+pub struct SyscallEcrecover<'a> {
+    base_cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallEcrecover<'a> {
+    fn call(
+        &mut self,
+        hash_addr: u64,
+        recovery_id_val: u64,
+        signature_addr: u64,
+        result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(self.base_cost), result);
+
+        let hash = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                hash_addr,
+                keccak::HASH_BYTES as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let signature = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                signature_addr,
+                64u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let ecrecover_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                64u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+
+        let message = match libsecp256k1::Message::parse_slice(hash) {
+            Ok(msg) => msg,
+            Err(_) => {
+                *result = Ok(1);
+                return;
+            }
+        };
+        let recovery_id = match libsecp256k1::RecoveryId::parse(recovery_id_val as u8) {
+            Ok(id) => id,
+            Err(_) => {
+                *result = Ok(2);
+                return;
+            }
+        };
+        let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
+            Ok(sig) => sig,
+            Err(_) => {
+                *result = Ok(3);
+                return;
+            }
+        };
+
+        let public_key = match libsecp256k1::recover(&message, &signature, &recovery_id) {
+            Ok(key) => key.serialize(),
+            Err(_) => {
+                *result = Ok(4);
+                return;
+            }
+        };
+
+        ecrecover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(0);
     }
 }
