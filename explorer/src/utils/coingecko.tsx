@@ -142,8 +142,6 @@ export function useCoinGeckoCategoryTokens(
         displayLoading: true,
       }
     ) => {
-      setError(null);
-
       if (displayLoading) setLoading(true);
       return CoinGeckoClient.coins
         .markets({
@@ -152,6 +150,7 @@ export function useCoinGeckoCategoryTokens(
           sparkline: true,
         })
         .then(({ data }: { data: Array<CoinGeckoToken> }) => {
+          setError(null);
           if (displayLoading) setLoading(false);
           setTokens(data);
         })
@@ -204,16 +203,18 @@ export function useCoinGeckoCategoryStats(
         displayLoading: true,
       }
     ) => {
-      setError(null);
       if (displayLoading) setLoading(true);
       return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
         .then((response) => {
           if (response.ok) {
             return response.json();
           }
-          throw new Error(`Couldn't fetch stats for ${categoryId}`);
+          throw new Error(
+            `Couldn't fetch stats for ${categoryId} from CoinGecko`
+          );
         })
         .then((data?: Array<CoinGeckoCategoryStats>) => {
+          setError(null);
           if (displayLoading) setLoading(false);
 
           // CoinGecko doesn't have an API (yet) that lets us
@@ -230,7 +231,9 @@ export function useCoinGeckoCategoryStats(
             };
             setCategoryStats(statsForCategory);
           } else {
-            throw new Error(`Couldn't fetch stats for ${categoryId}`);
+            throw new Error(
+              `Couldn't fetch stats for ${categoryId} from CoinGecko`
+            );
           }
         })
         .catch((error) => {
