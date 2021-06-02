@@ -1,9 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::{
-    rpc_health::*,
-    send_transaction_service::{SendTransactionService, TransactionInfo},
-};
+use crate::rpc_health::*;
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
@@ -37,8 +34,10 @@ use solana_ledger::{
 use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_rpc::{
-    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+    max_slots::MaxSlots,
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     parsed_token_accounts::*,
+    send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_runtime::{
     accounts::AccountAddressFilter,

@@ -2481,7 +2481,6 @@ pub(crate) mod tests {
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
-        transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
     use solana_gossip::{cluster_info::Node, crds::Cursor};
@@ -2497,7 +2496,10 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
+    use solana_rpc::{
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        transaction_status_service::TransactionStatusService,
+    };
     use solana_runtime::{
         accounts_background_service::AbsRequestSender,
         commitment::BlockCommitment,

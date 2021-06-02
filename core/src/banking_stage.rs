@@ -1515,7 +1515,6 @@ fn next_leader_tpu_forwards(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transaction_status_service::TransactionStatusService;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_gossip::cluster_info::Node;
@@ -1531,6 +1530,7 @@ mod tests {
         poh_recorder::{create_test_recorder, Record, WorkingBank, WorkingBankEntry},
         poh_service::PohService,
     };
+    use solana_rpc::transaction_status_service::TransactionStatusService;
     use solana_sdk::{
         hash::Hash,
         instruction::InstructionError,

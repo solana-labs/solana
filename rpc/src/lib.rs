@@ -6,6 +6,8 @@ pub mod rpc_completed_slots_service;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
 pub mod rpc_subscriptions;
+pub mod send_transaction_service;
+pub mod transaction_status_service;
 
 #[macro_use]
 extern crate log;
