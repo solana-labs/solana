@@ -432,6 +432,7 @@ impl AbiExample for BankRc {
             // AbiExample for Accounts is specially implemented to contain a storage example
             accounts: AbiExample::example(),
             slot: AbiExample::example(),
+            slot_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 }

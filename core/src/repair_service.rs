@@ -17,7 +17,12 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, contains::Contains};
-use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
+use solana_sdk::{
+    clock::{Slot, SlotId},
+    epoch_schedule::EpochSchedule,
+    pubkey::Pubkey,
+    timing::timestamp,
+};
 use std::{
     collections::{HashMap, HashSet},
     iter::Iterator,
