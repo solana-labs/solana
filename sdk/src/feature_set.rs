@@ -135,6 +135,10 @@ pub mod stake_program_v4 {
     solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
 }
 
+pub mod memory_ops_syscalls {
+    solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -169,6 +173,7 @@ lazy_static! {
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
+        (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

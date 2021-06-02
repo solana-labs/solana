@@ -2967,6 +2967,16 @@ name = "solana-bpf-rust-mem"
 version = "1.7.0"
 dependencies = [
  "solana-program 1.7.0",
+ "solana-program-test",
+ "solana-sdk",
+]
+
+[[package]]
+name = "solana-bpf-rust-membuiltins"
+version = "1.7.0"
+dependencies = [
+ "solana-bpf-rust-mem",
+ "solana-program 1.7.0",
 ]
 
 [[package]]

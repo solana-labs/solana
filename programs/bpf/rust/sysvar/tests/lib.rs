@@ -12,7 +12,7 @@ use solana_sdk::{
 };
 
 #[tokio::test]
-async fn test_noop() {
+async fn test_sysvars() {
     let program_id = Pubkey::new_unique();
     let program_test = ProgramTest::new(
         "solana_bpf_rust_sysvar",
