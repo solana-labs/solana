@@ -54,6 +54,7 @@ members = [
     "programs/vote",
     "rbpf-cli",
     "remote-wallet",
+    "rpc",
     "runtime",
     "runtime/store-tool",
     "sdk",
