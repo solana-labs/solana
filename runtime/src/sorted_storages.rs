@@ -32,7 +32,6 @@ impl<'a> SortedStorages<'a> {
         self.slot_count
     }
 
-    // Currently only called when a testing CLI option is enabled.
     // assumptions:
     // 1. each SnapshotStorage.!is_empty()
     // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
@@ -51,10 +50,14 @@ impl<'a> SortedStorages<'a> {
 
     // source[i] is in slot slots[i]
     // assumptions:
-    // 1. slots contains unique items
+    // 1. slots vector contains unique slot #s.
     // 2. slots and source are the same len
     pub fn new_with_slots(source: &'a [SnapshotStorage], slots: &[Slot]) -> Self {
-        assert_eq!(source.len(), slots.len());
+        assert_eq!(
+            source.len(),
+            slots.len(),
+            "source and slots are different lengths"
+        );
         let mut min = Slot::MAX;
         let mut max = Slot::MIN;
         let slot_count = source.len();
@@ -83,7 +86,7 @@ impl<'a> SortedStorages<'a> {
                 .zip(slots)
                 .for_each(|(original_storages, slot)| {
                     let index = (slot - min) as usize;
-                    assert!(storages[index].is_none()); // we should not encounter the same slot twice
+                    assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
                     storages[index] = Some(original_storages);
                 });
         }
@@ -118,5 +121,76 @@ pub mod tests {
                 slot_count,
             }
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "SnapshotStorage.is_empty()")]
+    fn test_sorted_storages_empty() {
+        SortedStorages::new(&[Vec::new()]);
+    }
+
+    #[test]
+    #[should_panic(expected = "slots are not unique")]
+    fn test_sorted_storages_duplicate_slots() {
+        SortedStorages::new_with_slots(&[Vec::new(), Vec::new()], &[0, 0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "source and slots are different lengths")]
+    fn test_sorted_storages_mismatched_lengths() {
+        SortedStorages::new_with_slots(&[Vec::new()], &[0, 0]);
+    }
+
+    #[test]
+    fn test_sorted_storages_none() {
+        let result = SortedStorages::new_with_slots(&[], &[]);
+        assert_eq!(result.range, Range::default());
+        assert_eq!(result.slot_count, 0);
+        assert_eq!(result.storages.len(), 0);
+        assert!(result.get(0).is_none());
+    }
+
+    #[test]
+    fn test_sorted_storages_1() {
+        let vec = vec![];
+        let vec_check = vec.clone();
+        let slot = 4;
+        let vecs = [vec];
+        let result = SortedStorages::new_with_slots(&vecs, &[slot]);
+        assert_eq!(
+            result.range,
+            Range {
+                start: slot,
+                end: slot + 1
+            }
+        );
+        assert_eq!(result.slot_count, 1);
+        assert_eq!(result.storages.len(), 1);
+        assert_eq!(result.get(slot).unwrap().len(), vec_check.len());
+    }
+
+    #[test]
+    fn test_sorted_storages_2() {
+        let vec = vec![];
+        let vec_check = vec.clone();
+        let slots = [4, 7];
+        let vecs = [vec.clone(), vec];
+        let result = SortedStorages::new_with_slots(&vecs, &slots);
+        assert_eq!(
+            result.range,
+            Range {
+                start: slots[0],
+                end: slots[1] + 1,
+            }
+        );
+        assert_eq!(result.slot_count, 2);
+        assert_eq!(result.storages.len() as Slot, slots[1] - slots[0] + 1);
+        assert!(result.get(0).is_none());
+        assert!(result.get(3).is_none());
+        assert!(result.get(5).is_none());
+        assert!(result.get(6).is_none());
+        assert!(result.get(8).is_none());
+        assert_eq!(result.get(slots[0]).unwrap().len(), vec_check.len());
+        assert_eq!(result.get(slots[1]).unwrap().len(), vec_check.len());
     }
 }
