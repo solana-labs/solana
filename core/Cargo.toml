@@ -92,7 +92,7 @@ num_cpus = "1.13.0"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"
 symlink = "0.1.0"
-systemstat = "0.1.5"
+systemstat = "0.1.7"
 
 [build-dependencies]
 rustc_version = "0.2"
