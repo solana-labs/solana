@@ -12,7 +12,7 @@ pub mod bank;
 pub mod bank_client;
 pub mod bank_forks;
 pub mod bank_utils;
-mod blockhash_queue;
+pub mod blockhash_queue;
 pub mod bloom;
 pub mod builtins;
 pub mod commitment;
