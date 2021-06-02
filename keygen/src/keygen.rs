@@ -4,6 +4,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
     Arg, ArgMatches, SubCommand,
 };
+use regex::Regex;
 use solana_clap_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::{is_parsable, is_prompt_signer_source},
@@ -39,6 +40,7 @@ const NO_PASSPHRASE: &str = "";
 struct GrindMatch {
     starts: String,
     ends: String,
+    regex: Option<Regex>,
     count: AtomicU64,
 }
 
@@ -215,6 +217,22 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
+fn grind_validator_matches_regex(v: String) -> Result<(), String> {
+    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
+        return Err(String::from("Expected : between REGEX and COUNT"));
+    }
+    let args: Vec<&str> = v.split(':').collect();
+
+    Regex::new(&args[0])
+        .map_err(|err| format!("{}: {:?}", args[0], err))?;
+
+    let count = args[1].parse::<u64>();
+    if count.is_err() || count.unwrap() == 0 {
+        return Err(String::from("Expected COUNT to be of type u64"));
+    }
+    Ok(())
+}
+
 fn acquire_language(matches: &ArgMatches<'_>) -> Language {
     match matches.value_of(LANGUAGE_ARG.name).unwrap() {
         "english" => Language::English,
@@ -258,24 +276,47 @@ fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
     println!("Searching with {} threads for:", num_threads);
     for gm in grind_matches {
         let mut msg = Vec::<String>::new();
+
         if gm.count.load(Ordering::Relaxed) > 1 {
             msg.push("pubkeys".to_string());
-            msg.push("start".to_string());
-            msg.push("end".to_string());
         } else {
             msg.push("pubkey".to_string());
-            msg.push("starts".to_string());
-            msg.push("ends".to_string());
         }
-        println!(
-            "\t{} {} that {} with '{}' and {} with '{}'",
-            gm.count.load(Ordering::Relaxed),
-            msg[0],
-            msg[1],
-            gm.starts,
-            msg[2],
-            gm.ends
-        );
+
+        match &gm.regex {
+            Some(regex) => {
+                if gm.count.load(Ordering::Relaxed) > 1 {
+                    msg.push("match".to_string());
+                } else {
+                    msg.push("matches".to_string());
+                }
+                println!(
+                    "\t{} {} that {} '{}'",
+                    gm.count.load(Ordering::Relaxed),
+                    msg[0],
+                    msg[1],
+                    regex.as_str(),
+                );
+            },
+            None => {
+                if gm.count.load(Ordering::Relaxed) > 1 {
+                    msg.push("start".to_string());
+                    msg.push("end".to_string());
+                } else {
+                    msg.push("starts".to_string());
+                    msg.push("ends".to_string());
+                }
+                println!(
+                    "\t{} {} that {} with '{}' and {} with '{}'",
+                    gm.count.load(Ordering::Relaxed),
+                    msg[0],
+                    msg[1],
+                    gm.starts,
+                    msg[2],
+                    gm.ends
+                );
+            },
+        }
     }
 }
 
@@ -284,6 +325,7 @@ fn grind_parse_args(
     starts_with_args: HashSet<String>,
     ends_with_args: HashSet<String>,
     starts_and_ends_with_args: HashSet<String>,
+    matches_regex_args: HashSet<String>,
     num_threads: usize,
 ) -> Vec<GrindMatch> {
     let mut grind_matches = Vec::<GrindMatch>::new();
@@ -296,6 +338,7 @@ fn grind_parse_args(
                 args[0].to_string()
             },
             ends: "".to_string(),
+            regex: None,
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
     }
@@ -308,6 +351,7 @@ fn grind_parse_args(
             } else {
                 args[0].to_string()
             },
+            regex: None,
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
     }
@@ -324,9 +368,24 @@ fn grind_parse_args(
             } else {
                 args[1].to_string()
             },
+            regex: None,
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
         });
     }
+    for re in matches_regex_args {
+        let args: Vec<&str> = re.split(':').collect();
+        grind_matches.push(GrindMatch {
+            starts: "".to_string(),
+            ends: "".to_string(),
+            regex: Some(if ignore_case {
+                Regex::new(&("(?i)".to_string() + args[0])).unwrap()
+            } else {
+                Regex::new(args[0]).unwrap()
+            }),
+            count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
+        });
+    }
+
     grind_print_info(&grind_matches, num_threads);
     grind_matches
 }
@@ -434,6 +493,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .multiple(true)
                         .validator(grind_validator_starts_and_ends_with)
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                )
+                .arg(
+                    Arg::with_name("matches_regex")
+                        .long("matches-regex")
+                        .value_name("REGEX:COUNT")
+                        .number_of_values(1)
+                        .takes_value(true)
+                        .multiple(true)
+                        .validator(grind_validator_matches_regex)
+                        .help("Saves specified number of keypairs whose public key matches the indicated regular expression\nExample: --matches-regex 'sol[a4]n[a4]:4'\nREGEX is Regex\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::with_name("num_threads")
@@ -636,10 +705,16 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             } else {
                 HashSet::new()
             };
+            let matches_regex_args = if matches.is_present("matches_regex") {
+                values_t_or_exit!(matches, "matches_regex", String).into_iter().collect()
+            } else {
+                HashSet::new()
+            };
 
             if starts_with_args.is_empty()
                 && ends_with_args.is_empty()
                 && starts_and_ends_with_args.is_empty()
+                && matches_regex_args.is_empty()
             {
                 eprintln!(
                     "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
@@ -654,6 +729,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 starts_with_args,
                 ends_with_args,
                 starts_and_ends_with_args,
+                matches_regex_args,
                 num_threads,
             );
 
@@ -715,17 +791,18 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                                 total_matches_found += 1;
                                 continue;
                             }
-                            if (!grind_matches_thread_safe[i].starts.is_empty()
-                                && grind_matches_thread_safe[i].ends.is_empty()
-                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
-                                || (grind_matches_thread_safe[i].starts.is_empty()
-                                    && !grind_matches_thread_safe[i].ends.is_empty()
-                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                                || (!grind_matches_thread_safe[i].starts.is_empty()
-                                    && !grind_matches_thread_safe[i].ends.is_empty()
-                                    && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
-                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                            {
+                            if match (
+                                    grind_matches_thread_safe[i].starts.is_empty(),
+                                    grind_matches_thread_safe[i].ends.is_empty(),
+                                    grind_matches_thread_safe[i].regex.as_ref(),
+                            ) {
+                                    (false, true, None) => pubkey.starts_with(&grind_matches_thread_safe[i].starts),
+                                    (true, false, None) => pubkey.ends_with(&grind_matches_thread_safe[i].ends),
+                                    (false, false, None) => pubkey.starts_with(&grind_matches_thread_safe[i].starts) &&
+                                        pubkey.ends_with(&grind_matches_thread_safe[i].ends),
+                                    (true, true, Some(regex)) => regex.is_match(&pubkey),
+                                    _ => false,
+                            } {
                                 let _found = found.fetch_add(1, Ordering::Relaxed);
                                 grind_matches_thread_safe[i]
                                     .count
