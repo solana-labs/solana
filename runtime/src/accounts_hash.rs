@@ -884,11 +884,7 @@ pub mod tests {
         // 2nd key - zero lamports, so will be removed
         let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate2::new(
-            hash,
-            ZERO_RAW_LAMPORTS_SENTINEL,
-            key,
-        );
+        let val = CalculateHashIntermediate2::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
         account_maps.push(val);
 
         let result = AccountsHash::rest_of_hash_calculation(
@@ -950,11 +946,7 @@ pub mod tests {
             // 2nd key - zero lamports, so will be removed
             let key = Pubkey::new(&[12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
-            let val = CalculateHashIntermediate2::new(
-                hash,
-                ZERO_RAW_LAMPORTS_SENTINEL,
-                key,
-            );
+            let val = CalculateHashIntermediate2::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
             account_maps.push(val);
 
             let mut previous_pass = PreviousPass::default();
@@ -1281,13 +1273,7 @@ pub mod tests {
             .into_iter()
             .zip(keys.iter())
             .enumerate()
-            .map(|(i, (hash, key))| {
-                CalculateHashIntermediate2::new(
-                    hash,
-                    (i + 1) as u64,
-                    *key,
-                )
-            })
+            .map(|(i, (hash, key))| CalculateHashIntermediate2::new(hash, (i + 1) as u64, *key))
             .collect();
 
         type ExpectedType = (String, bool, u64, String);
@@ -1501,7 +1487,7 @@ pub mod tests {
         let list = AccountsHash::sort_hash_intermediate(vec![list], &mut HashStats::default());
         assert_eq!(list, vec![list_bkup]);
 
-        let list = vec![val2, val.clone()]; // reverse args
+        let list = vec![val2, val]; // reverse args
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsHash::compare_two_hash_entries2);
         let list = AccountsHash::sort_hash_intermediate(vec![list], &mut HashStats::default());
@@ -1522,11 +1508,7 @@ pub mod tests {
         assert_eq!(result, (vec![val.hash], val.lamports as u128));
 
         // zero original lamports, higher version
-        let val = CalculateHashIntermediate2::new(
-            hash,
-            ZERO_RAW_LAMPORTS_SENTINEL,
-            key,
-        );
+        let val = CalculateHashIntermediate2::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
         account_maps.insert(0, val); // has to be before other entry since sort order matters
 
         let result = AccountsHash::de_dup_accounts_from_stores(true, &account_maps[..]);
@@ -1985,11 +1967,7 @@ pub mod tests {
                 u64::MAX - offset,
                 Pubkey::new_unique(),
             ),
-            CalculateHashIntermediate2::new(
-                Hash::new_unique(),
-                offset + 1,
-                Pubkey::new_unique(),
-            ),
+            CalculateHashIntermediate2::new(Hash::new_unique(), offset + 1, Pubkey::new_unique()),
         ];
         AccountsHash::de_dup_accounts_in_parallel(&input, 1);
     }

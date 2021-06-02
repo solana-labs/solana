@@ -4228,7 +4228,7 @@ impl AccountsDb {
         (0..chunks)
             .into_par_iter()
             .map(|chunk| {
-                let chunk = chunks - chunk; // we want reverse order in groups so that the latest slots are in group[0]
+                let chunk = chunks - chunk - 1; // we want reverse order in groups so that the latest slots are in group[0]
                 let mut retval = B::default();
                 let start = snapshot_storages.range().start + chunk * MAX_ITEMS_PER_CHUNK;
                 let end = std::cmp::min(start + MAX_ITEMS_PER_CHUNK, snapshot_storages.range().end);
@@ -4408,7 +4408,7 @@ impl AccountsDb {
                             CalculateHashIntermediate2::new(item.hash, item.lamports, item.pubkey);
                         result.push(new_item);
                     }
-            }
+                }
                 result
             })
             .collect()
