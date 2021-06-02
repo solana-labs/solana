@@ -4222,14 +4222,18 @@ impl AccountsDb {
         (0..chunks)
             .into_par_iter()
             .map(|chunk| {
+                let mut slot_last = 0;
                 let mut retval = B::default();
                 let start = snapshot_storages.range().start + chunk * MAX_ITEMS_PER_CHUNK;
                 let end = std::cmp::min(start + MAX_ITEMS_PER_CHUNK, snapshot_storages.range().end);
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
                     if let Some(sub_storages) = sub_storages {
+                        assert!(sub_storages.len() == 1);
                         for storage in sub_storages {
                             let slot = storage.slot();
+                            assert!(slot >= slot_last);
+                            slot_last = slot;
                             let accounts = storage.accounts.accounts(0);
                             accounts.into_iter().for_each(|stored_account| {
                                 scan_func(LoadedAccount::Stored(stored_account), &mut retval, slot)

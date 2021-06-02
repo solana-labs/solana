@@ -549,13 +549,7 @@ impl AccountsHash {
         b: &CalculateHashIntermediate,
     ) -> std::cmp::Ordering {
         // note partial_cmp only returns None with floating point comparisons
-        match a.pubkey.partial_cmp(&b.pubkey).unwrap() {
-            std::cmp::Ordering::Equal => match b.slot.partial_cmp(&a.slot).unwrap() {
-                std::cmp::Ordering::Equal => b.version.partial_cmp(&a.version).unwrap(),
-                other => other,
-            },
-            other => other,
-        }
+        a.pubkey.partial_cmp(&b.pubkey).unwrap()
     }
 
     fn sort_hash_intermediate(
@@ -567,7 +561,7 @@ impl AccountsHash {
         let sorted_data_by_pubkey: Vec<Vec<_>> = data_by_pubkey
             .into_par_iter()
             .map(|mut pk_range| {
-                pk_range.par_sort_unstable_by(Self::compare_two_hash_entries);
+                pk_range.par_sort_by(Self::compare_two_hash_entries);
                 pk_range
             })
             .collect();
@@ -632,7 +626,8 @@ impl AccountsHash {
             .map(|chunk_index| {
                 let mut start_index = chunk_index * chunk_size;
                 let mut end_index = start_index + chunk_size;
-                if chunk_index == max - 1 {
+                let last = chunk_index == max - 1;
+                if last {
                     end_index = len;
                 }
 
@@ -645,6 +640,7 @@ impl AccountsHash {
                 let (result, sum) = Self::de_dup_accounts_from_stores(
                     chunk_index == 0,
                     &pubkey_division[start_index..end_index],
+                    last,
                 );
                 let mut overall = overall_sum.lock().unwrap();
                 *overall = Self::checked_cast_for_capitalization(sum + *overall as u128);
@@ -660,6 +656,7 @@ impl AccountsHash {
     fn de_dup_accounts_from_stores(
         is_first_slice: bool,
         slice: &[CalculateHashIntermediate],
+        is_last_slice: bool,
     ) -> (Vec<Hash>, u128) {
         let len = slice.len();
         let mut result: Vec<Hash> = Vec::with_capacity(len);
@@ -667,32 +664,46 @@ impl AccountsHash {
         let mut sum: u128 = 0;
         if len > 0 {
             let mut i = 0;
+            let mut insert_item = false;
             // look_for_first_key means the first key we find in our slice may be a
             //  continuation of accounts belonging to a key that started in the last slice.
             // so, look_for_first_key=true means we have to find the first key different than
             //  the first key we encounter in our slice. Note that if this is true,
             //  our slice begins one index prior to the 'actual' start of our logical range.
-            let mut look_for_first_key = !is_first_slice;
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
-                let now = &slice[i];
+                let mut now = &slice[i];
                 let last = now;
-                if !look_for_first_key && now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
-                    // first entry for this key that starts in our slice
-                    result.push(now.hash);
-                    sum += now.lamports as u128;
+                if insert_item {
+                    if now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
+                        // first entry for this key that starts in our slice
+                        result.push(now.hash);
+                        sum += now.lamports as u128;
+                    }
+                    insert_item = false;
+                    if i + 1 == len {
+                        break;
+                    }
+                    i += 1;
+                    now = &slice[i];
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last.pubkey {
-                        i = k;
-                        look_for_first_key = false;
+                        i = k - 1;
+                        insert_item = true;
                         continue 'outer;
                     } else {
-                        assert!(now.slot <= last.slot);
+                        assert!(now.slot >= last.slot);
                         if now.slot == last.slot {
-                            assert!(now.version < last.version);
+                            assert!(now.version > last.version);
+                        }
                     }
                 }
+
+                if is_last_slice {
+                    insert_item = true;
+                    i = len - 1;
+                    continue 'outer;
                 }
 
                 break; // ran out of items in our slice, so our slice is done
