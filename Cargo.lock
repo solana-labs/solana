@@ -4858,6 +4858,7 @@ dependencies = [
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-output",
+ "solana-core",
  "solana-ledger",
  "solana-logger 1.8.0",
  "solana-measure",
