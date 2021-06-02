@@ -331,11 +331,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             return Err(InstructionError::CallDepth);
         }
 
-        let contains = self
-            .invoke_stack
-            .iter()
-            .position(|frame| frame.key == *key)
-            .is_some();
+        let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
         let is_last = if let Some(last_frame) = self.invoke_stack.last() {
             last_frame.key == *key
         } else {
