@@ -725,7 +725,7 @@ impl AccountsHash {
             }
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
-                let now = &slice[i];
+                let mut now = &slice[i];
                 let last = now.pubkey;
                 if insert_item {
                     if now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
