@@ -4362,6 +4362,7 @@ impl AccountsDb {
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
                     if let Some(sub_storages) = sub_storages {
+                        assert!(sub_storages.len() == 1);
                         for storage in sub_storages {
                             let slot = storage.slot();
                             let accounts = storage.accounts.accounts(0);
