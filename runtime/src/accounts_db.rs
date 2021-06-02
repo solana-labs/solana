@@ -4446,7 +4446,7 @@ impl AccountsDb {
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
-                let pubkey = *loaded_account.pubkey();
+                let pubkey = loaded_account.pubkey();
                 let pubkey_to_bin_index = pubkey.as_ref()[0] as usize * bins / max_plus_1;
                 if !bin_range.contains(&pubkey_to_bin_index) {
                     return;
@@ -4466,7 +4466,7 @@ impl AccountsDb {
                     loaded_account.loaded_hash(),
                     balance,
                     slot,
-                    pubkey,
+                    *pubkey,
                 );
 
                 if check_hash {
