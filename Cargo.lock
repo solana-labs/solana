@@ -788,16 +788,6 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
-dependencies = [
- "crossbeam-utils 0.7.2",
- "maybe-uninit",
-]
-
-[[package]]
-name = "crossbeam-channel"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dca26ee1f8d361640700bde38b2c37d8c22b3ce2d360e1fc1c74ea4b0aa7d775"
@@ -3407,7 +3397,7 @@ version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ab346ac5921dc62ffa9f89b7a773907511cdfa5490c572ae9be1be33e8afa4a"
 dependencies = [
- "crossbeam-channel 0.5.0",
+ "crossbeam-channel",
  "crossbeam-deque 0.8.0",
  "crossbeam-utils 0.8.1",
  "lazy_static",
@@ -4029,7 +4019,7 @@ name = "solana-accounts-bench"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -4070,7 +4060,7 @@ name = "solana-banking-bench"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -4420,7 +4410,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "core_affinity",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "ed25519-dalek",
  "flate2",
  "fs_extra",
@@ -4789,7 +4779,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "chrono-humanize",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "dlopen",
  "dlopen_derive",
  "ed25519-dalek",
@@ -4878,7 +4868,7 @@ name = "solana-local-cluster"
 version = "1.8.0"
 dependencies = [
  "assert_matches",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "fs_extra",
  "gag",
  "itertools",
@@ -5206,7 +5196,7 @@ name = "solana-rpc"
 version = "1.8.0"
 dependencies = [
  "bs58 0.4.0",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5241,7 +5231,7 @@ dependencies = [
  "bv",
  "byteorder",
  "bzip2",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "dashmap",
  "dir-diff",
  "flate2",

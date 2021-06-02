@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 clap = "2.33.1"
-crossbeam-channel = "0.4"
+crossbeam-channel = "0.5"
 log = "0.4.11"
 rand = "0.7.0"
 rayon = "1.5.0"

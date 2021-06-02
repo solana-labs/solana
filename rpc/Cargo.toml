@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 bs58 = "0.4.0"
-crossbeam-channel = "0.4"
+crossbeam-channel = "0.5"
 jsonrpc-core = "17.0.0"
 jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "17.0.0"
