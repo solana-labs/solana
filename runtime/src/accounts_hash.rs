@@ -738,7 +738,7 @@ impl AccountsHash {
                         break;
                     }
                     i += 1;
-                    now = &slice[i]
+                    now = &slice[i];
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last {
