@@ -24,7 +24,9 @@ export function TokenRow({
       </td>
       <td className="">
         <img className="token-icon mr-3" src={token.image} alt={token.name} />
-        {token.name}
+        <a href={`https://www.coingecko.com/en/coins/${token.id}`}>
+          {token.name}
+        </a>
       </td>
       <td className="text-muted">{token.symbol.toUpperCase()}</td>
       <td className="text-right">{formatDollarValue(token.current_price)}</td>
