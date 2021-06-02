@@ -214,7 +214,7 @@ export class Transaction {
     }
 
     if (this.instructions.length < 1) {
-      throw new Error('No instructions provided');
+      console.warn('No instructions provided');
     }
 
     let feePayer: PublicKey;
