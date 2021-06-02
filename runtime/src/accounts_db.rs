@@ -29,6 +29,7 @@ use crate::{
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
+    pubkey_bins::PubkeyBinCalculator16,
     read_only_accounts_cache::ReadOnlyAccountsCache,
     sorted_storages::SortedStorages,
 };
@@ -4434,8 +4435,7 @@ impl AccountsDb {
         bin_range: &Range<usize>,
         check_hash: bool,
     ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
-        let max_plus_1 = std::u8::MAX as usize + 1;
-        assert!(bins <= max_plus_1 && bins > 0);
+        let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.len();
@@ -4447,7 +4447,7 @@ impl AccountsDb {
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
                 let pubkey = loaded_account.pubkey();
-                let pubkey_to_bin_index = pubkey.as_ref()[0] as usize * bins / max_plus_1;
+                let pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
                 if !bin_range.contains(&pubkey_to_bin_index) {
                     return;
                 }
@@ -5850,24 +5850,6 @@ pub mod tests {
 
     fn empty_storages<'a>() -> SortedStorages<'a> {
         SortedStorages::new(&[])
-    }
-
-    #[test]
-    #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
-    fn test_accountsdb_scan_snapshot_stores_illegal_bins2() {
-        let mut stats = HashStats::default();
-        let bounds = Range { start: 0, end: 0 };
-
-        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 257, &bounds, false)
-            .unwrap();
-    }
-    #[test]
-    #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
-    fn test_accountsdb_scan_snapshot_stores_illegal_bins() {
-        let mut stats = HashStats::default();
-        let bounds = Range { start: 0, end: 0 };
-
-        AccountsDb::scan_snapshot_stores(&empty_storages(), &mut stats, 0, &bounds, false).unwrap();
     }
 
     #[test]
