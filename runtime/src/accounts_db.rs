@@ -4241,17 +4241,18 @@ impl AccountsDb {
         use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
-    ) -> (Hash, u64) {
+        check_hash: bool,
+    ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
                 Some(&self.thread_pool_clean),
+                check_hash,
             )
         } else {
-            self.calculate_accounts_hash(slot, ancestors, false)
-                .unwrap()
+            self.calculate_accounts_hash(slot, ancestors, check_hash)
         }
     }
 
@@ -4263,12 +4264,15 @@ impl AccountsDb {
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
     ) -> (Hash, u64) {
-        let (hash, total_lamports) =
-            self.calculate_accounts_hash_helper(use_index, slot, ancestors);
+        let check_hash = false;
+        let (hash, total_lamports) = self
+            .calculate_accounts_hash_helper(use_index, slot, ancestors, check_hash)
+            .unwrap(); // unwrap here will never fail since check_hash = false
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
-            let (hash_other, total_lamports_other) =
-                self.calculate_accounts_hash_helper(!use_index, slot, ancestors);
+            let (hash_other, total_lamports_other) = self
+                .calculate_accounts_hash_helper(!use_index, slot, ancestors, check_hash)
+                .unwrap(); // unwrap here will never fail since check_hash = false
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
@@ -4286,12 +4290,15 @@ impl AccountsDb {
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
-    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+        check_hash: bool,
+    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
         let max_plus_1 = std::u8::MAX as usize + 1;
         assert!(bins <= max_plus_1 && bins > 0);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.len();
+        let mismatch_found = AtomicU64::new(0);
+
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
             &storage,
             |loaded_account: LoadedAccount,
@@ -4319,6 +4326,18 @@ impl AccountsDb {
                     slot,
                     pubkey,
                 );
+
+                if check_hash {
+                    let computed_hash = loaded_account.compute_hash(slot, &pubkey);
+                    if computed_hash != source_item.hash {
+                        info!(
+                            "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
+                            computed_hash, source_item.hash, pubkey
+                        );
+                        mismatch_found.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+
                 let max = accum.len();
                 if max == 0 {
                     accum.extend(vec![Vec::new(); bins]);
@@ -4326,9 +4345,19 @@ impl AccountsDb {
                 accum[pubkey_to_bin_index].push(source_item);
             },
         );
+
+        if check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
+            warn!(
+                "{} mismatched account hash(es) found",
+                mismatch_found.load(Ordering::Relaxed)
+            );
+            return Err(BankHashVerificationError::MismatchedAccountHash);
+        }
+
         time.stop();
         stats.scan_time_total_us += time.as_us();
-        result
+
+        Ok(result)
     }
 
     // modeled after get_accounts_delta_hash
@@ -4336,7 +4365,8 @@ impl AccountsDb {
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
         thread_pool: Option<&ThreadPool>,
-    ) -> (Hash, u64) {
+        check_hash: bool,
+    ) -> Result<(Hash, u64), BankHashVerificationError> {
         let scan_and_hash = || {
             let mut stats = HashStats::default();
             // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
@@ -4368,7 +4398,8 @@ impl AccountsDb {
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
-                );
+                    check_hash,
+                )?;
 
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
                     result,
@@ -4379,7 +4410,7 @@ impl AccountsDb {
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
-            final_result
+            Ok(final_result)
         };
         if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
@@ -4397,7 +4428,7 @@ impl AccountsDb {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash(slot, ancestors, true)?;
+            self.calculate_accounts_hash_helper(true, slot, ancestors, true)?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -5574,7 +5605,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257, &bounds, false).unwrap();
     }
     #[test]
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
@@ -5582,7 +5613,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0, &bounds, false).unwrap();
     }
 
     #[test]
@@ -5593,7 +5624,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, false).unwrap();
     }
     #[test]
     #[should_panic(
@@ -5603,7 +5634,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, false).unwrap();
     }
 
     #[test]
@@ -5614,7 +5645,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, false).unwrap();
     }
 
     fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
@@ -5711,7 +5742,9 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
         assert_eq!(result, vec![vec![raw_expected.clone()]]);
 
         let bins = 2;
@@ -5723,7 +5756,9 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
@@ -5740,7 +5775,9 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[1].push(raw_expected[1].clone());
@@ -5757,7 +5794,9 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[127].push(raw_expected[1].clone());
@@ -5779,7 +5818,9 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
         assert_eq!(result[1].len(), bins);
@@ -5801,7 +5842,9 @@ pub mod tests {
                 start: 0,
                 end: bins / 2,
             },
-        );
+            false,
+        )
+        .unwrap();
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
@@ -5816,7 +5859,9 @@ pub mod tests {
                 start: 1,
                 end: bins,
             },
-        );
+            false,
+        )
+        .unwrap();
 
         let mut expected = vec![Vec::new(); bins];
         expected[bins - 1].push(raw_expected[2].clone());
@@ -5834,7 +5879,9 @@ pub mod tests {
                     start: bin,
                     end: bin + 1,
                 },
-            );
+                false,
+            )
+            .unwrap();
             let mut expected = vec![Vec::new(); bins];
             expected[bin].push(raw_expected[bin].clone());
             assert_eq!(result, vec![expected]);
@@ -5851,7 +5898,9 @@ pub mod tests {
                     start: bin,
                     end: bin + 1,
                 },
-            );
+                false,
+            )
+            .unwrap();
             let mut expected = vec![];
             if let Some(index) = bin_locations.iter().position(|&r| r == bin) {
                 expected = vec![Vec::new(); bins];
@@ -5875,7 +5924,9 @@ pub mod tests {
                 start: 127,
                 end: 128,
             },
-        );
+            false,
+        )
+        .unwrap();
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
         let mut expected = vec![Vec::new(); bins];
@@ -5889,7 +5940,8 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
+        let result =
+            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5904,7 +5956,8 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
+        let result =
+            AccountsDb::calculate_accounts_hash_without_index(&storages, None, false).unwrap();
 
         assert_eq!(result, (expected_hash, sum));
     }
@@ -7843,6 +7896,58 @@ pub mod tests {
         assert_eq!(bank_hash.stats.num_lamports_stored, 1);
         assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
         assert_eq!(bank_hash.stats.num_executable_accounts, 1);
+    }
+
+    #[test]
+    fn test_calculate_accounts_hash_check_hash_mismatch() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let key = solana_sdk::pubkey::new_rand();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = AccountSharedData::new(1, some_data_len, &key);
+
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        // put wrong hash value in store so we get a mismatch
+        db.store_accounts_unfrozen(
+            some_slot,
+            &[(&key, &account)],
+            Some(&[&Hash::default()]),
+            false,
+        );
+        db.add_root(some_slot);
+        let check_hash = true;
+        assert!(db
+            .calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash)
+            .is_err());
+        assert!(db
+            .calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash)
+            .is_err());
+    }
+
+    #[test]
+    fn test_calculate_accounts_hash_check_hash() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let key = solana_sdk::pubkey::new_rand();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = AccountSharedData::new(1, some_data_len, &key);
+
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.store_uncached(some_slot, &[(&key, &account)]);
+        db.add_root(some_slot);
+        let check_hash = true;
+        assert_eq!(
+            db.calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash)
+                .unwrap(),
+            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash)
+                .unwrap(),
+        );
     }
 
     #[test]
