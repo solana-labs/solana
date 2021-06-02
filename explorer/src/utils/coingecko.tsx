@@ -133,9 +133,18 @@ export function useCoinGeckoCategoryTokens(
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
-    const fetchSolanaStats = () => {
+    const fetchSolanaStats = (
+      {
+        displayLoading,
+      }: {
+        displayLoading: boolean;
+      } = {
+        displayLoading: true,
+      }
+    ) => {
       setError(null);
-      setLoading(true);
+
+      if (displayLoading) setLoading(true);
       return CoinGeckoClient.coins
         .markets({
           category: categoryId,
@@ -143,18 +152,20 @@ export function useCoinGeckoCategoryTokens(
           sparkline: true,
         })
         .then(({ data }: { data: Array<CoinGeckoToken> }) => {
-          setLoading(false);
+          if (displayLoading) setLoading(false);
           setTokens(data);
         })
         .catch((error: any) => {
-          setLoading(false);
+          if (displayLoading) setLoading(false);
           setError(error);
         });
     };
 
     fetchSolanaStats();
     interval = setInterval(() => {
-      fetchSolanaStats();
+      fetchSolanaStats({
+        displayLoading: false,
+      });
     }, PRICE_REFRESH);
     return () => {
       if (interval) {
@@ -184,13 +195,21 @@ export function useCoinGeckoCategoryStats(
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
-    const fetchCategoryStats = () => {
+    const fetchCategoryStats = (
+      {
+        displayLoading,
+      }: {
+        displayLoading: boolean;
+      } = {
+        displayLoading: true,
+      }
+    ) => {
       setError(null);
-      setLoading(true);
+      if (displayLoading) setLoading(true);
       return fetch(`https://api.coingecko.com/api/v3/coins/categories`)
         .then((response) => response.json())
         .then((data: Array<CoinGeckoCategoryStats>) => {
-          setLoading(false);
+          if (displayLoading) setLoading(false);
 
           // CoinGecko doesn't have an API (yet) that lets us
           // fetch stats for a category so we fetch all of them
@@ -206,14 +225,14 @@ export function useCoinGeckoCategoryStats(
           }
         })
         .catch((error) => {
-          setLoading(false);
+          if (displayLoading) setLoading(false);
           setError(error);
         });
     };
 
     fetchCategoryStats();
     interval = setInterval(() => {
-      fetchCategoryStats();
+      fetchCategoryStats({ displayLoading: false });
     }, PRICE_REFRESH);
     return () => {
       if (interval) {
