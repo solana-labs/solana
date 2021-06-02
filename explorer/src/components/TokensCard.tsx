@@ -41,7 +41,7 @@ export function TokenRow({
       <td
         className={classNames(
           "text-right",
-          token.price_change_percentage_1h_in_currency > 0
+          token.price_change_percentage_24h > 0
             ? "change-positive"
             : "change-negative"
         )}
@@ -51,7 +51,7 @@ export function TokenRow({
       <td
         className={classNames(
           "text-right",
-          token.price_change_percentage_1h_in_currency > 0
+          token.price_change_percentage_7d_in_currency > 0
             ? "change-positive"
             : "change-negative"
         )}
