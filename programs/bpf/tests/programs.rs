@@ -1276,7 +1276,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_external_spend", 521),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_mem", 3143),
+            ("solana_bpf_rust_mem", 3166),
             ("solana_bpf_rust_membuiltins", 4069),
             ("solana_bpf_rust_noop", 495),
             ("solana_bpf_rust_param_passing", 46),
