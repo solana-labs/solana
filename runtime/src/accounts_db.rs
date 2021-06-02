@@ -4356,7 +4356,6 @@ impl AccountsDb {
         (0..chunks)
             .into_par_iter()
             .map(|chunk| {
-                let chunk = chunks - chunk - 1; // we want reverse order in groups so that the latest slots are in group[0]
                 let mut retval = B::default();
                 let start = snapshot_storages.range().start + chunk * MAX_ITEMS_PER_CHUNK;
                 let end = std::cmp::min(start + MAX_ITEMS_PER_CHUNK, snapshot_storages.range().end);
@@ -4452,7 +4451,7 @@ impl AccountsDb {
         let result: Vec<Vec<Vec<CalculateHashIntermediate2>>> = Self::scan_account_storage_no_bank(
             storage,
             |loaded_account: LoadedAccount,
-             accum: &mut Vec<Vec<CalculateHashIntermediate>>,
+             accum: &mut Vec<Vec<CalculateHashIntermediate2>>,
              slot: Slot| {
                 let pubkey = *loaded_account.pubkey();
                 let pubkey_to_bin_index = pubkey.as_ref()[0] as usize * bins / max_plus_1;
@@ -4469,11 +4468,9 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item = CalculateHashIntermediate::new(
-                    version,
+                let source_item = CalculateHashIntermediate2::new(
                     loaded_account.loaded_hash(),
                     balance,
-                    slot,
                     pubkey,
                 );
 
@@ -4495,11 +4492,14 @@ impl AccountsDb {
                 accum[pubkey_to_bin_index].push(source_item);
             },
             |input| {
+                input
+                /*
                 let mut m = Measure::start("");
                 let result = Self::sort_and_simplify(input);
                 m.stop();
                 sort_time.fetch_add(m.as_us(), Ordering::Relaxed);
                 result
+                */
             },
         );
 
@@ -4524,7 +4524,6 @@ impl AccountsDb {
         accum
             .into_par_iter()
             .map(|mut items| {
-                items.par_sort_unstable_by(AccountsHash::compare_two_hash_entries);
                 let mut result = Vec::with_capacity(items.len());
                 for i in 0..items.len() {
                     let item = &items[i];
