@@ -33,7 +33,7 @@ const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u32 = COST_UNIT;
 // Configuring cost model to have larger block limit and smaller account limit
 // to encourage packing parallelizable transactions in block.
 pub const ACCOUNT_MAX_COST: u32 = COST_UNIT * 200_000;
-pub const BLOCK_MAX_COST: u32 = COST_UNIT * 500_000;
+pub const BLOCK_MAX_COST: u32 = COST_UNIT * 5_000_000;
 
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
