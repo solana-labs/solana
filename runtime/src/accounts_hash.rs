@@ -715,14 +715,12 @@ impl AccountsHash {
             if !is_first_slice {
                 if len == 1 {
                     insert_item = true;
-                } else if slice[0].pubkey != slice[1].pubkey {
-                    insert_item = true;
                 }
             }
+            if is_last_slice && len == i + 1 {
+                insert_item = true;
+            }
             'outer: loop {
-                if is_last_slice && len == i + 1 {
-                    insert_item = true;
-                }
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
                 let now = &slice[i];
                 let last = now.pubkey;
@@ -739,12 +737,14 @@ impl AccountsHash {
                         i = k - 1;
                         insert_item = true;
                         continue 'outer;
-                    } else if is_last_slice && k + 1 == len {
-                        insert_item = true;
-                        i = k;
-                        continue 'outer;
                     }
                 }
+
+                if is_last_slice && i + 1 != len {
+                    insert_item = true;
+                    i = len - 1;
+                    continue 'outer;
+                }                
 
                 break; // ran out of items in our slice, so our slice is done
             }
