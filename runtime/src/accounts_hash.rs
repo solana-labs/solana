@@ -673,7 +673,7 @@ impl AccountsHash {
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
                 let mut now = &slice[i];
-                let last = now;
+                let mut last = now;
                 if insert_item {
                     if now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
                         // first entry for this key that starts in our slice
@@ -686,6 +686,7 @@ impl AccountsHash {
                         break;
                     }
                     now = &slice[i];
+                    last = now;
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last.pubkey {
