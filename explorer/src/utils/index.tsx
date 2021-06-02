@@ -116,8 +116,28 @@ export function camelToTitleCase(str: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-export function formatDollarValue(value: number, decimals: number): string {
-  return "$" + Number(value.toFixed(decimals)).toLocaleString("en-US");
+export function formatDollarValue(
+  value: number | string,
+  decimals?: number
+): string {
+  if (value) {
+    let floatValue: number;
+    if (typeof value === "string") {
+      floatValue = parseFloat(value);
+    } else {
+      floatValue = value;
+    }
+    return (
+      "$" +
+      Number(
+        decimals ? floatValue.toFixed(decimals) : floatValue
+      ).toLocaleString("en-US", {
+        maximumSignificantDigits: 4,
+      })
+    );
+  } else {
+    return "";
+  }
 }
 
 export function normalizePercentage(value: number, decimals: number): string {

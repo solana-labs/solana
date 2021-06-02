@@ -3,7 +3,7 @@ import classNames from "classnames";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
 import { Sparkline, Direction } from "./Sparkline";
-import { normalizePercentage } from "utils";
+import { normalizePercentage, formatDollarValue } from "utils";
 import {
   useCoinGeckoCategoryTokens,
   COIN_GECKO_SOLANA_CATEGORY,
@@ -27,9 +27,7 @@ export function TokenRow({
         {token.name}
       </td>
       <td className="text-muted">{token.symbol.toUpperCase()}</td>
-      <td className="text-right">
-        {token.current_price && "$" + token.current_price}
-      </td>
+      <td className="text-right">{formatDollarValue(token.current_price)}</td>
       <td
         className={classNames(
           "text-right",
@@ -60,12 +58,8 @@ export function TokenRow({
       >
         {normalizePercentage(token.price_change_percentage_7d_in_currency, 2)}
       </td>
-      <td className="text-right">
-        {token.total_volume?.toLocaleString("en-US")}
-      </td>
-      <td className="text-right">
-        {token.market_cap?.toLocaleString("en-US")}
-      </td>
+      <td className="text-right">{formatDollarValue(token.total_volume, 0)}</td>
+      <td className="text-right">{formatDollarValue(token.market_cap, 0)}</td>
       <td>
         <Sparkline
           values={token.sparkline_in_7d.price}
