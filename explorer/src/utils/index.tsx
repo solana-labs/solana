@@ -116,32 +116,22 @@ export function camelToTitleCase(str: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-export function formatDollarValue(
-  value: number | string,
-  decimals?: number
-): string {
-  if (value) {
-    let floatValue: number;
-    if (typeof value === "string") {
-      floatValue = parseFloat(value);
-    } else {
-      floatValue = value;
-    }
-    return (
-      "$" +
-      Number(
-        decimals ? floatValue.toFixed(decimals) : floatValue
-      ).toLocaleString("en-US", {
+export function formatDollarValue(value: number): string {
+  return value
+    ? new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
         maximumSignificantDigits: 4,
-      })
-    );
-  } else {
-    return "";
-  }
+      }).format(value)
+    : "";
 }
 
-export function normalizePercentage(value: number, decimals: number): string {
-  return value ? value.toFixed(decimals) + "%" : "";
+export function normalizePercentage(value: number): string {
+  return value
+    ? new Intl.NumberFormat("en-US", {
+        style: "percent",
+      }).format(value)
+    : "";
 }
 
 export const abbreviatedNumber = (value: number, fixed = 1) => {

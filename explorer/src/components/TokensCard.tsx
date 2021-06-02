@@ -36,7 +36,7 @@ export function TokenRow({
             : "change-negative"
         )}
       >
-        {normalizePercentage(token.price_change_percentage_1h_in_currency, 2)}
+        {normalizePercentage(token.price_change_percentage_1h_in_currency)}
       </td>
       <td
         className={classNames(
@@ -46,7 +46,7 @@ export function TokenRow({
             : "change-negative"
         )}
       >
-        {normalizePercentage(token.price_change_percentage_24h, 2)}
+        {normalizePercentage(token.price_change_percentage_24h)}
       </td>
       <td
         className={classNames(
@@ -56,10 +56,10 @@ export function TokenRow({
             : "change-negative"
         )}
       >
-        {normalizePercentage(token.price_change_percentage_7d_in_currency, 2)}
+        {normalizePercentage(token.price_change_percentage_7d_in_currency)}
       </td>
-      <td className="text-right">{formatDollarValue(token.total_volume, 0)}</td>
-      <td className="text-right">{formatDollarValue(token.market_cap, 0)}</td>
+      <td className="text-right">{formatDollarValue(token.total_volume)}</td>
+      <td className="text-right">{formatDollarValue(token.market_cap)}</td>
       <td>
         <Sparkline
           values={token.sparkline_in_7d.price}
