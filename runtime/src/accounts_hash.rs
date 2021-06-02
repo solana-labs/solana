@@ -732,8 +732,8 @@ impl AccountsHash {
                         // first entry for this key that starts in our slice
                         result.push(now.hash);
                         sum += now.lamports as u128;
-                        insert_item = false;
                     }
+                    insert_item = false;
                     if i + 1 == len {
                         break;
                     }
