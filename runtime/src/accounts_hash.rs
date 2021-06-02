@@ -676,26 +676,23 @@ impl AccountsHash {
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
                 let now = &slice[i];
-                let last = now.pubkey;
+                let last = now;
                 if !look_for_first_key && now.lamports != ZERO_RAW_LAMPORTS_SENTINEL {
                     // first entry for this key that starts in our slice
                     result.push(now.hash);
                     sum += now.lamports as u128;
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
-                    if now.pubkey != last {
+                    if now.pubkey != last.pubkey {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
                     } else {
-                        let prev = &slice[k - 1];
-                        assert!(
-                            !(prev.slot == now.slot
-                                && prev.version == now.version
-                                && (prev.hash != now.hash || prev.lamports != now.lamports)),
-                            "Conflicting store data. Pubkey: {}, Slot: {}, Version: {}, Hashes: {}, {}, Lamports: {}, {}", now.pubkey, now.slot, now.version, prev.hash, now.hash, prev.lamports, now.lamports
-                        );
+                        assert!(now.slot <= last.slot);
+                        if now.slot == last.slot {
+                            assert!(now.version < last.version);
                     }
+                }
                 }
 
                 break; // ran out of items in our slice, so our slice is done
