@@ -3501,7 +3501,7 @@ impl AccountsDb {
                         // Mark that we're about to delete this slot now
                         currently_contended_slots.insert(*flush_slot);
                     }
-                    !is_being_flushed
+                    is_being_flushed
                 });
             }
         }
@@ -10730,6 +10730,24 @@ pub mod tests {
                 .unwrap()
         };
 
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let t_spurious_signal = {
+            let db = db.clone();
+            let exit = exit.clone();
+            std::thread::Builder::new()
+                .name("account-cache-flush".to_string())
+                .spawn(move || loop {
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    // Simulate spurious wake-up that can happen, but is too rare to
+                    // otherwise depend on in tests.
+                    db.remove_unrooted_slots_synchronization.signal.notify_all();
+                })
+                .unwrap()
+        };
+
         // Run multiple trials. Has the added benefit of rewriting the same slots after we've
         // dumped them in previous trials.
         for _ in 0..num_trials {
@@ -10800,8 +10818,10 @@ pub mod tests {
             }
         }
 
+        exit.store(true, Ordering::Relaxed);
         drop(new_trial_start_sender);
         t_flush_cache.join().unwrap();
+        t_spurious_signal.join().unwrap();
     }
 
     #[test]
