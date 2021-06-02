@@ -757,6 +757,7 @@ fn test_program_bpf_invoke_sanity() {
     const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
     const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
     const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
+    const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -874,10 +875,18 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
                 solana_sdk::system_program::id(),
                 solana_sdk::system_program::id(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
@@ -1002,6 +1011,18 @@ fn test_program_bpf_invoke_sanity() {
             TEST_WRITABLE_DEESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified),
             &[invoked_program_id.clone()],
+        );
+
+        do_invoke_failure_test_local(
+            TEST_NESTED_INVOKE_TOO_DEEP,
+            TransactionError::InstructionError(0, InstructionError::CallDepth),
+            &[
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+            ],
         );
 
         // Check resulting state

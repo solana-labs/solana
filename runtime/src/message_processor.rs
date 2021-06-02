@@ -330,11 +330,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
-        let frame_index = self.invoke_stack.iter().position(|frame| frame.key == *key);
-        if frame_index != None && frame_index != Some(self.invoke_stack.len().saturating_sub(1)) {
+
+        let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
+        let is_last = if let Some(last_frame) = self.invoke_stack.last() {
+            last_frame.key == *key
+        } else {
+            false
+        };
+        if contains && !is_last {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
+
         // Alias the keys and account references in the provided keyed_accounts
         // with the ones already existing in self, so that the lifetime 'a matches.
         fn transmute_lifetime<'a, 'b, T: Sized>(value: &'a T) -> &'b T {
