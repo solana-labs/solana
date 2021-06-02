@@ -681,14 +681,15 @@ impl AccountsHash {
                         sum += now.lamports as u128;
                     }
                     insert_item = false;
-                    if i + 1 == len {
+                    i += 1;
+                    if i == len {
                         break;
                     }
-                    i += 1;
                     now = &slice[i];
                 }
                 for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last.pubkey {
+                        assert!(now.pubkey > last.pubkey);
                         i = k - 1;
                         insert_item = true;
                         continue 'outer;
