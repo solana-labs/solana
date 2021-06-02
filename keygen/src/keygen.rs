@@ -223,8 +223,7 @@ fn grind_validator_matches_regex(v: String) -> Result<(), String> {
     }
     let args: Vec<&str> = v.split(':').collect();
 
-    Regex::new(&args[0])
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
+    Regex::new(&args[0]).map_err(|err| format!("{}: {:?}", args[0], err))?;
 
     let count = args[1].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
@@ -297,7 +296,7 @@ fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
                     msg[1],
                     regex.as_str(),
                 );
-            },
+            }
             None => {
                 if gm.count.load(Ordering::Relaxed) > 1 {
                     msg.push("start".to_string());
@@ -315,7 +314,7 @@ fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
                     msg[2],
                     gm.ends
                 );
-            },
+            }
         }
     }
 }
@@ -706,7 +705,9 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
             let matches_regex_args = if matches.is_present("matches_regex") {
-                values_t_or_exit!(matches, "matches_regex", String).into_iter().collect()
+                values_t_or_exit!(matches, "matches_regex", String)
+                    .into_iter()
+                    .collect()
             } else {
                 HashSet::new()
             };
