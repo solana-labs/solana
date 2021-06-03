@@ -7,8 +7,6 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
-    rpc::JsonRpcConfig,
-    rpc_service::JsonRpcService,
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
@@ -47,7 +45,9 @@ use solana_rpc::{
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
+    rpc::JsonRpcConfig,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
+    rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
     transaction_status_service::TransactionStatusService,
 };

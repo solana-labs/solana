@@ -1,6 +1,12 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::rpc_health::*;
+use crate::{
+    max_slots::MaxSlots,
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+    parsed_token_accounts::*,
+    rpc_health::*,
+    send_transaction_service::{SendTransactionService, TransactionInfo},
+};
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
@@ -33,12 +39,6 @@ use solana_ledger::{
 };
 use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_rpc::{
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-    parsed_token_accounts::*,
-    send_transaction_service::{SendTransactionService, TransactionInfo},
-};
 use solana_runtime::{
     accounts::AccountAddressFilter,
     accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
@@ -60,7 +60,7 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     sanitize::Sanitize,
-    signature::Signature,
+    signature::{Keypair, Signature, Signer},
     stake_history::StakeHistory,
     system_instruction,
     sysvar::stake_history,
@@ -3778,10 +3778,91 @@ pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>>
     Arc::new(RwLock::new(validator_exit))
 }
 
+// Used for tests
+pub fn create_test_transactions_and_populate_blockstore(
+    keypairs: Vec<&Keypair>,
+    previous_slot: Slot,
+    bank: Arc<Bank>,
+    blockstore: Arc<Blockstore>,
+    max_complete_transaction_status_slot: Arc<AtomicU64>,
+) -> Vec<Signature> {
+    let mint_keypair = keypairs[0];
+    let keypair1 = keypairs[1];
+    let keypair2 = keypairs[2];
+    let keypair3 = keypairs[3];
+    let slot = bank.slot();
+    let blockhash = bank.confirmed_last_blockhash().0;
+
+    // Generate transactions for processing
+    // Successful transaction
+    let success_tx =
+        solana_sdk::system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+    let success_signature = success_tx.signatures[0];
+    let entry_1 = solana_ledger::entry::next_entry(&blockhash, 1, vec![success_tx]);
+    // Failed transaction, InstructionError
+    let ix_error_tx =
+        solana_sdk::system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+    let ix_error_signature = ix_error_tx.signatures[0];
+    let entry_2 = solana_ledger::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
+    // Failed transaction
+    let fail_tx = solana_sdk::system_transaction::transfer(
+        &mint_keypair,
+        &keypair2.pubkey(),
+        2,
+        Hash::default(),
+    );
+    let entry_3 = solana_ledger::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
+    let mut entries = vec![entry_1, entry_2, entry_3];
+
+    let shreds = solana_ledger::blockstore::entries_to_test_shreds(
+        entries.clone(),
+        slot,
+        previous_slot,
+        true,
+        0,
+    );
+    blockstore.insert_shreds(shreds, None, false).unwrap();
+    blockstore.set_roots(&[slot]).unwrap();
+
+    let (transaction_status_sender, transaction_status_receiver) = crossbeam_channel::unbounded();
+    let (replay_vote_sender, _replay_vote_receiver) = crossbeam_channel::unbounded();
+    let transaction_status_service =
+        crate::transaction_status_service::TransactionStatusService::new(
+            transaction_status_receiver,
+            max_complete_transaction_status_slot,
+            blockstore,
+            &Arc::new(AtomicBool::new(false)),
+        );
+
+    // Check that process_entries successfully writes can_commit transactions statuses, and
+    // that they are matched properly by get_rooted_block
+    let _result = solana_ledger::blockstore_processor::process_entries(
+        &bank,
+        &mut entries,
+        true,
+        Some(
+            &solana_ledger::blockstore_processor::TransactionStatusSender {
+                sender: transaction_status_sender,
+                enable_cpi_and_log_storage: false,
+            },
+        ),
+        Some(&replay_vote_sender),
+    );
+
+    transaction_status_service.join().unwrap();
+
+    vec![success_signature, ix_error_signature]
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::{rpc_full::*, rpc_minimal::*, *};
-    use crate::replay_stage::tests::create_test_transactions_and_populate_blockstore;
+    use crate::{
+        optimistically_confirmed_bank_tracker::{
+            BankNotification, OptimisticallyConfirmedBankTracker,
+        },
+        rpc_subscriptions::RpcSubscriptions,
+    };
     use bincode::deserialize;
     use jsonrpc_core::{futures, ErrorCode, MetaIoHandler, Output, Response, Value};
     use jsonrpc_core_client::transports::local;
@@ -3791,12 +3872,6 @@ pub mod tests {
         blockstore_meta::PerfSample,
         blockstore_processor::fill_blockstore_slot_with_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    };
-    use solana_rpc::{
-        optimistically_confirmed_bank_tracker::{
-            BankNotification, OptimisticallyConfirmedBankTracker,
-        },
-        rpc_subscriptions::RpcSubscriptions,
     };
     use solana_runtime::{
         accounts_background_service::AbsRequestSender, commitment::BlockCommitment,

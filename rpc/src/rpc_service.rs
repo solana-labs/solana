@@ -1,8 +1,11 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
+    max_slots::MaxSlots,
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
+    send_transaction_service::{LeaderInfo, SendTransactionService},
 };
 use jsonrpc_core::{futures::prelude::*, MetaIoHandler};
 use jsonrpc_http_server::{
@@ -18,11 +21,6 @@ use solana_ledger::{
 };
 use solana_metrics::inc_new_counter_info;
 use solana_poh::poh_recorder::PohRecorder;
-use solana_rpc::{
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-    send_transaction_service::{LeaderInfo, SendTransactionService},
-};
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,

@@ -39,9 +39,6 @@ pub mod request_response;
 mod result;
 pub mod retransmit_stage;
 pub mod rewards_recorder_service;
-pub mod rpc;
-pub mod rpc_health;
-pub mod rpc_service;
 pub mod sample_performance_service;
 pub mod serve_repair;
 pub mod serve_repair_service;
@@ -65,10 +62,6 @@ extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
-extern crate serde_json;
 
 #[macro_use]
 extern crate solana_metrics;
