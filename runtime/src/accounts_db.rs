@@ -4573,8 +4573,21 @@ impl AccountsDb {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash_helper(true, slot, ancestors, true)?;
+        let use_index = false;
+        let check_hash = false;
+        let (hash, total_lamports_found) =
+            self.calculate_accounts_hash_helper(use_index, slot, ancestors, check_hash)?;
+        let debug_verify = true; // temporary debug code
+        if debug_verify {
+            // calculate the other way (store or non-store) and verify results match.
+            let (hash_other, total_lamports_other) =
+                self.calculate_accounts_hash_helper(!use_index, slot, ancestors, check_hash)?;
+
+            let success = hash == hash_other && total_lamports_found == total_lamports_other;
+            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports_found, total_lamports_other, total_lamports, use_index, slot);
+        }
+
+        let (calculated_hash, calculated_lamports) = (hash, total_lamports_found);
 
         if calculated_lamports != total_lamports {
             warn!(
