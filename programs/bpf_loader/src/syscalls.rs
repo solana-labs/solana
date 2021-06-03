@@ -19,9 +19,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, memory_ops_syscalls, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc, ecrecover_syscall_enabled,
+        cpi_data_cost, demote_sysvar_write_locks, ecrecover_syscall_enabled,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -1373,23 +1373,11 @@ impl<'a> SyscallObject<BpfError> for SyscallEcrecover<'a> {
             result
         );
         let signature = question_mark!(
-            translate_slice::<u8>(
-                memory_mapping,
-                signature_addr,
-                64u64,
-                self.loader_id,
-                true,
-            ),
+            translate_slice::<u8>(memory_mapping, signature_addr, 64u64, self.loader_id, true,),
             result
         );
         let ecrecover_result = question_mark!(
-            translate_slice_mut::<u8>(
-                memory_mapping,
-                result_addr,
-                64u64,
-                self.loader_id,
-                true,
-            ),
+            translate_slice_mut::<u8>(memory_mapping, result_addr, 64u64, self.loader_id, true,),
             result
         );
 
