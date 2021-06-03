@@ -714,6 +714,7 @@ function createRpcClient(
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
   fetchMiddleware?: FetchMiddleware,
+  disableRetryOnRateLimit?: boolean,
 ): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
@@ -762,6 +763,9 @@ function createRpcClient(
         }
 
         if (res.status !== 429 /* Too many requests */) {
+          break;
+        }
+        if (disableRetryOnRateLimit === true) {
           break;
         }
         too_many_requests_retries -= 1;
@@ -1924,6 +1928,8 @@ export type ConnectionConfig = {
   httpHeaders?: HttpHeaders;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
+  /** Optional Disable retring calls when server responds with HTTP 429 (Too Many Requests) */
+  disableRetryOnRateLimit?: boolean;
 };
 
 /**
@@ -2010,6 +2016,7 @@ export class Connection {
     let wsEndpoint;
     let httpHeaders;
     let fetchMiddleware;
+    let disableRetryOnRateLimit;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
@@ -2017,6 +2024,7 @@ export class Connection {
       wsEndpoint = commitmentOrConfig.wsEndpoint;
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
+      disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
 
     this._rpcEndpoint = endpoint;
@@ -2027,6 +2035,7 @@ export class Connection {
       useHttps,
       httpHeaders,
       fetchMiddleware,
+      disableRetryOnRateLimit,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
