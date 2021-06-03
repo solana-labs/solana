@@ -9,7 +9,9 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{instructions_sysvar_enabled, updated_verify_policy, FeatureSet},
+    feature_set::{
+        instructions_sysvar_enabled, neon_evm_compute_budget, updated_verify_policy, FeatureSet,
+    },
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
@@ -1151,6 +1153,16 @@ impl MessageProcessor {
         }
 
         let program_id = instruction.program_id(&message.account_keys);
+
+        let mut bpf_compute_budget = bpf_compute_budget;
+        if feature_set.is_active(&neon_evm_compute_budget::id())
+            && *program_id == crate::neon_evm_program::id()
+        {
+            // Bump the compute budget for neon_evm
+            bpf_compute_budget.max_units = 500_000;
+            bpf_compute_budget.heap_size = Some(256 * 1024);
+        }
+
         let mut invoke_context = ThisInvokeContext::new(
             program_id,
             rent_collector.rent,
