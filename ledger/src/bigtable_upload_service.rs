@@ -1,11 +1,13 @@
-use crate::{bigtable_upload, blockstore::Blockstore};
-use solana_runtime::commitment::BlockCommitmentCache;
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
+use {
+    crate::{bigtable_upload, blockstore::Blockstore},
+    solana_runtime::commitment::BlockCommitmentCache,
+    std::{
+        sync::atomic::{AtomicBool, Ordering},
+        sync::{Arc, RwLock},
+        thread::{self, Builder, JoinHandle},
+    },
+    tokio::runtime::Runtime,
 };
-use tokio::runtime::Runtime;
 
 // Delay uploading the largest confirmed root for this many slots.  This is done in an attempt to
 // ensure that the `CacheBlockMetaService` has had enough time to add the block time for the root
