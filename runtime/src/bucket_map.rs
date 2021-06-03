@@ -99,19 +99,22 @@ impl BucketMap {
         pubkey: &Pubkey,
         updatefn: fn(Option<&SlotSlice>) -> &SlotSlice,
     ) -> Result<(), BucketMapError> {
-        let ix = self.bucket_ix(pubkey);
         self.check_lock(pubkey);
         let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
-        spinlock.lock();
-        let current = self.masks[ix].bucket.read(pubkey);
-        if current.is_none() {
-            self.new_key_locked(pubkey);
-        }
-        let new = updatefn(current);
+
         let mut rv = Ok(());
+        spinlock.lock();
         loop {
-            rv = self.masks[ix].bucket.read().unrwap().try_write(pubkey, new);
+            let rmasks = self.masks.read().unwrap();
+            let ix = self.bucket_ix(pubkey, &rmasks);
+            let current = rmasks[ix].bucket.read(pubkey);
+            if current.is_none() {
+                self.new_key_locked(pubkey);
+            }
+            let new = updatefn(current);
+            rv = rmasks[ix].bucket.read().unrwap().try_write(pubkey, new);
             if let Err(BucketMapError::DataNoSpace(ix)) = rv {
+                drop(rmasks)
                 self.masks[ix].bucket.write().unwrap().grow(new.len());
                 continue;
             }
@@ -129,9 +132,10 @@ impl BucketMap {
             key_locks.insert(pubkey, Arc::new(SpinLock::new()));
         }
     }
-    fn bucket_ix(&self, pubkey: &Pubkey) -> u64 {
+
+    fn bucket_ix(&self, pubkey: &Pubkey, &[Arc<RwLock<Bucket>>>]) -> u64 {
         let location = read_be_u64(pubkey.as_ref());
-        let bits = (self.masks.len() as f64).log2() as u64;
+        let bits = (masks.len() as f64).log2() as u64;
         location >> (64 - bits)
     }
 }
