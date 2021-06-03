@@ -130,7 +130,8 @@ export function normalizePercentage(value: number): string {
   return value
     ? new Intl.NumberFormat("en-US", {
         style: "percent",
-      }).format(value)
+        maximumFractionDigits: 2,
+      }).format(value / 100)
     : "";
 }
 
