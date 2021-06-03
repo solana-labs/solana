@@ -4357,11 +4357,63 @@ impl AccountsDb {
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
                     if let Some(sub_storages) = sub_storages {
-                        for storage in sub_storages {
-                            let accounts = storage.accounts.accounts(0);
-                            accounts.into_iter().for_each(|stored_account| {
-                                scan_func(LoadedAccount::Stored(stored_account), &mut retval, slot)
-                            });
+                        let mut len = sub_storages.len();
+                        if len == 1 {
+                            for storage in sub_storages {
+                                let accounts = storage.accounts.accounts(0);
+                                accounts.into_iter().for_each(|stored_account| {
+                                    scan_func(
+                                        LoadedAccount::Stored(stored_account),
+                                        &mut retval,
+                                        slot,
+                                    )
+                                });
+                            }
+                        } else {
+                            // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
+                            let mut progress = Vec::with_capacity(len);
+                            let mut current = Vec::with_capacity(len);
+                            for storage in sub_storages {
+                                let accounts = storage.accounts.accounts(0);
+                                let mut iterator: std::vec::IntoIter<StoredAccountMeta<'_>> =
+                                    accounts.into_iter();
+                                if let Some(item) = iterator.next().map(|stored_account| {
+                                    (stored_account.meta.write_version, Some(stored_account))
+                                }) {
+                                    current.push(item);
+                                    progress.push(iterator);
+                                }
+                            }
+                            while !progress.is_empty() {
+                                let mut min = current[0].0;
+                                let mut min_index = 0;
+                                for (i, (item, _)) in current.iter().enumerate().take(len).skip(1) {
+                                    if item < &min {
+                                        min_index = i;
+                                        min = *item;
+                                    }
+                                }
+                                let mut account = (0, None);
+                                std::mem::swap(&mut account, &mut current[min_index]);
+                                scan_func(
+                                    LoadedAccount::Stored(account.1.unwrap()),
+                                    &mut retval,
+                                    slot,
+                                );
+                                let next = progress[min_index].next().map(|stored_account| {
+                                    (stored_account.meta.write_version, Some(stored_account))
+                                });
+                                match next {
+                                    Some(item) => {
+                                        current[min_index] = item;
+                                    }
+                                    None => {
+                                        current.remove(min_index);
+                                        progress.remove(min_index);
+                                        len -= 1;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -4456,7 +4508,6 @@ impl AccountsDb {
                     return;
                 }
 
-                let version = loaded_account.write_version();
                 let raw_lamports = loaded_account.lamports();
                 let zero_raw_lamports = raw_lamports == 0;
                 let balance = if zero_raw_lamports {
@@ -4465,11 +4516,9 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item = CalculateHashIntermediate::new(
-                    version,
+                let source_item = CalculateHashIntermediate::new_without_slot(
                     loaded_account.loaded_hash(),
                     balance,
-                    slot,
                     *pubkey,
                 );
 
