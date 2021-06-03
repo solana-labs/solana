@@ -11,6 +11,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
+use std::collections::BTreeSet;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -98,6 +99,15 @@ pub fn process_instruction(
         } else if config_keyed_account.signer_key().is_none() {
             ic_msg!(invoke_context, "account[0].signer_key().is_none()");
             return Err(InstructionError::MissingRequiredSignature);
+        }
+    }
+
+    if invoke_context.is_feature_active(&feature_set::dedupe_config_program_signers::id()) {
+        let total_new_keys = key_list.keys.len();
+        let unique_new_keys = key_list.keys.into_iter().collect::<BTreeSet<_>>();
+        if unique_new_keys.len() != total_new_keys {
+            ic_msg!(invoke_context, "new config contains duplicate keys");
+            return Err(InstructionError::InvalidArgument);
         }
     }
 
@@ -490,6 +500,96 @@ mod tests {
                 &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn test_config_initialize_contains_duplicates_fails() {
+        solana_logger::setup();
+        let config_address = Pubkey::new_unique();
+        let signer0_pubkey = Pubkey::new_unique();
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let keys = vec![
+            (config_address, false),
+            (signer0_pubkey, true),
+            (signer0_pubkey, true),
+        ];
+        let (config_keypair, config_account) = create_config_account(keys.clone());
+        let config_pubkey = config_keypair.pubkey();
+        let my_config = MyConfig::new(42);
+
+        // Attempt initialization with duplicate signer inputs
+        let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
+        let accounts = vec![
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+        ];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        assert_eq!(
+            process_instruction(
+                &id(),
+                &instruction.data,
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_config_update_contains_duplicates_fails() {
+        solana_logger::setup();
+        let config_address = Pubkey::new_unique();
+        let signer0_pubkey = Pubkey::new_unique();
+        let signer1_pubkey = Pubkey::new_unique();
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let signer1_account = RefCell::new(AccountSharedData::default());
+        let keys = vec![
+            (config_address, false),
+            (signer0_pubkey, true),
+            (signer1_pubkey, true),
+        ];
+        let (config_keypair, config_account) = create_config_account(keys.clone());
+        let config_pubkey = config_keypair.pubkey();
+        let my_config = MyConfig::new(42);
+
+        let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
+        let accounts = vec![
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer1_pubkey, &signer1_account),
+        ];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        assert_eq!(
+            process_instruction(
+                &id(),
+                &instruction.data,
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        // Attempt update with duplicate signer inputs
+        let new_config = MyConfig::new(84);
+        let dupe_keys = vec![
+            (config_address, false),
+            (signer0_pubkey, true),
+            (signer0_pubkey, true),
+        ];
+        let instruction = config_instruction::store(&config_pubkey, false, dupe_keys, &new_config);
+        let accounts = vec![
+            (false, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+        ];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        assert_eq!(
+            process_instruction(
+                &id(),
+                &instruction.data,
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Err(InstructionError::InvalidArgument),
         );
     }
 
