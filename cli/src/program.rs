@@ -153,7 +153,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             pubkey!(Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades \
+                                "Executable program's address, must be a keypair for initial deploys, can be a pubkey for upgrades \
                                 [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
@@ -889,6 +889,11 @@ fn process_program_deploy(
     )?;
 
     let result = if do_deploy {
+        if program_signer.is_none() {
+            return Err(
+                "Initial deployments require a keypair be provided for the program id".into(),
+            );
+        }
         do_process_program_write_and_deploy(
             rpc_client.clone(),
             config,
