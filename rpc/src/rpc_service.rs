@@ -58,6 +58,7 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
+    incremental_snapshot_archive_path_regex: Regex,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
 }
@@ -72,10 +73,14 @@ impl RpcRequestMiddleware {
         Self {
             ledger_path,
             snapshot_archive_path_regex: Regex::new(
-                r"^/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
+                snapshot_utils::SNAPSHOT_ARCHIVE_FILENAME_REGEX,
             )
             .unwrap(),
             snapshot_config,
+            incremental_snapshot_archive_path_regex: Regex::new(
+                snapshot_utils::INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
+            )
+            .unwrap(),
             bank_forks,
             health,
         }
@@ -110,6 +115,7 @@ impl RpcRequestMiddleware {
             _ => {
                 if self.snapshot_config.is_some() {
                     self.snapshot_archive_path_regex.is_match(path)
+                        || self.incremental_snapshot_archive_path_regex.is_match(path)
                 } else {
                     false
                 }
@@ -610,22 +616,42 @@ mod tests {
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
         assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
         ));
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-200-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"
+        ));
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
 
         assert!(!rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
 
         assert!(!rrm_with_snapshot_config.is_file_get_path("../../../test/snapshot-123-xxx.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
         assert!(!rrm.is_file_get_path(".."));

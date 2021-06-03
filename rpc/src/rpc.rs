@@ -48,7 +48,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
-        snapshot_utils::get_highest_snapshot_archive_path,
+        snapshot_utils::{get_highest_snapshot_archive_path, get_highest_incremental_snapshot_archive_path},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -2134,6 +2134,13 @@ pub mod rpc_minimal {
         #[rpc(meta, name = "getSnapshotSlot")]
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
+        #[rpc(meta, name = "getIncrementalSnapshotSlot")]
+        fn get_incremental_snapshot_slot(
+            &self,
+            meta: Self::Metadata,
+            full_snapshot_slot: Slot,
+        ) -> Result<Slot>;
+
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(
             &self,
@@ -2235,6 +2242,22 @@ pub mod rpc_minimal {
                 .and_then(|snapshot_config| {
                     get_highest_snapshot_archive_path(&snapshot_config.snapshot_package_output_path)
                         .map(|(_, (slot, _, _))| slot)
+                })
+                .ok_or_else(|| RpcCustomError::NoSnapshot.into())
+        }
+
+        fn get_incremental_snapshot_slot(
+            &self,
+            meta: Self::Metadata,
+            full_snapshot_slot: Slot,
+        ) -> Result<Slot> {
+            meta.snapshot_config
+                .and_then(|snapshot_config| {
+                    get_highest_incremental_snapshot_archive_path(
+                        &snapshot_config.snapshot_package_output_path,
+                        full_snapshot_slot,
+                    )
+                    .map(|(_, (slot, _, _))| slot)
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }

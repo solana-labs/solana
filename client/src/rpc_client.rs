@@ -351,6 +351,13 @@ impl RpcClient {
         self.send(RpcRequest::GetSnapshotSlot, Value::Null)
     }
 
+    pub fn get_incremental_snapshot_slot(&self, full_snapshot_slot: Slot) -> ClientResult<Slot> {
+        self.send(
+            RpcRequest::GetIncrementalSnapshotSlot,
+            json!([full_snapshot_slot]),
+        )
+    }
+
     pub fn get_signature_status(
         &self,
         signature: &Signature,
