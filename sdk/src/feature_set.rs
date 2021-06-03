@@ -151,6 +151,10 @@ pub mod blake3_syscall_enabled {
     solana_sdk::declare_id!("HTW2pSyErTj4BV6KBM9NZ9VBUJVxt7sacNWcf76wtzb3");
 }
 
+pub mod dedupe_config_program_signers {
+    solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -189,6 +193,7 @@ lazy_static! {
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
+        (dedupe_config_program_signers::id(), "dedupe config program signers"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
