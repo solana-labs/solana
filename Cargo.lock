@@ -3836,7 +3836,18 @@ checksum = "fef5f7c7434b2f2c598adc6f9494648a1e41274a75c0ba4056f680ae0c117fd6"
 dependencies = [
  "lazy_static",
  "parking_lot 0.10.2",
- "serial_test_derive",
+ "serial_test_derive 0.4.0",
+]
+
+[[package]]
+name = "serial_test"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
+dependencies = [
+ "lazy_static",
+ "parking_lot 0.11.0",
+ "serial_test_derive 0.5.1",
 ]
 
 [[package]]
@@ -3844,6 +3855,17 @@ name = "serial_test_derive"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d08338d8024b227c62bd68a12c7c9883f5c66780abaef15c550dc56f46ee6515"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
@@ -4176,7 +4198,7 @@ dependencies = [
  "rayon",
  "serde_json",
  "serde_yaml",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-clap-utils",
  "solana-client",
  "solana-core",
@@ -4441,7 +4463,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-account-decoder",
  "solana-banks-server",
  "solana-clap-utils",
@@ -4701,7 +4723,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-clap-utils",
  "solana-client",
  "solana-frozen-abi 1.8.0",
@@ -4875,7 +4897,7 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-client",
  "solana-config-program",
  "solana-core",
@@ -4968,7 +4990,7 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "reqwest",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-sdk",
 ]
 
@@ -5206,7 +5228,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "serial_test",
+ "serial_test 0.4.0",
  "solana-account-decoder",
  "solana-client",
  "solana-ledger",
@@ -5388,7 +5410,7 @@ dependencies = [
  "log 0.4.11",
  "serde",
  "serde_yaml",
- "serial_test",
+ "serial_test 0.5.1",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
