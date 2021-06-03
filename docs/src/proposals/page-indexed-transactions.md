@@ -113,6 +113,11 @@ pub struct AccountIndex {
 - Most indexes will be compact and use 2 bytes + index address
 - Cost of each additional index account is ~2 bytes
 
+#### Cost changes
+
+Accessing an index account in a transaction should incur an extra cost due to
+the extra work validators need to do to load and cache index accounts.
+
 #### RPC changes
 
 The RPC API should support returning both compressed transactions for
