@@ -50,7 +50,7 @@ ed25519-dalek = { version = "=1.0.1", optional = true }
 ed25519-dalek-bip32 = { version = "0.1.1", optional = true }
 generic-array = { version = "0.14.3", default-features = false, features = ["serde", "more_lengths"], optional = true }
 hex = "0.4.2"
-hmac = "0.10.1"
+hmac = "0.11.0"
 itertools =  "0.9.0"
 lazy_static = "1.4.0"
 libsecp256k1 = { version = "0.3.5", optional = true }
