@@ -465,9 +465,9 @@ fn retransmit(
 
         let mut retransmit_time = Measure::start("retransmit_to");
         if !packet.meta.forward {
-            ClusterInfo::retransmit_to(&neighbors, packet, sock, true)?;
+            ClusterInfo::retransmit_to(&neighbors, packet, sock, true);
         }
-        ClusterInfo::retransmit_to(&children, packet, sock, packet.meta.forward)?;
+        ClusterInfo::retransmit_to(&children, packet, sock, packet.meta.forward);
         retransmit_time.stop();
         retransmit_total += retransmit_time.as_us();
     }
