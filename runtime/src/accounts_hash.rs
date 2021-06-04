@@ -23,6 +23,7 @@ pub struct HashStats {
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
+    pub hash_time_pre_us: u64,
     pub sort_time_total_us: u64,
     pub flatten_time_total_us: u64,
     pub hash_total: usize,
@@ -45,6 +46,7 @@ impl HashStats {
             ("accounts_scan", self.scan_time_total_us, i64),
             ("eliminate_zeros", self.zeros_time_total_us, i64),
             ("hash", self.hash_time_total_us, i64),
+            ("hash_time_pre_us", self.hash_time_pre_us, i64),
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("flatten", self.flatten_time_total_us, i64),
@@ -765,6 +767,7 @@ impl AccountsHash {
             .1;
             hash_time.stop();
             stats.hash_time_total_us += hash_time.as_us();
+            stats.hash_time_pre_us += hash_time.as_us();
             next_pass.reduced_hashes.push(partial_hashes);
         }
 
