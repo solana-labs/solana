@@ -760,7 +760,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &invalid_stake_state_pubkey(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -783,7 +783,7 @@ mod tests {
                     &invalid_stake_state_pubkey(),
                     &Pubkey::default(),
                     "seed"
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -846,7 +846,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &Pubkey::default(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
@@ -857,7 +857,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &spoofed_stake_state_pubkey(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::IncorrectProgramId),
         );
@@ -890,7 +890,7 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     "seed"
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
