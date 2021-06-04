@@ -276,42 +276,6 @@ impl Rocks {
         let oldest_slot = OldestSlot::default();
 
         // Column family names
-<<<<<<< HEAD
-        let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
-        let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(&access_type));
-        let duplicate_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options(&access_type));
-        let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(&access_type));
-        let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(&access_type));
-        let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(&access_type));
-        let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(&access_type));
-        let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(&access_type));
-        let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(&access_type));
-        let transaction_status_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options(&access_type));
-        let address_signatures_cf_descriptor =
-            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options(&access_type));
-        let transaction_status_index_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options(&access_type));
-        let rewards_cf_descriptor =
-            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options(&access_type));
-        let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
-        let perf_samples_cf_descriptor =
-            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
-        let block_height_cf_descriptor =
-            ColumnFamilyDescriptor::new(BlockHeight::NAME, get_cf_options(&access_type));
-        // Don't forget to add to both run_purge_with_stats() and
-        // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
-=======
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(
             SlotMeta::NAME,
             get_cf_options::<SlotMeta>(&access_type, &oldest_slot),
@@ -376,7 +340,8 @@ impl Rocks {
             BlockHeight::NAME,
             get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
         );
->>>>>>> 1f97b2365 (Avoid full-range compactions with periodic filtered b.g. ones (#16697))
+        // Don't forget to add to both run_purge_with_stats() and
+        // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
