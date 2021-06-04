@@ -1,6 +1,6 @@
-use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
 use solana_ledger::{entry::Entry, shred::Shred};
+use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use std::{

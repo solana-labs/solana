@@ -16,7 +16,6 @@ use crate::{
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{DuplicateStats, ForkProgress, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
     result::Result,
@@ -35,6 +34,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
+use solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS};
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     rpc_subscriptions::RpcSubscriptions,
@@ -2474,22 +2474,21 @@ impl ReplayStage {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
     use crate::{
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
-        transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
     use solana_gossip::{cluster_info::Node, crds::Cursor};
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
-        blockstore_processor, create_new_tmp_ledger,
-        entry::{self, next_entry, Entry},
+        create_new_tmp_ledger,
+        entry::{self, Entry},
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         get_tmp_ledger_path,
         shred::{
@@ -2497,7 +2496,10 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
+    use solana_rpc::{
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        rpc::create_test_transactions_and_populate_blockstore,
+    };
     use solana_runtime::{
         accounts_background_service::AbsRequestSender,
         commitment::BlockCommitment,
@@ -2510,7 +2512,7 @@ pub(crate) mod tests {
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
         poh_config::PohConfig,
-        signature::{Keypair, Signature, Signer},
+        signature::{Keypair, Signer},
         system_transaction,
         transaction::TransactionError,
     };
@@ -3299,68 +3301,6 @@ pub(crate) mod tests {
                 .unwrap(),
             &expected2
         );
-    }
-
-    pub fn create_test_transactions_and_populate_blockstore(
-        keypairs: Vec<&Keypair>,
-        previous_slot: Slot,
-        bank: Arc<Bank>,
-        blockstore: Arc<Blockstore>,
-        max_complete_transaction_status_slot: Arc<AtomicU64>,
-    ) -> Vec<Signature> {
-        let mint_keypair = keypairs[0];
-        let keypair1 = keypairs[1];
-        let keypair2 = keypairs[2];
-        let keypair3 = keypairs[3];
-        let slot = bank.slot();
-        let blockhash = bank.confirmed_last_blockhash().0;
-
-        // Generate transactions for processing
-        // Successful transaction
-        let success_tx =
-            system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
-        let success_signature = success_tx.signatures[0];
-        let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
-        // Failed transaction, InstructionError
-        let ix_error_tx =
-            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
-        let ix_error_signature = ix_error_tx.signatures[0];
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
-        // Failed transaction
-        let fail_tx =
-            system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
-        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
-        let mut entries = vec![entry_1, entry_2, entry_3];
-
-        let shreds = entries_to_test_shreds(entries.clone(), slot, previous_slot, true, 0);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-        blockstore.set_roots(&[slot]).unwrap();
-
-        let (transaction_status_sender, transaction_status_receiver) = unbounded();
-        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
-        let transaction_status_service = TransactionStatusService::new(
-            transaction_status_receiver,
-            max_complete_transaction_status_slot,
-            blockstore,
-            &Arc::new(AtomicBool::new(false)),
-        );
-
-        // Check that process_entries successfully writes can_commit transactions statuses, and
-        // that they are matched properly by get_rooted_block
-        let _result = blockstore_processor::process_entries(
-            &bank,
-            &mut entries,
-            true,
-            Some(&TransactionStatusSender {
-                sender: transaction_status_sender,
-                enable_cpi_and_log_storage: false,
-            }),
-            Some(&replay_vote_sender),
-        );
-
-        transaction_status_service.join().unwrap();
-
-        vec![success_signature, ix_error_signature]
     }
 
     #[test]

@@ -5,10 +5,7 @@ use self::{
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
-use crate::{
-    poh_recorder::WorkingBankEntry,
-    result::{Error, Result},
-};
+use crate::result::{Error, Result};
 use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
@@ -22,6 +19,7 @@ use solana_gossip::{
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};

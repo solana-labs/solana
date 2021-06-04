@@ -1,26 +1,27 @@
 // TODO: Merge this implementation with the one at `banks-server/src/send_transaction_service.rs`
-use crate::poh_recorder::PohRecorder;
-use log::*;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_metrics::{datapoint_warn, inc_new_counter_info};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
-    clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-    hash::Hash,
-    nonce_account,
-    pubkey::Pubkey,
-    signature::Signature,
-};
-use std::sync::Mutex;
-use std::{
-    collections::HashMap,
-    net::{SocketAddr, UdpSocket},
-    sync::{
-        mpsc::{Receiver, RecvTimeoutError},
-        Arc, RwLock,
+use {
+    log::*,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_metrics::{datapoint_warn, inc_new_counter_info},
+    solana_poh::poh_recorder::PohRecorder,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        hash::Hash,
+        nonce_account,
+        pubkey::Pubkey,
+        signature::Signature,
     },
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
+    std::{
+        collections::HashMap,
+        net::{SocketAddr, UdpSocket},
+        sync::{
+            mpsc::{Receiver, RecvTimeoutError},
+            Arc, Mutex, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 /// Maximum size of the transaction queue
@@ -312,26 +313,28 @@ impl SendTransactionService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_gossip::contact_info::ContactInfo;
-    use solana_ledger::{
-        blockstore::Blockstore, get_tmp_ledger_path, leader_schedule_cache::LeaderScheduleCache,
+    use {
+        super::*,
+        solana_gossip::contact_info::ContactInfo,
+        solana_ledger::{
+            blockstore::Blockstore, get_tmp_ledger_path, leader_schedule_cache::LeaderScheduleCache,
+        },
+        solana_runtime::genesis_utils::{
+            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+        },
+        solana_sdk::{
+            account::AccountSharedData,
+            fee_calculator::FeeCalculator,
+            genesis_config::create_genesis_config,
+            nonce,
+            poh_config::PohConfig,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_program, system_transaction,
+            timing::timestamp,
+        },
+        std::sync::{atomic::AtomicBool, mpsc::channel},
     };
-    use solana_runtime::genesis_utils::{
-        create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
-    };
-    use solana_sdk::{
-        account::AccountSharedData,
-        fee_calculator::FeeCalculator,
-        genesis_config::create_genesis_config,
-        nonce,
-        poh_config::PohConfig,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_program, system_transaction,
-        timing::timestamp,
-    };
-    use std::sync::{atomic::AtomicBool, mpsc::channel};
 
     #[test]
     fn service_exit() {

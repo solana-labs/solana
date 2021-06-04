@@ -5,18 +5,13 @@ use crate::{
     cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST},
     cost_tracker::CostTracker,
     packet_hasher::PacketHasher,
-    poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
-    poh_service::{self, PohService},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
 use retain_mut::RetainMut;
 use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-    entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
-};
+use solana_ledger::{blockstore_processor::TransactionStatusSender, entry::hash_transactions};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::{
@@ -24,6 +19,7 @@ use solana_perf::{
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     perf_libs,
 };
+use solana_poh::poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder};
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{
@@ -41,7 +37,6 @@ use solana_sdk::{
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
     message::Message,
-    poh_config::PohConfig,
     pubkey::Pubkey,
     short_vec::decode_shortu16_len,
     signature::Signature,
@@ -59,8 +54,7 @@ use std::{
     mem::size_of,
     net::UdpSocket,
     ops::DerefMut,
-    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::mpsc::Receiver,
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -1518,66 +1512,29 @@ fn next_leader_tpu_forwards(
     }
 }
 
-pub fn create_test_recorder(
-    bank: &Arc<Bank>,
-    blockstore: &Arc<Blockstore>,
-    poh_config: Option<PohConfig>,
-) -> (
-    Arc<AtomicBool>,
-    Arc<Mutex<PohRecorder>>,
-    PohService,
-    Receiver<WorkingBankEntry>,
-) {
-    let exit = Arc::new(AtomicBool::new(false));
-    let poh_config = Arc::new(poh_config.unwrap_or_default());
-    let (mut poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
-        bank.tick_height(),
-        bank.last_blockhash(),
-        bank.slot(),
-        Some((4, 4)),
-        bank.ticks_per_slot(),
-        &Pubkey::default(),
-        blockstore,
-        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-        &poh_config,
-        exit.clone(),
-    );
-    poh_recorder.set_bank(&bank);
-
-    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-    let poh_service = PohService::new(
-        poh_recorder.clone(),
-        &poh_config,
-        &exit,
-        bank.ticks_per_slot(),
-        poh_service::DEFAULT_PINNED_CPU_CORE,
-        poh_service::DEFAULT_HASHES_PER_BATCH,
-        record_receiver,
-    );
-
-    (exit, poh_recorder, poh_service, entry_receiver)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        poh_recorder::Record, poh_recorder::WorkingBank,
-        transaction_status_service::TransactionStatusService,
-    };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_gossip::cluster_info::Node;
     use solana_ledger::{
-        blockstore::entries_to_test_shreds,
+        blockstore::{entries_to_test_shreds, Blockstore},
         entry::{next_entry, Entry, EntrySlice},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
+        leader_schedule_cache::LeaderScheduleCache,
     };
     use solana_perf::packet::to_packets_chunked;
+    use solana_poh::{
+        poh_recorder::{create_test_recorder, Record, WorkingBank, WorkingBankEntry},
+        poh_service::PohService,
+    };
+    use solana_rpc::transaction_status_service::TransactionStatusService;
     use solana_sdk::{
         hash::Hash,
         instruction::InstructionError,
+        poh_config::PohConfig,
         signature::{Keypair, Signer},
         system_instruction::SystemError,
         system_transaction,
@@ -1587,7 +1544,10 @@ mod tests {
     use std::{
         net::SocketAddr,
         path::Path,
-        sync::atomic::{AtomicBool, Ordering},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::Receiver,
+        },
         thread::sleep,
     };
 

@@ -4,11 +4,7 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::{
-    banking_stage::{create_test_recorder, BankingStage},
-    poh_recorder::PohRecorder,
-    poh_recorder::WorkingBankEntry,
-};
+use solana_core::banking_stage::BankingStage;
 use solana_gossip::{cluster_info::ClusterInfo, cluster_info::Node};
 use solana_ledger::{
     blockstore::Blockstore,
@@ -17,6 +13,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_perf::packet::to_packets_chunked;
+use solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry};
 use solana_runtime::{
     accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
 };

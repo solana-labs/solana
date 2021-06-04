@@ -9,7 +9,6 @@
 
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
-pub mod bigtable_upload_service;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
@@ -30,8 +29,6 @@ pub mod ledger_cleanup_service;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_hasher;
-pub mod poh_recorder;
-pub mod poh_service;
 pub mod progress_map;
 pub mod repair_response;
 pub mod repair_service;
@@ -42,11 +39,7 @@ pub mod request_response;
 mod result;
 pub mod retransmit_stage;
 pub mod rewards_recorder_service;
-pub mod rpc;
-pub mod rpc_health;
-pub mod rpc_service;
 pub mod sample_performance_service;
-pub mod send_transaction_service;
 pub mod serve_repair;
 pub mod serve_repair_service;
 pub mod shred_fetch_stage;
@@ -56,7 +49,6 @@ pub mod sigverify_stage;
 pub mod snapshot_packager_service;
 pub mod test_validator;
 pub mod tpu;
-pub mod transaction_status_service;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
@@ -70,10 +62,6 @@ extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
-extern crate serde_json;
 
 #[macro_use]
 extern crate solana_metrics;
