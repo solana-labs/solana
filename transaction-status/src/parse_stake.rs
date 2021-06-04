@@ -309,21 +309,25 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..5]).is_err());
 
-        let instructions = stake_instruction::split(&keys[2], &keys[0], lamports, &keys[1]);
+        // This looks wrong, but in an actual compiled instruction, the order is:
+        //  * split account (signer, allocate + assign first)
+        //  * stake authority (signer)
+        //  * stake account
+        let instructions = stake_instruction::split(&keys[2], &keys[1], lamports, &keys[0]);
         let message = Message::new(&instructions, None);
         assert_eq!(
-            parse_stake(&message.instructions[1], &keys[0..3]).unwrap(),
+            parse_stake(&message.instructions[2], &keys[0..3]).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "split".to_string(),
                 info: json!({
                     "stakeAccount": keys[2].to_string(),
-                    "newSplitAccount": keys[1].to_string(),
-                    "stakeAuthority": keys[0].to_string(),
+                    "newSplitAccount": keys[0].to_string(),
+                    "stakeAuthority": keys[1].to_string(),
                     "lamports": lamports,
                 }),
             }
         );
-        assert!(parse_stake(&message.instructions[1], &keys[0..2]).is_err());
+        assert!(parse_stake(&message.instructions[2], &keys[0..2]).is_err());
 
         let instruction = stake_instruction::withdraw(&keys[1], &keys[0], &keys[2], lamports, None);
         let message = Message::new(&[instruction], None);
