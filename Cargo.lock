@@ -4278,12 +4278,7 @@ dependencies = [
  "bv",
  "byteorder",
  "chrono",
-<<<<<<< HEAD
- "core_affinity",
  "crossbeam-channel 0.4.4",
-=======
- "crossbeam-channel",
->>>>>>> 544b3c0d1 (Create solana-poh and move remaining rpc modules to solana-rpc (#17698))
  "ed25519-dalek",
  "flate2",
  "fs_extra",
@@ -4316,15 +4311,8 @@ dependencies = [
  "solana-banks-server",
  "solana-clap-utils",
  "solana-client",
-<<<<<<< HEAD
- "solana-faucet",
  "solana-frozen-abi 1.7.1",
  "solana-frozen-abi-macro 1.7.1",
-=======
- "solana-config-program",
- "solana-frozen-abi 1.8.0",
- "solana-frozen-abi-macro 1.8.0",
->>>>>>> 544b3c0d1 (Create solana-poh and move remaining rpc modules to solana-rpc (#17698))
  "solana-gossip",
  "solana-ledger",
  "solana-logger 1.7.1",
@@ -4344,6 +4332,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
+ "spl-token",
  "symlink",
  "systemstat",
  "tempfile",
@@ -4927,16 +4916,16 @@ dependencies = [
 
 [[package]]
 name = "solana-poh"
-version = "1.8.0"
+version = "1.7.1"
 dependencies = [
  "bincode",
  "core_affinity",
- "crossbeam-channel",
+ "crossbeam-channel 0.4.4",
  "log 0.4.11",
  "matches",
  "rand 0.7.3",
  "solana-ledger",
- "solana-logger 1.8.0",
+ "solana-logger 1.7.1",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
@@ -5087,16 +5076,11 @@ dependencies = [
 name = "solana-rpc"
 version = "1.7.1"
 dependencies = [
-<<<<<<< HEAD
- "bs58",
- "crossbeam-channel 0.4.4",
-=======
  "base64 0.12.3",
  "bincode",
- "bs58 0.4.0",
- "crossbeam-channel",
+ "bs58",
+ "crossbeam-channel 0.4.4",
  "itertools",
->>>>>>> 544b3c0d1 (Create solana-poh and move remaining rpc modules to solana-rpc (#17698))
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5115,7 +5099,7 @@ dependencies = [
  "solana-faucet",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.8.0",
+ "solana-logger 1.7.1",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",

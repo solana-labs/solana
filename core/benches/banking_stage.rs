@@ -7,14 +7,7 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-<<<<<<< HEAD
-use solana_core::banking_stage::{create_test_recorder, BankingStage, BankingStageStats};
-use solana_core::poh_recorder::WorkingBankEntry;
-=======
 use solana_core::banking_stage::{BankingStage, BankingStageStats};
-use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::CostTracker;
->>>>>>> 544b3c0d1 (Create solana-poh and move remaining rpc modules to solana-rpc (#17698))
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
 use solana_ledger::blockstore_processor::process_entries;
