@@ -179,7 +179,6 @@ fn transfer_verified(
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
     }
-
     if lamports > from.lamports()? {
         ic_msg!(
             invoke_context,
