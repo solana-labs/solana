@@ -1,0 +1,17 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "Restart test on GCE"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "false"
+      CLOUD_PROVIDER: "gce"
+      ENABLE_GPU: "false"
+      NUMBER_OF_VALIDATOR_NODES: 4
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      NUMBER_OF_CLIENT_NODES: 1
+      ADDITIONAL_FLAGS: "--dedicated"
+      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 66
+      SKIP_PERF_RESULTS: "true"
+      TEST_TYPE: "script"
+      CUSTOM_SCRIPT: "system-test/restart-testcases/restart_test_automation.sh"
+    agents:
+      - "queue=gce-deploy"
