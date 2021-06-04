@@ -305,7 +305,14 @@ impl AppendVec {
         let file_size = std::fs::metadata(&path)?.len();
         AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
 
-        let map = unsafe { MmapMut::map_mut(&data)? };
+        let map = unsafe {
+            let result = MmapMut::map_mut(&data);
+            if result.is_err() {
+                // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
+                info!("memory map error: {:?}. This may be because vm.max_map_count is not set correctly.", result);
+            }
+            result?
+        };
 
         let new = AppendVec {
             path: path.as_ref().to_path_buf(),
