@@ -1,7 +1,7 @@
 use {
     crate::{
         rpc::JsonRpcConfig,
-        validator::{Validator, ValidatorConfig, ValidatorExit, ValidatorStartProgress},
+        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_client::rpc_client::RpcClient,
     solana_gossip::{cluster_info::Node, gossip_service::discover_cluster, socketaddr},
@@ -18,6 +18,7 @@ use {
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
+        exit::Exit,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         native_token::sol_to_lamports,
@@ -79,7 +80,7 @@ pub struct TestValidatorGenesis {
     programs: Vec<ProgramInfo>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
-    pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub validator_exit: Arc<RwLock<Exit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub max_ledger_shreds: Option<u64>,

@@ -21,6 +21,7 @@ pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod entrypoint_native;
 pub mod epoch_info;
+pub mod exit;
 pub mod feature;
 pub mod feature_set;
 pub mod genesis_config;
