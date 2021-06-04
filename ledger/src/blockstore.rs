@@ -1523,12 +1523,7 @@ impl Blockstore {
         to_index: u64,
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
         let meta_cf = self.db.column::<cf::SlotMeta>();
         let mut buffer_offset = 0;
         let mut last_index = 0;
@@ -1766,12 +1761,7 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_block_time".to_string(), String)
         );
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
         self.blocktime_cf.get(slot)
     }
 
@@ -1784,12 +1774,7 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_block_height".to_string(), String)
         );
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
         self.block_height_cf.get(slot)
     }
 
@@ -1811,12 +1796,8 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_rooted_block".to_string(), String)
         );
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
+
         if self.is_root(slot) {
             return self.get_complete_block(slot, require_previous_blockhash);
         }
@@ -2054,6 +2035,17 @@ impl Blockstore {
             )?;
         }
         Ok(())
+    }
+
+    fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
+        // lowest_cleanup_slot is the last slot that was not cleaned up by LedgerCleanupService
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+        // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
+        // needed slots here at any given moment
+        Ok(lowest_cleanup_slot)
     }
 
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
@@ -2671,12 +2663,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> Result<(CompletedRanges, Option<SlotMeta>)> {
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
+        let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
