@@ -1,12 +1,10 @@
 use {
-    crate::{
-        rpc::JsonRpcConfig,
-        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
-    },
+    crate::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     solana_client::rpc_client::RpcClient,
     solana_gossip::{cluster_info::Node, gossip_service::discover_cluster, socketaddr},
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
+    solana_rpc::rpc::JsonRpcConfig,
     solana_runtime::{
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,

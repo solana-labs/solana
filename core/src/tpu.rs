@@ -9,13 +9,13 @@ use crate::{
         VerifiedVoteSender, VoteTracker,
     },
     fetch_stage::FetchStage,
-    poh_recorder::{PohRecorder, WorkingBankEntry},
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry};
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     rpc_subscriptions::RpcSubscriptions,

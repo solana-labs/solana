@@ -41,6 +41,7 @@ solana-logger = { path = "../logger", version = "=1.7.1" }
 solana-metrics = { path = "../metrics", version = "=1.7.1" }
 solana-net-utils = { path = "../net-utils", version = "=1.7.1" }
 solana-perf = { path = "../perf", version = "=1.7.1" }
+solana-poh = { path = "../poh", version = "=1.7.1" }
 solana-rpc = { path = "../rpc", version = "=1.7.1" }
 solana-runtime = { path = "../runtime", version = "=1.7.1" }
 solana-sdk = { path = "../sdk", version = "=1.7.1" }

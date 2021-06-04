@@ -359,8 +359,9 @@ mod test {
     use super::*;
     use serial_test::serial;
     use solana_client::rpc_config::RpcSendTransactionConfig;
-    use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
+    use solana_core::validator::ValidatorConfig;
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+    use solana_rpc::rpc::JsonRpcConfig;
     use solana_sdk::{
         commitment_config::CommitmentConfig,
         genesis_config::ClusterType,
