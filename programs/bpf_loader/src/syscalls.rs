@@ -19,7 +19,7 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, demote_sysvar_write_locks, ecrecover_syscall_enabled,
+        cpi_data_cost, demote_sysvar_write_locks, secp256k1_recover_syscall_enabled,
         enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
@@ -134,8 +134,8 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
     }
 
-    if invoke_context.is_feature_active(&ecrecover_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_ecrecover", SyscallEcrecover::call)?;
+    if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
@@ -323,9 +323,9 @@ pub fn bind_syscall_context_objects<'a>(
 
     bind_feature_gated_syscall_context_object!(
         vm,
-        invoke_context.is_feature_active(&ecrecover_syscall_enabled::id()),
-        Box::new(SyscallEcrecover {
-            base_cost: bpf_compute_budget.ecrecover_base_cost,
+        invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()),
+        Box::new(SyscallSecp256k1Recover {
+            base_cost: bpf_compute_budget.secp256k1_recover_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1343,13 +1343,13 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
     }
 }
 
-// Ecrecover
-pub struct SyscallEcrecover<'a> {
+/// secp256k1_recover
+pub struct SyscallSecp256k1Recover<'a> {
     base_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallObject<BpfError> for SyscallEcrecover<'a> {
+impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
     fn call(
         &mut self,
         hash_addr: u64,
@@ -1376,7 +1376,7 @@ impl<'a> SyscallObject<BpfError> for SyscallEcrecover<'a> {
             translate_slice::<u8>(memory_mapping, signature_addr, 64u64, self.loader_id, true,),
             result
         );
-        let ecrecover_result = question_mark!(
+        let secp256k1_recover_result = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, result_addr, 64u64, self.loader_id, true,),
             result
         );
@@ -1411,7 +1411,7 @@ impl<'a> SyscallObject<BpfError> for SyscallEcrecover<'a> {
             }
         };
 
-        ecrecover_result.copy_from_slice(&public_key[1..65]);
+        secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(0);
     }
 }

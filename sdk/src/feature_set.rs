@@ -139,7 +139,7 @@ pub mod memory_ops_syscalls {
     solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
-pub mod ecrecover_syscall_enabled {
+pub mod secp256k1_recover_syscall_enabled {
     solana_sdk::declare_id!("Cj9ydNGWLePKRztuE3m3zT1uvj2We517k55vq2e65jtP");
 }
 
@@ -178,7 +178,7 @@ lazy_static! {
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
-        (ecrecover_syscall_enabled::id(), "ecrecover syscall"),
+        (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
