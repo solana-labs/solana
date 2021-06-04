@@ -2311,8 +2311,8 @@ impl AccountsDb {
             for (slot, slot_shrink_candidates) in &shrink_slots {
                 candidates_count += slot_shrink_candidates.len();
                 for store in slot_shrink_candidates.values() {
-                    total_alive += self.page_align(store.alive_bytes() as u64);
-                    let alive_ratio = self.page_align(store.alive_bytes() as u64) as f64
+                    total_alive += Self::page_align(store.alive_bytes() as u64);
+                    let alive_ratio = Self::page_align(store.alive_bytes() as u64) as f64
                         / store.total_bytes() as f64;
                     store_usage.push((*slot, store.append_vec_id(), alive_ratio, store.clone(), 0));
                 }
@@ -2326,13 +2326,13 @@ impl AccountsDb {
                 usage.4 = usage.3.total_bytes() + all_total;
                 all_total = usage.4;
             }
-            // now working from the beginning of store_usage which are most sparse and see when we can stop
-            // shrinking while still achieving the goals.
+            // now working from the beginning of store_usage which are the most sparse and see when we can stop
+            // shrinking while still achieving the overall goals.
             let mut shrink_slots: ShrinkCandidates = HashMap::new();
             let mut shrunk_total: u64 = 0;
             for usage in &store_usage {
                 let store = &usage.3;
-                shrunk_total += self.page_align(store.alive_bytes() as u64);
+                shrunk_total += Self::page_align(store.alive_bytes() as u64);
                 let unshrunk_total = usage.4 - store.total_bytes(); // the unshrunk total after this
                 let total_bytes = shrunk_total + unshrunk_total;
                 shrink_slots
@@ -4901,8 +4901,8 @@ impl AccountsDb {
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
                     && ((self.optimize_total_space
-                        && self.page_align(store.alive_bytes() as u64) < store.total_bytes())
-                        || (self.page_align(store.alive_bytes() as u64) as f64
+                        && Self::page_align(store.alive_bytes() as u64) < store.total_bytes())
+                        || (Self::page_align(store.alive_bytes() as u64) as f64
                             / store.total_bytes() as f64)
                             < self.shrink_ratio)
                 {
