@@ -215,6 +215,8 @@ pub enum InstructionError {
     /// Unsupported sysvar
     #[error("Unsupported sysvar")]
     UnsupportedSysvar,
+    // Note: For any new error added here an equivilent ProgramError and it's
+    // conversions must also be added
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
