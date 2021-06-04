@@ -1,8 +1,8 @@
-use log::*;
 /// Cluster independent integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
+use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::thin_client::create_client;

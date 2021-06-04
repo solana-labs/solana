@@ -1,44 +1,47 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
-use crate::{
-    bigtable_upload_service::BigTableUploadService,
-    poh_recorder::PohRecorder,
-    rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
-    rpc_health::*,
-    send_transaction_service::{LeaderInfo, SendTransactionService},
+use {
+    crate::{
+        max_slots::MaxSlots,
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
+        rpc_health::*,
+        send_transaction_service::{LeaderInfo, SendTransactionService},
+    },
+    jsonrpc_core::{futures::prelude::*, MetaIoHandler},
+    jsonrpc_http_server::{
+        hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
+        RequestMiddlewareAction, ServerBuilder,
+    },
+    regex::Regex,
+    solana_client::rpc_cache::LargestAccountsCache,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        bigtable_upload_service::BigTableUploadService, blockstore::Blockstore,
+        leader_schedule_cache::LeaderScheduleCache,
+    },
+    solana_metrics::inc_new_counter_info,
+    solana_poh::poh_recorder::PohRecorder,
+    solana_runtime::{
+        bank_forks::{BankForks, SnapshotConfig},
+        commitment::BlockCommitmentCache,
+        snapshot_utils,
+    },
+    solana_sdk::{
+        exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
+        native_token::lamports_to_sol, pubkey::Pubkey,
+    },
+    std::{
+        collections::HashSet,
+        net::SocketAddr,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        sync::{mpsc::channel, Arc, Mutex, RwLock},
+        thread::{self, Builder, JoinHandle},
+    },
+    tokio::runtime,
+    tokio_util::codec::{BytesCodec, FramedRead},
 };
-use jsonrpc_core::{futures::prelude::*, MetaIoHandler};
-use jsonrpc_http_server::{
-    hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
-    RequestMiddlewareAction, ServerBuilder,
-};
-use regex::Regex;
-use solana_client::rpc_cache::LargestAccountsCache;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
-use solana_metrics::inc_new_counter_info;
-use solana_rpc::{
-    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-};
-use solana_runtime::{
-    bank_forks::{BankForks, SnapshotConfig},
-    commitment::BlockCommitmentCache,
-    snapshot_utils,
-};
-use solana_sdk::{
-    exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-    native_token::lamports_to_sol, pubkey::Pubkey,
-};
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::{mpsc::channel, Arc, Mutex, RwLock},
-    thread::{self, Builder, JoinHandle},
-};
-use tokio::runtime;
-use tokio_util::codec::{BytesCodec, FramedRead};
 
 const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
 
@@ -477,23 +480,27 @@ impl JsonRpcService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rpc::create_validator_exit;
-    use solana_gossip::crds_value::{CrdsData, CrdsValue, SnapshotHash};
-    use solana_ledger::{
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
+    use {
+        super::*,
+        crate::rpc::create_validator_exit,
+        solana_gossip::crds_value::{CrdsData, CrdsValue, SnapshotHash},
+        solana_ledger::{
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+        },
+        solana_runtime::{
+            bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion,
+            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        },
+        solana_sdk::{
+            genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
+            signature::Signer,
+        },
+        std::{
+            io::Write,
+            net::{IpAddr, Ipv4Addr},
+        },
     };
-    use solana_runtime::{
-        bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion,
-        snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
-    };
-    use solana_sdk::{
-        genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
-        signature::Signer,
-    };
-    use std::io::Write;
-    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_rpc_new() {
