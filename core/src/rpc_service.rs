@@ -6,7 +6,6 @@ use crate::{
     rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
     send_transaction_service::{LeaderInfo, SendTransactionService},
-    validator::ValidatorExit,
 };
 use jsonrpc_core::{futures::prelude::*, MetaIoHandler};
 use jsonrpc_http_server::{
@@ -27,8 +26,8 @@ use solana_runtime::{
     snapshot_utils,
 };
 use solana_sdk::{
-    genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash, native_token::lamports_to_sol,
-    pubkey::Pubkey,
+    exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
+    native_token::lamports_to_sol, pubkey::Pubkey,
 };
 use std::{
     collections::HashSet,
@@ -273,7 +272,7 @@ impl JsonRpcService {
         poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
         genesis_hash: Hash,
         ledger_path: &Path,
-        validator_exit: Arc<RwLock<ValidatorExit>>,
+        validator_exit: Arc<RwLock<Exit>>,
         trusted_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,

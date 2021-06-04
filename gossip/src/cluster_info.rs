@@ -2703,7 +2703,7 @@ impl ClusterInfo {
                                     self.id()
                                 );
                                 exit.store(true, Ordering::Relaxed);
-                                // TODO: Pass through ValidatorExit here so
+                                // TODO: Pass through Exit here so
                                 // that this will exit cleanly.
                                 std::process::exit(1);
                             }

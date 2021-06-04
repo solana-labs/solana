@@ -59,6 +59,7 @@ use solana_runtime::{
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+    exit::Exit,
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -70,7 +71,6 @@ use solana_vote_program::vote_state::VoteState;
 use std::time::Instant;
 use std::{
     collections::HashSet,
-    fmt,
     net::SocketAddr,
     ops::Deref,
     path::{Path, PathBuf},
@@ -135,7 +135,7 @@ pub struct ValidatorConfig {
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
-    pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
 }
 
@@ -191,7 +191,7 @@ impl Default for ValidatorConfig {
             accounts_db_test_hash_calculation: false,
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
-            validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
+            validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
         }
     }
@@ -224,35 +224,6 @@ impl Default for ValidatorStartProgress {
 }
 
 #[derive(Default)]
-pub struct ValidatorExit {
-    exited: bool,
-    exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
-}
-
-impl ValidatorExit {
-    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() + Send + Sync>) {
-        if self.exited {
-            exit();
-        } else {
-            self.exits.push(exit);
-        }
-    }
-
-    pub fn exit(&mut self) {
-        self.exited = true;
-        for exit in self.exits.drain(..) {
-            exit();
-        }
-    }
-}
-
-impl fmt::Debug for ValidatorExit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} exits", self.exits.len())
-    }
-}
-
-#[derive(Default)]
 struct TransactionHistoryServices {
     transaction_status_sender: Option<TransactionStatusSender>,
     transaction_status_service: Option<TransactionStatusService>,
@@ -264,7 +235,7 @@ struct TransactionHistoryServices {
 }
 
 pub struct Validator {
-    validator_exit: Arc<RwLock<ValidatorExit>>,
+    validator_exit: Arc<RwLock<Exit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
