@@ -288,7 +288,6 @@ pub fn split_with_seed(
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
-        system_instruction::assign_with_seed(split_stake_pubkey, base, seed, &id()),
         _split(
             stake_pubkey,
             authorized_pubkey,
@@ -783,7 +782,7 @@ mod tests {
                     &invalid_stake_state_pubkey(),
                     &Pubkey::default(),
                     "seed"
-                )[2]
+                )[1]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -890,7 +889,7 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     "seed"
-                )[2]
+                )[1]
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
