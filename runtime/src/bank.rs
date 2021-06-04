@@ -11982,7 +11982,6 @@ pub(crate) mod tests {
         // Thread that runs scan and constantly checks for
         // consistency
         let pubkeys_to_modify_ = pubkeys_to_modify.clone();
-        let exit_ = exit.clone();
 
         // Channel over which the bank to scan is sent
         let (bank_to_scan_sender, bank_to_scan_receiver): (
@@ -11994,68 +11993,72 @@ pub(crate) mod tests {
             crossbeam_channel::Sender<SlotId>,
             crossbeam_channel::Receiver<SlotId>,
         ) = unbounded();
-        let scan_thread = Builder::new()
-            .name("scan".to_string())
-            .spawn(move || {
-                let mut num_banks_scanned = 0;
-                loop {
-                    info!("starting scan iteration");
-                    if exit_.load(Relaxed) {
-                        info!("scan exiting");
-                        return num_banks_scanned;
-                    }
-                    if let Ok(bank_to_scan) =
-                        bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
-                    {
-                        info!("scanning program accounts for slot {}", bank_to_scan.slot());
-                        let accounts_result = bank_to_scan.get_program_accounts(&program_id);
-                        let _ = scan_finished_sender.send(bank_to_scan.slot_id());
-                        num_banks_scanned += 1;
-                        match (&acceptable_scan_results, accounts_result.is_err()) {
-                            (AcceptableScanResults::DroppedSlotError, _)
-                            | (AcceptableScanResults::Both, true) => {
-                                assert_eq!(
-                                    accounts_result,
-                                    Err(ScanError::SlotRemoved {
-                                        slot: bank_to_scan.slot(),
-                                        slot_id: bank_to_scan.slot_id()
-                                    })
-                                );
-                            }
-                            (AcceptableScanResults::NoFailure, _)
-                            | (AcceptableScanResults::Both, false) => {
-                                assert!(accounts_result.is_ok())
-                            }
+        let num_banks_scanned = Arc::new(AtomicU64::new(0));
+        let scan_thread = {
+            let exit = exit.clone();
+            let num_banks_scanned = num_banks_scanned.clone();
+            Builder::new()
+                .name("scan".to_string())
+                .spawn(move || {
+                    loop {
+                        info!("starting scan iteration");
+                        if exit.load(Relaxed) {
+                            info!("scan exiting");
+                            return;
                         }
-
-                        // Should never see empty accounts because no slot ever deleted
-                        // any of the original accounts, and the scan should reflect the
-                        // account state at some frozen slot `X` (no partial updates).
-                        if let Ok(accounts) = accounts_result {
-                            assert!(!accounts.is_empty());
-                            let mut expected_lamports = None;
-                            let mut target_accounts_found = HashSet::new();
-                            for (pubkey, account) in accounts {
-                                let account_balance = account.lamports();
-                                if pubkeys_to_modify_.contains(&pubkey) {
-                                    target_accounts_found.insert(pubkey);
-                                    if let Some(expected_lamports) = expected_lamports {
-                                        assert_eq!(account_balance, expected_lamports);
-                                    } else {
-                                        // All pubkeys in the specified set should have the same balance
-                                        expected_lamports = Some(account_balance);
-                                    }
+                        if let Ok(bank_to_scan) =
+                            bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
+                        {
+                            info!("scanning program accounts for slot {}", bank_to_scan.slot());
+                            let accounts_result = bank_to_scan.get_program_accounts(&program_id);
+                            let _ = scan_finished_sender.send(bank_to_scan.slot_id());
+                            num_banks_scanned.fetch_add(1, Relaxed);
+                            match (&acceptable_scan_results, accounts_result.is_err()) {
+                                (AcceptableScanResults::DroppedSlotError, _)
+                                | (AcceptableScanResults::Both, true) => {
+                                    assert_eq!(
+                                        accounts_result,
+                                        Err(ScanError::SlotRemoved {
+                                            slot: bank_to_scan.slot(),
+                                            slot_id: bank_to_scan.slot_id()
+                                        })
+                                    );
+                                }
+                                (AcceptableScanResults::NoFailure, _)
+                                | (AcceptableScanResults::Both, false) => {
+                                    assert!(accounts_result.is_ok())
                                 }
                             }
 
-                            // Should've found all the accounts, i.e. no partial cleans should
-                            // be detected
-                            assert_eq!(target_accounts_found.len(), total_pubkeys_to_modify);
+                            // Should never see empty accounts because no slot ever deleted
+                            // any of the original accounts, and the scan should reflect the
+                            // account state at some frozen slot `X` (no partial updates).
+                            if let Ok(accounts) = accounts_result {
+                                assert!(!accounts.is_empty());
+                                let mut expected_lamports = None;
+                                let mut target_accounts_found = HashSet::new();
+                                for (pubkey, account) in accounts {
+                                    let account_balance = account.lamports();
+                                    if pubkeys_to_modify_.contains(&pubkey) {
+                                        target_accounts_found.insert(pubkey);
+                                        if let Some(expected_lamports) = expected_lamports {
+                                            assert_eq!(account_balance, expected_lamports);
+                                        } else {
+                                            // All pubkeys in the specified set should have the same balance
+                                            expected_lamports = Some(account_balance);
+                                        }
+                                    }
+                                }
+
+                                // Should've found all the accounts, i.e. no partial cleans should
+                                // be detected
+                                assert_eq!(target_accounts_found.len(), total_pubkeys_to_modify);
+                            }
                         }
                     }
-                }
-            })
-            .unwrap();
+                })
+                .unwrap()
+        };
 
         // Thread that constantly updates the accounts, sets
         // roots, and cleans
@@ -12074,11 +12077,17 @@ pub(crate) mod tests {
             .unwrap();
 
         // Let threads run for a while, check the scans didn't see any mixed slots
-        std::thread::sleep(Duration::new(5, 0));
-        exit.store(true, Relaxed);
         let min_expected_number_of_scans = 5;
-        let num_banks_scanned = scan_thread.join().unwrap();
-        assert!(num_banks_scanned > min_expected_number_of_scans);
+        std::thread::sleep(Duration::new(5, 0));
+        loop {
+            if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
+                break;
+            } else {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+        exit.store(true, Relaxed);
+        scan_thread.join().unwrap();
         update_thread.join().unwrap();
     }
 
