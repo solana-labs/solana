@@ -13,6 +13,7 @@ use crate::{
     consensus::{
         ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
     },
+    cost_model::CostModel,
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
@@ -294,6 +295,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
+        cost_model: Arc<RwLock<CostModel>>,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -390,6 +392,7 @@ impl ReplayStage {
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
+                        &cost_model,
                     );
                     replay_active_banks_time.stop();
 
@@ -1641,6 +1644,7 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
+        cost_model: &RwLock<CostModel>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1696,6 +1700,41 @@ impl ReplayStage {
                     transaction_status_sender,
                     replay_vote_sender,
                     verify_recyclers,
+                );
+                debug!(
+                    "replayed into bank slot: {:?} / {:?}, result: {:?}, the execute_timings stats are: {:?}",
+                    bank.slot(),
+                    bank_slot,
+                    replay_result,
+                    bank_progress.replay_stats.execute_timings
+                );
+                let mut cost_model_mutable = cost_model.write().unwrap();
+                for (program_id, stats) in &bank_progress
+                    .replay_stats
+                    .execute_timings
+                    .details
+                    .per_program_timings
+                {
+                    let cost = stats.0 / stats.1 as u64;
+                    match cost_model_mutable.upsert_instruction_cost(&program_id, &cost) {
+                        Ok(c) => {
+                            debug!(
+                                "after replayed into bank, instruction {:?} has averaged cost {}",
+                                program_id, c
+                            );
+                        }
+                        Err(err) => {
+                            debug!(
+                                "after replayed into bank, instruction {:?} failed to update cost, err: {}",
+                                program_id, err
+                            );
+                        }
+                    }
+                }
+                drop(cost_model_mutable);
+                debug!(
+                    "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
+                    cost_model.read().unwrap().get_instruction_cost_table()
                 );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
