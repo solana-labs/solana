@@ -602,7 +602,7 @@ checksum = "853eda514c284c2287f4bf20ae614f8781f40a81d32ecda6e91449304dfe077c"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.7.0",
+ "libloading",
 ]
 
 [[package]]
@@ -2226,15 +2226,6 @@ name = "libc"
 version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
-
-[[package]]
-name = "libloading"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cadb8e769f070c45df05c78c7520eb4cd17061d4ab262e43cfc68b4d00ac71c"
-dependencies = [
- "winapi 0.3.8",
-]
 
 [[package]]
 name = "libloading"
@@ -5261,7 +5252,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
- "libloading 0.6.2",
+ "libloading",
  "log 0.4.11",
  "memmap2 0.2.3",
  "num-derive",
