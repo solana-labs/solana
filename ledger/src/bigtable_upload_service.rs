@@ -1,4 +1,4 @@
-use solana_ledger::blockstore::Blockstore;
+use crate::{bigtable_upload, blockstore::Blockstore};
 use solana_runtime::commitment::BlockCommitmentCache;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -68,7 +68,7 @@ impl BigTableUploadService {
                 continue;
             }
 
-            let result = runtime.block_on(solana_ledger::bigtable_upload::upload_confirmed_blocks(
+            let result = runtime.block_on(bigtable_upload::upload_confirmed_blocks(
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 start_slot,
