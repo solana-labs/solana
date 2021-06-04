@@ -5200,6 +5200,7 @@ dependencies = [
  "hex",
  "itertools",
  "lazy_static",
+ "libsecp256k1 0.5.0",
  "log 0.4.11",
  "num-derive",
  "num-traits",

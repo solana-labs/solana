@@ -457,6 +457,39 @@ uint64_t sol_keccak256(
     uint8_t *result
 );
 
+
+/** Length of a secp256k1 recover input digest */
+#define SECP256K1_RECOVER_DIGEST_LENGTH 32
+/** Length of a secp256k1 input signature */
+#define SECP256K1_RECOVER_SIGNATURE_LENGTH 64
+/** Length of a secp256k1 recover result */
+#define SECP256K1_RECOVER_RESULT_LENGTH 64
+
+/** The digest provided to a sol_secp256k1_recover has an invalid size */
+#define SECP256K1_RECOVER_ERROR_INVALID_DIGEST_LENGTH 1
+/** The signature provided to a sol_secp256k1_recover has an invalid size */
+#define SECP256K1_RECOVER_ERROR_INVALID_SIGNATURE_LENGTH 2
+/** The recovery_id provided to a sol_secp256k1_recover is invalid */
+#define SECP256K1_RECOVER_ERROR_INVALID_RECOVERY_ID 3
+/** The signature provided to a sol_secp256k1_recover is invalid */
+#define SECP256K1_RECOVER_ERROR_INVALID_SIGNATURE 4
+
+/**
+ * Recover public key from a signed message.
+ *
+ * @param digest Hashed message
+ * @param recovery_id Tag used for public key recovery from signatures. Can be 0 or 1
+ * @param signature An ECDSA signature.
+ * @param result 64 byte array to hold the result
+ * @return 0 if executed successfully
+ */
+uint64_t sol_secp256k1_recover(
+    const uint8_t *digest,
+    uint64_t recovery_id,
+    const uint8_t *signature,
+    uint8_t *result
+);
+
 /**
  * Account Meta
  */
