@@ -3781,7 +3781,6 @@ mod tests {
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert!(slots.is_empty());
         cluster_info.push_epoch_slots(&[0]);
-        cluster_info.flush_push_queue();
 
         let mut cursor = Cursor::default();
         let slots = cluster_info.get_epoch_slots(&mut cursor);
@@ -4138,9 +4137,7 @@ mod tests {
             range.push(last + rand::thread_rng().gen_range(1, 32));
         }
         cluster_info.push_epoch_slots(&range[..16000]);
-        cluster_info.flush_push_queue();
         cluster_info.push_epoch_slots(&range[16000..]);
-        cluster_info.flush_push_queue();
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
         assert_eq!(slots, range);
