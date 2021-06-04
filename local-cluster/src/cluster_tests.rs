@@ -7,7 +7,6 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::thin_client::create_client;
 use solana_core::consensus::VOTE_THRESHOLD_DEPTH;
-use solana_core::validator::ValidatorExit;
 use solana_gossip::{
     cluster_info::VALIDATOR_PORT_RANGE, contact_info::ContactInfo, gossip_service::discover_cluster,
 };
@@ -20,6 +19,7 @@ use solana_sdk::{
     clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+    exit::Exit,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -178,7 +178,7 @@ pub fn sleep_n_epochs(
 
 pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
-    entry_point_validator_exit: &Arc<RwLock<ValidatorExit>>,
+    entry_point_validator_exit: &Arc<RwLock<Exit>>,
     funding_keypair: &Keypair,
     nodes: usize,
     slot_millis: u64,

@@ -1,4 +1,5 @@
-use solana_core::validator::{ValidatorConfig, ValidatorExit};
+use solana_core::validator::ValidatorConfig;
+use solana_sdk::exit::Exit;
 use std::sync::{Arc, RwLock};
 
 pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
@@ -52,7 +53,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
-        validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
+        validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
     }
