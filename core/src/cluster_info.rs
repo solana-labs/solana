@@ -1375,12 +1375,16 @@ impl ClusterInfo {
     /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
+<<<<<<< HEAD:core/src/cluster_info.rs
     pub fn retransmit_to(
         peers: &[&ContactInfo],
         packet: &Packet,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
+=======
+    pub fn retransmit_to(peers: &[&ContactInfo], packet: &Packet, s: &UdpSocket, forwarded: bool) {
+>>>>>>> be957f25c (adds fallback logic if retransmit multicast fails (#17714)):gossip/src/cluster_info.rs
         trace!("retransmit orders {}", peers.len());
         let dests: Vec<_> = if forwarded {
             peers
@@ -1391,6 +1395,7 @@ impl ClusterInfo {
         } else {
             peers.iter().map(|peer| &peer.tvu).collect()
         };
+<<<<<<< HEAD:core/src/cluster_info.rs
         let mut sent = 0;
         while sent < dests.len() {
             match multicast(s, &packet.data[..packet.meta.size], &dests[sent..]) {
@@ -1403,10 +1408,30 @@ impl ClusterInfo {
                     );
                     error!("retransmit result {:?}", e);
                     return Err(Error::Io(e));
+=======
+        let mut dests = &dests[..];
+        let data = &packet.data[..packet.meta.size];
+        while !dests.is_empty() {
+            match multicast(s, data, dests) {
+                Ok(n) => dests = &dests[n..],
+                Err(err) => {
+                    inc_new_counter_error!("cluster_info-retransmit-send_to_error", dests.len(), 1);
+                    error!("retransmit multicast: {:?}", err);
+                    break;
+>>>>>>> be957f25c (adds fallback logic if retransmit multicast fails (#17714)):gossip/src/cluster_info.rs
                 }
             }
         }
-        Ok(())
+        let mut errs = 0;
+        for dest in dests {
+            if let Err(err) = s.send_to(data, dest) {
+                error!("retransmit send: {}, {:?}", dest, err);
+                errs += 1;
+            }
+        }
+        if errs != 0 {
+            inc_new_counter_error!("cluster_info-retransmit-error", errs, 1);
+        }
     }
 
     fn insert_self(&self) {
