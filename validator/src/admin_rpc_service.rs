@@ -5,8 +5,11 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
-    solana_core::validator::{ValidatorExit, ValidatorStartProgress},
-    solana_sdk::signature::{read_keypair_file, Keypair, Signer},
+    solana_core::validator::ValidatorStartProgress,
+    solana_sdk::{
+        exit::Exit,
+        signature::{read_keypair_file, Keypair, Signer},
+    },
     std::{
         net::SocketAddr,
         path::Path,
@@ -21,7 +24,7 @@ pub struct AdminRpcRequestMetadata {
     pub rpc_addr: Option<SocketAddr>,
     pub start_time: SystemTime,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
-    pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
@@ -67,7 +70,7 @@ impl AdminRpc for AdminRpcImpl {
             warn!("validator exit requested");
             meta.validator_exit.write().unwrap().exit();
 
-            // TODO: Debug why ValidatorExit doesn't always cause the validator to fully exit
+            // TODO: Debug why Exit doesn't always cause the validator to fully exit
             // (rocksdb background processing or some other stuck thread perhaps?).
             //
             // If the process is still alive after five seconds, exit harder

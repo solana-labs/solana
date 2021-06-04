@@ -3,7 +3,6 @@
 use crate::{
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
-    validator::ValidatorExit,
 };
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{types::error, Error, Metadata, Result};
@@ -58,6 +57,7 @@ use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
+    exit::Exit,
     hash::Hash,
     pubkey::Pubkey,
     sanitize::Sanitize,
@@ -148,7 +148,7 @@ pub struct JsonRpcRequestProcessor {
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
     snapshot_config: Option<SnapshotConfig>,
-    validator_exit: Arc<RwLock<ValidatorExit>>,
+    validator_exit: Arc<RwLock<Exit>>,
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
@@ -235,7 +235,7 @@ impl JsonRpcRequestProcessor {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
-        validator_exit: Arc<RwLock<ValidatorExit>>,
+        validator_exit: Arc<RwLock<Exit>>,
         health: Arc<RpcHealth>,
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
@@ -3772,8 +3772,8 @@ fn deserialize_transaction(
         .map(|transaction| (wire_transaction, transaction))
 }
 
-pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<ValidatorExit>> {
-    let mut validator_exit = ValidatorExit::default();
+pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
+    let mut validator_exit = Exit::default();
     let exit_ = exit.clone();
     validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
     Arc::new(RwLock::new(validator_exit))
