@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
+    accounts_db::{DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO},
     accounts_index::AccountSecondaryIndexes,
     ancestors::Ancestors,
 };
@@ -64,6 +65,8 @@ fn main() {
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
         false,
+        DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+        DEFAULT_ACCOUNTS_SHRINK_RATIO,
     );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");

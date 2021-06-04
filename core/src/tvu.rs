@@ -88,6 +88,8 @@ pub struct TvuConfig {
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
+    pub accounts_shrink_optimize_total_space: bool,
+    pub accounts_shrink_ratio: f64,
 }
 
 impl Tvu {

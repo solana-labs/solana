@@ -136,6 +136,8 @@ pub(crate) fn bank_from_stream<R>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    optimize_total_space: bool,
+    shrink_ratio: f64,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -156,6 +158,8 @@ where
                 account_indexes,
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
+                optimize_total_space,
+                shrink_ratio,
             )?;
             Ok(bank)
         }};
@@ -246,6 +250,8 @@ fn reconstruct_bank_from_fields<E>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    optimize_total_space: bool,
+    shrink_ratio: f64,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage,
@@ -258,6 +264,8 @@ where
         account_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
+        optimize_total_space,
+        shrink_ratio,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -284,6 +292,8 @@ fn reconstruct_accountsdb_from_fields<E>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    optimize_total_space: bool,
+    shrink_ratio: f64,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage,
@@ -293,6 +303,8 @@ where
         cluster_type,
         account_indexes,
         caching_enabled,
+        optimize_total_space,
+        shrink_ratio,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 

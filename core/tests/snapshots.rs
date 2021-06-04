@@ -106,6 +106,8 @@ mod tests {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
+                accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+                accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -165,6 +167,8 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
+            accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
         )
         .unwrap();
 
@@ -220,7 +224,13 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler.handle_snapshot_requests(false, false, false);
+                snapshot_request_handler.handle_snapshot_requests(
+                    false,
+                    false,
+                    false,
+                    accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+                    accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
+                );
             }
         }
 

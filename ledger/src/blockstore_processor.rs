@@ -373,6 +373,8 @@ pub struct ProcessOptions {
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
+    pub optimize_total_space: bool,
+    pub shrink_ratio: f64,
 }
 
 pub fn process_blockstore(
@@ -400,6 +402,8 @@ pub fn process_blockstore(
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
+        opts.optimize_total_space,
+        opts.shrink_ratio,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -1279,6 +1283,9 @@ pub mod tests {
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
+    use solana_runtime::accounts_db::{
+        DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
+    };
     use solana_runtime::genesis_utils::{
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
@@ -3064,6 +3071,8 @@ pub mod tests {
             None,
             AccountSecondaryIndexes::default(),
             false,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         *bank.epoch_schedule()
     }

@@ -57,6 +57,7 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::{Borrow, Cow},
     boxed::Box,
+    cmp,
     collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     io::{Error as IoError, Result as IoResult},
@@ -82,7 +83,11 @@ const SCAN_SLOT_PAR_ITER_THRESHOLD: usize = 4000;
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
-pub const SHRINK_RATIO: f64 = 0.80;
+
+// The default extra account space in percentage from the ideal target
+pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
+
+pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
@@ -848,6 +853,14 @@ pub struct AccountsDb {
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     /// can safely clear the set of unrooted slots `slots`.
     remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
+
+    /// when shrinking accounts, try to to optimize
+    /// on the overall usage from all accounts
+    optimize_total_space: bool,
+
+    /// The shrink ratio: live_bytes/total_bytes of an account
+    /// or of all accounts when using optimize_total_space
+    shrink_ratio: f64,
 }
 
 #[derive(Debug, Default)]
@@ -1291,6 +1304,8 @@ impl Default for AccountsDb {
             load_limit: AtomicU64::default(),
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
+            optimize_total_space: DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
         }
     }
 }
@@ -1302,6 +1317,8 @@ impl AccountsDb {
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         )
     }
 
@@ -1310,7 +1327,14 @@ impl AccountsDb {
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
+        optimize_total_space: bool,
+        shrink_ratio: f64,
     ) -> Self {
+        info!(
+            "Creating new accountdb: caching_enabled {:?}, optimize_total_space: {:?}",
+            caching_enabled, optimize_total_space
+        );
+
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -1318,6 +1342,8 @@ impl AccountsDb {
                 cluster_type: Some(*cluster_type),
                 account_indexes,
                 caching_enabled,
+                optimize_total_space,
+                shrink_ratio,
                 ..Self::default()
             }
         } else {
@@ -1330,6 +1356,8 @@ impl AccountsDb {
                 cluster_type: Some(*cluster_type),
                 account_indexes,
                 caching_enabled,
+                optimize_total_space,
+                shrink_ratio,
                 ..Self::default()
             }
         };
@@ -1976,6 +2004,7 @@ impl AccountsDb {
             for slot in dead_slots {
                 list.remove(slot);
             }
+            info!("process_dead_slots, candidates: {:?}", list.len());
         }
 
         debug!(
@@ -2267,13 +2296,82 @@ impl AccountsDb {
 
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_slots = std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
+
+        info!(
+            "shrink_candidate_slots candidates: {:?}",
+            shrink_slots.len()
+        );
+        let shrink_slots = if self.optimize_total_space {
+            let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
+
+            let mut store_usage: Vec<(Slot, AppendVecId, f64, Arc<AccountStorageEntry>, u64)> =
+                Vec::with_capacity(shrink_slots.len());
+            let mut total_alive: u64 = 0;
+            let mut candidates_count: usize = 0;
+            for (slot, slot_shrink_candidates) in &shrink_slots {
+                candidates_count += slot_shrink_candidates.len();
+                for store in slot_shrink_candidates.values() {
+                    total_alive += self.page_align(store.alive_bytes() as u64);
+                    let alive_ratio = self.page_align(store.alive_bytes() as u64) as f64
+                        / store.total_bytes() as f64;
+                    store_usage.push((*slot, store.append_vec_id(), alive_ratio, store.clone(), 0));
+                }
+            }
+            store_usage.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(cmp::Ordering::Equal));
+            // working backward on store_usage, get the all total bytes if the entries including it and after it are not shrunk
+            // the total bytes for all unshrinked stores
+            let mut all_total: u64 = 0;
+            for i in (0..store_usage.len()).rev() {
+                let usage = &mut store_usage[i];
+                usage.4 = usage.3.total_bytes() + all_total;
+                all_total = usage.4;
+            }
+            // now working from the beginning of store_usage which are most sparse and see when we can stop
+            // shrinking while still achieving the goals.
+            let mut shrink_slots: ShrinkCandidates = HashMap::new();
+            let mut shrunk_total: u64 = 0;
+            for usage in &store_usage {
+                let store = &usage.3;
+                shrunk_total += self.page_align(store.alive_bytes() as u64);
+                let unshrunk_total = usage.4 - store.total_bytes(); // the unshrunk total after this
+                let total_bytes = shrunk_total + unshrunk_total;
+                shrink_slots
+                    .entry(usage.0)
+                    .or_default()
+                    .insert(store.append_vec_id(), store.clone());
+
+                if (total_alive as f64) / (total_bytes as f64) < self.shrink_ratio {
+                    // we have reached our goal, stop
+                    break;
+                }
+            }
+            measure.stop();
+            inc_new_counter_info!(
+                "select_top_sparse_storage_entries-ms",
+                measure.as_ms() as usize
+            );
+            inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
+            shrink_slots
+        } else {
+            shrink_slots
+        };
+
+        let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
+        let mut shrink_candidates_count: usize = 0;
         for (slot, slot_shrink_candidates) in shrink_slots {
+            shrink_candidates_count += slot_shrink_candidates.len();
             let mut measure = Measure::start("shrink_candidate_slots-ms");
             self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), false);
             measure.stop();
             inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
         }
+        measure_shrink_all_candidates.stop();
+        inc_new_counter_info!(
+            "shrink_all_candidate_slots-ms",
+            measure_shrink_all_candidates.as_ms() as usize
+        );
+        inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
         num_candidates
     }
 
@@ -4802,9 +4900,11 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && (Self::page_align(store.alive_bytes() as u64) as f64
-                        / store.total_bytes() as f64)
-                        < SHRINK_RATIO
+                    && ((self.optimize_total_space
+                        && self.page_align(store.alive_bytes() as u64) < store.total_bytes())
+                        || (self.page_align(store.alive_bytes() as u64) as f64
+                            / store.total_bytes() as f64)
+                            < self.shrink_ratio)
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -4845,6 +4945,7 @@ impl AccountsDb {
                         }
                     }
                 }
+                info!("candidates counts: {:?}", shrink_candidate_slots.len());
             }
         }
 
@@ -7168,6 +7269,8 @@ pub mod tests {
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
             false,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -8763,7 +8866,10 @@ pub mod tests {
             let accounts = AccountsDb::new_single();
 
             for _ in 0..10 {
-                accounts.shrink_candidate_slots();
+                accounts.shrink_candidate_slots(
+                    DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+                    DEFAULT_ACCOUNTS_SHRINK_RATIO,
+                );
             }
 
             accounts.shrink_all_slots(*startup);
@@ -8959,7 +9065,10 @@ pub mod tests {
 
         // Only, try to shrink stale slots, nothing happens because 90/100
         // is not small enough to do a shrink
-        accounts.shrink_candidate_slots();
+        accounts.shrink_candidate_slots(
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        );
         assert_eq!(
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -9471,6 +9580,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -9518,6 +9629,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -9566,6 +9679,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         ));
 
         let zero_lamport_account_key = Pubkey::new_unique();
@@ -9697,6 +9812,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         ));
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -9801,6 +9918,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         let slot: Slot = 0;
         let num_keys = 10;
@@ -9855,6 +9974,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
         let stall_slot = num_slots as Slot;
@@ -10253,6 +10374,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -10295,7 +10418,10 @@ pub mod tests {
                 .or_default()
                 .insert(slot0_store.append_vec_id(), slot0_store);
         }
-        db.shrink_candidate_slots();
+        db.shrink_candidate_slots(
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        );
 
         // Make slot 0 dead by updating the remaining key
         db.store_cached(2, &[(&account_key2, &account1)]);
@@ -10515,6 +10641,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -10586,6 +10714,8 @@ pub mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -10623,7 +10753,10 @@ pub mod tests {
                         .entry(slot)
                         .or_default()
                         .insert(store_id, store.clone());
-                    db.shrink_candidate_slots();
+                    db.shrink_candidate_slots(
+                        DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+                        DEFAULT_ACCOUNTS_SHRINK_RATIO,
+                    );
                 })
                 .unwrap()
         };
