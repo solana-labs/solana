@@ -4613,7 +4613,21 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
             );
-        assert_eq!(total_lamports, self.capitalization());
+        if total_lamports != self.capitalization() {
+            datapoint_info!(
+                "capitalization_mismatch",
+                ("slot", self.slot(), i64),
+                ("calculated_lamports", total_lamports, i64),
+                ("capitalization", self.capitalization(), i64),
+            );
+
+            panic!(
+                "capitalization_mismatch. slot: {}, calculated_lamports: {}, capitalization: {}",
+                self.slot(),
+                total_lamports,
+                self.capitalization()
+            );
+        }
         hash
     }
 
