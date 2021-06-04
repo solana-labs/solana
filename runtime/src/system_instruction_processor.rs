@@ -180,12 +180,6 @@ fn transfer_verified(
         return Err(InstructionError::InvalidArgument);
     }
 
-    if invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
-        && lamports == 0
-    {
-        return Ok(());
-    }
-
     if lamports > from.lamports()? {
         ic_msg!(
             invoke_context,
@@ -1119,13 +1113,15 @@ mod tests {
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
 
-        assert!(transfer(
-            &from_keyed_account,
-            &to_keyed_account,
-            0,
-            &MockInvokeContext::new(vec![]),
-        )
-        .is_err(),);
+        assert_eq!(
+            transfer(
+                &from_keyed_account,
+                &to_keyed_account,
+                0,
+                &MockInvokeContext::new(vec![]),
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
         assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
     }
