@@ -4387,28 +4387,6 @@ impl AccountsDb {
         }
     }
 
-    fn scan_account_storages_one_slot<F, B>(
-        storages: &[Arc<AccountStorageEntry>],
-        scan_func: &F,
-        slot: Slot,
-        retval: &mut B,
-    ) where
-        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
-        B: Send + Default,
-    {
-        let len = storages.len();
-        if len == 1 {
-            for storage in storages {
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    scan_func(LoadedAccount::Stored(stored_account), retval, slot)
-                });
-            }
-        } else if len > 0 {
-            Self::scan_multiple_account_storages_one_slot(storages, scan_func, slot, retval);
-        }
-    }
-
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
         snapshot_storages: &SortedStorages,
@@ -4431,7 +4409,7 @@ impl AccountsDb {
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
                     if let Some(sub_storages) = sub_storages {
-                        Self::scan_account_storages_one_slot(
+                        Self::scan_multiple_account_storages_one_slot(
                             sub_storages,
                             &scan_func,
                             slot,
@@ -6373,7 +6351,7 @@ pub mod tests {
             assert_eq!(slot_expected, slot);
             accum.push(expected);
         };
-        AccountsDb::scan_account_storages_one_slot(
+        AccountsDb::scan_multiple_account_storages_one_slot(
             &storages[0],
             &scan_func,
             slot_expected,
