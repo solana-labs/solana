@@ -10,7 +10,7 @@ use log::*;
 use ouroboros::self_referencing;
 use solana_measure::measure::Measure;
 use solana_sdk::{
-    clock::{Slot, SlotId},
+    clock::{BankId, Slot},
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
 use std::{
@@ -58,8 +58,8 @@ impl IsCached for u64 {
 
 #[derive(Error, Debug, PartialEq)]
 pub enum ScanError {
-    #[error("Node detected it replayed bad version of slot {slot:?} with id {slot_id:?}, thus the scan on said slot was aborted")]
-    SlotRemoved { slot: Slot, slot_id: SlotId },
+    #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
+    SlotRemoved { slot: Slot, bank_id: BankId },
 }
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
@@ -626,10 +626,10 @@ pub struct AccountsIndex<T> {
     // `AccountsDb::remove_unrooted_slots()`. When the scan finishes, it'll realize that the
     // results of the scan may have been corrupted by `remove_unrooted_slots` and abort its results.
     //
-    // `removed_slot_ids` tracks all the slot ids that were removed via `remove_unrooted_slots()` so any attempted scans
+    // `removed_bank_ids` tracks all the slot ids that were removed via `remove_unrooted_slots()` so any attempted scans
     // on any of these slots fails. This is safe to purge once the associated Bank is dropped and
     // scanning the fork with that Bank at the tip is no longer possible.
-    pub removed_slot_ids: Mutex<HashSet<SlotId>>,
+    pub removed_bank_ids: Mutex<HashSet<BankId>>,
     zero_lamport_pubkeys: DashSet<Pubkey>,
 }
 
@@ -648,7 +648,7 @@ impl<T> Default for AccountsIndex<T> {
             ),
             roots_tracker: RwLock::<RootsTracker>::default(),
             ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
-            removed_slot_ids: Mutex::<HashSet<SlotId>>::default(),
+            removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
             zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
         }
     }
@@ -666,7 +666,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         &self,
         metric_name: &'static str,
         ancestors: &Ancestors,
-        scan_slot_id: SlotId,
+        scan_bank_id: BankId,
         func: F,
         scan_type: ScanTypes<R>,
     ) -> Result<(), ScanError>
@@ -675,11 +675,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         R: RangeBounds<Pubkey>,
     {
         {
-            let locked_removed_slot_ids = self.removed_slot_ids.lock().unwrap();
-            if locked_removed_slot_ids.contains(&scan_slot_id) {
+            let locked_removed_bank_ids = self.removed_bank_ids.lock().unwrap();
+            if locked_removed_bank_ids.contains(&scan_bank_id) {
                 return Err(ScanError::SlotRemoved {
                     slot: ancestors.max_slot(),
-                    slot_id: scan_slot_id,
+                    bank_id: scan_bank_id,
                 });
             }
         }
@@ -861,18 +861,18 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             }
         }
 
-        // If the fork with tip at bank `scan_slot_id` was removed durin our scan, then the scan
+        // If the fork with tip at bank `scan_bank_id` was removed durin our scan, then the scan
         // may have been corrupted, so abort the results.
         let was_scan_corrupted = self
-            .removed_slot_ids
+            .removed_bank_ids
             .lock()
             .unwrap()
-            .contains(&scan_slot_id);
+            .contains(&scan_bank_id);
 
         if was_scan_corrupted {
             Err(ScanError::SlotRemoved {
                 slot: ancestors.max_slot(),
-                slot_id: scan_slot_id,
+                bank_id: scan_bank_id,
             })
         } else {
             Ok(())
@@ -1079,7 +1079,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     pub(crate) fn scan_accounts<F>(
         &self,
         ancestors: &Ancestors,
-        scan_slot_id: SlotId,
+        scan_bank_id: BankId,
         func: F,
     ) -> Result<(), ScanError>
     where
@@ -1089,7 +1089,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         self.do_checked_scan_accounts(
             "",
             ancestors,
-            scan_slot_id,
+            scan_bank_id,
             func,
             ScanTypes::Unindexed(None::<Range<Pubkey>>),
         )
@@ -1125,7 +1125,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     pub(crate) fn index_scan_accounts<F>(
         &self,
         ancestors: &Ancestors,
-        scan_slot_id: SlotId,
+        scan_bank_id: BankId,
         index_key: IndexKey,
         func: F,
     ) -> Result<(), ScanError>
@@ -1136,7 +1136,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         self.do_checked_scan_accounts(
             "",
             ancestors,
-            scan_slot_id,
+            scan_bank_id,
             func,
             ScanTypes::<Range<Pubkey>>::Indexed(index_key),
         )

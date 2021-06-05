@@ -68,7 +68,7 @@ use solana_sdk::{
         AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
     },
     clock::{
-        Epoch, Slot, SlotCount, SlotId, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
+        BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
@@ -417,7 +417,7 @@ pub struct BankRc {
     /// Current slot
     pub(crate) slot: Slot,
 
-    pub(crate) slot_id_generator: Arc<AtomicU64>,
+    pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -432,7 +432,7 @@ impl AbiExample for BankRc {
             // AbiExample for Accounts is specially implemented to contain a storage example
             accounts: AbiExample::example(),
             slot: AbiExample::example(),
-            slot_id_generator: Arc::new(AtomicU64::new(0)),
+            bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -443,7 +443,7 @@ impl BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
             slot,
-            slot_id_generator: Arc::new(AtomicU64::new(0)),
+            bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -913,7 +913,7 @@ pub struct Bank {
     /// Bank slot (i.e. block)
     slot: Slot,
 
-    slot_id: SlotId,
+    bank_id: BankId,
 
     /// Bank epoch
     epoch: Epoch,
@@ -1135,7 +1135,7 @@ impl Bank {
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
-            slot_id_generator: parent.rc.slot_id_generator.clone(),
+            bank_id_generator: parent.rc.bank_id_generator.clone(),
         };
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
@@ -1144,12 +1144,12 @@ impl Bank {
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
-        let slot_id = rc.slot_id_generator.fetch_add(1, Relaxed) + 1;
+        let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
             rc,
             src,
             slot,
-            slot_id,
+            bank_id,
             epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
@@ -1328,7 +1328,7 @@ impl Bank {
             slots_per_year: fields.slots_per_year,
             unused: genesis_config.unused,
             slot: fields.slot,
-            slot_id: 0,
+            bank_id: 0,
             epoch: fields.epoch,
             block_height: fields.block_height,
             collector_id: fields.collector_id,
@@ -1447,8 +1447,8 @@ impl Bank {
         self.slot
     }
 
-    pub fn slot_id(&self) -> SlotId {
-        self.slot_id
+    pub fn bank_id(&self) -> BankId {
+        self.bank_id
     }
 
     pub fn epoch(&self) -> Epoch {
@@ -2668,7 +2668,7 @@ impl Bank {
         }
     }
 
-    pub fn remove_unrooted_slots(&self, slots: &[(Slot, SlotId)]) {
+    pub fn remove_unrooted_slots(&self, slots: &[(Slot, BankId)]) {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
@@ -4351,7 +4351,7 @@ impl Bank {
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program(&self.ancestors, self.slot_id, program_id)
+            .load_by_program(&self.ancestors, self.bank_id, program_id)
     }
 
     pub fn get_filtered_program_accounts<F: Fn(&AccountSharedData) -> bool>(
@@ -4361,7 +4361,7 @@ impl Bank {
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_program_with_filter(
             &self.ancestors,
-            self.slot_id,
+            self.bank_id,
             program_id,
             filter,
         )
@@ -4374,7 +4374,7 @@ impl Bank {
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_index_key_with_filter(
             &self.ancestors,
-            self.slot_id,
+            self.bank_id,
             index_key,
             filter,
         )
@@ -4387,7 +4387,7 @@ impl Bank {
     pub fn get_all_accounts_with_modified_slots(
         &self,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
-        self.rc.accounts.load_all(&self.ancestors, self.slot_id)
+        self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -4445,7 +4445,7 @@ impl Bank {
     ) -> ScanResult<Vec<(Pubkey, u64)>> {
         self.rc.accounts.load_largest_accounts(
             &self.ancestors,
-            self.slot_id,
+            self.bank_id,
             num,
             filter_by_address,
             filter,
@@ -5281,7 +5281,7 @@ impl Drop for Bank {
             // AccountsBackgroundService to perform cleanups yet.
             self.rc
                 .accounts
-                .purge_slot(self.slot(), self.slot_id(), false);
+                .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
 }
@@ -11933,7 +11933,7 @@ pub(crate) mod tests {
         F: Fn(
                 Arc<Bank>,
                 crossbeam_channel::Sender<Arc<Bank>>,
-                crossbeam_channel::Receiver<SlotId>,
+                crossbeam_channel::Receiver<BankId>,
                 Arc<HashSet<Pubkey>>,
                 Pubkey,
                 u64,
@@ -11990,8 +11990,8 @@ pub(crate) mod tests {
         ) = bounded(1);
 
         let (scan_finished_sender, scan_finished_receiver): (
-            crossbeam_channel::Sender<SlotId>,
-            crossbeam_channel::Receiver<SlotId>,
+            crossbeam_channel::Sender<BankId>,
+            crossbeam_channel::Receiver<BankId>,
         ) = unbounded();
         let num_banks_scanned = Arc::new(AtomicU64::new(0));
         let scan_thread = {
@@ -12011,7 +12011,7 @@ pub(crate) mod tests {
                         {
                             info!("scanning program accounts for slot {}", bank_to_scan.slot());
                             let accounts_result = bank_to_scan.get_program_accounts(&program_id);
-                            let _ = scan_finished_sender.send(bank_to_scan.slot_id());
+                            let _ = scan_finished_sender.send(bank_to_scan.bank_id());
                             num_banks_scanned.fetch_add(1, Relaxed);
                             match (&acceptable_scan_results, accounts_result.is_err()) {
                                 (AcceptableScanResults::DroppedSlotError, _)
@@ -12020,7 +12020,7 @@ pub(crate) mod tests {
                                         accounts_result,
                                         Err(ScanError::SlotRemoved {
                                             slot: bank_to_scan.slot(),
-                                            slot_id: bank_to_scan.slot_id()
+                                            bank_id: bank_to_scan.bank_id()
                                         })
                                     );
                                 }
@@ -12250,7 +12250,7 @@ pub(crate) mod tests {
         starting_lamports: u64,
         num_banks_on_fork: usize,
         step_size: usize,
-    ) -> (Arc<Bank>, Vec<(Slot, SlotId)>, Ancestors) {
+    ) -> (Arc<Bank>, Vec<(Slot, BankId)>, Ancestors) {
         // Need at least 2 keys to create inconsistency in account balances when deleting
         // slots
         assert!(pubkeys_to_modify.len() > 1);
@@ -12278,7 +12278,7 @@ pub(crate) mod tests {
                     bank_at_fork_tip.slot() + 1,
                 ));
                 if lamports_this_round == 0 {
-                    lamports_this_round = bank_at_fork_tip.slot_id() + starting_lamports + 1;
+                    lamports_this_round = bank_at_fork_tip.bank_id() + starting_lamports + 1;
                 }
                 let pubkey_to_modify_starting_index = i * pubkeys_to_modify_per_slot;
                 let account = AccountSharedData::new(lamports_this_round, 0, program_id);
@@ -12289,7 +12289,7 @@ pub(crate) mod tests {
                     bank_at_fork_tip.store_account(&key, &account);
                 }
                 bank_at_fork_tip.freeze();
-                slots_on_fork.push((bank_at_fork_tip.slot(), bank_at_fork_tip.slot_id()));
+                slots_on_fork.push((bank_at_fork_tip.slot(), bank_at_fork_tip.bank_id()));
             }
         }
 
@@ -12336,11 +12336,11 @@ pub(crate) mod tests {
                         }
 
                         // Wait for scan to finish before starting next iteration
-                        let finished_scan_slot_id = scan_finished_receiver.recv();
-                        if finished_scan_slot_id.is_err() {
+                        let finished_scan_bank_id = scan_finished_receiver.recv();
+                        if finished_scan_bank_id.is_err() {
                             return;
                         }
-                        assert_eq!(finished_scan_slot_id.unwrap(), bank_at_fork_tip.slot_id());
+                        assert_eq!(finished_scan_bank_id.unwrap(), bank_at_fork_tip.bank_id());
                     }
                 },
                 None,
@@ -12398,12 +12398,12 @@ pub(crate) mod tests {
                                 return;
                             }
 
-                            let finished_scan_slot_id = scan_finished_receiver.recv();
-                            if finished_scan_slot_id.is_err() {
+                            let finished_scan_bank_id = scan_finished_receiver.recv();
+                            if finished_scan_bank_id.is_err() {
                                 return;
                             }
                             // Wait for scan to finish before starting next iteration
-                            assert_eq!(finished_scan_slot_id.unwrap(), prev_bank.slot_id());
+                            assert_eq!(finished_scan_bank_id.unwrap(), prev_bank.bank_id());
                         }
                         bank_at_fork_tip.remove_unrooted_slots(&slots_on_fork);
                         prev_bank = bank_at_fork_tip;
@@ -12459,15 +12459,15 @@ pub(crate) mod tests {
                         bank_at_fork_tip.remove_unrooted_slots(&[slot_to_remove]);
 
                         // Wait for scan to finish before starting next iteration
-                        let finished_scan_slot_id = scan_finished_receiver.recv();
-                        if finished_scan_slot_id.is_err() {
+                        let finished_scan_bank_id = scan_finished_receiver.recv();
+                        if finished_scan_bank_id.is_err() {
                             return;
                         }
-                        assert_eq!(finished_scan_slot_id.unwrap(), bank_at_fork_tip.slot_id());
+                        assert_eq!(finished_scan_bank_id.unwrap(), bank_at_fork_tip.bank_id());
 
                         // Remove the rest of the slots before the next iteration
-                        for (slot, slot_id) in slots_on_fork {
-                            bank_at_fork_tip.remove_unrooted_slots(&[(slot, slot_id)]);
+                        for (slot, bank_id) in slots_on_fork {
+                            bank_at_fork_tip.remove_unrooted_slots(&[(slot, bank_id)]);
                         }
                     }
                 },

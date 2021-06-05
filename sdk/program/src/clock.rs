@@ -79,7 +79,7 @@ pub type Slot = u64;
 
 /// Uniquely distinguishes every version of a slot, even if the
 /// slot number is the same, i.e. duplicate slots
-pub type SlotId = u64;
+pub type BankId = u64;
 
 /// Epoch is a unit of time a given leader schedule is honored,
 ///  some number of Slots.

@@ -23,7 +23,7 @@ use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Slot, SlotId, INITIAL_RENT_EPOCH},
+    clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -585,7 +585,7 @@ impl Accounts {
     pub fn load_largest_accounts(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
@@ -595,7 +595,7 @@ impl Accounts {
         }
         let account_balances = self.accounts_db.scan_accounts(
             ancestors,
-            slot_id,
+            bank_id,
             |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
                 if let Some((pubkey, account, _slot)) = option {
                     if account.lamports() == 0 {
@@ -685,12 +685,12 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         program_id: &Pubkey,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
-            slot_id,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id
@@ -702,13 +702,13 @@ impl Accounts {
     pub fn load_by_program_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         program_id: &Pubkey,
         filter: F,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
-            slot_id,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id && filter(account)
@@ -720,14 +720,14 @@ impl Accounts {
     pub fn load_by_index_key_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         index_key: &IndexKey,
         filter: F,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db
             .index_scan_accounts(
                 ancestors,
-                slot_id,
+                bank_id,
                 *index_key,
                 |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
@@ -745,11 +745,11 @@ impl Accounts {
     pub fn load_all(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
         self.accounts_db.scan_accounts(
             ancestors,
-            slot_id,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) = some_account_tuple
                     .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
@@ -940,8 +940,8 @@ impl Accounts {
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, slot_id: SlotId, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, slot_id, is_from_abs);
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
+        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -2589,12 +2589,12 @@ mod tests {
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
 
         // num == 0 should always return empty set
-        let slot_id = 0;
+        let bank_id = 0;
         assert_eq!(
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     0,
                     &HashSet::new(),
                     AccountAddressFilter::Exclude
@@ -2606,7 +2606,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     0,
                     &all_pubkeys,
                     AccountAddressFilter::Include
@@ -2621,7 +2621,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     1,
                     &HashSet::new(),
                     AccountAddressFilter::Exclude
@@ -2633,7 +2633,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     2,
                     &HashSet::new(),
                     AccountAddressFilter::Exclude
@@ -2645,7 +2645,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     3,
                     &HashSet::new(),
                     AccountAddressFilter::Exclude
@@ -2659,7 +2659,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     6,
                     &HashSet::new(),
                     AccountAddressFilter::Exclude
@@ -2674,7 +2674,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     1,
                     &exclude1,
                     AccountAddressFilter::Exclude
@@ -2686,7 +2686,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     2,
                     &exclude1,
                     AccountAddressFilter::Exclude
@@ -2698,7 +2698,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     3,
                     &exclude1,
                     AccountAddressFilter::Exclude
@@ -2713,7 +2713,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     1,
                     &include1_2,
                     AccountAddressFilter::Include
@@ -2725,7 +2725,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     2,
                     &include1_2,
                     AccountAddressFilter::Include
@@ -2737,7 +2737,7 @@ mod tests {
             accounts
                 .load_largest_accounts(
                     &ancestors,
-                    slot_id,
+                    bank_id,
                     3,
                     &include1_2,
                     AccountAddressFilter::Include

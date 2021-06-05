@@ -13,7 +13,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
 use solana_sdk::{
-    clock::{Slot, SlotId},
+    clock::{BankId, Slot},
     hash::Hash,
 };
 use std::{
@@ -42,8 +42,8 @@ const RECYCLE_STORE_EXPIRATION_INTERVAL_SECS: u64 = crate::accounts_db::EXPIRATI
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
-pub type DroppedSlotsSender = Sender<(Slot, SlotId)>;
-pub type DroppedSlotsReceiver = Receiver<(Slot, SlotId)>;
+pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
+pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
 #[derive(Clone)]
 pub struct SendDroppedBankCallback {
@@ -52,7 +52,7 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        if let Err(e) = self.sender.send((bank.slot(), bank.slot_id())) {
+        if let Err(e) = self.sender.send((bank.slot(), bank.bank_id())) {
             warn!("Error sending dropped banks: {:?}", e);
         }
     }
@@ -269,11 +269,11 @@ impl AbsRequestHandler {
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
         let mut count = 0;
-        for (pruned_slot, pruned_slot_id) in self.pruned_banks_receiver.try_iter() {
+        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
             bank.rc
                 .accounts
-                .purge_slot(pruned_slot, pruned_slot_id, is_from_abs);
+                .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
         }
 
         count

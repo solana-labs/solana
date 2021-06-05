@@ -395,11 +395,11 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
     let ancestors = Ancestors::from(vec![0]);
-    let slot_id = 0;
+    let bank_id = 0;
     b.iter(|| {
         accounts.load_largest_accounts(
             &ancestors,
-            slot_id,
+            bank_id,
             20,
             &HashSet::new(),
             AccountAddressFilter::Exclude,

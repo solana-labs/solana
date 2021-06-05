@@ -48,7 +48,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
-    clock::{Epoch, Slot, SlotId},
+    clock::{BankId, Epoch, Slot},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -1506,7 +1506,7 @@ impl AccountsDb {
             };
             if no_delete {
                 let mut pending_store_ids: HashSet<usize> = HashSet::new();
-                for (_slot_id, account_info) in account_infos {
+                for (_bank_id, account_info) in account_infos {
                     if !already_counted.contains(&account_info.store_id) {
                         pending_store_ids.insert(account_info.store_id);
                     }
@@ -2423,7 +2423,7 @@ impl AccountsDb {
     pub fn scan_accounts<F, A>(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         scan_func: F,
     ) -> ScanResult<A>
     where
@@ -2434,7 +2434,7 @@ impl AccountsDb {
 
         // This can error out if the slots being scanned over are aborted
         self.accounts_index
-            .scan_accounts(ancestors, slot_id, |pubkey, (account_info, slot)| {
+            .scan_accounts(ancestors, bank_id, |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
                     .get_loaded_account()
@@ -2512,7 +2512,7 @@ impl AccountsDb {
     pub fn index_scan_accounts<F, A>(
         &self,
         ancestors: &Ancestors,
-        slot_id: SlotId,
+        bank_id: BankId,
         index_key: IndexKey,
         scan_func: F,
     ) -> ScanResult<(A, bool)>
@@ -2528,14 +2528,14 @@ impl AccountsDb {
         if !self.account_indexes.include_key(key) {
             // the requested key was not indexed in the secondary index, so do a normal scan
             let used_index = false;
-            let scan_result = self.scan_accounts(ancestors, slot_id, scan_func)?;
+            let scan_result = self.scan_accounts(ancestors, bank_id, scan_func)?;
             return Ok((scan_result, used_index));
         }
 
         let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
-            slot_id,
+            bank_id,
             index_key,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
@@ -3298,20 +3298,20 @@ impl AccountsDb {
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
     /// comment below for more explanation.
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, slot_id: SlotId, is_from_abs: bool) {
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
         if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
             panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
         }
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
         // we know that there are no longer any ongoing scans on this bank, because scans require
         // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
-        // safe to remove this slot_id from the `removed_slot_ids` list at this point.
+        // safe to remove this bank_id from the `removed_bank_ids` list at this point.
         if self
             .accounts_index
-            .removed_slot_ids
+            .removed_bank_ids
             .lock()
             .unwrap()
-            .remove(&slot_id)
+            .remove(&bank_id)
         {
             // If this slot was already cleaned up, no need to do any further cleans
             return;
@@ -3575,7 +3575,7 @@ impl AccountsDb {
             //
             // Also note roots are never removed via `remove_unrooted_slot()`, so
             // it's safe to filter them out here as they won't need deletion from
-            // self.accounts_index.removed_slot_ids in `purge_slots_from_cache_and_store()`.
+            // self.accounts_index.removed_bank_ids in `purge_slots_from_cache_and_store()`.
             .filter(|slot| !self.accounts_index.is_root(**slot));
         safety_checks_elapsed.stop();
         self.external_purge_slots_stats
@@ -3586,7 +3586,7 @@ impl AccountsDb {
             .report("external_purge_slots_stats", Some(1000));
     }
 
-    pub fn remove_unrooted_slots(&self, remove_slots: &[(Slot, SlotId)]) {
+    pub fn remove_unrooted_slots(&self, remove_slots: &[(Slot, BankId)]) {
         let rooted_slots = self
             .accounts_index
             .get_rooted_from_list(remove_slots.iter().map(|(slot, _)| slot));
@@ -3660,9 +3660,9 @@ impl AccountsDb {
         // banks fail, and any ongoing scans over these slots will detect that they should abort
         // their results
         {
-            let mut locked_removed_slot_ids = self.accounts_index.removed_slot_ids.lock().unwrap();
-            for (_slot, remove_slot_id) in remove_slots.iter() {
-                locked_removed_slot_ids.insert(*remove_slot_id);
+            let mut locked_removed_bank_ids = self.accounts_index.removed_bank_ids.lock().unwrap();
+            for (_slot, remove_bank_id) in remove_slots.iter() {
+                locked_removed_bank_ids.insert(*remove_bank_id);
             }
         }
 
@@ -6871,7 +6871,7 @@ pub mod tests {
 
     fn run_test_remove_unrooted_slot(is_cached: bool) {
         let unrooted_slot = 9;
-        let unrooted_slot_id = 9;
+        let unrooted_bank_id = 9;
         let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         db.caching_enabled = true;
         let key = Pubkey::default();
@@ -6893,7 +6893,7 @@ pub mod tests {
         assert_load_account(&db, unrooted_slot, key, 1);
 
         // Purge the slot
-        db.remove_unrooted_slots(&[(unrooted_slot, unrooted_slot_id)]);
+        db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
@@ -6924,14 +6924,14 @@ pub mod tests {
     fn test_remove_unrooted_slot_snapshot() {
         solana_logger::setup();
         let unrooted_slot = 9;
-        let unrooted_slot_id = 9;
+        let unrooted_bank_id = 9;
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let key = solana_sdk::pubkey::new_rand();
         let account0 = AccountSharedData::new(1, 0, &key);
         db.store_uncached(unrooted_slot, &[(&key, &account0)]);
 
         // Purge the slot
-        db.remove_unrooted_slots(&[(unrooted_slot, unrooted_slot_id)]);
+        db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
 
         // Add a new root
         let key2 = solana_sdk::pubkey::new_rand();
@@ -7556,10 +7556,10 @@ pub mod tests {
         // Secondary index should still find both pubkeys
         let mut found_accounts = HashSet::new();
         let index_key = IndexKey::SplTokenMint(mint_key);
-        let slot_id = 0;
+        let bank_id = 0;
         accounts
             .accounts_index
-            .index_scan_accounts(&Ancestors::default(), slot_id, index_key, |key, _| {
+            .index_scan_accounts(&Ancestors::default(), bank_id, index_key, |key, _| {
                 found_accounts.insert(*key);
             })
             .unwrap();
@@ -7576,7 +7576,7 @@ pub mod tests {
             let found_accounts = accounts
                 .index_scan_accounts(
                     &Ancestors::default(),
-                    slot_id,
+                    bank_id,
                     index_key,
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
@@ -7594,7 +7594,7 @@ pub mod tests {
             let found_accounts = accounts
                 .index_scan_accounts(
                     &Ancestors::default(),
-                    slot_id,
+                    bank_id,
                     index_key,
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
@@ -7629,7 +7629,7 @@ pub mod tests {
             .accounts_index
             .index_scan_accounts(
                 &Ancestors::default(),
-                slot_id,
+                bank_id,
                 IndexKey::SplTokenMint(mint_key),
                 |key, _| found_accounts.push(*key),
             )
@@ -10107,7 +10107,7 @@ pub mod tests {
     fn setup_scan(
         db: Arc<AccountsDb>,
         scan_ancestors: Arc<Ancestors>,
-        slot_id: SlotId,
+        bank_id: BankId,
         stall_key: Pubkey,
     ) -> ScanTracker {
         let exit = Arc::new(AtomicBool::new(false));
@@ -10120,7 +10120,7 @@ pub mod tests {
             .spawn(move || {
                 db.scan_accounts(
                     &scan_ancestors,
-                    slot_id,
+                    bank_id,
                     |_collector: &mut Vec<(Pubkey, AccountSharedData)>, maybe_account| {
                         ready_.store(true, Ordering::Relaxed);
                         if let Some((pubkey, _, _)) = maybe_account {
@@ -10182,8 +10182,8 @@ pub mod tests {
         let max_scan_root = 0;
         db.add_root(max_scan_root);
         let scan_ancestors: Arc<Ancestors> = Arc::new(vec![(0, 1), (1, 1)].into_iter().collect());
-        let slot_id = 0;
-        let scan_tracker = setup_scan(db.clone(), scan_ancestors.clone(), slot_id, account_key2);
+        let bank_id = 0;
+        let scan_tracker = setup_scan(db.clone(), scan_ancestors.clone(), bank_id, account_key2);
 
         // Add a new root 2
         let new_root = 2;
@@ -10243,8 +10243,8 @@ pub mod tests {
         assert_eq!(account.0.lamports(), slot1_account.lamports());
 
         // Simulate dropping the bank, which finally removes the slot from the cache
-        let slot_id = 1;
-        db.purge_slot(1, slot_id, false);
+        let bank_id = 1;
+        db.purge_slot(1, bank_id, false);
         assert!(db
             .do_load(
                 &scan_ancestors,
@@ -10349,11 +10349,11 @@ pub mod tests {
             accounts_db.add_root(*slot as Slot);
             if Some(*slot) == scan_slot {
                 let ancestors = Arc::new(vec![(stall_slot, 1), (*slot, 1)].into_iter().collect());
-                let slot_id = 0;
+                let bank_id = 0;
                 scan_tracker = Some(setup_scan(
                     accounts_db.clone(),
                     ancestors,
-                    slot_id,
+                    bank_id,
                     scan_stall_key,
                 ));
                 assert_eq!(
@@ -11188,10 +11188,10 @@ pub mod tests {
             account.set_lamports(lamports);
 
             // Pick random 50% of the slots to pass to `remove_unrooted_slots()`
-            let mut all_slots: Vec<(Slot, SlotId)> = (0..num_cached_slots)
+            let mut all_slots: Vec<(Slot, BankId)> = (0..num_cached_slots)
                 .map(|slot| {
-                    let slot_id = slot + 1;
-                    (slot, slot_id)
+                    let bank_id = slot + 1;
+                    (slot, bank_id)
                 })
                 .collect();
             all_slots.shuffle(&mut rand::thread_rng());
@@ -11239,7 +11239,7 @@ pub mod tests {
             // Wait for flush to finish before starting next trial
             flush_done_receiver.recv().unwrap();
 
-            for (slot, slot_id) in slots_to_keep {
+            for (slot, bank_id) in slots_to_keep {
                 let account_in_slot = slot_to_pubkey_map[slot];
                 assert!(db
                     .load(
@@ -11250,7 +11250,7 @@ pub mod tests {
                     .is_some());
                 // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`
                 // in `purge_slot_pubkeys()` doesn't trigger
-                db.remove_unrooted_slots(&[(*slot, *slot_id)]);
+                db.remove_unrooted_slots(&[(*slot, *bank_id)]);
             }
         }
 
