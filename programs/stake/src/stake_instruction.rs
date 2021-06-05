@@ -261,13 +261,8 @@ pub fn split(
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::create_account(
-            authorized_pubkey, // Sending 0, so any signer will suffice
-            split_stake_pubkey,
-            0,
-            std::mem::size_of::<StakeState>() as u64,
-            &id(),
-        ),
+        system_instruction::allocate(split_stake_pubkey, std::mem::size_of::<StakeState>() as u64),
+        system_instruction::assign(split_stake_pubkey, &id()),
         _split(
             stake_pubkey,
             authorized_pubkey,
@@ -286,12 +281,10 @@ pub fn split_with_seed(
     seed: &str,                  // seed
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::create_account_with_seed(
-            authorized_pubkey, // Sending 0, so any signer will suffice
+        system_instruction::allocate_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            0,
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
@@ -766,7 +759,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &invalid_stake_state_pubkey(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -852,7 +845,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &Pubkey::default(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
@@ -863,7 +856,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &spoofed_stake_state_pubkey(),
-                )[1]
+                )[2]
             ),
             Err(InstructionError::IncorrectProgramId),
         );

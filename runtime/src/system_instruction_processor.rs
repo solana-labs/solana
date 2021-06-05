@@ -2,7 +2,7 @@ use log::*;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
-    ic_msg,
+    feature_set, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
     nonce,
@@ -200,7 +200,9 @@ fn transfer(
     lamports: u64,
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    if lamports == 0 {
+    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+        && lamports == 0
+    {
         return Ok(());
     }
 
@@ -225,7 +227,9 @@ fn transfer_with_seed(
     lamports: u64,
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    if lamports == 0 {
+    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+        && lamports == 0
+    {
         return Ok(());
     }
 
@@ -659,22 +663,27 @@ mod tests {
     fn test_create_with_zero_lamports() {
         // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = solana_sdk::pubkey::new_rand();
-        let from_account = AccountSharedData::new_ref(100, 1, &solana_sdk::pubkey::new_rand()); // not from system account
+        let from = Pubkey::new_unique();
+        let from_account = AccountSharedData::new_ref(100, 0, &Pubkey::new_unique()); // not from system account
 
-        let to = solana_sdk::pubkey::new_rand();
+        let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             create_account(
-                &KeyedAccount::new(&from, false, &from_account), // no signer
-                &KeyedAccount::new(&to, false, &to_account),
+                &KeyedAccount::new(&from, true, &from_account),
+                &KeyedAccount::new(&to, true, &to_account),
                 &to.into(),
                 0,
                 2,
                 &new_owner,
+<<<<<<< HEAD
                 &[to].iter().cloned().collect::<HashSet<_>>(),
                 &mut MockInvokeContext::default(),
+=======
+                &[from, to].iter().cloned().collect::<HashSet<_>>(),
+                &MockInvokeContext::new(vec![]),
+>>>>>>> 8f5e773ca (system-program: Remove zero lamport check on transfers (#17726))
             ),
             Ok(())
         );
@@ -863,11 +872,11 @@ mod tests {
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
-        // support creation/assignment with zero lamports (ephemeral account)
+        // Don't support unsigned creation with zero lamports (ephemeral account)
         let owned_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
         let result = create_account(
             &KeyedAccount::new(&from, false, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
+            &KeyedAccount::new(&owned_key, true, &owned_account),
             &owned_address,
             0,
             2,
@@ -875,7 +884,7 @@ mod tests {
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
             &mut MockInvokeContext::default(),
         );
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
     }
 
     #[test]
@@ -1087,9 +1096,7 @@ mod tests {
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_keyed_account.account.borrow().lamports, 51);
 
-        // test unsigned transfer of zero
-        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-
+        // test signed transfer of zero
         assert!(transfer(
             &from_keyed_account,
             &to_keyed_account,
@@ -1097,8 +1104,28 @@ mod tests {
             &mut MockInvokeContext::default(),
         )
         .is_ok(),);
+<<<<<<< HEAD
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+=======
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+
+        // test unsigned transfer of zero
+        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
+
+        assert_eq!(
+            transfer(
+                &from_keyed_account,
+                &to_keyed_account,
+                0,
+                &MockInvokeContext::new(vec![]),
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+>>>>>>> 8f5e773ca (system-program: Remove zero lamport check on transfers (#17726))
     }
 
     #[test]
