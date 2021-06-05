@@ -1,11 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::{
-    cost_model::CostModel,
-    cost_tracker::CostTracker,
-    packet_hasher::PacketHasher,
-};
+use crate::{cost_model::CostModel, cost_tracker::CostTracker, packet_hasher::PacketHasher};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -54,8 +50,7 @@ use std::{
     mem::size_of,
     net::UdpSocket,
     ops::DerefMut,
-    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::mpsc::Receiver,
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -1513,12 +1508,7 @@ fn next_leader_tpu_forwards(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cost_model::{ACCOUNT_MAX_COST, BLOCK_MAX_COST},
-        poh_recorder::Record,
-        poh_recorder::WorkingBank,
-        transaction_status_service::TransactionStatusService,
-    };
+    use crate::cost_model::{ACCOUNT_MAX_COST, BLOCK_MAX_COST};
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_gossip::cluster_info::Node;
