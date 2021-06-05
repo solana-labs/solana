@@ -502,14 +502,12 @@ impl Default for ProgramTest {
 }
 
 impl ProgramTest {
-    /// Create a `ProgramTest` with the given arguments, where `program_name` *must* match the
-    /// name of the BPF shared object file (located at `<crate>/target/deploy/<program>.so` by
-    /// default), which is derived from the name of the crate. For example, if the program is
-    /// housed in a crate named `my-program`, then `program_name` should be provided as
-    /// `"my_program"`.
+    /// Create a `ProgramTest`.
     ///
-    /// See also [`add_program`], which is called by `new` internally.
+    /// This is a wrapper around [`default`] and [`add_program`]. See their documentation for more
+    /// details.
     ///
+    /// [`default`]: #method.default
     /// [`add_program`]: #method.add_program
     pub fn new(
         program_name: &str,
