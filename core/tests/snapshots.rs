@@ -228,8 +228,6 @@ mod tests {
                     false,
                     false,
                     false,
-                    accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-                    accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
                 );
             }
         }

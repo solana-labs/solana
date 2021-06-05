@@ -10746,10 +10746,7 @@ pub(crate) mod tests {
         // shouldn't because none of its accounts are outdated by a later
         // root
         assert_eq!(
-            bank2.shrink_candidate_slots(
-                DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-                DEFAULT_ACCOUNTS_SHRINK_RATIO
-            ),
+            bank2.shrink_candidate_slots(),
             2
         );
         let alive_counts: Vec<usize> = (0..3)
@@ -10764,10 +10761,7 @@ pub(crate) mod tests {
 
         // No more slots should be shrunk
         assert_eq!(
-            bank2.shrink_candidate_slots(
-                DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-                DEFAULT_ACCOUNTS_SHRINK_RATIO
-            ),
+            bank2.shrink_candidate_slots(),
             0
         );
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
