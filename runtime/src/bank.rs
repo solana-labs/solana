@@ -1039,7 +1039,6 @@ impl Bank {
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
-        optimize_total_space: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
@@ -5302,9 +5301,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
-        accounts_db::{
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        },
+        accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
         accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
         ancestors::Ancestors,
         genesis_utils::{
@@ -9207,8 +9204,7 @@ pub(crate) mod tests {
             &genesis_config,
             account_indexes,
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         ));
 
         let address = Pubkey::new_unique();
@@ -10658,8 +10654,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
@@ -10695,8 +10690,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             true,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
 
@@ -11916,8 +11910,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         ));
         bank0.set_callback(drop_callback);
 

@@ -106,8 +106,7 @@ mod tests {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
-                accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-                accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
+                accounts_db::AccountShrinkThreshold::default(),
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -167,8 +166,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
-            accounts_db::DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            accounts_db::AccountShrinkThreshold::default(),
         )
         .unwrap();
 

@@ -1093,9 +1093,6 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::accounts_db::{
-        DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
-    };
     use crate::rent_collector::RentCollector;
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
@@ -1129,8 +1126,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
             accounts.store_slow_uncached(0, &ka.0, &ka.1);
@@ -1668,8 +1664,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
 
         // Load accounts owned by various programs into AccountsDb
@@ -1698,8 +1693,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1723,8 +1717,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         accounts.bank_hash_at(1);
     }
@@ -1746,8 +1739,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -1874,8 +1866,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -2026,8 +2017,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         {
             accounts
@@ -2080,8 +2070,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         let mut old_pubkey = Pubkey::default();
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -2129,8 +2118,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
@@ -2416,8 +2404,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2537,8 +2524,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2573,8 +2559,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
 
         let pubkey0 = Pubkey::new_unique();

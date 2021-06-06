@@ -1282,9 +1282,6 @@ pub mod tests {
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_runtime::accounts_db::{
-        DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
-    };
     use solana_runtime::genesis_utils::{
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
@@ -3070,8 +3067,7 @@ pub mod tests {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()
     }
