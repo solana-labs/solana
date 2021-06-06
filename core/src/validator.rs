@@ -52,7 +52,7 @@ use solana_rpc::{
     transaction_status_service::TransactionStatusService,
 };
 use solana_runtime::{
-    accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION},
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
@@ -196,7 +196,7 @@ impl Default for ValidatorConfig {
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
-            accounts_shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
+            accounts_shrink_ratio: AccountShrinkThreshold::default(),
         }
     }
 }

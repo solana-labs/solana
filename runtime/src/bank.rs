@@ -40,7 +40,6 @@ use crate::{
     },
     accounts_db::{
         AccountShrinkThreshold, ErrorCounters, SnapshotStorages,
-        DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
@@ -1014,7 +1013,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
+            AccountShrinkThreshold::default(),
         )
     }
 
@@ -1027,7 +1026,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
+            AccountShrinkThreshold::default(),
         );
 
         bank.ns_per_slot = std::u128::MAX;

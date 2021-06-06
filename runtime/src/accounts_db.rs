@@ -57,7 +57,6 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::{Borrow, Cow},
     boxed::Box,
-    cmp,
     collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     io::{Error as IoError, Result as IoResult},
@@ -129,7 +128,7 @@ pub enum AccountShrinkThreshold {
 pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 // The default extra account space in percentage from the ideal target
-pub const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
+const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
     AccountShrinkThreshold::IndividalAccount {
         ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
     };
@@ -2009,7 +2008,6 @@ impl AccountsDb {
             for slot in dead_slots {
                 list.remove(slot);
             }
-            info!("process_dead_slots, candidates: {:?}", list.len());
         }
 
         debug!(
@@ -2331,7 +2329,7 @@ impl AccountsDb {
         store_usage.sort_by(|a, b| {
             a.alive_ratio
                 .partial_cmp(&b.alive_ratio)
-                .unwrap_or(cmp::Ordering::Equal)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         // working backward on store_usage, get the all total bytes if the entries including this and after it are not shrunk
         // the total bytes for all unshrinked stores
@@ -4982,7 +4980,6 @@ impl AccountsDb {
                         }
                     }
                 }
-                info!("candidates counts: {:?}", shrink_candidate_slots.len());
             }
         }
 
