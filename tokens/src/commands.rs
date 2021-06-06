@@ -1467,7 +1467,7 @@ mod tests {
         )); // Same recipient, same lockups
     }
 
-    const SET_LOCKUP_INDEX: usize = 4;
+    const SET_LOCKUP_INDEX: usize = 5;
 
     #[test]
     fn test_set_split_stake_lockup() {

@@ -143,6 +143,10 @@ pub mod add_missing_program_error_mappings {
     solana_sdk::declare_id!("3QEUpjhgPEt92nz3Mqf6pABkHPGCQwSvKtyGMq4SuQyL");
 }
 
+pub mod system_transfer_zero_check {
+    solana_sdk::declare_id!("BrTR9hzw4WBGFP65AJMbpAo64DcA3U6jdPSga9fMV5cS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -179,6 +183,7 @@ lazy_static! {
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
+        (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
