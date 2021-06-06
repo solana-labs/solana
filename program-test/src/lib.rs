@@ -393,6 +393,16 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 }
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
+    for dir in default_shared_object_dirs() {
+        let candidate = dir.join(&filename);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn default_shared_object_dirs() -> Vec<PathBuf> {
     let mut search_path = vec![];
     if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
         search_path.push(PathBuf::from(bpf_out_dir));
@@ -401,15 +411,8 @@ pub fn find_file(filename: &str) -> Option<PathBuf> {
     if let Ok(dir) = std::env::current_dir() {
         search_path.push(dir);
     }
-    trace!("search path: {:?}", search_path);
-
-    for path in search_path {
-        let candidate = path.join(&filename);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-    None
+    trace!("BPF .so search path: {:?}", search_path);
+    search_path
 }
 
 pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
@@ -502,6 +505,13 @@ impl Default for ProgramTest {
 }
 
 impl ProgramTest {
+    /// Create a `ProgramTest`.
+    ///
+    /// This is a wrapper around [`default`] and [`add_program`]. See their documentation for more
+    /// details.
+    ///
+    /// [`default`]: #method.default
+    /// [`add_program`]: #method.add_program
     pub fn new(
         program_name: &str,
         program_id: Pubkey,
@@ -579,7 +589,7 @@ impl ProgramTest {
 
     /// Add a BPF program to the test environment.
     ///
-    /// `program_name` will also used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also be used to locate the BPF shared object in the current or fixtures
     /// directory.
     ///
     /// If `process_instruction` is provided, the natively built-program may be used instead of the
@@ -590,20 +600,7 @@ impl ProgramTest {
         program_id: Pubkey,
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
-        let loader = solana_sdk::bpf_loader::id();
-        let program_file = find_file(&format!("{}.so", program_name));
-
-        if process_instruction.is_none() && program_file.is_none() {
-            panic!("Unable to add program {} ({})", program_name, program_id);
-        }
-
-        if (program_file.is_some() && self.prefer_bpf) || process_instruction.is_none() {
-            let program_file = program_file.unwrap_or_else(|| {
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
-            });
+        let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
             info!(
                 "\"{}\" BPF program from {}{}",
@@ -627,28 +624,87 @@ impl ProgramTest {
                     .unwrap_or_else(|| "".to_string())
             );
 
-            self.add_account(
+            this.add_account(
                 program_id,
                 Account {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
                     data,
-                    owner: loader,
+                    owner: solana_sdk::bpf_loader::id(),
                     executable: true,
                     rent_epoch: 0,
                 },
             );
-        } else {
+        };
+
+        let add_native = |this: &mut ProgramTest, process_fn: ProcessInstructionWithContext| {
             info!("\"{}\" program loaded as native code", program_name);
-            self.builtins.push(Builtin::new(
+            this.builtins
+                .push(Builtin::new(program_name, program_id, process_fn));
+        };
+
+        let warn_invalid_program_name = || {
+            let valid_program_names = default_shared_object_dirs()
+                .iter()
+                .filter_map(|dir| dir.read_dir().ok())
+                .flat_map(|read_dir| {
+                    read_dir.filter_map(|entry| {
+                        let path = entry.ok()?.path();
+                        if !path.is_file() {
+                            return None;
+                        }
+                        match path.extension()?.to_str()? {
+                            "so" => Some(path.file_stem()?.to_os_string()),
+                            _ => None,
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            if valid_program_names.is_empty() {
+                // This should be unreachable as `test-bpf` should guarantee at least one shared
+                // object exists somewhere.
+                warn!("No BPF shared objects found.");
+                return;
+            }
+
+            warn!(
+                "Possible bogus program name. Ensure the program name ({}) \
+                matches one of the following recognizable program names:",
                 program_name,
-                program_id,
-                process_instruction.unwrap_or_else(|| {
-                    panic!(
-                        "Program processor not available for {} ({})",
-                        program_name, program_id
-                    );
-                }),
-            ));
+            );
+            for name in valid_program_names {
+                warn!(" - {}", name.to_str().unwrap());
+            }
+        };
+
+        let program_file = find_file(&format!("{}.so", program_name));
+        match (self.prefer_bpf, program_file, process_instruction) {
+            // If BPF is preferred (i.e., `test-bpf` is invoked) and a BPF shared object exists,
+            // use that as the program data.
+            (true, Some(file), _) => add_bpf(self, file),
+
+            // If BPF is not required (i.e., we were invoked with `test`), use the provided
+            // processor function as is.
+            //
+            // TODO: figure out why tests hang if a processor panics when running native code.
+            (false, _, Some(process)) => add_native(self, process),
+
+            // Invalid: `test-bpf` invocation with no matching BPF shared object.
+            (true, None, _) => {
+                warn_invalid_program_name();
+                panic!(
+                    "Program file data not available for {} ({})",
+                    program_name, program_id
+                );
+            }
+
+            // Invalid: regular `test` invocation without a processor.
+            (false, _, None) => {
+                panic!(
+                    "Program processor not available for {} ({})",
+                    program_name, program_id
+                );
+            }
         }
     }
 
