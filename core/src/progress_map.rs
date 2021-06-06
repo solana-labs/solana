@@ -525,7 +525,7 @@ impl ProgressMap {
         }
 
         if let Some(slot_fork_progress) = self.get_mut(&slot) {
-            // Setting the fields here is nly correct and necessary if the loop above didn't
+            // Setting the fields here is only correct and necessary if the loop above didn't
             // already do this, so check with an assert.
             assert!(!ancestors.contains(&slot));
             let slot_had_unconfirmed_duplicate_ancestor = slot_fork_progress
@@ -986,9 +986,9 @@ mod test {
 
         // All slots should no longer have any unconfirmed duplicate ancestors
         progress.set_confirmed_duplicate_slot(
-            larger_duplicate_slot,
-            &ancestors.get(&larger_duplicate_slot).unwrap(),
-            &descendants.get(&larger_duplicate_slot).unwrap(),
+            smaller_duplicate_slot,
+            &ancestors.get(&smaller_duplicate_slot).unwrap(),
+            &descendants.get(&smaller_duplicate_slot).unwrap(),
         );
         for slot in bank_forks.read().unwrap().banks().keys() {
             // All slots <= the latest duplciate confirmed slot are ancestors of

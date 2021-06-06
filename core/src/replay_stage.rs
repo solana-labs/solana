@@ -1782,6 +1782,9 @@ impl ReplayStage {
                 bank.freeze();
                 let bank_hash = bank.hash();
                 assert_ne!(bank_hash, Hash::default());
+                // Needs to be updated before `check_slot_agrees_with_cluster()` so that
+                // any updates in `check_slot_agrees_with_cluster()` on fork choice take
+                // effect
                 heaviest_subtree_fork_choice.add_new_leaf_slot(
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),

@@ -646,7 +646,7 @@ mod test {
             vec![ResultingStateChange::MarkSlotDuplicate(slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
-            .is_candidate_slot(&(slot, slot_hash))
+            .is_candidate(&(slot, slot_hash))
             .unwrap());
         for child_slot in descendants
             .get(&slot)
@@ -684,7 +684,7 @@ mod test {
                 .is_none());
         }
         assert!(heaviest_subtree_fork_choice
-            .is_candidate_slot(&(slot, slot_hash))
+            .is_candidate(&(slot, slot_hash))
             .unwrap());
     }
 
