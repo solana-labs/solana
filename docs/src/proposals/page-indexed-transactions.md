@@ -56,6 +56,11 @@ stored addresses, index accounts must also track the latest count of stored
 addresses and an authority which must be a present signer for all index
 modifications.
 
+#### Cost
+
+Since index accounts require caching and special handling in the runtime, they should incur
+higher costs for storage. Cost structure design is TBD.
+
 #### Program controlled indexes
 
 If the authority of an index account is controlled by a program, more
@@ -151,6 +156,13 @@ If the addresses listed within an index account are modifiable, front running
 attacks could modify which index accounts are accessed from a later transaction.
 For this reason, we propose that any stored address is immutable and that index
 accounts themselves may not be removed.
+
+Additionally, a malicious actor could try to fork the chain immediately after a
+new index account is added to a block. If successful, they could add a different
+unexpected index account in the fork. In order to deter this attack, clients
+should wait for indexes to be finalized before using them in a transaction.
+Clients may also append integrity check instructions to the transaction which
+verify that the correct accounts are used.
 
 ### Denial of service
 
