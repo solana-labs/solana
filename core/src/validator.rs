@@ -52,7 +52,7 @@ use solana_rpc::{
     transaction_status_service::TransactionStatusService,
 };
 use solana_runtime::{
-    accounts_db::{DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO},
+    accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION},
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
@@ -139,8 +139,7 @@ pub struct ValidatorConfig {
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
-    pub accounts_shrink_optimize_total_space: bool,
-    pub accounts_shrink_ratio: f64,
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
 impl Default for ValidatorConfig {
@@ -197,8 +196,7 @@ impl Default for ValidatorConfig {
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
-            accounts_shrink_optimize_total_space: DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            accounts_shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            accounts_shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
         }
     }
 }
@@ -725,7 +723,6 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
-                accounts_shrink_optimize_total_space: config.accounts_shrink_optimize_total_space,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
             },
             &max_slots,
@@ -1098,7 +1095,6 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
-        optimize_total_space: config.accounts_shrink_optimize_total_space,
         shrink_ratio: config.accounts_shrink_ratio,
         ..blockstore_processor::ProcessOptions::default()
     };

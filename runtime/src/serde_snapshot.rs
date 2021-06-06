@@ -1,7 +1,9 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo, AccountShrinkThreshold},
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo,
+        },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},

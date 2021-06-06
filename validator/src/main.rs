@@ -40,7 +40,8 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::{
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
@@ -2107,6 +2108,16 @@ pub fn main() {
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let accounts_shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
 
+    let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
+        AccountShrinkThreshold::TotalSpace {
+            ratio: accounts_shrink_ratio,
+        }
+    } else {
+        AccountShrinkThreshold::IndividalAccount {
+            ratio: accounts_shrink_ratio,
+        }
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_path: value_t!(matches, "tower", PathBuf).ok(),
@@ -2204,7 +2215,6 @@ pub fn main() {
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
-        accounts_shrink_optimize_total_space,
         accounts_shrink_ratio,
         ..ValidatorConfig::default()
     };

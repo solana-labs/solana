@@ -114,23 +114,31 @@ lazy_static! {
     pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AccountShrinkThreshold {
     /// Measure the total space sparseness across all candididates
     /// And select the candidiates by using the top sparse accounts to shrink
     /// The value is the overall shrink threshold measured as ratio of the total live bytes
     /// over the total bytes.
-    TotalSpace {ratio: f64},
+    TotalSpace { ratio: f64 },
     /// Use the following option to shrink all accounts whose alive ratio is below
     /// the specified threshold. All accounts with alive usage ratio below this thresholds
-    /// will be shrank. 
-    IndividalAccount {ratio: f64},
+    /// will be shrank.
+    IndividalAccount { ratio: f64 },
 }
-
+pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 // The default extra account space in percentage from the ideal target
-pub const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold = AccountShrinkThreshold::IndividalAccount {ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO};
+pub const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
+    AccountShrinkThreshold::IndividalAccount {
+        ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
+    };
 
+impl Default for AccountShrinkThreshold {
+    fn default() -> AccountShrinkThreshold {
+        DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION
+    }
+}
 
 pub enum ScanStorageResult<R, B> {
     Cached(Vec<R>),
@@ -2370,7 +2378,7 @@ impl AccountsDb {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let shrink_slots = {
-            if let AccountShrinkThreshold::TotalSpace {ratio} = self.shrink_ratio {
+            if let AccountShrinkThreshold::TotalSpace { ratio } = self.shrink_ratio {
                 self.select_candidates_by_total_usage(&shrink_candidates_slots, ratio)
             } else {
                 shrink_candidates_slots
@@ -4888,12 +4896,11 @@ impl AccountsDb {
 
     fn is_store_candidate_for_shrink(&self, store: Arc<AccountStorageEntry>) -> bool {
         match self.shrink_ratio {
-            AccountShrinkThreshold::TotalSpace {ratio: _} => { 
+            AccountShrinkThreshold::TotalSpace { ratio: _ } => {
                 Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
-            },
-            AccountShrinkThreshold::IndividalAccount {ratio} => {
-                (Self::page_align(store.alive_bytes() as u64) as f64
-                    / store.total_bytes() as f64)
+            }
+            AccountShrinkThreshold::IndividalAccount { ratio } => {
+                (Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64)
                     < ratio
             }
         }

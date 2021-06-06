@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountsDb, AccountShrinkThreshold},
+        accounts_db::{AccountShrinkThreshold, AccountsDb},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
