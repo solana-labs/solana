@@ -2343,9 +2343,14 @@ impl AccountsDb {
                 .entry(usage.slot)
                 .or_default()
                 .insert(store.append_vec_id(), store.clone());
-
-            if (total_alive_bytes as f64) / (total_bytes as f64) > self.shrink_ratio {
+            let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
+            if alive_ratio > self.shrink_ratio {
                 // we have reached our goal, stop
+                debug!(
+                    "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
+                    total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
+                    usage.slot, total_alive_bytes, total_bytes, alive_ratio, self.shrink_ratio
+                );
                 break;
             }
         }
@@ -2359,16 +2364,12 @@ impl AccountsDb {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
-        let shrink_slots = std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-
-        info!(
-            "shrink_candidate_slots candidates: {:?}",
-            shrink_slots.len()
-        );
+        let shrink_candidates_slots =
+            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let shrink_slots = if self.optimize_total_space {
-            self.select_candidates_by_total_usage(&shrink_slots)
+            self.select_candidates_by_total_usage(&shrink_candidates_slots)
         } else {
-            shrink_slots
+            shrink_candidates_slots
         };
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
@@ -9088,6 +9089,108 @@ pub mod tests {
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
+        );
+    }
+
+    #[test]
+    fn test_select_candidates_by_total_usage() {
+        solana_logger::setup();
+
+        // case 1: no canidates
+        let mut accounts = AccountsDb::new_single();
+        accounts.optimize_total_space = true;
+
+        let mut candidates: ShrinkCandidates = HashMap::new();
+        let output_candidates = accounts.select_candidates_by_total_usage(&candidates);
+
+        assert_eq!(0, output_candidates.len());
+
+        // case 2: two candidates, only one selected
+        let dummy_path = Path::new("");
+        let dummy_slot = 12;
+        let dummy_size = 2 * PAGE_SIZE;
+
+        let dummy_id1 = 22;
+        let entry1 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot,
+            dummy_id1,
+            dummy_size,
+        ));
+        entry1.alive_bytes.store(8000, Ordering::Relaxed);
+
+        candidates
+            .entry(dummy_slot)
+            .or_default()
+            .insert(entry1.append_vec_id(), entry1.clone());
+
+        let dummy_id2 = 44;
+        let entry2 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot,
+            dummy_id2,
+            dummy_size,
+        ));
+        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+        candidates
+            .entry(dummy_slot)
+            .or_default()
+            .insert(entry2.append_vec_id(), entry2.clone());
+
+        let output_candidates = accounts.select_candidates_by_total_usage(&candidates);
+        assert_eq!(1, output_candidates.len());
+
+        assert_eq!(1, output_candidates[&dummy_slot].len());
+
+        assert_eq!(
+            true,
+            output_candidates[&dummy_slot].contains(&entry2.append_vec_id())
+        );
+
+        // case 3: two candidates, both are selected
+        candidates.clear();
+        let dummy_size = 4 * PAGE_SIZE;
+        let dummy_id1 = 22;
+        let entry1 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot,
+            dummy_id1,
+            dummy_size,
+        ));
+        entry1.alive_bytes.store(3500, Ordering::Relaxed);
+
+        candidates
+            .entry(dummy_slot)
+            .or_default()
+            .insert(entry1.append_vec_id(), entry1.clone());
+
+        let dummy_id2 = 44;
+        let dummy_slot2 = 44;
+        let entry2 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot2,
+            dummy_id2,
+            dummy_size,
+        ));
+        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+
+        candidates
+            .entry(dummy_slot2)
+            .or_default()
+            .insert(entry2.append_vec_id(), entry2.clone());
+
+        let output_candidates = accounts.select_candidates_by_total_usage(&candidates);
+        assert_eq!(2, output_candidates.len());
+        assert_eq!(1, output_candidates[&dummy_slot].len());
+        assert_eq!(1, output_candidates[&dummy_slot2].len());
+
+        assert_eq!(
+            true,
+            output_candidates[&dummy_slot].contains(&entry1.append_vec_id())
+        );
+        assert_eq!(
+            true,
+            output_candidates[&dummy_slot2].contains(&entry2.append_vec_id())
         );
     }
 
