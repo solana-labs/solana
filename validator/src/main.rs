@@ -1790,8 +1790,8 @@ pub fn main() {
                 .value_name("BOOLEAN")
                 .default_value(default_accounts_shrink_optimize_total_space)
                 .help("When this is set to true, the system will shrink the most \
-                       sparse accounts and when the overall account usage is reached \
-                       within accounts_shrink_ratio, the shrink will stop and \
+                       sparse accounts and when the overall shrink ratio is above \
+                       the specified accounts-shrink-ratio, the shrink will stop and \
                        it will skip all other less sparse accounts."),
         )
         .arg(
@@ -1802,8 +1802,8 @@ pub fn main() {
                 .default_value(default_accounts_shrink_ratio)
                 .help("Specifies the shrink ratio for the accounts to be shrank \
                        The shrink ratio is defined as the ratio of the bytes alive over the  \
-                       total bytes used. If the account's shrink ratio the overall account usage is reached \
-                       within accounts-extra-space percentage, the shrink will stop."),
+                       total bytes used. If the account's shrink ratio is less than this ratio \
+                       it can become a candidate for shrink."),
         )
         .arg(
             Arg::with_name("no_duplicate_instance_check")

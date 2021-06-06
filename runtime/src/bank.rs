@@ -10745,10 +10745,7 @@ pub(crate) mod tests {
         // Slots 0 and 1 should be candidates for shrinking, but slot 2
         // shouldn't because none of its accounts are outdated by a later
         // root
-        assert_eq!(
-            bank2.shrink_candidate_slots(),
-            2
-        );
+        assert_eq!(bank2.shrink_candidate_slots(), 2);
         let alive_counts: Vec<usize> = (0..3)
             .map(|slot| {
                 bank2
@@ -10760,10 +10757,7 @@ pub(crate) mod tests {
             .collect();
 
         // No more slots should be shrunk
-        assert_eq!(
-            bank2.shrink_candidate_slots(),
-            0
-        );
+        assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
         assert_eq!(alive_counts, vec![9, 1, 7]);
     }

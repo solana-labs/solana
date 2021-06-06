@@ -1330,11 +1330,6 @@ impl AccountsDb {
         optimize_total_space: bool,
         shrink_ratio: f64,
     ) -> Self {
-        info!(
-            "Creating new accountdb: caching_enabled {:?}, optimize_total_space: {:?}",
-            caching_enabled, optimize_total_space
-        );
-
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -2294,6 +2289,75 @@ impl AccountsDb {
         self.accounts_index.all_roots()
     }
 
+    fn select_candidates_by_total_usage(
+        &self,
+        shrink_slots: &ShrinkCandidates,
+    ) -> ShrinkCandidates {
+        struct StoreUsageInfo {
+            slot: Slot,
+            alive_ratio: f64,
+            store: Arc<AccountStorageEntry>,
+            all_total_bytes: u64,
+        }
+        let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
+        let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
+        let mut total_alive_bytes: u64 = 0;
+        let mut candidates_count: usize = 0;
+        for (slot, slot_shrink_candidates) in shrink_slots {
+            candidates_count += slot_shrink_candidates.len();
+            for store in slot_shrink_candidates.values() {
+                total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+                let alive_ratio = Self::page_align(store.alive_bytes() as u64) as f64
+                    / store.total_bytes() as f64;
+                store_usage.push(StoreUsageInfo {
+                    slot: *slot,
+                    alive_ratio,
+                    store: store.clone(),
+                    all_total_bytes: 0,
+                });
+            }
+        }
+        store_usage.sort_by(|a, b| {
+            a.alive_ratio
+                .partial_cmp(&b.alive_ratio)
+                .unwrap_or(cmp::Ordering::Equal)
+        });
+        // working backward on store_usage, get the all total bytes if the entries including this and after it are not shrunk
+        // the total bytes for all unshrinked stores
+        let mut all_total: u64 = 0;
+        for i in (0..store_usage.len()).rev() {
+            let usage = &mut store_usage[i];
+            usage.all_total_bytes = usage.store.total_bytes() + all_total;
+            all_total = usage.all_total_bytes;
+        }
+        // now working from the beginning of store_usage which are the most sparse and see when we can stop
+        // shrinking while still achieving the overall goals.
+        let mut shrink_slots: ShrinkCandidates = HashMap::new();
+        let mut shrunk_total: u64 = 0;
+        for usage in &store_usage {
+            let store = &usage.store;
+            shrunk_total += Self::page_align(store.alive_bytes() as u64);
+            let unshrunk_total = usage.all_total_bytes - store.total_bytes(); // the unshrunk total after this
+            let total_bytes = shrunk_total + unshrunk_total;
+            shrink_slots
+                .entry(usage.slot)
+                .or_default()
+                .insert(store.append_vec_id(), store.clone());
+
+            if (total_alive_bytes as f64) / (total_bytes as f64) > self.shrink_ratio {
+                // we have reached our goal, stop
+                break;
+            }
+        }
+        measure.stop();
+        inc_new_counter_info!(
+            "select_top_sparse_storage_entries-ms",
+            measure.as_ms() as usize
+        );
+        inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
+        shrink_slots
+    }
+
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_slots = std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
@@ -2302,56 +2366,7 @@ impl AccountsDb {
             shrink_slots.len()
         );
         let shrink_slots = if self.optimize_total_space {
-            let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
-
-            let mut store_usage: Vec<(Slot, AppendVecId, f64, Arc<AccountStorageEntry>, u64)> =
-                Vec::with_capacity(shrink_slots.len());
-            let mut total_alive: u64 = 0;
-            let mut candidates_count: usize = 0;
-            for (slot, slot_shrink_candidates) in &shrink_slots {
-                candidates_count += slot_shrink_candidates.len();
-                for store in slot_shrink_candidates.values() {
-                    total_alive += Self::page_align(store.alive_bytes() as u64);
-                    let alive_ratio = Self::page_align(store.alive_bytes() as u64) as f64
-                        / store.total_bytes() as f64;
-                    store_usage.push((*slot, store.append_vec_id(), alive_ratio, store.clone(), 0));
-                }
-            }
-            store_usage.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(cmp::Ordering::Equal));
-            // working backward on store_usage, get the all total bytes if the entries including it and after it are not shrunk
-            // the total bytes for all unshrinked stores
-            let mut all_total: u64 = 0;
-            for i in (0..store_usage.len()).rev() {
-                let usage = &mut store_usage[i];
-                usage.4 = usage.3.total_bytes() + all_total;
-                all_total = usage.4;
-            }
-            // now working from the beginning of store_usage which are the most sparse and see when we can stop
-            // shrinking while still achieving the overall goals.
-            let mut shrink_slots: ShrinkCandidates = HashMap::new();
-            let mut shrunk_total: u64 = 0;
-            for usage in &store_usage {
-                let store = &usage.3;
-                shrunk_total += Self::page_align(store.alive_bytes() as u64);
-                let unshrunk_total = usage.4 - store.total_bytes(); // the unshrunk total after this
-                let total_bytes = shrunk_total + unshrunk_total;
-                shrink_slots
-                    .entry(usage.0)
-                    .or_default()
-                    .insert(store.append_vec_id(), store.clone());
-
-                if (total_alive as f64) / (total_bytes as f64) < self.shrink_ratio {
-                    // we have reached our goal, stop
-                    break;
-                }
-            }
-            measure.stop();
-            inc_new_counter_info!(
-                "select_top_sparse_storage_entries-ms",
-                measure.as_ms() as usize
-            );
-            inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
-            shrink_slots
+            self.select_candidates_by_total_usage(&shrink_slots)
         } else {
             shrink_slots
         };
