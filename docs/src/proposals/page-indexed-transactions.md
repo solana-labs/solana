@@ -59,7 +59,7 @@ modifications.
 #### Cost
 
 Since index accounts require caching and special handling in the runtime, they should incur
-higher costs for storage. Cost structure design is TBD.
+higher costs for storage. Cost structure design will be added later.
 
 #### Program controlled indexes
 
