@@ -3257,15 +3257,26 @@ export class Connection {
   }
 
   /**
-   * Request an allocation of lamports to the specified account
+   * Request an allocation of lamports to the specified address
+   *
+   * ```typescript
+   * import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+   *
+   * (async () => {
+   *   const connection = new Connection("https://api.testnet.solana.com", "confirmed");
+   *   const myAddress = new PublicKey("2nr1bHFT86W9tGnyvmYW4vcHKsQB3sVQfnddasz4kExM");
+   *   const signature = await connection.requestAirdrop(myAddress, LAMPORTS_PER_SOL);
+   *   await connection.confirmTransaction(signature);
+   * })();
+   * ```
    */
   async requestAirdrop(
     to: PublicKey,
-    amount: number,
+    lamports: number,
   ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('requestAirdrop', [
       to.toBase58(),
-      amount,
+      lamports,
     ]);
     const res = create(unsafeRes, RequestAirdropRpcResult);
     if ('error' in res) {
