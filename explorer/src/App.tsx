@@ -8,6 +8,7 @@ import { ClusterStatusBanner } from "components/ClusterStatusButton";
 import { SearchBar } from "components/SearchBar";
 
 import { AccountDetailsPage } from "pages/AccountDetailsPage";
+import { TransactionInspectorPage } from "pages/inspector/InspectorPage";
 import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
@@ -36,6 +37,13 @@ function App() {
               let pathname = `/tx/${match.params.signature}`;
               return <Redirect to={{ ...location, pathname }} />;
             }}
+          />
+          <Route
+            exact
+            path={["/tx/inspector", "/tx/:signature/inspect"]}
+            render={({ match }) => (
+              <TransactionInspectorPage signature={match.params.signature} />
+            )}
           />
           <Route
             exact

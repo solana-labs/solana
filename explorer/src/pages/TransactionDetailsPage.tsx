@@ -1,11 +1,12 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import bs58 from "bs58";
 import {
   useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
 } from "providers/transactions";
-import { useFetchTransactionDetails } from "providers/transactions/details";
+import { useFetchTransactionDetails } from "providers/transactions/parsed";
 import { useCluster, ClusterStatus } from "providers/cluster";
 import {
   TransactionSignature,
@@ -28,6 +29,7 @@ import { BalanceDelta } from "components/common/BalanceDelta";
 import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 import { InstructionsSection } from "components/transaction/InstructionsSection";
 import { ProgramLogSection } from "components/transaction/ProgramLogSection";
+import { clusterPath } from "utils/url";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -206,6 +208,13 @@ function StatusCard({
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
+        <Link
+          to={clusterPath(`/tx/${signature}/inspect`)}
+          className="btn btn-white btn-sm mr-2"
+        >
+          <span className="fe fe-settings mr-2"></span>
+          Inspect
+        </Link>
         {autoRefresh === AutoRefresh.Active ? (
           <span className="spinner-grow spinner-grow-sm"></span>
         ) : (

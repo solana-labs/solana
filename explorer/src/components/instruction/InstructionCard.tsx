@@ -8,9 +8,9 @@ import { RawDetails } from "./RawDetails";
 import { RawParsedDetails } from "./RawParsedDetails";
 import { SignatureContext } from "../../pages/TransactionDetailsPage";
 import {
-  useTransactionDetails,
   useFetchRawTransaction,
-} from "providers/transactions/details";
+  useRawTransactionDetails,
+} from "providers/transactions/raw";
 import { Address } from "components/common/Address";
 
 type InstructionProps = {
@@ -37,11 +37,11 @@ export function InstructionCard({
   const [resultClass] = ixResult(result, index);
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
   const signature = useContext(SignatureContext);
-  const details = useTransactionDetails(signature);
+  const rawDetails = useRawTransactionDetails(signature);
 
   let raw: TransactionInstruction | undefined = undefined;
-  if (details && childIndex === undefined) {
-    raw = details?.data?.raw?.instructions[index];
+  if (rawDetails && childIndex === undefined) {
+    raw = rawDetails?.data?.raw?.transaction.instructions[index];
   }
 
   const fetchRaw = useFetchRawTransaction();

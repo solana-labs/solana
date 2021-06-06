@@ -24,7 +24,7 @@ import {
   Details,
   useFetchTransactionDetails,
   useTransactionDetailsCache,
-} from "providers/transactions/details";
+} from "providers/transactions/parsed";
 import { reportError } from "utils/sentry";
 import { intoTransactionInstruction, displayAddress } from "utils/tx";
 import {

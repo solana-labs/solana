@@ -64,12 +64,12 @@ export function SolBalance({
   maximumFractionDigits?: number;
 }) {
   return (
-    <>
+    <span>
       ◎
       <span className="text-monospace">
         {lamportsToSolString(lamports, maximumFractionDigits)}
       </span>
-    </>
+    </span>
   );
 }
 

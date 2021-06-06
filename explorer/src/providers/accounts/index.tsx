@@ -76,7 +76,7 @@ export type ProgramData =
 export interface Details {
   executable: boolean;
   owner: PublicKey;
-  space?: number;
+  space: number;
   data?: ProgramData;
 }
 
@@ -143,7 +143,7 @@ async function fetchAccountInfo(
       lamports = result.lamports;
 
       // Only save data in memory if we can decode it
-      let space;
+      let space: number;
       if (!("parsed" in result.data)) {
         space = result.data.length;
       } else {
