@@ -1991,8 +1991,10 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = 3;
 
-    let mut error_validator_config = ValidatorConfig::default();
-    error_validator_config.broadcast_stage_type = faulty_node_type;
+    let error_validator_config = ValidatorConfig {
+        broadcast_stage_type: faulty_node_type,
+        ..ValidatorConfig::default()
+    };
     let mut validator_configs = Vec::with_capacity(num_nodes);
     validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
     validator_configs.push(error_validator_config);
@@ -2009,8 +2011,8 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         node_stakes,
         validator_configs,
         validator_keys: Some(validator_keys),
-        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
-        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2u64,
         ..ClusterConfig::default()
     };
 
@@ -2042,8 +2044,8 @@ fn test_duplicate_node() {
         node_stakes,
         validator_configs,
         validator_keys: Some(validator_keys),
-        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
-        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2u64,
         ..ClusterConfig::default()
     };
 
