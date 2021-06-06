@@ -84,11 +84,6 @@ pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
 
-// The default extra account space in percentage from the ideal target
-pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
-
-pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
-
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
 // when interacting with cached accounts. This id is "virtual" in that it
@@ -118,6 +113,24 @@ lazy_static! {
     // as |cargo test| cannot observe panics in other threads
     pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
+
+#[derive(Debug)]
+pub enum AccountShrinkThreshold {
+    /// Measure the total space sparseness across all candididates
+    /// And select the candidiates by using the top sparse accounts to shrink
+    /// The value is the overall shrink threshold measured as ratio of the total live bytes
+    /// over the total bytes.
+    TotalSpace {ratio: f64},
+    /// Use the following option to shrink all accounts whose alive ratio is below
+    /// the specified threshold. All accounts with alive usage ratio below this thresholds
+    /// will be shrank. 
+    IndividalAccount {ratio: f64},
+}
+
+pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
+// The default extra account space in percentage from the ideal target
+pub const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold = AccountShrinkThreshold::IndividalAccount {ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO};
+
 
 pub enum ScanStorageResult<R, B> {
     Cached(Vec<R>),
@@ -854,13 +867,7 @@ pub struct AccountsDb {
     /// can safely clear the set of unrooted slots `slots`.
     remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
 
-    /// when shrinking accounts, try to to optimize
-    /// on the overall usage from all accounts
-    optimize_total_space: bool,
-
-    /// The shrink ratio: live_bytes/total_bytes of an account
-    /// or of all accounts when using optimize_total_space
-    shrink_ratio: f64,
+    shrink_ratio: AccountShrinkThreshold,
 }
 
 #[derive(Debug, Default)]
@@ -1304,8 +1311,7 @@ impl Default for AccountsDb {
             load_limit: AtomicU64::default(),
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
-            optimize_total_space: DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
         }
     }
 }
@@ -1317,8 +1323,7 @@ impl AccountsDb {
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
         )
     }
 
@@ -1327,8 +1332,7 @@ impl AccountsDb {
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
-        optimize_total_space: bool,
-        shrink_ratio: f64,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         let mut new = if !paths.is_empty() {
             Self {
@@ -1337,7 +1341,6 @@ impl AccountsDb {
                 cluster_type: Some(*cluster_type),
                 account_indexes,
                 caching_enabled,
-                optimize_total_space,
                 shrink_ratio,
                 ..Self::default()
             }
@@ -1351,7 +1354,6 @@ impl AccountsDb {
                 cluster_type: Some(*cluster_type),
                 account_indexes,
                 caching_enabled,
-                optimize_total_space,
                 shrink_ratio,
                 ..Self::default()
             }
@@ -2292,6 +2294,7 @@ impl AccountsDb {
     fn select_candidates_by_total_usage(
         &self,
         shrink_slots: &ShrinkCandidates,
+        shrink_ratio: f64,
     ) -> ShrinkCandidates {
         struct StoreUsageInfo {
             slot: Slot,
@@ -2344,12 +2347,12 @@ impl AccountsDb {
                 .or_default()
                 .insert(store.append_vec_id(), store.clone());
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
-            if alive_ratio > self.shrink_ratio {
+            if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
                     "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
-                    usage.slot, total_alive_bytes, total_bytes, alive_ratio, self.shrink_ratio
+                    usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
                 break;
             }
@@ -2366,10 +2369,12 @@ impl AccountsDb {
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        let shrink_slots = if self.optimize_total_space {
-            self.select_candidates_by_total_usage(&shrink_candidates_slots)
-        } else {
-            shrink_candidates_slots
+        let shrink_slots = {
+            if let AccountShrinkThreshold::TotalSpace {ratio} = self.shrink_ratio {
+                self.select_candidates_by_total_usage(&shrink_candidates_slots, ratio)
+            } else {
+                shrink_candidates_slots
+            }
         };
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
@@ -4881,6 +4886,19 @@ impl AccountsDb {
         true
     }
 
+    fn is_store_candidate_for_shrink(&self, store: Arc<AccountStorageEntry>) -> bool {
+        match self.shrink_ratio {
+            AccountShrinkThreshold::TotalSpace {ratio: _} => { 
+                Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
+            },
+            AccountShrinkThreshold::IndividalAccount {ratio} => {
+                (Self::page_align(store.alive_bytes() as u64) as f64
+                    / store.total_bytes() as f64)
+                    < ratio
+            }
+        }
+    }
+
     fn remove_dead_accounts(
         &self,
         reclaims: SlotSlice<AccountInfo>,
@@ -4916,11 +4934,7 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && ((self.optimize_total_space
-                        && Self::page_align(store.alive_bytes() as u64) < store.total_bytes())
-                        || (Self::page_align(store.alive_bytes() as u64) as f64
-                            / store.total_bytes() as f64)
-                            < self.shrink_ratio)
+                    && self.is_store_candidate_for_shrink(store.clone())
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk

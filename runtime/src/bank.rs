@@ -39,8 +39,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{
-        ErrorCounters, SnapshotStorages, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-        DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        ErrorCounters, SnapshotStorages, AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
@@ -1014,8 +1013,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
         )
     }
 
@@ -1028,8 +1026,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1042,7 +1039,7 @@ impl Bank {
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         optimize_total_space: bool,
-        shrink_ratio: f64,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -1052,7 +1049,6 @@ impl Bank {
             None,
             account_indexes,
             accounts_db_caching_enabled,
-            optimize_total_space,
             shrink_ratio,
         )
     }
@@ -1065,8 +1061,7 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
-        optimize_total_space: bool,
-        shrink_ratio: f64,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1078,7 +1073,6 @@ impl Bank {
             &genesis_config.cluster_type,
             account_indexes,
             accounts_db_caching_enabled,
-            optimize_total_space,
             shrink_ratio,
         ));
         bank.process_genesis_config(genesis_config);

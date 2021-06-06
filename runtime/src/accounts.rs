@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{
-        AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+        AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult, AccountShrinkThreshold,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::Ancestors,
@@ -120,15 +120,13 @@ impl Accounts {
     pub fn new(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        optimize_total_space: bool,
-        shrink_ratio: f64,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
-            optimize_total_space,
             shrink_ratio,
         )
     }
@@ -138,8 +136,7 @@ impl Accounts {
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
-        optimize_total_space: bool,
-        shrink_ratio: f64,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -147,7 +144,6 @@ impl Accounts {
                 cluster_type,
                 account_indexes,
                 caching_enabled,
-                optimize_total_space,
                 shrink_ratio,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
