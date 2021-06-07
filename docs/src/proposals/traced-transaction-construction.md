@@ -2,10 +2,10 @@
 
 ## Problem
 
-With more composition for Solana's program comes, it will be harder and harder
-for the higher-level consuming program to correctly construct lower-level
-program's instructions by precisely specifying each and every accessed accounts
-with the `read_only` or `read_write` flag.
+With more composition comes in the Solana's program ecosystem, it will be harder
+and harder for the higher-level consuming program to correctly construct
+lower-level program's instructions by precisely specifying each and every
+accessed accounts with the `read_only` or `read_write` flag.
 
 Also, there will be no way to signal the need of additional accounts for the
 arbitrarily customized behavior from the lower-level program to the higher-level
@@ -34,8 +34,9 @@ transaction execution in the simulation.
 After that, client signs the final transaction after appending these additional
 account addresses and submits it to the cluster via `sendTransaction`.
 
-In other words, programs can dynamically access their _internal_ accounts
-implicitly via the newly-added traced syscalls.
+For that end, introduce a new syscall to trace account accesses, so that
+programs can dynamically hint their _internal_ or _derivable_ account addresses
+implicitly via , attaning the classic implementation-detail abstraction.
 
 ## Traced syscalls
 
@@ -221,9 +222,8 @@ also, traced program just load dummy addresses for tx versionsing for completene
 
 # Run these before replaying stage on validator
 
-unavoidable latency.
-
-
+unavoidable latency.  (and scheduling difficulty).
+The proposed implementation doesn't have such a downside
 
 
 
