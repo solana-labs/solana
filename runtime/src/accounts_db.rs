@@ -9156,13 +9156,8 @@ pub mod tests {
         let output_candidates =
             accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
         assert_eq!(1, output_candidates.len());
-
         assert_eq!(1, output_candidates[&dummy_slot].len());
-
-        assert_eq!(
-            true,
-            output_candidates[&dummy_slot].contains(&entry2.append_vec_id())
-        );
+        assert!(output_candidates[&dummy_slot].contains(&entry2.append_vec_id()));
 
         // case 3: two candidates, both are selected
         candidates.clear();
@@ -9202,14 +9197,8 @@ pub mod tests {
         assert_eq!(1, output_candidates[&dummy_slot].len());
         assert_eq!(1, output_candidates[&dummy_slot2].len());
 
-        assert_eq!(
-            true,
-            output_candidates[&dummy_slot].contains(&entry1.append_vec_id())
-        );
-        assert_eq!(
-            true,
-            output_candidates[&dummy_slot2].contains(&entry2.append_vec_id())
-        );
+        assert!(output_candidates[&dummy_slot].contains(&entry1.append_vec_id()));
+        assert!(output_candidates[&dummy_slot2].contains(&entry2.append_vec_id()));
     }
 
     #[test]
@@ -11195,10 +11184,10 @@ pub mod tests {
         assert!(accounts.is_candidate_for_shrink(entry.clone()));
         entry.alive_bytes.store(5000, Ordering::Relaxed);
         assert!(!accounts.is_candidate_for_shrink(entry.clone()));
-        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace {shrink_ratio: 0.3};
+        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Relaxed);
         assert!(accounts.is_candidate_for_shrink(entry.clone()));
-        accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore {shrink_ratio: 0.3};
+        accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(entry.clone()));
     }
 }
