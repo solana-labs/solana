@@ -130,20 +130,17 @@ fn install_if_missing(
     }
     let source_path = source_base.join(package);
     // Check whether the correct symbolic link exists.
-    let missing_source = if source_path.exists() {
-        let invalid_link = if let Ok(link_target) = source_path.read_link() {
-            link_target != target_path
-        } else {
-            true
-        };
-        if invalid_link {
+    let invalid_link = if let Ok(link_target) = source_path.read_link() {
+        if link_target != target_path {
             fs::remove_file(&source_path).map_err(|err| err.to_string())?;
+            true
+        } else {
+            false
         }
-        invalid_link
     } else {
         true
     };
-    if missing_source {
+    if invalid_link {
         #[cfg(unix)]
         std::os::unix::fs::symlink(target_path, source_path).map_err(|err| err.to_string())?;
         #[cfg(windows)]
