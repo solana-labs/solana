@@ -3,15 +3,17 @@ const endpoint = {
     devnet: 'http://api.devnet.solana.com',
     testnet: 'http://api.testnet.solana.com',
     'mainnet-beta': 'http://api.mainnet-beta.solana.com',
+    localhost: 'http://localhost:8899',
   },
   https: {
     devnet: 'https://api.devnet.solana.com',
     testnet: 'https://api.testnet.solana.com',
     'mainnet-beta': 'https://api.mainnet-beta.solana.com',
+    localhost: 'https://localhost:8899',
   },
 };
 
-export type Cluster = 'devnet' | 'testnet' | 'mainnet-beta';
+export type Cluster = 'devnet' | 'testnet' | 'mainnet-beta' | 'localhost';
 
 /**
  * Retrieves the RPC API URL for the specified cluster
