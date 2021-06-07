@@ -19,8 +19,8 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, demote_sysvar_write_locks, secp256k1_recover_syscall_enabled,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
+        cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
+        keccak256_syscall_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
@@ -135,7 +135,8 @@ pub fn register_syscalls(
     }
 
     if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
