@@ -3,6 +3,7 @@ use rayon_core::{ThreadBuilder, ThreadPoolBuilder};
 use std::{io, thread};
 
 const NUM_THREADS_PER_CORE: usize = 8;
+const MAX_NUM_OF_THREADS: usize = 128;
 
 #[derive(Debug, Default)]
 pub struct PinnedSpawn {
@@ -63,7 +64,10 @@ pub fn pinned_spawn_handler_frac(num: usize, denom: usize) -> ThreadPool {
     let mut spawner = PinnedSpawn::new_frac_of_cores(num, denom);
     ThreadPoolBuilder::new()
         .thread_name(|i| format!("pinned-thread-for-parallel-load-{}", i))
-        .num_threads(spawner.len * NUM_THREADS_PER_CORE)
+        .num_threads(std::cmp::min(
+            spawner.len * NUM_THREADS_PER_CORE,
+            MAX_NUM_OF_THREADS,
+        ))
         .spawn_handler(|thread| spawner.spawn(thread))
         .build()
         .unwrap()
