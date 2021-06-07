@@ -29,6 +29,7 @@ use crate::{
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
+    pinned_threads::pinned_spawn_handler_frac,
     pubkey_bins::PubkeyBinCalculator16,
     read_only_accounts_cache::ReadOnlyAccountsCache,
     sorted_storages::SortedStorages,
@@ -119,7 +120,7 @@ pub enum ScanStorageResult<R, B> {
     Stored(B),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct ErrorCounters {
     pub total: usize,
     pub account_in_use: usize,
@@ -135,6 +136,29 @@ pub struct ErrorCounters {
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
+}
+
+impl std::ops::AddAssign for ErrorCounters {
+    fn add_assign(&mut self, other: Self) {
+        *self = ErrorCounters {
+            total: self.total + other.total,
+            account_in_use: self.account_in_use + other.account_in_use,
+            account_loaded_twice: self.account_loaded_twice + other.account_loaded_twice,
+            account_not_found: self.account_not_found + other.account_not_found,
+            blockhash_not_found: self.blockhash_not_found + other.blockhash_not_found,
+            blockhash_too_old: self.blockhash_too_old + other.blockhash_too_old,
+            call_chain_too_deep: self.call_chain_too_deep + other.call_chain_too_deep,
+            already_processed: self.already_processed + other.already_processed,
+            instruction_error: self.instruction_error + other.instruction_error,
+            insufficient_funds: self.insufficient_funds + other.insufficient_funds,
+            invalid_account_for_fee: self.invalid_account_for_fee + other.invalid_account_for_fee,
+            invalid_account_index: self.invalid_account_index + other.invalid_account_index,
+            invalid_program_for_execution: self.invalid_program_for_execution
+                + other.invalid_program_for_execution,
+            not_allowed_during_cluster_maintenance: self.not_allowed_during_cluster_maintenance
+                + other.not_allowed_during_cluster_maintenance,
+        }
+    }
 }
 
 #[derive(Default, Debug, PartialEq, Clone)]
@@ -810,6 +834,8 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
+    pub pinned_thread_pool: ThreadPool,
+
     /// Number of append vecs to create to maximize parallelism when scanning
     /// the accounts
     min_num_stores: usize,
@@ -1275,6 +1301,7 @@ impl Default for AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
+            pinned_thread_pool: pinned_spawn_handler_frac(1, 4),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),

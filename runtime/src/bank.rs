@@ -3074,9 +3074,9 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_accounts = self.rc.accounts.load_accounts(
+        let mut loaded_accounts = self.rc.accounts.load_accounts_parallel(
             &self.ancestors,
-            hashed_txs.as_transactions_iter(),
+            hashed_txs,
             check_results,
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,

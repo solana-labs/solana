@@ -39,12 +39,18 @@ impl<'a> From<&'a Transaction> for HashedTransaction<'a> {
     }
 }
 
+impl<'a> Into<&'a Transaction> for &'a HashedTransaction<'a> {
+    fn into(self) -> &'a Transaction {
+        self.transaction.as_ref()
+    }
+}
+
 pub trait HashedTransactionSlice<'a> {
     fn as_transactions_iter(&'a self) -> Box<dyn Iterator<Item = &'a Transaction> + '_>;
 }
 
 impl<'a> HashedTransactionSlice<'a> for [HashedTransaction<'a>] {
     fn as_transactions_iter(&'a self) -> Box<dyn Iterator<Item = &'a Transaction> + '_> {
-        Box::new(self.iter().map(|h| h.transaction.as_ref()))
+        Box::new(self.iter().map(|h| h.into()))
     }
 }

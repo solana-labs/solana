@@ -3416,9 +3416,9 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ab346ac5921dc62ffa9f89b7a773907511cdfa5490c572ae9be1be33e8afa4a"
+checksum = "d78120e2c850279833f1dd3582f730c4ab53ed95aeaaaa862a2a5c71b1656d8e"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque 0.8.0",
@@ -5308,6 +5308,7 @@ dependencies = [
  "bv",
  "byteorder",
  "bzip2",
+ "core_affinity",
  "crossbeam-channel",
  "dashmap",
  "dir-diff",
@@ -5325,6 +5326,7 @@ dependencies = [
  "ouroboros",
  "rand 0.7.3",
  "rayon",
+ "rayon-core",
  "regex",
  "rustc_version",
  "serde",

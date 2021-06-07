@@ -9,6 +9,7 @@ use crate::{
         TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
+    hashed_transaction::HashedTransaction,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
 };
@@ -18,6 +19,7 @@ use dashmap::{
 };
 use log::*;
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
@@ -465,6 +467,87 @@ impl Accounts {
                 (_, (Err(e), _nonce_rollback)) => (Err(e), None),
             })
             .collect()
+    }
+
+    pub fn load_accounts_parallel<'a>(
+        &self,
+        ancestors: &Ancestors,
+        txs: &'a [HashedTransaction<'a>],
+        lock_results: Vec<TransactionCheckResult>,
+        hash_queue: &BlockhashQueue,
+        error_counters: &mut ErrorCounters,
+        rent_collector: &RentCollector,
+        feature_set: &FeatureSet,
+    ) -> Vec<TransactionLoadResult> {
+        let fee_config = FeeConfig {
+            secp256k1_program_enabled: feature_set
+                .is_active(&feature_set::secp256k1_program_enabled::id()),
+        };
+        let mut error_counters_list = vec![ErrorCounters::default(); lock_results.len()];
+
+        let res = self.accounts_db.pinned_thread_pool.install(|| {
+            txs.par_iter()
+                .map(|h| {
+                    let res: &'a Transaction = h.into();
+                    res
+                })
+                .zip(lock_results)
+                .zip(error_counters_list.par_iter_mut())
+                .map(|etx| match etx {
+                    ((tx, (Ok(()), nonce_rollback)), error_counters) => {
+                        let fee_calculator = nonce_rollback
+                            .as_ref()
+                            .map(|nonce_rollback| nonce_rollback.fee_calculator())
+                            .unwrap_or_else(|| {
+                                hash_queue
+                                    .get_fee_calculator(&tx.message().recent_blockhash)
+                                    .cloned()
+                            });
+                        let fee = if let Some(fee_calculator) = fee_calculator {
+                            fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
+                        } else {
+                            return (Err(TransactionError::BlockhashNotFound), None);
+                        };
+
+                        let loaded_transaction = match self.load_transaction(
+                            ancestors,
+                            tx,
+                            fee,
+                            error_counters,
+                            rent_collector,
+                            feature_set,
+                        ) {
+                            Ok(loaded_transaction) => loaded_transaction,
+                            Err(e) => return (Err(e), None),
+                        };
+
+                        // Update nonce_rollback with fee-subtracted accounts
+                        let nonce_rollback = if let Some(nonce_rollback) = nonce_rollback {
+                            match NonceRollbackFull::from_partial(
+                                nonce_rollback,
+                                tx.message(),
+                                &loaded_transaction.accounts,
+                            ) {
+                                Ok(nonce_rollback) => Some(nonce_rollback),
+                                Err(e) => return (Err(e), None),
+                            }
+                        } else {
+                            None
+                        };
+
+                        (Ok(loaded_transaction), nonce_rollback)
+                    }
+                    ((_, (Err(e), _nonce_rollback)), _) => (Err(e), None),
+                })
+                .collect()
+        });
+        *error_counters += error_counters_list
+            .iter()
+            .fold(ErrorCounters::default(), |mut x, y| {
+                x += *y;
+                x
+            });
+        res
     }
 
     fn filter_zero_lamport_account(
