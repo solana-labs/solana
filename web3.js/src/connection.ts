@@ -19,6 +19,7 @@ import {
   create,
   tuple,
   unknown,
+  Infer,
   any,
 } from 'superstruct';
 import type {Struct} from 'superstruct';
@@ -27,6 +28,7 @@ import RpcClient from 'jayson/lib/client/browser';
 import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
+import {EpochSchedule} from './epoch-schedule';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -373,23 +375,7 @@ const GetEpochInfoResult = pick({
   transactionCount: optional(number()),
 });
 
-/**
- * Epoch schedule
- * (see https://docs.solana.com/terminology#epoch)
- */
-export type EpochSchedule = {
-  /** The maximum number of slots in each epoch */
-  slotsPerEpoch: number;
-  /** The number of slots before beginning of an epoch to calculate a leader schedule for that epoch */
-  leaderScheduleSlotOffset: number;
-  /** Indicates whether epochs start short and grow */
-  warmup: boolean;
-  /** The first epoch with `slotsPerEpoch` slots */
-  firstNormalEpoch: number;
-  /** The first slot of `firstNormalEpoch` */
-  firstNormalSlot: number;
-};
-
+type GetEpochScheduleResult = Infer<typeof GetEpochScheduleResult>;
 const GetEpochScheduleResult = pick({
   slotsPerEpoch: number(),
   leaderScheduleSlotOffset: number(),
@@ -2788,7 +2774,14 @@ export class Connection {
     if ('error' in res) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
-    return res.result;
+    const epochSchedule = res.result;
+    return new EpochSchedule(
+      epochSchedule.slotsPerEpoch,
+      epochSchedule.leaderScheduleSlotOffset,
+      epochSchedule.warmup,
+      epochSchedule.firstNormalEpoch,
+      epochSchedule.firstNormalSlot
+    );
   }
 
   /**
