@@ -2,18 +2,18 @@
 
 ## Problem
 
-With more composition comes, it will be harder and harder for the higher-level
-consumer to correctly construct high-level transactions by precisely specifying
-each and every accessed accounts with the `read_only` or `read_write` proper
-flag.
+With more composition for Solana's program comes, it will be harder and harder
+for the higher-level consuming program to correctly construct lower-level
+program's instructions by precisely specifying each and every accessed accounts
+with the `read_only` or `read_write` flag.
 
 Also, there will be no way to signal the need of additional accounts for the
 arbitrarily customized behavior from the lower-level program to the higher-level
 one under the standardized instruction API like spl-token, even though we're
-about to explore the flexibility of allowing custom programs conforming to a
-standard like itoken.
+about to explore the flexibility of allowing customzed programs conforming to a
+standard like the itoken.
 
-The preceding runtime limitation are applicable both to on-chain (instruction
+These preceding runtime limitations are applicable both to on-chain (instruction
 construction for CPI) or off-chain (transaction construction by end-user
 interfaces) boundaries likewise.
 
@@ -141,7 +141,6 @@ pub fn process_transfer(
 }
 ```
 
-
 ## example: sharding
 
 
@@ -160,6 +159,23 @@ pub fn process_place_order(
     );
 }
 ```
+
+### example: instruction versioning by traced access after redeploy
+
+```
+pub fn check_instruction_version_and_load_data() {
+   // this is newly added after the redeploy
+   if access_as_unsigned(declare!("OldVersion111111111111111111111111111111111111"), READ).is_ok() {
+     return Err("we changed internal data loading implementation. to avoid unexpected malfunction retry");
+   }
+
+   // this is changed from OldVersion1111
+   access_as_unsigned(declare!("NewVersion111111111111111111111111111111111111"), READ)?
+
+   access_as_unsigned(...);
+}
+```
+
 
 ## RPC changes
 
