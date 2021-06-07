@@ -4870,7 +4870,7 @@ impl AccountsDb {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let use_index = true;
+        let use_index = false;
         let check_hash = true;
         let can_cached_slot_be_unflushed = false;
         let (calculated_hash, calculated_lamports) = self
