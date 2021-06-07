@@ -31,7 +31,7 @@ Extend the `simulateTransaction` RPC method to return more information like
 additional account addresses to read and/or write, collected from traced
 transaction execution in the simulation.
 
-After that, client signs the final transaction after appending these additional
+Then, client signs the final transaction after appending these additional
 account addresses and submits it to the cluster via `sendTransaction`.
 
 For that end, introduce a new syscall to trace account accesses, so that
@@ -53,33 +53,33 @@ fn access_as_unsigned(address: &Pubkey, flags = enum { READ, WRITE}):
 This syscall behaves differently depending on the BPF execution mode (simulated
 or executed):
 
-simulated: load any account at the specified address (if any) and retain any
-written data to those accounts in the scope of single transaction simulation.
+simulated: load any account at the specified address from AccountsDb (if any)
+and retain any written data to those accounts in the scope of single transaction
+simulation.
 
-executed: load any account if the specified address is contained in the list of
+executed: return any account if the specified address is contained in the list of
 tx's account keys.
 
 While MessageProcessor's `verify_accounts` is enforced to these accessed
 accounts like normally-accessed accounts, this syscall can bypass the CPI
 boundaries by always accessing to the outermost execution environment (the
 whole AccountsDB account set while simulated, all of account keys while
-executed). This bypass semantics is needed to work with existing CPI.
+executed). This bypass semantic is needed to work with existing CPI usage.
 
-Then, otherwise noted, the returned AccountInfo should behave exactly same both
-in the simulated and executed mode. This is desired for determisnism for
-developers and is mandated for security to lightly protect users from bad
-programs pretending to be harmless only in simulation.
+Then, otherwise noted, the returned `AccountInfo` should behave in the exactly
+same way both in the simulated and executed mode. This is desired for
+determisnism while developing and is mandated for security to lightly protect
+users from bad programs pretending to be harmless only in simulation.
 
 
 ## example: the associated token account program (demonstrating the problem #1)
 
 ```patch
-$ git diff
 diff --git a/associated-token-account/program/src/processor.rs b/associated-token-account/program/src/processor.rs
-index 98eb08b..ff0ad5b 100644
+index 98eb08b..fa8ae50 100644
 --- a/associated-token-account/program/src/processor.rs
 +++ b/associated-token-account/program/src/processor.rs
-@@ -22,13 +22,11 @@ pub fn process_instruction(
+@@ -22,13 +22,12 @@ pub fn process_instruction(
      let account_info_iter = &mut accounts.iter();
  
      let funder_info = next_account_info(account_info_iter)?;
@@ -88,15 +88,15 @@ index 98eb08b..ff0ad5b 100644
      let spl_token_mint_info = next_account_info(account_info_iter)?;
 -    let system_program_info = next_account_info(account_info_iter)?;
 -    let spl_token_program_info = next_account_info(account_info_iter)?;
--    let spl_token_program_id = spl_token_program_info.key;
--    let rent_sysvar_info = next_account_info(account_info_iter)?;
 +    let system_program_info = access_as_unsigned(funder_info.owner(), READ)?;
 +    let spl_token_program_info = access_as_unsigned(spl_token_mint_info.owner(), READ)?;
+     let spl_token_program_id = spl_token_program_info.key;
+-    let rent_sysvar_info = next_account_info(account_info_iter)?;
 +    let rent_sysvar_info = access_as_unsigned(sysvars::rent::id(), READ)?;
  
      let (associated_token_address, bump_seed) = get_associated_token_address_and_bump_seed_internal(
          &wallet_account_info.key,
-@@ -36,10 +34,7 @@ pub fn process_instruction(
+@@ -36,10 +35,7 @@ pub fn process_instruction(
          program_id,
          &spl_token_program_id,
      );
@@ -110,7 +110,7 @@ index 98eb08b..ff0ad5b 100644
          &wallet_account_info.key.to_bytes(),
 ```
 
-This reduces the number of require accounts for CPI and clients from 7 to 3, reducing 4.
+This reduces the number of required accounts for CPI and clients from 7 to 3, reducing by 4.
 
 ## example: limited number of NFT transfers per day shared across program:
 
@@ -136,6 +136,8 @@ pub fn process_transfer(
       transfer_counter.count = 0;
    } else if transfer_counter > 10 {
       return Err("daily quote of transfer is reached");
+   } else {
+      transfer_counter.count += 1;
    }
 
    ...
@@ -151,19 +153,22 @@ pub fn process_place_order(
   market_id: &Pubkey,
   order: &Pubkey,
 ) {
-   let sharded_event_queue = let counter_address = Pubkey::find_program_address(
-        &[  
-            &market_id.to_bytes(),
-            &[ourder_to_bytes()[0] & 0xf0],
-        ],
-        program_id,
-    );
+  let sharded_event_queue_address = let counter_address = Pubkey::find_program_address(
+      &[  
+          &market_id.to_bytes(),
+          &[ourder_to_bytes()[0] & 0xf0],
+      ],
+      program_id,
+  );
+  let event_queue = access_as_unsigned(sharded_event_queue_address, READ_WRITE);  
+
+  // crank tx will merge all event queues later
 }
 ```
 
-### example: instruction versioning by traced access after redeploy
+### example: instruction versioning across redeploy
 
-```
+```rust
 pub fn check_instruction_version_and_load_data() {
    // this is newly added after the redeploy
    if access_as_unsigned(declare!("OldVersion111111111111111111111111111111111111"), READ).is_ok() {
