@@ -2027,18 +2027,14 @@ pub mod tests {
 
         let offset = 2;
         let input = vec![
-            CalculateHashIntermediate::new(
-                0,
+            CalculateHashIntermediate::new_without_slot(
                 Hash::new_unique(),
                 u64::MAX - offset,
-                0,
                 Pubkey::new_unique(),
             ),
-            CalculateHashIntermediate::new(
-                0,
+            CalculateHashIntermediate::new_without_slot(
                 Hash::new_unique(),
                 offset + 1,
-                0,
                 Pubkey::new_unique(),
             ),
         ];
@@ -2052,18 +2048,14 @@ pub mod tests {
 
         let offset = 2;
         let input = vec![
-            vec![CalculateHashIntermediate::new(
-                0,
+            vec![CalculateHashIntermediate::new_without_slot(
                 Hash::new_unique(),
                 u64::MAX - offset,
-                0,
                 Pubkey::new_unique(),
             )],
-            vec![CalculateHashIntermediate::new(
-                0,
+            vec![CalculateHashIntermediate::new_without_slot(
                 Hash::new_unique(),
                 offset + 1,
-                0,
                 Pubkey::new_unique(),
             )],
         ];
