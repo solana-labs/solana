@@ -11188,6 +11188,6 @@ pub mod tests {
         entry.alive_bytes.store(3000, Ordering::Relaxed);
         assert!(accounts.is_candidate_for_shrink(entry.clone()));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
-        assert!(!accounts.is_candidate_for_shrink(entry.clone()));
+        assert!(!accounts.is_candidate_for_shrink(entry));
     }
 }
