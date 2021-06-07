@@ -54,7 +54,7 @@ store up to 2^16 addresses each. Anyone may create an index account of any size
 as long as its big enough to store the necessary metadata. In addition to
 stored addresses, index accounts must also track the latest count of stored
 addresses and an authority which must be a present signer for all index
-modifications.
+additions.
 
 #### Cost
 
