@@ -2107,7 +2107,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
-    if shrink_ratio < 0.0 || shrink_ratio > 1.0 {
+    if !(0.0..=1.0).contains(&shrink_ratio) {
         eprintln!(
             "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0: {}",
             shrink_ratio
