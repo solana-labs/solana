@@ -61,7 +61,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             #[cfg(not(unix))]
             {
                 println!("logging to a file is not supported on this platform");
-                ()
+                None
             }
         }
     };
