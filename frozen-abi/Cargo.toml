@@ -21,7 +21,7 @@ thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 solana-logger = { path = "../logger", version = "=1.8.0" }
-generic-array = { version = "0.14.3", default-features = false, features = ["serde", "more_lengths"]}
+generic-array = { version = "0.14.4", default-features = false, features = ["serde", "more_lengths"]}
 memmap2 = "0.2.3"
 
 [build-dependencies]
