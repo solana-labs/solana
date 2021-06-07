@@ -4,10 +4,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Secp256k1RecoverError {
-    #[error("The digest provided to a secp256k1_recover has an invalid size")]
-    InvalidDigestLength,
-    #[error("The signature provided to a secp256k1_recover has an invalid size")]
-    InvalidSignatureLength,
+    #[error("The digest provided to a secp256k1_recover is invalid")]
+    InvalidDigest,
     #[error("The recovery_id provided to a secp256k1_recover is invalid")]
     InvalidRecoveryId,
     #[error("The signature provided to a secp256k1_recover is invalid")]
@@ -71,10 +69,9 @@ pub fn secp256k1_recover(
 
         match result {
             0 => Ok(Secp256k1Pubkey::new(&pubkey_buffer)),
-            1 => Err(Secp256k1RecoverError::InvalidDigestLength),
+            1 => Err(Secp256k1RecoverError::InvalidDigest),
             2 => Err(Secp256k1RecoverError::InvalidRecoveryId),
-            3 => Err(Secp256k1RecoverError::InvalidSignatureLength),
-            4 => Err(Secp256k1RecoverError::InvalidSignature),
+            3 => Err(Secp256k1RecoverError::InvalidSignature),
             _ => panic!("Unsupported Secp256k1RecoverError"),
         }
     }
@@ -82,11 +79,11 @@ pub fn secp256k1_recover(
     #[cfg(not(target_arch = "bpf"))]
     {
         let message = libsecp256k1::Message::parse_slice(digest)
-            .map_err(|_| Secp256k1RecoverError::InvalidDigestLength)?;
+            .map_err(|_| Secp256k1RecoverError::InvalidDigest)?;
         let recovery_id = libsecp256k1::RecoveryId::parse(recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
         let signature = libsecp256k1::Signature::parse_standard_slice(signature)
-            .map_err(|_| Secp256k1RecoverError::InvalidSignatureLength)?;
+            .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
 
         let secp256k1_key = libsecp256k1::recover(&message, &signature, &recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;

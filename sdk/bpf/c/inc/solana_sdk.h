@@ -465,14 +465,12 @@ uint64_t sol_keccak256(
 /** Length of a secp256k1 recover result */
 #define SECP256K1_RECOVER_RESULT_LENGTH 64
 
-/** The digest provided to a sol_secp256k1_recover has an invalid size */
-#define SECP256K1_RECOVER_ERROR_INVALID_DIGEST_LENGTH 1
-/** The signature provided to a sol_secp256k1_recover has an invalid size */
-#define SECP256K1_RECOVER_ERROR_INVALID_SIGNATURE_LENGTH 2
+/** The digest provided to a sol_secp256k1_recover is invalid */
+#define SECP256K1_RECOVER_ERROR_INVALID_DIGEST 1
 /** The recovery_id provided to a sol_secp256k1_recover is invalid */
-#define SECP256K1_RECOVER_ERROR_INVALID_RECOVERY_ID 3
+#define SECP256K1_RECOVER_ERROR_INVALID_RECOVERY_ID 2
 /** The signature provided to a sol_secp256k1_recover is invalid */
-#define SECP256K1_RECOVER_ERROR_INVALID_SIGNATURE 4
+#define SECP256K1_RECOVER_ERROR_INVALID_SIGNATURE 3
 
 /**
  * Recover public key from a signed message.

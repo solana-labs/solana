@@ -1385,21 +1385,21 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
         let message = match libsecp256k1::Message::parse_slice(hash) {
             Ok(msg) => msg,
             Err(_) => {
-                *result = Ok(1);
+                *result = Ok(1); // invalid digest
                 return;
             }
         };
         let recovery_id = match libsecp256k1::RecoveryId::parse(recovery_id_val as u8) {
             Ok(id) => id,
             Err(_) => {
-                *result = Ok(2);
+                *result = Ok(2); // invalid recovery id
                 return;
             }
         };
         let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
             Ok(sig) => sig,
             Err(_) => {
-                *result = Ok(3);
+                *result = Ok(3); // invalid signature
                 return;
             }
         };
@@ -1407,7 +1407,7 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
         let public_key = match libsecp256k1::recover(&message, &signature, &recovery_id) {
             Ok(key) => key.serialize(),
             Err(_) => {
-                *result = Ok(4);
+                *result = Ok(3); // invalid signature
                 return;
             }
         };
