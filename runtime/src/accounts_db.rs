@@ -119,17 +119,17 @@ pub enum AccountShrinkThreshold {
     /// And select the candidiates by using the top sparse account storage entries to shrink.
     /// The value is the overall shrink threshold measured as ratio of the total live bytes
     /// over the total bytes.
-    TotalSpace { ratio: f64 },
-    /// Use the following option to shrink all accounts whose alive ratio is below
+    TotalSpace { shrink_ratio: f64 },
+    /// Use the following option to shrink all stores whose alive ratio is below
     /// the specified threshold.
-    IndividalAccount { ratio: f64 },
+    IndividalStore { shrink_ratio: f64 },
 }
 pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 // The default extra account space in percentage from the ideal target
 const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
-    AccountShrinkThreshold::IndividalAccount {
-        ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
+    AccountShrinkThreshold::IndividalStore {
+        shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
     };
 
 impl Default for AccountShrinkThreshold {
@@ -2375,8 +2375,8 @@ impl AccountsDb {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let shrink_slots = {
-            if let AccountShrinkThreshold::TotalSpace { ratio } = self.shrink_ratio {
-                self.select_candidates_by_total_usage(&shrink_candidates_slots, ratio)
+            if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
+                self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio)
             } else {
                 shrink_candidates_slots
             }
@@ -4891,14 +4891,14 @@ impl AccountsDb {
         true
     }
 
-    fn is_store_candidate_for_shrink(&self, store: Arc<AccountStorageEntry>) -> bool {
+    fn is_candidate_for_shrink(&self, store: Arc<AccountStorageEntry>) -> bool {
         match self.shrink_ratio {
-            AccountShrinkThreshold::TotalSpace { ratio: _ } => {
+            AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
                 Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
             }
-            AccountShrinkThreshold::IndividalAccount { ratio } => {
+            AccountShrinkThreshold::IndividalStore { shrink_ratio } => {
                 (Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64)
-                    < ratio
+                    < shrink_ratio
             }
         }
     }
@@ -4938,7 +4938,7 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && self.is_store_candidate_for_shrink(store.clone())
+                    && self.is_candidate_for_shrink(store.clone())
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -11181,5 +11181,24 @@ pub mod tests {
         s2.add_account(PAGE_SIZE as usize);
         let stores = vec![Arc::new(s1), Arc::new(s2)];
         assert!(AccountsDb::is_shrinking_productive(0, &stores));
+    }
+
+    #[test]
+    fn test_is_candidate_for_shrink() {
+        solana_logger::setup();
+
+        let mut accounts = AccountsDb::new_single();
+        let dummy_path = Path::new("");
+        let dummy_size = 2 * PAGE_SIZE;
+        let entry = Arc::new(AccountStorageEntry::new(&dummy_path, 0, 1, dummy_size));
+        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        assert!(accounts.is_candidate_for_shrink(entry.clone()));
+        entry.alive_bytes.store(5000, Ordering::Relaxed);
+        assert!(!accounts.is_candidate_for_shrink(entry.clone()));
+        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace {shrink_ratio: 0.3};
+        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        assert!(accounts.is_candidate_for_shrink(entry.clone()));
+        accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore {shrink_ratio: 0.3};
+        assert!(!accounts.is_candidate_for_shrink(entry.clone()));
     }
 }

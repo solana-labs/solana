@@ -1799,12 +1799,12 @@ pub fn main() {
             Arg::with_name("accounts_shrink_ratio")
                 .long("accounts-shrink-ratio")
                 .takes_value(true)
-                .value_name("NUM")
+                .value_name("RATIO")
                 .default_value(default_accounts_shrink_ratio)
                 .help("Specifies the shrink ratio for the accounts to be shrank. \
                        The shrink ratio is defined as the ratio of the bytes alive over the  \
                        total bytes used. If the account's shrink ratio is less than this ratio \
-                       it becomes a candidate for shrinking."),
+                       it becomes a candidate for shrinking. The value must between 0. - 1.0."),
         )
         .arg(
             Arg::with_name("no_duplicate_instance_check")
@@ -2107,15 +2107,18 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
+    if shrink_ratio < 0.0 || shrink_ratio > 1.0 {
+        eprintln!(
+            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0: {}",
+            shrink_ratio
+        );
+        exit(1);
+    }
 
     let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
-        AccountShrinkThreshold::TotalSpace {
-            ratio: shrink_ratio,
-        }
+        AccountShrinkThreshold::TotalSpace { shrink_ratio }
     } else {
-        AccountShrinkThreshold::IndividalAccount {
-            ratio: shrink_ratio,
-        }
+        AccountShrinkThreshold::IndividalStore { shrink_ratio }
     };
 
     let mut validator_config = ValidatorConfig {
