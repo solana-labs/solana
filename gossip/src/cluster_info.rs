@@ -78,6 +78,7 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, Ordering},
+            mpsc::{Receiver, RecvTimeoutError, Sender},
             {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
         },
         thread::{sleep, Builder, JoinHandle},
@@ -235,7 +236,7 @@ impl Default for ClusterInfo {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
-struct PruneData {
+pub(crate) struct PruneData {
     /// Pubkey of the node that sent this prune data
     pubkey: Pubkey,
     /// Pubkeys of nodes that should be pruned
@@ -329,7 +330,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 #[frozen_abi(digest = "GANv3KVkTYF84kmg1bAuWEZd9MaiYzPquuu13hup3379")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
-enum Protocol {
+pub(crate) enum Protocol {
     /// Gossip protocol messages
     PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
@@ -2499,7 +2500,7 @@ impl ClusterInfo {
 
     fn process_packets(
         &self,
-        packets: VecDeque<Packet>,
+        packets: VecDeque<(/*from:*/ SocketAddr, Protocol)>,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
@@ -2509,24 +2510,6 @@ impl ClusterInfo {
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
-        self.stats
-            .packets_received_count
-            .add_relaxed(packets.len() as u64);
-        let packets: Vec<_> = thread_pool.install(|| {
-            packets
-                .into_par_iter()
-                .filter_map(|packet| {
-                    let protocol: Protocol =
-                        limited_deserialize(&packet.data[..packet.meta.size]).ok()?;
-                    protocol.sanitize().ok()?;
-                    let protocol = protocol.par_verify()?;
-                    Some((packet.meta.addr(), protocol))
-                })
-                .collect()
-        });
-        self.stats
-            .packets_received_verified_count
-            .add_relaxed(packets.len() as u64);
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
         let check_duplicate_instance = |values: &[CrdsValue]| {
@@ -2611,12 +2594,54 @@ impl ClusterInfo {
         Ok(())
     }
 
+    // Consumes packets received from the socket, deserializing, sanitizing and
+    // verifying them and then sending them down the channel for the actual
+    // handling of requests/messages.
+    fn run_socket_consume(
+        &self,
+        receiver: &PacketReceiver,
+        sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        thread_pool: &ThreadPool,
+    ) -> Result<(), GossipError> {
+        const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+        let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
+        let mut packets = VecDeque::from(packets);
+        for payload in receiver.try_iter() {
+            packets.extend(payload.packets.iter().cloned());
+            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
+            if excess_count > 0 {
+                packets.drain(0..excess_count);
+                self.stats
+                    .gossip_packets_dropped_count
+                    .add_relaxed(excess_count as u64);
+            }
+        }
+        self.stats
+            .packets_received_count
+            .add_relaxed(packets.len() as u64);
+        let verify_packet = |packet: Packet| {
+            let data = &packet.data[..packet.meta.size];
+            let protocol: Protocol = limited_deserialize(data).ok()?;
+            protocol.sanitize().ok()?;
+            let protocol = protocol.par_verify()?;
+            Some((packet.meta.addr(), protocol))
+        };
+        let packets: Vec<_> = {
+            let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
+            thread_pool.install(|| packets.into_par_iter().filter_map(verify_packet).collect())
+        };
+        self.stats
+            .packets_received_verified_count
+            .add_relaxed(packets.len() as u64);
+        Ok(sender.send(packets)?)
+    }
+
     /// Process messages from the network
     fn run_listen(
         &self,
         recycler: &PacketsRecycler,
         bank_forks: Option<&RwLock<BankForks>>,
-        requests_receiver: &PacketReceiver,
+        receiver: &Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         response_sender: &PacketSender,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
@@ -2624,10 +2649,9 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
-        let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
-        let mut packets = VecDeque::from(packets);
-        while let Ok(packet) = requests_receiver.try_recv() {
-            packets.extend(packet.packets.iter().cloned());
+        let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
+        for payload in receiver.try_iter() {
+            packets.extend(payload);
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
                 packets.drain(0..excess_count);
@@ -2664,10 +2688,35 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn listen(
+    pub(crate) fn start_socket_consume_thread(
+        self: Arc<Self>,
+        receiver: PacketReceiver,
+        sender: Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        exit: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(get_thread_count().min(8))
+            .thread_name(|i| format!("gossip-consume-{}", i))
+            .build()
+            .unwrap();
+        let run_consume = move || {
+            while !exit.load(Ordering::Relaxed) {
+                match self.run_socket_consume(&receiver, &sender, &thread_pool) {
+                    Err(GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
+                    Err(GossipError::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                    Err(err) => error!("gossip consume: {}", err),
+                    Ok(()) => (),
+                }
+            }
+        };
+        let thread_name = String::from("gossip-consume");
+        Builder::new().name(thread_name).spawn(run_consume).unwrap()
+    }
+
+    pub(crate) fn listen(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        requests_receiver: PacketReceiver,
+        requests_receiver: Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         response_sender: PacketSender,
         should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
@@ -2694,7 +2743,8 @@ impl ClusterInfo {
                         should_check_duplicate_instance,
                     ) {
                         match err {
-                            GossipError::RecvTimeoutError(_) => {
+                            GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            GossipError::RecvTimeoutError(RecvTimeoutError::Timeout) => {
                                 let table_size = self.gossip.read().unwrap().crds.len();
                                 debug!(
                                     "{}: run_listen timeout, table size: {}",
