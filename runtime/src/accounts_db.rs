@@ -4891,7 +4891,7 @@ impl AccountsDb {
         true
     }
 
-    fn is_candidate_for_shrink(&self, store: Arc<AccountStorageEntry>) -> bool {
+    fn is_candidate_for_shrink(&self, store: &Arc<AccountStorageEntry>) -> bool {
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
                 Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
@@ -4938,7 +4938,7 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && self.is_candidate_for_shrink(store.clone())
+                    && self.is_candidate_for_shrink(&store)
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -11181,13 +11181,13 @@ pub mod tests {
         let dummy_size = 2 * PAGE_SIZE;
         let entry = Arc::new(AccountStorageEntry::new(&dummy_path, 0, 1, dummy_size));
         entry.alive_bytes.store(3000, Ordering::Relaxed);
-        assert!(accounts.is_candidate_for_shrink(entry.clone()));
+        assert!(accounts.is_candidate_for_shrink(&entry));
         entry.alive_bytes.store(5000, Ordering::Relaxed);
-        assert!(!accounts.is_candidate_for_shrink(entry.clone()));
+        assert!(!accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Relaxed);
-        assert!(accounts.is_candidate_for_shrink(entry.clone()));
+        assert!(accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
-        assert!(!accounts.is_candidate_for_shrink(entry));
+        assert!(!accounts.is_candidate_for_shrink(&entry));
     }
 }
