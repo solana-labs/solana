@@ -30,7 +30,6 @@ prost = "0.7.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.0"
-reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 serde = "1.0.126"
 serde_bytes = "0.11.5"
 sha2 = "0.9.5"
@@ -55,6 +54,14 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 trees = "0.2.1"
+
+# Disable reed-solomon-erasure/simd-accel feature on aarch64 only since it
+# requires clang to support -march=native.
+[target.'cfg(any(target_arch = "aarch64", target_arch = "aarch64_apple_darwin"))'.dependencies]
+reed-solomon-erasure = { version = "4.0.2" }
+
+[target.'cfg(not(any(target_arch = "aarch64", target_arch = "aarch64_apple_darwin")))'.dependencies]
+reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
