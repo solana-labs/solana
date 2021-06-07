@@ -34,13 +34,15 @@ transaction execution in the simulation.
 Then, client signs the final transaction after appending these additional
 account addresses and submits it to the cluster via `sendTransaction`.
 
-To be specific, wallet should be able to manage these transaction finalization,
-agnostic to individual defi programs. This extra simulation process results in
-no-op if the executed program aren't aware of this new functionality.
-
 For that end, introduce a new syscall to trace account accesses, so that
 programs can dynamically hint their _internal_ or _derivable_ account addresses
-implicitly via , attaning the classic implementation-detail abstraction.
+implicitly, attaning the classic implementation-detail abstraction in the
+context Soalna's program ecosystem.
+
+In general, wallets should be able to manage these transaction finalization,
+agnostic to individual defi programs. Also, this extra simulation step results
+in no-op and harmless if all of the executed programs aren't aware of this new
+functionality.
 
 ## Traced syscalls
 
@@ -76,7 +78,7 @@ determisnism while developing and is mandated for security to lightly protect
 users from bad programs pretending to be harmless only in simulation.
 
 
-## example: the associated token account program (demonstrating the problem #1)
+### example: the associated token account program (demonstrating the problem #1)
 
 ```patch
 diff --git a/associated-token-account/program/src/processor.rs b/associated-token-account/program/src/processor.rs
@@ -115,8 +117,11 @@ index 98eb08b..fa8ae50 100644
 ```
 
 This reduces the number of required accounts for CPI and clients from 7 to 3, reducing by 4.
+(Obviously, we can't actually deploy these changes because this will break
+compatibility. This is only for illustration of effective applicability to
+moderately-complex program construct.)
 
-## example: limited number of NFT transfers per day shared across program:
+### example: limited number of NFT transfers per day shared across program:
 
 ```rust
 pub fn process_transfer(                                              
@@ -140,15 +145,14 @@ pub fn process_transfer(
       transfer_counter.count = 0;
    } else if transfer_counter > 10 {
       return Err("daily quote of transfer is reached");
-   } else {
-      transfer_counter.count += 1;
    }
 
+   transfer_counter.count += 1;
    ...
 }
 ```
 
-## example: sharding
+### example: sharding
 
 
 ```rust
@@ -176,6 +180,7 @@ pub fn process_place_order(
 pub fn check_instruction_version_and_load_data() {
    // this is newly added after the redeploy
    if access_as_unsigned(declare!("OldVersion111111111111111111111111111111111111"), READ).is_ok() {
+     // it seems that this transaction is construction by simulation with pre-redeploy program executable.
      return Err("we changed internal data loading implementation. to avoid unexpected malfunction retry");
    }
 
@@ -201,42 +206,42 @@ transaction:
       Bm9UhRBysjeT35ukzriheHKr76yiM1fPyEBMMw2yT9v1: {read: true, write: false}      
       J8H1Gsvnm2CY5oVa1zw1LHHbfvtone8ZGsVBzjkkPbpy: {read: true, write: true}      
     instructions:
-      accounts: []
+      accesses: []
       instruction_type: spl_token_transfer
       instructions: [...]
   accesses: [...]
   pre_balances/pre_token_balances
   post_balances/post_token_balances
-  token_approvals
+  token_token_approvals: ???
 ```
 
 
 
 also, page-indexed account can be incorporated to find compact combination of existing account indexes to match the required account list
 
+## downside
 
-## Other Proposals / alternative implementation
+race condition around program deploy (= possible account loading change) => just retry also seek to the ix versioning for perfection
 
-
-#  or customized entrypoint?
+(traced program just load dummy addresses for tx versionsing for completeness)
 
 ## careful consideration
 
-prevent program  to be simulated or really-executed
+prevent program  detect to be simulated or really-executed
 
-## downside
 
-race condition around program deploy (= possible account loading change) => just retry
-also, traced program just load dummy addresses for tx versionsing for completeness
+## Other Proposals / alternative implementation
+
+### customized entrypoint?
+
+breaks compatibility?
 
 # Run these before replaying stage on validator
 
 unavoidable latency.  (and scheduling difficulty).
 The proposed implementation doesn't have such a downside
 
+# Future possible expansions
 
-
-# Future expansion
-
-Wallet account delta check
-Browser-side bpf program simualtion for server-less architecture with online wasm translation
+- Wallet account delta check
+- Browser-side bpf program simualtion for server-less architecture with online wasm translation
