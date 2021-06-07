@@ -677,13 +677,8 @@ mod tests {
                 0,
                 2,
                 &new_owner,
-<<<<<<< HEAD
-                &[to].iter().cloned().collect::<HashSet<_>>(),
-                &mut MockInvokeContext::default(),
-=======
                 &[from, to].iter().cloned().collect::<HashSet<_>>(),
-                &MockInvokeContext::new(vec![]),
->>>>>>> 8f5e773ca (system-program: Remove zero lamport check on transfers (#17726))
+                &mut MockInvokeContext::default(),
             ),
             Ok(())
         );
@@ -1104,12 +1099,8 @@ mod tests {
             &mut MockInvokeContext::default(),
         )
         .is_ok(),);
-<<<<<<< HEAD
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_keyed_account.account.borrow().lamports, 51);
-=======
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
 
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
@@ -1119,13 +1110,12 @@ mod tests {
                 &from_keyed_account,
                 &to_keyed_account,
                 0,
-                &MockInvokeContext::new(vec![]),
+                &mut MockInvokeContext::default(),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
->>>>>>> 8f5e773ca (system-program: Remove zero lamport check on transfers (#17726))
+        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
     }
 
     #[test]
