@@ -1,4 +1,4 @@
-# Traced transaction construction via RPC's transaction simulation
+# Traced transaction construction via RPC's `simulateTransaction`
 
 ## Problem
 
