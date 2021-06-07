@@ -1,6 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, value_t, App, Arg};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+use solana_ledger::entry::{create_ticks, init_poh, EntrySlice, VerifyRecyclers};
 use solana_measure::measure::Measure;
 use solana_perf::perf_libs;
 use solana_sdk::hash::hash;
@@ -84,34 +87,40 @@ fn main() {
             time.as_us() / iterations as u64
         );
 
-        if is_x86_feature_detected!("avx2") && entry::api().is_some() {
-            let mut time = Measure::start("time");
-            for _ in 0..iterations {
-                assert!(ticks[..num_entries]
-                    .verify_cpu_x86_simd(&start_hash, 8)
-                    .finish_verify());
+        // A target_arch check is required here since calling
+        // is_x86_feature_detected from a non-x86_64 arch results in a build
+        // error.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if is_x86_feature_detected!("avx2") && entry::api().is_some() {
+                let mut time = Measure::start("time");
+                for _ in 0..iterations {
+                    assert!(ticks[..num_entries]
+                        .verify_cpu_x86_simd(&start_hash, 8)
+                        .finish_verify());
+                }
+                time.stop();
+                println!(
+                    "{},cpu_simd_avx2,{}",
+                    num_entries,
+                    time.as_us() / iterations as u64
+                );
             }
-            time.stop();
-            println!(
-                "{},cpu_simd_avx2,{}",
-                num_entries,
-                time.as_us() / iterations as u64
-            );
-        }
 
-        if is_x86_feature_detected!("avx512f") && entry::api().is_some() {
-            let mut time = Measure::start("time");
-            for _ in 0..iterations {
-                assert!(ticks[..num_entries]
-                    .verify_cpu_x86_simd(&start_hash, 16)
-                    .finish_verify());
+            if is_x86_feature_detected!("avx512f") && entry::api().is_some() {
+                let mut time = Measure::start("time");
+                for _ in 0..iterations {
+                    assert!(ticks[..num_entries]
+                        .verify_cpu_x86_simd(&start_hash, 16)
+                        .finish_verify());
+                }
+                time.stop();
+                println!(
+                    "{},cpu_simd_avx512,{}",
+                    num_entries,
+                    time.as_us() / iterations as u64
+                );
             }
-            time.stop();
-            println!(
-                "{},cpu_simd_avx512,{}",
-                num_entries,
-                time.as_us() / iterations as u64
-            );
         }
 
         if perf_libs::api().is_some() {
