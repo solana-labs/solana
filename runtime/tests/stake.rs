@@ -11,9 +11,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_instruction::SystemError,
     sysvar::{self, stake_history::StakeHistory},
-    transaction::TransactionError,
 };
 use solana_stake_program::{
     stake_instruction::{self},
@@ -171,7 +169,7 @@ fn test_stake_create_and_split_single_signature() {
 
 #[test]
 fn test_stake_create_and_split_to_existing_system_account() {
-    // Ensure stake-split does not allow the user to promote an existing system account into
+    // Ensure stake-split allows the user to promote an existing system account into
     // a stake account.
 
     solana_logger::setup();
@@ -229,7 +227,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
         existing_lamports
     );
 
-    // Verify the split fails because the account is already in use
+    // Verify the split succeeds with lamports in the destination account
     let message = Message::new(
         &stake_instruction::split_with_seed(
             &stake_address, // original
@@ -241,16 +239,12 @@ fn test_stake_create_and_split_to_existing_system_account() {
         ),
         Some(&staker_keypair.pubkey()),
     );
-    assert_eq!(
-        bank_client
-            .send_and_confirm_message(&[&staker_keypair], message)
-            .unwrap_err()
-            .unwrap(),
-        TransactionError::InstructionError(0, SystemError::AccountAlreadyInUse.into())
-    );
+    bank_client
+        .send_and_confirm_message(&[&staker_keypair], message)
+        .expect("failed to split into account with lamports");
     assert_eq!(
         bank_client.get_balance(&split_stake_address).unwrap(),
-        existing_lamports
+        existing_lamports + lamports / 2
     );
 }
 
