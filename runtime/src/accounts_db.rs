@@ -4335,6 +4335,58 @@ impl AccountsDb {
         self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None)
     }
 
+    fn scan_multiple_account_storages_one_slot<F, B>(
+        storages: &[Arc<AccountStorageEntry>],
+        scan_func: &F,
+        slot: Slot,
+        retval: &mut B,
+    ) where
+        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        B: Send + Default,
+    {
+        // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
+        let mut len = storages.len();
+        let mut progress = Vec::with_capacity(len);
+        let mut current = Vec::with_capacity(len);
+        for storage in storages {
+            let accounts = storage.accounts.accounts(0);
+            let mut iterator: std::vec::IntoIter<StoredAccountMeta<'_>> = accounts.into_iter();
+            if let Some(item) = iterator
+                .next()
+                .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
+            {
+                current.push(item);
+                progress.push(iterator);
+            }
+        }
+        while !progress.is_empty() {
+            let mut min = current[0].0;
+            let mut min_index = 0;
+            for (i, (item, _)) in current.iter().enumerate().take(len).skip(1) {
+                if item < &min {
+                    min_index = i;
+                    min = *item;
+                }
+            }
+            let mut account = (0, None);
+            std::mem::swap(&mut account, &mut current[min_index]);
+            scan_func(LoadedAccount::Stored(account.1.unwrap()), retval, slot);
+            let next = progress[min_index]
+                .next()
+                .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)));
+            match next {
+                Some(item) => {
+                    current[min_index] = item;
+                }
+                None => {
+                    current.remove(min_index);
+                    progress.remove(min_index);
+                    len -= 1;
+                }
+            }
+        }
+    }
+
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
         snapshot_storages: &SortedStorages,
@@ -4357,12 +4409,12 @@ impl AccountsDb {
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
                     if let Some(sub_storages) = sub_storages {
-                        for storage in sub_storages {
-                            let accounts = storage.accounts.accounts(0);
-                            accounts.into_iter().for_each(|stored_account| {
-                                scan_func(LoadedAccount::Stored(stored_account), &mut retval, slot)
-                            });
-                        }
+                        Self::scan_multiple_account_storages_one_slot(
+                            sub_storages,
+                            &scan_func,
+                            slot,
+                            &mut retval,
+                        );
                     }
                 }
                 retval
@@ -4456,7 +4508,6 @@ impl AccountsDb {
                     return;
                 }
 
-                let version = loaded_account.write_version();
                 let raw_lamports = loaded_account.lamports();
                 let zero_raw_lamports = raw_lamports == 0;
                 let balance = if zero_raw_lamports {
@@ -4465,11 +4516,9 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item = CalculateHashIntermediate::new(
-                    version,
+                let source_item = CalculateHashIntermediate::new_without_slot(
                     loaded_account.loaded_hash(),
                     balance,
-                    slot,
                     *pubkey,
                 );
 
@@ -5822,7 +5871,7 @@ pub mod tests {
         accounts_hash::MERKLE_FANOUT,
         accounts_index::RefCount,
         accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
-        append_vec::AccountMeta,
+        append_vec::{test_utils::TempFile, AccountMeta},
         inline_spl_token_v2_0,
     };
     use assert_matches::assert_matches;
@@ -6264,6 +6313,130 @@ pub mod tests {
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
+    }
+
+    #[test]
+    fn test_accountsdb_scan_account_storage_no_bank_one_slot() {
+        solana_logger::setup();
+
+        let expected = 1;
+        let tf = crate::append_vec::test_utils::get_append_vec_path(
+            "test_accountsdb_scan_account_storage_no_bank",
+        );
+        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+        let slot_expected: Slot = 0;
+        let size: usize = 123;
+        let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
+        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        data.accounts = av;
+
+        let arc = Arc::new(data);
+        let storages = vec![vec![arc]];
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey,
+            write_version: 1,
+        };
+        storages[0][0]
+            .accounts
+            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+
+        let calls = AtomicU64::new(0);
+        let mut accum = Vec::new();
+        let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
+            calls.fetch_add(1, Ordering::Relaxed);
+            assert_eq!(loaded_account.pubkey(), &pubkey);
+            assert_eq!(slot_expected, slot);
+            accum.push(expected);
+        };
+        AccountsDb::scan_multiple_account_storages_one_slot(
+            &storages[0],
+            &scan_func,
+            slot_expected,
+            &mut accum,
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(accum, vec![expected]);
+    }
+
+    fn sample_storage_with_entries(
+        tf: &TempFile,
+        write_version: StoredMetaWriteVersion,
+        slot: Slot,
+        pubkey: &Pubkey,
+    ) -> SnapshotStorages {
+        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+        let size: usize = 123;
+        let mut data = AccountStorageEntry::new(&paths[0], slot, 0, size as u64);
+        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        data.accounts = av;
+
+        let arc = Arc::new(data);
+        let storages = vec![vec![arc]];
+        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey: *pubkey,
+            write_version,
+        };
+        storages[0][0]
+            .accounts
+            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        storages
+    }
+
+    #[test]
+    fn test_accountsdb_scan_multiple_account_storage_no_bank_one_slot() {
+        solana_logger::setup();
+
+        let slot_expected: Slot = 0;
+        let tf = crate::append_vec::test_utils::get_append_vec_path(
+            "test_accountsdb_scan_account_storage_no_bank",
+        );
+        let write_version1 = 0;
+        let write_version2 = 1;
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        for swap in [false, true].iter() {
+            let mut storages = [
+                sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1)
+                    .remove(0)
+                    .remove(0),
+                sample_storage_with_entries(&tf, write_version2, slot_expected, &pubkey2)
+                    .remove(0)
+                    .remove(0),
+            ];
+            if *swap {
+                storages[..].swap(0, 1);
+            }
+            let calls = AtomicU64::new(0);
+            let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
+                calls.fetch_add(1, Ordering::Relaxed);
+                let write_version = loaded_account.write_version();
+                let first = loaded_account.pubkey() == &pubkey1 && write_version == write_version1;
+                assert!(
+                    first || loaded_account.pubkey() == &pubkey2 && write_version == write_version2
+                );
+                assert_eq!(slot_expected, slot);
+                if first {
+                    assert!(accum.is_empty());
+                } else {
+                    assert!(accum.len() == 1);
+                }
+                accum.push(write_version);
+            };
+            let mut accum = Vec::new();
+            AccountsDb::scan_multiple_account_storages_one_slot(
+                &storages,
+                &scan_func,
+                slot_expected,
+                &mut accum,
+            );
+            assert_eq!(calls.load(Ordering::Relaxed), storages.len() as u64);
+            assert_eq!(accum, vec![write_version1, write_version2]);
+        }
     }
 
     #[test]
