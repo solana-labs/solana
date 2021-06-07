@@ -765,11 +765,13 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDb {
     /// Keeps tracks of index into AppendVec on a per slot basis
-    pub accounts_index: AccountsIndex<AccountInfo>,
+    pub accounts_index: AccountInfoAccountsIndex,
 
     pub storage: AccountStorage,
 
