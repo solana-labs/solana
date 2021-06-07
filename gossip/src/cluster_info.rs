@@ -2592,7 +2592,7 @@ impl ClusterInfo {
     // Consumes packets received from the socket, deserializing, sanitizing and
     // verifying them and then sending them down the channel for the actual
     // handling of requests/messages.
-    fn run_consume(
+    fn run_socket_consume(
         &self,
         receiver: &PacketReceiver,
         sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
@@ -2683,7 +2683,7 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub(crate) fn consume(
+    pub(crate) fn start_socket_consume_thread(
         self: Arc<Self>,
         receiver: PacketReceiver,
         sender: Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
@@ -2696,7 +2696,7 @@ impl ClusterInfo {
             .unwrap();
         let run_consume = move || {
             while !exit.load(Ordering::Relaxed) {
-                match self.run_consume(&receiver, &sender, &thread_pool) {
+                match self.run_socket_consume(&receiver, &sender, &thread_pool) {
                     Err(GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                     Err(GossipError::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                     Err(err) => error!("gossip consume: {}", err),

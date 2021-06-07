@@ -57,10 +57,11 @@ impl GossipService {
         );
         let (response_sender, response_receiver) = channel();
         let (consume_sender, listen_receiver) = channel();
-        let t_consume =
-            cluster_info
-                .clone()
-                .consume(request_receiver, consume_sender, exit.clone());
+        let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
+            request_receiver,
+            consume_sender,
+            exit.clone(),
+        );
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
             bank_forks.clone(),
@@ -81,7 +82,13 @@ impl GossipService {
         // responder thread should start after response_sender.clone(). see:
         // https://github.com/rust-lang/rust/issues/39364#issuecomment-381446873
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
-        let thread_hdls = vec![t_receiver, t_responder, t_consume, t_listen, t_gossip];
+        let thread_hdls = vec![
+            t_receiver,
+            t_responder,
+            t_socket_consume,
+            t_listen,
+            t_gossip,
+        ];
         Self { thread_hdls }
     }
 
