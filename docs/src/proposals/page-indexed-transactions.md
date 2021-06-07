@@ -56,6 +56,22 @@ stored addresses, index accounts must also track the latest count of stored
 addresses and an authority which must be a present signer for all index
 additions.
 
+Index additions require one slot to activate and so the index data should track
+how many additions are still pending activation in on-chain data.
+
+```rust
+struct IndexMeta {
+  // authority must sign for each addition
+  authority: Pubkey,
+  // incremented on each addition
+  len: u16,
+  // always set to the current slot
+  last_update_slot: Slot,
+  // incremented if current slot is equal to `last_update_slot`
+  last_update_slot_additions: u16,
+}
+```
+
 #### Cost
 
 Since index accounts require caching and special handling in the runtime, they should incur
