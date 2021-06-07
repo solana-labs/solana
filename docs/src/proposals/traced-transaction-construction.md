@@ -241,7 +241,7 @@ breaks compatibility?
 unavoidable latency.  (and scheduling difficulty).
 The proposed implementation doesn't have such a downside
 
-# Future possible expansions
+## Future possible expansions
 
-- Wallet account balance delta check?
+- Wallet account balance delta check: append VerifyTokenBalances ix at last and pass the expected balances of spl-tokens or hash of it (also with delegation status).
 - Browser-side bpf program simualtion for server-less architecture with online wasm translation
