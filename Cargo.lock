@@ -2007,13 +2007,9 @@ version = "17.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4467ab6dfa369b69e52bd0692e480c4d117410538526a57a304a0f2250fd95e"
 dependencies = [
-<<<<<<< HEAD
  "futures 0.3.8",
-=======
- "futures 0.3.15",
  "futures-executor",
  "futures-util",
->>>>>>> 2e998ed11 (Bump jsonrpc crates (#17797))
  "log 0.4.11",
  "serde",
  "serde_derive",
