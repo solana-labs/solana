@@ -116,13 +116,12 @@ lazy_static! {
 #[derive(Debug, Clone, Copy)]
 pub enum AccountShrinkThreshold {
     /// Measure the total space sparseness across all candididates
-    /// And select the candidiates by using the top sparse accounts to shrink
+    /// And select the candidiates by using the top sparse account storage entries to shrink.
     /// The value is the overall shrink threshold measured as ratio of the total live bytes
     /// over the total bytes.
     TotalSpace { ratio: f64 },
     /// Use the following option to shrink all accounts whose alive ratio is below
-    /// the specified threshold. All accounts with alive usage ratio below this thresholds
-    /// will be shrank.
+    /// the specified threshold.
     IndividalAccount { ratio: f64 },
 }
 pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
@@ -1318,7 +1317,7 @@ impl Default for AccountsDb {
             load_limit: AtomicU64::default(),
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
-            shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
+            shrink_ratio: AccountShrinkThreshold::default(),
         }
     }
 }
@@ -1330,7 +1329,7 @@ impl AccountsDb {
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
-            DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
+            AccountShrinkThreshold::default(),
         )
     }
 

@@ -1801,10 +1801,10 @@ pub fn main() {
                 .takes_value(true)
                 .value_name("NUM")
                 .default_value(default_accounts_shrink_ratio)
-                .help("Specifies the shrink ratio for the accounts to be shrank \
+                .help("Specifies the shrink ratio for the accounts to be shrank. \
                        The shrink ratio is defined as the ratio of the bytes alive over the  \
                        total bytes used. If the account's shrink ratio is less than this ratio \
-                       it can become a candidate for shrink."),
+                       it becomes a candidate for shrinking."),
         )
         .arg(
             Arg::with_name("no_duplicate_instance_check")
@@ -2106,15 +2106,15 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
-    let accounts_shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
+    let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
 
     let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
         AccountShrinkThreshold::TotalSpace {
-            ratio: accounts_shrink_ratio,
+            ratio: shrink_ratio,
         }
     } else {
         AccountShrinkThreshold::IndividalAccount {
-            ratio: accounts_shrink_ratio,
+            ratio: shrink_ratio,
         }
     };
 

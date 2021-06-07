@@ -38,9 +38,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{
-        AccountShrinkThreshold, ErrorCounters, SnapshotStorages,
-    },
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
