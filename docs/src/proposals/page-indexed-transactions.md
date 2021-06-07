@@ -133,6 +133,12 @@ patterns.
 
 #### RPC changes
 
+Fetched transaction responses will likely require a new version field to
+indicate to clients which transaction structure to use for deserialization.
+Clients using pre-existing RPC methods will receive error responses when
+attempting to fetch a versioned transaction which will indicate that they
+must upgrade.
+
 The RPC API should also support an option for returning fully decompressed
 transactions to abstract away the indexing details from downstream clients.
 
