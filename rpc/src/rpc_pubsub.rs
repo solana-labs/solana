@@ -771,7 +771,7 @@ mod tests {
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}"#;
         let res = io.handle_request_sync(&req, session);
-        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid Request: Subscription id does not exist"},"id":1}"#;
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
@@ -1013,7 +1013,7 @@ mod tests {
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}"#;
         let res = io.handle_request_sync(&req, session);
-        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid Request: Subscription id does not exist"},"id":1}"#;
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
