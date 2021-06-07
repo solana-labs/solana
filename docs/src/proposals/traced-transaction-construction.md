@@ -196,7 +196,7 @@ pub fn check_instruction_version_and_load_data() {
 
 `pre_balances` and `post_balances` needs to be updated?
 
-sample return from simulatedTransaction:
+### sample return from `simulateTransaction` (or define `traceTransaction` for the compatibility??):
 
 ```yml
 # these somewhat verbose formatting is for future expansion
@@ -236,12 +236,12 @@ prevent program  detect to be simulated or really-executed
 
 breaks compatibility?
 
-# Run these before replaying stage on validator
+### Run these before replaying stage on validator
 
 unavoidable latency.  (and scheduling difficulty).
 The proposed implementation doesn't have such a downside
 
 # Future possible expansions
 
-- Wallet account delta check
+- Wallet account balance delta check?
 - Browser-side bpf program simualtion for server-less architecture with online wasm translation
