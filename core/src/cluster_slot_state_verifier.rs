@@ -3,7 +3,7 @@ use crate::{
     progress_map::ProgressMap,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
@@ -201,19 +201,12 @@ fn get_cluster_duplicate_confirmed_hash<'a>(
 
 fn apply_state_changes(
     slot: Slot,
-    progress: &mut ProgressMap,
     fork_choice: &mut HeaviestSubtreeForkChoice,
-    ancestors: &HashMap<Slot, HashSet<Slot>>,
-    descendants: &HashMap<Slot, HashSet<Slot>>,
     state_changes: Vec<ResultingStateChange>,
 ) {
     for state_change in state_changes {
         match state_change {
             ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash) => {
-                progress.set_unconfirmed_duplicate_slot(
-                    slot,
-                    descendants.get(&slot).unwrap_or(&HashSet::default()),
-                );
                 fork_choice.mark_fork_invalid_candidate(&(slot, bank_frozen_hash));
             }
             ResultingStateChange::RepairDuplicateConfirmedVersion(
@@ -224,11 +217,6 @@ fn apply_state_changes(
                 repair_correct_version(slot, &cluster_duplicate_confirmed_hash);
             }
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
-                progress.set_confirmed_duplicate_slot(
-                    slot,
-                    ancestors.get(&slot).unwrap_or(&HashSet::default()),
-                    descendants.get(&slot).unwrap_or(&HashSet::default()),
-                );
                 fork_choice.mark_fork_valid_candidate(&(slot, bank_frozen_hash));
             }
         }
@@ -242,9 +230,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     frozen_hash: Option<Hash>,
     duplicate_slots_tracker: &mut DuplicateSlotsTracker,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
-    ancestors: &HashMap<Slot, HashSet<Slot>>,
-    descendants: &HashMap<Slot, HashSet<Slot>>,
-    progress: &mut ProgressMap,
+    progress: &ProgressMap,
     fork_choice: &mut HeaviestSubtreeForkChoice,
     slot_state_update: SlotStateUpdate,
 ) {
@@ -280,7 +266,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     let frozen_hash = frozen_hash.unwrap();
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot);
 
-    let is_local_replay_duplicate_confirmed = progress.is_duplicate_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+    let is_local_replay_duplicate_confirmed = fork_choice.is_duplicate_confirmed(&(slot, frozen_hash)).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
     let cluster_duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash(
         slot,
         gossip_duplicate_confirmed_hash,
@@ -310,14 +296,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
         is_slot_duplicate,
         is_dead,
     );
-    apply_state_changes(
-        slot,
-        progress,
-        fork_choice,
-        ancestors,
-        descendants,
-        state_changes,
-    );
+    apply_state_changes(slot, fork_choice, state_changes);
 }
 
 #[cfg(test)]
@@ -325,13 +304,15 @@ mod test {
     use super::*;
     use crate::consensus::test::VoteSimulator;
     use solana_runtime::bank_forks::BankForks;
-    use std::sync::RwLock;
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::RwLock,
+    };
     use trees::tr;
 
     struct InitialState {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         progress: ProgressMap,
-        ancestors: HashMap<Slot, HashSet<Slot>>,
         descendants: HashMap<Slot, HashSet<Slot>>,
         slot: Slot,
         bank_forks: RwLock<BankForks>,
@@ -342,7 +323,6 @@ mod test {
         let forks = tr(0) / (tr(1) / (tr(2) / tr(3)));
         let mut vote_simulator = VoteSimulator::new(1);
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
-        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
 
         let descendants = vote_simulator
             .bank_forks
@@ -354,7 +334,6 @@ mod test {
         InitialState {
             heaviest_subtree_fork_choice: vote_simulator.heaviest_subtree_fork_choice,
             progress: vote_simulator.progress,
-            ancestors,
             descendants,
             slot: 0,
             bank_forks: vote_simulator.bank_forks,
@@ -627,11 +606,10 @@ mod test {
         // Common state
         let InitialState {
             mut heaviest_subtree_fork_choice,
-            mut progress,
-            ancestors,
             descendants,
             slot,
             bank_forks,
+            ..
         } = setup();
 
         // MarkSlotDuplicate should mark progress map and remove
@@ -639,10 +617,7 @@ mod test {
         let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
         apply_state_changes(
             slot,
-            &mut progress,
             &mut heaviest_subtree_fork_choice,
-            &ancestors,
-            &descendants,
             vec![ResultingStateChange::MarkSlotDuplicate(slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
@@ -655,8 +630,11 @@ mod test {
             .chain(std::iter::once(&slot))
         {
             assert_eq!(
-                progress
-                    .latest_unconfirmed_duplicate_ancestor(*child_slot)
+                heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(&(
+                        *child_slot,
+                        bank_forks.read().unwrap().get(*child_slot).unwrap().hash()
+                    ))
                     .unwrap(),
                 slot
             );
@@ -665,10 +643,7 @@ mod test {
         // DuplicateConfirmedSlotMatchesCluster should re-enable fork choice
         apply_state_changes(
             slot,
-            &mut progress,
             &mut heaviest_subtree_fork_choice,
-            &ancestors,
-            &descendants,
             vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
                 slot_hash,
             )],
@@ -679,8 +654,11 @@ mod test {
             .iter()
             .chain(std::iter::once(&slot))
         {
-            assert!(progress
-                .latest_unconfirmed_duplicate_ancestor(*child_slot)
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(&(
+                    *child_slot,
+                    bank_forks.read().unwrap().get(*child_slot).unwrap().hash()
+                ))
                 .is_none());
         }
         assert!(heaviest_subtree_fork_choice
@@ -692,9 +670,7 @@ mod test {
         // Common state
         let InitialState {
             mut heaviest_subtree_fork_choice,
-            mut progress,
-            ancestors,
-            descendants,
+            progress,
             bank_forks,
             ..
         } = setup();
@@ -713,9 +689,7 @@ mod test {
             initial_bank_hash,
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
@@ -733,16 +707,16 @@ mod test {
             Some(frozen_duplicate_slot_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Frozen,
         );
 
         // Progress map should have the correct updates, fork choice should mark duplicate
         // as unvotable
-        assert!(progress.is_unconfirmed_duplicate(duplicate_slot).unwrap());
+        assert!(heaviest_subtree_fork_choice
+            .is_unconfirmed_duplicate(&(duplicate_slot, frozen_duplicate_slot_hash))
+            .unwrap());
 
         // The ancestor of the duplicate slot should be the best slot now
         let (duplicate_ancestor, duplicate_parent_hash) = {
@@ -771,9 +745,7 @@ mod test {
         // Common state
         let InitialState {
             mut heaviest_subtree_fork_choice,
-            mut progress,
-            ancestors,
-            descendants,
+            progress,
             bank_forks,
             ..
         } = setup();
@@ -796,9 +768,7 @@ mod test {
             Some(slot2_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::DuplicateConfirmed,
         );
@@ -816,9 +786,7 @@ mod test {
             Some(slot3_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
@@ -834,9 +802,7 @@ mod test {
         // Common state
         let InitialState {
             mut heaviest_subtree_fork_choice,
-            mut progress,
-            ancestors,
-            descendants,
+            progress,
             bank_forks,
             ..
         } = setup();
@@ -857,9 +823,7 @@ mod test {
             Some(bank_forks.read().unwrap().get(2).unwrap().hash()),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
@@ -878,9 +842,7 @@ mod test {
             Some(slot3_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &ancestors,
-            &descendants,
-            &mut progress,
+            &progress,
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::DuplicateConfirmed,
         );

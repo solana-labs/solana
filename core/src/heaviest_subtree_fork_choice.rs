@@ -30,6 +30,7 @@ const MAX_ROOT_PRINT_SECONDS: u64 = 30;
 enum UpdateLabel {
     Aggregate,
     Add,
+
     // Notify a fork in the tree that a particular slot in that fork is now
     // marked as valid. If there are multiple MarkValid operations for
     // a single node, should apply the one with the smaller slot first (hence
@@ -443,6 +444,34 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.stake_voted_at)
     }
 
+    pub fn latest_invalid_ancestor(&self, slot_hash_key: &SlotHashKey) -> Option<Slot> {
+        self.fork_infos
+            .get(slot_hash_key)
+            .map(|fork_info| fork_info.latest_invalid_ancestor)
+            .unwrap_or(None)
+    }
+
+    pub fn is_duplicate_confirmed(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
+        self.fork_infos
+            .get(&slot_hash_key)
+            .map(|fork_info| fork_info.is_duplicate_confirmed())
+    }
+
+    /// Returns if the exact node with the specified key has been explicitly marked as a duplicate
+    /// slot (doesn't count ancestors being marked as duplicate).
+    pub fn is_unconfirmed_duplicate(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
+        self.fork_infos
+            .get(slot_hash_key)
+            .map(|fork_info| fork_info.is_unconfirmed_duplicate(slot_hash_key.0))
+    }
+
+    /// Returns false if the node or any of its ancestors have been marked as duplicate
+    pub fn is_candidate(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
+        self.fork_infos
+            .get(&slot_hash_key)
+            .map(|fork_info| fork_info.is_candidate())
+    }
+
     fn propagate_new_leaf(
         &mut self,
         slot_hash_key: &SlotHashKey,
@@ -476,19 +505,29 @@ impl HeaviestSubtreeForkChoice {
         update_operations: &mut BTreeMap<(SlotHashKey, UpdateLabel), UpdateOperation>,
         slot_hash_key: SlotHashKey,
     ) {
-        self.do_insert_aggregate_operations(update_operations, false, slot_hash_key);
+        self.do_insert_aggregate_operations_across_ancestors(
+            update_operations,
+            None,
+            slot_hash_key,
+        );
     }
 
     #[allow(clippy::map_entry)]
-    fn do_insert_aggregate_operations(
+    fn do_insert_aggregate_operations_across_ancestors(
         &self,
         update_operations: &mut BTreeMap<(SlotHashKey, UpdateLabel), UpdateOperation>,
-        should_mark_valid: bool,
+        modify_fork_validity: Option<UpdateOperation>,
         slot_hash_key: SlotHashKey,
     ) {
         for parent_slot_hash_key in self.ancestor_iterator(slot_hash_key) {
-            let aggregate_label = (parent_slot_hash_key, UpdateLabel::Aggregate);
-            if update_operations.contains_key(&aggregate_label) {
+            if !self.do_insert_aggregate_operation(
+                update_operations,
+                &modify_fork_validity,
+                parent_slot_hash_key,
+            ) {
+                // If this parent was already inserted, we assume all the other parents have also
+                // already been inserted. This is to prevent iterating over the parents multiple times
+                // when we are aggregating leaves that have a lot of shared ancestors
                 break;
             }
         }
@@ -827,33 +866,6 @@ impl HeaviestSubtreeForkChoice {
             })
     }
 
-    fn is_duplicate_confirmed(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
-        self.fork_infos
-            .get(&slot_hash_key)
-            .map(|fork_info| fork_info.is_duplicate_confirmed())
-    }
-
-    fn is_candidate(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
-        self.fork_infos
-            .get(&slot_hash_key)
-            .map(|fork_info| fork_info.is_candidate())
-    }
-
-    /// Returns if the node with the specified key has been explicitly marked as a duplicate
-    /// slot
-    fn is_unconfirmed_duplicate(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
-        self.fork_infos
-            .get(slot_hash_key)
-            .map(|fork_info| fork_info.is_unconfirmed_duplicate(slot_hash_key.0))
-    }
-
-    fn latest_invalid_ancestor(&self, slot_hash_key: &SlotHashKey) -> Option<Slot> {
-        self.fork_infos
-            .get(slot_hash_key)
-            .map(|fork_info| fork_info.latest_invalid_ancestor)
-            .unwrap_or(None)
-    }
-
     #[cfg(test)]
     fn set_stake_voted_at(&mut self, slot_hash_key: SlotHashKey, stake_voted_at: u64) {
         self.fork_infos
@@ -950,13 +962,8 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         );
         let fork_info = self.fork_infos.get_mut(invalid_slot_hash_key);
         if let Some(fork_info) = fork_info {
-            if fork_info.is_duplicate_confirmed {
-                // Duplicate confirmed fork should also duplicate
-                // confirm all of its ancestors, so there should be
-                // no latest_invalid_ancestor
-                assert!(fork_info.latest_invalid_ancestor.is_none());
-                return;
-            }
+            // Should not be marking duplicate confirmed blocks as invalid candidates
+            assert!(!fork_info.is_duplicate_confirmed);
             let mut update_operations = UpdateOperations::default();
 
             // Notify all the children of this node that a parent was marked as invalid
@@ -981,16 +988,13 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
             valid_slot_hash_key
         );
         let mut update_operations = UpdateOperations::default();
-        let fork_info = self.fork_infos.get_mut(valid_slot_hash_key);
-        if let Some(fork_info) = fork_info {
-            // Notify all the children of this node that a parent was marked as valid
-            for child_hash_key in self.subtree_diff(*valid_slot_hash_key, SlotHashKey::default()) {
-                self.do_insert_aggregate_operation(
-                    &mut update_operations,
-                    &Some(UpdateOperation::MarkValid(valid_slot_hash_key.0)),
-                    child_hash_key,
-                );
-            }
+        // Notify all the children of this node that a parent was marked as valid
+        for child_hash_key in self.subtree_diff(*valid_slot_hash_key, SlotHashKey::default()) {
+            self.do_insert_aggregate_operation(
+                &mut update_operations,
+                &Some(UpdateOperation::MarkValid(valid_slot_hash_key.0)),
+                child_hash_key,
+            );
         }
 
         // Aggregate across all ancestors to find the new best slots including this fork
@@ -2896,34 +2900,50 @@ mod test {
             (expected_best_slot, Hash::default()),
         );
 
-        // Mark slot 5 as invalid, the best fork should be its ancestor 3,
-        // not the other for at 4.
-        let invalid_candidate = (5, Hash::default());
+        // Simulate a vote on slot 5
+        let last_voted_slot_hash = (5, Hash::default());
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(last_voted_slot_hash.0, last_voted_slot_hash.1);
+
+        // The heaviest_slot_on_same_voted_fork() should be 6, descended from 5.
+        assert_eq!(
+            heaviest_subtree_fork_choice
+                .heaviest_slot_on_same_voted_fork(&tower)
+                .unwrap(),
+            (6, Hash::default())
+        );
+
+        // Mark slot 5 as invalid
+        let invalid_candidate = last_voted_slot_hash;
         heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&invalid_candidate);
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot().0, 3);
         assert!(!heaviest_subtree_fork_choice
             .is_candidate(&invalid_candidate)
             .unwrap());
 
-        // The ancestor is still a candidate
+        // The ancestor 3 is still a candidate
         assert!(heaviest_subtree_fork_choice
             .is_candidate(&(3, Hash::default()))
             .unwrap());
 
+        // The best fork should be its ancestor 3, not the other fork at 4.
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot().0, 3);
+
+        // After marking the last vote in the tower as invalid, `heaviest_slot_on_same_voted_fork()`
+        // should disregard all descendants of that invalid vote
+        assert!(heaviest_subtree_fork_choice
+            .heaviest_slot_on_same_voted_fork(&tower)
+            .is_none());
+
         // Adding another descendant to the invalid candidate won't
         // update the best slot, even if it contains votes
-        let new_leaf_slot7 = 7;
-        heaviest_subtree_fork_choice.add_new_leaf_slot(
-            (new_leaf_slot7, Hash::default()),
-            Some((6, Hash::default())),
-        );
+        let new_leaf7 = (7, Hash::default());
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf7, Some((6, Hash::default())));
         let invalid_slot_ancestor = 3;
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot().0,
             invalid_slot_ancestor
         );
-        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> =
-            vec![(vote_pubkeys[0], (new_leaf_slot7, Hash::default()))];
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![(vote_pubkeys[0], new_leaf7)];
         assert_eq!(
             heaviest_subtree_fork_choice.add_votes(
                 pubkey_votes.iter(),
@@ -2933,17 +2953,22 @@ mod test {
             (invalid_slot_ancestor, Hash::default()),
         );
 
+        // This shouldn't update the `heaviest_slot_on_same_voted_fork` either
+        assert!(heaviest_subtree_fork_choice
+            .heaviest_slot_on_same_voted_fork(&tower)
+            .is_none());
+
         // Adding a descendant to the ancestor of the invalid candidate *should* update
         // the best slot though, since the ancestor is on the heaviest fork
-        let new_leaf_slot8 = 8;
-        heaviest_subtree_fork_choice.add_new_leaf_slot(
-            (new_leaf_slot8, Hash::default()),
-            Some((invalid_slot_ancestor, Hash::default())),
-        );
-        assert_eq!(
-            heaviest_subtree_fork_choice.best_overall_slot().0,
-            new_leaf_slot8,
-        );
+        let new_leaf8 = (8, Hash::default());
+        heaviest_subtree_fork_choice
+            .add_new_leaf_slot(new_leaf8, Some((invalid_slot_ancestor, Hash::default())));
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), new_leaf8,);
+        // Should not update the `heaviest_slot_on_same_voted_fork` because the new leaf
+        // is not descended from the last vote
+        assert!(heaviest_subtree_fork_choice
+            .heaviest_slot_on_same_voted_fork(&tower)
+            .is_none());
 
         // If we mark slot a descendant of `invalid_candidate` as valid, then that
         // should also mark `invalid_candidate` as valid, and the best slot should
@@ -2953,9 +2978,16 @@ mod test {
             .is_candidate(&invalid_candidate)
             .unwrap());
         assert_eq!(
-            heaviest_subtree_fork_choice.best_overall_slot().0,
+            heaviest_subtree_fork_choice.best_overall_slot(),
             // Should pick the smaller slot of the two new equally weighted leaves
-            new_leaf_slot7
+            new_leaf7
+        );
+        // Should update the `heaviest_slot_on_same_voted_fork` as well
+        assert_eq!(
+            heaviest_subtree_fork_choice
+                .heaviest_slot_on_same_voted_fork(&tower)
+                .unwrap(),
+            new_leaf7
         );
     }
 
