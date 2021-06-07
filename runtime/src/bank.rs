@@ -2652,8 +2652,8 @@ impl Bank {
         }
     }
 
-    pub fn remove_unrooted_slot(&self, slot: Slot) {
-        self.rc.accounts.accounts_db.remove_unrooted_slot(slot)
+    pub fn remove_unrooted_slots(&self, slots: &[Slot]) {
+        self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
     pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
