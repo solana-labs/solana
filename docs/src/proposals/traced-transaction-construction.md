@@ -34,6 +34,10 @@ transaction execution in the simulation.
 Then, client signs the final transaction after appending these additional
 account addresses and submits it to the cluster via `sendTransaction`.
 
+To be specific, wallet should be able to manage these transaction finalization,
+agnostic to individual defi programs. This extra simulation process results in
+no-op if the executed program aren't aware of this new functionality.
+
 For that end, introduce a new syscall to trace account accesses, so that
 programs can dynamically hint their _internal_ or _derivable_ account addresses
 implicitly via , attaning the classic implementation-detail abstraction.
