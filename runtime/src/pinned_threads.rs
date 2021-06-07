@@ -1,4 +1,3 @@
-use core_affinity;
 use rayon::ThreadPool;
 use rayon_core::{ThreadBuilder, ThreadPoolBuilder};
 use std::{io, thread};

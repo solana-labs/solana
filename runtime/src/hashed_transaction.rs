@@ -39,9 +39,9 @@ impl<'a> From<&'a Transaction> for HashedTransaction<'a> {
     }
 }
 
-impl<'a> Into<&'a Transaction> for &'a HashedTransaction<'a> {
-    fn into(self) -> &'a Transaction {
-        self.transaction.as_ref()
+impl<'a> From<&'a HashedTransaction<'a>> for &'a Transaction {
+    fn from(h: &'a HashedTransaction<'a>) -> Self {
+        h.transaction.as_ref()
     }
 }
 
