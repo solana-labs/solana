@@ -96,6 +96,18 @@ function get_bootstrap_validator_ip_address {
   echo "${validatorIpList[0]}"
 }
 
+function check_transaction_confirmations {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  # shellcheck disable=SC2029
+  result=$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    "\$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 --keypair \$HOME/solana/config/faucet.json ping --count 5 --interval 0")
+  if [[ $(echo "$result" | grep -o ". transactions confirmed" | cut -d' ' -f1) -ne 5 ]]; then
+      echo "Not enough transactions confirmed"
+      exit 1
+  fi
+}
+
 function collect_performance_statistics {
   execution_step "Collect performance statistics about run"
   declare q_mean_tps='

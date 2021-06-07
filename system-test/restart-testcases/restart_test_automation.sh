@@ -21,11 +21,6 @@ if [[ "$ASYNC_NODE_INIT" = "true" ]]; then
   maybeAsyncNodeInit="--async-node-init"
 fi
 
-declare maybeExtraPrimordialStakes
-if [[ -n "$EXTRA_PRIMORDIAL_STAKES" ]]; then
-  maybeExtraPrimordialStakes="--extra-primordial-stakes $EXTRA_PRIMORDIAL_STAKES"
-fi
-
 # Restart the network
 "$REPO_ROOT"/net/net.sh stop
 
@@ -33,8 +28,9 @@ sleep 2
 
 # shellcheck disable=SC2086
 "$REPO_ROOT"/net/net.sh start --skip-setup --no-snapshot-fetch --no-deploy \
-  --gpu-mode $startGpuMode $maybeAsyncNodeInit $maybeExtraPrimordialStakes
+  --gpu-mode $startGpuMode $maybeAsyncNodeInit
 
-# TODO add the test here
+# Basic test, check 5 transactions
+check_transaction_confirmations >> "$RESULT_FILE"
 
 echo "Restart Test Succeeded" >>"$RESULT_FILE"
