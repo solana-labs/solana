@@ -1801,10 +1801,11 @@ pub fn main() {
                 .takes_value(true)
                 .value_name("RATIO")
                 .default_value(default_accounts_shrink_ratio)
-                .help("Specifies the shrink ratio for the accounts to be shrank. \
+                .help("Specifies the shrink ratio for the accounts to be shrunk. \
                        The shrink ratio is defined as the ratio of the bytes alive over the  \
                        total bytes used. If the account's shrink ratio is less than this ratio \
-                       it becomes a candidate for shrinking. The value must between 0. - 1.0."),
+                       it becomes a candidate for shrinking. The value must between 0. and 1.0 \
+                       inclusive."),
         )
         .arg(
             Arg::with_name("no_duplicate_instance_check")
@@ -2109,7 +2110,7 @@ pub fn main() {
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
         eprintln!(
-            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0: {}",
+            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0 inclusive: {}",
             shrink_ratio
         );
         exit(1);
