@@ -123,11 +123,18 @@ pub struct AccountIndex {
 Accessing an index account in a transaction should incur an extra cost due to
 the extra work validators need to do to load and cache index accounts.
 
+#### Metadata changes
+
+Each account accessed via an index should be stored in the transaction metadata
+for quick reference. This will avoid the need for clients to make multiple RPC
+round trips to fetch all accounts referenced in a page-indexed transaction. It
+will also make it easier to use the ledger tool to analyze account access
+patterns.
+
 #### RPC changes
 
-The RPC API should support returning both compressed transactions for
-verification as well as decompressed transactions which are easier for clients
-to handle and abstract away the indexing details.
+The RPC API should also support an option for returning fully decompressed
+transactions to abstract away the indexing details from downstream clients.
 
 ### Limitations
 
