@@ -4307,22 +4307,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-budget-program"
-version = "1.8.0"
-dependencies = [
- "bincode",
- "chrono",
- "log 0.4.11",
- "num-derive",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-runtime",
- "solana-sdk",
- "thiserror",
-]
-
-[[package]]
 name = "solana-cargo-build-bpf"
 version = "1.8.0"
 dependencies = [
@@ -4740,7 +4724,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "solana-budget-program",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-exchange-program",
@@ -4888,7 +4871,6 @@ dependencies = [
  "sha2 0.9.5",
  "solana-account-decoder",
  "solana-bpf-loader-program",
- "solana-budget-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -5132,11 +5114,11 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
- "solana-budget-program",
  "solana-logger 1.8.0",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
+ "solana-stake-program",
 ]
 
 [[package]]
