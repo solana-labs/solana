@@ -92,6 +92,7 @@ fn main() -> Result<()> {
             recycler.clone(),
             "bench-streamer-test",
             1,
+            true,
         ));
     }
 
