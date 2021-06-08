@@ -683,7 +683,9 @@ describe('Connection', () => {
     expect(epochSchedule.getLastSlotInEpoch(2)).to.be.equal(223);
 
     expect(epochSchedule.getFirstSlotInEpoch(10)).to.be.equal(8160 + 2 * 8192);
-    expect(epochSchedule.getLastSlotInEpoch(10)).to.be.equal(8160 + 3 * 8192 - 1);
+    expect(epochSchedule.getLastSlotInEpoch(10)).to.be.equal(
+      8160 + 3 * 8192 - 1,
+    );
   });
 
   it('get leader schedule', async () => {

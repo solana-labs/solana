@@ -19,7 +19,6 @@ import {
   create,
   tuple,
   unknown,
-  Infer,
   any,
 } from 'superstruct';
 import type {Struct} from 'superstruct';
@@ -375,7 +374,6 @@ const GetEpochInfoResult = pick({
   transactionCount: optional(number()),
 });
 
-type GetEpochScheduleResult = Infer<typeof GetEpochScheduleResult>;
 const GetEpochScheduleResult = pick({
   slotsPerEpoch: number(),
   leaderScheduleSlotOffset: number(),
@@ -2780,7 +2778,7 @@ export class Connection {
       epochSchedule.leaderScheduleSlotOffset,
       epochSchedule.warmup,
       epochSchedule.firstNormalEpoch,
-      epochSchedule.firstNormalSlot
+      epochSchedule.firstNormalSlot,
     );
   }
 

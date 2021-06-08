@@ -3,7 +3,7 @@ const MINIMUM_SLOT_PER_EPOCH = 32;
 // Returns the number of trailing zeros in the binary representation of self.
 function trailingZeros(n: number) {
   let trailingZeros = 0;
-  while((n & 1) == 0) {
+  while ((n & 1) == 0) {
     n /= 2;
     trailingZeros++;
   }
@@ -26,7 +26,13 @@ export class EpochSchedule {
   /** The first slot of `firstNormalEpoch` */
   public firstNormalSlot: number;
 
-  constructor(slotsPerEpoch: number, leaderScheduleSlotOffset: number, warmup: boolean, firstNormalEpoch: number, firstNormalSlot: number) {
+  constructor(
+    slotsPerEpoch: number,
+    leaderScheduleSlotOffset: number,
+    warmup: boolean,
+    firstNormalEpoch: number,
+    firstNormalSlot: number,
+  ) {
     this.slotsPerEpoch = slotsPerEpoch;
     this.leaderScheduleSlotOffset = leaderScheduleSlotOffset;
     this.warmup = warmup;
@@ -35,11 +41,13 @@ export class EpochSchedule {
   }
 
   getFirstSlotInEpoch(epoch: number): number {
-    if(epoch <= this.firstNormalEpoch) {
+    if (epoch <= this.firstNormalEpoch) {
       return (Math.pow(2, epoch) - 1) * MINIMUM_SLOT_PER_EPOCH;
-    }
-    else {
-      return (epoch - this.firstNormalEpoch) * this.slotsPerEpoch + this.firstNormalSlot;
+    } else {
+      return (
+        (epoch - this.firstNormalEpoch) * this.slotsPerEpoch +
+        this.firstNormalSlot
+      );
     }
   }
 
@@ -48,11 +56,10 @@ export class EpochSchedule {
   }
 
   getSlotsInEpoch(epoch: number) {
-    if(epoch < this.firstNormalEpoch) {
+    if (epoch < this.firstNormalEpoch) {
       return Math.pow(2, epoch + trailingZeros(MINIMUM_SLOT_PER_EPOCH));
-    }
-    else {
+    } else {
       return this.slotsPerEpoch;
     }
   }
-};
+}
