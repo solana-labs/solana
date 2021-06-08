@@ -627,11 +627,11 @@ impl Blockstore {
     }
 
     fn get_recovery_data_shreds<'a>(
+        &'a self,
         index: &'a Index,
         slot: Slot,
         erasure_meta: &'a ErasureMeta,
         prev_inserted_datas: &'a mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
-        data_cf: &'a LedgerColumn<cf::ShredData>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta.data_shreds_indices().filter_map(move |i| {
             if let Some(shred) = prev_inserted_datas.remove(&(slot, i)) {
@@ -640,7 +640,7 @@ impl Blockstore {
             if !index.data().is_present(i) {
                 return None;
             }
-            match data_cf.get_bytes((slot, i)).unwrap() {
+            match self.get_data_shred(slot, i).unwrap() {
                 None => {
                     warn!("Data shred deleted while reading for recovery");
                     None
@@ -651,11 +651,11 @@ impl Blockstore {
     }
 
     fn get_recovery_coding_shreds<'a>(
-        index: &'a mut Index,
+        &'a self,
+        index: &'a Index,
         slot: Slot,
         erasure_meta: &'a ErasureMeta,
         prev_inserted_codes: &'a HashMap<(Slot, /*shred index:*/ u64), Shred>,
-        code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
             if let Some(shred) = prev_inserted_codes.get(&(slot, i)) {
@@ -664,7 +664,7 @@ impl Blockstore {
             if !index.coding().is_present(i) {
                 return None;
             }
-            match code_cf.get_bytes((slot, i)).unwrap() {
+            match self.get_coding_shred(slot, i).unwrap() {
                 None => {
                     warn!("Code shred deleted while reading for recovery");
                     None
@@ -675,26 +675,25 @@ impl Blockstore {
     }
 
     fn recover_shreds(
+        &self,
         index: &mut Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         recovered_data_shreds: &mut Vec<Shred>,
-        data_cf: &LedgerColumn<cf::ShredData>,
-        code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
         // Find shreds for this erasure set and try recovery
         let slot = index.slot;
-        let mut available_shreds: Vec<_> =
-            Self::get_recovery_data_shreds(index, slot, erasure_meta, prev_inserted_datas, data_cf)
-                .collect();
-        available_shreds.extend(Self::get_recovery_coding_shreds(
+        let mut available_shreds: Vec<_> = self
+            .get_recovery_data_shreds(index, slot, erasure_meta, prev_inserted_datas)
+            .collect();
+        available_shreds.extend(self.get_recovery_coding_shreds(
             index,
             slot,
             erasure_meta,
             prev_inserted_codes,
-            code_cf,
         ));
+
         if let Ok(mut result) = Shredder::try_recovery(available_shreds) {
             Self::submit_metrics(slot, erasure_meta, true, "complete".into(), result.len());
             recovered_data_shreds.append(&mut result);
@@ -725,14 +724,12 @@ impl Blockstore {
     }
 
     fn try_shred_recovery(
-        db: &Database,
+        &self,
         erasure_metas: &HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> Vec<Shred> {
-        let data_cf = db.column::<cf::ShredData>();
-        let code_cf = db.column::<cf::ShredCode>();
         let mut recovered_data_shreds = vec![];
         // Recovery rules:
         // 1. Only try recovery around indexes for which new data or coding shreds are received
@@ -744,14 +741,12 @@ impl Blockstore {
             let index = &mut index_meta_entry.index;
             match erasure_meta.status(index) {
                 ErasureMetaStatus::CanRecover => {
-                    Self::recover_shreds(
+                    self.recover_shreds(
                         index,
                         erasure_meta,
                         prev_inserted_datas,
                         prev_inserted_codes,
                         &mut recovered_data_shreds,
-                        &data_cf,
-                        &code_cf,
                     );
                 }
                 ErasureMetaStatus::DataFull => {
@@ -862,8 +857,7 @@ impl Blockstore {
         metrics.insert_shreds_elapsed += start.as_us();
         let mut start = Measure::start("Shred recovery");
         if let Some(leader_schedule_cache) = leader_schedule {
-            let recovered_data_shreds = Self::try_shred_recovery(
-                db,
+            let recovered_data_shreds = self.try_shred_recovery(
                 &erasure_metas,
                 &mut index_working_set,
                 &mut just_inserted_data_shreds,
@@ -3972,7 +3966,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_insert_get_bytes() {
+    fn test_insert_get_shred() {
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
@@ -3989,9 +3983,8 @@ pub mod tests {
             .insert_shreds(vec![last_shred.clone()], None, false)
             .unwrap();
 
-        let serialized_shred = blockstore
-            .data_shred_cf
-            .get_bytes((0, last_shred.index() as u64))
+        let serialized_shred = ledger
+            .get_data_shred(0, last_shred.index() as u64)
             .unwrap()
             .unwrap();
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
@@ -4140,6 +4133,10 @@ pub mod tests {
             .expect("Expected data object to exist");
 
         assert_eq!(result, data);
+
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
