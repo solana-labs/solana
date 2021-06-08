@@ -43,5 +43,24 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(0 == sol_memcmp(result, expected, KECCAK_RESULT_LENGTH));
   }
 
+  // Blake3
+  {
+    uint8_t result[BLAKE3_RESULT_LENGTH];
+    uint8_t expected[] = {0xad, 0x5d, 0x97, 0x5b, 0xc2, 0xc7, 0x46, 0x19,
+                          0x31, 0xb4, 0x87, 0x5d, 0x19, 0x6, 0xc5, 0x36,
+                          0xf4, 0x97, 0xa8, 0x45, 0x55, 0xec, 0xaf, 0xf2,
+                          0x50, 0x70, 0xe3, 0xe2, 0x3d, 0xbe, 0x7, 0x8c};
+
+    uint8_t bytes1[] = {'G', 'a', 'g', 'g', 'a', 'b', 'l', 'a',
+                        'g', 'h', 'b', 'l', 'a', 'g', 'h', '!'};
+    uint8_t bytes2[] = {'f', 'l', 'u', 'r', 'b', 'o', 's'};
+    const SolBytes bytes[] = {{bytes1, SOL_ARRAY_SIZE(bytes1)},
+                              {bytes2, SOL_ARRAY_SIZE(bytes2)}};
+
+    sol_blake3(bytes, SOL_ARRAY_SIZE(bytes), result);
+
+    sol_assert(0 == sol_memcmp(result, expected, BLAKE3_RESULT_LENGTH));
+  }
+
   return SUCCESS;
 }

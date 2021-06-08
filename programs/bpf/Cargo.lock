@@ -3069,6 +3069,7 @@ dependencies = [
 name = "solana-bpf-rust-sha"
 version = "1.8.0"
 dependencies = [
+ "blake3",
  "solana-program 1.8.0",
 ]
 
