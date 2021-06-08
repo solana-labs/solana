@@ -2,7 +2,7 @@ use rayon::ThreadPool;
 use rayon_core::{ThreadBuilder, ThreadPoolBuilder};
 use std::{io, thread};
 
-const NUM_THREADS_PER_CORE: usize = 8;
+const NUM_THREADS_PER_CORE: usize = 2;
 const MAX_NUM_OF_THREADS: usize = 128;
 
 #[derive(Debug, Default)]

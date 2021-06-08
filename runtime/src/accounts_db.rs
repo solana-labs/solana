@@ -1301,7 +1301,7 @@ impl Default for AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            pinned_thread_pool: pinned_spawn_handler_frac(1, 4),
+            pinned_thread_pool: pinned_spawn_handler_frac(1, 1),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),
