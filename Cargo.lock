@@ -4572,7 +4572,7 @@ dependencies = [
  "either",
  "lazy_static",
  "libc",
- "rand_chacha 0.2.2",
+ "rand_chacha 0.3.0",
  "regex-syntax",
  "reqwest",
  "ring",

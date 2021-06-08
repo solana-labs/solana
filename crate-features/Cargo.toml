@@ -17,7 +17,7 @@ curve25519-dalek = { version = "2" }
 either= { version = "1.5.2" }
 lazy_static = { version = "1.4.0", features = ["spin", "spin_no_std"] }
 libc = { version = "0.2.62", features = ["extra_traits"] }
-rand_chacha = { version = "0.2.2" }
+rand_chacha = { version = "0.3.0" }
 regex-syntax = { version = "0.6.12" }
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 ring = { version = "0.16.17" }
