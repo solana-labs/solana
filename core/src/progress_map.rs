@@ -232,12 +232,11 @@ impl ForkProgress {
         num_blocks_on_fork: u64,
         num_dropped_blocks_on_fork: u64,
     ) -> Self {
-        let validator_fork_info = {
+        let validator_stake_info = {
             if bank.collector_id() == my_pubkey {
-                let stake = bank.epoch_vote_account_stake(voting_pubkey);
                 Some(ValidatorStakeInfo::new(
                     *voting_pubkey,
-                    stake,
+                    bank.epoch_vote_account_stake(voting_pubkey),
                     bank.total_epoch_stake(),
                 ))
             } else {
@@ -249,7 +248,7 @@ impl ForkProgress {
             bank.last_blockhash(),
             prev_leader_slot,
             duplicate_stats,
-            validator_fork_info,
+            validator_stake_info,
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
         )
