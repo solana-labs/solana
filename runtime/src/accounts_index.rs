@@ -284,6 +284,24 @@ impl RollingBitField {
         self.max - self.min
     }
 
+    pub fn min(&self) -> Option<u64> {
+        if self.is_empty() {
+            None
+        } else if self.excess.is_empty() {
+            Some(self.min)
+        } else {
+            let mut min = if self.all_items_in_excess() {
+                u64::MAX
+            } else {
+                self.min
+            };
+            for item in &self.excess {
+                min = std::cmp::min(min, *item);
+            }
+            Some(min)
+        }
+    }
+
     pub fn insert(&mut self, key: u64) {
         let mut bits_empty = self.count == 0 || self.all_items_in_excess();
         let update_bits = if bits_empty {
@@ -477,6 +495,10 @@ impl RootsTracker {
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
         }
+    }
+
+    pub fn min_root(&self) -> Option<Slot> {
+        self.roots.min()
     }
 }
 
@@ -1685,8 +1707,10 @@ pub mod tests {
         solana_logger::setup();
         let len = 16;
         let mut bitfield = RollingBitField::new(len);
+        assert_eq!(bitfield.min(), None);
 
         bitfield.insert(0);
+        assert_eq!(bitfield.min(), Some(0));
         let too_big = len + 1;
         bitfield.insert(too_big);
         assert!(bitfield.contains(&0));
@@ -1694,6 +1718,7 @@ pub mod tests {
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.excess.len(), 1);
         assert_eq!(bitfield.min, too_big);
+        assert_eq!(bitfield.min(), Some(0));
         assert_eq!(bitfield.max, too_big + 1);
 
         // delete the thing that is NOT in excess
@@ -1706,6 +1731,7 @@ pub mod tests {
         assert!(bitfield.contains(&too_big_times_2));
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.excess.len(), 1);
+        assert_eq!(bitfield.min(), bitfield.excess.iter().min().copied());
         assert_eq!(bitfield.min, too_big_times_2);
         assert_eq!(bitfield.max, too_big_times_2 + 1);
 
@@ -2062,6 +2088,7 @@ pub mod tests {
         assert_eq!(hashset.is_empty(), bitfield.is_empty());
         if !bitfield.is_empty() {
             let mut min = Slot::MAX;
+            let mut overall_min = Slot::MAX;
             let mut max = Slot::MIN;
             for item in bitfield.get_all() {
                 assert!(hashset.contains(&item));
@@ -2069,7 +2096,9 @@ pub mod tests {
                     min = std::cmp::min(min, item);
                     max = std::cmp::max(max, item);
                 }
+                overall_min = std::cmp::min(overall_min, item);
             }
+            assert_eq!(bitfield.min(), Some(overall_min));
             assert_eq!(bitfield.get_all().len(), hashset.len());
             // range isn't tracked for excess items
             if bitfield.excess.len() != bitfield.len() {
@@ -2087,6 +2116,8 @@ pub mod tests {
                     width,
                 );
             }
+        } else {
+            assert_eq!(bitfield.min(), None);
         }
     }
 
