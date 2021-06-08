@@ -257,6 +257,9 @@ fn link_bpf_toolchain(config: &Config) {
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
     let rustup_output = spawn(&rustup, &rustup_args);
+    if config.verbose {
+        println!("{}", rustup_output);
+    }
     let mut do_link = true;
     for line in rustup_output.lines() {
         if line.starts_with("bpf") {
@@ -265,7 +268,10 @@ fn link_bpf_toolchain(config: &Config) {
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
                 let rustup_args = vec!["toolchain", "uninstall", "bpf"];
-                spawn(&rustup, &rustup_args);
+                let output = spawn(&rustup, &rustup_args);
+                if config.verbose {
+                    println!("{}", output);
+                }
             } else {
                 do_link = false;
             }
@@ -274,7 +280,10 @@ fn link_bpf_toolchain(config: &Config) {
     }
     if do_link {
         let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
-        spawn(&rustup, &rustup_args);
+        let output = spawn(&rustup, &rustup_args);
+        if config.verbose {
+            println!("{}", output);
+        }
     }
 }
 
@@ -401,7 +410,10 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         cargo_build_args.push("--verbose");
     }
-    spawn(&cargo_build, &cargo_build_args);
+    let output = spawn(&cargo_build, &cargo_build_args);
+    if config.verbose {
+        println!("{}", output);
+    }
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
@@ -440,17 +452,23 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
             );
+            if config.verbose {
+                println!("{}", output);
+            }
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
             );
+            if config.verbose {
+                println!("{}", output);
+            }
             postprocess_dump(&program_dump);
         }
 
