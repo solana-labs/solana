@@ -44,7 +44,6 @@ members = [
     "program-test",
     "programs/secp256k1",
     "programs/bpf_loader",
-    "programs/budget",
     "programs/config",
     "programs/exchange",
     "programs/failure",
