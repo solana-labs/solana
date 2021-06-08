@@ -128,7 +128,7 @@ pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 // The default extra account space in percentage from the ideal target
 const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
-    AccountShrinkThreshold::IndividalStore {
+    AccountShrinkThreshold::TotalSpace {
         shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO,
     };
 
@@ -2348,7 +2348,7 @@ impl AccountsDb {
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
                 break;
-            }            
+            }
             let store = &usage.store;
             let current_store_size = store.total_bytes();
             let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
