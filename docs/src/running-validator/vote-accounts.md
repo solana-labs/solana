@@ -165,6 +165,24 @@ change the validator identity. The follow steps assume that
    to modify the validator identity in your vote account
 4. Restart your validator with the new identity keypair for the `--identity` argument
 
+**Additional steps are required if your validator has stake.**  The leader
+schedule is computed two epochs in advance. Therefore if your old validator
+identity was in the leader schedule, it will remain in the leader schedule for
+up to two epochs after the validator identity change. If extra steps are not
+taken your validator will produce no blocks until your new validator identity is
+added to the leader schedule.
+
+After your validator is restarted with the new identity keypair, per step 4,
+start a second non-voting validator on a different machine with the old identity keypair
+without providing the `--vote-account` argument.
+
+This temporary validator should be run for two full epochs. During this time it will:
+* Produce blocks for the remaining slots that are assigned to your old validator identity
+* Receive the transaction fees and rent rewards for your old validator identity
+
+It is safe to stop this temporary validator when your old validator identity is
+no longer listed in the `solana leader-schedule` output.
+
 ### Vote Account Authorized Voter
 
 The _vote authority_ keypair may only be changed at epoch boundaries and
