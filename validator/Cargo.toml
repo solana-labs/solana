@@ -51,7 +51,7 @@ symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.81"
-signal-hook = "0.1.15"
+signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
