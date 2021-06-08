@@ -2203,6 +2203,8 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
                         dead_storages.push(store.clone());
                         false
                     } else {
@@ -5130,9 +5132,9 @@ impl AccountsDb {
                     store.slot(), *slot
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
-                self.dirty_stores
-                    .insert((*slot, store.append_vec_id()), store.clone());
                 if count == 0 {
+                    self.dirty_stores
+                        .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
