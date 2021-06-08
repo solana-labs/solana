@@ -7,7 +7,7 @@ use {
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         env,
         ffi::OsStr,
         fs::{self, File},
@@ -247,6 +247,71 @@ fn postprocess_dump(program_dump: &Path) {
     fs::rename(postprocessed_dump, program_dump).unwrap();
 }
 
+// Check whether the built .so file contains undefined symbols that are
+// not known to the runtime and warn about them if any.
+fn check_undefined_symbols(config: &Config, program: &Path) {
+    let syscalls: HashSet<String> = [
+        "abort",
+        "sol_panic_",
+        "sol_log_",
+        "sol_log_64_",
+        "sol_log_compute_units_",
+        "sol_log_pubkey",
+        "sol_create_program_address",
+        "sol_try_find_program_address",
+        "sol_sha256",
+        "sol_keccak256",
+        "sol_get_clock_sysvar",
+        "sol_get_epoch_schedule_sysvar",
+        "sol_get_fees_sysvar",
+        "sol_get_rent_sysvar",
+        "sol_memcpy_",
+        "sol_memmove_",
+        "sol_memcmp_",
+        "sol_memset_",
+        "sol_invoke_signed_c",
+        "sol_invoke_signed_rust",
+        "sol_alloc_free_",
+    ]
+    .iter()
+    .map(|&symbol| symbol.to_owned())
+    .collect();
+    let entry =
+        Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
+            .unwrap();
+    let readelf = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin")
+        .join("llvm-readelf");
+    let mut readelf_args = vec!["--dyn-symbols"];
+    readelf_args.push(program.to_str().unwrap());
+    let output = spawn(&readelf, &readelf_args);
+    if config.verbose {
+        println!("{}", output);
+    }
+    let mut unresolved_symbols: Vec<String> = Vec::new();
+    for line in output.lines() {
+        let line = line.trim_end();
+        if entry.is_match(line) {
+            let captures = entry.captures(line).unwrap();
+            let symbol = captures[1].to_string();
+            if !syscalls.contains(&symbol) {
+                unresolved_symbols.push(symbol);
+            }
+        }
+    }
+    if !unresolved_symbols.is_empty() {
+        println!(
+            "Warning: the following functions are undefined and not known syscalls {:?}.",
+            unresolved_symbols
+        );
+        println!("         Calling them will trigger a run-time error.");
+    }
+}
+
 // check whether custom BPF toolchain is linked, and link it if it is not.
 fn link_bpf_toolchain(config: &Config) {
     let toolchain_path = config
@@ -469,6 +534,8 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             }
             postprocess_dump(&program_dump);
         }
+
+        check_undefined_symbols(&config, &program_so);
 
         println!();
         println!("To deploy this program:");
