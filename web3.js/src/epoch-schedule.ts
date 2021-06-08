@@ -1,5 +1,15 @@
 const MINIMUM_SLOT_PER_EPOCH = 32;
 
+// Returns the number of trailing zeros in the binary representation of self.
+function trailingZeros(n: number) {
+  let trailingZeros = 0;
+  while((n & 1) == 0) {
+    n /= 2;
+    trailingZeros++;
+  }
+  return trailingZeros;
+}
+
 /**
  * Epoch schedule
  * (see https://docs.solana.com/terminology#epoch)
@@ -39,7 +49,7 @@ export class EpochSchedule {
 
   getSlotsInEpoch(epoch: number) {
     if(epoch < this.firstNormalEpoch) {
-      return Math.pow(2, epoch) + MINIMUM_SLOT_PER_EPOCH;
+      return Math.pow(2, epoch + trailingZeros(MINIMUM_SLOT_PER_EPOCH));
     }
     else {
       return this.slotsPerEpoch;

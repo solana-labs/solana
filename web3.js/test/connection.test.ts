@@ -676,13 +676,14 @@ describe('Connection', () => {
       }
     }
 
-    expect(epochSchedule.getFirstSlotInEpoch(2)).to.be.equal(6);
-    expect(epochSchedule.getLastSlotInEpoch(2)).to.be.equal(14);
+    expect(epochSchedule.getSlotsInEpoch(4)).to.be.equal(512);
+    expect(epochSchedule.getSlotsInEpoch(100)).to.be.equal(8192);
+
+    expect(epochSchedule.getFirstSlotInEpoch(2)).to.be.equal(96);
+    expect(epochSchedule.getLastSlotInEpoch(2)).to.be.equal(223);
 
     expect(epochSchedule.getFirstSlotInEpoch(10)).to.be.equal(8160 + 2 * 8192);
     expect(epochSchedule.getLastSlotInEpoch(10)).to.be.equal(8160 + 3 * 8192 - 1);
-
-    expect(epochSchedule.getSlotsInEpoch(100)).to.be.equal(8192);
   });
 
   it('get leader schedule', async () => {
