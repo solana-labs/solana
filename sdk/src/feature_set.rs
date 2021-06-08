@@ -140,7 +140,7 @@ pub mod memory_ops_syscalls {
 }
 
 pub mod secp256k1_recover_syscall_enabled {
-    solana_sdk::declare_id!("Cj9ydNGWLePKRztuE3m3zT1uvj2We517k55vq2e65jtP");
+    solana_sdk::declare_id!("6RvdSWHh8oh72Dp7wMTS2DBkf3fRPtChfNrAo3cZZoXJ");
 }
 
 lazy_static! {

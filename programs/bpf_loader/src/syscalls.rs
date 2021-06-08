@@ -32,6 +32,9 @@ use solana_sdk::{
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
     rent::Rent,
+    secp256k1_recover::{
+        Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+    },
     sysvar::{self, fees::Fees, Sysvar, SysvarId},
 };
 use std::{
@@ -326,7 +329,7 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()),
         Box::new(SyscallSecp256k1Recover {
-            base_cost: bpf_compute_budget.secp256k1_recover_base_cost,
+            cost: bpf_compute_budget.secp256k1_recover_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1346,10 +1349,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
 
 /// secp256k1_recover
 pub struct SyscallSecp256k1Recover<'a> {
-    base_cost: u64,
+    cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
+
 impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
     fn call(
         &mut self,
@@ -1361,7 +1365,7 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(self.base_cost), result);
+        question_mark!(self.compute_meter.consume(self.cost), result);
 
         let hash = question_mark!(
             translate_slice::<u8>(
@@ -1374,32 +1378,44 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
             result
         );
         let signature = question_mark!(
-            translate_slice::<u8>(memory_mapping, signature_addr, 64u64, self.loader_id, true,),
+            translate_slice::<u8>(
+                memory_mapping,
+                signature_addr,
+                SECP256K1_SIGNATURE_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
             result
         );
         let secp256k1_recover_result = question_mark!(
-            translate_slice_mut::<u8>(memory_mapping, result_addr, 64u64, self.loader_id, true,),
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                SECP256K1_PUBLIC_KEY_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
             result
         );
 
         let message = match libsecp256k1::Message::parse_slice(hash) {
             Ok(msg) => msg,
             Err(_) => {
-                *result = Ok(1); // invalid digest
+                *result = Ok(Secp256k1RecoverError::InvalidHash.into());
                 return;
             }
         };
         let recovery_id = match libsecp256k1::RecoveryId::parse(recovery_id_val as u8) {
             Ok(id) => id,
             Err(_) => {
-                *result = Ok(2); // invalid recovery id
+                *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
                 return;
             }
         };
         let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
             Ok(sig) => sig,
             Err(_) => {
-                *result = Ok(3); // invalid signature
+                *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
                 return;
             }
         };
@@ -1407,13 +1423,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
         let public_key = match libsecp256k1::recover(&message, &signature, &recovery_id) {
             Ok(key) => key.serialize(),
             Err(_) => {
-                *result = Ok(3); // invalid signature
+                *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
                 return;
             }
         };
 
         secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
-        *result = Ok(0);
+        *result = Ok(SUCCESS);
     }
 }
 
