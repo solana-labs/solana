@@ -74,7 +74,7 @@ fn make_accounts_txs(
         .into_par_iter()
         .map(|_| {
             let mut new = dummy.clone();
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
             if !same_payer {
                 new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
             }
@@ -185,7 +185,7 @@ fn main() {
             genesis_config.hash(),
         );
         // Ignore any pesky duplicate signature errors in the case we are using single-payer
-        let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+        let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
         fund.signatures = vec![Signature::new(&sig[0..64])];
         let x = bank.process_transaction(&fund);
         x.unwrap();
@@ -351,7 +351,7 @@ fn main() {
             if bank.slot() > 0 && bank.slot() % 16 == 0 {
                 for tx in transactions.iter_mut() {
                     tx.message.recent_blockhash = bank.last_blockhash();
-                    let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+                    let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
                 verified = to_packets_chunked(&transactions.clone(), packets_per_chunk);
