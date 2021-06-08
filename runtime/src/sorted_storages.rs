@@ -45,24 +45,23 @@ impl<'a> SortedStorages<'a> {
                 storage.slot() // this must be unique. Will be enforced in new_with_slots
             })
             .collect::<Vec<_>>();
-        Self::new_with_slots(source, &slots)
+        Self::new_with_slots(source.iter().zip(slots.iter()))
     }
 
     // source[i] is in slot slots[i]
     // assumptions:
     // 1. slots vector contains unique slot #s.
     // 2. slots and source are the same len
-    pub fn new_with_slots(source: &'a [SnapshotStorage], slots: &[Slot]) -> Self {
-        assert_eq!(
-            source.len(),
-            slots.len(),
-            "source and slots are different lengths"
-        );
+    pub fn new_with_slots<'b>(
+        source: impl Iterator<Item = (&'a SnapshotStorage, &'b Slot)> + Clone,
+    ) -> Self {
         let mut min = Slot::MAX;
         let mut max = Slot::MIN;
-        let slot_count = source.len();
+        let mut slot_count = 0;
         let mut time = Measure::start("get slot");
-        slots.iter().for_each(|slot| {
+        let source_ = source.clone();
+        source_.for_each(|(_, slot)| {
+            slot_count += 1;
             let slot = *slot;
             min = std::cmp::min(slot, min);
             max = std::cmp::max(slot + 1, max);
@@ -81,14 +80,11 @@ impl<'a> SortedStorages<'a> {
             };
             let len = max - min;
             storages = vec![None; len as usize];
-            source
-                .iter()
-                .zip(slots)
-                .for_each(|(original_storages, slot)| {
-                    let index = (slot - min) as usize;
-                    assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
-                    storages[index] = Some(original_storages);
-                });
+            source.for_each(|(original_storages, slot)| {
+                let index = (slot - min) as usize;
+                assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
+                storages[index] = Some(original_storages);
+            });
         }
         time2.stop();
         debug!("SortedStorages, times: {}, {}", time.as_us(), time2.as_us());
@@ -132,18 +128,12 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "slots are not unique")]
     fn test_sorted_storages_duplicate_slots() {
-        SortedStorages::new_with_slots(&[Vec::new(), Vec::new()], &[0, 0]);
-    }
-
-    #[test]
-    #[should_panic(expected = "source and slots are different lengths")]
-    fn test_sorted_storages_mismatched_lengths() {
-        SortedStorages::new_with_slots(&[Vec::new()], &[0, 0]);
+        SortedStorages::new_with_slots([Vec::new(), Vec::new()].iter().zip([0, 0].iter()));
     }
 
     #[test]
     fn test_sorted_storages_none() {
-        let result = SortedStorages::new_with_slots(&[], &[]);
+        let result = SortedStorages::new_with_slots([].iter().zip([].iter()));
         assert_eq!(result.range, Range::default());
         assert_eq!(result.slot_count, 0);
         assert_eq!(result.storages.len(), 0);
@@ -156,7 +146,7 @@ pub mod tests {
         let vec_check = vec.clone();
         let slot = 4;
         let vecs = [vec];
-        let result = SortedStorages::new_with_slots(&vecs, &[slot]);
+        let result = SortedStorages::new_with_slots(vecs.iter().zip([slot].iter()));
         assert_eq!(
             result.range,
             Range {
@@ -175,7 +165,7 @@ pub mod tests {
         let vec_check = vec.clone();
         let slots = [4, 7];
         let vecs = [vec.clone(), vec];
-        let result = SortedStorages::new_with_slots(&vecs, &slots);
+        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()));
         assert_eq!(
             result.range,
             Range {
