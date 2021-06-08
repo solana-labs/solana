@@ -4085,6 +4085,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-budget-program"
 version = "1.7.1"
 dependencies = [
@@ -4101,6 +4102,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> a66566e75 (Remove budget program (#17816))
 name = "solana-cargo-build-bpf"
 version = "1.7.1"
 dependencies = [
@@ -4518,7 +4521,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "solana-budget-program",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-exchange-program",
@@ -4666,10 +4668,16 @@ dependencies = [
  "sha2 0.9.2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+<<<<<<< HEAD
  "solana-budget-program",
  "solana-frozen-abi 1.7.1",
  "solana-frozen-abi-macro 1.7.1",
  "solana-logger 1.7.1",
+=======
+ "solana-frozen-abi 1.8.0",
+ "solana-frozen-abi-macro 1.8.0",
+ "solana-logger 1.8.0",
+>>>>>>> a66566e75 (Remove budget program (#17816))
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
@@ -4909,11 +4917,16 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
+<<<<<<< HEAD
  "solana-budget-program",
  "solana-logger 1.7.1",
+=======
+ "solana-logger 1.8.0",
+>>>>>>> a66566e75 (Remove budget program (#17816))
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
+ "solana-stake-program",
 ]
 
 [[package]]
