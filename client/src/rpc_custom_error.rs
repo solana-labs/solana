@@ -19,7 +19,7 @@ pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
-pub const JSON_RPC_REMOVED_SLOT: i64 = -32012;
+pub const JSON_RPC_SCAN_ERROR: i64 = -32012;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -149,7 +149,7 @@ impl From<RpcCustomError> for Error {
                 data: None,
             },
             RpcCustomError::ScanError(scan_err) => Self {
-                code: ErrorCode::ServerError(JSON_RPC_REMOVED_SLOT),
+                code: ErrorCode::ServerError(JSON_RPC_SCAN_ERROR),
                 message: scan_err.to_string(),
                 data: None,
             },

@@ -861,7 +861,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             }
         }
 
-        // If the fork with tip at bank `scan_bank_id` was removed durin our scan, then the scan
+        // If the fork with tip at bank `scan_bank_id` was removed during our scan, then the scan
         // may have been corrupted, so abort the results.
         let was_scan_corrupted = self
             .removed_bank_ids
