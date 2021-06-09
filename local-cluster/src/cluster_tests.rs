@@ -280,18 +280,23 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
     let mut last_print = Instant::now();
     let loop_start = Instant::now();
     let loop_timeout = Duration::from_secs(60);
+    let mut num_roots_map = HashMap::new();
     while !done {
         assert!(loop_start.elapsed() < loop_timeout);
+
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
-            let slot = client.get_slot().unwrap_or(0);
-            roots[i].insert(slot);
-            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            done = min_node >= num_new_roots;
+            let root_slot = client
+                .get_slot_with_commitment(CommitmentConfig::finalized())
+                .unwrap_or(0);
+            roots[i].insert(root_slot);
+            num_roots_map.insert(ingress_node.id, roots[i].len());
+            let num_roots = roots.iter().map(|r| r.len()).min().unwrap();
+            done = num_roots >= num_new_roots;
             if done || last_print.elapsed().as_secs() > 3 {
                 info!(
-                    "{} {} min observed roots {}/16",
-                    test_name, ingress_node.id, min_node
+                    "{} waiting for {} new roots.. observed: {:?}",
+                    test_name, num_new_roots, num_roots_map
                 );
                 last_print = Instant::now();
             }
