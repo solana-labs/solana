@@ -86,7 +86,7 @@ systemstat = "0.1.7"
 tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.4"
 
 [[bench]]
 name = "banking_stage"
