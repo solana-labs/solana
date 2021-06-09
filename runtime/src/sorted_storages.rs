@@ -45,7 +45,7 @@ impl<'a> SortedStorages<'a> {
                 storage.slot() // this must be unique. Will be enforced in new_with_slots
             })
             .collect::<Vec<_>>();
-        Self::new_with_slots(source.iter().zip(slots.iter()))
+        Self::new_with_slots(source.iter().zip(slots.iter()), None, None)
     }
 
     // source[i] is in slot slots[i]
@@ -54,9 +54,25 @@ impl<'a> SortedStorages<'a> {
     // 2. slots and source are the same len
     pub fn new_with_slots<'b>(
         source: impl Iterator<Item = (&'a SnapshotStorage, &'b Slot)> + Clone,
+        min_slot: Option<Slot>,
+        // highest valid slot. Only matters if slots array does not contain a slot >= max_slot_inclusive.
+        // An example is a slot that has accounts in the write cache at slots <= 'max_slot_inclusive' but no storages at those slots.
+        // None => self.range.end = slots.max() + 1
+        // Some(slot) => self.range.end = std::cmp::max(slot, slots.max())
+        max_slot_inclusive: Option<Slot>,
     ) -> Self {
         let mut min = Slot::MAX;
         let mut max = Slot::MIN;
+        // none, either, or both of min/max could be specified
+        if let Some(slot) = min_slot {
+            min = std::cmp::min(slot, min);
+            max = std::cmp::max(slot + 1, max);
+        }
+        if let Some(slot) = max_slot_inclusive {
+            min = std::cmp::min(slot, min);
+            max = std::cmp::max(slot + 1, max);
+        }
+
         let mut slot_count = 0;
         let mut time = Measure::start("get slot");
         let source_ = source.clone();
@@ -128,12 +144,16 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "slots are not unique")]
     fn test_sorted_storages_duplicate_slots() {
-        SortedStorages::new_with_slots([Vec::new(), Vec::new()].iter().zip([0, 0].iter()));
+        SortedStorages::new_with_slots(
+            [Vec::new(), Vec::new()].iter().zip([0, 0].iter()),
+            None,
+            None,
+        );
     }
 
     #[test]
     fn test_sorted_storages_none() {
-        let result = SortedStorages::new_with_slots([].iter().zip([].iter()));
+        let result = SortedStorages::new_with_slots([].iter().zip([].iter()), None, None);
         assert_eq!(result.range, Range::default());
         assert_eq!(result.slot_count, 0);
         assert_eq!(result.storages.len(), 0);
@@ -146,7 +166,7 @@ pub mod tests {
         let vec_check = vec.clone();
         let slot = 4;
         let vecs = [vec];
-        let result = SortedStorages::new_with_slots(vecs.iter().zip([slot].iter()));
+        let result = SortedStorages::new_with_slots(vecs.iter().zip([slot].iter()), None, None);
         assert_eq!(
             result.range,
             Range {
@@ -165,7 +185,7 @@ pub mod tests {
         let vec_check = vec.clone();
         let slots = [4, 7];
         let vecs = [vec.clone(), vec];
-        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()));
+        let result = SortedStorages::new_with_slots(vecs.iter().zip(slots.iter()), None, None);
         assert_eq!(
             result.range,
             Range {
