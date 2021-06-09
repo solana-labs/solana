@@ -262,6 +262,7 @@ pub struct ThisInvokeContext<'a> {
     rent: Rent,
     message: &'a Message,
     pre_accounts: Vec<PreAccount>,
+    accounts: &'a [Rc<RefCell<AccountSharedData>>],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
@@ -308,6 +309,7 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             message,
             pre_accounts,
+            accounts,
             account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -469,14 +471,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
-            if pre.key == *pubkey {
-                Some(pre.account.clone())
-            } else {
-                None
-            }
-        }) {
-            return Some(account);
+        if let Some(index) = self
+            .message
+            .account_keys
+            .iter()
+            .position(|key| key == pubkey)
+        {
+            return Some(self.accounts[index].clone());
         }
         self.account_deps.iter().find_map(|(key, account)| {
             if key == pubkey {
