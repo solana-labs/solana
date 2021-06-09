@@ -4568,12 +4568,18 @@ impl Bank {
         }
     }
 
-    pub fn calculate_capitalization(&self) -> u64 {
-        self.rc.accounts.calculate_capitalization(&self.ancestors)
+    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+        let can_cached_slot_be_unflushed = true; // implied yes
+        self.rc.accounts.calculate_capitalization(
+            &self.ancestors,
+            self.slot(),
+            can_cached_slot_be_unflushed,
+            debug_verify,
+        )
     }
 
-    pub fn calculate_and_verify_capitalization(&self) -> bool {
-        let calculated = self.calculate_capitalization();
+    pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
+        let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
         if calculated == expected {
             true
@@ -4590,8 +4596,9 @@ impl Bank {
     /// This should only be used for developing purposes.
     pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
+        let debug_verify = true;
         self.capitalization
-            .store(self.calculate_capitalization(), Relaxed);
+            .store(self.calculate_capitalization(debug_verify), Relaxed);
         old
     }
 
@@ -4618,6 +4625,7 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 Some(self.capitalization()),
+                false,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -5849,7 +5857,7 @@ pub(crate) mod tests {
         updater();
         let new = bank.capitalization();
         asserter(old, new);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -6145,7 +6153,7 @@ pub(crate) mod tests {
             burned_portion
         );
 
-        assert!(bank.calculate_and_verify_capitalization());
+        assert!(bank.calculate_and_verify_capitalization(true));
 
         assert_eq!(
             rent_to_be_distributed,
@@ -7321,7 +7329,7 @@ pub(crate) mod tests {
             )]
         );
         bank1.freeze();
-        assert!(bank1.calculate_and_verify_capitalization());
+        assert!(bank1.calculate_and_verify_capitalization(true));
     }
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
@@ -7399,7 +7407,7 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
         bank1.freeze();
-        assert!(bank1.calculate_and_verify_capitalization());
+        assert!(bank1.calculate_and_verify_capitalization(true));
 
         // verify voting and staking rewards are recorded
         let rewards = bank1.rewards.read().unwrap();
@@ -8630,7 +8638,7 @@ pub(crate) mod tests {
         // First, initialize the clock sysvar
         activate_all_features(&mut genesis_config);
         let bank1 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank1.calculate_capitalization(), bank1.capitalization());
+        assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
 
         assert_capitalization_diff(
             &bank1,
@@ -9389,7 +9397,7 @@ pub(crate) mod tests {
         // Non-native loader accounts can not be used for instruction processing
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         let ((vote_id, vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
@@ -9399,13 +9407,13 @@ pub(crate) mod tests {
         bank.store_account(&stake_id, &stake_account);
         assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
             String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
@@ -9425,7 +9433,7 @@ pub(crate) mod tests {
         assert_eq!(old_hash, new_hash);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
             String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
@@ -11037,16 +11045,16 @@ pub(crate) mod tests {
         let program_id = solana_sdk::pubkey::new_rand();
 
         bank.add_native_program("mock_program", &program_id, false);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         // someone mess with program_id's balance
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
-        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
         bank.deposit(&program_id, 10).unwrap();
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         bank.add_native_program("mock_program v2", &program_id, true);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -11057,12 +11065,12 @@ pub(crate) mod tests {
 
         // someone managed to squat at program_id!
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
-        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
         bank.deposit(&program_id, 10).unwrap();
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         bank.add_native_program("mock_program", &program_id, false);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -11213,13 +11221,13 @@ pub(crate) mod tests {
             bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
             bank1.capitalization()
         );
-        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
+        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));
 
         // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
         // So do some convolted setup; anyway this test itself will just be temporary
         let bank0 = std::panic::AssertUnwindSafe(bank0);
         let overflowing_capitalization =
-            std::panic::catch_unwind(|| bank0.calculate_capitalization());
+            std::panic::catch_unwind(|| bank0.calculate_capitalization(true));
         if let Ok(overflowing_capitalization) = overflowing_capitalization {
             info!("asserting overflowing capitalization for bank0");
             assert_eq!(overflowing_capitalization, bank0.capitalization());
