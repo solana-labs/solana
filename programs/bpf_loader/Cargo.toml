@@ -24,7 +24,7 @@ solana_rbpf = "=0.2.12"
 thiserror = "1.0"
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.3"
 rustversion = "1.0.5"
 
 [lib]
