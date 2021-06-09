@@ -19,6 +19,12 @@ pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
+<<<<<<< HEAD
+=======
+pub mod cost_model;
+pub mod cost_tracker;
+pub mod execute_cost_table;
+>>>>>>> ae27fcbcd (replay stage feed back program cost (#17731))
 pub mod fetch_stage;
 pub mod fork_choice;
 pub mod gen_keys;

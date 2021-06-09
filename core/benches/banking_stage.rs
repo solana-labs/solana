@@ -32,7 +32,11 @@ use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
+<<<<<<< HEAD
 use std::sync::Arc;
+=======
+use std::sync::{Arc, Mutex, RwLock};
+>>>>>>> ae27fcbcd (replay stage feed back program cost (#17731))
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -91,6 +95,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
+<<<<<<< HEAD
+=======
+                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(Mutex::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
+>>>>>>> ae27fcbcd (replay stage feed back program cost (#17731))
             );
         });
 
@@ -211,6 +220,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
+<<<<<<< HEAD
+=======
+            &Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
+>>>>>>> ae27fcbcd (replay stage feed back program cost (#17731))
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
