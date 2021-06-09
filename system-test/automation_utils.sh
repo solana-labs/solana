@@ -96,16 +96,18 @@ function get_bootstrap_validator_ip_address {
   echo "${validatorIpList[0]}"
 }
 
-function check_transaction_confirmations {
+function get_active_stake {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
-  # shellcheck disable=SC2029
-  result=$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
-    "\$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 --keypair \$HOME/solana/config/faucet.json ping --count 5 --interval 0")
-  if [[ $(echo "$result" | grep -o ". transactions confirmed" | cut -d' ' -f1) -ne 5 ]]; then
-      echo "Not enough transactions confirmed"
-      exit 1
-  fi
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 slot validators --output=json | jq .totalActiveStake'
+}
+
+function get_current_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 slot validators --output=json | jq .totalCurrentStake'
 }
 
 function collect_performance_statistics {

@@ -13,6 +13,7 @@ steps:
       EXTRA_PRIMORDIAL_STAKES: 4
       WAIT_FOR_EQUAL_STAKE: "true"
       TEST_TYPE: "script"
+      CONSENSUS_TIMEOUT: 60
       CUSTOM_SCRIPT: "system-test/restart-testcases/restart_test_automation.sh"
     agents:
       - "queue=gce-deploy"

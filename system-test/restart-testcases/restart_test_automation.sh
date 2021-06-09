@@ -8,6 +8,10 @@ source "$(dirname "$0")"/../automation_utils.sh
 
 RESULT_FILE="$1"
 
+if [[ -z $CONSENSUS_TIMEOUT ]]; then
+  CONSENSUS_TIMEOUT=180
+fi
+
 startGpuMode="off"
 if [[ -z $ENABLE_GPU ]]; then
   ENABLE_GPU=false
@@ -30,7 +34,18 @@ sleep 2
 "$REPO_ROOT"/net/net.sh start --skip-setup --no-snapshot-fetch --no-deploy \
   --gpu-mode $startGpuMode $maybeAsyncNodeInit
 
-# Basic test, check 5 transactions
-check_transaction_confirmations >> "$RESULT_FILE"
+# wait until consensus
+start=$SECONDS
+activeStake=get_active_stake
+while [[ $((SECONDS - start)) -lt $CONSENSUS_TIMEOUT ]]
+do
+  currentStake=get_current_stake
+  if [[ $activeStake -eq $currentStake ]]; then
+    echo "Restart Test Succeeded" >>"$RESULT_FILE"
+    exit 0
+  fi
+  sleep 5
+done
 
-echo "Restart Test Succeeded" >>"$RESULT_FILE"
+echo "Could not establish consensus in $CONSENSUS_TIMEOUT seconds" >> "$RESULT_FILE"
+exit 1
