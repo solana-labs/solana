@@ -124,7 +124,7 @@ pub enum AccountShrinkThreshold {
     /// the specified threshold.
     IndividalStore { shrink_ratio: f64 },
 }
-pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = false;
+pub const DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE: bool = true;
 pub const DEFAULT_ACCOUNTS_SHRINK_RATIO: f64 = 0.80;
 // The default extra account space in percentage from the ideal target
 const DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION: AccountShrinkThreshold =
