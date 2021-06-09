@@ -124,7 +124,7 @@ impl ExecuteCostTable {
             .iter()
             .map(|(key, (count, timestamp))| {
                 let age = now.duration_since(*timestamp).unwrap().as_micros();
-                let weighted_age = *count as i64 * OCCURRENCES_WEIGHT + age as i64 * -1;
+                let weighted_age = *count as i64 * OCCURRENCES_WEIGHT + -(age as i64);
                 (weighted_age, *key)
             })
             .collect();
