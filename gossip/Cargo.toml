@@ -49,7 +49,7 @@ num_cpus = "1.13.0"
 serial_test = "0.5.1"
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.4"
 
 [[bench]]
 name = "crds"

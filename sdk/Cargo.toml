@@ -84,7 +84,7 @@ curve25519-dalek = "2.1.0"
 tiny-bip39 = "0.7.0"
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.4"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

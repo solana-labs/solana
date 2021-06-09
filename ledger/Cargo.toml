@@ -77,7 +77,7 @@ solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.4"
 
 [lib]
 crate-type = ["lib"]
