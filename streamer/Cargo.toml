@@ -17,7 +17,7 @@ thiserror = "1.0"
 solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 libc = "0.2.81"
-nix = "0.19.0"
+nix = "0.20.0"
 solana-perf = { path = "../perf", version = "=1.8.0" }
 
 [dev-dependencies]
