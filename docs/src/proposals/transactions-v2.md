@@ -61,6 +61,9 @@ addresses are still pending activation in their on-chain state:
 struct AddressMap {
   // authority must sign for each addition and to close the map account
   authority: Pubkey,
+  // record a deactivation epoch to help validators know when to remove
+  // the mapping from their caches.
+  deactivation_epoch: Epoch,
   // entries may not be modified once activated
   activated: bool,
   // list of entries, max capacity of u8::MAX
@@ -76,7 +79,7 @@ two epochs of rent. This ensures that it takes at least one full epoch to
 deactivate a map.
 
 Maps may not be recreated because each new map must be created at a derived
-address using a monotonically increase counter seed.
+address using a monotonically increasing counter as a derivation seed.
 
 #### Cost
 
@@ -209,8 +212,8 @@ Address map accounts will be read very frequently and will therefore be a
 more high profile target for denial of service attacks through write locks
 similar to sysvar accounts.
 
-Since addresses stored inside map accounts are immutable, reads and writes
-can be parallelized as long as all referenced map entries are activated.
+For this reason, special handling should be given to address map lookups.
+Address maps lookups should not be affected by account read/write locks.
 
 ### Duplicate accounts
 
