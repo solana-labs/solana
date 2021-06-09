@@ -339,9 +339,9 @@ impl ReplayStage {
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
-                let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = GossipDuplicateConfirmedSlots::default();
-                let mut unfrozen_gossip_verified_vote_hashes: UnfrozenGossipVerifiedVoteHashes = UnfrozenGossipVerifiedVoteHashes::default();
-                let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks = LatestValidatorVotesForFrozenBanks::default();
+                let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+                let mut unfrozen_gossip_verified_vote_hashes = UnfrozenGossipVerifiedVoteHashes::default();
+                let mut latest_validator_votes_for_frozen_banks = LatestValidatorVotesForFrozenBanks::default();
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
                 let mut last_vote_refresh_time = LastVoteRefreshTime {
@@ -487,7 +487,9 @@ impl ReplayStage {
                             &bank_forks,
                         );
 
-                        Self::mark_slots_confirmed(&confirmed_forks, &bank_forks, &mut progress, &ancestors, &descendants, &mut heaviest_subtree_fork_choice);
+                        Self::mark_slots_confirmed(&confirmed_forks, &bank_forks, &mut progress,
+                                                   &ancestors, &descendants, &mut
+                                                   heaviest_subtree_fork_choice);
                     }
                     compute_slot_stats_time.stop();
 
@@ -498,7 +500,14 @@ impl ReplayStage {
 
                     if let Some(heaviest_bank_on_same_voted_fork) = heaviest_bank_on_same_voted_fork.as_ref() {
                         if let Some(my_latest_landed_vote) = progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot()) {
-                            Self::refresh_last_vote(&mut tower, &cluster_info, heaviest_bank_on_same_voted_fork, &poh_recorder, my_latest_landed_vote, &vote_account, &authorized_voter_keypairs.read().unwrap(), &mut voted_signatures, has_new_vote_been_rooted, &mut last_vote_refresh_time);
+                            Self::refresh_last_vote(&mut tower, &cluster_info,
+                                                    heaviest_bank_on_same_voted_fork,
+                                                    &poh_recorder, my_latest_landed_vote,
+                                                    &vote_account,
+                                                    &authorized_voter_keypairs.read().unwrap(),
+                                                    &mut voted_signatures,
+                                                    has_new_vote_been_rooted, &mut
+                                                    last_vote_refresh_time);
                         }
                     }
 
@@ -1138,7 +1147,8 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
-                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot).expect("In order for propagated check to fail, latest leader must exist in progress map");
+                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot)
+                    .expect("In order for propagated check to fail, latest leader must exist in progress map");
                 if poh_slot != skipped_slots_info.last_skipped_slot {
                     datapoint_info!(
                         "replay_stage-skip_leader_slot",
@@ -1153,8 +1163,15 @@ impl ReplayStage {
                     progress_map.log_propagated_stats(latest_unconfirmed_leader_slot, bank_forks);
                     skipped_slots_info.last_skipped_slot = poh_slot;
                 }
-                let bank = bank_forks.read().unwrap().get(latest_unconfirmed_leader_slot)
-                .expect("In order for propagated check to fail, latest leader must exist in progress map, and thus also in BankForks").clone();
+                let bank = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(latest_unconfirmed_leader_slot)
+                    .expect(
+                        "In order for propagated check to fail, \
+                            latest leader must exist in progress map, and thus also in BankForks",
+                    )
+                    .clone();
 
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
@@ -1495,7 +1512,12 @@ impl ReplayStage {
             && last_vote_refresh_time.last_print_time.elapsed().as_secs() >= 1
         {
             last_vote_refresh_time.last_print_time = Instant::now();
-            info!("Last landed vote for slot {} in bank {} is greater than the current last vote for slot: {} tracked by Tower", my_latest_landed_vote, heaviest_bank_on_same_fork.slot(), last_voted_slot);
+            info!(
+                "Last landed vote for slot {} in bank {} is greater than the current last vote for slot: {} tracked by Tower",
+                my_latest_landed_vote,
+                heaviest_bank_on_same_fork.slot(),
+                last_voted_slot
+            );
         }
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
