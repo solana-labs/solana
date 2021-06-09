@@ -37,54 +37,52 @@ tables used in operating systems to succinctly map virtual addresses to physical
 memory.
 
 After addresses are stored on-chain in an address map account, they may be
-succinctly referenced in a transaction using a 2-byte u16 index rather than a
+succinctly referenced in a transaction using a 1-byte u8 index rather than a
 full 32-byte address. This will require a new transaction format to make use of
 these succinct references as well as runtime handling for looking up and loading
 accounts from the on-chain mappings.
 
 #### State
 
-Address map accounts must be rent-exempt and may not be deleted. Address maps
-should be append only so that once an address is stored, it may not be removed
-later. Address map accounts must be pre-allocated since Solana does not support
-reallocation for accounts yet.
+Address map accounts must be rent-exempt but may be closed with a one epoch
+deactivation period. Address maps must be activated before use.
 
-Since transactions use a u16 offset to look up addresses, accounts can store up
-to 2^16 addresses each. Anyone may create an address map account of any size as
-long as its big enough to store the necessary metadata. In addition to stored
-addresses, address map accounts must also track the latest count of stored
-addresses and an authority which must be a present signer for all appended map
-entries.
+Since transactions use a u8 offset to look up mapped addresses, accounts can
+store up to 2^8 addresses each. Anyone may create an address map account of any
+size as long as its big enough to store the necessary metadata. In addition to
+stored addresses, address map accounts must also track the latest count of
+stored addresses and an authority which must be a present signer for all
+appended map entries.
 
 Map additions require one slot to activate so each map should track how many
-addresses are still pending activation in their on-chain state.
+addresses are still pending activation in their on-chain state:
 
 ```rust
 struct AddressMap {
-  // authority must sign for each addition
+  // authority must sign for each addition and to close the map account
   authority: Pubkey,
-  // always set to the current slot
-  last_update_slot: Slot,
-  // incremented if current slot is equal to `last_update_slot`
-  last_update_slot_additions: u16,
-  // incremented on each addition
-  len: u16,
-  // list of entries
-  entries: [Pubkey; MAP_CAPACITY],
+  // entries may not be modified once activated
+  activated: bool,
+  // list of entries, max capacity of u8::MAX
+  entries: Vec<Pubkey>,
 }
 ```
 
+#### Cleanup
+
+Once an address map gets stale and is no longer used, it can be reclaimed by the
+authority withdrawing lamports but the remaining balance must be greater than
+two epochs of rent. This ensures that it takes at least one full epoch to
+deactivate a map.
+
+Maps may not be recreated because each new map must be created at a derived
+address using a monotonically increase counter seed.
+
 #### Cost
 
-Since address map accounts require caching and special handling in the runtime, they
-should incur higher costs for storage. Cost structure design will be added
+Since address map accounts require caching and special handling in the runtime,
+they should incur higher costs for storage. Cost structure design will be added
 later.
-
-#### Program controlled address maps
-
-If the authority of an address map account is controlled by a program, more
-sophisticated maps could be built with governance features or price curves for
-new additions.
 
 ### Versioned Transactions
 
@@ -135,7 +133,7 @@ pub struct AddressMapping {
 
   /// List of mapping entries to load
   #[serde(with = "short_vec")]
-  pub entries: Vec<u16>,
+  pub entries: Vec<u8>,
 }
 ```
 
@@ -144,7 +142,7 @@ pub struct AddressMapping {
 - 1 byte for `version` field
 - 1 byte for `account_mappings` length
 - Each mapping requires 2 bytes for `indices` length and `num_readonly`
-- Each mapping entry is 2 bytes (u16)
+- Each mapping entry is 1 byte (u8)
 
 #### Cost changes
 
@@ -173,8 +171,8 @@ transactions to abstract away the mapping details from downstream clients.
 
 - Max of 256 accounts may be specified in a transaction because u8 is used by compiled
 instructions to index into transaction message account keys.
-- Address maps can hold up to 2^16 addresses because mapping entries are encoded as
-`u16` in transactions.
+- Address maps can hold up to 256 addresses because mapping entries are encoded as
+`u8` in transactions.
 - Transaction signers may not be specified using a mapping, the full address of
 each signer must be serialized in the transaction. This ensures that the
 performance of transaction signature checks is not affected.
