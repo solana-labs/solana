@@ -7,6 +7,7 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
@@ -681,6 +682,11 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
+        let cost_model = Arc::new(RwLock::new(CostModel::new(
+            ACCOUNT_MAX_COST,
+            BLOCK_MAX_COST,
+        )));
+
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
@@ -758,6 +764,7 @@ impl Validator {
                 disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
             },
             &max_slots,
+            &cost_model,
         );
 
         let tpu = Tpu::new(
@@ -784,6 +791,7 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
+            &cost_model,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

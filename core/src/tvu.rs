@@ -12,6 +12,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
+    cost_model::CostModel,
     ledger_cleanup_service::LedgerCleanupService,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -131,6 +132,7 @@ impl Tvu {
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
+        cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
@@ -303,6 +305,7 @@ impl Tvu {
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
             voting_sender,
+            cost_model.clone(),
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -455,6 +458,7 @@ pub mod tests {
             gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
+            &Arc::new(RwLock::new(CostModel::default())),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

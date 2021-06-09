@@ -36,7 +36,7 @@ use solana_streamer::socket::SocketAddrSpace;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -95,8 +95,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(CostModel::default()),
-                &Arc::new(Mutex::new(CostTracker::new(std::u32::MAX, std::u32::MAX))),
+                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(Mutex::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
             );
         });
 
@@ -223,8 +223,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
-            std::u32::MAX,
-            std::u32::MAX,
+            &Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
