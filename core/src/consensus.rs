@@ -1866,7 +1866,16 @@ pub mod test {
         let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
 
         // Last vote is 47
-        tower.record_vote(47, Hash::default());
+        tower.record_vote(
+            47,
+            vote_simulator
+                .bank_forks
+                .read()
+                .unwrap()
+                .get(47)
+                .unwrap()
+                .hash(),
+        );
 
         // Trying to switch to an ancestor of last vote should only not panic
         // if the current vote has a duplicate ancestor

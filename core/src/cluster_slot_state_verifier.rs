@@ -314,7 +314,6 @@ mod test {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         progress: ProgressMap,
         descendants: HashMap<Slot, HashSet<Slot>>,
-        slot: Slot,
         bank_forks: RwLock<BankForks>,
     }
 
@@ -335,7 +334,6 @@ mod test {
             heaviest_subtree_fork_choice: vote_simulator.heaviest_subtree_fork_choice,
             progress: vote_simulator.progress,
             descendants,
-            slot: 0,
             bank_forks: vote_simulator.bank_forks,
         }
     }
@@ -607,27 +605,32 @@ mod test {
         let InitialState {
             mut heaviest_subtree_fork_choice,
             descendants,
-            slot,
             bank_forks,
             ..
         } = setup();
 
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
-        let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+        let duplicate_slot = bank_forks.read().unwrap().root() + 1;
+        let duplicate_slot_hash = bank_forks
+            .read()
+            .unwrap()
+            .get(duplicate_slot)
+            .unwrap()
+            .hash();
         apply_state_changes(
-            slot,
+            duplicate_slot,
             &mut heaviest_subtree_fork_choice,
-            vec![ResultingStateChange::MarkSlotDuplicate(slot_hash)],
+            vec![ResultingStateChange::MarkSlotDuplicate(duplicate_slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
-            .is_candidate(&(slot, slot_hash))
+            .is_candidate(&(duplicate_slot, duplicate_slot_hash))
             .unwrap());
         for child_slot in descendants
-            .get(&slot)
+            .get(&duplicate_slot)
             .unwrap()
             .iter()
-            .chain(std::iter::once(&slot))
+            .chain(std::iter::once(&duplicate_slot))
         {
             assert_eq!(
                 heaviest_subtree_fork_choice
@@ -636,23 +639,23 @@ mod test {
                         bank_forks.read().unwrap().get(*child_slot).unwrap().hash()
                     ))
                     .unwrap(),
-                slot
+                duplicate_slot
             );
         }
 
         // DuplicateConfirmedSlotMatchesCluster should re-enable fork choice
         apply_state_changes(
-            slot,
+            duplicate_slot,
             &mut heaviest_subtree_fork_choice,
             vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
-                slot_hash,
+                duplicate_slot_hash,
             )],
         );
         for child_slot in descendants
-            .get(&slot)
+            .get(&duplicate_slot)
             .unwrap()
             .iter()
-            .chain(std::iter::once(&slot))
+            .chain(std::iter::once(&duplicate_slot))
         {
             assert!(heaviest_subtree_fork_choice
                 .latest_invalid_ancestor(&(
@@ -662,7 +665,7 @@ mod test {
                 .is_none());
         }
         assert!(heaviest_subtree_fork_choice
-            .is_candidate(&(slot, slot_hash))
+            .is_candidate(&(duplicate_slot, duplicate_slot_hash))
             .unwrap());
     }
 

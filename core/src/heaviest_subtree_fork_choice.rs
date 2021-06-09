@@ -2991,8 +2991,13 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_mark_valid_invalid_forks_duplicate() {
+    fn setup_mark_valid_invalid_forks_duplicate_tests() -> (
+        HeaviestSubtreeForkChoice,
+        Vec<SlotHashKey>,
+        SlotHashKey,
+        Bank,
+        Vec<Pubkey>,
+    ) {
         let (
             mut heaviest_subtree_fork_choice,
             duplicate_leaves_descended_from_4,
@@ -3020,11 +3025,27 @@ mod test {
         // the other branch at slot 5
         let invalid_candidate = (4, Hash::default());
         heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&invalid_candidate);
-
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
             (2, Hash::default())
         );
+        (
+            heaviest_subtree_fork_choice,
+            duplicate_leaves_descended_from_4,
+            invalid_candidate,
+            bank,
+            vote_pubkeys,
+        )
+    }
+
+    #[test]
+    fn test_mark_valid_invalid_forks_duplicate() {
+        let (
+            mut heaviest_subtree_fork_choice,
+            duplicate_leaves_descended_from_4,
+            invalid_candidate,
+            ..,
+        ) = setup_mark_valid_invalid_forks_duplicate_tests();
 
         // Marking candidate as valid again will choose the the heaviest leaf of
         // the newly valid branch
@@ -3039,16 +3060,26 @@ mod test {
             heaviest_subtree_fork_choice.best_overall_slot(),
             duplicate_descendant
         );
+    }
 
-        // Mark the current heaviest branch as invalid again
-        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&invalid_candidate);
+    #[test]
+    fn test_mark_valid_invalid_forks_with_new_heavier_duplicate_slot() {
+        let (
+            mut heaviest_subtree_fork_choice,
+            duplicate_leaves_descended_from_4,
+            _invalid_candidate,
+            bank,
+            vote_pubkeys,
+        ) = setup_mark_valid_invalid_forks_duplicate_tests();
 
         // If we add a new version of the duplicate slot that is not descended from the invalid
         // candidate and votes for that duplicate slot, the new duplicate slot should be picked
         // once it has more weight
         let new_duplicate_hash = Hash::default();
+
         // The hash has to be smaller in order for the votes to be counted
         assert!(new_duplicate_hash < duplicate_leaves_descended_from_4[0].1);
+        let duplicate_slot = duplicate_leaves_descended_from_4[0].0;
         let new_duplicate = (duplicate_slot, new_duplicate_hash);
         heaviest_subtree_fork_choice.add_new_leaf_slot(new_duplicate, Some((3, Hash::default())));
 
