@@ -122,7 +122,52 @@ pub struct CumulativeOffsets {
     total_count: usize,
 }
 
+pub struct CumulativeOffsetsWalker<'a> {
+    cumulative_offsets: &'a CumulativeOffsets,
+    last_index: Option<usize>,
+}
+
+impl<'a> CumulativeOffsetsWalker<'a> {
+    pub fn new(cumulative_offsets: &'a CumulativeOffsets) -> Self {
+        Self {
+            cumulative_offsets,
+            last_index: None,
+        }
+    }
+    pub fn get_slice<'e, 'f, T, U: ExtractSliceFromRawData<'f, T>>(
+        &'e mut self,
+        start: usize,
+        raw: &'f U,
+    ) -> &'f [T] {
+        let mut lookup = true;
+        let mut index = 0;
+        if let Some(last) = self.last_index {
+            index = last + 1;
+            if index < self.cumulative_offsets.len() {
+                let result = &self.cumulative_offsets.cumulative_offsets[index];
+                if result.start_offset == start {
+                    lookup = false;
+                }
+            }
+        };
+
+        if lookup {
+            index = self.cumulative_offsets.find_index(index);
+        }
+        self.last_index = Some(index);
+        let offset = &self.cumulative_offsets.cumulative_offsets[index];
+        let start = start - offset.start_offset;
+        raw.extract(offset, start)
+    }
+}
+
 impl CumulativeOffsets {
+    pub fn len(&self) -> usize {
+        self.cumulative_offsets.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn from_raw<T>(raw: &[Vec<T>]) -> CumulativeOffsets {
         let mut total_count: usize = 0;
         let cumulative_offsets: Vec<_> = raw
@@ -1712,6 +1757,105 @@ pub mod tests {
 
         for start in 0..len {
             let slice: &[u64] = cumulative.get_slice(&input, start);
+            let len = slice.len();
+            assert!(len > 0);
+            assert_eq!(&src[start..(start + len)], slice);
+        }
+    }
+
+    #[test]
+    fn test_accountsdb_cumulative_offsets2_d_walker() {
+        solana_logger::setup();
+
+        let input = vec![vec![vec![0, 1], vec![], vec![2, 3, 4], vec![]]];
+        let cumulative = CumulativeOffsets::from_raw_2d(&input);
+
+        let src: Vec<_> = input
+            .clone()
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .flatten()
+            .collect();
+        let len = src.len();
+        let mut walker = CumulativeOffsetsWalker::new(&cumulative);
+        for start in 0..len {
+            let slice: &[u64] = walker.get_slice(start, &input);
+            let len = slice.len();
+            assert!(len > 0);
+            assert_eq!(&src[start..(start + len)], slice);
+        }
+
+        let input = vec![vec![vec![], vec![0, 1], vec![], vec![2, 3, 4], vec![]]];
+        let cumulative = CumulativeOffsets::from_raw_2d(&input);
+
+        let src: Vec<_> = input
+            .clone()
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .flatten()
+            .collect();
+        let len = src.len();
+        assert_eq!(cumulative.total_count, len);
+        assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
+
+        const DIMENSION_0: usize = 0;
+        const DIMENSION_1: usize = 1;
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION_0], 0);
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION_1], 1);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION_0], 0);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION_1], 3);
+
+        assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
+        assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
+        let mut walker = CumulativeOffsetsWalker::new(&cumulative);
+
+        for start in 0..len {
+            let slice: &[u64] = walker.get_slice(start, &input);
+            let len = slice.len();
+            assert!(len > 0);
+            assert_eq!(&src[start..(start + len)], slice);
+        }
+
+        let input: Vec<Vec<Vec<u32>>> = vec![vec![]];
+        let cumulative = CumulativeOffsets::from_raw_2d(&input);
+
+        let src: Vec<_> = input.into_iter().flatten().collect();
+        let len = src.len();
+        assert_eq!(cumulative.total_count, len);
+        assert_eq!(cumulative.cumulative_offsets.len(), 0); // 2 non-empty vectors
+
+        let input = vec![
+            vec![vec![0, 1]],
+            vec![vec![]],
+            vec![vec![], vec![2, 3, 4], vec![]],
+        ];
+        let cumulative = CumulativeOffsets::from_raw_2d(&input);
+
+        let src: Vec<_> = input
+            .clone()
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .flatten()
+            .collect();
+        let len = src.len();
+        assert_eq!(cumulative.total_count, len);
+        assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
+
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION_0], 0);
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION_1], 0);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION_0], 2);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION_1], 1);
+
+        assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
+        assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
+
+        let mut walker = CumulativeOffsetsWalker::new(&cumulative);
+
+        for start in 0..len {
+            let slice: &[u64] = walker.get_slice(start, &input);
             let len = slice.len();
             assert!(len > 0);
             assert_eq!(&src[start..(start + len)], slice);
