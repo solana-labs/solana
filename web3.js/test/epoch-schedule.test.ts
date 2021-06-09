@@ -1,5 +1,6 @@
-import { expect } from "chai";
-import { EpochSchedule } from "../src";
+import {expect} from 'chai';
+
+import {EpochSchedule} from '../src';
 
 describe('EpochSchedule', () => {
   it('slot methods work', () => {
