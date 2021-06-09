@@ -54,11 +54,12 @@ impl<'a> SortedStorages<'a> {
     // 2. slots and source are the same len
     pub fn new_with_slots<'b>(
         source: impl Iterator<Item = (&'a SnapshotStorage, &'b Slot)> + Clone,
+        // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
         min_slot: Option<Slot>,
-        // highest valid slot. Only matters if slots array does not contain a slot >= max_slot_inclusive.
+        // highest valid slot. Only matters if source array does not contain a slot >= max_slot_inclusive.
         // An example is a slot that has accounts in the write cache at slots <= 'max_slot_inclusive' but no storages at those slots.
-        // None => self.range.end = slots.max() + 1
-        // Some(slot) => self.range.end = std::cmp::max(slot, slots.max())
+        // None => self.range.end = source.1.max() + 1
+        // Some(slot) => self.range.end = std::cmp::max(slot, source.1.max())
         max_slot_inclusive: Option<Slot>,
     ) -> Self {
         let mut min = Slot::MAX;
