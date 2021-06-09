@@ -272,8 +272,9 @@ also need to be limited in length to limit resource consumption.
 
 This proposal can be thought of a special case of the proposed index account
 approach. Since the full account list would be expanded, there's no need to add
-additional offsets that use up the limited space in a serialized
-transaction. However, the expected size of an address list may need to be
-encoded into the transaction to aid the sanitization of account indexes.
-Additionally, special attention must be given to watch out for accounts that
-exist in multiple account lists.
+additional offsets that use up the limited space in a serialized transaction.
+However, the expected size of an address list may need to be encoded into the
+transaction to aid the sanitization of account indexes.  We would also need to
+encode how many addresses in the list should be loaded as readonly vs
+read-write. Lastly, special attention must be given to watch out for addresses
+that exist in multiple account lists.
