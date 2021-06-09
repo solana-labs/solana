@@ -11,6 +11,9 @@ use std::{collections::HashMap, time::SystemTime};
 // would be more efficient. PRUNE_RATIO defines the after prune table
 // size will be original_size * PRUNE_RATIO.
 const PRUNE_RATIO: f64 = 0.75;
+// with 50_000 TPS as norm, weights occurrences '100' per microsec
+const OCCURRENCES_WEIGHT: i64 = 100;
+
 const DEFAULT_CAPACITY: usize = 1024;
 
 #[derive(Debug)]
@@ -120,8 +123,8 @@ impl ExecuteCostTable {
             .occurrences
             .iter()
             .map(|(key, (count, timestamp))| {
-                let weighted_age: f64 =
-                    *count as f64 / (now.duration_since(*timestamp).unwrap().as_micros()) as f64;
+                let age = now.duration_since(*timestamp).unwrap().as_micros();
+                let weighted_age = *count as i64 * OCCURRENCES_WEIGHT + age as i64 * -1;
                 (weighted_age, *key)
             })
             .collect();
