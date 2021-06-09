@@ -36,10 +36,10 @@ sleep 2
 
 # wait until consensus
 start=$SECONDS
-activeStake=get_active_stake
-while [[ $((SECONDS - start)) -lt $CONSENSUS_TIMEOUT ]]
-do
-  currentStake=get_current_stake
+activeStake=$(get_active_stake)
+while [[ $((SECONDS - start)) -lt $CONSENSUS_TIMEOUT ]]; do
+  currentStake=$(get_current_stake)
+  echo "$((SECONDS - start))s: Current stake $currentStake, Active stake $activeStake" >> "$RESULT_FILE"
   if [[ $activeStake -eq $currentStake ]]; then
     echo "Restart Test Succeeded" >>"$RESULT_FILE"
     exit 0
