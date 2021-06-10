@@ -282,11 +282,6 @@ pub(crate) fn check_slot_agrees_with_cluster(
     if matches!(slot_state_update, SlotStateUpdate::Duplicate) {
         // If this slot is a duplicate > root, it better be present in the duplicate_slots_tracker.
         assert!(is_slot_duplicate);
-        if is_slot_duplicate {
-            // Already processed duplicate signal for this slot, and the state transition is just another
-            // SlotStateUpdate::Duplicate, then no need to continue
-            return;
-        }
     }
     let is_dead = progress.is_dead(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
 
@@ -852,7 +847,7 @@ mod test {
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
 
-        // Mark 2 as duplicate confirmed
+        // Mark 2 as duplicate
         duplicate_slots_tracker.insert(2);
         check_slot_agrees_with_cluster(
             2,
