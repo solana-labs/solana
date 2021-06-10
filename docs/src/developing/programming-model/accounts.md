@@ -24,10 +24,9 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 ## Signers
 
 Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. When a
-corresponding digital signature is present it signifies that the holder of the
-account's private key signed and thus "authorized" the transaction and the
-account is then referred to as a _signer_. Whether an account is a signer or not
+corresponding to the accounts' public keys referenced by the transaction. Such signatures signify that the holder of the
+account's private key signed and thus "authorized" the transaction.  In this case, 
+the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
 
@@ -52,10 +51,9 @@ runtime enforces that the account's data (the program) is immutable.
 
 ## Creating
 
-To create an account a client generates a _keypair_ and registers its public key
-using the `SystemProgram::CreateAccount` instruction with preallocated a fixed
-storage size in bytes. The current maximum size of an account's data is 10
-megabytes.
+To create an account, a client generates a _keypair_ and registers its public key
+using the `SystemProgram::CreateAccount` instruction with a fixed
+storage size in bytes preallocated . The current maximum size of an account's data is 10 megabytes.
 
 An account address can be any arbitrary 256 bit value, and there are mechanisms
 for advanced users to create derived addresses
@@ -64,8 +62,8 @@ for advanced users to create derived addresses
 
 Accounts that have never been created via the system program can also be passed
 to programs. When an instruction references an account that hasn't been
-previously created the program will be passed an account that is owned by the
-system program, has zero lamports, and zero data. But, the account will reflect
+previously created, the program will be passed an account that is owned by the
+system program with zero lamports and zero data. But, the account will reflect
 whether it is a signer of the transaction or not and therefore can be used as an
 authority. Authorities in this context convey to the program that the holder of
 the private key associated with the account's public key signed the transaction.
