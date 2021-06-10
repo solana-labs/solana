@@ -265,7 +265,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     // signals arriving before the bank is constructed in replay.
     if matches!(slot_state_update, SlotStateUpdate::Duplicate) {
         // If this slot has already been processed before, return
-        if duplicate_slots_tracker.insert(slot) {
+        if !duplicate_slots_tracker.insert(slot) {
             return;
         }
     }

@@ -4630,7 +4630,6 @@ mod tests {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
         assert_ne!(bank4_hash, Hash::default());
-        duplicate_slots_tracker.insert(4);
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
@@ -4660,7 +4659,6 @@ mod tests {
         let descendants = bank_forks.read().unwrap().descendants().clone();
         let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
         assert_ne!(bank2_hash, Hash::default());
-        duplicate_slots_tracker.insert(2);
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
