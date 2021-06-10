@@ -4,6 +4,15 @@
 #
 # https://doc.mergify.io/
 pull_request_rules:
+  - name: label changes from community
+    conditions:
+      - author≠@core-contributors
+      - author≠mergify[bot]
+      - author≠dependabot[bot]
+    actions:
+      label:
+        add:
+          - community
   - name: automatic merge (squash) on CI success
     conditions:
       - status-success=buildkite/solana
