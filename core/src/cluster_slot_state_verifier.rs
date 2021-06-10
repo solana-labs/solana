@@ -266,7 +266,11 @@ pub(crate) fn check_slot_agrees_with_cluster(
     let frozen_hash = frozen_hash.unwrap();
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot);
 
-    let is_local_replay_duplicate_confirmed = fork_choice.is_duplicate_confirmed(&(slot, frozen_hash)).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+    // If the bank hasn't been frozen yet, then we haven't duplicate confirmed a local version
+    // this slot through replay yet.
+    let is_local_replay_duplicate_confirmed = fork_choice
+        .is_duplicate_confirmed(&(slot, frozen_hash))
+        .unwrap_or(false);
     let cluster_duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash(
         slot,
         gossip_duplicate_confirmed_hash,
