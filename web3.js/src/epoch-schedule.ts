@@ -19,13 +19,14 @@ function nextPowerOfTwo(n: number) {
   n |= n >> 4;
   n |= n >> 8;
   n |= n >> 16;
+  n |= n >> 32;
   return n + 1;
 }
 
 /**
  * Epoch schedule
  * (see https://docs.solana.com/terminology#epoch)
- * Can be retreived with {@link connection.getEpochSchedule} method
+ * Can be retrieved with the {@link connection.getEpochSchedule} method
  */
 export class EpochSchedule {
   /** The maximum number of slots in each epoch */
@@ -69,9 +70,9 @@ export class EpochSchedule {
       return [epoch, slotIndex];
     } else {
       const normalSlotIndex = slot - this.firstNormalSlot;
-      const normalEpochIndex = (normalSlotIndex / this.slotsPerEpoch) | 0;
+      const normalEpochIndex = Math.floor(normalSlotIndex / this.slotsPerEpoch);
       const epoch = this.firstNormalEpoch + normalEpochIndex;
-      const slotIndex = normalSlotIndex % this.slotsPerEpoch | 0;
+      const slotIndex = normalSlotIndex % this.slotsPerEpoch;
       return [epoch, slotIndex];
     }
   }
