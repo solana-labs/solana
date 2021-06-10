@@ -38,7 +38,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{ErrorCounters, SnapshotStorages},
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -1010,6 +1010,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
             false,
         )
     }
@@ -1023,6 +1024,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
             false,
         );
 
@@ -1035,6 +1037,7 @@ impl Bank {
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -1044,6 +1047,7 @@ impl Bank {
             None,
             account_indexes,
             accounts_db_caching_enabled,
+            shrink_ratio,
             false,
         )
     }
@@ -1056,6 +1060,7 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
         let mut bank = Self::default();
@@ -1068,6 +1073,7 @@ impl Bank {
             &genesis_config.cluster_type,
             account_indexes,
             accounts_db_caching_enabled,
+            shrink_ratio,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
@@ -5316,7 +5322,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
-        accounts_db::SHRINK_RATIO,
+        accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
         accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
         ancestors::Ancestors,
         genesis_utils::{
@@ -9219,6 +9225,7 @@ pub(crate) mod tests {
             &genesis_config,
             account_indexes,
             false,
+            AccountShrinkThreshold::default(),
         ));
 
         let address = Pubkey::new_unique();
@@ -10668,6 +10675,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
@@ -10679,11 +10687,13 @@ pub(crate) mod tests {
             .accounts
             .scan_slot(0, |stored_account| Some(stored_account.stored_size()));
 
-        // Create an account such that it takes SHRINK_RATIO of the total account space for
+        // Create an account such that it takes DEFAULT_ACCOUNTS_SHRINK_RATIO of the total account space for
         // the slot, so when it gets pruned, the storage entry will become a shrink candidate.
         let bank0_total_size: usize = sizes.into_iter().sum();
-        let pubkey0_size = (bank0_total_size as f64 / (1.0 - SHRINK_RATIO)).ceil();
-        assert!(pubkey0_size / (pubkey0_size + bank0_total_size as f64) > SHRINK_RATIO);
+        let pubkey0_size = (bank0_total_size as f64 / (1.0 - DEFAULT_ACCOUNTS_SHRINK_RATIO)).ceil();
+        assert!(
+            pubkey0_size / (pubkey0_size + bank0_total_size as f64) > DEFAULT_ACCOUNTS_SHRINK_RATIO
+        );
         pubkey0_size as usize
     }
 
@@ -10701,6 +10711,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             true,
+            AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
 
@@ -11920,6 +11931,7 @@ pub(crate) mod tests {
             &genesis_config,
             AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled,
+            AccountShrinkThreshold::default(),
         ));
         bank0.set_callback(drop_callback);
 
