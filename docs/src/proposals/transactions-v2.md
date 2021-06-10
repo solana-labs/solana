@@ -62,7 +62,7 @@ struct AddressMap {
   // authority must sign for each addition and to close the map account
   authority: Pubkey,
   // record a deactivation epoch to help validators know when to remove
-  // the mapping from their caches.
+  // the map from their caches.
   deactivation_epoch: Epoch,
   // entries may not be modified once activated
   activated: bool,
@@ -112,26 +112,21 @@ pub struct Transaction {
     pub message: Message,
 }
 
-// Uses custom deserialization. If the first bit is not set, deserialize as the
-// original `Message` format. Otherwise deserialize as a versioned message.
+// Uses custom serialization. If the first bit is set, a versioned message is
+// encoded starting from the next byte. If the first bit is not set, all bytes
+// are used to encode the original unversioned `Message` format.
 pub enum Message {
   Unversioned(UnversionedMessage),
   Versioned(VersionedMessage),
 }
 
+// use bincode varint encoding to use u8 instead of u32 for enum tags
 #[derive(Serialize, Deserialize)]
-pub struct VersionedMessage {
-  // only used for differentiating between message types, must be greater than 2^7
-  prefix: u8,
-  pub message: MessageVersions,
-}
-
-// use bincode varint encoding to use u8 as enum discriminant
-#[derive(Serialize, Deserialize)]
-pub enum MessageVersions {
+pub enum VersionedMessage {
   Current(Box<MessageV2>)
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct MessageV2 {
   // unchanged
   pub header: MessageHeader,
@@ -140,25 +135,26 @@ pub struct MessageV2 {
   #[serde(with = "short_vec")]
   pub account_keys: Vec<Pubkey>,
 
-  /// The last `address_mappings.len()` number of readonly unsigned account_keys
+  /// The last `address_maps.len()` number of readonly unsigned account_keys
   /// should be loaded as address maps
   #[serde(with = "short_vec")]
-  pub address_mappings: Vec<AddressMappings>,
+  pub address_maps: Vec<AddressMap>,
 
   // unchanged
   pub recent_blockhash: Hash,
 
   // unchanged. Account indices are still `u8` encoded so the max number of accounts
-  // in account_keys + address_mappings is limited to 256.
+  // in account_keys + address_maps is limited to 256.
   #[serde(with = "short_vec")]
   pub instructions: Vec<CompiledInstruction>,
 }
 
-pub struct AddressMapping {
-  /// The last num_readonly of address_entries are read-only
-  pub num_readonly: u8,
+#[derive(Serialize, Deserialize)]
+pub struct AddressMap {
+  /// The last num_readonly_entries of entries are read-only
+  pub num_readonly_entries: u8,
 
-  /// List of mapping entries to load
+  /// List of map entries to load
   #[serde(with = "short_vec")]
   pub entries: Vec<u8>,
 }
@@ -168,9 +164,9 @@ pub struct AddressMapping {
 
 - 1 byte for `prefix` field
 - 1 byte for version enum discriminant
-- 1 byte for `account_mappings` length
-- Each mapping requires 2 bytes for `indices` length and `num_readonly`
-- Each mapping entry is 1 byte (u8)
+- 1 byte for `address_maps` length
+- Each map requires 2 bytes for `entries` length and `num_readonly`
+- Each map entry is 1 byte (u8)
 
 #### Cost changes
 
@@ -179,10 +175,11 @@ the extra work validators need to do to load and cache them.
 
 #### Metadata changes
 
-Each account accessed via a mapping should be stored in the transaction metadata
-for quick reference. This will avoid the need for clients to make multiple RPC
-round trips to fetch all accounts referenced in a v2 transaction. It will also
-make it easier to use the ledger tool to analyze account access patterns.
+Each account accessed via an address map should be stored in the transaction
+metadata for quick reference. This will avoid the need for clients to make
+multiple RPC round trips to fetch all accounts referenced in a v2 transaction.
+It will also make it easier to use the ledger tool to analyze account access
+patterns.
 
 #### RPC changes
 
@@ -193,19 +190,19 @@ attempting to fetch a versioned transaction which will indicate that they
 must upgrade.
 
 The RPC API should also support an option for returning fully expanded
-transactions to abstract away the mapping details from downstream clients.
+transactions to abstract away the address map details from downstream clients.
 
 ### Limitations
 
 - Max of 256 accounts may be specified in a transaction because u8 is used by compiled
 instructions to index into transaction message account keys.
-- Address maps can hold up to 256 addresses because mapping entries are encoded as
-`u8` in transactions.
-- Transaction signers may not be specified using a mapping, the full address of
-each signer must be serialized in the transaction. This ensures that the
-performance of transaction signature checks is not affected.
+- Address maps can hold up to 256 addresses because references to map entries
+are encoded as `u8` in transactions.
+- Transaction signers may not be referenced with an address map, the full
+address of each signer must be serialized in the transaction. This ensures that
+the performance of transaction signature checks is not affected.
 - Hardware wallets will probably not be able to display details about accounts
-referenced through mappings due to inability to verify on-chain data.
+referenced through address maps due to inability to verify on-chain data.
 - Only single level address maps can be used. Recursive maps will not be supported.
 
 ## Security Concerns
@@ -221,13 +218,13 @@ data reads are required.
 
 If the addresses listed within an address map account are modifiable, front
 running attacks could modify which mapped accounts are resolved for a later
-transaction.  For this reason, we propose that any stored address is immutable
-and that mapping accounts themselves may not be removed.
+transaction. For this reason, we propose that any stored address is immutable
+and that address map accounts themselves may not be recreated.
 
 Additionally, a malicious actor could try to fork the chain immediately after a
 new address map account is added to a block. If successful, they could add a
 different unexpected map entry in the fork. In order to deter this attack,
-clients should wait for mappings to be finalized before using them in a
+clients should wait for address maps to be finalized before using them in a
 transaction.  Clients may also append integrity check instructions to the
 transaction which verify that the correct accounts are used.
 
@@ -243,7 +240,7 @@ Address maps lookups should not be affected by account read/write locks.
 ### Duplicate accounts
 
 Transactions may not load an account more than once whether directly through
-`account_keys` or indirectly through `address_mappings`.
+`account_keys` or indirectly through `address_maps`.
 
 ## Other Proposals
 
