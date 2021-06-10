@@ -990,22 +990,23 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
     ) {
-        let duplicate_slots: Vec<Slot> = duplicate_slots_receiver.try_iter().collect();
-
+        let new_duplicate_slots: Vec<Slot> = duplicate_slots_receiver
+            .try_iter()
+            .filter(|duplicate_slot|
+                // If this is the first time seeing this duplicate, run the processing
+                !duplicate_slots_tracker.insert(*duplicate_slot))
+            .collect();
         let (root_slot, bank_hashes) = {
             let r_bank_forks = bank_forks.read().unwrap();
-            let bank_hashes: Vec<Option<Hash>> = duplicate_slots
+            let bank_hashes: Vec<Option<Hash>> = new_duplicate_slots
                 .iter()
-                .map(|slot| {
-                    duplicate_slots_tracker.insert(*slot);
-                    r_bank_forks.get(*slot).map(|bank| bank.hash())
-                })
+                .map(|duplicate_slot| r_bank_forks.get(*duplicate_slot).map(|bank| bank.hash()))
                 .collect();
 
             (r_bank_forks.root(), bank_hashes)
         };
-
-        for (duplicate_slot, bank_hash) in duplicate_slots.into_iter().zip(bank_hashes.into_iter())
+        for (duplicate_slot, bank_hash) in
+            new_duplicate_slots.into_iter().zip(bank_hashes.into_iter())
         {
             // WindowService should only send the signal once per slot
             check_slot_agrees_with_cluster(
