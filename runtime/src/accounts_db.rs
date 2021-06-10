@@ -9109,7 +9109,7 @@ pub mod tests {
     fn test_select_candidates_by_total_usage() {
         solana_logger::setup();
 
-        // case 1: no canidates
+        // case 1: no candidates
         let accounts = AccountsDb::new_single();
 
         let mut candidates: ShrinkCandidates = HashMap::new();
@@ -11177,6 +11177,14 @@ pub mod tests {
         let dummy_path = Path::new("");
         let dummy_size = 2 * PAGE_SIZE;
         let entry = Arc::new(AccountStorageEntry::new(&dummy_path, 0, 1, dummy_size));
+        match accounts.shrink_ratio {
+            AccountShrinkThreshold::TotalSpace { shrink_ratio } => {
+                assert_eq!(DEFAULT_ACCOUNTS_SHRINK_RATIO, shrink_ratio)
+            }
+            AccountShrinkThreshold::IndividalStore { shrink_ratio: _ } => {
+                assert!(false, "Expect the default to be TotalSpace")
+            }
+        }
         entry.alive_bytes.store(3000, Ordering::Relaxed);
         assert!(accounts.is_candidate_for_shrink(&entry));
         entry.alive_bytes.store(5000, Ordering::Relaxed);
