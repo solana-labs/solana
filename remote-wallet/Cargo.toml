@@ -19,7 +19,7 @@ num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 parking_lot = "0.10"
 qstring = "0.7.2"
-semver = "0.9"
+semver = "1.0"
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 thiserror = "1.0"
 uriparse = "0.6.3"
