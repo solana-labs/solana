@@ -64,14 +64,16 @@ impl<'a> SortedStorages<'a> {
     ) -> Self {
         let mut min = Slot::MAX;
         let mut max = Slot::MIN;
+        let mut adjust_min_max = |slot| {
+            min = std::cmp::min(slot, min);
+            max = std::cmp::max(slot + 1, max);
+        };
         // none, either, or both of min/max could be specified
         if let Some(slot) = min_slot {
-            min = std::cmp::min(slot, min);
-            max = std::cmp::max(slot + 1, max);
+            adjust_min_max(slot);
         }
         if let Some(slot) = max_slot_inclusive {
-            min = std::cmp::min(slot, min);
-            max = std::cmp::max(slot + 1, max);
+            adjust_min_max(slot);
         }
 
         let mut slot_count = 0;
@@ -79,9 +81,7 @@ impl<'a> SortedStorages<'a> {
         let source_ = source.clone();
         source_.for_each(|(_, slot)| {
             slot_count += 1;
-            let slot = *slot;
-            min = std::cmp::min(slot, min);
-            max = std::cmp::max(slot + 1, max);
+            adjust_min_max(*slot);
         });
         time.stop();
         let mut time2 = Measure::start("sort");
