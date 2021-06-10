@@ -62,8 +62,8 @@ for advanced users to create derived addresses
 
 Accounts that have never been created via the system program can also be passed
 to programs. When an instruction references an account that hasn't been
-previously created, the program will be passed an account that is owned by the
-system program with zero lamports and zero data. But, the account will reflect
+previously created, the program will be passed an account with no data and zero lamports that is owned by the
+system program. But, the account will reflect
 whether it is a signer of the transaction or not and therefore can be used as an
 authority. Authorities in this context convey to the program that the holder of
 the private key associated with the account's public key signed the transaction.
