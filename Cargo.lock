@@ -5400,6 +5400,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "walkdir",
  "zstd",
 ]
 

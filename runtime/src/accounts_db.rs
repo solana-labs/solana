@@ -876,6 +876,10 @@ pub struct AccountsDb {
     remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
 
     shrink_ratio: AccountShrinkThreshold,
+
+    /// Save the slot number of the last full snapshot.  Clean-type functions must not clean higher
+    /// than this slot to support incremental snapshots.
+    last_full_snapshot_slot: Option<Slot>, // bprumo TODO: does Slot need to be atomic?
 }
 
 #[derive(Debug, Default)]
@@ -1320,6 +1324,7 @@ impl Default for AccountsDb {
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
+            last_full_snapshot_slot: None,
         }
     }
 }
@@ -1586,18 +1591,24 @@ impl AccountsDb {
         reclaims
     }
 
+    /// Get the highest (max) slot that is safe for cleaning.  This will be the MIN of the
+    /// `proposed_clean_root`, any ongoing scans, and the last full snapshot slot.
     fn max_clean_root(&self, proposed_clean_root: Option<Slot>) -> Option<Slot> {
-        match (
-            self.accounts_index.min_ongoing_scan_root(),
-            proposed_clean_root,
-        ) {
+        let min2 = |x, y| match (x, y) {
             (None, None) => None,
-            (Some(min_scan_root), None) => Some(min_scan_root),
-            (None, Some(proposed_clean_root)) => Some(proposed_clean_root),
-            (Some(min_scan_root), Some(proposed_clean_root)) => {
-                Some(std::cmp::min(min_scan_root, proposed_clean_root))
-            }
-        }
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => Some(std::cmp::min(x, y)),
+        };
+
+        let min3 = |x, y, z| min2(x, min2(y, z));
+
+        min3(
+            proposed_clean_root,
+            self.last_full_snapshot_slot()
+                .map(|slot| slot.saturating_sub(1)),
+            self.accounts_index.min_ongoing_scan_root(),
+        )
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -1687,6 +1698,11 @@ impl AccountsDb {
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self, max_clean_root: Option<Slot>, is_startup: bool) {
+        debug!(
+            "bprumo DEBUG: clean_accounts(), max_clean_root: {:?}, last full snapshot slot: {:?}",
+            max_clean_root,
+            self.last_full_snapshot_slot()
+        );
         let max_clean_root = self.max_clean_root(max_clean_root);
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
@@ -5813,6 +5829,16 @@ impl AccountsDb {
             }
         }
     }
+
+    /// Get a the last full snapshot slot
+    pub fn last_full_snapshot_slot(&self) -> Option<Slot> {
+        self.last_full_snapshot_slot
+    }
+
+    /// Set the last full snapshot slot
+    pub fn set_last_full_snapshot_slot(&mut self, last_full_snapshot_slot: Slot) {
+        self.last_full_snapshot_slot = Some(last_full_snapshot_slot);
+    }
 }
 
 #[cfg(test)]
@@ -9032,7 +9058,7 @@ pub mod tests {
         // pubkey1 to be revived as the state of step A.
         // So, prevent that from happening by introducing refcount
         accounts.clean_accounts(None, false);
-        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        let mut accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.clean_accounts(None, false);
 
         info!("pubkey: {}", pubkey1);
@@ -9048,6 +9074,8 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         // Do clean
+        // Clear the last full snapshot slot before calling `clean_accounts()` otherwise cleaning will stop at that slot
+        accounts.last_full_snapshot_slot = None;
         accounts.clean_accounts(None, false);
 
         // Ensure pubkey2 is cleaned from the index finally

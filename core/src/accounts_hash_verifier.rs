@@ -153,6 +153,11 @@ impl AccountsHashVerifier {
             }
         }
 
+        // bprumo TODO: here's where the snapshot interval is used, and when a true snapshot is made
+        // bprumo TODO: We could alternatively and optimistically set
+        // AccountsDb::last_full_snapshot_slot here as well, but there's a risk that the full
+        // snapshot does not actually successfully complete, which may be an issue for future
+        // cleans and/or future incremental snapshots.
         if accounts_package.block_height % snapshot_interval_slots == 0 {
             if let Some(pending_snapshot_package) = pending_snapshot_package.as_ref() {
                 *pending_snapshot_package.lock().unwrap() = Some(accounts_package);

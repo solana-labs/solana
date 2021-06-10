@@ -57,6 +57,12 @@ pub fn load(
                 &snapshot_config.snapshot_package_output_path,
             )
         {
+            let incremental_snapshot_archive =
+                snapshot_utils::get_highest_incremental_snapshot_archive_path(
+                    &snapshot_config.snapshot_package_output_path,
+                    archive_slot,
+                );
+
             return load_from_snapshot(
                 &genesis_config,
                 &blockstore,
@@ -70,6 +76,7 @@ pub fn load(
                 archive_slot,
                 archive_hash,
                 archive_format,
+                incremental_snapshot_archive,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -121,6 +128,7 @@ fn load_from_snapshot(
     archive_slot: Slot,
     archive_hash: Hash,
     archive_format: ArchiveFormat,
+    incremental_snapshot_archive: Option<snapshot_utils::IncrementalSnapshotArchiveInfo>,
 ) -> LoadResult {
     info!("Loading snapshot package: {:?}", archive_filename);
 
@@ -130,20 +138,40 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let deserialized_bank = snapshot_utils::bank_from_archive(
-        &account_paths,
-        &process_options.frozen_accounts,
-        &snapshot_config.snapshot_path,
-        &archive_filename,
-        archive_format,
-        genesis_config,
-        process_options.debug_keys.clone(),
-        Some(&crate::builtins::get(process_options.bpf_jit)),
-        process_options.account_indexes.clone(),
-        process_options.accounts_db_caching_enabled,
-        process_options.limit_load_slot_count_from_snapshot,
-        process_options.shrink_ratio,
-    )
+    // bprumo TODO: Simplify this to reduce duplication
+    let deserialized_bank = match incremental_snapshot_archive {
+        None => snapshot_utils::bank_from_snapshot_archive(
+            &account_paths,
+            &process_options.frozen_accounts,
+            &snapshot_config.snapshot_path,
+            &archive_filename,
+            archive_format,
+            genesis_config,
+            process_options.debug_keys.clone(),
+            Some(&crate::builtins::get(process_options.bpf_jit)),
+            process_options.account_indexes.clone(),
+            process_options.accounts_db_caching_enabled,
+            process_options.limit_load_slot_count_from_snapshot,
+            process_options.shrink_ratio,
+        ),
+        Some((incremental_snapshot_archive_path, (_, _, _, _))) => {
+            snapshot_utils::bank_from_incremental_snapshot_archive(
+                &account_paths,
+                &process_options.frozen_accounts,
+                &snapshot_config.snapshot_path,
+                &incremental_snapshot_archive_path,
+                &archive_filename,
+                archive_format,
+                genesis_config,
+                process_options.debug_keys.clone(),
+                Some(&crate::builtins::get(process_options.bpf_jit)),
+                process_options.account_indexes.clone(),
+                process_options.accounts_db_caching_enabled,
+                process_options.limit_load_slot_count_from_snapshot,
+                process_options.shrink_ratio,
+            )
+        }
+    }
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
@@ -158,6 +186,7 @@ fn load_from_snapshot(
         deserialized_bank.get_accounts_hash(),
     );
 
+    // bprumo TODO: If incremental_snapshot_archive is Some, then use its slot and hash instead
     if deserialized_bank_slot_and_hash != (archive_slot, archive_hash) {
         error!(
             "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",

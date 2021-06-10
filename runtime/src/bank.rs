@@ -4933,7 +4933,7 @@ impl Bank {
     }
 
     pub fn clean_accounts(&self, skip_last: bool, is_startup: bool) {
-        let max_clean_slot = if skip_last {
+        let highest_slot_to_clean = if skip_last {
             // Don't clean the slot we're snapshotting because it may have zero-lamport
             // accounts that were included in the bank delta hash when the bank was frozen,
             // and if we clean them here, any newly created snapshot's hash for this bank
@@ -4942,10 +4942,14 @@ impl Bank {
         } else {
             None
         };
+        self.clean_accounts_up_to_slot(highest_slot_to_clean, is_startup);
+    }
+
+    pub fn clean_accounts_up_to_slot(&self, highest_slot_to_clean: Option<Slot>, is_startup: bool) {
         self.rc
             .accounts
             .accounts_db
-            .clean_accounts(max_clean_slot, is_startup);
+            .clean_accounts(highest_slot_to_clean, is_startup);
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool) {

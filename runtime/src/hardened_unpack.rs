@@ -100,10 +100,12 @@ where
 
     let mut total_entries = 0;
     let mut last_log_update = Instant::now();
+    debug!("bprumo DEBUG: unpack_archive(), entries:");
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
         let path_str = path.display().to_string();
+        debug!("bprumo DEBUG: unpack_archive(),    entry path: {:?}", path);
 
         // Although the `tar` crate safely skips at the actual unpacking, fail
         // first by ourselves when there are odd paths like including `..` or /
@@ -200,6 +202,11 @@ pub fn unpack_snapshot<A: Read>(
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
+
+    debug!(
+        "bprumo DEBUG: unpack_snapshot():\n\tledger_dir: {:?}\n\taccount_paths: {:?}",
+        ledger_dir, account_paths
+    );
 
     unpack_archive(
         archive,
