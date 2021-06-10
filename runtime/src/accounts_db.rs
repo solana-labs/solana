@@ -11179,10 +11179,13 @@ pub mod tests {
         let entry = Arc::new(AccountStorageEntry::new(&dummy_path, 0, 1, dummy_size));
         match accounts.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio } => {
-                assert_eq!(DEFAULT_ACCOUNTS_SHRINK_RATIO, shrink_ratio)
+                assert_eq!(
+                    (DEFAULT_ACCOUNTS_SHRINK_RATIO * 100.) as u64,
+                    (shrink_ratio * 100.) as u64
+                )
             }
             AccountShrinkThreshold::IndividalStore { shrink_ratio: _ } => {
-                assert!(false, "Expect the default to be TotalSpace")
+                panic!("Expect the default to be TotalSpace")
             }
         }
         entry.alive_bytes.store(3000, Ordering::Relaxed);
