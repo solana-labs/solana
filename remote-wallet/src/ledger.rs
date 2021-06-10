@@ -15,13 +15,7 @@ use {
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
-const DEPRECATE_VERSION_BEFORE: FirmwareVersion = FirmwareVersion {
-    major: 0,
-    minor: 2,
-    patch: 0,
-    pre: Vec::new(),
-    build: Vec::new(),
-};
+const DEPRECATE_VERSION_BEFORE: FirmwareVersion = FirmwareVersion::new(0, 2, 0);
 
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
