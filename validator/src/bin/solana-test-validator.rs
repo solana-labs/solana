@@ -17,6 +17,7 @@ use {
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
+        rent::Rent,
         rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
@@ -561,6 +562,8 @@ fn main() {
             slots_per_epoch,
             /* enable_warmup_epochs = */ false,
         ));
+
+        genesis.rent = Rent::with_slots_per_epoch(slots_per_epoch);
     }
 
     if let Some(gossip_host) = gossip_host {
