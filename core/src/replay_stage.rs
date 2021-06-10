@@ -387,7 +387,7 @@ impl ReplayStage {
                         &bank_notification_sender,
                         &rewards_recorder_sender,
                         &subscriptions,
-                        &duplicate_slots_tracker,
+                        &mut duplicate_slots_tracker,
                         &gossip_duplicate_confirmed_slots,
                         &ancestors,
                         &descendants,
@@ -416,7 +416,7 @@ impl ReplayStage {
                     let mut process_gossip_duplicate_confirmed_slots_time = Measure::start("process_gossip_duplicate_confirmed_slots");
                     Self::process_gossip_duplicate_confirmed_slots(
                         &gossip_duplicate_confirmed_slots_receiver,
-                        &duplicate_slots_tracker,
+                        &mut duplicate_slots_tracker,
                         &mut gossip_duplicate_confirmed_slots,
                         &bank_forks,
                         &mut progress,
@@ -495,7 +495,7 @@ impl ReplayStage {
                         );
 
                         Self::mark_slots_confirmed(&confirmed_forks, &bank_forks, &mut progress,
-                                                   &duplicate_slots_tracker,
+                                                   &mut duplicate_slots_tracker,
                                                    &ancestors, &descendants, &mut
                                                    heaviest_subtree_fork_choice);
                     }
@@ -919,7 +919,7 @@ impl ReplayStage {
     // for duplicate slot recovery.
     fn process_gossip_duplicate_confirmed_slots(
         gossip_duplicate_confirmed_slots_receiver: &GossipDuplicateConfirmedSlotsReceiver,
-        duplicate_slots_tracker: &DuplicateSlotsTracker,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -990,12 +990,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
     ) {
-        let new_duplicate_slots: Vec<Slot> = duplicate_slots_receiver
-            .try_iter()
-            .filter(|duplicate_slot|
-                // If this is the first time seeing this duplicate, run the processing
-                !duplicate_slots_tracker.insert(*duplicate_slot))
-            .collect();
+        let new_duplicate_slots: Vec<Slot> = duplicate_slots_receiver.try_iter().collect();
         let (root_slot, bank_hashes) = {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank_hashes: Vec<Option<Hash>> = new_duplicate_slots
@@ -1262,7 +1257,7 @@ impl ReplayStage {
         root: Slot,
         err: &BlockstoreProcessorError,
         subscriptions: &Arc<RpcSubscriptions>,
-        duplicate_slots_tracker: &DuplicateSlotsTracker,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
         descendants: &HashMap<Slot, HashSet<Slot>>,
@@ -1679,7 +1674,7 @@ impl ReplayStage {
         bank_notification_sender: &Option<BankNotificationSender>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
         subscriptions: &Arc<RpcSubscriptions>,
-        duplicate_slots_tracker: &DuplicateSlotsTracker,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
         descendants: &HashMap<Slot, HashSet<Slot>>,
@@ -2332,7 +2327,7 @@ impl ReplayStage {
         confirmed_forks: &[Slot],
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
-        duplicate_slots_tracker: &DuplicateSlotsTracker,
+        duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
         descendants: &HashMap<Slot, HashSet<Slot>>,
         fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -3258,7 +3253,7 @@ mod tests {
                     0,
                     err,
                     &subscriptions,
-                    &DuplicateSlotsTracker::default(),
+                    &mut DuplicateSlotsTracker::default(),
                     &GossipDuplicateConfirmedSlots::default(),
                     &HashMap::new(),
                     &HashMap::new(),
@@ -4640,7 +4635,7 @@ mod tests {
             4,
             bank_forks.read().unwrap().root(),
             Some(bank4_hash),
-            &duplicate_slots_tracker,
+            &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -4670,7 +4665,7 @@ mod tests {
             2,
             bank_forks.read().unwrap().root(),
             Some(bank2_hash),
-            &duplicate_slots_tracker,
+            &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -4699,7 +4694,7 @@ mod tests {
             4,
             bank_forks.read().unwrap().root(),
             Some(bank4_hash),
-            &duplicate_slots_tracker,
+            &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
