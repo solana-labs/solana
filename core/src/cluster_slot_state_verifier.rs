@@ -3,8 +3,9 @@ use crate::{
     progress_map::ProgressMap,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 type SlotStateHandler = fn(Slot, &Hash, Option<&Hash>, bool, bool) -> Vec<ResultingStateChange>;
 
@@ -234,10 +235,12 @@ fn apply_state_changes(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_slot_agrees_with_cluster(
     slot: Slot,
     root: Slot,
     frozen_hash: Option<Hash>,
+    duplicate_slots_tracker: &DuplicateSlotsTracker,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
     ancestors: &HashMap<Slot, HashSet<Slot>>,
     descendants: &HashMap<Slot, HashSet<Slot>>,
@@ -275,16 +278,14 @@ pub(crate) fn check_slot_agrees_with_cluster(
         &frozen_hash,
         is_local_replay_duplicate_confirmed,
     );
-    let mut is_slot_duplicate =
-        progress.is_unconfirmed_duplicate(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+    let is_slot_duplicate = duplicate_slots_tracker.contains(&slot);
     if matches!(slot_state_update, SlotStateUpdate::Duplicate) {
+        // If this slot is a duplicate > root, it better be present in the duplicate_slots_tracker.
+        assert!(is_slot_duplicate);
         if is_slot_duplicate {
-            // Already processed duplicate signal for this slot, no need to continue
+            // Already processed duplicate signal for this slot, and the state transition is just another
+            // SlotStateUpdate::Duplicate, then no need to continue
             return;
-        } else {
-            // Otherwise, mark the slot as duplicate so the appropriate state changes
-            // will trigger
-            is_slot_duplicate = true;
         }
     }
     let is_dead = progress.is_dead(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
@@ -687,6 +688,85 @@ mod test {
             .unwrap());
     }
 
+    fn run_test_state_duplicate_then_bank_frozen(initial_bank_hash: Option<Hash>) {
+        // Common state
+        let InitialState {
+            mut heaviest_subtree_fork_choice,
+            mut progress,
+            ancestors,
+            descendants,
+            bank_forks,
+            ..
+        } = setup();
+
+        // Setup a duplicate slot state transition with the initial bank state of the duplicate slot
+        // determined by `initial_bank_hash`, which can be:
+        // 1) A default hash (unfrozen bank),
+        // 2) None (a slot that hasn't even started replay yet).
+        let root = 0;
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let duplicate_slot = 2;
+        duplicate_slots_tracker.insert(duplicate_slot);
+        check_slot_agrees_with_cluster(
+            duplicate_slot,
+            root,
+            initial_bank_hash,
+            &duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &ancestors,
+            &descendants,
+            &mut progress,
+            &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::Duplicate,
+        );
+
+        // Now freeze the bank
+        let frozen_duplicate_slot_hash = bank_forks
+            .read()
+            .unwrap()
+            .get(duplicate_slot)
+            .unwrap()
+            .hash();
+        check_slot_agrees_with_cluster(
+            duplicate_slot,
+            root,
+            Some(frozen_duplicate_slot_hash),
+            &duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &ancestors,
+            &descendants,
+            &mut progress,
+            &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::Frozen,
+        );
+
+        // Progress map should have the correct updates, fork choice should mark duplicate
+        // as unvotable
+        assert!(progress.is_unconfirmed_duplicate(duplicate_slot).unwrap());
+
+        // The ancestor of the duplicate slot should be the best slot now
+        let (duplicate_ancestor, duplicate_parent_hash) = {
+            let r_bank_forks = bank_forks.read().unwrap();
+            let parent_bank = r_bank_forks.get(duplicate_slot).unwrap().parent().unwrap();
+            (parent_bank.slot(), parent_bank.hash())
+        };
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (duplicate_ancestor, duplicate_parent_hash)
+        );
+    }
+
+    #[test]
+    fn test_state_unfrozen_bank_duplicate_then_bank_frozen() {
+        run_test_state_duplicate_then_bank_frozen(Some(Hash::default()));
+    }
+
+    #[test]
+    fn test_state_unreplayed_bank_duplicate_then_bank_frozen() {
+        run_test_state_duplicate_then_bank_frozen(None);
+    }
+
     #[test]
     fn test_state_ancestor_confirmed_descendant_duplicate() {
         // Common state
@@ -705,6 +785,7 @@ mod test {
             (3, slot3_hash)
         );
         let root = 0;
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
 
         // Mark slot 2 as duplicate confirmed
@@ -714,6 +795,7 @@ mod test {
             2,
             root,
             Some(slot2_hash),
+            &duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -727,11 +809,14 @@ mod test {
             (3, slot3_hash)
         );
 
-        // Mark 3 as duplicate, should not remove slot 2 from fork choice
+        // Mark 3 as duplicate, should not remove the duplicate confirmed slot 2 from
+        // fork choice
+        duplicate_slots_tracker.insert(3);
         check_slot_agrees_with_cluster(
             3,
             root,
             Some(slot3_hash),
+            &duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -764,12 +849,16 @@ mod test {
             (3, slot3_hash)
         );
         let root = 0;
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+
         // Mark 2 as duplicate confirmed
+        duplicate_slots_tracker.insert(2);
         check_slot_agrees_with_cluster(
             2,
             root,
             Some(bank_forks.read().unwrap().get(2).unwrap().hash()),
+            &duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -790,6 +879,7 @@ mod test {
             3,
             root,
             Some(slot3_hash),
+            &duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
