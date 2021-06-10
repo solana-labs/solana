@@ -104,11 +104,35 @@ denote whether a transaction should be decoded with the versioned format or not.
 #### New Transaction Format
 
 ```rust
-pub struct VersionedMessage {
-  /// Version of encoded message.
-  /// The max encoded version is 2^7 - 1 due to the ignored upper disambiguation bit
-  pub version: u8,
+#[derive(Serialize, Deserialize)]
+pub struct Transaction {
+    #[serde(with = "short_vec")]
+    pub signatures: Vec<Signature>,
+    /// The message to sign.
+    pub message: Message,
+}
 
+// Uses custom deserialization. If the first bit is not set, deserialize as the
+// original `Message` format. Otherwise deserialize as a versioned message.
+pub enum Message {
+  Unversioned(UnversionedMessage),
+  Versioned(VersionedMessage),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct VersionedMessage {
+  // only used for differentiating between message types, must be greater than 2^7
+  prefix: u8,
+  pub message: MessageVersions,
+}
+
+// use bincode varint encoding to use u8 as enum discriminant
+#[derive(Serialize, Deserialize)]
+pub enum MessageVersions {
+  Current(Box<MessageV2>)
+}
+
+pub struct MessageV2 {
   // unchanged
   pub header: MessageHeader,
 
@@ -142,7 +166,8 @@ pub struct AddressMapping {
 
 #### Size changes
 
-- 1 byte for `version` field
+- 1 byte for `prefix` field
+- 1 byte for version enum discriminant
 - 1 byte for `account_mappings` length
 - Each mapping requires 2 bytes for `indices` length and `num_readonly`
 - Each mapping entry is 1 byte (u8)
