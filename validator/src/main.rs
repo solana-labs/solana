@@ -39,6 +39,10 @@ use {
     solana_poh::poh_service,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
+        accounts_db::{
+            AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
         },
@@ -1009,6 +1013,9 @@ pub fn main() {
     let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
     let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
     let default_max_snapshot_download_abort = &MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string();
+    let default_accounts_shrink_optimize_total_space =
+        &DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE.to_string();
+    let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1778,6 +1785,29 @@ pub fn main() {
                 .hidden(true)
         )
         .arg(
+            Arg::with_name("accounts_shrink_optimize_total_space")
+                .long("accounts-shrink-optimize-total-space")
+                .takes_value(true)
+                .value_name("BOOLEAN")
+                .default_value(default_accounts_shrink_optimize_total_space)
+                .help("When this is set to true, the system will shrink the most \
+                       sparse accounts and when the overall shrink ratio is above \
+                       the specified accounts-shrink-ratio, the shrink will stop and \
+                       it will skip all other less sparse accounts."),
+        )
+        .arg(
+            Arg::with_name("accounts_shrink_ratio")
+                .long("accounts-shrink-ratio")
+                .takes_value(true)
+                .value_name("RATIO")
+                .default_value(default_accounts_shrink_ratio)
+                .help("Specifies the shrink ratio for the accounts to be shrunk. \
+                       The shrink ratio is defined as the ratio of the bytes alive over the  \
+                       total bytes used. If the account's shrink ratio is less than this ratio \
+                       it becomes a candidate for shrinking. The value must between 0. and 1.0 \
+                       inclusive."),
+        )
+        .arg(
             Arg::with_name("no_duplicate_instance_check")
                 .long("no-duplicate-instance-check")
                 .takes_value(false)
@@ -2075,6 +2105,23 @@ pub fn main() {
     let account_indexes = process_account_indexes(&matches);
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
+    let accounts_shrink_optimize_total_space =
+        value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
+    let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
+    if !(0.0..=1.0).contains(&shrink_ratio) {
+        eprintln!(
+            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0 inclusive: {}",
+            shrink_ratio
+        );
+        exit(1);
+    }
+
+    let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
+        AccountShrinkThreshold::TotalSpace { shrink_ratio }
+    } else {
+        AccountShrinkThreshold::IndividalStore { shrink_ratio }
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_path: value_t!(matches, "tower", PathBuf).ok(),
@@ -2172,6 +2219,7 @@ pub fn main() {
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
+        accounts_shrink_ratio,
         ..ValidatorConfig::default()
     };
 

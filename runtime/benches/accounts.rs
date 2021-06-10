@@ -8,6 +8,7 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, AccountAddressFilter, Accounts},
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     ancestors::Ancestors,
     bank::*,
@@ -59,6 +60,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         None,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -78,6 +80,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         None,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
@@ -103,6 +106,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     let num_accounts = 60_000;
@@ -121,6 +125,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
@@ -138,6 +143,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
@@ -154,6 +160,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     let mut old_pubkey = Pubkey::default();
     let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -187,6 +194,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     ));
     let num_keys = 1000;
     let slot = 0;
@@ -316,6 +324,7 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedD
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     ));
 
     let dashmap = DashMap::new();
@@ -370,6 +379,7 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     let mut rng = rand::thread_rng();
     for _ in 0..10_000 {

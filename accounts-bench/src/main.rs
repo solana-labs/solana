@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     ancestors::Ancestors,
 };
@@ -64,6 +65,7 @@ fn main() {
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
