@@ -9,6 +9,7 @@ import {
   Account,
   Authorized,
   Connection,
+  EpochSchedule,
   SystemProgram,
   Transaction,
   LAMPORTS_PER_SOL,
@@ -24,7 +25,6 @@ import {
   BLOCKHASH_CACHE_TIMEOUT_MS,
   Commitment,
   EpochInfo,
-  EpochSchedule,
   InflationGovernor,
   SlotInfo,
 } from '../src/connection';
