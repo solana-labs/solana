@@ -206,12 +206,12 @@ pub enum InstructionError {
 
     /// Failed to serialize or deserialize account data
     ///
-    /// Warning: This error should never be emmited by the runtime.
+    /// Warning: This error should never be emitted by the runtime.
     ///
     /// This error includes strings from the underlying 3rd party Borsh crate
     /// which can be dangerous beause the error strings could change across
-    /// Borsh versions. Only programs can this error because they are consistent
-    /// across Solana software versions.
+    /// Borsh versions. Only programs can use this error because they are
+    /// consistent across Solana software versions.
     ///
     #[error("Failed to serialize or deserialize account data: {0}")]
     BorshIoError(String),
