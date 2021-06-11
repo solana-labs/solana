@@ -53,24 +53,25 @@ const initialDashboardInfo: DashboardInfo = {
 };
 
 type SetActive = React.Dispatch<React.SetStateAction<boolean>>;
-const StatsProviderContext =
-  React.createContext<
-    | {
-        setActive: SetActive;
-        setTimedOut: Function;
-        retry: Function;
-        active: boolean;
-      }
-    | undefined
-  >(undefined);
+const StatsProviderContext = React.createContext<
+  | {
+      setActive: SetActive;
+      setTimedOut: Function;
+      retry: Function;
+      active: boolean;
+    }
+  | undefined
+>(undefined);
 
 type DashboardState = { info: DashboardInfo };
-const DashboardContext =
-  React.createContext<DashboardState | undefined>(undefined);
+const DashboardContext = React.createContext<DashboardState | undefined>(
+  undefined
+);
 
 type PerformanceState = { info: PerformanceInfo };
-const PerformanceContext =
-  React.createContext<PerformanceState | undefined>(undefined);
+const PerformanceContext = React.createContext<PerformanceState | undefined>(
+  undefined
+);
 
 type Props = { children: React.ReactNode };
 export function SolanaClusterStatsProvider({ children }: Props) {
