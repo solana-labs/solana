@@ -143,10 +143,9 @@ pub struct MessageV2 {
   // unchanged
   pub recent_blockhash: Hash,
 
-  // unchanged. Account indices are still `u8` encoded so the max number of accounts
-  // in account_keys + address_maps is limited to 256.
+  /// Optimize instructions by separating dependent accounts from inputs
   #[serde(with = "short_vec")]
-  pub instructions: Vec<CompiledInstruction>,
+  pub instructions: Vec<CompiledInstructionV2>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -158,7 +157,42 @@ pub struct AddressMap {
   #[serde(with = "short_vec")]
   pub entries: Vec<u8>,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct CompiledInstructionV2 {
+  /// unchanged
+  pub program_id_index: u8,
+
+  /// unchanged
+  #[serde(with = "short_vec")]
+  pub accounts: Vec<u8>,
+
+  /// Only programs in this list may be invoked by the outer instruction
+  #[serde(with = "short_vec")]
+  pub inner_programs: Vec<u8>,
+
+  /// Dependent accounts do not need to be mapped to the memory of the outer
+  /// instruction's execution context. They are available for passing to inner
+  /// instructions
+  #[serde(with = "short_vec")]
+  pub inner_program_accounts: Vec<u8>,
+
+  /// unchanged
+  #[serde(with = "short_vec")]
+  pub data: Vec<u8>,
+}
 ```
+
+#### Dependent accounts
+
+The new transaction format supports lists of programs and accounts that a
+transaction instruction may use when invoking inner instructions. These programs
+and accounts are separate from transaction instruction account inputs so that
+they do not need to incur the cost of serializing into the outer instruction's
+memory which does need to read or write the account.
+
+For extra user protection, only the programs listed in `inner_programs` may be
+invoked by the outer transaction instruction.
 
 #### Size changes
 
@@ -167,6 +201,7 @@ pub struct AddressMap {
 - 1 byte for `address_maps` length
 - Each map requires 2 bytes for `entries` length and `num_readonly`
 - Each map entry is 1 byte (u8)
+- Each instruction requires 2 bytes for the lengths of `inner_programs` and `inner_program_accounts`
 
 #### Cost changes
 
