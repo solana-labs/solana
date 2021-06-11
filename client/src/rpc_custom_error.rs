@@ -1,6 +1,4 @@
 //! Implementation defined RPC server errors
-
-use solana_runtime::accounts_index::ScanError;
 use thiserror::Error;
 use {
     crate::rpc_response::RpcSimulateTransactionResult,
@@ -52,7 +50,7 @@ pub enum RpcCustomError {
     #[error("TransactionHistoryNotAvailable")]
     TransactionHistoryNotAvailable,
     #[error("ScanError")]
-    ScanError(#[from] ScanError),
+    ScanError { message: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -148,9 +146,9 @@ impl From<RpcCustomError> for Error {
                 message: "Transaction history is not available from this node".to_string(),
                 data: None,
             },
-            RpcCustomError::ScanError(scan_err) => Self {
+            RpcCustomError::ScanError { message } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SCAN_ERROR),
-                message: scan_err.to_string(),
+                message,
                 data: None,
             },
         }

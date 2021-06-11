@@ -3170,7 +3170,6 @@ dependencies = [
  "solana-clap-utils",
  "solana-faucet",
  "solana-net-utils",
- "solana-runtime",
  "solana-sdk",
  "solana-transaction-status",
  "solana-version",

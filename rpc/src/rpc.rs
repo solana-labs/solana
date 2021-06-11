@@ -718,7 +718,12 @@ impl JsonRpcRequestProcessor {
             })
         } else {
             let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
-                let non_circulating_supply = calculate_non_circulating_supply(&bank)?;
+                let non_circulating_supply =
+                    calculate_non_circulating_supply(&bank).map_err(|e| {
+                        RpcCustomError::ScanError {
+                            message: e.to_string(),
+                        }
+                    })?;
                 let addresses = non_circulating_supply.accounts.into_iter().collect();
                 let address_filter = match filter {
                     RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
@@ -729,7 +734,10 @@ impl JsonRpcRequestProcessor {
                 (HashSet::new(), AccountAddressFilter::Exclude)
             };
             let accounts = bank
-                .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)?
+                .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?
                 .into_iter()
                 .map(|(address, lamports)| RpcAccountBalance {
                     address: address.to_string(),
@@ -747,7 +755,10 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcCustomResult<RpcResponse<RpcSupply>> {
         let bank = self.bank(commitment);
-        let non_circulating_supply = calculate_non_circulating_supply(&bank)?;
+        let non_circulating_supply =
+            calculate_non_circulating_supply(&bank).map_err(|e| RpcCustomError::ScanError {
+                message: e.to_string(),
+            })?;
         let total_supply = bank.capitalization();
         Ok(new_response(
             &bank,
@@ -1760,19 +1771,24 @@ impl JsonRpcRequestProcessor {
                     index_key: program_id.to_string(),
                 });
             }
-            Ok(bank.get_filtered_indexed_accounts(
-                &IndexKey::ProgramId(*program_id),
-                |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
                     // The program-id account index checks for Account owner on inclusion. However, due
                     // to the current AccountsDb implementation, an account may remain in storage as a
                     // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
                     // updates. We include the redundant filters here to avoid returning these
                     // accounts.
                     account.owner() == program_id && filter_closure(account)
-                },
-            )?)
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
-            Ok(bank.get_filtered_program_accounts(program_id, filter_closure)?)
+            Ok(bank
+                .get_filtered_program_accounts(program_id, filter_closure)
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         }
     }
 
@@ -1809,16 +1825,17 @@ impl JsonRpcRequestProcessor {
                     index_key: owner_key.to_string(),
                 });
             }
-            Ok(bank.get_filtered_indexed_accounts(
-                &IndexKey::SplTokenOwner(*owner_key),
-                |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                         })
-                },
-            )?)
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -1856,16 +1873,17 @@ impl JsonRpcRequestProcessor {
                     index_key: mint_key.to_string(),
                 });
             }
-            Ok(bank.get_filtered_indexed_accounts(
-                &IndexKey::SplTokenMint(*mint_key),
-                |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                         })
-                },
-            )?)
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
