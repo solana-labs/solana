@@ -4125,7 +4125,6 @@ dependencies = [
  "serde_json",
  "solana-config-program",
  "solana-sdk",
- "solana-stake-program",
  "solana-vote-program",
  "spl-token",
  "thiserror",

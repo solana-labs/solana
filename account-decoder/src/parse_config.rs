@@ -6,10 +6,10 @@ use bincode::deserialize;
 use serde_json::Value;
 use solana_config_program::{get_config_data, ConfigKeys};
 use solana_sdk::pubkey::Pubkey;
-use solana_stake_program::config::Config as StakeConfig;
+use solana_sdk::stake::config::{self as stake_config, Config as StakeConfig};
 
 pub fn parse_config(data: &[u8], pubkey: &Pubkey) -> Result<ConfigAccountType, ParseAccountError> {
-    let parsed_account = if pubkey == &solana_stake_program::config::id() {
+    let parsed_account = if pubkey == &stake_config::id() {
         get_config_data(data)
             .ok()
             .and_then(|data| deserialize::<StakeConfig>(data).ok())
@@ -103,7 +103,7 @@ mod test {
         assert_eq!(
             parse_config(
                 &stake_config_account.data(),
-                &solana_stake_program::config::id()
+                &stake_config::id()
             )
             .unwrap(),
             ConfigAccountType::StakeConfig(UiStakeConfig {
