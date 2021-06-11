@@ -143,7 +143,7 @@ impl ForkInfo {
         newly_invalid_ancestor: Slot,
     ) {
         // Should not be marking a duplicate confirmed slot as invalid
-        assert!(!fork_info.is_duplicate_confirmed);
+        assert!(!self.is_duplicate_confirmed);
         if self
             .latest_invalid_ancestor
             .map(|latest_invalid_ancestor| newly_invalid_ancestor > latest_invalid_ancestor)
@@ -3222,7 +3222,6 @@ mod test {
         let last_duplicate_confirmed_key = last_duplicate_confirmed_slot.slot_hash();
         heaviest_subtree_fork_choice.mark_fork_valid_candidate(&last_duplicate_confirmed_key);
         for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
-            let slot = slot_hash_key.0;
             assert!(heaviest_subtree_fork_choice
                 .is_duplicate_confirmed(&slot_hash_key)
                 .unwrap());
@@ -3230,6 +3229,20 @@ mod test {
                 .latest_invalid_ancestor(slot_hash_key)
                 .is_none());
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_mark_valid_then_ancestor_invalid() {
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / (tr(5) / tr(6))))));
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+        let duplicate_confirmed_slot: Slot = 4;
+        let duplicate_confirmed_key = duplicate_confirmed_slot.slot_hash();
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(&duplicate_confirmed_key);
+
+        // Now mark an ancestor of this fork invalid, should panic since this ancestor
+        // was duplicate confirmed by its descendant 4 already
+        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&3.slot_hash());
     }
 
     fn setup_set_unconfirmed_and_confirmed_duplicate_slot_tests(

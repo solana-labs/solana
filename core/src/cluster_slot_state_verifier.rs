@@ -700,6 +700,14 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
+        assert!(duplicate_slots_tracker.contains(&duplicate_slot));
+        // Nothing should be applied yet to fork choice, since bank was not yet frozen
+        for slot in 2..=3 {
+            let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(&(slot, slot_hash))
+                .is_none());
+        }
 
         // Now freeze the bank
         let frozen_duplicate_slot_hash = bank_forks
@@ -779,11 +787,22 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::DuplicateConfirmed,
         );
-
+        assert!(heaviest_subtree_fork_choice
+            .is_duplicate_confirmed(&(2, slot2_hash))
+            .unwrap());
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
             (3, slot3_hash)
         );
+        for slot in 0..=2 {
+            let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+            assert!(heaviest_subtree_fork_choice
+                .is_duplicate_confirmed(&(slot, slot_hash))
+                .unwrap());
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(&(slot, slot_hash))
+                .is_none());
+        }
 
         // Mark 3 as duplicate, should not remove the duplicate confirmed slot 2 from
         // fork choice
@@ -797,11 +816,32 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
-
+        assert!(duplicate_slots_tracker.contains(&3));
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
             (2, slot2_hash)
         );
+        for slot in 0..=3 {
+            let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+            if slot <= 2 {
+                assert!(heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&(slot, slot_hash))
+                    .unwrap());
+                assert!(heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(&(slot, slot_hash))
+                    .is_none());
+            } else {
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&(slot, slot_hash))
+                    .unwrap());
+                assert_eq!(
+                    heaviest_subtree_fork_choice
+                        .latest_invalid_ancestor(&(slot, slot_hash))
+                        .unwrap(),
+                    3
+                );
+            }
+        }
     }
 
     #[test]
@@ -834,6 +874,16 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
+        assert!(duplicate_slots_tracker.contains(&2));
+        for slot in 2..=3 {
+            let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+            assert_eq!(
+                heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(&(slot, slot_hash))
+                    .unwrap(),
+                2
+            );
+        }
 
         let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
         assert_eq!(
@@ -853,7 +903,87 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::DuplicateConfirmed,
         );
+        for slot in 0..=3 {
+            let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+            assert!(heaviest_subtree_fork_choice
+                .is_duplicate_confirmed(&(slot, slot_hash))
+                .unwrap());
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(&(slot, slot_hash))
+                .is_none());
+        }
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
+    }
 
+    #[test]
+    fn test_state_descendant_confirmed_ancestor_duplicate() {
+        // Common state
+        let InitialState {
+            mut heaviest_subtree_fork_choice,
+            progress,
+            bank_forks,
+            ..
+        } = setup();
+
+        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
+        let root = 0;
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+
+        // Mark 3 as duplicate confirmed
+        gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        check_slot_agrees_with_cluster(
+            3,
+            root,
+            Some(slot3_hash),
+            &mut duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &progress,
+            &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::DuplicateConfirmed,
+        );
+        let verify_all_slots_duplicate_confirmed =
+            |bank_forks: &RwLock<BankForks>,
+             heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice| {
+                for slot in 0..=3 {
+                    let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
+                    assert!(heaviest_subtree_fork_choice
+                        .is_duplicate_confirmed(&(slot, slot_hash))
+                        .unwrap());
+                    assert!(heaviest_subtree_fork_choice
+                        .latest_invalid_ancestor(&(slot, slot_hash))
+                        .is_none());
+                }
+            };
+        verify_all_slots_duplicate_confirmed(&bank_forks, &heaviest_subtree_fork_choice);
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
+
+        // Mark ancestor 1 as duplicate, fork choice should be unaffected since
+        // slot 1 was duplicate confirmed by the confirmation on its
+        // descendant, 3.
+        let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
+        check_slot_agrees_with_cluster(
+            1,
+            root,
+            Some(slot1_hash),
+            &mut duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &progress,
+            &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::Duplicate,
+        );
+        assert!(duplicate_slots_tracker.contains(&1));
+        verify_all_slots_duplicate_confirmed(&bank_forks, &heaviest_subtree_fork_choice);
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
             (3, slot3_hash)
