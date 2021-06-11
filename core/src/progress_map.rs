@@ -437,6 +437,7 @@ impl ProgressMap {
         }
     }
 
+    #[cfg(test)]
     pub fn is_unconfirmed_duplicate(&self, slot: Slot) -> Option<bool> {
         self.get(&slot).map(|p| {
             p.duplicate_stats

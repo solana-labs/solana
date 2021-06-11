@@ -1358,7 +1358,7 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
-        cluster_slot_state_verifier::GossipDuplicateConfirmedSlots,
+        cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
         heaviest_subtree_fork_choice::{HeaviestSubtreeForkChoice, SlotHashKey},
@@ -1554,6 +1554,7 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut DuplicateSlotsTracker::default(),
                 &mut GossipDuplicateConfirmedSlots::default(),
                 &mut UnfrozenGossipVerifiedVoteHashes::default(),
                 &mut true,
