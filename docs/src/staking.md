@@ -45,10 +45,11 @@ be found
 Rewards and slashing align validator and token holder interests which helps keep the network
 secure, robust and performant.
 
+
 ## How do I stake my SOL tokens?
 
-You can stake SOL by moving your tokens 
-into a wallet that supports staking.   The wallet provides steps to create a stake account 
+You can stake SOL by moving your tokens
+into a wallet that supports staking.   The wallet provides steps to create a stake account
 and do the delegation.
 
 #### Supported Wallets
@@ -74,12 +75,12 @@ Staking operations are supported by the following wallet solutions:
 
 #### Create a Stake Account
 
-Follow the wallet's instructions for creating a staking account.  This account 
+Follow the wallet's instructions for creating a staking account.  This account
 will be of a different type than one used to simply send and receive tokens.
 
 #### Select a Validator
 
-Follow the wallet's instructions for selecting a validator.  You can get    
+Follow the wallet's instructions for selecting a validator.  You can get
 information about potentially performant validators from the links below.
 The Solana Labs team and the Solana Foundation do not recommend any particular
 validator.
