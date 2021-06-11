@@ -143,10 +143,9 @@ pub struct MessageV2 {
   // unchanged
   pub recent_blockhash: Hash,
 
-  // unchanged. Account indices are still `u8` encoded so the max number of accounts
-  // in account_keys + address_maps is limited to 256.
+  /// New compiled instructions support additional safety features.
   #[serde(with = "short_vec")]
-  pub instructions: Vec<CompiledInstruction>,
+  pub instructions: Vec<CompiledInstructionV2>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -158,7 +157,64 @@ pub struct AddressMap {
   #[serde(with = "short_vec")]
   pub entries: Vec<u8>,
 }
+
+bitflags::bitflags! {
+    struct IxConfig: u8 {
+        const NONE = 0b00000000;
+        /// The signer privilege may be propagated to arbitrary
+        /// instruction depth by default. When this config flag
+        /// is enabled, the signer privilege cannot be propagated.
+        /// Only the signer privileges by the direct invoker
+        /// (program or user wallet) will be usable by the invoked
+        /// instruction.
+        const DISABLE_SIGNER_PROPAGATION = 0b00000001;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CompiledInstructionV2 {
+  /// NEW: Modify runtime behavior for this instruction
+  pub config: IxConfig,
+
+  /// unchanged
+  pub program_id_index: u8,
+
+  /// NEW: Only programs in this list may be invoked by this instruction
+  #[serde(with = "short_vec")]
+  pub invokable_program_id_indexes: Vec<u8>,
+
+  /// unchanged
+  #[serde(with = "short_vec")]
+  pub accounts: Vec<u8>,
+
+  /// unchanged
+  #[serde(with = "short_vec")]
+  pub data: Vec<u8>,
+}
 ```
+
+#### IxConfig: Disable signer propagation
+
+The propagation of signer accounts to invoked inner programs is a little too
+powerful. Invoked programs that receive a signer account input can freely
+invoke programs with that signer account input. This is very useful when a program
+needs lamports to create new accounts, for example, because the program can simply
+make use of the transaction fee payer signer to fund the account creation. However,
+this design pattern can be misused if a program is compromised or otherwise malicious
+because it can freely drain the lamports or transfer all the SPL tokens of a targeted
+user or program.
+
+By adding the `DISABLE_SIGNER_PROPAGATION` flag to an invoked instruction, a user
+can be confident that the invoked program can't act as them when invoking other
+programs. The preferred design pattern is using delegations to grant temporary
+authority to an invoked program to, for instance, transfer a certain number of tokens.
+
+#### Invokable programs
+
+The new transaction format supports lists of programs that a transaction
+instruction may use when invoking inner instructions. This provides extra
+protection to the caller by ensuring that only the programs listed in
+`inner_programs` may be invoked.
 
 #### Size changes
 
@@ -167,6 +223,7 @@ pub struct AddressMap {
 - 1 byte for `address_maps` length
 - Each map requires 2 bytes for `entries` length and `num_readonly`
 - Each map entry is 1 byte (u8)
+- Each instruction requires 2 extra bytes for the config flags and the length of `invokable_program_id_indexes`
 
 #### Cost changes
 
