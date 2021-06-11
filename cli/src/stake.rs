@@ -38,7 +38,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     stake::{
         self,
-        instruction::{self, LockupArgs, StakeError},
+        instruction::{self as stake_instruction, LockupArgs, StakeError},
         state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
     },
     system_instruction::SystemError,
