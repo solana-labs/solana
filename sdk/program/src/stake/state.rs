@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     crate::{
         clock::{Clock, Epoch, UnixTimestamp},
