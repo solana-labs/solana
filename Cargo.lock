@@ -35,12 +35,12 @@ checksum = "f6789e291be47ace86a60303502173d84af8327e3627ecf334356ee0f87a164c"
 
 [[package]]
 name = "ahash"
-version = "0.6.1"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865f8b0b3fced577b7df82e9b0eb7609595d7209c0b39e78d0646672e244b1b1"
+checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
 dependencies = [
  "getrandom 0.2.0",
- "lazy_static",
+ "once_cell",
  "version_check 0.9.2",
 ]
 
@@ -4495,7 +4495,7 @@ dependencies = [
 name = "solana-core"
 version = "1.8.0"
 dependencies = [
- "ahash 0.6.1",
+ "ahash 0.7.4",
  "base64 0.12.3",
  "bincode",
  "blake3",
