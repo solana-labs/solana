@@ -1,4 +1,4 @@
-# Transactions v2 - On-chain Address Lookup Tables
+# Versioned Transactions - v0: Address Lookup Tables
 
 ## Problem
 
@@ -24,9 +24,9 @@ after accounting for signatures and other transaction metadata.
 
 ## Proposed Solution
 
-1) Introduce a new program which manages on-chain address lookup tables
-2) Add a new transaction format which can make use of on-chain
-address lookup tables to efficiently load more accounts in a single transaction.
+1. Introduce a new program which manages on-chain address lookup tables
+2. Add a new transaction format which can make use of on-chain
+   address lookup tables to efficiently load more accounts in a single transaction.
 
 ### Address Lookup Table Program
 
@@ -72,24 +72,8 @@ pub struct LookupTableMeta {
     pub last_extended_slot_start_index: u8,
     /// Authority address which must sign for each modification.
     pub authority: Option<Pubkey>,
-    // Padding to keep addresses 8-byte aligned
-    pub _padding: u16,
     // Raw list of addresses follows this serialized structure in
     // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
-}
-```
-
-To make it easier for address lookup tables to be updated by multi-sig or
-governance-controlled authorities, addresses can be buffered on-chain in
-a buffer account. Buffer accounts can be used to extend a lookup table
-with many addresses in a single small transaction.
-
-```rust
-pub struct BufferMeta {
-    /// Authority address which must sign for each modification.
-    pub authority: Pubkey,
-
-    // Serialized list of stored addresses follows the above metadata.
 }
 ```
 
@@ -106,11 +90,6 @@ sysvar. This cool-down period ensures that in-flight transactions cannot be
 censored and that address lookup tables cannot be closed and recreated for the same
 slot.
 
-#### Cost
-
-Since address lookups require extra overhead during transaction processing,
-they should incur higher costs for a transaction.
-
 ### Versioned Transactions
 
 In order to support address table lookups, the structure of serialized
@@ -125,15 +104,19 @@ the message header encodes `num_required_signatures` as a `u8`. Since the upper
 bit of the `u8` will never be set for a valid transaction, we can enable it to
 denote whether a transaction should be decoded with the versioned format or not.
 
+The original transaction format will be referred to as the legacy transaction
+version and the first versioned transaction format will start at version 0.
+
 #### New Transaction Format
 
 ```rust
 #[derive(Serialize, Deserialize)]
-pub struct Transaction {
+pub struct VersionedTransaction {
+    /// List of signatures
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
-    /// The message to sign.
-    pub message: Message,
+    /// Message to sign.
+    pub message: VersionedMessage,
 }
 
 // Uses custom serialization. If the first bit is set, the remaining bits
@@ -141,7 +124,7 @@ pub struct Transaction {
 // set, the first byte will be treated as the first byte of an encoded
 // legacy message.
 pub enum VersionedMessage {
-    Legacy(Message),
+    Legacy(LegacyMessage),
     V0(v0::Message),
 }
 
@@ -193,18 +176,25 @@ pub struct MessageAddressTableLookup {
 
 #### Size changes
 
-- 1 extra byte for `version` field
-- 1 extra byte for `address_table_lookups` length
-- 34 extra bytes for the address and lengths of the `writable_indexes`
-and `readonly_indexes` indexes in each address table lookup
+- 1 extra byte for the `version` field
+- 1 extra byte for the `address_table_lookups` length
+- 34 extra bytes for each address table lookup which includes 32 bytes for the
+  address of the table and a byte each for the lengths of the `writable_indexes`
+  and `readonly_indexes` fields
 - 1 extra byte for each lookup table index
+
+#### Cost
+
+Address lookups require extra computational overhead during transaction
+processing, but also reduce network bandwidth due to smaller transactions and
+therefore smaller blocks.
 
 #### Metadata changes
 
 Each resolved address from an address lookup table should be stored in
 the transaction metadata for quick reference. This will avoid the need for
 clients to make multiple RPC round trips to fetch all accounts loaded by a
-v2 transaction. It will also make it easier to use the ledger tool to
+v0 transaction. It will also make it easier to use the ledger tool to
 analyze account access patterns.
 
 #### RPC changes
@@ -222,13 +212,13 @@ downstream clients.
 ### Limitations
 
 - Max of 256 unique accounts may be loaded by a transaction because `u8`
-is used by compiled instructions to index into transaction message `account_keys`.
+  is used by compiled instructions to index into transaction message `account_keys`.
 - Address lookup tables can hold up to 256 entries because lookup table indexes are also `u8`.
 - Transaction signers may not be loaded through an address lookup table, the full
-address of each signer must be serialized in the transaction. This ensures that
-the performance of transaction signature checks is not affected.
-- Hardware wallets will probably not be able to display details about accounts
-referenced through address lookup tables due to inability to verify on-chain data.
+  address of each signer must be serialized in the transaction. This ensures that
+  the performance of transaction signature checks is not affected.
+- Hardware wallets will not be able to display details about accounts referenced
+  through address lookup tables due to inability to verify on-chain data.
 - Only single level address lookup tables can be used. Recursive lookups will not be supported.
 
 ## Security Concerns
@@ -282,7 +272,7 @@ Transactions may not load an account more than once whether directly through
 
 ## Other Proposals
 
-1) Account prefixes
+1. Account prefixes
 
 Needing to pre-register accounts in an on-chain address lookup table is cumbersome
 because it adds an extra step for transaction processing. Instead, Solana
@@ -294,7 +284,7 @@ However, this model requires nodes to keep a mapping of prefixes to active accou
 addresses. Attackers can create accounts with the same prefix as a popular account
 to disrupt transactions.
 
-2) Transaction builder program
+2. Transaction builder program
 
 Solana can provide a new on-chain program which allows "Big" transactions to be
 constructed on-chain by normal transactions. Once the transaction is
@@ -311,7 +301,7 @@ relayer to construct the large pre-signed transaction on-chain for them.
 In order to prevent the large transaction from being reconstructed and replayed,
 its message hash will need to be added to the status cache when executed.
 
-3) Epoch account indexes
+3. Epoch account indexes
 
 Similarly to leader schedule calculation, validators could create a global index
 of the most accessed accounts in the previous epoch and make that index
@@ -322,7 +312,7 @@ which means there would be a few day delay before popular new accounts could be
 referenced. It also needs to be consistently generated by all validators by
 using some criteria like adding accounts in order by access count.
 
-4) Address lists
+4. Address lists
 
 Extend the transaction structure to support addresses that, when loaded, expand
 to a list of addresses. After expansion, all account inputs are concatenated to
@@ -334,12 +324,12 @@ This proposal can be thought of a special case of the proposed index account
 approach. Since the full account list would be expanded, there's no need to add
 additional offsets that use up the limited space in a serialized transaction.
 However, the expected size of an address list may need to be encoded into the
-transaction to aid the sanitization of account indexes.  We would also need to
+transaction to aid the sanitization of account indexes. We would also need to
 encode how many addresses in the list should be loaded as readonly vs
 read-write. Lastly, special attention must be given to watch out for addresses
 that exist in multiple account lists.
 
-5) Increase transaction size
+5. Increase transaction size
 
 Significantly larger serialized transactions have an increased likelihood of being
 dropped over the wire but this might not be a big issue since clients can retry
