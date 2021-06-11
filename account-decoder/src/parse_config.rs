@@ -101,11 +101,7 @@ mod test {
         };
         let stake_config_account = create_config_account(vec![], &stake_config, 10);
         assert_eq!(
-            parse_config(
-                &stake_config_account.data(),
-                &stake_config::id()
-            )
-            .unwrap(),
+            parse_config(&stake_config_account.data(), &stake_config::id()).unwrap(),
             ConfigAccountType::StakeConfig(UiStakeConfig {
                 warmup_cooldown_rate: 0.25,
                 slash_penalty: 50,

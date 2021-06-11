@@ -4,8 +4,12 @@ use {
         bank::Bank,
     },
     log::*,
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
-    solana_stake_program::stake_state::StakeState,
+    solana_sdk::{
+        account::ReadableAccount,
+        pubkey::Pubkey,
+        stake::{self, state::StakeState},
+    },
+    solana_stake_program::stake_state::StakeConverter,
     std::{collections::HashSet, sync::Arc},
 };
 
@@ -32,18 +36,18 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         .contains(&AccountIndex::ProgramId)
     {
         bank.get_filtered_indexed_accounts(
-            &IndexKey::ProgramId(solana_stake_program::id()),
+            &IndexKey::ProgramId(stake::id()),
             // The program-id account index checks for Account owner on inclusion. However, due to
             // the current AccountsDb implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
-            |account| account.owner() == &solana_stake_program::id(),
+            |account| account.owner() == &stake::id(),
         )
     } else {
-        bank.get_program_accounts(&solana_stake_program::id())
+        bank.get_program_accounts(&stake::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
-        let stake_account = StakeState::from(account).unwrap_or_default();
+        let stake_account = StakeConverter::from(account).unwrap_or_default();
         match stake_account {
             StakeState::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
@@ -195,8 +199,8 @@ mod tests {
         account::AccountSharedData,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
+        stake::state::{Authorized, Lockup, Meta},
     };
-    use solana_stake_program::stake_state::{Authorized, Lockup, Meta, StakeState};
     use std::{collections::BTreeMap, sync::Arc};
 
     fn new_from_parent(parent: &Arc<Bank>) -> Bank {
@@ -235,7 +239,7 @@ mod tests {
                 balance,
                 &StakeState::Initialized(meta),
                 std::mem::size_of::<StakeState>(),
-                &solana_stake_program::id(),
+                &stake::id(),
             )
             .unwrap();
             accounts.insert(pubkey, stake_account);

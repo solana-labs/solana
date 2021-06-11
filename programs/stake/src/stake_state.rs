@@ -1285,13 +1285,13 @@ fn do_create_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id;
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
         clock::UnixTimestamp,
         native_token,
         process_instruction::MockInvokeContext,
         pubkey::Pubkey,
+        stake::id,
         system_program,
     };
     use solana_vote_program::vote_state;

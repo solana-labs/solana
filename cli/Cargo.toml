@@ -41,7 +41,6 @@ solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
 solana_rbpf = "=0.2.12"
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
