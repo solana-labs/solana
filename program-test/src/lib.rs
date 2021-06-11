@@ -290,7 +290,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         'outer: for key in &message.account_keys {
             for account_info in account_infos {
                 if account_info.unsigned_key() == key {
-                    accounts.push(Rc::new(RefCell::new(ai_to_a(account_info))));
+                    accounts.push((*key, Rc::new(RefCell::new(ai_to_a(account_info)))));
                     continue 'outer;
                 }
             }
@@ -343,7 +343,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
             for account_info in account_infos {
                 if account_info.unsigned_key() == account_pubkey {
-                    let account = &accounts[i];
+                    let (_key, account) = &accounts[i];
                     **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
 
                     let mut data = account_info.try_borrow_mut_data()?;

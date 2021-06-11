@@ -177,7 +177,7 @@ impl ExecuteTimings {
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "F3Ubz2Sx973pKSYNHTEmj6LY3te1DKUo3fs3cgzQ1uqJ")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
-type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
+type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
 
@@ -2942,14 +2942,17 @@ impl Bank {
         accounts: &mut TransactionAccounts,
         account_deps: &mut TransactionAccountDeps,
         loaders: &mut TransactionLoaders,
+        message: &Message,
     ) -> (
         TransactionAccountRefCells,
         TransactionAccountDepRefCells,
         TransactionLoaderRefCells,
     ) {
-        let account_refcells: Vec<_> = accounts
-            .drain(..)
-            .map(|account| Rc::new(RefCell::new(account)))
+        let account_refcells: Vec<_> = message
+            .account_keys
+            .iter()
+            .zip(accounts.drain(..))
+            .map(|(pubkey, account)| (*pubkey, Rc::new(RefCell::new(account))))
             .collect();
         let account_dep_refcells: Vec<_> = account_deps
             .drain(..)
@@ -2974,7 +2977,7 @@ impl Bank {
         mut account_refcells: TransactionAccountRefCells,
         loader_refcells: TransactionLoaderRefCells,
     ) -> std::result::Result<(), TransactionError> {
-        for account_refcell in account_refcells.drain(..) {
+        for (_key, account_refcell) in account_refcells.drain(..) {
             accounts.push(
                 Rc::try_unwrap(account_refcell)
                     .map_err(|_| TransactionError::AccountBorrowOutstanding)?
@@ -3140,6 +3143,7 @@ impl Bank {
                             &mut loaded_transaction.accounts,
                             &mut loaded_transaction.account_deps,
                             &mut loaded_transaction.loaders,
+                            &tx.message,
                         );
 
                     let instruction_recorders = if enable_cpi_recording {
