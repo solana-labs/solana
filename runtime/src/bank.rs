@@ -625,7 +625,7 @@ impl NonceRollbackFull {
     pub fn from_partial(
         partial: NonceRollbackPartial,
         message: &Message,
-        accounts: &[AccountSharedData],
+        accounts: &[(Pubkey, AccountSharedData)],
     ) -> Result<Self> {
         let NonceRollbackPartial {
             nonce_address,
@@ -636,7 +636,7 @@ impl NonceRollbackFull {
             .iter()
             .enumerate()
             .find(|(i, k)| message.is_non_loader_key(k, *i))
-            .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
+            .and_then(|(i, k)| accounts.get(i).cloned().map(|(_k, a)| (*k, a)));
         if let Some((fee_pubkey, fee_account)) = fee_payer {
             if fee_pubkey == nonce_address {
                 Ok(Self {
@@ -2629,7 +2629,11 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: &Transaction,
-    ) -> (Result<()>, TransactionLogMessages, Vec<AccountSharedData>) {
+    ) -> (
+        Result<()>,
+        TransactionLogMessages,
+        Vec<(Pubkey, AccountSharedData)>,
+    ) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let batch = self.prepare_simulation_batch(transaction);
@@ -2952,7 +2956,7 @@ impl Bank {
             .account_keys
             .iter()
             .zip(accounts.drain(..))
-            .map(|(pubkey, account)| (*pubkey, Rc::new(RefCell::new(account))))
+            .map(|(pubkey, (_pubkey, account))| (*pubkey, Rc::new(RefCell::new(account))))
             .collect();
         let account_dep_refcells: Vec<_> = account_deps
             .drain(..)
@@ -2977,12 +2981,13 @@ impl Bank {
         mut account_refcells: TransactionAccountRefCells,
         loader_refcells: TransactionLoaderRefCells,
     ) -> std::result::Result<(), TransactionError> {
-        for (_key, account_refcell) in account_refcells.drain(..) {
-            accounts.push(
+        for (pubkey, account_refcell) in account_refcells.drain(..) {
+            accounts.push((
+                pubkey,
                 Rc::try_unwrap(account_refcell)
                     .map_err(|_| TransactionError::AccountBorrowOutstanding)?
                     .into_inner(),
-            )
+            ))
         }
         for (ls, mut lrcs) in loaders.iter_mut().zip(loader_refcells) {
             for (pubkey, lrc) in lrcs.drain(..) {
@@ -4806,11 +4811,11 @@ impl Bank {
             let message = &tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (pubkey, account) in message
+            for (pubkey, (_pubkey, account)) in message
                 .account_keys
                 .iter()
                 .zip(loaded_transaction.accounts.iter())
-                .filter(|(_key, account)| (Stakes::is_stake(account)))
+                .filter(|(_key, (_pubkey, account))| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
@@ -5434,10 +5439,13 @@ pub(crate) mod tests {
         let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
         let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
         let accounts = [
-            from_account.clone(),
-            nonce_account.clone(),
-            to_account.clone(),
-            recent_blockhashes_sysvar_account.clone(),
+            (message.account_keys[0], from_account.clone()),
+            (message.account_keys[1], nonce_account.clone()),
+            (message.account_keys[2], to_account.clone()),
+            (
+                message.account_keys[3],
+                recent_blockhashes_sysvar_account.clone(),
+            ),
         ];
 
         // NonceRollbackFull create + NonceRollbackInfo impl
@@ -5449,10 +5457,10 @@ pub(crate) mod tests {
 
         let message = Message::new(&instructions, Some(&nonce_address));
         let accounts = [
-            nonce_account,
-            from_account,
-            to_account,
-            recent_blockhashes_sysvar_account,
+            (message.account_keys[0], nonce_account),
+            (message.account_keys[1], from_account),
+            (message.account_keys[2], to_account),
+            (message.account_keys[3], recent_blockhashes_sysvar_account),
         ];
 
         // Nonce account is fee-payer

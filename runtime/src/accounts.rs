@@ -97,7 +97,7 @@ pub struct Accounts {
 }
 
 // for the load instructions
-pub type TransactionAccounts = Vec<AccountSharedData>;
+pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionAccountDeps = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData)>>;
@@ -277,7 +277,7 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 };
-                accounts.push((key, account));
+                accounts.push((*key, account));
             }
             debug_assert_eq!(accounts.len(), message.account_keys.len());
 
@@ -329,10 +329,7 @@ impl Accounts {
                             })
                             .collect::<Result<TransactionLoaders>>()?;
                         Ok(LoadedTransaction {
-                            accounts: accounts
-                                .into_iter()
-                                .map(|(_key, account)| account)
-                                .collect(),
+                            accounts,
                             account_deps,
                             loaders,
                             rent: tx_rent,
@@ -996,12 +993,12 @@ impl Accounts {
             let message = &tx.message();
             let loaded_transaction = raccs.as_mut().unwrap();
             let mut fee_payer_index = None;
-            for ((i, key), account) in message
+            for ((i, key), (_key, account)) in message
                 .account_keys
                 .iter()
                 .enumerate()
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|((i, key), _account)| message.is_non_loader_key(key, *i))
+                .filter(|((i, key), (_key, _account))| message.is_non_loader_key(key, *i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
@@ -1381,7 +1378,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce_rollback) = &loaded_accounts[0];
         let loaded_transaction = load_res.as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].lamports(), min_balance);
+        assert_eq!(loaded_transaction.accounts[0].1.lamports(), min_balance);
 
         // Fee leaves zero balance fails
         accounts[0].1.set_lamports(min_balance);
@@ -1443,7 +1440,7 @@ mod tests {
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce_rollback) => {
                 assert_eq!(loaded_transaction.accounts.len(), 3);
-                assert_eq!(loaded_transaction.accounts[0], accounts[0].1);
+                assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.loaders.len(), 1);
                 assert_eq!(loaded_transaction.loaders[0].len(), 0);
             }
@@ -1666,7 +1663,7 @@ mod tests {
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce_rollback) => {
                 assert_eq!(loaded_transaction.accounts.len(), 3);
-                assert_eq!(loaded_transaction.accounts[0], accounts[0].1);
+                assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.loaders.len(), 2);
                 assert_eq!(loaded_transaction.loaders[0].len(), 1);
                 assert_eq!(loaded_transaction.loaders[1].len(), 2);
@@ -1974,6 +1971,9 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let pubkey = solana_sdk::pubkey::new_rand();
+        let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
+        let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
+        let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
 
         let rent_collector = RentCollector::default();
 
@@ -1986,6 +1986,10 @@ mod tests {
             Hash::default(),
             instructions,
         );
+        let transaction_accounts0 = vec![
+            (message.account_keys[0], account0),
+            (message.account_keys[1], account2.clone()),
+        ];
         let tx0 = Transaction::new(&[&keypair0], message, Hash::default());
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -1997,16 +2001,14 @@ mod tests {
             Hash::default(),
             instructions,
         );
+        let transaction_accounts1 = vec![
+            (message.account_keys[0], account1),
+            (message.account_keys[1], account2),
+        ];
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
-        let txs = vec![tx0, tx1];
 
         let loaders = vec![(Ok(()), None), (Ok(()), None)];
 
-        let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
-        let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
-        let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
-
-        let transaction_accounts0 = vec![account0, account2.clone()];
         let transaction_loaders0 = vec![];
         let transaction_rent0 = 0;
         let loaded0 = (
@@ -2020,7 +2022,6 @@ mod tests {
             None,
         );
 
-        let transaction_accounts1 = vec![account1, account2];
         let transaction_loaders1 = vec![];
         let transaction_rent1 = 0;
         let loaded1 = (
@@ -2050,6 +2051,7 @@ mod tests {
                 .unwrap()
                 .insert_new_readonly(&pubkey);
         }
+        let txs = &[tx0, tx1];
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
             &loaders,
@@ -2353,15 +2355,33 @@ mod tests {
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_post =
+            AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
+        let from_account_post = AccountSharedData::new(4199, 0, &Pubkey::default());
+        let to_account = AccountSharedData::new(2, 0, &Pubkey::default());
+        let nonce_authority_account = AccountSharedData::new(3, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
+
         let instructions = vec![
             system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
             system_instruction::transfer(&from_address, &to_address, 42),
         ];
         let message = Message::new(&instructions, Some(&from_address));
         let blockhash = Hash::new_unique();
+        let transaction_accounts = vec![
+            (message.account_keys[0], from_account_post),
+            (message.account_keys[1], nonce_authority_account),
+            (message.account_keys[2], nonce_account_post),
+            (message.account_keys[3], to_account),
+            (message.account_keys[4], recent_blockhashes_sysvar_account),
+        ];
         let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
-
-        let txs = vec![tx];
 
         let nonce_state =
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
@@ -2386,27 +2406,6 @@ mod tests {
             nonce_rollback.clone(),
         )];
 
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash: Hash::new_unique(),
-                fee_calculator: FeeCalculator::default(),
-            }));
-        let nonce_account_post =
-            AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
-
-        let from_account_post = AccountSharedData::new(4199, 0, &Pubkey::default());
-        let to_account = AccountSharedData::new(2, 0, &Pubkey::default());
-        let nonce_authority_account = AccountSharedData::new(3, 0, &Pubkey::default());
-        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
-
-        let transaction_accounts = vec![
-            from_account_post,
-            nonce_authority_account,
-            nonce_account_post,
-            to_account,
-            recent_blockhashes_sysvar_account,
-        ];
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
@@ -2430,6 +2429,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
+        let txs = &[tx];
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
             &loaders,
@@ -2474,15 +2474,33 @@ mod tests {
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_post =
+            AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
+        let from_account_post = AccountSharedData::new(4200, 0, &Pubkey::default());
+        let to_account = AccountSharedData::new(2, 0, &Pubkey::default());
+        let nonce_authority_account = AccountSharedData::new(3, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
+
         let instructions = vec![
             system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
             system_instruction::transfer(&from_address, &to_address, 42),
         ];
         let message = Message::new(&instructions, Some(&nonce_address));
         let blockhash = Hash::new_unique();
+        let transaction_accounts = vec![
+            (message.account_keys[0], from_account_post),
+            (message.account_keys[1], nonce_authority_account),
+            (message.account_keys[2], nonce_account_post),
+            (message.account_keys[3], to_account),
+            (message.account_keys[4], recent_blockhashes_sysvar_account),
+        ];
         let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
-
-        let txs = vec![tx];
 
         let nonce_state =
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
@@ -2506,27 +2524,6 @@ mod tests {
             nonce_rollback.clone(),
         )];
 
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash: Hash::new_unique(),
-                fee_calculator: FeeCalculator::default(),
-            }));
-        let nonce_account_post =
-            AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
-
-        let from_account_post = AccountSharedData::new(4200, 0, &Pubkey::default());
-        let to_account = AccountSharedData::new(2, 0, &Pubkey::default());
-        let nonce_authority_account = AccountSharedData::new(3, 0, &Pubkey::default());
-        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
-
-        let transaction_accounts = vec![
-            from_account_post,
-            nonce_authority_account,
-            nonce_account_post,
-            to_account,
-            recent_blockhashes_sysvar_account,
-        ];
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
@@ -2550,6 +2547,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
+        let txs = &[tx];
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
             &loaders,

@@ -3097,7 +3097,7 @@ pub mod rpc_full {
                             .position(|pubkey| *pubkey == address)
                             .map(|i| post_simulation_accounts.get(i))
                             .flatten()
-                            .map(|account| {
+                            .map(|(_pubkey, account)| {
                                 UiAccount::encode(&address, account, accounts_encoding, None, None)
                             })
                     });
