@@ -106,9 +106,6 @@ fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
-        // Require a seed phrase to avoid generating a keypair
-        // but having no way to get the private key
-        .requires("use_mnemonic")
         .help(NO_OUTFILE_ARG.help)
 }
 
@@ -121,7 +118,6 @@ impl KeyGenerationCommonArgs for App<'_, '_> {
         self.arg(word_count_arg())
             .arg(language_arg())
             .arg(no_passphrase_arg())
-            .arg(no_outfile_arg())
     }
 }
 
@@ -395,6 +391,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
                 .key_generation_common_args()
+                .arg(no_outfile_arg())
         )
         .subcommand(
             SubCommand::with_name("grind")
@@ -450,6 +447,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
                 .key_generation_common_args()
+                .arg(
+                    no_outfile_arg()
+                    // Require a seed phrase to avoid generating a keypair
+                    // but having no way to get the private key
+                    .requires("use_mnemonic")
+                )
         )
         .subcommand(
             SubCommand::with_name("pubkey")
