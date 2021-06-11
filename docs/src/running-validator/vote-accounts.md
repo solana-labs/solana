@@ -5,6 +5,12 @@ title: Vote Account Management
 This page describes how to set up an on-chain _vote account_. Creating a vote
 account is needed if you plan to run a validator node on Solana.
 
+## Summary
+The vote account itself is just a shell. You won't need to use its private key 
+once  you have generated the public key. The most powerful keypair that controls
+the vote account is the withdraw authority. The withdraw authority keypair is 
+best kept in a "cold wallet", that is probably best to be a hardware wallet. 
+
 ## Create a Vote Account
 
 A vote account can be created with the
