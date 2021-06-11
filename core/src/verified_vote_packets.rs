@@ -15,16 +15,24 @@ impl VerifiedVotePackets {
         &mut self,
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         last_update_version: &mut u64,
+        would_be_leader: bool,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
         let vote_packets = vote_packets_receiver.recv_timeout(timer)?;
         *last_update_version += 1;
-        for (label, slot, packet) in vote_packets {
-            self.0.insert(label, (*last_update_version, slot, packet));
-        }
-        while let Ok(vote_packets) = vote_packets_receiver.try_recv() {
+        if would_be_leader {
             for (label, slot, packet) in vote_packets {
                 self.0.insert(label, (*last_update_version, slot, packet));
+            }
+        } else {
+            self.0.clear();
+            self.0.shrink_to_fit();
+        }
+        while let Ok(vote_packets) = vote_packets_receiver.try_recv() {
+            if would_be_leader {
+                for (label, slot, packet) in vote_packets {
+                    self.0.insert(label, (*last_update_version, slot, packet));
+                }
             }
         }
         Ok(())
@@ -137,7 +145,7 @@ mod tests {
         s.send(vec![(label1.clone(), 42, later_packets)]).unwrap();
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, &mut update_version)
+            .receive_and_process_vote_packets(&r, &mut update_version, true)
             .unwrap();
 
         // Test timestamps for same batch are the same
@@ -171,7 +179,7 @@ mod tests {
         s.send(vec![(label2.clone(), 51, Packets::default())])
             .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, &mut update_version)
+            .receive_and_process_vote_packets(&r, &mut update_version, true)
             .unwrap();
         let update_version2 = verified_vote_packets.get_vote_packets(&label2).unwrap().0;
         assert!(update_version2 > update_version1);
@@ -179,7 +187,7 @@ mod tests {
         // Test empty doesn't bump the version
         let before = update_version;
         assert_matches!(
-            verified_vote_packets.receive_and_process_vote_packets(&r, &mut update_version),
+            verified_vote_packets.receive_and_process_vote_packets(&r, &mut update_version, true),
             Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout))
         );
         assert_eq!(before, update_version);
