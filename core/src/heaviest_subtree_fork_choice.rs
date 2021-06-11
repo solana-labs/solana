@@ -94,8 +94,10 @@ struct ForkInfo {
     best_slot: SlotHashKey,
     parent: Option<SlotHashKey>,
     children: Vec<SlotHashKey>,
-    // The latest ancestor of this node that has been marked invalid
+    // The latest ancestor of this node that has been marked invalid. If the slot
+    // itself is a duplicate, this is set to the slot itself.
     latest_invalid_ancestor: Option<Slot>,
+    // Set to true if this slot or a child node was duplicate confirmed.
     is_duplicate_confirmed: bool,
 }
 
@@ -140,6 +142,8 @@ impl ForkInfo {
         my_key: &SlotHashKey,
         newly_invalid_ancestor: Slot,
     ) {
+        // Should not be marking a duplicate confirmed slot as invalid
+        assert!(!fork_info.is_duplicate_confirmed);
         if self
             .latest_invalid_ancestor
             .map(|latest_invalid_ancestor| newly_invalid_ancestor > latest_invalid_ancestor)
@@ -2991,7 +2995,7 @@ mod test {
         );
     }
 
-    fn setup_mark_valid_invalid_forks_duplicate_tests() -> (
+    fn setup_mark_invalid_forks_duplicate_tests() -> (
         HeaviestSubtreeForkChoice,
         Vec<SlotHashKey>,
         SlotHashKey,
@@ -3039,13 +3043,13 @@ mod test {
     }
 
     #[test]
-    fn test_mark_valid_invalid_forks_duplicate() {
+    fn test_mark_invalid_then_valid_duplicate() {
         let (
             mut heaviest_subtree_fork_choice,
             duplicate_leaves_descended_from_4,
             invalid_candidate,
             ..,
-        ) = setup_mark_valid_invalid_forks_duplicate_tests();
+        ) = setup_mark_invalid_forks_duplicate_tests();
 
         // Marking candidate as valid again will choose the the heaviest leaf of
         // the newly valid branch
@@ -3063,14 +3067,14 @@ mod test {
     }
 
     #[test]
-    fn test_mark_valid_invalid_forks_with_new_heavier_duplicate_slot() {
+    fn test_mark_invalid_then_add_new_heavier_duplicate_slot() {
         let (
             mut heaviest_subtree_fork_choice,
             duplicate_leaves_descended_from_4,
             _invalid_candidate,
             bank,
             vote_pubkeys,
-        ) = setup_mark_valid_invalid_forks_duplicate_tests();
+        ) = setup_mark_invalid_forks_duplicate_tests();
 
         // If we add a new version of the duplicate slot that is not descended from the invalid
         // candidate and votes for that duplicate slot, the new duplicate slot should be picked
@@ -3098,6 +3102,134 @@ mod test {
             heaviest_subtree_fork_choice.best_overall_slot(),
             new_duplicate
         );
+    }
+
+    #[test]
+    fn test_mark_valid_then_descendant_invalid() {
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / (tr(5) / tr(6))))));
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+        let duplicate_confirmed_slot: Slot = 1;
+        let duplicate_confirmed_key = duplicate_confirmed_slot.slot_hash();
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(&duplicate_confirmed_key);
+
+        for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
+            let slot = slot_hash_key.0;
+            if slot <= duplicate_confirmed_slot {
+                assert!(heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+            } else {
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+            }
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(slot_hash_key)
+                .is_none());
+        }
+
+        // Mark a later descendant invalid
+        let invalid_descendant_slot = 5;
+        let invalid_descendant_key = invalid_descendant_slot.slot_hash();
+        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(&invalid_descendant_key);
+        for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
+            let slot = slot_hash_key.0;
+            if slot <= duplicate_confirmed_slot {
+                // All ancestors of the duplicate confirmed slot should:
+                // 1) Be duplicate confirmed
+                // 2) Have no invalid ancestors
+                assert!(heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert!(heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(slot_hash_key)
+                    .is_none());
+            } else if slot >= invalid_descendant_slot {
+                // Anything descended from the invalid slot should:
+                // 1) Not be duplicate confirmed
+                // 2) Should have an invalid ancestor == `invalid_descendant_slot`
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert_eq!(
+                    heaviest_subtree_fork_choice
+                        .latest_invalid_ancestor(slot_hash_key)
+                        .unwrap(),
+                    invalid_descendant_slot
+                );
+            } else {
+                // Anything in between the duplicate confirmed slot and the invalid slot should:
+                // 1) Not be duplicate confirmed
+                // 2) Should not have an invalid ancestor
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert!(heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(slot_hash_key)
+                    .is_none());
+            }
+        }
+
+        // Mark later descendant `d` duplicate confirmed where `duplicate_confirmed_slot < d < invalid_descendant_slot`.
+        let later_duplicate_confirmed_slot = 4;
+        assert!(
+            later_duplicate_confirmed_slot > duplicate_confirmed_slot
+                && later_duplicate_confirmed_slot < invalid_descendant_slot
+        );
+        let later_duplicate_confirmed_key = later_duplicate_confirmed_slot.slot_hash();
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(&later_duplicate_confirmed_key);
+
+        for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
+            let slot = slot_hash_key.0;
+            if slot <= later_duplicate_confirmed_slot {
+                // All ancestors of the later_duplicate_confirmed_slot should:
+                // 1) Be duplicate confirmed
+                // 2) Have no invalid ancestors
+                assert!(heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert!(heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(slot_hash_key)
+                    .is_none());
+            } else if slot >= invalid_descendant_slot {
+                // Anything descended from the invalid slot should:
+                // 1) Not be duplicate confirmed
+                // 2) Should have an invalid ancestor == `invalid_descendant_slot`
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert_eq!(
+                    heaviest_subtree_fork_choice
+                        .latest_invalid_ancestor(slot_hash_key)
+                        .unwrap(),
+                    invalid_descendant_slot
+                );
+            } else {
+                // Anything in between the duplicate confirmed slot and the invalid slot should:
+                // 1) Not be duplicate confirmed
+                // 2) Should not have an invalid ancestor
+                assert!(!heaviest_subtree_fork_choice
+                    .is_duplicate_confirmed(&slot_hash_key)
+                    .unwrap());
+                assert!(heaviest_subtree_fork_choice
+                    .latest_invalid_ancestor(slot_hash_key)
+                    .is_none());
+            }
+        }
+
+        // Mark all slots duplicate confirmed
+        let last_duplicate_confirmed_slot = 6;
+        let last_duplicate_confirmed_key = last_duplicate_confirmed_slot.slot_hash();
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(&last_duplicate_confirmed_key);
+        for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
+            let slot = slot_hash_key.0;
+            assert!(heaviest_subtree_fork_choice
+                .is_duplicate_confirmed(&slot_hash_key)
+                .unwrap());
+            assert!(heaviest_subtree_fork_choice
+                .latest_invalid_ancestor(slot_hash_key)
+                .is_none());
+        }
     }
 
     fn setup_set_unconfirmed_and_confirmed_duplicate_slot_tests(
