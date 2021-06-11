@@ -12,6 +12,10 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        stake::{
+            instruction as stake_instruction,
+            state::{Authorized, Lockup, StakeState},
+        },
         system_instruction, system_program,
         sysvar::{
             clock,
@@ -19,10 +23,6 @@ use {
             Sysvar,
         },
         transaction::{Transaction, TransactionError},
-    },
-    solana_stake_program::{
-        stake_instruction,
-        stake_state::{Authorized, Lockup, StakeState},
     },
     solana_vote_program::{
         vote_instruction,

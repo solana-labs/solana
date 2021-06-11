@@ -26,9 +26,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     signature::{Keypair, Signer},
+    stake::state::StakeState,
     system_program, timing,
 };
-use solana_stake_program::stake_state::{self, StakeState};
+use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::{self, VoteState};
 use std::{
     collections::HashMap,

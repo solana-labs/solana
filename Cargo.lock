@@ -4904,7 +4904,6 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk",
- "solana-stake-program",
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-transaction-status",
@@ -5141,7 +5140,6 @@ dependencies = [
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-stake-program",
 ]
 
 [[package]]
@@ -5269,7 +5267,6 @@ dependencies = [
  "solana-logger 1.8.0",
  "solana-runtime",
  "solana-sdk",
- "solana-stake-program",
  "solana-vote-program",
  "thiserror",
  "tokio 1.6.1",
@@ -5527,7 +5524,6 @@ dependencies = [
  "solana-metrics",
  "solana-rpc",
  "solana-sdk",
- "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
  "tempfile",
@@ -5664,7 +5660,6 @@ dependencies = [
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk",
- "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
  "spl-associated-token-account",
@@ -5688,7 +5683,6 @@ dependencies = [
  "solana-account-decoder",
  "solana-runtime",
  "solana-sdk",
- "solana-stake-program",
  "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo",
