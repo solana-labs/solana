@@ -5,7 +5,7 @@ title: "Accounts"
 ## Storing State between Transactions
 
 If the program needs to store state between transactions, it does so using
-_accounts_. Accounts are similar to files in operating systems such as Linux in 
+_accounts_. Accounts are similar to files in operating systems such as Linux in
 that they may hold arbitrary data that persists beyond
 the lifetime of a program. Also like a file, an account includes metadata that
 tells the runtime who is allowed to access the data and how.
@@ -24,9 +24,9 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 ## Signers
 
 Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. Such 
+corresponding to the accounts' public keys referenced by the transaction. Such
 signatures signify that the holder of the
-account's private key signed and thus "authorized" the transaction.  In this case, 
+account's private key signed and thus "authorized" the transaction.  In this case,
 the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
@@ -55,7 +55,7 @@ runtime enforces that the account's data (the program) is immutable.
 
 To create an account, a client generates a _keypair_ and registers its public key
 using the `SystemProgram::CreateAccount` instruction with a fixed
-storage size in bytes preallocated. 
+storage size in bytes preallocated.
 The current maximum size of an account's data is 10 megabytes.
 
 An account address can be any arbitrary 256 bit value, and there are mechanisms
@@ -66,7 +66,7 @@ for advanced users to create derived addresses
 Accounts that have never been created via the system program can also be passed
 to programs. When an instruction references an account that hasn't been
 previously created, the program will be passed an account with no data and zero lamports
-that is owned by the system program. 
+that is owned by the system program.
 
 Such newly created accounts reflect
 whether they sign the transaction and therefore can be used as an
@@ -101,12 +101,12 @@ The security model enforces that an account's data can only be modified by the
 account's `Owner` program. This allows the program to trust that the data
 passed to them via accounts they own. The
 runtime enforces this by rejecting any transaction containing a program that
-attempts to write to an account it does not own. 
+attempts to write to an account it does not own.
 
-If a program were to not check account validity, it might read an account 
+If a program were to not check account validity, it might read an account
 it thinks it owns but doesn't.  Anyone can
 issue instructions to a program, and the runtime does not know that those
-accounts are expected to be owned by the program. 
+accounts are expected to be owned by the program.
 
 To check an account's validity, the program should either check the account's
 address against a known value or check that the account is indeed owned
@@ -123,13 +123,13 @@ function](https://github.com/solana-labs/solana/blob/64bfc14a75671e4ec3fe969ded0
 which doesn't require these checks.
 
 If the program always modifies the account in question, the address/owner check
-isn't required because modifying an unowned account will be rejected by the runtime, 
+isn't required because modifying an unowned account will be rejected by the runtime,
 and the containing transaction will be thrown out.
 
 ## Rent
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
-blockchain cluster must actively maintain the data to process any future transactions. 
+blockchain cluster must actively maintain the data to process any future transactions.
 This is different from Bitcoin and Ethereum, where storing accounts doesn't
 incur any costs.
 
