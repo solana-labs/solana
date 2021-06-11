@@ -35,6 +35,7 @@ use {
         map::{rayon::ParValues, Entry, IndexMap},
         set::IndexSet,
     },
+    matches::debug_assert_matches,
     rayon::{prelude::*, ThreadPool},
     solana_sdk::{
         hash::{hash, Hash},
@@ -66,6 +67,8 @@ pub struct Crds {
     entries: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Hash of recently purged values.
     purged: VecDeque<(Hash, u64 /*timestamp*/)>,
+    // Mapping from nodes' pubkeys to their respective shred-version.
+    shred_versions: HashMap<Pubkey, u16>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -125,6 +128,7 @@ impl Default for Crds {
             records: HashMap::default(),
             entries: BTreeMap::default(),
             purged: VecDeque::default(),
+            shred_versions: HashMap::default(),
         }
     }
 }
@@ -173,9 +177,10 @@ impl Crds {
             Entry::Vacant(entry) => {
                 let entry_index = entry.index();
                 self.shards.insert(entry_index, &value);
-                match value.value.data {
-                    CrdsData::ContactInfo(_) => {
+                match &value.value.data {
+                    CrdsData::ContactInfo(node) => {
                         self.nodes.insert(entry_index);
+                        self.shred_versions.insert(pubkey, node.shred_version);
                     }
                     CrdsData::Vote(_, _) => {
                         self.votes.insert(value.ordinal, entry_index);
@@ -195,7 +200,13 @@ impl Crds {
                 let entry_index = entry.index();
                 self.shards.remove(entry_index, entry.get());
                 self.shards.insert(entry_index, &value);
-                match value.value.data {
+                match &value.value.data {
+                    CrdsData::ContactInfo(node) => {
+                        self.shred_versions.insert(pubkey, node.shred_version);
+                        // self.nodes does not need to be updated since the
+                        // entry at this index was and stays contact-info.
+                        debug_assert_matches!(entry.get().value.data, CrdsData::ContactInfo(_));
+                    }
                     CrdsData::Vote(_, _) => {
                         self.votes.remove(&entry.get().ordinal);
                         self.votes.insert(value.ordinal, entry_index);
@@ -237,6 +248,10 @@ impl Crds {
     pub fn get_contact_info(&self, pubkey: Pubkey) -> Option<&ContactInfo> {
         let label = CrdsValueLabel::ContactInfo(pubkey);
         self.table.get(&label)?.value.contact_info()
+    }
+
+    pub(crate) fn get_shred_version(&self, pubkey: &Pubkey) -> Option<u16> {
+        self.shred_versions.get(pubkey).copied()
     }
 
     pub fn get_lowest_slot(&self, pubkey: Pubkey) -> Option<&LowestSlot> {
@@ -449,6 +464,7 @@ impl Crds {
         records_entry.get_mut().swap_remove(&index);
         if records_entry.get().is_empty() {
             records_entry.remove();
+            self.shred_versions.remove(&pubkey);
         }
         // If index == self.table.len(), then the removed entry was the last
         // entry in the table, in which case no other keys were modified.
@@ -544,17 +560,20 @@ impl Crds {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use {
         super::*,
         crate::{
             contact_info::ContactInfo,
-            crds_value::{new_rand_timestamp, NodeInstance},
+            crds_value::{new_rand_timestamp, NodeInstance, SnapshotHash},
         },
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
         std::{collections::HashSet, iter::repeat_with},
     };
 
@@ -1015,6 +1034,53 @@ mod test {
             }
         }
         assert!(crds.records.is_empty());
+    }
+
+    #[test]
+    fn test_get_shred_version() {
+        let mut rng = rand::thread_rng();
+        let pubkey = Pubkey::new_unique();
+        let mut crds = Crds::default();
+        assert_eq!(crds.get_shred_version(&pubkey), None);
+        // Initial insertion of a node with shred version:
+        let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
+        let wallclock = node.wallclock;
+        node.shred_version = 42;
+        let node = CrdsData::ContactInfo(node);
+        let node = CrdsValue::new_unsigned(node);
+        assert_eq!(crds.insert(node, timestamp()), Ok(()));
+        assert_eq!(crds.get_shred_version(&pubkey), Some(42));
+        // An outdated  value should not update shred-version:
+        let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
+        node.wallclock = wallclock - 1; // outdated.
+        node.shred_version = 8;
+        let node = CrdsData::ContactInfo(node);
+        let node = CrdsValue::new_unsigned(node);
+        assert_eq!(crds.insert(node, timestamp()), Err(CrdsError::InsertFailed));
+        assert_eq!(crds.get_shred_version(&pubkey), Some(42));
+        // Update shred version:
+        let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
+        node.wallclock = wallclock + 1; // so that it overrides the prev one.
+        node.shred_version = 8;
+        let node = CrdsData::ContactInfo(node);
+        let node = CrdsValue::new_unsigned(node);
+        assert_eq!(crds.insert(node, timestamp()), Ok(()));
+        assert_eq!(crds.get_shred_version(&pubkey), Some(8));
+        // Add other crds values with the same pubkey.
+        let val = SnapshotHash::new_rand(&mut rng, Some(pubkey));
+        let val = CrdsData::SnapshotHashes(val);
+        let val = CrdsValue::new_unsigned(val);
+        assert_eq!(crds.insert(val, timestamp()), Ok(()));
+        assert_eq!(crds.get_shred_version(&pubkey), Some(8));
+        // Remove contact-info. Shred version should stay there since there
+        // are still values associated with the pubkey.
+        crds.remove(&CrdsValueLabel::ContactInfo(pubkey), timestamp());
+        assert_eq!(crds.get_contact_info(pubkey), None);
+        assert_eq!(crds.get_shred_version(&pubkey), Some(8));
+        // Remove the remaining entry with the same pubkey.
+        crds.remove(&CrdsValueLabel::SnapshotHashes(pubkey), timestamp());
+        assert_eq!(crds.get_records(&pubkey).count(), 0);
+        assert_eq!(crds.get_shred_version(&pubkey), None);
     }
 
     #[test]
