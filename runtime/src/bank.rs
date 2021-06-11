@@ -2637,7 +2637,7 @@ impl Bank {
         let mut timings = ExecuteTimings::default();
 
         let (
-            loaded_accounts,
+            loaded_txs,
             executed,
             _inner_instructions,
             log_messages,
@@ -2659,7 +2659,7 @@ impl Bank {
         let log_messages = log_messages
             .get(0)
             .map_or(vec![], |messages| messages.to_vec());
-        let post_transaction_accounts = loaded_accounts
+        let post_transaction_accounts = loaded_txs
             .into_iter()
             .next()
             .unwrap()
@@ -3109,7 +3109,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_accounts = self.rc.accounts.load_accounts(
+        let mut loaded_txs = self.rc.accounts.load_accounts(
             &self.ancestors,
             hashed_txs.as_transactions_iter(),
             check_results,
@@ -3129,7 +3129,7 @@ impl Bank {
             .bpf_compute_budget
             .unwrap_or_else(BpfComputeBudget::new);
 
-        let executed: Vec<TransactionExecutionResult> = loaded_accounts
+        let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(hashed_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
@@ -3312,7 +3312,7 @@ impl Bank {
         }
         Self::update_error_counters(&error_counters);
         (
-            loaded_accounts,
+            loaded_txs,
             executed,
             inner_instructions,
             transaction_log_messages,
@@ -3384,7 +3384,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         hashed_txs: &[HashedTransaction],
-        loaded_accounts: &mut [TransactionLoadResult],
+        loaded_txs: &mut [TransactionLoadResult],
         executed: &[TransactionExecutionResult],
         tx_count: u64,
         signature_count: u64,
@@ -3423,19 +3423,16 @@ impl Bank {
             self.slot(),
             hashed_txs.as_transactions_iter(),
             executed,
-            loaded_accounts,
+            loaded_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
             self.demote_sysvar_write_locks(),
         );
-        let rent_debits = self.collect_rent(executed, loaded_accounts);
+        let rent_debits = self.collect_rent(executed, loaded_txs);
 
-        let overwritten_vote_accounts = self.update_cached_accounts(
-            hashed_txs.as_transactions_iter(),
-            executed,
-            loaded_accounts,
-        );
+        let overwritten_vote_accounts =
+            self.update_cached_accounts(hashed_txs.as_transactions_iter(), executed, loaded_txs);
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -3615,11 +3612,11 @@ impl Bank {
     fn collect_rent(
         &self,
         res: &[TransactionExecutionResult],
-        loaded_accounts: &mut [TransactionLoadResult],
+        loaded_txs: &mut [TransactionLoadResult],
     ) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
-        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_accounts.len());
-        for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter_mut().enumerate() {
+        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_txs.len());
+        for (i, (raccs, _nonce_rollback)) in loaded_txs.iter_mut().enumerate() {
             let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 rent_debits.push(RentDebits::default());
@@ -4058,7 +4055,7 @@ impl Bank {
         };
 
         let (
-            mut loaded_accounts,
+            mut loaded_txs,
             executed,
             inner_instructions,
             transaction_logs,
@@ -4075,7 +4072,7 @@ impl Bank {
 
         let results = self.commit_transactions(
             batch.hashed_transactions(),
-            &mut loaded_accounts,
+            &mut loaded_txs,
             &executed,
             tx_count,
             signature_count,
@@ -4797,10 +4794,10 @@ impl Bank {
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         res: &[TransactionExecutionResult],
-        loaded: &[TransactionLoadResult],
+        loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
         let mut overwritten_vote_accounts = vec![];
-        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded.iter().zip(txs).enumerate() {
+        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;

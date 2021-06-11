@@ -277,7 +277,7 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 };
-                accounts.push(account);
+                accounts.push((key, account));
             }
             debug_assert_eq!(accounts.len(), message.account_keys.len());
 
@@ -285,28 +285,29 @@ impl Accounts {
                 if payer_index != 0 {
                     warn!("Payer index should be 0! {:?}", tx);
                 }
-                if accounts[payer_index].lamports() == 0 {
+                let payer_account = &mut accounts[payer_index].1;
+                if payer_account.lamports() == 0 {
                     error_counters.account_not_found += 1;
                     Err(TransactionError::AccountNotFound)
                 } else {
-                    let min_balance = match get_system_account_kind(&accounts[payer_index])
-                        .ok_or_else(|| {
+                    let min_balance =
+                        match get_system_account_kind(payer_account).ok_or_else(|| {
                             error_counters.invalid_account_for_fee += 1;
                             TransactionError::InvalidAccountForFee
                         })? {
-                        SystemAccountKind::System => 0,
-                        SystemAccountKind::Nonce => {
-                            // Should we ever allow a fees charge to zero a nonce account's
-                            // balance. The state MUST be set to uninitialized in that case
-                            rent_collector.rent.minimum_balance(nonce::State::size())
-                        }
-                    };
+                            SystemAccountKind::System => 0,
+                            SystemAccountKind::Nonce => {
+                                // Should we ever allow a fees charge to zero a nonce account's
+                                // balance. The state MUST be set to uninitialized in that case
+                                rent_collector.rent.minimum_balance(nonce::State::size())
+                            }
+                        };
 
-                    if accounts[payer_index].lamports() < fee + min_balance {
+                    if payer_account.lamports() < fee + min_balance {
                         error_counters.insufficient_funds += 1;
                         Err(TransactionError::InsufficientFundsForFee)
                     } else {
-                        accounts[payer_index]
+                        payer_account
                             .checked_sub_lamports(fee)
                             .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
@@ -328,7 +329,10 @@ impl Accounts {
                             })
                             .collect::<Result<TransactionLoaders>>()?;
                         Ok(LoadedTransaction {
-                            accounts,
+                            accounts: accounts
+                                .into_iter()
+                                .map(|(_key, account)| account)
+                                .collect(),
                             account_deps,
                             loaders,
                             rent: tx_rent,
