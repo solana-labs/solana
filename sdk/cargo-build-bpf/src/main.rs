@@ -448,7 +448,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    env::set_var("RUSTFLAGS", "-C lto=no");
+    let rustflags = match env::var("RUSTFLAGS") {
+        Ok(rf) => rf + &" -C lto=no".to_string(),
+        _ => "-C lto=no".to_string(),
+    };
+    if config.verbose {
+        println!("RUSTFLAGS={}", rustflags);
+    }
+    env::set_var("RUSTFLAGS", rustflags);
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+bpf",
