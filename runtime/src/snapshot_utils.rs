@@ -611,12 +611,14 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
+    let mut untar = Measure::start("untar");
     let unpacked_append_vec_map = untar_snapshot_in(
         &snapshot_tar,
         &unpack_dir.as_ref(),
         account_paths,
         archive_format,
     )?;
+    untar.stop();
 
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
@@ -639,12 +641,24 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
     )?;
+    measure.stop();
 
+    let mut verify = Measure::start("verify");
     if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
-    measure.stop();
-    info!("{}", measure);
+    verify.stop();
+    datapoint_info!(
+        "bank_from_archive",
+        ("rebuild_bank_from_snapshots_us", measure.as_us(), i64),
+        ("untar_us", untar.as_us(), i64),
+        ("verify_snapshot_bank_us", verify.as_us(), i64),
+        (
+            "total",
+            measure.as_us() + untar.as_us() + verify.as_us(),
+            i64
+        ),
+    );
 
     Ok(bank)
 }
