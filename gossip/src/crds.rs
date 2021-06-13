@@ -391,22 +391,20 @@ impl Crds {
         // returns crds labels of old values to be evicted.
         let evict = |pubkey, index: &IndexSet<usize>| {
             let timeout = timeouts.get(pubkey).copied().unwrap_or(default_timeout);
-            let local_timestamp = {
-                let origin = CrdsValueLabel::ContactInfo(*pubkey);
-                match self.table.get(&origin) {
-                    Some(origin) => origin.local_timestamp,
-                    None => 0,
+            // If the origin's contact-info hasn't expired yet then preserve
+            // all associated values.
+            let origin = CrdsValueLabel::ContactInfo(*pubkey);
+            if let Some(origin) = self.table.get(&origin) {
+                if now < origin.local_timestamp.saturating_add(timeout) {
+                    return vec![];
                 }
-            };
+            }
+            // Otherwise check each value's timestamp individually.
             index
                 .into_iter()
                 .filter_map(|ix| {
                     let (label, value) = self.table.get_index(*ix).unwrap();
-                    let expiry_timestamp = value
-                        .local_timestamp
-                        .max(local_timestamp)
-                        .saturating_add(timeout);
-                    if expiry_timestamp <= now {
+                    if value.local_timestamp.saturating_add(timeout) <= now {
                         Some(label.clone())
                     } else {
                         None
