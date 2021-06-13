@@ -2792,6 +2792,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rand_core 0.6.2",
+ "regex",
  "sha3",
  "solana-measure",
  "solana-runtime",

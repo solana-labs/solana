@@ -4314,6 +4314,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "rand_core 0.6.2",
+ "regex",
  "rustversion",
  "sha3",
  "solana-measure",
