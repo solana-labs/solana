@@ -250,32 +250,17 @@ fn postprocess_dump(program_dump: &Path) {
 // Check whether the built .so file contains undefined symbols that are
 // not known to the runtime and warn about them if any.
 fn check_undefined_symbols(config: &Config, program: &Path) {
-    let syscalls: HashSet<String> = [
-        "abort",
-        "sol_panic_",
-        "sol_log_",
-        "sol_log_64_",
-        "sol_log_compute_units_",
-        "sol_log_pubkey",
-        "sol_create_program_address",
-        "sol_try_find_program_address",
-        "sol_sha256",
-        "sol_keccak256",
-        "sol_get_clock_sysvar",
-        "sol_get_epoch_schedule_sysvar",
-        "sol_get_fees_sysvar",
-        "sol_get_rent_sysvar",
-        "sol_memcpy_",
-        "sol_memmove_",
-        "sol_memcmp_",
-        "sol_memset_",
-        "sol_invoke_signed_c",
-        "sol_invoke_signed_rust",
-        "sol_alloc_free_",
-    ]
-    .iter()
-    .map(|&symbol| symbol.to_owned())
-    .collect();
+    let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
+    let file = match File::open(syscalls_txt) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut syscalls = HashSet::new();
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        syscalls.insert(line.to_string());
+    }
     let entry =
         Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
             .unwrap();
