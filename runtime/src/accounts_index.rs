@@ -1550,6 +1550,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         })
     }
 
+    pub fn min_root(&self) -> Option<Slot> {
+        self.roots_tracker.read().unwrap().min_root()
+    }
+
     pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
         let mut cleaned_roots = HashSet::new();
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();

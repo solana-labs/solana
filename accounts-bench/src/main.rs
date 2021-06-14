@@ -121,6 +121,7 @@ fn main() {
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
                 None,
+                false,
             );
             time_store.stop();
             if results != results_store {

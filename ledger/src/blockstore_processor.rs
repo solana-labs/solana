@@ -558,10 +558,14 @@ fn do_process_blockstore_from_root(
     );
     assert!(bank_forks.active_banks().is_empty());
 
+    let debug_verify = false;
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
     // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks.root_bank().calculate_and_verify_capitalization() {
+    if !bank_forks
+        .root_bank()
+        .calculate_and_verify_capitalization(debug_verify)
+    {
         return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
     }
 

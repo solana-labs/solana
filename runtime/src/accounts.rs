@@ -627,20 +627,24 @@ impl Accounts {
             .collect()
     }
 
-    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
-        self.accounts_db.unchecked_scan_accounts(
-            "calculate_capitalization_scan_elapsed",
-            ancestors,
-            |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
-                let lamports = loaded_account.lamports();
-                if Self::is_loadable(lamports) {
-                    *total_capitalization = AccountsDb::checked_iterative_sum_for_capitalization(
-                        *total_capitalization,
-                        lamports,
-                    );
-                }
-            },
-        )
+    pub fn calculate_capitalization(
+        &self,
+        ancestors: &Ancestors,
+        slot: Slot,
+        can_cached_slot_be_unflushed: bool,
+        debug_verify: bool,
+    ) -> u64 {
+        let use_index = false;
+        self.accounts_db
+            .update_accounts_hash_with_index_option(
+                use_index,
+                debug_verify,
+                slot,
+                ancestors,
+                None,
+                can_cached_slot_be_unflushed,
+            )
+            .1
     }
 
     #[must_use]

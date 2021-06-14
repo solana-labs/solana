@@ -4451,11 +4451,11 @@ impl AccountsDb {
     }
 
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None)
+        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None, false)
     }
 
     pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None)
+        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None, false)
     }
 
     fn scan_multiple_account_storages_one_slot<F, B>(
@@ -4512,6 +4512,11 @@ impl AccountsDb {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
+        accounts_cache_and_ancestors: Option<(
+            &AccountsCache,
+            &Ancestors,
+            &AccountInfoAccountsIndex,
+        )>,
         snapshot_storages: &SortedStorages,
         scan_func: F,
     ) -> Vec<B>
@@ -4531,13 +4536,35 @@ impl AccountsDb {
                 let end = std::cmp::min(start + MAX_ITEMS_PER_CHUNK, snapshot_storages.range().end);
                 for slot in start..end {
                     let sub_storages = snapshot_storages.get(slot);
+                    let mut valid_slot = false;
                     if let Some(sub_storages) = sub_storages {
+                        valid_slot = true;
                         Self::scan_multiple_account_storages_one_slot(
                             sub_storages,
                             &scan_func,
                             slot,
                             &mut retval,
                         );
+                    }
+                    if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
+                        if let Some(slot_cache) = cache.slot_cache(slot) {
+                            if valid_slot
+                                || ancestors.contains_key(&slot)
+                                || accounts_index.is_root(slot)
+                            {
+                                let keys = slot_cache.get_all_pubkeys();
+                                for key in keys {
+                                    if let Some(cached_account) = slot_cache.get_cloned(&key) {
+                                        let mut accessor = LoadedAccountAccessor::Cached(Some((
+                                            key,
+                                            Cow::Owned(cached_account),
+                                        )));
+                                        let account = accessor.get_loaded_account().unwrap();
+                                        scan_func(account, &mut retval, slot);
+                                    };
+                                }
+                            }
+                        }
                     }
                 }
                 retval
@@ -4551,14 +4578,26 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
+        can_cached_slot_be_unflushed: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
+            let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
+                Some((&self.accounts_cache, ancestors, &self.accounts_index))
+            } else {
+                None
+            };
+
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, Some(ancestors));
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
-            let storages = SortedStorages::new_with_slots(combined_maps.iter().zip(slots.iter()));
+            let min_root = self.accounts_index.min_root();
+            let storages = SortedStorages::new_with_slots(
+                combined_maps.iter().zip(slots.iter()),
+                min_root,
+                Some(slot),
+            );
             sort_time.stop();
 
             let timings = HashStats {
@@ -4572,6 +4611,7 @@ impl AccountsDb {
                 Some(&self.thread_pool_clean),
                 timings,
                 check_hash,
+                accounts_cache_and_ancestors,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -4585,15 +4625,28 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
+        can_cached_slot_be_unflushed: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
-            .calculate_accounts_hash_helper(use_index, slot, ancestors, check_hash)
+            .calculate_accounts_hash_helper(
+                use_index,
+                slot,
+                ancestors,
+                check_hash,
+                can_cached_slot_be_unflushed,
+            )
             .unwrap(); // unwrap here will never fail since check_hash = false
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self
-                .calculate_accounts_hash_helper(!use_index, slot, ancestors, check_hash)
+                .calculate_accounts_hash_helper(
+                    !use_index,
+                    slot,
+                    ancestors,
+                    check_hash,
+                    can_cached_slot_be_unflushed,
+                )
                 .unwrap(); // unwrap here will never fail since check_hash = false
 
             let success = hash == hash_other
@@ -4607,12 +4660,17 @@ impl AccountsDb {
         (hash, total_lamports)
     }
 
-    fn scan_snapshot_stores(
+    fn scan_snapshot_stores_with_cache(
         storage: &SortedStorages,
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
         check_hash: bool,
+        accounts_cache_and_ancestors: Option<(
+            &AccountsCache,
+            &Ancestors,
+            &AccountInfoAccountsIndex,
+        )>,
     ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -4621,6 +4679,7 @@ impl AccountsDb {
         let mismatch_found = AtomicU64::new(0);
 
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+            accounts_cache_and_ancestors,
             storage,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
@@ -4685,6 +4744,11 @@ impl AccountsDb {
         thread_pool: Option<&ThreadPool>,
         mut stats: HashStats,
         check_hash: bool,
+        accounts_cache_and_ancestors: Option<(
+            &AccountsCache,
+            &Ancestors,
+            &AccountInfoAccountsIndex,
+        )>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
             // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
@@ -4711,12 +4775,13 @@ impl AccountsDb {
                     end: (pass + 1) * bins_per_pass,
                 };
 
-                let result = Self::scan_snapshot_stores(
+                let result = Self::scan_snapshot_stores_with_cache(
                     &storages,
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
                     check_hash,
+                    accounts_cache_and_ancestors,
                 )?;
 
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
@@ -4746,7 +4811,7 @@ impl AccountsDb {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash_helper(true, slot, ancestors, true)?;
+            self.calculate_accounts_hash_helper(true, slot, ancestors, true, false)?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -5506,7 +5571,7 @@ impl AccountsDb {
     pub fn get_snapshot_storages(
         &self,
         snapshot_slot: Slot,
-        _ancestors: Option<&Ancestors>,
+        ancestors: Option<&Ancestors>,
     ) -> (SnapshotStorages, Vec<Slot>) {
         let mut m = Measure::start("get slots");
         let slots = self
@@ -5526,7 +5591,12 @@ impl AccountsDb {
                     slots
                         .iter()
                         .filter_map(|slot| {
-                            if *slot <= snapshot_slot && self.accounts_index.is_root(*slot) {
+                            if *slot <= snapshot_slot
+                                && (self.accounts_index.is_root(*slot)
+                                    || ancestors
+                                        .map(|ancestors| ancestors.contains_key(&slot))
+                                        .unwrap_or_default())
+                            {
                                 self.storage.0.get(&slot).map_or_else(
                                     || None,
                                     |item| {
@@ -6033,6 +6103,18 @@ pub mod tests {
         SortedStorages::new(&[])
     }
 
+    impl AccountsDb {
+        fn scan_snapshot_stores(
+            storage: &SortedStorages,
+            stats: &mut crate::accounts_hash::HashStats,
+            bins: usize,
+            bin_range: &Range<usize>,
+            check_hash: bool,
+        ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+            Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None)
+        }
+    }
+
     #[test]
     #[should_panic(
         expected = "bin_range.start < bins && bin_range.end <= bins &&\\n    bin_range.start < bin_range.end"
@@ -6368,6 +6450,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -6389,6 +6472,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
         )
         .unwrap();
 
@@ -6436,6 +6520,7 @@ pub mod tests {
 
         let calls = AtomicU64::new(0);
         let result = AccountsDb::scan_account_storage_no_bank(
+            None,
             &get_storage_refs(&storages),
             |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
@@ -8478,10 +8563,10 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         assert!(db
-            .calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash)
+            .calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash, false)
             .is_err());
         assert!(db
-            .calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash)
+            .calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false)
             .is_err());
     }
 
@@ -8501,9 +8586,9 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         assert_eq!(
-            db.calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash)
+            db.calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash, false)
                 .unwrap(),
-            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash)
+            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false)
                 .unwrap(),
         );
     }
