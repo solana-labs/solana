@@ -2916,9 +2916,16 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (bank_forks, _leader_schedule) =
-            do_process_blockstore_from_root(&blockstore, bank1, &opts, &recyclers, None, None)
-                .unwrap();
+        let (bank_forks, _leader_schedule) = do_process_blockstore_from_root(
+            &blockstore,
+            bank1,
+            &opts,
+            &recyclers,
+            None,
+            None,
+            BankFromArchiveTimings::default(),
+        )
+        .unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![5, 6]);
         assert_eq!(bank_forks.working_bank().slot(), 6);
