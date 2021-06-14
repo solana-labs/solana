@@ -15,7 +15,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 clap = "2.33.1"
 flate2 = "1.0"
 indexmap = { version = "1.6", features = ["rayon"] }
-itertools = "0.9.0"
+itertools = "0.10.1"
 log = "0.4.11"
 lru = "0.6.1"
 num-traits = "0.2"

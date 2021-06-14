@@ -2062,6 +2062,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3183,7 +3192,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.9.0",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.60",
@@ -4240,7 +4249,7 @@ name = "solana-bench-exchange"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "itertools",
+ "itertools 0.10.1",
  "log 0.4.11",
  "num-derive",
  "num-traits",
@@ -4509,7 +4518,7 @@ dependencies = [
  "flate2",
  "fs_extra",
  "indexmap",
- "itertools",
+ "itertools 0.10.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "libc",
@@ -4773,7 +4782,7 @@ dependencies = [
  "clap 2.33.3",
  "flate2",
  "indexmap",
- "itertools",
+ "itertools 0.10.1",
  "log 0.4.11",
  "lru",
  "matches",
@@ -4871,7 +4880,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.15",
  "futures-util",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "libc",
  "log 0.4.11",
@@ -4923,7 +4932,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-util",
  "histogram",
- "itertools",
+ "itertools 0.10.1",
  "log 0.4.11",
  "regex",
  "serde",
@@ -4955,7 +4964,7 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "gag",
- "itertools",
+ "itertools 0.10.1",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -5190,7 +5199,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5222,7 +5231,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5305,7 +5314,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "crossbeam-channel",
- "itertools",
+ "itertools 0.10.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5360,7 +5369,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "libc",
  "libloading",
@@ -5421,7 +5430,7 @@ dependencies = [
  "generic-array 0.14.4",
  "hex",
  "hmac 0.11.0",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.11",
@@ -7236,6 +7245,6 @@ checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
  "glob",
- "itertools",
+ "itertools 0.9.0",
  "libc",
 ]
