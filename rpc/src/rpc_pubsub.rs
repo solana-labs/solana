@@ -576,7 +576,7 @@ mod tests {
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
         },
-        solana_stake_program::stake_state::StakeConverter,
+        solana_stake_program::stake_state,
         solana_vote_program::vote_state::Vote,
         std::{
             sync::{atomic::AtomicBool, RwLock},
@@ -888,7 +888,7 @@ mod tests {
         let bank = bank_forks.read().unwrap()[1].clone();
         let account = bank.get_account(&stake_account.pubkey()).unwrap();
         assert_eq!(
-            StakeConverter::authorized_from(&account).unwrap().staker,
+            stake_state::authorized_from(&account).unwrap().staker,
             new_stake_authority
         );
     }

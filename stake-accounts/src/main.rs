@@ -19,7 +19,7 @@ use solana_sdk::{
     stake::{instruction::LockupArgs, state::Lockup},
     transaction::Transaction,
 };
-use solana_stake_program::stake_state::StakeConverter;
+use solana_stake_program::stake_state;
 use std::env;
 use std::error::Error;
 
@@ -50,7 +50,7 @@ fn get_balances(
 fn get_lockup(client: &RpcClient, address: &Pubkey) -> Result<Lockup, ClientError> {
     client
         .get_account(address)
-        .map(|account| StakeConverter::lockup_from(&account).unwrap())
+        .map(|account| stake_state::lockup_from(&account).unwrap())
 }
 
 fn get_lockups(

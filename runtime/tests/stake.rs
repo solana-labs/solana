@@ -17,7 +17,7 @@ use solana_sdk::{
     },
     sysvar::{self, stake_history::StakeHistory},
 };
-use solana_stake_program::stake_state::StakeConverter;
+use solana_stake_program::stake_state;
 use solana_vote_program::{
     vote_instruction,
     vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
@@ -70,7 +70,7 @@ fn fill_epoch_with_votes(
 }
 
 fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
-    let stake = StakeConverter::stake_from(&bank.get_account(stake_pubkey).unwrap()).unwrap();
+    let stake = stake_state::stake_from(&bank.get_account(stake_pubkey).unwrap()).unwrap();
 
     stake.delegation.stake
         == stake.stake(
@@ -86,7 +86,7 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
 }
 
 fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
-    StakeConverter::stake_from(&bank.get_account(stake_pubkey).unwrap())
+    stake_state::stake_from(&bank.get_account(stake_pubkey).unwrap())
         .unwrap()
         .stake(
             bank.epoch(),

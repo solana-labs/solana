@@ -10,24 +10,21 @@ use solana_sdk::{
     stake::config::{self, Config},
 };
 
-pub struct ConfigConverter;
-impl ConfigConverter {
-    pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
-        get_config_data(&account.data())
-            .ok()
-            .and_then(|data| deserialize(data).ok())
-    }
+pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
+    get_config_data(&account.data())
+        .ok()
+        .and_then(|data| deserialize(data).ok())
+}
 
-    pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
-        if !config::check_id(account.unsigned_key()) {
-            return Err(InstructionError::InvalidArgument);
-        }
-        ConfigConverter::from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
+    if !config::check_id(account.unsigned_key()) {
+        return Err(InstructionError::InvalidArgument);
     }
+    from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
+}
 
-    pub fn create_account(lamports: u64, config: &Config) -> AccountSharedData {
-        create_config_account(vec![], config, lamports)
-    }
+pub fn create_account(lamports: u64, config: &Config) -> AccountSharedData {
+    create_config_account(vec![], config, lamports)
 }
 
 pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
@@ -49,17 +46,10 @@ mod tests {
 
     #[test]
     fn test() {
-        let account = RefCell::new(ConfigConverter::create_account(0, &Config::default()));
+        let account = RefCell::new(create_account(0, &Config::default()));
+        assert_eq!(from(&account.borrow()), Some(Config::default()));
         assert_eq!(
-            ConfigConverter::from(&account.borrow()),
-            Some(Config::default())
-        );
-        assert_eq!(
-            ConfigConverter::from_keyed_account(&KeyedAccount::new(
-                &Pubkey::default(),
-                false,
-                &account
-            )),
+            from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &account)),
             Err(InstructionError::InvalidArgument)
         );
     }

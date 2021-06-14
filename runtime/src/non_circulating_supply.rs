@@ -9,7 +9,7 @@ use {
         pubkey::Pubkey,
         stake::{self, state::StakeState},
     },
-    solana_stake_program::stake_state::StakeConverter,
+    solana_stake_program::stake_state,
     std::{collections::HashSet, sync::Arc},
 };
 
@@ -47,7 +47,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         bank.get_program_accounts(&stake::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
-        let stake_account = StakeConverter::from(account).unwrap_or_default();
+        let stake_account = stake_state::from(account).unwrap_or_default();
         match stake_account {
             StakeState::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)

@@ -36,7 +36,7 @@ use solana_sdk::{
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_program::{config::ConfigConverter, stake_state::StakeConverter};
+use solana_stake_program::{config::create_account as create_stake_config_account, stake_state};
 use solana_vote_program::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
@@ -191,7 +191,7 @@ impl LocalCluster {
         // Replace staking config
         genesis_config.add_account(
             stake_config::id(),
-            ConfigConverter::create_account(
+            create_stake_config_account(
                 1,
                 &stake_config::Config {
                     warmup_cooldown_rate: 1_000_000_000.0f64,
@@ -569,7 +569,7 @@ impl LocalCluster {
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
-                    StakeConverter::stake_from(&stake_account),
+                    stake_state::stake_from(&stake_account),
                     VoteState::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {

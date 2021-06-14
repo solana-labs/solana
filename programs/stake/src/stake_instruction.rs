@@ -1,5 +1,5 @@
 use {
-    crate::{config::ConfigConverter, stake_state::StakeAccount},
+    crate::{config, stake_state::StakeAccount},
     log::*,
     solana_sdk::{
         feature_set,
@@ -116,7 +116,7 @@ pub fn process_instruction(
                 &vote,
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
-                &ConfigConverter::from_keyed_account(keyed_account_at_index(keyed_accounts, 4)?)?,
+                &config::from_keyed_account(keyed_account_at_index(keyed_accounts, 4)?)?,
                 &signers,
                 can_reverse_deactivation,
             )
@@ -170,7 +170,6 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ConfigConverter;
     use bincode::serialize;
     use solana_sdk::{
         account::{self, Account, AccountSharedData, WritableAccount},
@@ -179,7 +178,7 @@ mod tests {
         process_instruction::{mock_set_sysvar, MockInvokeContext},
         rent::Rent,
         stake::{
-            config,
+            config as stake_config,
             instruction::{self, LockupArgs},
             state::{Authorized, Lockup, StakeAuthorize},
         },
@@ -228,8 +227,8 @@ mod tests {
                     ))
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
                     account::create_account_shared_data_for_test(&StakeHistory::default())
-                } else if config::check_id(&meta.pubkey) {
-                    ConfigConverter::create_account(0, &config::Config::default())
+                } else if stake_config::check_id(&meta.pubkey) {
+                    config::create_account(0, &stake_config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account_shared_data_for_test(&Rent::default())
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
@@ -597,11 +596,9 @@ mod tests {
         let stake_history_account = RefCell::new(account::create_account_shared_data_for_test(
             &sysvar::stake_history::StakeHistory::default(),
         ));
-        let config_address = config::id();
-        let config_account = RefCell::new(ConfigConverter::create_account(
-            0,
-            &config::Config::default(),
-        ));
+        let config_address = stake_config::id();
+        let config_account =
+            RefCell::new(config::create_account(0, &stake_config::Config::default()));
         let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, true, &stake_account),
             KeyedAccount::new(&vote_address, false, &bad_vote_account),

@@ -290,7 +290,7 @@ mod tests {
         signature::{Keypair, Signer},
         stake::state::StakeState,
     };
-    use solana_stake_program::stake_state::StakeConverter;
+    use solana_stake_program::stake_state;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
@@ -343,7 +343,7 @@ mod tests {
                 let address = derive_stake_account_address(&base_pubkey, i);
                 let account =
                     AccountSharedData::from(client.get_account(&address).unwrap().unwrap());
-                (address, StakeConverter::lockup_from(&account).unwrap())
+                (address, stake_state::lockup_from(&account).unwrap())
             })
             .collect()
     }
@@ -380,7 +380,7 @@ mod tests {
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
         assert_eq!(account.lamports(), lamports);
-        let authorized = StakeConverter::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);
     }
@@ -442,7 +442,7 @@ mod tests {
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        let authorized = StakeConverter::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
     }
@@ -498,7 +498,7 @@ mod tests {
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        let lockup = StakeConverter::lockup_from(&account).unwrap();
+        let lockup = stake_state::lockup_from(&account).unwrap();
         assert_eq!(lockup.unix_timestamp, 1);
         assert_eq!(lockup.epoch, 0);
 
@@ -591,7 +591,7 @@ mod tests {
 
         // Ensure the new accounts are duplicates of the previous ones.
         let account = get_account_at(&bank_client, &new_base_pubkey, 0);
-        let authorized = StakeConverter::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);
     }
@@ -660,7 +660,7 @@ mod tests {
 
         // Ensure the new accounts have the new authorities.
         let account = get_account_at(&bank_client, &new_base_pubkey, 0);
-        let authorized = StakeConverter::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
     }
