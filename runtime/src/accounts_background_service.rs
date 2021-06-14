@@ -137,17 +137,22 @@ impl SnapshotRequestHandler {
                 flush_accounts_cache_time.stop();
 
                 let mut hash_time = Measure::start("hash_time");
-                let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
-                    use_index_hash_calculation,
-                    test_hash_calculation,
-                );
-                let hash_for_testing = if test_hash_calculation {
-                    assert_eq!(previous_hash, this_hash);
-                    Some(snapshot_root_bank.get_accounts_hash())
-                } else {
-                    None
-                };
                 hash_time.stop();
+                let bank_ = snapshot_root_bank.clone();
+                let thread = Builder::new()
+                    .name("solana-bg-hash".to_string())
+                    .spawn(move || {
+                        let this_hash = bank_.update_accounts_hash_with_index_option(
+                            use_index_hash_calculation,
+                            test_hash_calculation,
+                        );
+                        if test_hash_calculation {
+                            assert_eq!(previous_hash, this_hash);
+                            Some(bank_.get_accounts_hash())
+                        } else {
+                            None
+                        }
+                    });
 
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
@@ -156,6 +161,7 @@ impl SnapshotRequestHandler {
                 // the frozen hash.
                 snapshot_root_bank.clean_accounts(true, false);
                 clean_time.stop();
+                let hash_for_testing = thread.unwrap().join().unwrap();
 
                 if accounts_db_caching_enabled {
                     shrink_time = Measure::start("shrink_time");
