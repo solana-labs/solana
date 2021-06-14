@@ -1005,6 +1005,7 @@ pub fn process_accounts_package_pre(
             thread_pool,
             crate::accounts_hash::HashStats::default(),
             false,
+            None,
         )
         .unwrap();
 
