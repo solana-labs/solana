@@ -27,7 +27,7 @@ ed25519-dalek = "=1.0.1"
 fs_extra = "1.2.0"
 flate2 = "1.0"
 indexmap = { version = "1.6", features = ["rayon"] }
-itertools = "0.9.0"
+itertools = "0.10.1"
 libc = "0.2.81"
 log = "0.4.11"
 lru = "0.6.1"
