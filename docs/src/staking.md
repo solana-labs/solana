@@ -6,57 +6,51 @@ _Note before reading: All references to increases in values are in absolute
 terms with regards to balance of SOL.
 This document makes no suggestion as to the monetary value of SOL at any time._
 
-Staking your SOL tokens on Solana is the best way you can help secure the world's
-highest-performing blockchain network, and
-[earn rewards](implemented-proposals/staking-rewards.md) for doing so!
+By staking your SOL tokens, you help secure the network and
+[earn rewards](implemented-proposals/staking-rewards.md) while doing so.
 
-Solana is a Proof-of-Stake (PoS) network with delegations, which means that
-anyone who holds SOL tokens can choose to delegate some of their SOL to one or
-more validators, who process transactions and run the network.
+You can stake by delegating your tokens to validators who process transactions and run the network.
 
 Delegating stake is a shared-risk shared-reward financial model that may provide
 returns to holders of tokens delegated for a long period.
 This is achieved by aligning the financial incentives of the token-holders
 (delegators) and the validators to whom they delegate.
 
-The more stake a validator has delegated to them, the more often this validator
+The more stake delegated to a validator, the more often this validator
 is chosen to write new transactions to the ledger. The more transactions
-the validator writes, the more rewards they and their delegators earn.
+the validator writes, the more rewards the validator and its delegators earn.
 Validators who configure their systems to be able to process more transactions
-at a time not only earn proportionally more rewards for doing so, they also
-keep the network running as fast and as smoothly as possible.
+earn proportionally more rewards and
+because they keep the network running as fast and as smoothly as possible.
 
 Validators incur costs by running and maintaining their systems, and this is
 passed on to delegators in the form of a fee collected as a percentage of
-rewards earned. This fee is known as a _commission_. As validators earn more
+rewards earned. This fee is known as a _commission_. Since validators earn more
 rewards the more stake is delegated to them, they may compete with one another
-to offer the lowest commission for their services, in order to attract more
-delegated stake.
+to offer the lowest commission for their services.
 
-There is a risk of loss of tokens when staking, through a process known as
+You risk losing tokens when staking through a process known as
 _slashing_. Slashing involves the removal and destruction of a portion of a
 validator's delegated stake in response to intentional malicious behavior,
 such as creating invalid transactions or censoring certain types of transactions
 or network participants.
 
-If a validator is slashed, all token holders who have delegated stake to that
-validator will lose a portion of their delegation. While this means an immediate
+When a validator is slashed, all token holders who have delegated stake to that
+validator lose a portion of their delegation. While this means an immediate
 loss for the token holder, it also is a loss of future rewards for the validator
 due to their reduced total delegation. More details on the slashing roadmap can
 be found
 [here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
-It is the goal of the network rewards and slashing to align both validators'
-and token holders' financial incentives, which in turn help keeps the network
-secure, robust and performing at its best.
+Rewards and slashing align validator and token holder interests which helps keep the network
+secure, robust and performant.
+
 
 ## How do I stake my SOL tokens?
 
-In order to stake tokens on Solana, you first will need to transfer some SOL
-into a wallet that supports staking, then follow the steps or instructions
-provided by the wallet to create a stake account and delegate your stake.
-Different wallets will vary slightly in their process for this but the general
-description is below.
+You can stake SOL by moving your tokens
+into a wallet that supports staking.   The wallet provides steps to create a stake account
+and do the delegation.
 
 #### Supported Wallets
 
@@ -81,20 +75,13 @@ Staking operations are supported by the following wallet solutions:
 
 #### Create a Stake Account
 
-A stake account is a different type of account from a wallet address
-that is used to simply send and receive SOL tokens to other addresses. If you
-have received SOL in a wallet address you control, you can use some of
-these tokens to create and fund a new stake account, which will have a different
-address than the wallet you used to create it.
-Depending on which wallet you are using the steps to create a stake account
-may vary slightly. Not all wallets support stake accounts, see
-[Supported Wallets](#supported-wallets).
+Follow the wallet's instructions for creating a staking account.  This account
+will be of a different type than one used to simply send and receive tokens.
 
 #### Select a Validator
 
-After a stake account is created, you will likely want to delegate the SOL
-to a validator node. Below are a few places where you can get information about
-the validators who are currently participating in running the network.
+Follow the wallet's instructions for selecting a validator.  You can get
+information about potentially performant validators from the links below.
 The Solana Labs team and the Solana Foundation do not recommend any particular
 validator.
 
@@ -116,13 +103,11 @@ To view block production statistics, use the Solana command-line tools:
 - `solana block-production`
 
 The Solana team does not make recommendations on how to interpret this
-information. Potential delegators should do their own due diligence.
+information. Do your own due diligence.
 
 #### Delegate your Stake
 
-Once you have decided to which validator or validators you will delegate, use
-a supported wallet to delegate your stake account to the validator's vote
-account address.
+Follow the wallet's instructions for delegating your to your chosen validator.
 
 ## Stake Account Details
 
