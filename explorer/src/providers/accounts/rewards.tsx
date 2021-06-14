@@ -17,6 +17,8 @@ export type Rewards = {
 
 export type RewardsUpdate = {
   rewards: (InflationReward | null)[];
+  highestFetchedEpoch: number;
+  lowestFetchedEpoch: number;
   foundOldest?: boolean;
 };
 
@@ -39,8 +41,9 @@ function reconcile(
 
   return {
     rewards: combined,
-    highestFetchedEpoch: combined[0]?.epoch,
-    lowestFetchedEpoch: combined[combined.length - 1]?.epoch,
+    highestFetchedEpoch:
+      rewards?.highestFetchedEpoch || update.highestFetchedEpoch,
+    lowestFetchedEpoch: update.lowestFetchedEpoch,
     foundOldest,
   };
 }
@@ -113,7 +116,10 @@ async function fetchRewards(
       const result = await connection.getInflationReward([pubkey], epoch);
       return result[0];
     } catch (error) {
-      if (cluster !== Cluster.Custom) {
+      if (
+        cluster !== Cluster.Custom &&
+        !error.message.match(/Block not available/)
+      ) {
         reportError(error, { url });
       }
     }
@@ -128,7 +134,7 @@ async function fetchRewards(
   }
 
   const results = await Promise.all(requests);
-  fromEpoch = fromEpoch - requests.length;
+  const lowestFetchedEpoch = fromEpoch - requests.length;
 
   dispatch({
     type: ActionType.Update,
@@ -137,7 +143,9 @@ async function fetchRewards(
     status: FetchStatus.Fetched,
     data: {
       rewards: results || [],
-      foundOldest: fromEpoch <= 0,
+      foundOldest: lowestFetchedEpoch <= 0,
+      highestFetchedEpoch: fromEpoch,
+      lowestFetchedEpoch,
     },
   });
 }
