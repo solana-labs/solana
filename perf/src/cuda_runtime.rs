@@ -146,6 +146,10 @@ impl<'a, T: Clone + Send + Sync + Default + Sized> IntoParallelIterator for &'a 
 }
 
 impl<T: Clone + Default + Sized> PinnedVec<T> {
+    pub fn reserve(&mut self, size: usize) {
+        self.x.reserve(size);
+    }
+
     pub fn reserve_and_pin(&mut self, size: usize) {
         if self.x.capacity() < size {
             if self.pinned {

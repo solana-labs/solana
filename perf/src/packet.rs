@@ -28,17 +28,38 @@ impl Packets {
         Packets { packets }
     }
 
+    pub fn new_unpinned_with_recycler(
+        recycler: PacketsRecycler,
+        size: usize,
+        name: &'static str,
+    ) -> Self {
+        let mut packets = recycler.allocate(name);
+        packets.reserve(size);
+        Packets { packets }
+    }
+
     pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(size);
         Packets { packets }
     }
+
     pub fn new_with_recycler_data(
         recycler: &PacketsRecycler,
         name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Self {
         let mut vec = Self::new_with_recycler(recycler.clone(), packets.len(), name);
+        vec.packets.append(&mut packets);
+        vec
+    }
+
+    pub fn new_unpinned_with_recycler_data(
+        recycler: &PacketsRecycler,
+        name: &'static str,
+        mut packets: Vec<Packet>,
+    ) -> Self {
+        let mut vec = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
         vec.packets.append(&mut packets);
         vec
     }
@@ -76,7 +97,7 @@ pub fn to_packets_with_destination<T: Serialize>(
     recycler: PacketsRecycler,
     dests_and_data: &[(SocketAddr, T)],
 ) -> Packets {
-    let mut out = Packets::new_with_recycler(
+    let mut out = Packets::new_unpinned_with_recycler(
         recycler,
         dests_and_data.len(),
         "to_packets_with_destination",
