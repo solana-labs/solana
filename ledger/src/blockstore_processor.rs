@@ -541,14 +541,17 @@ fn do_process_blockstore_from_root(
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
     // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks.root_bank().calculate_and_verify_capitalization(debug_verify) {
+    if !bank_forks
+        .root_bank()
+        .calculate_and_verify_capitalization(debug_verify)
+    {
         return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
     }
     time_cap.stop();
 
     datapoint_info!(
         "process_blockstore_from_root",
-        ("total_time_us", now.elapsed().as_micros(), i64),
+        ("total_time_us", processing_time.as_micros(), i64),
         ("frozen_banks", bank_forks.frozen_banks().len(), i64),
         ("slot", bank_forks.root(), i64),
         ("forks", initial_forks.len(), i64),
@@ -564,7 +567,6 @@ fn do_process_blockstore_from_root(
             timings.verify_snapshot_bank_us,
             i64
         ),
-        ("ledger_processing_us", processing_time.as_micros(), i64),
     );
 
     info!("ledger processing timing: {:?}", timing);
