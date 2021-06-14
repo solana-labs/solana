@@ -3,27 +3,27 @@
 [ejson2env](https://github.com/Shopify/ejson2env) are used to manage access
 tokens and other secrets required for CI.
 
-#### Setup
+#### Cài đặt
 ```bash
 $ sudo gem install ejson ejson2env
 ```
 
-then obtain the necessary keypair and place it in `/opt/ejson/keys/`.
+sau đó lấy "keypair" và copy vào `/opt/ejson/keys/`.
 
-#### Usage
-Run the following command to decrypt the secrets into the environment:
+#### Sử dụng
+Chạy lệnh sau để giải mã "secrets" vào môi trường:
 ```bash
 eval $(ejson2env secrets.ejson)
 ```
 
-#### Managing secrets.ejson
-To decrypt `secrets.ejson` for modification, run:
+#### Quản lý secrets.ejson
+Để giải mã `secrets.ejson` cho mục đích chỉnh sửa, chạy lệnh:
 ```bash
 $ ejson decrypt secrets.ejson -o secrets_unencrypted.ejson
 ```
 
-Edit, then run the following to re-encrypt the file **BEFORE COMMITING YOUR
-CHANGES**:
+Chỉnh sửa, sau đó chạy lệnh sau để mật mã file **TRƯỚC KHI ĐƯA MÃ NGUỒN CỦA BẠN LÊN
+**:
 ```bash
 $ ejson encrypt secrets_unencrypted.ejson
 $ mv secrets_unencrypted.ejson secrets.ejson
