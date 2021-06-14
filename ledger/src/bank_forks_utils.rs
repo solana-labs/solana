@@ -130,7 +130,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let deserialized_bank = snapshot_utils::bank_from_archive(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_archive(
         &account_paths,
         &process_options.frozen_accounts,
         &snapshot_config.snapshot_path,
@@ -174,6 +174,7 @@ fn load_from_snapshot(
             &VerifyRecyclers::default(),
             transaction_status_sender,
             cache_block_meta_sender,
+            timings,
         ),
         Some(deserialized_bank_slot_and_hash),
     )
