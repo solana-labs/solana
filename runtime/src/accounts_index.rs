@@ -1092,19 +1092,22 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     where
         C: Contains<'a, Slot>,
     {
-        let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        write_account_map_entry.slot_list_mut(|slot_list| {
-            slot_list.retain(|(slot, item)| {
-                let should_purge = slots_to_purge.contains(&slot);
-                if should_purge {
-                    reclaims.push((*slot, item.clone()));
-                    false
-                } else {
-                    true
-                }
-            });
-            slot_list.is_empty()
-        })
+        if let Some(mut write_account_map_entry) = self.get_account_write_entry(pubkey) {
+            write_account_map_entry.slot_list_mut(|slot_list| {
+                slot_list.retain(|(slot, item)| {
+                    let should_purge = slots_to_purge.contains(&slot);
+                    if should_purge {
+                        reclaims.push((*slot, item.clone()));
+                        false
+                    } else {
+                        true
+                    }
+                });
+                slot_list.is_empty()
+            })
+        } else {
+            true
+        }
     }
 
     pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
