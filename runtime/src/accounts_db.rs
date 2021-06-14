@@ -9241,6 +9241,9 @@ pub mod tests {
         // Do clean
         accounts.clean_accounts(None, false);
 
+        // 2nd clean needed to clean-up pubkey1
+        accounts.clean_accounts(None, false);
+
         // Ensure pubkey2 is cleaned from the index finally
         assert_not_load_account(&accounts, current_slot, pubkey1);
         assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
