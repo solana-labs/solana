@@ -363,23 +363,23 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let keyed_accounts = keyed_accounts
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
-                self.account_deps
+                self.message
+                    .account_keys
                     .iter()
-                    .map(|(key, _account)| key)
-                    .chain(self.message.account_keys.iter())
+                    .chain(self.account_deps.iter().map(|(key, _account)| key))
                     .position(|key| key == *search_key)
                     .map(|mut index| {
                         // TODO
                         // Currently we are constructing new accounts on the stack
                         // before calling MessageProcessor::process_cross_program_instruction
                         // Ideally we would recycle the existing accounts here.
-                        let key = if index < self.account_deps.len() {
-                            &self.account_deps[index].0
-                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
-                        } else {
-                            index = index.saturating_sub(self.account_deps.len());
+                        let key = if index < self.message.account_keys.len() {
                             &self.message.account_keys[index]
                             // &self.accounts[index] as &RefCell<AccountSharedData>,
+                        } else {
+                            index = index.saturating_sub(self.message.account_keys.len());
+                            &self.account_deps[index].0
+                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
                         };
                         (*is_signer, *is_writable, key, transmute_lifetime(*account))
                     })
