@@ -4830,8 +4830,16 @@ impl AccountsDb {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash_helper(true, slot, ancestors, true, false)?;
+        let use_index = true;
+        let check_hash = true;
+        let can_cached_slot_be_unflushed = false;
+        let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_helper(
+            use_index,
+            slot,
+            ancestors,
+            check_hash,
+            can_cached_slot_be_unflushed,
+        )?;
 
         if calculated_lamports != total_lamports {
             warn!(
