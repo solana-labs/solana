@@ -592,6 +592,13 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
     Ok(())
 }
 
+#[derive(Debug, Default)]
+pub struct BankFromArchiveTimings {
+    pub rebuild_bank_from_snapshots_us: u64,
+    pub untar_us: u64,
+    pub verify_snapshot_bank_us: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
@@ -606,7 +613,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-) -> Result<Bank> {
+) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
@@ -648,19 +655,13 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     verify.stop();
-    datapoint_info!(
-        "bank_from_archive",
-        ("rebuild_bank_from_snapshots_us", measure.as_us(), i64),
-        ("untar_us", untar.as_us(), i64),
-        ("verify_snapshot_bank_us", verify.as_us(), i64),
-        (
-            "total",
-            measure.as_us() + untar.as_us() + verify.as_us(),
-            i64
-        ),
-    );
+    let timings = BankFromArchiveTimings {
+        rebuild_bank_from_snapshots_us: measure.as_us(),
+        untar_us: untar.as_us(),
+        verify_snapshot_bank_us: verify.as_us(),
+    };
 
-    Ok(bank)
+    Ok((bank, timings))
 }
 
 pub fn get_snapshot_archive_path(
