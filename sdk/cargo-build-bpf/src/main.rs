@@ -7,7 +7,7 @@ use {
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         env,
         ffi::OsStr,
         fs::{self, File},
@@ -130,20 +130,17 @@ fn install_if_missing(
     }
     let source_path = source_base.join(package);
     // Check whether the correct symbolic link exists.
-    let missing_source = if source_path.exists() {
-        let invalid_link = if let Ok(link_target) = source_path.read_link() {
-            link_target != target_path
-        } else {
-            true
-        };
-        if invalid_link {
+    let invalid_link = if let Ok(link_target) = source_path.read_link() {
+        if link_target != target_path {
             fs::remove_file(&source_path).map_err(|err| err.to_string())?;
+            true
+        } else {
+            false
         }
-        invalid_link
     } else {
         true
     };
-    if missing_source {
+    if invalid_link {
         #[cfg(unix)]
         std::os::unix::fs::symlink(target_path, source_path).map_err(|err| err.to_string())?;
         #[cfg(windows)]
@@ -250,6 +247,56 @@ fn postprocess_dump(program_dump: &Path) {
     fs::rename(postprocessed_dump, program_dump).unwrap();
 }
 
+// Check whether the built .so file contains undefined symbols that are
+// not known to the runtime and warn about them if any.
+fn check_undefined_symbols(config: &Config, program: &Path) {
+    let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
+    let file = match File::open(syscalls_txt) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut syscalls = HashSet::new();
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        syscalls.insert(line.to_string());
+    }
+    let entry =
+        Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
+            .unwrap();
+    let readelf = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin")
+        .join("llvm-readelf");
+    let mut readelf_args = vec!["--dyn-symbols"];
+    readelf_args.push(program.to_str().unwrap());
+    let output = spawn(&readelf, &readelf_args);
+    if config.verbose {
+        println!("{}", output);
+    }
+    let mut unresolved_symbols: Vec<String> = Vec::new();
+    for line in output.lines() {
+        let line = line.trim_end();
+        if entry.is_match(line) {
+            let captures = entry.captures(line).unwrap();
+            let symbol = captures[1].to_string();
+            if !syscalls.contains(&symbol) {
+                unresolved_symbols.push(symbol);
+            }
+        }
+    }
+    if !unresolved_symbols.is_empty() {
+        println!(
+            "Warning: the following functions are undefined and not known syscalls {:?}.",
+            unresolved_symbols
+        );
+        println!("         Calling them will trigger a run-time error.");
+    }
+}
+
 // check whether custom BPF toolchain is linked, and link it if it is not.
 fn link_bpf_toolchain(config: &Config) {
     let toolchain_path = config
@@ -260,6 +307,9 @@ fn link_bpf_toolchain(config: &Config) {
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
     let rustup_output = spawn(&rustup, &rustup_args);
+    if config.verbose {
+        println!("{}", rustup_output);
+    }
     let mut do_link = true;
     for line in rustup_output.lines() {
         if line.starts_with("bpf") {
@@ -268,7 +318,10 @@ fn link_bpf_toolchain(config: &Config) {
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
                 let rustup_args = vec!["toolchain", "uninstall", "bpf"];
-                spawn(&rustup, &rustup_args);
+                let output = spawn(&rustup, &rustup_args);
+                if config.verbose {
+                    println!("{}", output);
+                }
             } else {
                 do_link = false;
             }
@@ -277,7 +330,10 @@ fn link_bpf_toolchain(config: &Config) {
     }
     if do_link {
         let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
-        spawn(&rustup, &rustup_args);
+        let output = spawn(&rustup, &rustup_args);
+        if config.verbose {
+            println!("{}", output);
+        }
     }
 }
 
@@ -360,7 +416,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         &config,
         "bpf-tools",
-        "v1.8",
+        "v1.10",
         "https://github.com/solana-labs/bpf-tools/releases/download",
         &PathBuf::from(bpf_tools_filename),
     )
@@ -377,9 +433,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    let mut rust_flags = String::from("-C lto=no");
-    rust_flags.push_str(" -C opt-level=2");
-    env::set_var("RUSTFLAGS", rust_flags);
+    let rustflags = match env::var("RUSTFLAGS") {
+        Ok(rf) => rf + &" -C lto=no".to_string(),
+        _ => "-C lto=no".to_string(),
+    };
+    if config.verbose {
+        println!("RUSTFLAGS={}", rustflags);
+    }
+    env::set_var("RUSTFLAGS", rustflags);
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+bpf",
@@ -404,7 +465,10 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         cargo_build_args.push("--verbose");
     }
-    spawn(&cargo_build, &cargo_build_args);
+    let output = spawn(&cargo_build, &cargo_build_args);
+    if config.verbose {
+        println!("{}", output);
+    }
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
@@ -443,19 +507,27 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
             );
+            if config.verbose {
+                println!("{}", output);
+            }
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
             );
+            if config.verbose {
+                println!("{}", output);
+            }
             postprocess_dump(&program_dump);
         }
+
+        check_undefined_symbols(&config, &program_so);
 
         println!();
         println!("To deploy this program:");

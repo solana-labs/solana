@@ -1,6 +1,5 @@
 use crate::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    poh_recorder::PohRecorder,
     replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
     sigverify,
@@ -20,6 +19,7 @@ use solana_gossip::{
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     rpc_subscriptions::RpcSubscriptions,
@@ -33,7 +33,7 @@ use solana_runtime::{
     vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
 };
 use solana_sdk::{
-    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT},
+    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     hash::Hash,
     pubkey::Pubkey,
@@ -384,9 +384,14 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
+            let would_be_leader = poh_recorder
+                .lock()
+                .unwrap()
+                .would_be_leader(20 * DEFAULT_TICKS_PER_SLOT);
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 &mut update_version,
+                would_be_leader,
             ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {

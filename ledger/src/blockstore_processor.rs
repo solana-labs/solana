@@ -16,6 +16,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
@@ -373,6 +374,7 @@ pub struct ProcessOptions {
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
+    pub shrink_ratio: AccountShrinkThreshold,
 }
 
 pub fn process_blockstore(
@@ -400,6 +402,7 @@ pub fn process_blockstore(
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
+        opts.shrink_ratio,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -555,10 +558,14 @@ fn do_process_blockstore_from_root(
     );
     assert!(bank_forks.active_banks().is_empty());
 
+    let debug_verify = false;
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
     // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks.root_bank().calculate_and_verify_capitalization() {
+    if !bank_forks
+        .root_bank()
+        .calculate_and_verify_capitalization(debug_verify)
+    {
         return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
     }
 
@@ -3064,6 +3071,7 @@ pub mod tests {
             None,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()
     }

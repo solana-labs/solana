@@ -96,6 +96,20 @@ function get_bootstrap_validator_ip_address {
   echo "${validatorIpList[0]}"
 }
 
+function get_active_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 validators --output=json | grep -o "totalActiveStake\": [0-9]*" | cut -d: -f2'
+}
+
+function get_current_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 validators --output=json | grep -o "totalCurrentStake\": [0-9]*" | cut -d: -f2'
+}
+
 function collect_performance_statistics {
   execution_step "Collect performance statistics about run"
   declare q_mean_tps='

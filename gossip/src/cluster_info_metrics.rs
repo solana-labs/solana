@@ -118,6 +118,7 @@ pub(crate) struct GossipStats {
     pub(crate) trim_crds_table_failed: Counter,
     pub(crate) trim_crds_table_purged_values_count: Counter,
     pub(crate) tvu_peers: Counter,
+    pub(crate) verify_gossip_packets_time: Counter,
 }
 
 pub(crate) fn submit_gossip_stats(
@@ -169,6 +170,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "process_gossip_packets_time",
             stats.process_gossip_packets_time.clear(),
+            i64
+        ),
+        (
+            "verify_gossip_packets_time",
+            stats.verify_gossip_packets_time.clear(),
             i64
         ),
         (

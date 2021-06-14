@@ -4,11 +4,7 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::{
-    banking_stage::{create_test_recorder, BankingStage},
-    poh_recorder::PohRecorder,
-    poh_recorder::WorkingBankEntry,
-};
+use solana_core::{banking_stage::BankingStage, cost_model::CostModel};
 use solana_gossip::{cluster_info::ClusterInfo, cluster_info::Node};
 use solana_ledger::{
     blockstore::Blockstore,
@@ -17,6 +13,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_perf::packet::to_packets_chunked;
+use solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry};
 use solana_runtime::{
     accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
 };
@@ -29,7 +26,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
-    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex},
+    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -77,7 +74,7 @@ fn make_accounts_txs(
         .into_par_iter()
         .map(|_| {
             let mut new = dummy.clone();
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
             if !same_payer {
                 new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
             }
@@ -188,7 +185,7 @@ fn main() {
             genesis_config.hash(),
         );
         // Ignore any pesky duplicate signature errors in the case we are using single-payer
-        let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+        let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
         fund.signatures = vec![Signature::new(&sig[0..64])];
         let x = bank.process_transaction(&fund);
         x.unwrap();
@@ -227,6 +224,7 @@ fn main() {
             vote_receiver,
             None,
             replay_vote_sender,
+            &Arc::new(RwLock::new(CostModel::default())),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -354,7 +352,7 @@ fn main() {
             if bank.slot() > 0 && bank.slot() % 16 == 0 {
                 for tx in transactions.iter_mut() {
                     tx.message.recent_blockhash = bank.last_blockhash();
-                    let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+                    let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
                 verified = to_packets_chunked(&transactions.clone(), packets_per_chunk);

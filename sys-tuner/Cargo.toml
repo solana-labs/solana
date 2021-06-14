@@ -21,7 +21,7 @@ solana-version = { path = "../version", version = "=1.8.0" }
 [target."cfg(unix)".dependencies]
 unix_socket2 = "0.5.4"
 users = "0.10.0"
-nix = "0.19.0"
+nix = "0.20.0"
 sysctl = "0.4.1"
 
 [lib]

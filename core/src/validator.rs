@@ -6,18 +6,14 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
-    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    poh_service::{self, PohService},
+    cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST},
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
-    rpc::JsonRpcConfig,
-    rpc_service::JsonRpcService,
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
-    transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
 };
 use crossbeam_channel::{bounded, unbounded};
@@ -41,15 +37,23 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
+use solana_poh::{
+    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    poh_service::{self, PohService},
+};
 use solana_rpc::{
     max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
+    rpc::JsonRpcConfig,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
+    rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
+    transaction_status_service::TransactionStatusService,
 };
 use solana_runtime::{
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
@@ -59,6 +63,7 @@ use solana_runtime::{
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+    exit::Exit,
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -67,10 +72,8 @@ use solana_sdk::{
     timing::timestamp,
 };
 use solana_vote_program::vote_state::VoteState;
-use std::time::Instant;
 use std::{
     collections::HashSet,
-    fmt,
     net::SocketAddr,
     ops::Deref,
     path::{Path, PathBuf},
@@ -78,7 +81,7 @@ use std::{
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
     thread::{sleep, Builder},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
@@ -135,8 +138,9 @@ pub struct ValidatorConfig {
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
-    pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
 impl Default for ValidatorConfig {
@@ -191,8 +195,9 @@ impl Default for ValidatorConfig {
             accounts_db_test_hash_calculation: false,
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
-            validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
+            validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
+            accounts_shrink_ratio: AccountShrinkThreshold::default(),
         }
     }
 }
@@ -224,35 +229,6 @@ impl Default for ValidatorStartProgress {
 }
 
 #[derive(Default)]
-pub struct ValidatorExit {
-    exited: bool,
-    exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
-}
-
-impl ValidatorExit {
-    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() + Send + Sync>) {
-        if self.exited {
-            exit();
-        } else {
-            self.exits.push(exit);
-        }
-    }
-
-    pub fn exit(&mut self) {
-        self.exited = true;
-        for exit in self.exits.drain(..) {
-            exit();
-        }
-    }
-}
-
-impl fmt::Debug for ValidatorExit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} exits", self.exits.len())
-    }
-}
-
-#[derive(Default)]
 struct TransactionHistoryServices {
     transaction_status_sender: Option<TransactionStatusSender>,
     transaction_status_service: Option<TransactionStatusService>,
@@ -264,7 +240,7 @@ struct TransactionHistoryServices {
 }
 
 pub struct Validator {
-    validator_exit: Arc<RwLock<ValidatorExit>>,
+    validator_exit: Arc<RwLock<Exit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
@@ -678,6 +654,11 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
+        let cost_model = Arc::new(RwLock::new(CostModel::new(
+            ACCOUNT_MAX_COST,
+            BLOCK_MAX_COST,
+        )));
+
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
@@ -748,8 +729,10 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
+                accounts_shrink_ratio: config.accounts_shrink_ratio,
             },
             &max_slots,
+            &cost_model,
         );
 
         let tpu = Tpu::new(
@@ -775,6 +758,7 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
+            &cost_model,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
@@ -1119,6 +1103,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+        shrink_ratio: config.accounts_shrink_ratio,
         ..blockstore_processor::ProcessOptions::default()
     };
 

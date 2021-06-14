@@ -78,6 +78,7 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, Ordering},
+            mpsc::{Receiver, RecvTimeoutError, Sender},
             {Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
         },
         thread::{sleep, Builder, JoinHandle},
@@ -235,7 +236,7 @@ impl Default for ClusterInfo {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
-struct PruneData {
+pub(crate) struct PruneData {
     /// Pubkey of the node that sent this prune data
     pubkey: Pubkey,
     /// Pubkeys of nodes that should be pruned
@@ -329,7 +330,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 #[frozen_abi(digest = "GANv3KVkTYF84kmg1bAuWEZd9MaiYzPquuu13hup3379")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
-enum Protocol {
+pub(crate) enum Protocol {
     /// Gossip protocol messages
     PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
@@ -897,6 +898,8 @@ impl ClusterInfo {
         }
     }
 
+    // TODO: If two threads call into this function then epoch_slot_index has a
+    // race condition and the threads will overwrite each other in crds table.
     pub fn push_epoch_slots(&self, mut update: &[Slot]) {
         let current_slots: Vec<_> = {
             let gossip =
@@ -933,26 +936,28 @@ impl ClusterInfo {
             Some((_wallclock, _slot, index)) => *index,
             None => 0,
         };
+        let self_pubkey = self.id();
+        let mut entries = Vec::default();
         while !update.is_empty() {
             let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
             let now = timestamp();
             let mut slots = if !reset {
                 self.lookup_epoch_slots(ix)
             } else {
-                EpochSlots::new(self.id(), now)
+                EpochSlots::new(self_pubkey, now)
             };
             let n = slots.fill(update, now);
             update = &update[n..];
             if n > 0 {
-                let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
-                self.local_message_pending_push_queue
-                    .lock()
-                    .unwrap()
-                    .push(entry);
+                let epoch_slots = CrdsData::EpochSlots(ix, slots);
+                let entry = CrdsValue::new_signed(epoch_slots, &self.keypair);
+                entries.push(entry);
             }
             epoch_slot_index += 1;
             reset = true;
         }
+        let mut gossip = self.gossip.write().unwrap();
+        gossip.process_push_message(&self_pubkey, entries, timestamp());
     }
 
     fn time_gossip_read_lock<'a>(
@@ -1165,10 +1170,19 @@ impl ClusterInfo {
             .map(map)
     }
 
+    /// Returns epoch-slots inserted since the given cursor.
+    /// Excludes entries from nodes with unkown or different shred version.
     pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
+        let self_shred_version = self.my_shred_version();
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
+            .filter(
+                |entry| match gossip.crds.get_contact_info(entry.value.pubkey()) {
+                    Some(node) => node.shred_version == self_shred_version,
+                    None => false,
+                },
+            )
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
@@ -1382,12 +1396,7 @@ impl ClusterInfo {
     /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
-    pub fn retransmit_to(
-        peers: &[&ContactInfo],
-        packet: &Packet,
-        s: &UdpSocket,
-        forwarded: bool,
-    ) -> Result<(), GossipError> {
+    pub fn retransmit_to(peers: &[&ContactInfo], packet: &Packet, s: &UdpSocket, forwarded: bool) {
         trace!("retransmit orders {}", peers.len());
         let dests: Vec<_> = if forwarded {
             peers
@@ -1398,22 +1407,28 @@ impl ClusterInfo {
         } else {
             peers.iter().map(|peer| &peer.tvu).collect()
         };
-        let mut sent = 0;
-        while sent < dests.len() {
-            match multicast(s, &packet.data[..packet.meta.size], &dests[sent..]) {
-                Ok(n) => sent += n,
-                Err(e) => {
-                    inc_new_counter_error!(
-                        "cluster_info-retransmit-send_to_error",
-                        dests.len() - sent,
-                        1
-                    );
-                    error!("retransmit result {:?}", e);
-                    return Err(GossipError::Io(e));
+        let mut dests = &dests[..];
+        let data = &packet.data[..packet.meta.size];
+        while !dests.is_empty() {
+            match multicast(s, data, dests) {
+                Ok(n) => dests = &dests[n..],
+                Err(err) => {
+                    inc_new_counter_error!("cluster_info-retransmit-send_to_error", dests.len(), 1);
+                    error!("retransmit multicast: {:?}", err);
+                    break;
                 }
             }
         }
-        Ok(())
+        let mut errs = 0;
+        for dest in dests {
+            if let Err(err) = s.send_to(data, dest) {
+                error!("retransmit send: {}, {:?}", dest, err);
+                errs += 1;
+            }
+        }
+        if errs != 0 {
+            inc_new_counter_error!("cluster_info-retransmit-error", errs, 1);
+        }
     }
 
     fn insert_self(&self) {
@@ -2036,7 +2051,8 @@ impl ClusterInfo {
             .process_pull_requests(callers.cloned(), timestamp());
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let mut packets =
+            Packets::new_unpinned_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2308,7 +2324,7 @@ impl ClusterInfo {
             None
         } else {
             let packets =
-                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+                Packets::new_unpinned_with_recycler_data(recycler, "handle_ping_messages", packets);
             Some(packets)
         }
     }
@@ -2494,7 +2510,7 @@ impl ClusterInfo {
 
     fn process_packets(
         &self,
-        packets: VecDeque<Packet>,
+        packets: VecDeque<(/*from:*/ SocketAddr, Protocol)>,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
@@ -2504,24 +2520,6 @@ impl ClusterInfo {
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
-        self.stats
-            .packets_received_count
-            .add_relaxed(packets.len() as u64);
-        let packets: Vec<_> = thread_pool.install(|| {
-            packets
-                .into_par_iter()
-                .filter_map(|packet| {
-                    let protocol: Protocol =
-                        limited_deserialize(&packet.data[..packet.meta.size]).ok()?;
-                    protocol.sanitize().ok()?;
-                    let protocol = protocol.par_verify()?;
-                    Some((packet.meta.addr(), protocol))
-                })
-                .collect()
-        });
-        self.stats
-            .packets_received_verified_count
-            .add_relaxed(packets.len() as u64);
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
         let check_duplicate_instance = |values: &[CrdsValue]| {
@@ -2606,12 +2604,54 @@ impl ClusterInfo {
         Ok(())
     }
 
+    // Consumes packets received from the socket, deserializing, sanitizing and
+    // verifying them and then sending them down the channel for the actual
+    // handling of requests/messages.
+    fn run_socket_consume(
+        &self,
+        receiver: &PacketReceiver,
+        sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        thread_pool: &ThreadPool,
+    ) -> Result<(), GossipError> {
+        const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+        let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
+        let mut packets = VecDeque::from(packets);
+        for payload in receiver.try_iter() {
+            packets.extend(payload.packets.iter().cloned());
+            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
+            if excess_count > 0 {
+                packets.drain(0..excess_count);
+                self.stats
+                    .gossip_packets_dropped_count
+                    .add_relaxed(excess_count as u64);
+            }
+        }
+        self.stats
+            .packets_received_count
+            .add_relaxed(packets.len() as u64);
+        let verify_packet = |packet: Packet| {
+            let data = &packet.data[..packet.meta.size];
+            let protocol: Protocol = limited_deserialize(data).ok()?;
+            protocol.sanitize().ok()?;
+            let protocol = protocol.par_verify()?;
+            Some((packet.meta.addr(), protocol))
+        };
+        let packets: Vec<_> = {
+            let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
+            thread_pool.install(|| packets.into_par_iter().filter_map(verify_packet).collect())
+        };
+        self.stats
+            .packets_received_verified_count
+            .add_relaxed(packets.len() as u64);
+        Ok(sender.send(packets)?)
+    }
+
     /// Process messages from the network
     fn run_listen(
         &self,
         recycler: &PacketsRecycler,
         bank_forks: Option<&RwLock<BankForks>>,
-        requests_receiver: &PacketReceiver,
+        receiver: &Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         response_sender: &PacketSender,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
@@ -2619,10 +2659,9 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
-        let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
-        let mut packets = VecDeque::from(packets);
-        while let Ok(packet) = requests_receiver.try_recv() {
-            packets.extend(packet.packets.iter().cloned());
+        let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
+        for payload in receiver.try_iter() {
+            packets.extend(payload);
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
                 packets.drain(0..excess_count);
@@ -2659,10 +2698,35 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn listen(
+    pub(crate) fn start_socket_consume_thread(
+        self: Arc<Self>,
+        receiver: PacketReceiver,
+        sender: Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        exit: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(get_thread_count().min(8))
+            .thread_name(|i| format!("gossip-consume-{}", i))
+            .build()
+            .unwrap();
+        let run_consume = move || {
+            while !exit.load(Ordering::Relaxed) {
+                match self.run_socket_consume(&receiver, &sender, &thread_pool) {
+                    Err(GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
+                    Err(GossipError::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                    Err(err) => error!("gossip consume: {}", err),
+                    Ok(()) => (),
+                }
+            }
+        };
+        let thread_name = String::from("gossip-consume");
+        Builder::new().name(thread_name).spawn(run_consume).unwrap()
+    }
+
+    pub(crate) fn listen(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        requests_receiver: PacketReceiver,
+        requests_receiver: Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         response_sender: PacketSender,
         should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
@@ -2689,7 +2753,8 @@ impl ClusterInfo {
                         should_check_duplicate_instance,
                     ) {
                         match err {
-                            GossipError::RecvTimeoutError(_) => {
+                            GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            GossipError::RecvTimeoutError(RecvTimeoutError::Timeout) => {
                                 let table_size = self.gossip.read().unwrap().crds.len();
                                 debug!(
                                     "{}: run_listen timeout, table size: {}",
@@ -2703,7 +2768,7 @@ impl ClusterInfo {
                                     self.id()
                                 );
                                 exit.store(true, Ordering::Relaxed);
-                                // TODO: Pass through ValidatorExit here so
+                                // TODO: Pass through Exit here so
                                 // that this will exit cleanly.
                                 std::process::exit(1);
                             }
@@ -3777,7 +3842,6 @@ mod tests {
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert!(slots.is_empty());
         cluster_info.push_epoch_slots(&[0]);
-        cluster_info.flush_push_queue();
 
         let mut cursor = Cursor::default();
         let slots = cluster_info.get_epoch_slots(&mut cursor);
@@ -3785,6 +3849,43 @@ mod tests {
 
         let slots = cluster_info.get_epoch_slots(&mut cursor);
         assert!(slots.is_empty());
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let node_pubkey = Pubkey::new_unique();
+        let mut node = ContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        node.shred_version = 42;
+        let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::EpochSlots(0, epoch_slots)),
+        ];
+        {
+            let mut gossip = cluster_info.gossip.write().unwrap();
+            for entry in entries {
+                assert!(gossip.crds.insert(entry, /*now=*/ 0).is_ok());
+            }
+        }
+        // Should exclude other node's epoch-slot because of different
+        // shred-version.
+        let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].from, cluster_info.id);
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.shred_version = 42;
+        }
+        cluster_info.push_self(
+            &HashMap::default(), // stakes
+            None,                // gossip validators
+        );
+        cluster_info.flush_push_queue();
+        // Should now include both epoch slots.
+        let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].from, cluster_info.id);
+        assert_eq!(slots[1].from, node_pubkey);
     }
 
     #[test]
@@ -4134,9 +4235,7 @@ mod tests {
             range.push(last + rand::thread_rng().gen_range(1, 32));
         }
         cluster_info.push_epoch_slots(&range[..16000]);
-        cluster_info.flush_push_queue();
         cluster_info.push_epoch_slots(&range[16000..]);
-        cluster_info.flush_push_queue();
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
         assert_eq!(slots, range);

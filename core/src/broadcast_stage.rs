@@ -1,14 +1,12 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
 use self::{
+    broadcast_duplicates_run::BroadcastDuplicatesRun,
     broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
-use crate::{
-    poh_recorder::WorkingBankEntry,
-    result::{Error, Result},
-};
+use crate::result::{Error, Result};
 use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
@@ -22,6 +20,7 @@ use solana_gossip::{
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -37,6 +36,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod broadcast_duplicates_run;
 mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
@@ -55,10 +55,19 @@ pub enum BroadcastStageReturnType {
 }
 
 #[derive(PartialEq, Clone, Debug)]
+pub struct BroadcastDuplicatesConfig {
+    /// Percentage of stake to send different version of slots to
+    pub stake_partition: u8,
+    /// Number of slots to wait before sending duplicate shreds
+    pub duplicate_send_delay: usize,
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
     BroadcastFakeShreds,
+    BroadcastDuplicates(BroadcastDuplicatesConfig),
 }
 
 impl BroadcastStageType {
@@ -102,6 +111,16 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 BroadcastFakeShredsRun::new(keypair, 0, shred_version),
+            ),
+
+            BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
             ),
         }
     }

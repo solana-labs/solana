@@ -19,8 +19,9 @@ type State = Cache.State<Details>;
 type Dispatch = Cache.Dispatch<Details>;
 
 export const StateContext = React.createContext<State | undefined>(undefined);
-export const DispatchContext =
-  React.createContext<Dispatch | undefined>(undefined);
+export const DispatchContext = React.createContext<Dispatch | undefined>(
+  undefined
+);
 
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {

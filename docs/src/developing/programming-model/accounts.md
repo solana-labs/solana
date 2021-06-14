@@ -5,14 +5,14 @@ title: "Accounts"
 ## Storing State between Transactions
 
 If the program needs to store state between transactions, it does so using
-_accounts_. Accounts are similar to files in operating systems such as Linux.
-Like a file, an account may hold arbitrary data and that data persists beyond
+_accounts_. Accounts are similar to files in operating systems such as Linux in
+that they may hold arbitrary data that persists beyond
 the lifetime of a program. Also like a file, an account includes metadata that
 tells the runtime who is allowed to access the data and how.
 
 Unlike a file, the account includes metadata for the lifetime of the file. That
-lifetime is expressed in "tokens", which is a number of fractional native
-tokens, called _lamports_. Accounts are held in validator memory and pay
+lifetime is expressed by a number of fractional native
+tokens called _lamports_. Accounts are held in validator memory and pay
 ["rent"](#rent) to stay there. Each validator periodically scans all accounts
 and collects rent. Any account that drops to zero lamports is purged. Accounts
 can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
@@ -24,10 +24,10 @@ uses an _address_ to look up an account. The address is a 256-bit public key.
 ## Signers
 
 Transactions may include digital [signatures](terminology.md#signature)
-corresponding to the accounts' public keys referenced by the transaction. When a
-corresponding digital signature is present it signifies that the holder of the
-account's private key signed and thus "authorized" the transaction and the
-account is then referred to as a _signer_. Whether an account is a signer or not
+corresponding to the accounts' public keys referenced by the transaction. Such
+signatures signify that the holder of the
+account's private key signed and thus "authorized" the transaction.  In this case,
+the account is referred to as a _signer_. Whether an account is a signer or not
 is communicated to the program as part of the account's metadata. Programs can
 then use that information to make authority decisions.
 
@@ -41,21 +41,22 @@ modify a read-only account, the transaction is rejected by the runtime.
 
 ## Executable
 
-If an account is marked "executable" in its metadata then it is considered a
-program which can be executed by including the account's public key an
+If an account is marked "executable" in its metadata, then it is considered a
+program which can be executed by including the account's public key in an
 instruction's [program id](transactions.md#program-id). Accounts are marked as
 executable during a successful program deployment process by the loader that
-owns the account. For example, during BPF program deployment, once the loader
-has determined that the BPF bytecode in the account's data is valid, the loader
+owns the account. When a program is deployed to the execution engine (BPF deployment),
+the loader determines that the bytecode in the account's data is valid.
+If so, the loader
 permanently marks the program account as executable. Once executable, the
 runtime enforces that the account's data (the program) is immutable.
 
 ## Creating
 
-To create an account a client generates a _keypair_ and registers its public key
-using the `SystemProgram::CreateAccount` instruction with preallocated a fixed
-storage size in bytes. The current maximum size of an account's data is 10
-megabytes.
+To create an account, a client generates a _keypair_ and registers its public key
+using the `SystemProgram::CreateAccount` instruction with a fixed
+storage size in bytes preallocated.
+The current maximum size of an account's data is 10 megabytes.
 
 An account address can be any arbitrary 256 bit value, and there are mechanisms
 for advanced users to create derived addresses
@@ -64,13 +65,15 @@ for advanced users to create derived addresses
 
 Accounts that have never been created via the system program can also be passed
 to programs. When an instruction references an account that hasn't been
-previously created the program will be passed an account that is owned by the
-system program, has zero lamports, and zero data. But, the account will reflect
-whether it is a signer of the transaction or not and therefore can be used as an
+previously created, the program will be passed an account with no data and zero lamports
+that is owned by the system program.
+
+Such newly created accounts reflect
+whether they sign the transaction and therefore can be used as an
 authority. Authorities in this context convey to the program that the holder of
 the private key associated with the account's public key signed the transaction.
 The account's public key may be known to the program or recorded in another
-account and signify some kind of ownership or authority over an asset or
+account, signifying some kind of ownership or authority over an asset or
 operation the program controls or performs.
 
 ## Ownership and Assignment to Programs
@@ -89,18 +92,21 @@ data and credit the account.
 For security purposes, it is recommended that programs check the validity of any
 account it reads but does not modify.
 
-The security model enforces that an account's data can only be modified by the
-account's `Owner` program. Doing so allows the program to trust that the data
-passed to them via accounts they own will be in a known and valid state. The
-runtime enforces this by rejecting any transaction containing a program that
-attempts to write to an account it does not own. But, there are also cases
-where a program may merely read an account they think they own and assume the
-data has only been written by themselves and thus is valid. But anyone can
-issues instructions to a program, and the runtime does not know that those
-accounts are expected to be owned by the program. Therefore a malicious user
+This is because a malicious user
 could create accounts with arbitrary data and then pass these accounts to the
-program in the place of a valid account. The arbitrary data could be crafted in
+program in place of valid accounts. The arbitrary data could be crafted in
 a way that leads to unexpected or harmful program behavior.
+
+The security model enforces that an account's data can only be modified by the
+account's `Owner` program. This allows the program to trust that the data
+passed to them via accounts they own. The
+runtime enforces this by rejecting any transaction containing a program that
+attempts to write to an account it does not own.
+
+If a program were to not check account validity, it might read an account
+it thinks it owns but doesn't.  Anyone can
+issue instructions to a program, and the runtime does not know that those
+accounts are expected to be owned by the program.
 
 To check an account's validity, the program should either check the account's
 address against a known value or check that the account is indeed owned
@@ -109,6 +115,7 @@ correctly (usually owned by the program itself).
 One example is when programs use a sysvar account. Unless the program checks the
 account's address or owner, it's impossible to be sure whether it's a real and
 valid sysvar account merely by successful deserialization of the account's data.
+
 Accordingly, the Solana SDK [checks the sysvar account's validity during
 deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
 A alternative and safer way to read a sysvar is via the sysvar's [`get()`
@@ -116,15 +123,14 @@ function](https://github.com/solana-labs/solana/blob/64bfc14a75671e4ec3fe969ded0
 which doesn't require these checks.
 
 If the program always modifies the account in question, the address/owner check
-isn't required because modifying an unowned (could be the malicious account with
-the wrong owner) will be rejected by the runtime, and the containing transaction
-will be thrown out.
+isn't required because modifying an unowned account will be rejected by the runtime,
+and the containing transaction will be thrown out.
 
 ## Rent
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
-cluster must actively maintain the data to process any future transactions on
-it. This is different from Bitcoin and Ethereum, where storing accounts doesn't
+blockchain cluster must actively maintain the data to process any future transactions.
+This is different from Bitcoin and Ethereum, where storing accounts doesn't
 incur any costs.
 
 The rent is debited from an account's balance by the runtime upon the first
@@ -190,8 +196,8 @@ if the transferred lamports are less than or equal to 2,439.
 ### Rent exemption
 
 Alternatively, an account can be made entirely exempt from rent collection by
-depositing at least 2 years-worth of rent. This is checked every time an
-account's balance is reduced and rent is immediately debited once the balance
+depositing at least 2 years worth of rent. This is checked every time an
+account's balance is reduced, and rent is immediately debited once the balance
 goes below the minimum amount.
 
 Program executable accounts are required by the runtime to be rent-exempt to

@@ -1,11 +1,15 @@
 #![feature(test)]
 extern crate test;
 
-use solana_ledger::entry::{next_entry_mut, Entry, EntrySlice};
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_transaction;
-use test::Bencher;
+use {
+    solana_ledger::entry::{next_entry_mut, Entry, EntrySlice},
+    solana_sdk::{
+        hash::{hash, Hash},
+        signature::{Keypair, Signer},
+        system_transaction,
+    },
+    test::Bencher,
+};
 
 const NUM_HASHES: u64 = 400;
 const NUM_ENTRIES: usize = 800;

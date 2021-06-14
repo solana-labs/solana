@@ -783,7 +783,8 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 }
 
 fn assert_capitalization(bank: &Bank) {
-    assert!(bank.calculate_and_verify_capitalization());
+    let debug_verify = true;
+    assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
 
 #[allow(clippy::cognitive_complexity)]

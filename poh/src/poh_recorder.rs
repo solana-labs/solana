@@ -10,30 +10,32 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
-use crate::poh_service::PohService;
-use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
-};
-use solana_ledger::blockstore::Blockstore;
-use solana_ledger::entry::Entry;
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::poh::Poh;
-use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
-use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
-use solana_sdk::hash::Hash;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing;
-use solana_sdk::transaction::Transaction;
-use std::cmp;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    mpsc::{channel, Receiver, SendError, Sender, SyncSender},
-    {Arc, Mutex},
+use {
+    crate::poh_service::PohService,
+    crossbeam_channel::{
+        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    },
+    log::*,
+    solana_ledger::{
+        blockstore::Blockstore, entry::Entry, leader_schedule_cache::LeaderScheduleCache, poh::Poh,
+    },
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
+        timing, transaction::Transaction,
+    },
+    std::{
+        cmp,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{channel, Receiver, SendError, Sender, SyncSender},
+            {Arc, Mutex},
+        },
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use std::time::{Duration, Instant};
-use thiserror::Error;
 
 pub const GRACE_TICKS_FACTOR: u64 = 2;
 pub const MAX_GRACE_SLOTS: u64 = 2;
@@ -726,22 +728,67 @@ impl PohRecorder {
         })
     }
 
-    #[cfg(test)]
+    // Used in tests
     pub fn schedule_dummy_max_height_reached_failure(&mut self) {
         self.reset(Hash::default(), 1, None);
     }
 }
 
+pub fn create_test_recorder(
+    bank: &Arc<Bank>,
+    blockstore: &Arc<Blockstore>,
+    poh_config: Option<PohConfig>,
+) -> (
+    Arc<AtomicBool>,
+    Arc<Mutex<PohRecorder>>,
+    PohService,
+    Receiver<WorkingBankEntry>,
+) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let poh_config = Arc::new(poh_config.unwrap_or_default());
+    let (mut poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
+        bank.tick_height(),
+        bank.last_blockhash(),
+        bank.slot(),
+        Some((4, 4)),
+        bank.ticks_per_slot(),
+        &Pubkey::default(),
+        blockstore,
+        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+        &poh_config,
+        exit.clone(),
+    );
+    poh_recorder.set_bank(&bank);
+
+    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &poh_config,
+        &exit,
+        bank.ticks_per_slot(),
+        crate::poh_service::DEFAULT_PINNED_CPU_CORE,
+        crate::poh_service::DEFAULT_HASHES_PER_BATCH,
+        record_receiver,
+    );
+
+    (exit, poh_recorder, poh_service, entry_receiver)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::serialize;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path};
-    use solana_perf::test_tx::test_tx;
-    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-    use solana_sdk::hash::hash;
-    use std::sync::mpsc::sync_channel;
+    use {
+        super::*,
+        bincode::serialize,
+        solana_ledger::{
+            blockstore::Blockstore,
+            blockstore_meta::SlotMeta,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+        },
+        solana_perf::test_tx::test_tx,
+        solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, hash::hash},
+        std::sync::mpsc::sync_channel,
+    };
 
     #[test]
     fn test_poh_recorder_no_zero_tick() {

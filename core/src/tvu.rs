@@ -12,8 +12,8 @@ use crate::{
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
+    cost_model::CostModel,
     ledger_cleanup_service::LedgerCleanupService,
-    poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
     rewards_recorder_service::RewardsRecorderSender,
@@ -29,6 +29,7 @@ use solana_ledger::{
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -37,6 +38,7 @@ use solana_runtime::{
     accounts_background_service::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
+    accounts_db::AccountShrinkThreshold,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
@@ -88,6 +90,7 @@ pub struct TvuConfig {
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
 impl Tvu {
@@ -128,6 +131,7 @@ impl Tvu {
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
+        cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
@@ -291,6 +295,7 @@ impl Tvu {
             gossip_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
+            cost_model.clone(),
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -341,7 +346,6 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
     use serial_test::serial;
     use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{
@@ -349,6 +353,7 @@ pub mod tests {
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
+    use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
@@ -437,6 +442,7 @@ pub mod tests {
             gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
+            &Arc::new(RwLock::new(CostModel::default())),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

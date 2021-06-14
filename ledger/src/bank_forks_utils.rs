@@ -142,6 +142,7 @@ fn load_from_snapshot(
         process_options.account_indexes.clone(),
         process_options.accounts_db_caching_enabled,
         process_options.limit_load_slot_count_from_snapshot,
+        process_options.shrink_ratio,
     )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {

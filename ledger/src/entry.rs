@@ -724,39 +724,15 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
 mod tests {
     use super::*;
     use crate::entry::Entry;
-    use chrono::prelude::Utc;
-    use solana_budget_program::budget_instruction;
     use solana_sdk::{
         hash::{hash, new_rand as hash_new_rand, Hash},
         message::Message,
         packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_transaction,
+        system_instruction, system_transaction,
         transaction::Transaction,
     };
-
-    fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
-        let pubkey = keypair.pubkey();
-        let budget_contract = Keypair::new();
-        let budget_pubkey = budget_contract.pubkey();
-        let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
-        let message = Message::new(&ixs, Some(&pubkey));
-        Transaction::new(&[keypair, &budget_contract], message, hash)
-    }
-
-    fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
-        let pubkey = keypair.pubkey();
-        let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-        let message = Message::new(&[ix], Some(&pubkey));
-        Transaction::new(&[keypair], message, hash)
-    }
-
-    fn create_sample_apply_signature(keypair: &Keypair, hash: Hash) -> Transaction {
-        let pubkey = keypair.pubkey();
-        let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
-        let message = Message::new(&[ix], Some(&pubkey));
-        Transaction::new(&[keypair], message, hash)
-    }
 
     #[test]
     fn test_entry_verify() {
@@ -820,23 +796,6 @@ mod tests {
     }
 
     #[test]
-    fn test_witness_reorder_attack() {
-        let zero = Hash::default();
-
-        // First, verify entries
-        let keypair = Keypair::new();
-        let tx0 = create_sample_timestamp(&keypair, zero);
-        let tx1 = create_sample_apply_signature(&keypair, zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
-        assert!(e0.verify(&zero));
-
-        // Next, swap two witness transactions and ensure verification fails.
-        e0.transactions[0] = tx1; // <-- attack
-        e0.transactions[1] = tx0;
-        assert!(!e0.verify(&zero));
-    }
-
-    #[test]
     fn test_next_entry() {
         let zero = Hash::default();
         let tick = next_entry(&zero, 1, vec![]);
@@ -848,7 +807,7 @@ mod tests {
         assert_eq!(tick.hash, zero);
 
         let keypair = Keypair::new();
-        let tx0 = create_sample_timestamp(&keypair, zero);
+        let tx0 = system_transaction::transfer(&keypair, &Pubkey::new_unique(), 42, zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
         assert_eq!(entry0.hash, next_hash(&zero, 1, &[tx0]));
@@ -904,9 +863,10 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
-        let alice_pubkey = Keypair::new();
-        let tx0 = create_sample_payment(&alice_pubkey, one);
-        let tx1 = create_sample_timestamp(&alice_pubkey, one);
+        let alice_keypair = Keypair::new();
+        let bob_keypair = Keypair::new();
+        let tx0 = system_transaction::transfer(&alice_keypair, &bob_keypair.pubkey(), 1, one);
+        let tx1 = system_transaction::transfer(&bob_keypair, &alice_keypair.pubkey(), 1, one);
         assert!(vec![][..].verify(&one)); // base case
         assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
         assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
@@ -931,17 +891,14 @@ mod tests {
         let recent_blockhash = hash_new_rand(&mut rng);
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
-        let budget_contract = Keypair::new();
-        let budget_pubkey = budget_contract.pubkey();
         let make_transaction = |size| {
             let ixs: Vec<_> = std::iter::repeat_with(|| {
-                budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1)
+                system_instruction::transfer(&pubkey, &Pubkey::new_unique(), 1)
             })
             .take(size)
-            .flat_map(|x| x.into_iter())
             .collect();
             let message = Message::new(&ixs[..], Some(&pubkey));
-            Transaction::new(&[&keypair, &budget_contract], message, recent_blockhash)
+            Transaction::new(&[&keypair], message, recent_blockhash)
         };
         // Small transaction.
         {
@@ -954,7 +911,7 @@ mod tests {
         }
         // Big transaction.
         {
-            let tx = make_transaction(15);
+            let tx = make_transaction(25);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
             assert!(entries[..]
@@ -963,7 +920,7 @@ mod tests {
         }
         // Assert that verify fails as soon as serialized
         // size exceeds packet data size.
-        for size in 1..20 {
+        for size in 1..30 {
             let tx = make_transaction(size);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert_eq!(

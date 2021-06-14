@@ -27,6 +27,7 @@ import RpcClient from 'jayson/lib/client/browser';
 import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
+import {EpochSchedule} from './epoch-schedule';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -373,23 +374,6 @@ const GetEpochInfoResult = pick({
   transactionCount: optional(number()),
 });
 
-/**
- * Epoch schedule
- * (see https://docs.solana.com/terminology#epoch)
- */
-export type EpochSchedule = {
-  /** The maximum number of slots in each epoch */
-  slotsPerEpoch: number;
-  /** The number of slots before beginning of an epoch to calculate a leader schedule for that epoch */
-  leaderScheduleSlotOffset: number;
-  /** Indicates whether epochs start short and grow */
-  warmup: boolean;
-  /** The first epoch with `slotsPerEpoch` slots */
-  firstNormalEpoch: number;
-  /** The first slot of `firstNormalEpoch` */
-  firstNormalSlot: number;
-};
-
 const GetEpochScheduleResult = pick({
   slotsPerEpoch: number(),
   leaderScheduleSlotOffset: number(),
@@ -714,6 +698,7 @@ function createRpcClient(
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
   fetchMiddleware?: FetchMiddleware,
+  disableRetryOnRateLimit?: boolean,
 ): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
@@ -762,6 +747,9 @@ function createRpcClient(
         }
 
         if (res.status !== 429 /* Too many requests */) {
+          break;
+        }
+        if (disableRetryOnRateLimit === true) {
           break;
         }
         too_many_requests_retries -= 1;
@@ -1924,6 +1912,8 @@ export type ConnectionConfig = {
   httpHeaders?: HttpHeaders;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
+  /** Optional Disable retring calls when server responds with HTTP 429 (Too Many Requests) */
+  disableRetryOnRateLimit?: boolean;
 };
 
 /**
@@ -2010,6 +2000,7 @@ export class Connection {
     let wsEndpoint;
     let httpHeaders;
     let fetchMiddleware;
+    let disableRetryOnRateLimit;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
@@ -2017,6 +2008,7 @@ export class Connection {
       wsEndpoint = commitmentOrConfig.wsEndpoint;
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
+      disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
 
     this._rpcEndpoint = endpoint;
@@ -2027,6 +2019,7 @@ export class Connection {
       useHttps,
       httpHeaders,
       fetchMiddleware,
+      disableRetryOnRateLimit,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
@@ -2779,7 +2772,14 @@ export class Connection {
     if ('error' in res) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
-    return res.result;
+    const epochSchedule = res.result;
+    return new EpochSchedule(
+      epochSchedule.slotsPerEpoch,
+      epochSchedule.leaderScheduleSlotOffset,
+      epochSchedule.warmup,
+      epochSchedule.firstNormalEpoch,
+      epochSchedule.firstNormalSlot,
+    );
   }
 
   /**
@@ -3248,15 +3248,26 @@ export class Connection {
   }
 
   /**
-   * Request an allocation of lamports to the specified account
+   * Request an allocation of lamports to the specified address
+   *
+   * ```typescript
+   * import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+   *
+   * (async () => {
+   *   const connection = new Connection("https://api.testnet.solana.com", "confirmed");
+   *   const myAddress = new PublicKey("2nr1bHFT86W9tGnyvmYW4vcHKsQB3sVQfnddasz4kExM");
+   *   const signature = await connection.requestAirdrop(myAddress, LAMPORTS_PER_SOL);
+   *   await connection.confirmTransaction(signature);
+   * })();
+   * ```
    */
   async requestAirdrop(
     to: PublicKey,
-    amount: number,
+    lamports: number,
   ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('requestAirdrop', [
       to.toBase58(),
-      amount,
+      lamports,
     ]);
     const res = create(unsafeRes, RequestAirdropRpcResult);
     if ('error' in res) {

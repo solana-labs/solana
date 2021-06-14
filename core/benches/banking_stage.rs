@@ -7,10 +7,9 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::banking_stage::{create_test_recorder, BankingStage, BankingStageStats};
+use solana_core::banking_stage::{BankingStage, BankingStageStats};
 use solana_core::cost_model::CostModel;
 use solana_core::cost_tracker::CostTracker;
-use solana_core::poh_recorder::WorkingBankEntry;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
 use solana_ledger::blockstore_processor::process_entries;
@@ -19,6 +18,7 @@ use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_perf::packet::to_packets_chunked;
 use solana_perf::test_tx::test_tx;
+use solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry};
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
@@ -34,7 +34,7 @@ use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -93,8 +93,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(CostModel::default()),
-                &Arc::new(Mutex::new(CostTracker::new(std::u32::MAX, std::u32::MAX))),
+                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(Mutex::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
             );
         });
 
@@ -215,8 +215,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
-            std::u32::MAX,
-            std::u32::MAX,
+            &Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

@@ -19,11 +19,11 @@ console = "0.14.1"
 core_affinity = "0.5.10"
 fd-lock = "2.0.0"
 indicatif = "0.16.2"
-jsonrpc-core = "17.0.0"
-jsonrpc-core-client = { version = "17.0.0", features = ["ipc", "ws"] }
-jsonrpc-derive = "17.0.0"
-jsonrpc-ipc-server = "17.0.0"
-jsonrpc-server-utils= "17.0.0"
+jsonrpc-core = "17.1.0"
+jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
+jsonrpc-derive = "17.1.0"
+jsonrpc-ipc-server = "17.1.0"
+jsonrpc-server-utils= "17.1.0"
 log = "0.4.11"
 num_cpus = "1.13.0"
 rand = "0.7.0"
@@ -41,6 +41,7 @@ solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
 solana-perf = { path = "../perf", version = "=1.8.0" }
+solana-poh = { path = "../poh", version = "=1.8.0" }
 solana-rpc = { path = "../rpc", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
@@ -50,7 +51,7 @@ symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.81"
-signal-hook = "0.1.15"
+signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

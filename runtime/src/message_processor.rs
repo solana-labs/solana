@@ -4,12 +4,13 @@ use crate::{
 };
 use log::*;
 use serde::{Deserialize, Serialize};
+use solana_measure::measure::Measure;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_sysvar_write_locks, instructions_sysvar_enabled, FeatureSet},
-    ic_msg,
+    ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
     message::Message,
@@ -63,6 +64,7 @@ pub struct ExecuteDetailsTimings {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
+    pub per_program_timings: HashMap<Pubkey, (u64, u32)>,
 }
 
 impl ExecuteDetailsTimings {
@@ -75,6 +77,11 @@ impl ExecuteDetailsTimings {
         self.total_account_count += other.total_account_count;
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
+        for (id, other) in &other.per_program_timings {
+            let time_count = self.per_program_timings.entry(*id).or_default();
+            time_count.0 += other.0;
+            time_count.1 += other.1;
+        }
     }
 }
 
@@ -396,6 +403,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .invoke_stack
             .last()
             .ok_or(InstructionError::CallDepth)?;
+        let logger = self.get_logger();
         MessageProcessor::verify_and_update(
             message,
             instruction,
@@ -406,6 +414,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             caller_write_privileges,
             &mut self.timings,
             self.feature_set.is_active(&demote_sysvar_write_locks::id()),
+            logger,
         )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
@@ -1008,6 +1017,7 @@ impl MessageProcessor {
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         demote_sysvar_write_locks: bool,
+        logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -1024,14 +1034,24 @@ impl MessageProcessor {
                         .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                 }
                 let account = accounts[account_index].borrow();
-                pre_accounts[unique_index].verify(
-                    &program_id,
-                    message.is_writable(account_index, demote_sysvar_write_locks),
-                    rent,
-                    &account,
-                    timings,
-                    true,
-                )?;
+                pre_accounts[unique_index]
+                    .verify(
+                        &program_id,
+                        message.is_writable(account_index, demote_sysvar_write_locks),
+                        rent,
+                        &account,
+                        timings,
+                        true,
+                    )
+                    .map_err(|err| {
+                        ic_logger_msg!(
+                            logger,
+                            "failed to verify account {}: {}",
+                            pre_accounts[unique_index].key,
+                            err
+                        );
+                        err
+                    })?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports());
                 Ok(())
@@ -1047,6 +1067,7 @@ impl MessageProcessor {
     }
 
     /// Verify the results of a cross-program instruction
+    #[allow(clippy::too_many_arguments)]
     fn verify_and_update(
         message: &Message,
         instruction: &CompiledInstruction,
@@ -1057,6 +1078,7 @@ impl MessageProcessor {
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
         demote_sysvar_write_locks: bool,
+        logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -1079,14 +1101,12 @@ impl MessageProcessor {
                                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                         }
                         let account = account.borrow();
-                        pre_account.verify(
-                            &program_id,
-                            is_writable,
-                            &rent,
-                            &account,
-                            timings,
-                            false,
-                        )?;
+                        pre_account
+                            .verify(&program_id, is_writable, &rent, &account, timings, false)
+                            .map_err(|err| {
+                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                err
+                            })?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports());
                         if is_writable && !account.executable() {
@@ -1175,6 +1195,7 @@ impl MessageProcessor {
             &rent_collector.rent,
             timings,
             demote_sysvar_write_locks,
+            invoke_context.get_logger(),
         )?;
 
         timings.accumulate(&invoke_context.timings);
@@ -1205,28 +1226,38 @@ impl MessageProcessor {
     ) -> Result<(), TransactionError> {
         let demote_sysvar_write_locks = feature_set.is_active(&demote_sysvar_write_locks::id());
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+            let mut time = Measure::start("execute_instruction");
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
-            self.execute_instruction(
-                message,
-                instruction,
-                &loaders[instruction_index],
-                accounts,
-                account_deps,
-                rent_collector,
-                log_collector.clone(),
-                executors.clone(),
-                instruction_recorder,
-                instruction_index,
-                feature_set.clone(),
-                bpf_compute_budget,
-                timings,
-                demote_sysvar_write_locks,
-                account_db.clone(),
-                ancestors,
-            )
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            let err = self
+                .execute_instruction(
+                    message,
+                    instruction,
+                    &loaders[instruction_index],
+                    accounts,
+                    account_deps,
+                    rent_collector,
+                    log_collector.clone(),
+                    executors.clone(),
+                    instruction_recorder,
+                    instruction_index,
+                    feature_set.clone(),
+                    bpf_compute_budget,
+                    timings,
+                    demote_sysvar_write_locks,
+                    account_db.clone(),
+                    ancestors,
+                )
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+            time.stop();
+
+            let program_id = instruction.program_id(&message.account_keys);
+            let time_count = timings.per_program_timings.entry(*program_id).or_default();
+            time_count.0 += time.as_us();
+            time_count.1 += 1;
+
+            err?;
         }
         Ok(())
     }

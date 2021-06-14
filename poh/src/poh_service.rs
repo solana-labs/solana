@@ -1,14 +1,21 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
-use crate::poh_recorder::{PohRecorder, Record};
-use crossbeam_channel::Receiver;
-use solana_ledger::poh::Poh;
-use solana_measure::measure::Measure;
-use solana_sdk::poh_config::PohConfig;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::{Duration, Instant};
+use {
+    crate::poh_recorder::{PohRecorder, Record},
+    crossbeam_channel::Receiver,
+    log::*,
+    solana_ledger::poh::Poh,
+    solana_measure::measure::Measure,
+    solana_sdk::poh_config::PohConfig,
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+};
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -348,20 +355,22 @@ impl PohService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::poh_recorder::WorkingBank;
-    use rand::{thread_rng, Rng};
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use solana_measure::measure::Measure;
-    use solana_perf::test_tx::test_tx;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::clock;
-    use solana_sdk::hash::hash;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::timing;
-    use std::time::Duration;
+    use {
+        super::*,
+        crate::poh_recorder::WorkingBank,
+        rand::{thread_rng, Rng},
+        solana_ledger::{
+            blockstore::Blockstore,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+            leader_schedule_cache::LeaderScheduleCache,
+        },
+        solana_measure::measure::Measure,
+        solana_perf::test_tx::test_tx,
+        solana_runtime::bank::Bank,
+        solana_sdk::{clock, hash::hash, pubkey::Pubkey, timing},
+        std::time::Duration,
+    };
 
     #[test]
     #[ignore]

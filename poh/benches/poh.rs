@@ -3,12 +3,16 @@
 #![feature(test)]
 extern crate test;
 
-use solana_core::poh_service::DEFAULT_HASHES_PER_BATCH;
-use solana_ledger::poh::Poh;
-use solana_sdk::hash::Hash;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use test::Bencher;
+use {
+    solana_ledger::poh::Poh,
+    solana_poh::poh_service::DEFAULT_HASHES_PER_BATCH,
+    solana_sdk::hash::Hash,
+    std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    test::Bencher,
+};
 
 const NUM_HASHES: u64 = 30_000; // Should require ~10ms on a 2017 MacBook Pro
 

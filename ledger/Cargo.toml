@@ -29,8 +29,7 @@ num_cpus = "1.13.0"
 prost = "0.7.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
-rayon = "1.5.0"
-reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
+rayon = "1.5.1"
 serde = "1.0.126"
 serde_bytes = "0.11.5"
 sha2 = "0.9.5"
@@ -56,6 +55,14 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 trees = "0.2.1"
 
+# Disable reed-solomon-erasure/simd-accel feature on aarch64 only since it
+# requires clang to support -march=native.
+[target.'cfg(any(target_arch = "aarch64", target_arch = "aarch64_apple_darwin"))'.dependencies]
+reed-solomon-erasure = { version = "4.0.2" }
+
+[target.'cfg(not(any(target_arch = "aarch64", target_arch = "aarch64_apple_darwin")))'.dependencies]
+reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
+
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
@@ -67,10 +74,10 @@ features = ["lz4"]
 assert_matches = "1.3.0"
 matches = "0.1.6"
 solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }
-solana-budget-program = { path = "../programs/budget", version = "=1.8.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.4"
 
 [lib]
 crate-type = ["lib"]
