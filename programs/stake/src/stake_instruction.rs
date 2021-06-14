@@ -8,7 +8,7 @@ use {
         process_instruction::{get_sysvar, InvokeContext},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        stake::{id, instruction::StakeInstruction},
+        stake::{program::id, instruction::StakeInstruction},
         sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
     },
 };

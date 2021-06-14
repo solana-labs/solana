@@ -36,15 +36,15 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         .contains(&AccountIndex::ProgramId)
     {
         bank.get_filtered_indexed_accounts(
-            &IndexKey::ProgramId(stake::id()),
+            &IndexKey::ProgramId(stake::program::id()),
             // The program-id account index checks for Account owner on inclusion. However, due to
             // the current AccountsDb implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
-            |account| account.owner() == &stake::id(),
+            |account| account.owner() == &stake::program::id(),
         )
     } else {
-        bank.get_program_accounts(&stake::id())
+        bank.get_program_accounts(&stake::program::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = stake_state::from(account).unwrap_or_default();
@@ -239,7 +239,7 @@ mod tests {
                 balance,
                 &StakeState::Initialized(meta),
                 std::mem::size_of::<StakeState>(),
-                &stake::id(),
+                &stake::program::id(),
             )
             .unwrap();
             accounts.insert(pubkey, stake_account);

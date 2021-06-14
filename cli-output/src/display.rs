@@ -244,7 +244,7 @@ pub fn write_transaction<W: io::Write>(
                 writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
                 raw = false;
             }
-        } else if program_pubkey == stake::id() {
+        } else if program_pubkey == stake::program::id() {
             if let Ok(stake_instruction) =
                 limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
             {

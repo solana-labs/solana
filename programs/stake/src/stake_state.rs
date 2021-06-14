@@ -16,7 +16,7 @@ use {
         rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
         stake::{
             config::Config,
-            id,
+            program::id,
             instruction::{LockupArgs, StakeError},
             state::{Authorized, Delegation, Lockup, Meta, Stake, StakeAuthorize, StakeState},
         },

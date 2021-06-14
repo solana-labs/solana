@@ -1907,7 +1907,7 @@ impl Bank {
                         if self
                             .feature_set
                             .is_active(&feature_set::filter_stake_delegation_accounts::id())
-                            && (stake_account.owner() != &stake::id()
+                            && (stake_account.owner() != &stake::program::id()
                                 || vote_account.owner() != &solana_vote_program::id())
                         {
                             datapoint_warn!(

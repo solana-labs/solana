@@ -14,7 +14,7 @@ const DAYS_PER_YEAR: f64 = 365.25;
 const SECONDS_PER_YEAR: i64 = (SECONDS_PER_DAY as f64 * DAYS_PER_YEAR) as i64;
 
 pub(crate) fn derive_stake_account_address(base_pubkey: &Pubkey, i: usize) -> Pubkey {
-    Pubkey::create_with_seed(base_pubkey, &i.to_string(), &stake::id()).unwrap()
+    Pubkey::create_with_seed(base_pubkey, &i.to_string(), &stake::program::id()).unwrap()
 }
 
 // Return derived addresses

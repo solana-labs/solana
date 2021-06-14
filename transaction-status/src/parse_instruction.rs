@@ -19,7 +19,7 @@ lazy_static! {
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
     static ref MEMO_V1_PROGRAM_ID: Pubkey = Pubkey::new_from_array(spl_memo::v1::id().to_bytes());
     static ref MEMO_V3_PROGRAM_ID: Pubkey = Pubkey::new_from_array(spl_memo::id().to_bytes());
-    static ref STAKE_PROGRAM_ID: Pubkey = stake::id();
+    static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();

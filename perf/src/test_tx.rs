@@ -24,7 +24,7 @@ pub fn test_multisig_tx() -> Transaction {
 
     let transfer_instruction = SystemInstruction::Transfer { lamports };
 
-    let program_ids = vec![system_program::id(), stake::id()];
+    let program_ids = vec![system_program::id(), stake::program::id()];
 
     let instructions = vec![CompiledInstruction::new(
         0,

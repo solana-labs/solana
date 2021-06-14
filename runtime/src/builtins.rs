@@ -56,7 +56,7 @@ fn genesis_builtins() -> Vec<Builtin> {
         ),
         Builtin::new(
             "stake_program",
-            stake::id(),
+            stake::program::id(),
             with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
         ),
         Builtin::new(

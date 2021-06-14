@@ -792,7 +792,7 @@ mod tests {
         let stake_authority = Keypair::new();
         let from = Keypair::new();
         let stake_account = Keypair::new();
-        let stake_program_id = stake::id();
+        let stake_program_id = stake::program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));

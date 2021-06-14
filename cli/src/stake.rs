@@ -972,7 +972,7 @@ pub fn process_create_stake_account(
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &stake::id())?
+        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &stake::program::id())?
     } else {
         stake_account.pubkey()
     };
@@ -1040,7 +1040,7 @@ pub fn process_create_stake_account(
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
-            let err_msg = if stake_account.owner == stake::id() {
+            let err_msg = if stake_account.owner == stake::program::id() {
                 format!("Stake account {} already exists", stake_account_address)
             } else {
                 format!(
@@ -1196,7 +1196,7 @@ pub fn process_deactivate_stake_account(
     let stake_authority = config.signers[stake_authority];
 
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account_pubkey, seed, &stake::id())?
+        Pubkey::create_with_seed(&stake_account_pubkey, seed, &stake::program::id())?
     } else {
         *stake_account_pubkey
     };
@@ -1274,7 +1274,7 @@ pub fn process_withdraw_stake(
     let custodian = custodian.map(|index| config.signers[index]);
 
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account_pubkey, seed, &stake::id())?
+        Pubkey::create_with_seed(&stake_account_pubkey, seed, &stake::program::id())?
     } else {
         *stake_account_pubkey
     };
@@ -1395,14 +1395,14 @@ pub fn process_split_stake(
     let stake_authority = config.signers[stake_authority];
 
     let split_stake_account_address = if let Some(seed) = split_stake_account_seed {
-        Pubkey::create_with_seed(&split_stake_account.pubkey(), &seed, &stake::id())?
+        Pubkey::create_with_seed(&split_stake_account.pubkey(), &seed, &stake::program::id())?
     } else {
         split_stake_account.pubkey()
     };
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == stake::id() {
+            let err_msg = if stake_account.owner == stake::program::id() {
                 format!(
                     "Stake account {} already exists",
                     split_stake_account_address
@@ -1537,7 +1537,7 @@ pub fn process_merge_stake(
     if !sign_only {
         for stake_account_address in &[stake_account_pubkey, source_stake_account_pubkey] {
             if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
-                if stake_account.owner != stake::id() {
+                if stake_account.owner != stake::program::id() {
                     return Err(CliError::BadParameter(format!(
                         "Account {} is not a stake account",
                         stake_account_address
@@ -1873,7 +1873,7 @@ pub fn process_show_stake_account(
     with_rewards: Option<usize>,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
-    if stake_account.owner != stake::id() {
+    if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a stake account",
             stake_account_address,

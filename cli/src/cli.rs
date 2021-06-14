@@ -933,7 +933,7 @@ pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
 fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) -> Option<Pubkey> {
     matches.value_of(arg_name).and_then(|v| match v {
         "NONCE" => Some(system_program::id()),
-        "STAKE" => Some(stake::id()),
+        "STAKE" => Some(stake::program::id()),
         "VOTE" => Some(solana_vote_program::id()),
         _ => pubkey_of(matches, arg_name),
     })
@@ -2488,7 +2488,7 @@ mod tests {
         let from_pubkey = Some(solana_sdk::pubkey::new_rand());
         let from_str = from_pubkey.unwrap().to_string();
         for (name, program_id) in &[
-            ("STAKE", stake::id()),
+            ("STAKE", stake::program::id()),
             ("VOTE", solana_vote_program::id()),
             ("NONCE", system_program::id()),
         ] {
@@ -2524,7 +2524,7 @@ mod tests {
                 command: CliCommand::CreateAddressWithSeed {
                     from_pubkey: None,
                     seed: "seed".to_string(),
-                    program_id: stake::id(),
+                    program_id: stake::program::id(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2787,11 +2787,11 @@ mod tests {
         config.command = CliCommand::CreateAddressWithSeed {
             from_pubkey: Some(from_pubkey),
             seed: "seed".to_string(),
-            program_id: stake::id(),
+            program_id: stake::program::id(),
         };
         let address = process_command(&config);
         let expected_address =
-            Pubkey::create_with_seed(&from_pubkey, "seed", &stake::id()).unwrap();
+            Pubkey::create_with_seed(&from_pubkey, "seed", &stake::program::id()).unwrap();
         assert_eq!(address.unwrap(), expected_address.to_string());
 
         // Need airdrop cases
@@ -3178,7 +3178,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     derived_address_seed: Some(derived_address_seed),
-                    derived_address_program_id: Some(stake::id()),
+                    derived_address_program_id: Some(stake::program::id()),
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             }

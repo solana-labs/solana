@@ -115,7 +115,7 @@ impl Stakes {
 
     pub fn is_stake(account: &AccountSharedData) -> bool {
         solana_vote_program::check_id(account.owner())
-            || stake::check_id(account.owner())
+            || stake::program::check_id(account.owner())
                 && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
@@ -152,7 +152,7 @@ impl Stakes {
                     .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
-        } else if stake::check_id(account.owner()) {
+        } else if stake::program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
                 (
@@ -568,7 +568,7 @@ pub mod tests {
         // not a stake account, and whacks above entry
         stakes.store(
             &stake_pubkey,
-            &AccountSharedData::new(1, 0, &stake::id()),
+            &AccountSharedData::new(1, 0, &stake::program::id()),
             true,
             true,
         );

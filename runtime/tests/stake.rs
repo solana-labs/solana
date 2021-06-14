@@ -118,7 +118,7 @@ fn test_stake_create_and_split_single_signature() {
 
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
-    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::id()).unwrap();
+    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
 
     let authorized = Authorized::auto(&staker_pubkey);
 
@@ -145,7 +145,7 @@ fn test_stake_create_and_split_single_signature() {
 
     // split the stake
     let split_stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &stake::id()).unwrap();
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &stake::program::id()).unwrap();
     // Test split
     let message = Message::new(
         &stake_instruction::split_with_seed(
@@ -187,7 +187,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
 
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
-    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::id()).unwrap();
+    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
 
     let authorized = Authorized::auto(&staker_pubkey);
 
@@ -212,7 +212,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
         .expect("failed to create and delegate stake account");
 
     let split_stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &stake::id()).unwrap();
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &stake::program::id()).unwrap();
 
     // First, put a system account where we want the new stake account
     let existing_lamports = 42;
@@ -513,7 +513,7 @@ fn test_create_stake_account_from_seed() {
     let bank_client = BankClient::new_shared(&bank);
 
     let seed = "test-string";
-    let stake_pubkey = Pubkey::create_with_seed(&mint_pubkey, seed, &stake::id()).unwrap();
+    let stake_pubkey = Pubkey::create_with_seed(&mint_pubkey, seed, &stake::program::id()).unwrap();
 
     // Create Vote Account
     let message = Message::new(

@@ -82,7 +82,7 @@ fn process_transaction(
     // Look for stake operations
     for instruction in message.instructions.iter().rev() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        if program_pubkey != stake::id() {
+        if program_pubkey != stake::program::id() {
             continue;
         }
 
