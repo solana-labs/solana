@@ -197,7 +197,7 @@ fn calculate_stake_points(
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     fix_stake_deactivate: bool,
 ) -> u128 {
-    calculate_points_and_credits(
+    calculate_stake_points_and_credits(
         stake,
         vote_state,
         stake_history,
@@ -210,7 +210,7 @@ fn calculate_stake_points(
 /// for a given stake and vote_state, calculate how many
 ///   points were earned (credits * stake) and new value
 ///   for credits_observed were the points paid
-fn calculate_points_and_credits(
+fn calculate_stake_points_and_credits(
     stake: &Stake,
     new_vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
@@ -293,7 +293,7 @@ pub fn calculate_stake_rewards(
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     fix_stake_deactivate: bool,
 ) -> Option<(u64, u64, u64)> {
-    let (points, credits_observed) = calculate_points_and_credits(
+    let (points, credits_observed) = calculate_stake_points_and_credits(
         stake,
         vote_state,
         stake_history,
@@ -3682,11 +3682,11 @@ mod tests {
         // assert the previous behavior is preserved where fix_stake_deactivate=false
         assert_eq!(
             (0, 0),
-            calculate_points_and_credits(&stake, &vote_state, None, &mut null_tracer(), false)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, &mut null_tracer(), false)
         );
         assert_eq!(
             (0, 4),
-            calculate_points_and_credits(&stake, &vote_state, None, &mut null_tracer(), true)
+            calculate_stake_points_and_credits(&stake, &vote_state, None, &mut null_tracer(), true)
         );
     }
 
