@@ -2051,7 +2051,8 @@ impl ClusterInfo {
             .process_pull_requests(callers.cloned(), timestamp());
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let mut packets =
+            Packets::new_unpinned_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2323,7 +2324,7 @@ impl ClusterInfo {
             None
         } else {
             let packets =
-                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+                Packets::new_unpinned_with_recycler_data(recycler, "handle_ping_messages", packets);
             Some(packets)
         }
     }

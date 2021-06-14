@@ -36,13 +36,18 @@ fn recv_loop(
     recycler: &PacketsRecycler,
     name: &'static str,
     coalesce_ms: u64,
+    use_pinned_memory: bool,
 ) -> Result<()> {
     let mut recv_count = 0;
     let mut call_count = 0;
     let mut now = Instant::now();
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
-        let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name);
+        let mut msgs = if use_pinned_memory {
+            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
+        } else {
+            Packets::with_capacity(PACKETS_PER_BATCH)
+        };
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader transaction socket)
@@ -84,6 +89,7 @@ pub fn receiver(
     recycler: PacketsRecycler,
     name: &'static str,
     coalesce_ms: u64,
+    use_pinned_memory: bool,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     if res.is_err() {
@@ -100,6 +106,7 @@ pub fn receiver(
                 &recycler.clone(),
                 name,
                 coalesce_ms,
+                use_pinned_memory,
             );
         })
         .unwrap()
@@ -211,6 +218,7 @@ mod test {
             Recycler::default(),
             "test",
             1,
+            true,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
