@@ -2309,6 +2309,8 @@ fn call<'a>(
     {
         let invoke_context = syscall.get_context()?;
         for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+            // REFACTOR: account_deps unification
+            assert_eq!(message.account_keys[i], *_key);
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {

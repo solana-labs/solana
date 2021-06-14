@@ -636,7 +636,13 @@ impl NonceRollbackFull {
             .iter()
             .enumerate()
             .find(|(i, k)| message.is_non_loader_key(k, *i))
-            .and_then(|(i, k)| accounts.get(i).cloned().map(|(_k, a)| (*k, a)));
+            .and_then(|(i, k)| {
+                accounts.get(i).cloned().map(|(_k, a)| {
+                    // REFACTOR: account_deps unification
+                    assert_eq!(*k, _k);
+                    (*k, a)
+                })
+            });
         if let Some((fee_pubkey, fee_account)) = fee_payer {
             if fee_pubkey == nonce_address {
                 Ok(Self {
@@ -2956,7 +2962,11 @@ impl Bank {
             .account_keys
             .iter()
             .zip(accounts.drain(..))
-            .map(|(pubkey, (_pubkey, account))| (*pubkey, Rc::new(RefCell::new(account))))
+            .map(|(pubkey, (_pubkey, account))| {
+                // REFACTOR: account_deps unification
+                assert_eq!(*pubkey, _pubkey);
+                (*pubkey, Rc::new(RefCell::new(account)))
+            })
             .collect();
         let account_dep_refcells: Vec<_> = account_deps
             .drain(..)
@@ -4817,6 +4827,8 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_key, (_pubkey, account))| (Stakes::is_stake(account)))
             {
+                // REFACTOR: account_deps unification
+                assert_eq!(pubkey, _pubkey);
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,

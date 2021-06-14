@@ -1000,6 +1000,8 @@ impl Accounts {
                 .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|((i, key), (_key, _account))| message.is_non_loader_key(key, *i))
             {
+                // REFACTOR: account_deps unification
+                assert_eq!(key, _key);
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
                     key,

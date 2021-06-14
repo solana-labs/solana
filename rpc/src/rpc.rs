@@ -3098,6 +3098,7 @@ pub mod rpc_full {
                             .map(|i| post_simulation_accounts.get(i))
                             .flatten()
                             .map(|(_pubkey, account)| {
+                                // REFACTOR: account_deps unification
                                 UiAccount::encode(&address, account, accounts_encoding, None, None)
                             })
                     });

@@ -477,6 +477,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .iter()
             .position(|key| key == pubkey)
         {
+            // REFACTOR: account_deps unification
+            assert_eq!(*pubkey, self.accounts[index].0);
             return Some(self.accounts[index].1.clone());
         }
         self.account_deps.iter().find_map(|(key, account)| {
@@ -637,6 +639,8 @@ impl MessageProcessor {
             .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
+                // REFACTOR: account_deps unification
+                assert_eq!(message.account_keys[index], accounts[index].0);
                 (
                     message.is_signer(index),
                     message.is_writable(index, demote_sysvar_write_locks),
@@ -992,6 +996,8 @@ impl MessageProcessor {
             let mut work = |_unique_index: usize, account_index: usize| {
                 let key = &message.account_keys[account_index];
                 let account = accounts[account_index].1.borrow();
+                // REFACTOR: account_deps unification
+                assert_eq!(*key, accounts[account_index].0);
                 pre_accounts.push(PreAccount::new(key, &account));
                 Ok(())
             };
@@ -1092,6 +1098,8 @@ impl MessageProcessor {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
                 let key = &message.account_keys[account_index];
                 let (_key, account) = &accounts[account_index];
+                // REFACTOR: account_deps unification
+                assert_eq!(key, _key);
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[account_index]
                 } else {
@@ -1163,6 +1171,8 @@ impl MessageProcessor {
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
                 if instructions::check_id(key) {
+                    // REFACTOR: account_deps unification
+                    assert_eq!(*key, accounts[i].0);
                     let mut mut_account_ref = accounts[i].1.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
