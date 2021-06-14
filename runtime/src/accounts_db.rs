@@ -4827,19 +4827,23 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
+        test_hash_calculation: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let use_index = true;
         let check_hash = true;
         let can_cached_slot_be_unflushed = false;
-        let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_helper(
-            use_index,
-            slot,
-            ancestors,
-            check_hash,
-            can_cached_slot_be_unflushed,
-        )?;
+        let (calculated_hash, calculated_lamports) = self
+            .calculate_accounts_hash_helper_with_verify(
+                use_index,
+                test_hash_calculation,
+                slot,
+                ancestors,
+                None,
+                can_cached_slot_be_unflushed,
+                check_hash,
+            )?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -8162,7 +8166,7 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
         accounts
-            .verify_bank_hash_and_lamports(4, &Ancestors::default(), 1222)
+            .verify_bank_hash_and_lamports(4, &Ancestors::default(), 1222, true)
             .unwrap();
     }
 
@@ -8637,13 +8641,13 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Ok(_)
         );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Err(MissingBankHash)
         );
 
@@ -8658,7 +8662,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, bank_hash_info);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Err(MismatchedBankHash)
         );
     }
@@ -8679,7 +8683,7 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Ok(_)
         );
 
@@ -8693,12 +8697,12 @@ pub mod tests {
         );
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2, true),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -8718,7 +8722,7 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, true),
             Ok(_)
         );
     }
@@ -8748,7 +8752,7 @@ pub mod tests {
         db.store_accounts_unfrozen(some_slot, accounts, Some(&[&some_hash]), false);
         db.add_root(some_slot);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Err(MismatchedAccountHash)
         );
     }
@@ -9317,12 +9321,12 @@ pub mod tests {
             let no_ancestors = Ancestors::default();
             accounts.update_accounts_hash(current_slot, &no_ancestors);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
                 .unwrap();
 
             // repeating should be no-op

@@ -114,7 +114,15 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
     let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(0, &ancestors);
-    bencher.iter(|| assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports)));
+    let test_hash_calculation = false;
+    bencher.iter(|| {
+        assert!(accounts.verify_bank_hash_and_lamports(
+            0,
+            &ancestors,
+            total_lamports,
+            test_hash_calculation
+        ))
+    });
 }
 
 #[bench]
