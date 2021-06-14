@@ -1557,6 +1557,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         from: 0,
     };
     process_command(&config).unwrap();
-    let seed_address = Pubkey::create_with_seed(&stake_pubkey, seed, &stake::program::id()).unwrap();
+    let seed_address =
+        Pubkey::create_with_seed(&stake_pubkey, seed, &stake::program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
 }

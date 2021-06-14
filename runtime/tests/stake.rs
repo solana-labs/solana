@@ -118,7 +118,8 @@ fn test_stake_create_and_split_single_signature() {
 
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
-    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
+    let stake_address =
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
 
     let authorized = Authorized::auto(&staker_pubkey);
 
@@ -187,7 +188,8 @@ fn test_stake_create_and_split_to_existing_system_account() {
 
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
-    let stake_address = Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
+    let stake_address =
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &stake::program::id()).unwrap();
 
     let authorized = Authorized::auto(&staker_pubkey);
 

@@ -1704,8 +1704,8 @@ pub fn process_show_stakes(
             ]);
         }
     }
-    let all_stake_accounts =
-        rpc_client.get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
+    let all_stake_accounts = rpc_client
+        .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {

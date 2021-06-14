@@ -16,8 +16,8 @@ use {
         rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
         stake::{
             config::Config,
-            program::id,
             instruction::{LockupArgs, StakeError},
+            program::id,
             state::{Authorized, Delegation, Lockup, Meta, Stake, StakeAuthorize, StakeState},
         },
         stake_history::{StakeHistory, StakeHistoryEntry},
@@ -25,6 +25,12 @@ use {
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
 };
+
+#[deprecated(
+    since = "1.8.0",
+    note = "Please use `solana_sdk::stake::state` or `solana_program::stake::state` instead"
+)]
+pub use solana_sdk::stake::state::*;
 
 #[derive(Debug)]
 pub enum SkippedReason {
@@ -1283,7 +1289,6 @@ mod tests {
         native_token,
         process_instruction::MockInvokeContext,
         pubkey::Pubkey,
-        stake::id,
         system_program,
     };
     use solana_vote_program::vote_state;

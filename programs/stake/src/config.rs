@@ -10,6 +10,12 @@ use solana_sdk::{
     stake::config::{self, Config},
 };
 
+#[deprecated(
+    since = "1.8.0",
+    note = "Please use `solana_sdk::stake::config` or `solana_program::stake::config` instead"
+)]
+pub use solana_sdk::stake::config::*;
+
 pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
     get_config_data(&account.data())
         .ok()

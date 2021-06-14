@@ -1,6 +1,7 @@
 use {
     crate::stake::{
-        config, program::id,
+        config,
+        program::id,
         state::{Authorized, Lockup, StakeAuthorize, StakeState},
     },
     crate::{

@@ -8,10 +8,16 @@ use {
         process_instruction::{get_sysvar, InvokeContext},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        stake::{program::id, instruction::StakeInstruction},
+        stake::{instruction::StakeInstruction, program::id},
         sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
     },
 };
+
+#[deprecated(
+    since = "1.8.0",
+    note = "Please use `solana_sdk::stake::instruction` or `solana_program::stake::instruction` instead"
+)]
+pub use solana_sdk::stake::instruction::*;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
