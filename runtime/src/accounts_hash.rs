@@ -93,7 +93,7 @@ impl CalculateHashIntermediate {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct CumulativeOffset {
     pub index: Vec<usize>,
     pub start_offset: usize,
@@ -163,39 +163,32 @@ impl CumulativeOffsets {
         }
     }
 
+    fn find(&self, start: usize) -> (usize, &CumulativeOffset) {
+        assert!(!self.cumulative_offsets.is_empty());
+        let index = match self.cumulative_offsets[..]
+            .binary_search_by(|index| index.start_offset.cmp(&start))
+        {
+            Ok(index) => index,
+            Err(index) => index - 1, // we would insert at index so we are before the item at index
+        };
+        let index = &self.cumulative_offsets[index];
+        let start = start - index.start_offset;
+        (start, index)
+    }
+
     // return the biggest slice possible that starts at 'start'
     pub fn get_slice<'a, T>(&self, raw: &'a [Vec<T>], start: usize) -> &'a [T] {
-        // This could be binary search, but we expect a small number of vectors.
-        for i in (0..self.cumulative_offsets.len()).into_iter().rev() {
-            let index = &self.cumulative_offsets[i];
-            if start >= index.start_offset {
-                let start = start - index.start_offset;
-                const DIMENSION: usize = 0;
-                return &raw[index.index[DIMENSION]][start..];
-            }
-        }
-        panic!(
-            "get_slice didn't find: {}, len: {}",
-            start, self.total_count
-        );
+        let (start, index) = self.find(start);
+        const DIMENSION: usize = 0;
+        &raw[index.index[DIMENSION]][start..]
     }
 
     // return the biggest slice possible that starts at 'start'
     pub fn get_slice_2d<'a, T>(&self, raw: &'a [Vec<Vec<T>>], start: usize) -> &'a [T] {
-        // This could be binary search, but we expect a small number of vectors.
-        for i in (0..self.cumulative_offsets.len()).into_iter().rev() {
-            let index = &self.cumulative_offsets[i];
-            if start >= index.start_offset {
-                let start = start - index.start_offset;
-                const DIMENSION_0: usize = 0;
-                const DIMENSION_1: usize = 1;
-                return &raw[index.index[DIMENSION_0]][index.index[DIMENSION_1]][start..];
-            }
-        }
-        panic!(
-            "get_slice didn't find: {}, len: {}",
-            start, self.total_count
-        );
+        let (start, index) = self.find(start);
+        const DIMENSION_0: usize = 0;
+        const DIMENSION_1: usize = 1;
+        &raw[index.index[DIMENSION_0]][index.index[DIMENSION_1]][start..]
     }
 }
 
@@ -1599,6 +1592,46 @@ pub mod tests {
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 0); // 2 non-empty vectors
+    }
+
+    #[should_panic(expected = "is_empty")]
+    #[test]
+    fn test_accountsdb_cumulative_find_empty() {
+        let input = CumulativeOffsets {
+            cumulative_offsets: vec![],
+            total_count: 0,
+        };
+        input.find(0);
+    }
+
+    #[test]
+    fn test_accountsdb_cumulative_find() {
+        let input = CumulativeOffsets {
+            cumulative_offsets: vec![CumulativeOffset {
+                index: vec![0],
+                start_offset: 0,
+            }],
+            total_count: 0,
+        };
+        assert_eq!(input.find(0), (0, &input.cumulative_offsets[0]));
+
+        let input = CumulativeOffsets {
+            cumulative_offsets: vec![
+                CumulativeOffset {
+                    index: vec![0],
+                    start_offset: 0,
+                },
+                CumulativeOffset {
+                    index: vec![1],
+                    start_offset: 2,
+                },
+            ],
+            total_count: 0,
+        };
+        assert_eq!(input.find(0), (0, &input.cumulative_offsets[0])); // = first start_offset
+        assert_eq!(input.find(1), (1, &input.cumulative_offsets[0])); // > first start_offset
+        assert_eq!(input.find(2), (0, &input.cumulative_offsets[1])); // = last start_offset
+        assert_eq!(input.find(3), (1, &input.cumulative_offsets[1])); // > last start_offset
     }
 
     #[test]
