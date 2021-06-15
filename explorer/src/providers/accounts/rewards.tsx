@@ -6,6 +6,11 @@ import { ActionType } from "providers/block";
 import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
+const REWARDS_AVAILABLE_EPOCH = new Map<Cluster, number>([
+  [Cluster.MainnetBeta, 133],
+  [Cluster.Testnet, 43],
+]);
+
 const PAGE_SIZE = 15;
 
 export type Rewards = {
@@ -87,6 +92,7 @@ async function fetchRewards(
     url,
   });
 
+  const lowestAvailableEpoch = REWARDS_AVAILABLE_EPOCH.get(cluster) || 0;
   const connection = new Connection(url);
 
   if (!fromEpoch && highestEpoch) {
@@ -143,7 +149,7 @@ async function fetchRewards(
     status: FetchStatus.Fetched,
     data: {
       rewards: results || [],
-      foundOldest: lowestFetchedEpoch <= 0,
+      foundOldest: lowestFetchedEpoch <= lowestAvailableEpoch,
       highestFetchedEpoch: fromEpoch,
       lowestFetchedEpoch,
     },
