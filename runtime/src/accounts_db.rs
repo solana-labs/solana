@@ -5723,8 +5723,7 @@ impl AccountsDb {
         type AccountsMap<'a> =
             HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
+        slots.sort_unstable();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
@@ -5917,8 +5916,7 @@ impl AccountsDb {
 
     fn print_index(&self, label: &str) {
         let mut roots: Vec<_> = self.accounts_index.all_roots();
-        #[allow(clippy::stable_sort_primitive)]
-        roots.sort();
+        roots.sort_unstable();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
             info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
@@ -5931,15 +5929,13 @@ impl AccountsDb {
 
     fn print_count_and_status(&self, label: &str) {
         let mut slots: Vec<_> = self.storage.all_slots();
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
+        slots.sort_unstable();
         info!("{}: count_and status for {} slots:", label, slots.len());
         for slot in &slots {
             let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
             let r_slot_stores = slot_stores.read().unwrap();
             let mut ids: Vec<_> = r_slot_stores.keys().cloned().collect();
-            #[allow(clippy::stable_sort_primitive)]
-            ids.sort();
+            ids.sort_unstable();
             for id in &ids {
                 let entry = r_slot_stores.get(id).unwrap();
                 info!(

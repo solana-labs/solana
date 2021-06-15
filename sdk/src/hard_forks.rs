@@ -22,8 +22,7 @@ impl HardForks {
         } else {
             self.hard_forks.push((new_slot, 1));
         }
-        #[allow(clippy::stable_sort_primitive)]
-        self.hard_forks.sort();
+        self.hard_forks.sort_unstable();
     }
 
     // Returns a sorted-by-slot iterator over the registered hark forks

@@ -1484,8 +1484,7 @@ impl Bank {
         }
 
         let mut ancestors: Vec<_> = roots.into_iter().collect();
-        #[allow(clippy::stable_sort_primitive)]
-        ancestors.sort();
+        ancestors.sort_unstable();
         ancestors
     }
 

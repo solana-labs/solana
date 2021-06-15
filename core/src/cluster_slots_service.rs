@@ -143,8 +143,7 @@ impl ClusterSlotsService {
         while let Ok(mut more) = cluster_slots_update_receiver.try_recv() {
             slots.append(&mut more);
         }
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
+        slots.sort_unstable();
 
         if !slots.is_empty() {
             cluster_info.push_epoch_slots(&slots);
