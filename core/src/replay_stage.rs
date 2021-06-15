@@ -850,12 +850,6 @@ impl ReplayStage {
             // Clear the duplicate banks from BankForks
             {
                 let mut w_bank_forks = bank_forks.write().unwrap();
-                // Purging should have already been taken care of by logic
-                // in repair_service, so make sure drop implementation doesn't
-                // run
-                if let Some(b) = w_bank_forks.get(*d) {
-                    b.skip_drop.store(true, Ordering::Relaxed)
-                }
                 w_bank_forks.remove(*d);
             }
         }

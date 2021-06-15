@@ -39,7 +39,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
-    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -68,7 +68,7 @@ use solana_sdk::{
         AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
     },
     clock::{
-        Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
+        BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
@@ -415,6 +415,8 @@ pub struct BankRc {
 
     /// Current slot
     pub(crate) slot: Slot,
+
+    pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -429,6 +431,7 @@ impl AbiExample for BankRc {
             // AbiExample for Accounts is specially implemented to contain a storage example
             accounts: AbiExample::example(),
             slot: AbiExample::example(),
+            bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -439,6 +442,7 @@ impl BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
             slot,
+            bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -908,6 +912,8 @@ pub struct Bank {
     /// Bank slot (i.e. block)
     slot: Slot,
 
+    bank_id: BankId,
+
     /// Bank epoch
     epoch: Epoch,
 
@@ -963,8 +969,6 @@ pub struct Bank {
 
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
-
-    pub skip_drop: AtomicBool,
 
     pub cluster_type: Option<ClusterType>,
 
@@ -1130,6 +1134,7 @@ impl Bank {
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
+            bank_id_generator: parent.rc.bank_id_generator.clone(),
         };
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
@@ -1138,10 +1143,12 @@ impl Bank {
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
+        let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
             rc,
             src,
             slot,
+            bank_id,
             epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
@@ -1183,7 +1190,6 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
             rewards: RwLock::new(vec![]),
-            skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             no_stake_rewrite: AtomicBool::new(parent.no_stake_rewrite.load(Relaxed)),
@@ -1321,6 +1327,7 @@ impl Bank {
             slots_per_year: fields.slots_per_year,
             unused: genesis_config.unused,
             slot: fields.slot,
+            bank_id: 0,
             epoch: fields.epoch,
             block_height: fields.block_height,
             collector_id: fields.collector_id,
@@ -1340,7 +1347,6 @@ impl Bank {
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
-            skip_drop: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             no_stake_rewrite: new(),
@@ -1438,6 +1444,10 @@ impl Bank {
 
     pub fn slot(&self) -> Slot {
         self.slot
+    }
+
+    pub fn bank_id(&self) -> BankId {
+        self.bank_id
     }
 
     pub fn epoch(&self) -> Epoch {
@@ -2657,7 +2667,7 @@ impl Bank {
         }
     }
 
-    pub fn remove_unrooted_slots(&self, slots: &[Slot]) {
+    pub fn remove_unrooted_slots(&self, slots: &[(Slot, BankId)]) {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
@@ -4334,38 +4344,49 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, AccountSharedData)> {
+    pub fn get_program_accounts(
+        &self,
+        program_id: &Pubkey,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program(&self.ancestors, program_id)
+            .load_by_program(&self.ancestors, self.bank_id, program_id)
     }
 
     pub fn get_filtered_program_accounts<F: Fn(&AccountSharedData) -> bool>(
         &self,
         program_id: &Pubkey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
-        self.rc
-            .accounts
-            .load_by_program_with_filter(&self.ancestors, program_id, filter)
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+        self.rc.accounts.load_by_program_with_filter(
+            &self.ancestors,
+            self.bank_id,
+            program_id,
+            filter,
+        )
     }
 
     pub fn get_filtered_indexed_accounts<F: Fn(&AccountSharedData) -> bool>(
         &self,
         index_key: &IndexKey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
-        self.rc
-            .accounts
-            .load_by_index_key_with_filter(&self.ancestors, index_key, filter)
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+        self.rc.accounts.load_by_index_key_with_filter(
+            &self.ancestors,
+            self.bank_id,
+            index_key,
+            filter,
+        )
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
         self.rc.accounts.account_indexes_include_key(key)
     }
 
-    pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, AccountSharedData, Slot)> {
-        self.rc.accounts.load_all(&self.ancestors)
+    pub fn get_all_accounts_with_modified_slots(
+        &self,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
+        self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -4420,10 +4441,14 @@ impl Bank {
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
-    ) -> Vec<(Pubkey, u64)> {
-        self.rc
-            .accounts
-            .load_largest_accounts(&self.ancestors, num, filter_by_address, filter)
+    ) -> ScanResult<Vec<(Pubkey, u64)>> {
+        self.rc.accounts.load_largest_accounts(
+            &self.ancestors,
+            self.bank_id,
+            num,
+            filter_by_address,
+            filter,
+        )
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -4567,12 +4592,18 @@ impl Bank {
         }
     }
 
-    pub fn calculate_capitalization(&self) -> u64 {
-        self.rc.accounts.calculate_capitalization(&self.ancestors)
+    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+        let can_cached_slot_be_unflushed = true; // implied yes
+        self.rc.accounts.calculate_capitalization(
+            &self.ancestors,
+            self.slot(),
+            can_cached_slot_be_unflushed,
+            debug_verify,
+        )
     }
 
-    pub fn calculate_and_verify_capitalization(&self) -> bool {
-        let calculated = self.calculate_capitalization();
+    pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
+        let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
         if calculated == expected {
             true
@@ -4589,8 +4620,9 @@ impl Bank {
     /// This should only be used for developing purposes.
     pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
+        let debug_verify = true;
         self.capitalization
-            .store(self.calculate_capitalization(), Relaxed);
+            .store(self.calculate_capitalization(debug_verify), Relaxed);
         old
     }
 
@@ -4617,6 +4649,7 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 Some(self.capitalization()),
+                false,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -5246,10 +5279,6 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if self.skip_drop.load(Relaxed) {
-            return;
-        }
-
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
@@ -5257,7 +5286,9 @@ impl Drop for Bank {
             // 1. Tests
             // 2. At startup when replaying blockstore and there's no
             // AccountsBackgroundService to perform cleanups yet.
-            self.rc.accounts.purge_slot(self.slot(), false);
+            self.rc
+                .accounts
+                .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
 }
@@ -5298,7 +5329,9 @@ pub(crate) mod tests {
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        accounts_index::{AccountIndex, AccountMap, AccountSecondaryIndexes, ITER_BATCH_SIZE},
+        accounts_index::{
+            AccountIndex, AccountMap, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE,
+        },
         ancestors::Ancestors,
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
@@ -5848,7 +5881,7 @@ pub(crate) mod tests {
         updater();
         let new = bank.capitalization();
         asserter(old, new);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -6144,7 +6177,7 @@ pub(crate) mod tests {
             burned_portion
         );
 
-        assert!(bank.calculate_and_verify_capitalization());
+        assert!(bank.calculate_and_verify_capitalization(true));
 
         assert_eq!(
             rent_to_be_distributed,
@@ -7320,7 +7353,7 @@ pub(crate) mod tests {
             )]
         );
         bank1.freeze();
-        assert!(bank1.calculate_and_verify_capitalization());
+        assert!(bank1.calculate_and_verify_capitalization(true));
     }
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
@@ -7398,7 +7431,7 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
         bank1.freeze();
-        assert!(bank1.calculate_and_verify_capitalization());
+        assert!(bank1.calculate_and_verify_capitalization(true));
 
         // verify voting and staking rewards are recorded
         let rewards = bank1.rewards.read().unwrap();
@@ -8629,7 +8662,7 @@ pub(crate) mod tests {
         // First, initialize the clock sysvar
         activate_all_features(&mut genesis_config);
         let bank1 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank1.calculate_capitalization(), bank1.capitalization());
+        assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
 
         assert_capitalization_diff(
             &bank1,
@@ -9136,7 +9169,7 @@ pub(crate) mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         parent.restore_old_behavior_for_fragile_tests();
 
-        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
+        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots().unwrap();
         assert!(
             genesis_accounts
                 .iter()
@@ -9164,11 +9197,11 @@ pub(crate) mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         bank1.squash();
         assert_eq!(
-            bank0.get_program_accounts(&program_id),
+            bank0.get_program_accounts(&program_id).unwrap(),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
-            bank1.get_program_accounts(&program_id),
+            bank1.get_program_accounts(&program_id).unwrap(),
             vec![(pubkey0, account0)]
         );
         assert_eq!(
@@ -9187,8 +9220,8 @@ pub(crate) mod tests {
 
         let bank3 = Arc::new(new_from_parent(&bank2));
         bank3.squash();
-        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
-        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank1.get_program_accounts(&program_id).unwrap().len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).unwrap().len(), 2);
     }
 
     #[test]
@@ -9208,8 +9241,9 @@ pub(crate) mod tests {
         let account = AccountSharedData::new(1, 0, &program_id);
         bank.store_account(&address, &account);
 
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, account));
 
@@ -9220,12 +9254,14 @@ pub(crate) mod tests {
         let new_account = AccountSharedData::new(1, 0, &another_program_id);
         let bank = Arc::new(new_from_parent(&bank));
         bank.store_account(&address, &new_account);
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
-        let indexed_accounts =
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true);
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true)
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
 
@@ -9233,12 +9269,14 @@ pub(crate) mod tests {
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
                 account.owner() == &program_id
-            });
+            })
+            .unwrap();
         assert!(indexed_accounts.is_empty());
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
                 account.owner() == &another_program_id
-            });
+            })
+            .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account));
     }
@@ -9388,7 +9426,7 @@ pub(crate) mod tests {
         // Non-native loader accounts can not be used for instruction processing
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         let ((vote_id, vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
@@ -9398,13 +9436,13 @@ pub(crate) mod tests {
         bank.store_account(&stake_id, &stake_account);
         assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
             String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
@@ -9424,7 +9462,7 @@ pub(crate) mod tests {
         assert_eq!(old_hash, new_hash);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
             String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
@@ -11036,16 +11074,16 @@ pub(crate) mod tests {
         let program_id = solana_sdk::pubkey::new_rand();
 
         bank.add_native_program("mock_program", &program_id, false);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         // someone mess with program_id's balance
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
-        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
         bank.deposit(&program_id, 10).unwrap();
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         bank.add_native_program("mock_program v2", &program_id, true);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -11056,12 +11094,12 @@ pub(crate) mod tests {
 
         // someone managed to squat at program_id!
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
-        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
         bank.deposit(&program_id, 10).unwrap();
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
 
         bank.add_native_program("mock_program", &program_id, false);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
     }
 
     #[test]
@@ -11212,13 +11250,13 @@ pub(crate) mod tests {
             bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
             bank1.capitalization()
         );
-        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
+        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));
 
         // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
         // So do some convolted setup; anyway this test itself will just be temporary
         let bank0 = std::panic::AssertUnwindSafe(bank0);
         let overflowing_capitalization =
-            std::panic::catch_unwind(|| bank0.calculate_capitalization());
+            std::panic::catch_unwind(|| bank0.calculate_capitalization(true));
         if let Ok(overflowing_capitalization) = overflowing_capitalization {
             info!("asserting overflowing capitalization for bank0");
             assert_eq!(overflowing_capitalization, bank0.capitalization());
@@ -11886,13 +11924,27 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
+    #[derive(Debug)]
+    enum AcceptableScanResults {
+        DroppedSlotError,
+        NoFailure,
+        Both,
+    }
+
     fn test_store_scan_consistency<F: 'static>(
         accounts_db_caching_enabled: bool,
         update_f: F,
         drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
+        acceptable_scan_results: AcceptableScanResults,
     ) where
-        F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
-            + std::marker::Send,
+        F: Fn(
+                Arc<Bank>,
+                crossbeam_channel::Sender<Arc<Bank>>,
+                crossbeam_channel::Receiver<BankId>,
+                Arc<HashSet<Pubkey>>,
+                Pubkey,
+                u64,
+            ) + std::marker::Send,
     {
         // Set up initial bank
         let mut genesis_config = create_genesis_config_with_leader(
@@ -11937,48 +11989,83 @@ pub(crate) mod tests {
         // Thread that runs scan and constantly checks for
         // consistency
         let pubkeys_to_modify_ = pubkeys_to_modify.clone();
-        let exit_ = exit.clone();
 
         // Channel over which the bank to scan is sent
         let (bank_to_scan_sender, bank_to_scan_receiver): (
             crossbeam_channel::Sender<Arc<Bank>>,
             crossbeam_channel::Receiver<Arc<Bank>>,
         ) = bounded(1);
-        let scan_thread = Builder::new()
-            .name("scan".to_string())
-            .spawn(move || loop {
-                if exit_.load(Relaxed) {
-                    return;
-                }
-                if let Ok(bank_to_scan) =
-                    bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
-                {
-                    let accounts = bank_to_scan.get_program_accounts(&program_id);
-                    // Should never see empty accounts because no slot ever deleted
-                    // any of the original accounts, and the scan should reflect the
-                    // account state at some frozen slot `X` (no partial updates).
-                    assert!(!accounts.is_empty());
-                    let mut expected_lamports = None;
-                    let mut target_accounts_found = HashSet::new();
-                    for (pubkey, account) in accounts {
-                        let account_balance = account.lamports();
-                        if pubkeys_to_modify_.contains(&pubkey) {
-                            target_accounts_found.insert(pubkey);
-                            if let Some(expected_lamports) = expected_lamports {
-                                assert_eq!(account_balance, expected_lamports);
-                            } else {
-                                // All pubkeys in the specified set should have the same balance
-                                expected_lamports = Some(account_balance);
+
+        let (scan_finished_sender, scan_finished_receiver): (
+            crossbeam_channel::Sender<BankId>,
+            crossbeam_channel::Receiver<BankId>,
+        ) = unbounded();
+        let num_banks_scanned = Arc::new(AtomicU64::new(0));
+        let scan_thread = {
+            let exit = exit.clone();
+            let num_banks_scanned = num_banks_scanned.clone();
+            Builder::new()
+                .name("scan".to_string())
+                .spawn(move || {
+                    loop {
+                        info!("starting scan iteration");
+                        if exit.load(Relaxed) {
+                            info!("scan exiting");
+                            return;
+                        }
+                        if let Ok(bank_to_scan) =
+                            bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
+                        {
+                            info!("scanning program accounts for slot {}", bank_to_scan.slot());
+                            let accounts_result = bank_to_scan.get_program_accounts(&program_id);
+                            let _ = scan_finished_sender.send(bank_to_scan.bank_id());
+                            num_banks_scanned.fetch_add(1, Relaxed);
+                            match (&acceptable_scan_results, accounts_result.is_err()) {
+                                (AcceptableScanResults::DroppedSlotError, _)
+                                | (AcceptableScanResults::Both, true) => {
+                                    assert_eq!(
+                                        accounts_result,
+                                        Err(ScanError::SlotRemoved {
+                                            slot: bank_to_scan.slot(),
+                                            bank_id: bank_to_scan.bank_id()
+                                        })
+                                    );
+                                }
+                                (AcceptableScanResults::NoFailure, _)
+                                | (AcceptableScanResults::Both, false) => {
+                                    assert!(accounts_result.is_ok())
+                                }
+                            }
+
+                            // Should never see empty accounts because no slot ever deleted
+                            // any of the original accounts, and the scan should reflect the
+                            // account state at some frozen slot `X` (no partial updates).
+                            if let Ok(accounts) = accounts_result {
+                                assert!(!accounts.is_empty());
+                                let mut expected_lamports = None;
+                                let mut target_accounts_found = HashSet::new();
+                                for (pubkey, account) in accounts {
+                                    let account_balance = account.lamports();
+                                    if pubkeys_to_modify_.contains(&pubkey) {
+                                        target_accounts_found.insert(pubkey);
+                                        if let Some(expected_lamports) = expected_lamports {
+                                            assert_eq!(account_balance, expected_lamports);
+                                        } else {
+                                            // All pubkeys in the specified set should have the same balance
+                                            expected_lamports = Some(account_balance);
+                                        }
+                                    }
+                                }
+
+                                // Should've found all the accounts, i.e. no partial cleans should
+                                // be detected
+                                assert_eq!(target_accounts_found.len(), total_pubkeys_to_modify);
                             }
                         }
                     }
-
-                    // Should've found all the accounts, i.e. no partial cleans should
-                    // be detected
-                    assert_eq!(target_accounts_found.len(), total_pubkeys_to_modify);
-                }
-            })
-            .unwrap();
+                })
+                .unwrap()
+        };
 
         // Thread that constantly updates the accounts, sets
         // roots, and cleans
@@ -11988,6 +12075,7 @@ pub(crate) mod tests {
                 update_f(
                     bank0,
                     bank_to_scan_sender,
+                    scan_finished_receiver,
                     pubkeys_to_modify,
                     program_id,
                     starting_lamports,
@@ -11996,7 +12084,15 @@ pub(crate) mod tests {
             .unwrap();
 
         // Let threads run for a while, check the scans didn't see any mixed slots
+        let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
+        loop {
+            if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
+                break;
+            } else {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
         exit.store(true, Relaxed);
         scan_thread.join().unwrap();
         update_thread.join().unwrap();
@@ -12014,6 +12110,7 @@ pub(crate) mod tests {
                 *accounts_db_caching_enabled,
                 move |bank0,
                       bank_to_scan_sender,
+                      _scan_finished_receiver,
                       pubkeys_to_modify,
                       program_id,
                       starting_lamports| {
@@ -12098,6 +12195,7 @@ pub(crate) mod tests {
                 Some(Box::new(SendDroppedBankCallback::new(
                     pruned_banks_sender.clone(),
                 ))),
+                AcceptableScanResults::NoFailure,
             )
         }
     }
@@ -12107,7 +12205,12 @@ pub(crate) mod tests {
         for accounts_db_caching_enabled in &[false, true] {
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,
-                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                |bank0,
+                 bank_to_scan_sender,
+                 _scan_finished_receiver,
+                 pubkeys_to_modify,
+                 program_id,
+                 starting_lamports| {
                     let mut current_bank = bank0.clone();
                     let mut prev_bank = bank0;
                     loop {
@@ -12142,6 +12245,242 @@ pub(crate) mod tests {
                     }
                 },
                 None,
+                AcceptableScanResults::NoFailure,
+            );
+        }
+    }
+
+    fn setup_banks_on_fork_to_remove(
+        bank0: Arc<Bank>,
+        pubkeys_to_modify: Arc<HashSet<Pubkey>>,
+        program_id: &Pubkey,
+        starting_lamports: u64,
+        num_banks_on_fork: usize,
+        step_size: usize,
+    ) -> (Arc<Bank>, Vec<(Slot, BankId)>, Ancestors) {
+        // Need at least 2 keys to create inconsistency in account balances when deleting
+        // slots
+        assert!(pubkeys_to_modify.len() > 1);
+
+        // Tracks the bank at the tip of the to be created fork
+        let mut bank_at_fork_tip = bank0;
+
+        // All the slots on the fork except slot 0
+        let mut slots_on_fork = Vec::with_capacity(num_banks_on_fork);
+
+        // All accounts in each set of `step_size` slots will have the same account balances.
+        // The account balances of the accounts changes every `step_size` banks. Thus if you
+        // delete any one of the latest `step_size` slots, then you will see varying account
+        // balances when loading the accounts.
+        assert!(num_banks_on_fork >= 2);
+        assert!(step_size >= 2);
+        let pubkeys_to_modify: Vec<Pubkey> = pubkeys_to_modify.iter().cloned().collect();
+        let pubkeys_to_modify_per_slot = (pubkeys_to_modify.len() / step_size).max(1);
+        for _ in (0..num_banks_on_fork).step_by(step_size) {
+            let mut lamports_this_round = 0;
+            for i in 0..step_size {
+                bank_at_fork_tip = Arc::new(Bank::new_from_parent(
+                    &bank_at_fork_tip,
+                    &solana_sdk::pubkey::new_rand(),
+                    bank_at_fork_tip.slot() + 1,
+                ));
+                if lamports_this_round == 0 {
+                    lamports_this_round = bank_at_fork_tip.bank_id() + starting_lamports + 1;
+                }
+                let pubkey_to_modify_starting_index = i * pubkeys_to_modify_per_slot;
+                let account = AccountSharedData::new(lamports_this_round, 0, program_id);
+                for pubkey_index_to_modify in pubkey_to_modify_starting_index
+                    ..pubkey_to_modify_starting_index + pubkeys_to_modify_per_slot
+                {
+                    let key = pubkeys_to_modify[pubkey_index_to_modify % pubkeys_to_modify.len()];
+                    bank_at_fork_tip.store_account(&key, &account);
+                }
+                bank_at_fork_tip.freeze();
+                slots_on_fork.push((bank_at_fork_tip.slot(), bank_at_fork_tip.bank_id()));
+            }
+        }
+
+        let ancestors: Vec<(Slot, usize)> = slots_on_fork.iter().map(|(s, _)| (*s, 0)).collect();
+        let ancestors = Ancestors::from(ancestors);
+
+        (bank_at_fork_tip, slots_on_fork, ancestors)
+    }
+
+    #[test]
+    fn test_remove_unrooted_before_scan() {
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0,
+                 bank_to_scan_sender,
+                 scan_finished_receiver,
+                 pubkeys_to_modify,
+                 program_id,
+                 starting_lamports| {
+                    loop {
+                        let (bank_at_fork_tip, slots_on_fork, ancestors) =
+                            setup_banks_on_fork_to_remove(
+                                bank0.clone(),
+                                pubkeys_to_modify.clone(),
+                                &program_id,
+                                starting_lamports,
+                                10,
+                                2,
+                            );
+                        // Test removing the slot before the scan starts, should cause
+                        // SlotRemoved error every time
+                        for k in pubkeys_to_modify.iter() {
+                            assert!(bank_at_fork_tip.load_slow(&ancestors, k).is_some());
+                        }
+                        bank_at_fork_tip.remove_unrooted_slots(&slots_on_fork);
+
+                        // Accounts on this fork should not be found after removal
+                        for k in pubkeys_to_modify.iter() {
+                            assert!(bank_at_fork_tip.load_slow(&ancestors, k).is_none());
+                        }
+                        if bank_to_scan_sender.send(bank_at_fork_tip.clone()).is_err() {
+                            return;
+                        }
+
+                        // Wait for scan to finish before starting next iteration
+                        let finished_scan_bank_id = scan_finished_receiver.recv();
+                        if finished_scan_bank_id.is_err() {
+                            return;
+                        }
+                        assert_eq!(finished_scan_bank_id.unwrap(), bank_at_fork_tip.bank_id());
+                    }
+                },
+                None,
+                // Test removing the slot before the scan starts, should error every time
+                AcceptableScanResults::DroppedSlotError,
+            );
+        }
+    }
+
+    #[test]
+    fn test_remove_unrooted_scan_then_recreate_same_slot_before_scan() {
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0,
+                 bank_to_scan_sender,
+                 scan_finished_receiver,
+                 pubkeys_to_modify,
+                 program_id,
+                 starting_lamports| {
+                    let mut prev_bank = bank0.clone();
+                    loop {
+                        let start = Instant::now();
+                        let (bank_at_fork_tip, slots_on_fork, ancestors) =
+                            setup_banks_on_fork_to_remove(
+                                bank0.clone(),
+                                pubkeys_to_modify.clone(),
+                                &program_id,
+                                starting_lamports,
+                                10,
+                                2,
+                            );
+                        info!("setting up banks elapsed: {}", start.elapsed().as_millis());
+                        // Remove the fork. Then we'll recreate the slots and only after we've
+                        // recreated the slots, do we send this old bank for scanning.
+                        // Skip scanning bank 0 on first iteration of loop, since those accounts
+                        // aren't being removed
+                        if prev_bank.slot() != 0 {
+                            info!(
+                                "sending bank with slot: {:?}, elapsed: {}",
+                                prev_bank.slot(),
+                                start.elapsed().as_millis()
+                            );
+                            // Although we dumped the slots last iteration via `remove_unrooted_slots()`,
+                            // we've recreated those slots this iteration, so they should be findable
+                            // again
+                            for k in pubkeys_to_modify.iter() {
+                                assert!(bank_at_fork_tip.load_slow(&ancestors, k).is_some());
+                            }
+
+                            // Now after we've recreated the slots removed in the previous loop
+                            // iteration, send the previous bank, should fail even though the
+                            // same slots were recreated
+                            if bank_to_scan_sender.send(prev_bank.clone()).is_err() {
+                                return;
+                            }
+
+                            let finished_scan_bank_id = scan_finished_receiver.recv();
+                            if finished_scan_bank_id.is_err() {
+                                return;
+                            }
+                            // Wait for scan to finish before starting next iteration
+                            assert_eq!(finished_scan_bank_id.unwrap(), prev_bank.bank_id());
+                        }
+                        bank_at_fork_tip.remove_unrooted_slots(&slots_on_fork);
+                        prev_bank = bank_at_fork_tip;
+                    }
+                },
+                None,
+                // Test removing the slot before the scan starts, should error every time
+                AcceptableScanResults::DroppedSlotError,
+            );
+        }
+    }
+
+    #[test]
+    fn test_remove_unrooted_scan_interleaved_with_remove_unrooted_slots() {
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0,
+                 bank_to_scan_sender,
+                 scan_finished_receiver,
+                 pubkeys_to_modify,
+                 program_id,
+                 starting_lamports| {
+                    loop {
+                        let step_size = 2;
+                        let (bank_at_fork_tip, slots_on_fork, ancestors) =
+                            setup_banks_on_fork_to_remove(
+                                bank0.clone(),
+                                pubkeys_to_modify.clone(),
+                                &program_id,
+                                starting_lamports,
+                                10,
+                                step_size,
+                            );
+                        // Although we dumped the slots last iteration via `remove_unrooted_slots()`,
+                        // we've recreated those slots this iteration, so they should be findable
+                        // again
+                        for k in pubkeys_to_modify.iter() {
+                            assert!(bank_at_fork_tip.load_slow(&ancestors, k).is_some());
+                        }
+
+                        // Now after we've recreated the slots removed in the previous loop
+                        // iteration, send the previous bank, should fail even though the
+                        // same slots were recreated
+                        if bank_to_scan_sender.send(bank_at_fork_tip.clone()).is_err() {
+                            return;
+                        }
+
+                        // Remove 1 < `step_size` of the *latest* slots while the scan is happening.
+                        // This should create inconsistency between the account balances of accounts
+                        // stored in that slot, and the accounts stored in earlier slots
+                        let slot_to_remove = *slots_on_fork.last().unwrap();
+                        bank_at_fork_tip.remove_unrooted_slots(&[slot_to_remove]);
+
+                        // Wait for scan to finish before starting next iteration
+                        let finished_scan_bank_id = scan_finished_receiver.recv();
+                        if finished_scan_bank_id.is_err() {
+                            return;
+                        }
+                        assert_eq!(finished_scan_bank_id.unwrap(), bank_at_fork_tip.bank_id());
+
+                        // Remove the rest of the slots before the next iteration
+                        for (slot, bank_id) in slots_on_fork {
+                            bank_at_fork_tip.remove_unrooted_slots(&[(slot, bank_id)]);
+                        }
+                    }
+                },
+                None,
+                // Test removing the slot before the scan starts, should error every time
+                AcceptableScanResults::Both,
             );
         }
     }
@@ -12655,21 +12994,25 @@ pub(crate) mod tests {
 
         // Return only one largest account
         assert_eq!(
-            bank.get_largest_accounts(1, &pubkeys_hashset, AccountAddressFilter::Include),
+            bank.get_largest_accounts(1, &pubkeys_hashset, AccountAddressFilter::Include)
+                .unwrap(),
             vec![(pubkeys[4], sol_to_lamports(5.0))]
         );
         assert_eq!(
-            bank.get_largest_accounts(1, &HashSet::new(), AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(1, &HashSet::new(), AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![(pubkeys[4], sol_to_lamports(5.0))]
         );
         assert_eq!(
-            bank.get_largest_accounts(1, &exclude4, AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(1, &exclude4, AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![(pubkeys[3], sol_to_lamports(4.0))]
         );
 
         // Return all added accounts
-        let results =
-            bank.get_largest_accounts(10, &pubkeys_hashset, AccountAddressFilter::Include);
+        let results = bank
+            .get_largest_accounts(10, &pubkeys_hashset, AccountAddressFilter::Include)
+            .unwrap();
         assert_eq!(results.len(), sorted_accounts.len());
         for pubkey_balance in sorted_accounts.iter() {
             assert!(results.contains(pubkey_balance));
@@ -12679,7 +13022,9 @@ pub(crate) mod tests {
         assert_eq!(sorted_results, results);
 
         let expected_accounts = sorted_accounts[1..].to_vec();
-        let results = bank.get_largest_accounts(10, &exclude4, AccountAddressFilter::Exclude);
+        let results = bank
+            .get_largest_accounts(10, &exclude4, AccountAddressFilter::Exclude)
+            .unwrap();
         // results include 5 Bank builtins
         assert_eq!(results.len(), 10);
         for pubkey_balance in expected_accounts.iter() {
@@ -12691,14 +13036,18 @@ pub(crate) mod tests {
 
         // Return 3 added accounts
         let expected_accounts = sorted_accounts[0..4].to_vec();
-        let results = bank.get_largest_accounts(4, &pubkeys_hashset, AccountAddressFilter::Include);
+        let results = bank
+            .get_largest_accounts(4, &pubkeys_hashset, AccountAddressFilter::Include)
+            .unwrap();
         assert_eq!(results.len(), expected_accounts.len());
         for pubkey_balance in expected_accounts.iter() {
             assert!(results.contains(pubkey_balance));
         }
 
         let expected_accounts = expected_accounts[1..4].to_vec();
-        let results = bank.get_largest_accounts(3, &exclude4, AccountAddressFilter::Exclude);
+        let results = bank
+            .get_largest_accounts(3, &exclude4, AccountAddressFilter::Exclude)
+            .unwrap();
         assert_eq!(results.len(), expected_accounts.len());
         for pubkey_balance in expected_accounts.iter() {
             assert!(results.contains(pubkey_balance));
@@ -12710,7 +13059,8 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         assert_eq!(
-            bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude),
+            bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude)
+                .unwrap(),
             vec![pubkeys_balances[3], pubkeys_balances[1]]
         );
     }

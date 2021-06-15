@@ -240,7 +240,7 @@ pub fn find_program_address(
 
 Clients can use the `create_program_address` function to generate a destination
 address. In this example, we assume that
-`create_program_address(&[&["escrow]], &escrow_program_id)` generates a valid
+`create_program_address(&[&["escrow"]], &escrow_program_id)` generates a valid
 program address that is off the curve.
 
 ```rust,ignore

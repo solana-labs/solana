@@ -12,7 +12,10 @@ use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, hash::Hash};
+use solana_sdk::{
+    clock::{BankId, Slot},
+    hash::Hash,
+};
 use std::{
     boxed::Box,
     fmt::{Debug, Formatter},
@@ -39,8 +42,8 @@ const RECYCLE_STORE_EXPIRATION_INTERVAL_SECS: u64 = crate::accounts_db::EXPIRATI
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
-pub type DroppedSlotsSender = Sender<Slot>;
-pub type DroppedSlotsReceiver = Receiver<Slot>;
+pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
+pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
 #[derive(Clone)]
 pub struct SendDroppedBankCallback {
@@ -49,7 +52,7 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        if let Err(e) = self.sender.send(bank.slot()) {
+        if let Err(e) = self.sender.send((bank.slot(), bank.bank_id())) {
             warn!("Error sending dropped banks: {:?}", e);
         }
     }
@@ -89,11 +92,13 @@ impl SnapshotRequestHandler {
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
+        non_snapshot_time_us: u128,
     ) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
             .map(|snapshot_request| {
+                let mut total_time = Measure::start("wallclock time elapsed");
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
@@ -188,6 +193,7 @@ impl SnapshotRequestHandler {
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
                 snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
                 purge_old_snapshots_time.stop();
+                total_time.stop();
 
                 datapoint_info!(
                     "handle_snapshot_requests-timing",
@@ -205,6 +211,8 @@ impl SnapshotRequestHandler {
                         purge_old_snapshots_time.as_us(),
                         i64
                     ),
+                    ("total_us", total_time.as_us(), i64),
+                    ("non_snapshot_time_us", non_snapshot_time_us, i64),
                 );
                 snapshot_root_bank.block_height()
             })
@@ -251,6 +259,7 @@ impl AbsRequestHandler {
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
+        non_snapshot_time_us: u128,
     ) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
@@ -259,6 +268,7 @@ impl AbsRequestHandler {
                     accounts_db_caching_enabled,
                     test_hash_calculation,
                     use_index_hash_calculation,
+                    non_snapshot_time_us,
                 )
             })
     }
@@ -266,9 +276,11 @@ impl AbsRequestHandler {
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
         let mut count = 0;
-        for pruned_slot in self.pruned_banks_receiver.try_iter() {
+        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.purge_slot(pruned_slot, is_from_abs);
+            bank.rc
+                .accounts
+                .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
         }
 
         count
@@ -297,87 +309,101 @@ impl AccountsBackgroundService {
         let mut last_expiration_check_time = Instant::now();
         let t_background = Builder::new()
             .name("solana-bg-accounts".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+            .spawn(move || {
+                let mut last_snapshot_end_time = None;
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                // Grab the current root bank
-                let bank = bank_forks.read().unwrap().root_bank().clone();
+                    // Grab the current root bank
+                    let bank = bank_forks.read().unwrap().root_bank().clone();
 
-                // Purge accounts of any dead slots
-                Self::remove_dead_slots(
-                    &bank,
-                    &request_handler,
-                    &mut removed_slots_count,
-                    &mut total_remove_slots_time,
-                );
+                    // Purge accounts of any dead slots
+                    Self::remove_dead_slots(
+                        &bank,
+                        &request_handler,
+                        &mut removed_slots_count,
+                        &mut total_remove_slots_time,
+                    );
 
-                Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
+                    Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
-                // Check to see if there were any requests for snapshotting banks
-                // < the current root bank `bank` above.
+                    let non_snapshot_time = last_snapshot_end_time
+                        .map(|last_snapshot_end_time: Instant| {
+                            last_snapshot_end_time.elapsed().as_micros()
+                        })
+                        .unwrap_or_default();
 
-                // Claim: Any snapshot request for slot `N` found here implies that the last cleanup
-                // slot `M` satisfies `M < N`
-                //
-                // Proof: Assume for contradiction that we find a snapshot request for slot `N` here,
-                // but cleanup has already happened on some slot `M >= N`. Because the call to
-                // `bank.clean_accounts(true)` (in the code below) implies we only clean slots `<= bank - 1`,
-                // then that means in some *previous* iteration of this loop, we must have gotten a root
-                // bank for slot some slot `R` where `R > N`, but did not see the snapshot for `N` in the
-                // snapshot request channel.
-                //
-                // However, this is impossible because BankForks.set_root() will always flush the snapshot
-                // request for `N` to the snapshot request channel before setting a root `R > N`, and
-                // snapshot_request_handler.handle_requests() will always look for the latest
-                // available snapshot in the channel.
-                let snapshot_block_height = request_handler.handle_snapshot_requests(
-                    accounts_db_caching_enabled,
-                    test_hash_calculation,
-                    use_index_hash_calculation,
-                );
-                if accounts_db_caching_enabled {
-                    // Note that the flush will do an internal clean of the
-                    // cache up to bank.slot(), so should be safe as long
-                    // as any later snapshots that are taken are of
-                    // slots >= bank.slot()
-                    bank.flush_accounts_cache_if_needed();
-                }
+                    // Check to see if there were any requests for snapshotting banks
+                    // < the current root bank `bank` above.
 
-                if let Some(snapshot_block_height) = snapshot_block_height {
-                    // Safe, see proof above
-                    assert!(last_cleaned_block_height <= snapshot_block_height);
-                    last_cleaned_block_height = snapshot_block_height;
-                } else {
+                    // Claim: Any snapshot request for slot `N` found here implies that the last cleanup
+                    // slot `M` satisfies `M < N`
+                    //
+                    // Proof: Assume for contradiction that we find a snapshot request for slot `N` here,
+                    // but cleanup has already happened on some slot `M >= N`. Because the call to
+                    // `bank.clean_accounts(true)` (in the code below) implies we only clean slots `<= bank - 1`,
+                    // then that means in some *previous* iteration of this loop, we must have gotten a root
+                    // bank for slot some slot `R` where `R > N`, but did not see the snapshot for `N` in the
+                    // snapshot request channel.
+                    //
+                    // However, this is impossible because BankForks.set_root() will always flush the snapshot
+                    // request for `N` to the snapshot request channel before setting a root `R > N`, and
+                    // snapshot_request_handler.handle_requests() will always look for the latest
+                    // available snapshot in the channel.
+                    let snapshot_block_height = request_handler.handle_snapshot_requests(
+                        accounts_db_caching_enabled,
+                        test_hash_calculation,
+                        use_index_hash_calculation,
+                        non_snapshot_time,
+                    );
+                    if snapshot_block_height.is_some() {
+                        last_snapshot_end_time = Some(Instant::now());
+                    }
+
                     if accounts_db_caching_enabled {
-                        bank.shrink_candidate_slots();
+                        // Note that the flush will do an internal clean of the
+                        // cache up to bank.slot(), so should be safe as long
+                        // as any later snapshots that are taken are of
+                        // slots >= bank.slot()
+                        bank.flush_accounts_cache_if_needed();
+                    }
+
+                    if let Some(snapshot_block_height) = snapshot_block_height {
+                        // Safe, see proof above
+                        assert!(last_cleaned_block_height <= snapshot_block_height);
+                        last_cleaned_block_height = snapshot_block_height;
                     } else {
-                        // under sustained writes, shrink can lag behind so cap to
-                        // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
-                        // which in turn roughly associated block time)
-                        consumed_budget = bank
-                            .process_stale_slot_with_budget(
-                                consumed_budget,
-                                SHRUNKEN_ACCOUNT_PER_INTERVAL,
-                            )
-                            .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
-                    }
-                    if bank.block_height() - last_cleaned_block_height
-                        > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
-                    {
                         if accounts_db_caching_enabled {
-                            // Note that the flush will do an internal clean of the
-                            // cache up to bank.slot(), so should be safe as long
-                            // as any later snapshots that are taken are of
-                            // slots >= bank.slot()
-                            bank.force_flush_accounts_cache();
+                            bank.shrink_candidate_slots();
+                        } else {
+                            // under sustained writes, shrink can lag behind so cap to
+                            // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
+                            // which in turn roughly associated block time)
+                            consumed_budget = bank
+                                .process_stale_slot_with_budget(
+                                    consumed_budget,
+                                    SHRUNKEN_ACCOUNT_PER_INTERVAL,
+                                )
+                                .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
                         }
-                        bank.clean_accounts(true, false);
-                        last_cleaned_block_height = bank.block_height();
+                        if bank.block_height() - last_cleaned_block_height
+                            > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
+                        {
+                            if accounts_db_caching_enabled {
+                                // Note that the flush will do an internal clean of the
+                                // cache up to bank.slot(), so should be safe as long
+                                // as any later snapshots that are taken are of
+                                // slots >= bank.slot()
+                                bank.force_flush_accounts_cache();
+                            }
+                            bank.clean_accounts(true, false);
+                            last_cleaned_block_height = bank.block_height();
+                        }
                     }
+                    sleep(Duration::from_millis(INTERVAL_MS));
                 }
-                sleep(Duration::from_millis(INTERVAL_MS));
             })
             .unwrap();
         Self { t_background }
@@ -444,7 +470,7 @@ mod test {
             &AccountSharedData::new(264, 0, &Pubkey::default()),
         );
         assert!(bank0.get_account(&account_key).is_some());
-        pruned_banks_sender.send(0).unwrap();
+        pruned_banks_sender.send((0, 0)).unwrap();
 
         assert!(!bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
 

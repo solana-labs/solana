@@ -146,7 +146,7 @@ mod tests {
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
-        let deserialized_bank = snapshot_utils::bank_from_archive(
+        let (deserialized_bank, _timing) = snapshot_utils::bank_from_archive(
             &account_paths,
             &[],
             &old_bank_forks
@@ -222,7 +222,7 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler.handle_snapshot_requests(false, false, false);
+                snapshot_request_handler.handle_snapshot_requests(false, false, false, 0);
             }
         }
 

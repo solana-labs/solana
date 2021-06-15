@@ -113,6 +113,7 @@ impl FetchStage {
                 recycler.clone(),
                 "fetch_stage",
                 coalesce_ms,
+                true,
             )
         });
 
@@ -125,6 +126,7 @@ impl FetchStage {
                 recycler.clone(),
                 "fetch_forward_stage",
                 coalesce_ms,
+                true,
             )
         });
 

@@ -8025,31 +8025,34 @@ pub mod tests {
     }
 
     fn verify_index_integrity(blockstore: &Blockstore, slot: u64) {
-        let index = blockstore.get_index(slot).unwrap().unwrap();
-        // Test the set of data shreds in the index and in the data column
-        // family are the same
+        let shred_index = blockstore.get_index(slot).unwrap().unwrap();
+
         let data_iter = blockstore.slot_data_iterator(slot, 0).unwrap();
         let mut num_data = 0;
         for ((slot, index), _) in data_iter {
             num_data += 1;
+            // Test that iterator and individual shred lookup yield same set
             assert!(blockstore.get_data_shred(slot, index).unwrap().is_some());
+            // Test that the data index has current shred accounted for
+            assert!(shred_index.data().is_present(index));
         }
 
         // Test the data index doesn't have anything extra
-        let num_data_in_index = index.data().num_shreds();
+        let num_data_in_index = shred_index.data().num_shreds();
         assert_eq!(num_data_in_index, num_data);
 
-        // Test the set of coding shreds in the index and in the coding column
-        // family are the same
         let coding_iter = blockstore.slot_coding_iterator(slot, 0).unwrap();
         let mut num_coding = 0;
         for ((slot, index), _) in coding_iter {
             num_coding += 1;
+            // Test that the iterator and individual shred lookup yield same set
             assert!(blockstore.get_coding_shred(slot, index).unwrap().is_some());
+            // Test that the coding index has current shred accounted for
+            assert!(shred_index.coding().is_present(index));
         }
 
         // Test the data index doesn't have anything extra
-        let num_coding_in_index = index.coding().num_shreds();
+        let num_coding_in_index = shred_index.coding().num_shreds();
         assert_eq!(num_coding_in_index, num_coding);
     }
 
