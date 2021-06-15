@@ -13,7 +13,7 @@ edition = "2018"
 mio = "0.7.11"
 serde = { version = "1.0.126", features = ["derive"] }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
-tarpc = { version = "0.24.1", features = ["full"] }
+tarpc = { version = "0.26.2", features = ["full"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
