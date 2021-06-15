@@ -76,7 +76,7 @@ solana-sys-tuner = { path = "../sys-tuner", version = "=1.6.12" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.6.12" }
 solana-version = { path = "../version", version = "=1.6.12" }
 solana-vote-program = { path = "../programs/vote", version = "=1.6.12" }
-spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
+spl-token-v2-0 = { package = "spl-token", version = "=3.1.1", features = ["no-entrypoint"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
