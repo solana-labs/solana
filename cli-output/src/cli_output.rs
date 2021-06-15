@@ -25,10 +25,10 @@ use {
         native_token::lamports_to_sol,
         pubkey::Pubkey,
         signature::Signature,
+        stake::state::{Authorized, Lockup},
         stake_history::StakeHistoryEntry,
         transaction::{Transaction, TransactionError},
     },
-    solana_stake_program::stake_state::{Authorized, Lockup},
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
         UiTransactionStatusMeta,

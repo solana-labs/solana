@@ -42,9 +42,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     shred_version::compute_shred_version,
+    stake::{self, state::StakeState},
     system_program,
 };
-use solana_stake_program::stake_state::{self, PointValue, StakeState};
+use solana_stake_program::stake_state::{self, PointValue};
 use solana_vote_program::{
     self,
     vote_state::{self, VoteState},
@@ -1971,9 +1972,8 @@ fn main() {
                     }
 
                     if remove_stake_accounts {
-                        for (address, mut account) in bank
-                            .get_program_accounts(&solana_stake_program::id())
-                            .into_iter()
+                        for (address, mut account) in
+                            bank.get_program_accounts(&stake::program::id()).into_iter()
                         {
                             account.set_lamports(0);
                             bank.store_account(&address, &account);

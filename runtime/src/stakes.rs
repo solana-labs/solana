@@ -5,9 +5,13 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
     pubkey::Pubkey,
+    stake::{
+        self,
+        state::{Delegation, StakeState},
+    },
     sysvar::stake_history::StakeHistory,
 };
-use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
+use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::VoteState;
 use std::{borrow::Borrow, collections::HashMap};
 
@@ -42,7 +46,7 @@ impl Stakes {
             let mut stake_history_upto_prev_epoch = self.stake_history.clone();
             stake_history_upto_prev_epoch.add(
                 prev_epoch,
-                new_stake_history_entry(
+                stake_state::new_stake_history_entry(
                     prev_epoch,
                     self.stake_delegations
                         .iter()
@@ -111,7 +115,7 @@ impl Stakes {
 
     pub fn is_stake(account: &AccountSharedData) -> bool {
         solana_vote_program::check_id(account.owner())
-            || solana_stake_program::check_id(account.owner())
+            || stake::program::check_id(account.owner())
                 && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
@@ -148,7 +152,7 @@ impl Stakes {
                     .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
-        } else if solana_stake_program::check_id(account.owner()) {
+        } else if stake::program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
                 (
@@ -157,7 +161,7 @@ impl Stakes {
                 )
             });
 
-            let delegation = StakeState::delegation_from(account);
+            let delegation = stake_state::delegation_from(account);
 
             let stake = delegation.map(|delegation| {
                 (
@@ -308,7 +312,7 @@ pub mod tests {
 
             stakes.store(&vote_pubkey, &vote_account, true, true);
             stakes.store(&stake_pubkey, &stake_account, true, true);
-            let stake = StakeState::stake_from(&stake_account).unwrap();
+            let stake = stake_state::stake_from(&stake_account).unwrap();
             {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
@@ -332,7 +336,7 @@ pub mod tests {
             // activate more
             let (_stake_pubkey, mut stake_account) = create_stake_account(42, &vote_pubkey);
             stakes.store(&stake_pubkey, &stake_account, true, true);
-            let stake = StakeState::stake_from(&stake_account).unwrap();
+            let stake = stake_state::stake_from(&stake_account).unwrap();
             {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
@@ -463,7 +467,7 @@ pub mod tests {
         // delegates to vote_pubkey
         stakes.store(&stake_pubkey, &stake_account, true, true);
 
-        let stake = StakeState::stake_from(&stake_account).unwrap();
+        let stake = stake_state::stake_from(&stake_account).unwrap();
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -523,7 +527,7 @@ pub mod tests {
 
         stakes.store(&vote_pubkey, &vote_account, true, true);
         stakes.store(&stake_pubkey, &stake_account, true, true);
-        let stake = StakeState::stake_from(&stake_account).unwrap();
+        let stake = stake_state::stake_from(&stake_account).unwrap();
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -564,7 +568,7 @@ pub mod tests {
         // not a stake account, and whacks above entry
         stakes.store(
             &stake_pubkey,
-            &AccountSharedData::new(1, 0, &solana_stake_program::id()),
+            &AccountSharedData::new(1, 0, &stake::program::id()),
             true,
             true,
         );
