@@ -5723,8 +5723,6 @@ impl AccountsDb {
         type AccountsMap<'a> =
             HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
@@ -5865,9 +5863,13 @@ impl AccountsDb {
             ("scan_stores_us", scan_time, i64),
         );
 
-        // Need to add these last, otherwise older updates will be cleaned
-        for slot in slots {
-            self.accounts_index.add_root(slot, false);
+        if let Some(min) = slots.iter().min() {
+            // min slot has to go first so roots tracker can be efficient
+            self.accounts_index.add_root(*min, false);
+            // Need to add these last, otherwise older updates will be cleaned
+            for slot in slots {
+                self.accounts_index.add_root(slot, false);
+            }
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
