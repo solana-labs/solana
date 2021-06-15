@@ -29,13 +29,14 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    stake::{
+        config as stake_config, instruction as stake_instruction,
+        state::{Authorized, Lockup},
+    },
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_program::{
-    config as stake_config, stake_instruction,
-    stake_state::{Authorized, Lockup, StakeState},
-};
+use solana_stake_program::{config::create_account as create_stake_config_account, stake_state};
 use solana_vote_program::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
@@ -190,7 +191,7 @@ impl LocalCluster {
         // Replace staking config
         genesis_config.add_account(
             stake_config::id(),
-            stake_config::create_account(
+            create_stake_config_account(
                 1,
                 &stake_config::Config {
                     warmup_cooldown_rate: 1_000_000_000.0f64,
@@ -568,7 +569,7 @@ impl LocalCluster {
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
-                    StakeState::stake_from(&stake_account),
+                    stake_state::stake_from(&stake_account),
                     VoteState::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {

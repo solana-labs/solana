@@ -96,6 +96,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
+    stake::{self, state::Delegation},
     stake_weighted_timestamp::{
         calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
         MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
@@ -105,9 +106,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{
-    self, Delegation, InflationPointCalculationEvent, PointValue,
-};
+use solana_stake_program::stake_state::{self, InflationPointCalculationEvent, PointValue};
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     borrow::Cow,
@@ -1918,7 +1917,7 @@ impl Bank {
                         if self
                             .feature_set
                             .is_active(&feature_set::filter_stake_delegation_accounts::id())
-                            && (stake_account.owner() != &solana_stake_program::id()
+                            && (stake_account.owner() != &stake::program::id()
                                 || vote_account.owner() != &solana_vote_program::id())
                         {
                             datapoint_warn!(
@@ -5357,14 +5356,14 @@ pub(crate) mod tests {
         process_instruction::InvokeContext,
         rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
+        stake::{
+            instruction as stake_instruction,
+            state::{Authorized, Delegation, Lockup, Stake},
+        },
         system_instruction::{self, SystemError},
         system_program,
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
-    };
-    use solana_stake_program::{
-        stake_instruction,
-        stake_state::{self, Authorized, Delegation, Lockup, Stake},
     };
     use solana_vote_program::{
         vote_instruction,
@@ -9558,7 +9557,7 @@ pub(crate) mod tests {
                 let pubkey = solana_sdk::pubkey::new_rand();
                 genesis_config.add_account(
                     pubkey,
-                    solana_stake_program::stake_state::create_lockup_stake_account(
+                    stake_state::create_lockup_stake_account(
                         &Authorized::auto(&pubkey),
                         &Lockup::default(),
                         &Rent::default(),

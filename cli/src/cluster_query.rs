@@ -46,7 +46,9 @@ use solana_sdk::{
     rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
     signature::Signature,
-    slot_history, system_instruction, system_program,
+    slot_history,
+    stake::{self, state::StakeState},
+    system_instruction, system_program,
     sysvar::{
         self,
         slot_history::SlotHistory,
@@ -55,7 +57,6 @@ use solana_sdk::{
     timing,
     transaction::Transaction,
 };
-use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::UiTransactionEncoding;
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -1704,7 +1705,7 @@ pub fn process_show_stakes(
         }
     }
     let all_stake_accounts = rpc_client
-        .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
+        .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {

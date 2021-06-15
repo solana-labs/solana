@@ -1343,7 +1343,7 @@ pub(crate) mod tests {
         solana_sdk::{
             message::Message,
             signature::{Keypair, Signer},
-            system_instruction, system_program, system_transaction,
+            stake, system_instruction, system_program, system_transaction,
             transaction::Transaction,
         },
         std::{fmt::Debug, sync::mpsc::channel},
@@ -1544,7 +1544,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &stake::program::id(),
         );
         bank_forks
             .write()
@@ -1567,7 +1567,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank,
         );
         subscriptions.add_program_subscription(
-            solana_stake_program::id(),
+            stake::program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::processed()),
@@ -1584,7 +1584,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&stake::program::id()));
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -1616,7 +1616,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&stake::program::id()));
     }
 
     #[test]
@@ -2044,7 +2044,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &stake::program::id(),
         );
 
         // Add the transaction to the 1st bank and then freeze the bank

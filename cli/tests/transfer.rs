@@ -16,6 +16,7 @@ use solana_sdk::{
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, NullSigner, Signer},
+    stake,
 };
 
 #[test]
@@ -513,7 +514,7 @@ fn test_transfer_with_seed() {
     let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
     let derived_address_seed = "seed".to_string();
-    let derived_address_program_id = solana_stake_program::id();
+    let derived_address_program_id = stake::program::id();
     let derived_address = Pubkey::create_with_seed(
         &sender_pubkey,
         &derived_address_seed,

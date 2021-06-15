@@ -1,16 +1,20 @@
 use solana_sdk::{
-    clock::SECONDS_PER_DAY, instruction::Instruction, message::Message, pubkey::Pubkey,
-};
-use solana_stake_program::{
-    stake_instruction::{self, LockupArgs},
-    stake_state::{Authorized, Lockup, StakeAuthorize},
+    clock::SECONDS_PER_DAY,
+    instruction::Instruction,
+    message::Message,
+    pubkey::Pubkey,
+    stake::{
+        self,
+        instruction::{self as stake_instruction, LockupArgs},
+        state::{Authorized, Lockup, StakeAuthorize},
+    },
 };
 
 const DAYS_PER_YEAR: f64 = 365.25;
 const SECONDS_PER_YEAR: i64 = (SECONDS_PER_DAY as f64 * DAYS_PER_YEAR) as i64;
 
 pub(crate) fn derive_stake_account_address(base_pubkey: &Pubkey, i: usize) -> Pubkey {
-    Pubkey::create_with_seed(base_pubkey, &i.to_string(), &solana_stake_program::id()).unwrap()
+    Pubkey::create_with_seed(base_pubkey, &i.to_string(), &stake::program::id()).unwrap()
 }
 
 // Return derived addresses
@@ -284,8 +288,9 @@ mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
+        stake::state::StakeState,
     };
-    use solana_stake_program::stake_state::StakeState;
+    use solana_stake_program::stake_state;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
@@ -338,7 +343,7 @@ mod tests {
                 let address = derive_stake_account_address(&base_pubkey, i);
                 let account =
                     AccountSharedData::from(client.get_account(&address).unwrap().unwrap());
-                (address, StakeState::lockup_from(&account).unwrap())
+                (address, stake_state::lockup_from(&account).unwrap())
             })
             .collect()
     }
@@ -375,7 +380,7 @@ mod tests {
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
         assert_eq!(account.lamports(), lamports);
-        let authorized = StakeState::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);
     }
@@ -437,7 +442,7 @@ mod tests {
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        let authorized = StakeState::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
     }
@@ -493,7 +498,7 @@ mod tests {
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        let lockup = StakeState::lockup_from(&account).unwrap();
+        let lockup = stake_state::lockup_from(&account).unwrap();
         assert_eq!(lockup.unix_timestamp, 1);
         assert_eq!(lockup.epoch, 0);
 
@@ -586,7 +591,7 @@ mod tests {
 
         // Ensure the new accounts are duplicates of the previous ones.
         let account = get_account_at(&bank_client, &new_base_pubkey, 0);
-        let authorized = StakeState::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);
     }
@@ -655,7 +660,7 @@ mod tests {
 
         // Ensure the new accounts have the new authorities.
         let account = get_account_at(&bank_client, &new_base_pubkey, 0);
-        let authorized = StakeState::authorized_from(&account).unwrap();
+        let authorized = stake_state::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
     }

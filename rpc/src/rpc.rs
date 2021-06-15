@@ -62,12 +62,12 @@ use {
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
+        stake::state::StakeState,
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
         transaction::{self, Transaction},
     },
-    solana_stake_program::stake_state::StakeState,
     solana_transaction_status::{
         EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
         TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,

@@ -27,12 +27,12 @@ use solana_sdk::{
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
+    stake::{
+        instruction::{self as stake_instruction, LockupArgs},
+        state::{Authorized, Lockup, StakeAuthorize},
+    },
     system_instruction,
     transaction::Transaction,
-};
-use solana_stake_program::{
-    stake_instruction::{self, LockupArgs},
-    stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
 use spl_associated_token_account_v1_0::get_associated_token_address;
@@ -1204,8 +1204,10 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 mod tests {
     use super::*;
     use solana_core::test_validator::TestValidator;
-    use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
-    use solana_stake_program::stake_instruction::StakeInstruction;
+    use solana_sdk::{
+        signature::{read_keypair_file, write_keypair_file, Signer},
+        stake::instruction::StakeInstruction,
+    };
     use solana_transaction_status::TransactionConfirmationStatus;
 
     #[test]

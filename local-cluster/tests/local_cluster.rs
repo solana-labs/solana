@@ -1402,7 +1402,7 @@ fn test_mainnet_beta_cluster_type() {
     for program_id in [
         &solana_config_program::id(),
         &solana_sdk::system_program::id(),
-        &solana_stake_program::id(),
+        &solana_sdk::stake::program::id(),
         &solana_vote_program::id(),
         &solana_sdk::bpf_loader_deprecated::id(),
         &solana_sdk::bpf_loader::id(),
