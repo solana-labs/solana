@@ -34,7 +34,7 @@ use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -94,7 +94,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &BankingStageStats::default(),
                 &recorder,
                 &Arc::new(RwLock::new(CostModel::default())),
-                &Arc::new(Mutex::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
+                &Arc::new(RwLock::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
             );
         });
 
