@@ -3,6 +3,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
+    deserialize_utils::default_on_eof,
     pubkey::Pubkey,
     signature::Signature,
     sysvar::is_sysvar_id,
@@ -89,6 +90,7 @@ struct StoredConfirmedBlock {
     transactions: Vec<StoredConfirmedBlockTransaction>,
     rewards: StoredConfirmedBlockRewards,
     block_time: Option<UnixTimestamp>,
+    #[serde(deserialize_with = "default_on_eof")]
     block_height: Option<u64>,
 }
 
