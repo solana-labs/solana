@@ -7,7 +7,7 @@ import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
 const REWARDS_AVAILABLE_EPOCH = new Map<Cluster, number>([
-  [Cluster.MainnetBeta, 133],
+  [Cluster.MainnetBeta, 132],
   [Cluster.Testnet, 43],
 ]);
 
@@ -95,10 +95,6 @@ async function fetchRewards(
   const lowestAvailableEpoch = REWARDS_AVAILABLE_EPOCH.get(cluster) || 0;
   const connection = new Connection(url);
 
-  if (!fromEpoch && highestEpoch) {
-    fromEpoch = highestEpoch;
-  }
-
   if (!fromEpoch) {
     try {
       const epochInfo = await connection.getEpochInfo();
@@ -115,6 +111,10 @@ async function fetchRewards(
         url,
       });
     }
+
+    if (highestEpoch && highestEpoch < fromEpoch) {
+      fromEpoch = highestEpoch;
+    }
   }
 
   const getInflationReward = async (epoch: number) => {
@@ -122,10 +122,7 @@ async function fetchRewards(
       const result = await connection.getInflationReward([pubkey], epoch);
       return result[0];
     } catch (error) {
-      if (
-        cluster !== Cluster.Custom &&
-        !error.message.match(/Block not available/)
-      ) {
+      if (cluster !== Cluster.Custom) {
         reportError(error, { url });
       }
     }
