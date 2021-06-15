@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_index::{AccountIndex, IndexKey},
+        accounts_index::{AccountIndex, IndexKey, ScanResult},
         bank::Bank,
     },
     log::*,
@@ -14,7 +14,7 @@ pub struct NonCirculatingSupply {
     pub accounts: Vec<Pubkey>,
 }
 
-pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSupply {
+pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCirculatingSupply> {
     debug!("Updating Bank supply, epoch: {}", bank.epoch());
     let mut non_circulating_accounts_set: HashSet<Pubkey> = HashSet::new();
 
@@ -38,10 +38,11 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
             |account| account.owner() == &solana_stake_program::id(),
-        )
+        )?
     } else {
-        bank.get_program_accounts(&solana_stake_program::id())
+        bank.get_program_accounts(&solana_stake_program::id())?
     };
+
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = StakeState::from(account).unwrap_or_default();
         match stake_account {
@@ -68,10 +69,10 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         .map(|pubkey| bank.get_balance(&pubkey))
         .sum();
 
-    NonCirculatingSupply {
+    Ok(NonCirculatingSupply {
         lamports,
         accounts: non_circulating_accounts_set.into_iter().collect(),
-    }
+    })
 }
 
 // Mainnet-beta accounts that should be considered non-circulating
@@ -256,7 +257,7 @@ mod tests {
                 + sysvar_and_native_program_delta,
         );
 
-        let non_circulating_supply = calculate_non_circulating_supply(&bank);
+        let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();
         assert_eq!(
             non_circulating_supply.lamports,
             (num_non_circulating_accounts + num_stake_accounts) * balance
@@ -274,7 +275,7 @@ mod tests {
                 &AccountSharedData::new(new_balance, 0, &Pubkey::default()),
             );
         }
-        let non_circulating_supply = calculate_non_circulating_supply(&bank);
+        let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();
         assert_eq!(
             non_circulating_supply.lamports,
             (num_non_circulating_accounts * new_balance) + (num_stake_accounts * balance)
@@ -289,7 +290,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.epoch(), 1);
-        let non_circulating_supply = calculate_non_circulating_supply(&bank);
+        let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();
         assert_eq!(
             non_circulating_supply.lamports,
             num_non_circulating_accounts * new_balance

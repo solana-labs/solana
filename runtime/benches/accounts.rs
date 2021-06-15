@@ -260,7 +260,13 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
 fn bench_concurrent_scan_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
         test::black_box(
-            accounts.load_by_program(&Ancestors::default(), AccountSharedData::default().owner()),
+            accounts
+                .load_by_program(
+                    &Ancestors::default(),
+                    0,
+                    AccountSharedData::default().owner(),
+                )
+                .unwrap(),
         );
     })
 }
@@ -389,9 +395,11 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
     let ancestors = Ancestors::from(vec![0]);
+    let bank_id = 0;
     b.iter(|| {
         accounts.load_largest_accounts(
             &ancestors,
+            bank_id,
             20,
             &HashSet::new(),
             AccountAddressFilter::Exclude,

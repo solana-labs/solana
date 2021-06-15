@@ -77,6 +77,10 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 ///  is some some number of Ticks long.
 pub type Slot = u64;
 
+/// Uniquely distinguishes every version of a slot, even if the
+/// slot number is the same, i.e. duplicate slots
+pub type BankId = u64;
+
 /// Epoch is a unit of time a given leader schedule is honored,
 ///  some number of Slots.
 pub type Epoch = u64;

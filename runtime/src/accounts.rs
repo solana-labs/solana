@@ -3,7 +3,7 @@ use crate::{
         AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
         ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -23,7 +23,7 @@ use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Slot, INITIAL_RENT_EPOCH},
+    clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -585,15 +585,17 @@ impl Accounts {
     pub fn load_largest_accounts(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
-    ) -> Vec<(Pubkey, u64)> {
+    ) -> ScanResult<Vec<(Pubkey, u64)>> {
         if num == 0 {
-            return vec![];
+            return Ok(vec![]);
         }
         let account_balances = self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
                 if let Some((pubkey, account, _slot)) = option {
                     if account.lamports() == 0 {
@@ -619,12 +621,12 @@ impl Accounts {
                     collector.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
-        );
-        account_balances
+        )?;
+        Ok(account_balances
             .into_sorted_vec()
             .into_iter()
             .map(|Reverse((balance, pubkey))| (pubkey, balance))
-            .collect()
+            .collect())
     }
 
     pub fn calculate_capitalization(
@@ -687,10 +689,12 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         program_id: &Pubkey,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id
@@ -702,11 +706,13 @@ impl Accounts {
     pub fn load_by_program_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         program_id: &Pubkey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id && filter(account)
@@ -718,12 +724,14 @@ impl Accounts {
     pub fn load_by_index_key_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         index_key: &IndexKey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db
             .index_scan_accounts(
                 ancestors,
+                bank_id,
                 *index_key,
                 |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
@@ -731,16 +739,21 @@ impl Accounts {
                     })
                 },
             )
-            .0
+            .map(|result| result.0)
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
         self.accounts_db.account_indexes.include_key(key)
     }
 
-    pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, AccountSharedData, Slot)> {
+    pub fn load_all(
+        &self,
+        ancestors: &Ancestors,
+        bank_id: BankId,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) = some_account_tuple
                     .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
@@ -931,8 +944,8 @@ impl Accounts {
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, is_from_abs);
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
+        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -2580,108 +2593,160 @@ mod tests {
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
 
         // num == 0 should always return empty set
+        let bank_id = 0;
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                0,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    0,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                0,
-                &all_pubkeys,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    0,
+                    &all_pubkeys,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![]
         );
 
         // list should be sorted by balance, then pubkey, descending
         assert!(pubkey1 > pubkey0);
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                1,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                2,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                3,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
         );
 
         // larger num should not affect results
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                6,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    6,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
         );
 
         // AccountAddressFilter::Exclude should exclude entry
         let exclude1: HashSet<_> = vec![pubkey1].into_iter().collect();
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 1, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 2, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 3, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
         );
 
         // AccountAddressFilter::Include should limit entries
         let include1_2: HashSet<_> = vec![pubkey1, pubkey2].into_iter().collect();
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                1,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                2,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                3,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
         );
     }

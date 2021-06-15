@@ -2041,6 +2041,7 @@ fn main() {
                     if remove_stake_accounts {
                         for (address, mut account) in bank
                             .get_program_accounts(&solana_stake_program::id())
+                            .unwrap()
                             .into_iter()
                         {
                             account.set_lamports(0);
@@ -2074,6 +2075,7 @@ fn main() {
                         // Delete existing vote accounts
                         for (address, mut account) in bank
                             .get_program_accounts(&solana_vote_program::id())
+                            .unwrap()
                             .into_iter()
                         {
                             account.set_lamports(0);
@@ -2235,6 +2237,7 @@ fn main() {
 
                     let accounts: BTreeMap<_, _> = bank
                         .get_all_accounts_with_modified_slots()
+                        .unwrap()
                         .into_iter()
                         .filter(|(pubkey, _account, _slot)| {
                             include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
