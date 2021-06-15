@@ -4236,13 +4236,8 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
-<<<<<<< HEAD
  "console",
- "humantime 2.0.1",
-=======
- "console 0.14.1",
  "humantime",
->>>>>>> 1f97b2365 (Avoid full-range compactions with periodic filtered b.g. ones (#16697))
  "indicatif",
  "serde",
  "serde_derive",
