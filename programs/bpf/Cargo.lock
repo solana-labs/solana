@@ -3235,15 +3235,9 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
-<<<<<<< HEAD
  "sha2 0.9.2",
- "solana-frozen-abi-macro 1.6.4",
- "solana-logger 1.6.4",
-=======
- "sha2",
  "solana-frozen-abi-macro 1.7.1",
  "solana-logger 1.7.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
  "thiserror",
 ]
 
@@ -3354,16 +3348,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2df39c63e21c5b58e2012e7675bed5e8dd5100470ffddedcafb78f5a7e3abe"
 dependencies = [
  "bincode",
-<<<<<<< HEAD
+ "blake3",
  "borsh",
  "borsh-derive",
  "bs58",
-=======
- "blake3",
- "borsh 0.8.1",
- "borsh-derive 0.8.1",
- "bs58 0.3.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -3378,20 +3366,12 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
-<<<<<<< HEAD
  "sha2 0.9.2",
- "solana-frozen-abi 1.6.4",
- "solana-frozen-abi-macro 1.6.4",
- "solana-logger 1.6.4",
- "solana-sdk-macro 1.6.4",
-=======
- "sha2",
  "sha3",
  "solana-frozen-abi 1.7.1",
  "solana-frozen-abi-macro 1.7.1",
  "solana-logger 1.7.1",
  "solana-sdk-macro 1.7.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
  "thiserror",
 ]
 
