@@ -79,7 +79,7 @@ pub fn secp256k1_recover(
                 signature: *const u8,
                 result: *mut u8,
             ) -> u64;
-        };
+        }
 
         let mut pubkey_buffer = [0u8; SECP256K1_PUBLIC_KEY_LENGTH];
         let result = unsafe {
