@@ -404,6 +404,7 @@ pub fn process_blockstore(
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
+        false,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -3100,6 +3101,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            false,
         );
         *bank.epoch_schedule()
     }

@@ -150,10 +150,6 @@ fn load_from_snapshot(
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
-    if process_options.accounts_db_test_hash_calculation {
-        deserialized_bank.update_accounts_hash_with_index_option(false, true);
-    }
-
     let deserialized_bank_slot_and_hash = (
         deserialized_bank.slot(),
         deserialized_bank.get_accounts_hash(),

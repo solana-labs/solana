@@ -1015,6 +1015,7 @@ impl Bank {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            false,
         )
     }
 
@@ -1028,6 +1029,7 @@ impl Bank {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            false,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1050,6 +1052,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            false,
         )
     }
 
@@ -1062,6 +1065,7 @@ impl Bank {
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1076,7 +1080,11 @@ impl Bank {
             shrink_ratio,
         ));
         bank.process_genesis_config(genesis_config);
-        bank.finish_init(genesis_config, additional_builtins);
+        bank.finish_init(
+            genesis_config,
+            additional_builtins,
+            debug_do_not_add_builtins,
+        );
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
@@ -1299,6 +1307,7 @@ impl Bank {
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
+        debug_do_not_add_builtins: bool,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1361,7 +1370,11 @@ impl Bank {
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
         };
-        bank.finish_init(genesis_config, additional_builtins);
+        bank.finish_init(
+            genesis_config,
+            additional_builtins,
+            debug_do_not_add_builtins,
+        );
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -4249,6 +4262,7 @@ impl Bank {
         &mut self,
         genesis_config: &GenesisConfig,
         additional_builtins: Option<&Builtins>,
+        debug_do_not_add_builtins: bool,
     ) {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
@@ -4262,12 +4276,14 @@ impl Bank {
                 .feature_builtins
                 .extend_from_slice(&additional_builtins.feature_builtins);
         }
-        for builtin in builtins.genesis_builtins {
-            self.add_builtin(
-                &builtin.name,
-                builtin.id,
-                builtin.process_instruction_with_context,
-            );
+        if !debug_do_not_add_builtins {
+            for builtin in builtins.genesis_builtins {
+                self.add_builtin(
+                    &builtin.name,
+                    builtin.id,
+                    builtin.process_instruction_with_context,
+                );
+            }
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
@@ -11920,7 +11936,7 @@ pub(crate) mod tests {
     fn test_debug_bank() {
         let (genesis_config, _mint_keypair) = create_genesis_config(50000);
         let mut bank = Bank::new(&genesis_config);
-        bank.finish_init(&genesis_config, None);
+        bank.finish_init(&genesis_config, None, false);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
     }

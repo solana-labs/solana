@@ -652,7 +652,9 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     measure.stop();
 
     let mut verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(test_hash_calculation) {
+    if !bank.verify_snapshot_bank(test_hash_calculation)
+        && limit_load_slot_count_from_snapshot.is_none()
+    {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     verify.stop();
