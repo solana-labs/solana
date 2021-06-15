@@ -363,7 +363,7 @@ fn run_accounts_bench(
     iterations: usize,
     maybe_space: Option<u64>,
     batch_size: usize,
-    close_nth: u64,
+    close_nth_batch: u64,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
     mint: Option<Pubkey>,
@@ -441,6 +441,7 @@ fn run_accounts_bench(
             }
         }
 
+        // Create accounts
         let sigs_len = executor.num_outstanding();
         if sigs_len < batch_size {
             let num_to_create = batch_size - sigs_len;
@@ -475,10 +476,14 @@ fn run_accounts_bench(
                 }
             }
 
-            if close_nth > 0 {
-                let expected_closed = total_accounts_created as u64 / close_nth;
-                if expected_closed > total_accounts_closed {
-                    let txs: Vec<_> = (0..expected_closed - total_accounts_closed)
+            if close_nth_batch > 0 {
+                let expected_closed = (total_accounts_created as u64
+                    / (close_nth_batch * batch_size as u64))
+                    * batch_size as u64;
+                let max_closed_seed = seed_tracker.max_closed.load(Ordering::Relaxed);
+                // Close every account we've created with seed between max_closed_seed..expected_closed
+                if max_closed_seed < expected_closed {
+                    let txs: Vec<_> = (0..expected_closed - max_closed_seed)
                         .into_par_iter()
                         .map(|_| {
                             let message = make_close_message(
@@ -572,12 +577,13 @@ fn main() {
                 .help("Number of transactions to send per batch"),
         )
         .arg(
-            Arg::with_name("close_nth")
+            Arg::with_name("close_nth_batch")
                 .long("close-frequency")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help(
-                    "Send close transactions after this many accounts created. \
+                    "Every `n` batches, create a batch of close transactions for
+                    the first batch of accounts created.
                     Note: a `close-frequency` value near or below `batch-size` \
                     may result in transaction-simulation errors, as the close \
                     transactions will be submitted before the corresponding \
@@ -632,7 +638,7 @@ fn main() {
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
-    let close_nth = value_t!(matches, "close_nth", u64).unwrap_or(0);
+    let close_nth_batch = value_t!(matches, "close_nth_batch", u64).unwrap_or(0);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
@@ -685,7 +691,7 @@ fn main() {
         iterations,
         space,
         batch_size,
-        close_nth,
+        close_nth_batch,
         lamports,
         num_instructions,
         mint,
@@ -720,7 +726,7 @@ pub mod test {
         let iterations = 10;
         let maybe_space = None;
         let batch_size = 100;
-        let close_nth = 100;
+        let close_nth_batch = 100;
         let maybe_lamports = None;
         let num_instructions = 2;
         let mut start = Measure::start("total accounts run");
@@ -731,7 +737,7 @@ pub mod test {
             iterations,
             maybe_space,
             batch_size,
-            close_nth,
+            close_nth_batch,
             maybe_lamports,
             num_instructions,
             None,
