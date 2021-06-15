@@ -1,9 +1,6 @@
 use crate::send_transaction_service::{SendTransactionService, TransactionInfo};
 use bincode::{deserialize, serialize};
-use futures::{
-    future,
-    prelude::stream::{self, StreamExt},
-};
+use futures::{future, prelude::stream::StreamExt};
 use solana_banks_interface::{
     Banks, BanksRequest, BanksResponse, TransactionConfirmationStatus, TransactionStatus,
 };
@@ -30,10 +27,10 @@ use std::{
 };
 use tarpc::{
     context::Context,
-    rpc::{transport::channel::UnboundedChannel, ClientMessage, Response},
     serde_transport::tcp,
-    server::{self, Channel, Handler},
-    transport,
+    server::{self, Channel, Incoming},
+    transport::{self, channel::UnboundedChannel},
+    ClientMessage, Response,
 };
 use tokio::time::sleep;
 use tokio_serde::formats::Bincode;
@@ -252,9 +249,7 @@ pub async fn start_local_server(
 ) -> UnboundedChannel<Response<BanksResponse>, ClientMessage<BanksRequest>> {
     let banks_server = BanksServer::new_loopback(bank_forks, block_commitment_cache);
     let (client_transport, server_transport) = transport::channel::unbounded();
-    let server = server::new(server::Config::default())
-        .incoming(stream::once(future::ready(server_transport)))
-        .respond_with(banks_server.serve());
+    let server = server::BaseChannel::with_defaults(server_transport).execute(banks_server.serve());
     tokio::spawn(server);
     client_transport
 }
@@ -287,7 +282,7 @@ pub async fn start_tcp_server(
 
             let server =
                 BanksServer::new(bank_forks.clone(), block_commitment_cache.clone(), sender);
-            chan.respond_with(server.serve()).execute()
+            chan.execute(server.serve())
         })
         // Max 10 channels.
         .buffer_unordered(10)
