@@ -145,6 +145,7 @@ mod tests {
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
+        let check_hash_calculation = false;
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_archive(
             &account_paths,
             &[],
@@ -165,6 +166,11 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
+<<<<<<< HEAD
+=======
+            accounts_db::AccountShrinkThreshold::default(),
+            check_hash_calculation,
+>>>>>>> f558b9b6b (verify bank hash on startup with ledger tool option (#17939))
         )
         .unwrap();
 
