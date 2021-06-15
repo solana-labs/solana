@@ -61,6 +61,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        false,
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -81,6 +82,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
