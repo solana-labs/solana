@@ -6224,10 +6224,10 @@ pub mod tests {
         let pubkey255 = Pubkey::new(&[0xffu8; 32]);
 
         let mut raw_expected = vec![
-            CalculateHashIntermediate::new(0, Hash::default(), 1, slot, pubkey0),
-            CalculateHashIntermediate::new(1, Hash::default(), 128, slot, pubkey127),
-            CalculateHashIntermediate::new(2, Hash::default(), 129, slot, pubkey128),
-            CalculateHashIntermediate::new(3, Hash::default(), 256, slot, pubkey255),
+            CalculateHashIntermediate::new_without_slot(Hash::default(), 1, pubkey0),
+            CalculateHashIntermediate::new_without_slot(Hash::default(), 128, pubkey127),
+            CalculateHashIntermediate::new_without_slot(Hash::default(), 129, pubkey128),
+            CalculateHashIntermediate::new_without_slot(Hash::default(), 256, pubkey255),
         ];
 
         let expected_hashes = vec![

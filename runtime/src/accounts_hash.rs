@@ -2,7 +2,6 @@ use log::*;
 use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_sdk::{
-    clock::Slot,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
@@ -76,15 +75,6 @@ pub struct CalculateHashIntermediate {
 
 impl CalculateHashIntermediate {
     pub fn new_without_slot(hash: Hash, lamports: u64, pubkey: Pubkey) -> Self {
-        Self {
-            hash,
-            lamports,
-            pubkey,
-        }
-    }
-
-    // exists so tests and benches don't have to change yet
-    pub fn new(_version: u64, hash: Hash, lamports: u64, _slot: Slot, pubkey: Pubkey) -> Self {
         Self {
             hash,
             lamports,
@@ -864,19 +854,14 @@ pub mod tests {
 
         let key = Pubkey::new(&[11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
-        let val = CalculateHashIntermediate::new(0, hash, 88, Slot::default(), key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 88, key);
         account_maps.push(val);
 
         // 2nd key - zero lamports, so will be removed
         let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate::new(
-            0,
-            hash,
-            ZERO_RAW_LAMPORTS_SENTINEL,
-            Slot::default(),
-            key,
-        );
+        let val =
+            CalculateHashIntermediate::new_without_slot(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
         account_maps.push(val);
 
         let result = AccountsHash::rest_of_hash_calculation(
@@ -891,7 +876,7 @@ pub mod tests {
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let key = Pubkey::new(&[10u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate::new(0, hash, 20, Slot::default(), key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 20, key);
         account_maps.push(val);
 
         let result = AccountsHash::rest_of_hash_calculation(
@@ -906,7 +891,7 @@ pub mod tests {
         // 3rd key - with later slot
         let key = Pubkey::new(&[10u8; 32]);
         let hash = Hash::new(&[99u8; 32]);
-        let val = CalculateHashIntermediate::new(0, hash, 30, Slot::default() + 1, key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 30, key);
         account_maps.push(val);
 
         let result = AccountsHash::rest_of_hash_calculation(
@@ -932,19 +917,14 @@ pub mod tests {
 
             let key = Pubkey::new(&[11u8; 32]);
             let hash = Hash::new(&[1u8; 32]);
-            let val = CalculateHashIntermediate::new(0, hash, 88, Slot::default(), key);
+            let val = CalculateHashIntermediate::new_without_slot(hash, 88, key);
             account_maps.push(val);
 
             // 2nd key - zero lamports, so will be removed
             let key = Pubkey::new(&[12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
-            let val = CalculateHashIntermediate::new(
-                0,
-                hash,
-                ZERO_RAW_LAMPORTS_SENTINEL,
-                Slot::default(),
-                key,
-            );
+            let val =
+                CalculateHashIntermediate::new_without_slot(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
             account_maps.push(val);
 
             let mut previous_pass = PreviousPass::default();
@@ -1019,12 +999,12 @@ pub mod tests {
 
         let key = Pubkey::new(&[11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
-        let val = CalculateHashIntermediate::new(0, hash, 88, Slot::default(), key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 88, key);
         account_maps.push(val);
 
         let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate::new(0, hash, 20, Slot::default(), key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 20, key);
         account_maps.push(val);
 
         let result = AccountsHash::rest_of_hash_calculation(
@@ -1100,7 +1080,7 @@ pub mod tests {
             total_lamports_expected += lamports;
             let key = Pubkey::new_unique();
             let hash = Hash::new_unique();
-            let val = CalculateHashIntermediate::new(0, hash, lamports, Slot::default(), key);
+            let val = CalculateHashIntermediate::new_without_slot(hash, lamports, key);
             account_maps.push(val);
         }
 
@@ -1259,7 +1239,6 @@ pub mod tests {
         let key_b = Pubkey::new(&[2u8; 32]);
         let key_c = Pubkey::new(&[3u8; 32]);
         const COUNT: usize = 6;
-        const VERSION: u64 = 0;
         let hashes: Vec<_> = (0..COUNT)
             .into_iter()
             .map(|i| Hash::new(&[i as u8; 32]))
@@ -1273,13 +1252,7 @@ pub mod tests {
             .zip(keys.iter())
             .enumerate()
             .map(|(i, (hash, key))| {
-                CalculateHashIntermediate::new(
-                    VERSION,
-                    hash,
-                    (i + 1) as u64,
-                    u64::MAX - i as u64,
-                    *key,
-                )
+                CalculateHashIntermediate::new_without_slot(hash, (i + 1) as u64, *key)
             })
             .collect();
 
@@ -1444,13 +1417,13 @@ pub mod tests {
         let mut stats = HashStats::default();
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
-        let val = CalculateHashIntermediate::new(1, hash, 1, 1, key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 1, key);
 
         // slot same, version <
         let hash2 = Hash::new_unique();
-        let val2 = CalculateHashIntermediate::new(0, hash2, 4, 1, key);
-        let val3 = CalculateHashIntermediate::new(3, hash2, 4, 1, key);
-        let val4 = CalculateHashIntermediate::new(4, hash2, 4, 1, key);
+        let val2 = CalculateHashIntermediate::new_without_slot(hash2, 4, key);
+        let val3 = CalculateHashIntermediate::new_without_slot(hash2, 4, key);
+        let val4 = CalculateHashIntermediate::new_without_slot(hash2, 4, key);
 
         let src = vec![vec![val2.clone()], vec![val.clone()]];
         let result = AccountsHash::sort_hash_intermediate(src.clone(), &mut stats);
@@ -1478,11 +1451,11 @@ pub mod tests {
         solana_logger::setup();
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
-        let val = CalculateHashIntermediate::new(1, hash, 1, 1, key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 1, key);
 
         // slot same, version <
         let hash2 = Hash::new_unique();
-        let val2 = CalculateHashIntermediate::new(0, hash2, 4, 1, key);
+        let val2 = CalculateHashIntermediate::new_without_slot(hash2, 4, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
             AccountsHash::compare_two_hash_entries(&val, &val2)
@@ -1502,7 +1475,7 @@ pub mod tests {
 
         // slot same, vers =
         let hash3 = Hash::new_unique();
-        let val3 = CalculateHashIntermediate::new(1, hash3, 2, 1, key);
+        let val3 = CalculateHashIntermediate::new_without_slot(hash3, 2, key);
         assert_eq!(
             std::cmp::Ordering::Equal,
             AccountsHash::compare_two_hash_entries(&val, &val3)
@@ -1510,7 +1483,7 @@ pub mod tests {
 
         // slot same, vers >
         let hash4 = Hash::new_unique();
-        let val4 = CalculateHashIntermediate::new(2, hash4, 6, 1, key);
+        let val4 = CalculateHashIntermediate::new_without_slot(hash4, 6, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
             AccountsHash::compare_two_hash_entries(&val, &val4)
@@ -1518,7 +1491,7 @@ pub mod tests {
 
         // slot >, version <
         let hash5 = Hash::new_unique();
-        let val5 = CalculateHashIntermediate::new(0, hash5, 8, 2, key);
+        let val5 = CalculateHashIntermediate::new_without_slot(hash5, 8, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
             AccountsHash::compare_two_hash_entries(&val, &val5)
@@ -1532,20 +1505,15 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
         let mut account_maps = Vec::new();
-        let val = CalculateHashIntermediate::new(0, hash, 1, Slot::default(), key);
+        let val = CalculateHashIntermediate::new_without_slot(hash, 1, key);
         account_maps.push(val.clone());
 
         let result = AccountsHash::de_dup_accounts_from_stores(true, &account_maps[..]);
         assert_eq!(result, (vec![val.hash], val.lamports as u128));
 
         // zero original lamports, higher version
-        let val = CalculateHashIntermediate::new(
-            1,
-            hash,
-            ZERO_RAW_LAMPORTS_SENTINEL,
-            Slot::default(),
-            key,
-        );
+        let val =
+            CalculateHashIntermediate::new_without_slot(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
         account_maps.push(val); // has to be after previous entry since account_maps are in slot order
 
         let result = AccountsHash::de_dup_accounts_from_stores(true, &account_maps[..]);
@@ -1753,11 +1721,9 @@ pub mod tests {
     #[test]
     fn test_accountsdb_flatten_hash_intermediate() {
         solana_logger::setup();
-        let test = vec![vec![vec![CalculateHashIntermediate::new(
-            1,
+        let test = vec![vec![vec![CalculateHashIntermediate::new_without_slot(
             Hash::new_unique(),
             2,
-            3,
             Pubkey::new_unique(),
         )]]];
         let mut stats = HashStats::default();
@@ -1775,14 +1741,20 @@ pub mod tests {
 
         let test = vec![
             vec![vec![
-                CalculateHashIntermediate::new(1, Hash::new_unique(), 2, 3, Pubkey::new_unique()),
-                CalculateHashIntermediate::new(8, Hash::new_unique(), 9, 10, Pubkey::new_unique()),
+                CalculateHashIntermediate::new_without_slot(
+                    Hash::new_unique(),
+                    2,
+                    Pubkey::new_unique(),
+                ),
+                CalculateHashIntermediate::new_without_slot(
+                    Hash::new_unique(),
+                    9,
+                    Pubkey::new_unique(),
+                ),
             ]],
-            vec![vec![CalculateHashIntermediate::new(
-                4,
+            vec![vec![CalculateHashIntermediate::new_without_slot(
                 Hash::new_unique(),
                 5,
-                6,
                 Pubkey::new_unique(),
             )]],
         ];
