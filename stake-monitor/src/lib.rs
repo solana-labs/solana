@@ -4,10 +4,14 @@ use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{
-    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
-    pubkey::Pubkey, signature::Signature, transaction::Transaction,
+    clock::Slot,
+    native_token::LAMPORTS_PER_SOL,
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
+    signature::Signature,
+    stake::{self, instruction::StakeInstruction, state::Lockup},
+    transaction::Transaction,
 };
-use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
 use solana_transaction_status::{
     EncodedConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta,
 };
@@ -78,7 +82,7 @@ fn process_transaction(
     // Look for stake operations
     for instruction in message.instructions.iter().rev() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        if program_pubkey != solana_stake_program::id() {
+        if program_pubkey != stake::program::id() {
             continue;
         }
 
@@ -368,10 +372,10 @@ mod test {
         message::Message,
         native_token::sol_to_lamports,
         signature::{Keypair, Signer},
+        stake::{instruction as stake_instruction, state::Authorized},
         system_transaction,
         transaction::Transaction,
     };
-    use solana_stake_program::{stake_instruction, stake_state::Authorized};
 
     #[test]
     #[serial]

@@ -9,6 +9,7 @@ use solana_sdk::{
     account::{Account, AccountSharedData},
     pubkey::Pubkey,
     short_vec,
+    stake::config::Config as StakeConfig,
 };
 
 solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
@@ -16,6 +17,13 @@ solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
 pub trait ConfigState: serde::Serialize + Default {
     /// Maximum space that the serialized representation will require
     fn max_space() -> u64;
+}
+
+// TODO move ConfigState into `solana_program` to implement trait locally
+impl ConfigState for StakeConfig {
+    fn max_space() -> u64 {
+        serialized_size(&StakeConfig::default()).unwrap()
+    }
 }
 
 /// A collection of keys to be stored in Config account data.

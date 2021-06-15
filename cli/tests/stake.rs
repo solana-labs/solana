@@ -17,10 +17,11 @@ use solana_sdk::{
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
-};
-use solana_stake_program::{
-    stake_instruction::LockupArgs,
-    stake_state::{Lockup, StakeAuthorize, StakeState},
+    stake::{
+        self,
+        instruction::LockupArgs,
+        state::{Lockup, StakeAuthorize, StakeState},
+    },
 };
 
 #[test]
@@ -139,7 +140,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     let stake_address = Pubkey::create_with_seed(
         &config_validator.signers[0].pubkey(),
         "hi there",
-        &solana_stake_program::id(),
+        &stake::program::id(),
     )
     .expect("bad seed");
 
@@ -1557,6 +1558,6 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
     process_command(&config).unwrap();
     let seed_address =
-        Pubkey::create_with_seed(&stake_pubkey, seed, &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&stake_pubkey, seed, &stake::program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
 }

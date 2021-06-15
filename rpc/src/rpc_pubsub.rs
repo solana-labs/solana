@@ -569,13 +569,14 @@ mod tests {
             message::Message,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
+            stake::{
+                self, instruction as stake_instruction,
+                state::{Authorized, Lockup, StakeAuthorize},
+            },
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
         },
-        solana_stake_program::{
-            self, stake_instruction,
-            stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
-        },
+        solana_stake_program::stake_state,
         solana_vote_program::vote_state::Vote,
         std::{
             sync::{atomic::AtomicBool, RwLock},
@@ -791,7 +792,7 @@ mod tests {
         let stake_authority = Keypair::new();
         let from = Keypair::new();
         let stake_account = Keypair::new();
-        let stake_program_id = solana_stake_program::id();
+        let stake_program_id = stake::program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -887,7 +888,7 @@ mod tests {
         let bank = bank_forks.read().unwrap()[1].clone();
         let account = bank.get_account(&stake_account.pubkey()).unwrap();
         assert_eq!(
-            StakeState::authorized_from(&account).unwrap().staker,
+            stake_state::authorized_from(&account).unwrap().staker,
             new_stake_authority
         );
     }
