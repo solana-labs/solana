@@ -734,6 +734,11 @@ impl ReplayStage {
                         process_duplicate_slots_time.as_us(),
                     );
                 }
+
+                debug!("TAO - outside of TVU loop, best moment to persist. cost_table {:?} ",
+                    cost_model.read().unwrap().get_instruction_cost_table()
+                    );
+
                 Ok(())
             })
             .unwrap();

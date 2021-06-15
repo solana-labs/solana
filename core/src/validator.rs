@@ -662,6 +662,8 @@ impl Validator {
             BLOCK_MAX_COST,
         )));
 
+        debug!("TAO - location to ini cost model with blockstore. persisted table {:?}", blockstore.read_program_cost() );
+
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
@@ -827,6 +829,9 @@ impl Validator {
     }
 
     pub fn join(self) {
+
+        debug!("TAO - validator join");
+
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 

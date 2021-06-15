@@ -143,6 +143,7 @@ pub struct Blockstore {
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
     block_height_cf: LedgerColumn<cf::BlockHeight>,
+    program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -342,6 +343,7 @@ impl Blockstore {
         let blocktime_cf = db.column();
         let perf_samples_cf = db.column();
         let block_height_cf = db.column();
+        let program_costs_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -390,6 +392,7 @@ impl Blockstore {
             blocktime_cf,
             perf_samples_cf,
             block_height_cf,
+            program_costs_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -2684,6 +2687,29 @@ impl Blockstore {
 
     pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
         self.perf_samples_cf.put(index, perf_sample)
+    }
+
+    // program_cost table (if possible), it'd break a bit of pattern for ReplayStage to
+    // write. Can CF be gloabl - not tethed to slot?
+    pub fn read_program_cost(&self) -> Result<Vec<(Pubkey, u64)>> {
+        Ok(self
+            .db
+            .iter::<cf::ProgramCosts>(IteratorMode::End)?
+            .map(|(pubkey, data)| {
+                let program_cost: ProgramCost = deserialize(&data).unwrap();
+                (pubkey, program_cost.cost)
+            })
+            .collect())
+    }
+
+    // TODO TAO - do we need this to clear table? What happens to table/cf in blockstore?
+    pub fn clear_program_costs(&self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn write_program_cost(&self, key: &Pubkey, value: &u64) -> Result<()> {
+        self.program_costs_cf
+            .put(*key, &ProgramCost { cost: *value })
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
@@ -8848,6 +8874,62 @@ pub mod tests {
             }
         }
 
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_read_write_cost_table() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let num_entries: usize = 10;
+            let mut cost_table: HashMap<Pubkey, u64> = HashMap::new();
+            for x in 1..num_entries + 1 {
+                cost_table.insert(Pubkey::new_unique(), (x + 100) as u64);
+            }
+
+            // write to db
+            for (key, cost) in cost_table.iter() {
+                blockstore.write_program_cost(key, cost).unwrap();
+            }
+
+            // read back from db
+            let read_back = blockstore.read_program_cost().unwrap();
+            // verify
+            assert_eq!(read_back.len(), cost_table.len());
+            for (read_key, read_cost) in read_back {
+                assert_eq!(read_cost, *cost_table.get(&read_key).unwrap());
+            }
+
+            // update value, write to db 
+            for val in cost_table.values_mut() {
+                *val = *val + 100;
+            }
+            for (key, cost) in cost_table.iter() {
+                blockstore.write_program_cost(key, cost).unwrap();
+            }
+            // add a new record
+            let new_program_key = Pubkey::new_unique();
+            let new_program_cost = 999;
+            blockstore.write_program_cost(&new_program_key, &new_program_cost).unwrap();
+
+            // confirm value updated
+            let read_back = blockstore.read_program_cost().unwrap();
+            // verify
+            assert_eq!(read_back.len(), cost_table.len() + 1);
+            for (key, cost) in cost_table {
+                assert_eq!(cost, read_back.iter().find(|(k, _v)| *k == key).unwrap().1);
+            }
+            assert_eq!(new_program_cost, read_back.iter().find(|(k, _v)| *k == new_program_key).unwrap().1);
+
+            /* TODO Tao -- do we need clear? if so, how slow it'd be?
+            // clear
+            blockstore.clear_program_costs().unwrap();
+            let read_back = blockstore.read_program_cost().unwrap();
+            // verify
+            assert_eq!(0, read_back.len());
+            // */ 
+        }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

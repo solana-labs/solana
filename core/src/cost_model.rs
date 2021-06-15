@@ -12,7 +12,7 @@ use log::*;
 use solana_sdk::{message::Message, pubkey::Pubkey, transaction::Transaction};
 use std::collections::HashMap;
 
-// Guestimated from mainnet-beta data, sigver averages 1us, read averages 7us and write avergae 25us
+// Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
 const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 1 + 25;
 const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1 + 7;
 const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
