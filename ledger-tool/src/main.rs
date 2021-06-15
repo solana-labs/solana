@@ -1972,9 +1972,8 @@ fn main() {
                     }
 
                     if remove_stake_accounts {
-                        for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
-                            .into_iter()
+                        for (address, mut account) in
+                            bank.get_program_accounts(&stake::program::id()).into_iter()
                         {
                             account.set_lamports(0);
                             bank.store_account(&address, &account);
