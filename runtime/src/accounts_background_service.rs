@@ -98,7 +98,7 @@ impl SnapshotRequestHandler {
             .try_iter()
             .last()
             .map(|snapshot_request| {
-                let mut total_time = Measure::start("wallclock time elapsed");
+                let mut total_time = Measure::start("snapshot_request_receiver_total_time");
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
