@@ -4521,32 +4521,6 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95c481f0f29753f5b2d382628abae98a1dd87b572ddc7cbe5fe55ca62b6f7f07"
-dependencies = [
- "bs58",
- "bv",
- "generic-array 0.14.3",
- "log 0.4.11",
- "memmap2",
- "rustc_version",
- "serde",
- "serde_derive",
-<<<<<<< HEAD
- "sha2 0.9.2",
- "solana-frozen-abi-macro 1.6.4",
- "solana-logger 1.6.4",
-=======
- "sha2 0.9.5",
- "solana-frozen-abi-macro 1.7.1",
- "solana-logger 1.7.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
- "thiserror",
-]
-
-[[package]]
-name = "solana-frozen-abi"
 version = "1.6.12"
 dependencies = [
  "bs58",
@@ -4564,11 +4538,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-frozen-abi-macro"
+name = "solana-frozen-abi"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2068bcc47160ac9081893439b10a05e4bbe85cc0f6bccb6f1b0815423fbdd0c"
+checksum = "95c481f0f29753f5b2d382628abae98a1dd87b572ddc7cbe5fe55ca62b6f7f07"
 dependencies = [
+ "bs58",
+ "bv",
+ "generic-array 0.14.3",
+ "log 0.4.11",
+ "memmap2",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "sha2 0.9.2",
+ "solana-frozen-abi-macro 1.7.1",
+ "solana-logger 1.7.1",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-frozen-abi-macro"
+version = "1.6.12"
+dependencies = [
+ "lazy_static",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustc_version",
@@ -4577,9 +4570,10 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.6.12"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2068bcc47160ac9081893439b10a05e4bbe85cc0f6bccb6f1b0815423fbdd0c"
 dependencies = [
- "lazy_static",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustc_version",
@@ -4810,9 +4804,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ea5932e186629f47859924b3773cfd8bcb4b8796898ac85c1fa0a6a2024e5c6"
+version = "1.6.12"
 dependencies = [
  "env_logger 0.8.3",
  "lazy_static",
@@ -4821,7 +4813,9 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.6.12"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ea5932e186629f47859924b3773cfd8bcb4b8796898ac85c1fa0a6a2024e5c6"
 dependencies = [
  "env_logger 0.8.3",
  "lazy_static",
@@ -4978,54 +4972,6 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a2df39c63e21c5b58e2012e7675bed5e8dd5100470ffddedcafb78f5a7e3abe"
-dependencies = [
- "bincode",
-<<<<<<< HEAD
- "borsh",
- "borsh-derive",
- "bs58",
-=======
- "blake3",
- "borsh 0.8.2",
- "borsh-derive 0.8.2",
- "bs58 0.3.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
- "bv",
- "curve25519-dalek 2.1.0",
- "hex",
- "itertools",
- "lazy_static",
- "log 0.4.11",
- "num-derive",
- "num-traits",
- "rand 0.7.3",
- "rustc_version",
- "rustversion",
- "serde",
- "serde_bytes",
- "serde_derive",
-<<<<<<< HEAD
- "sha2 0.9.2",
- "solana-frozen-abi 1.6.4",
- "solana-frozen-abi-macro 1.6.4",
- "solana-logger 1.6.4",
- "solana-sdk-macro 1.6.4",
-=======
- "sha2 0.9.5",
- "sha3",
- "solana-frozen-abi 1.7.1",
- "solana-frozen-abi-macro 1.7.1",
- "solana-logger 1.7.1",
- "solana-sdk-macro 1.7.1",
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
- "thiserror",
-]
-
-[[package]]
-name = "solana-program"
 version = "1.6.12"
 dependencies = [
  "assert_matches",
@@ -5055,6 +5001,40 @@ dependencies = [
  "solana-frozen-abi-macro 1.6.12",
  "solana-logger 1.6.12",
  "solana-sdk-macro 1.6.12",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-program"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a2df39c63e21c5b58e2012e7675bed5e8dd5100470ffddedcafb78f5a7e3abe"
+dependencies = [
+ "bincode",
+ "blake3",
+ "borsh",
+ "borsh-derive",
+ "bs58",
+ "bv",
+ "curve25519-dalek 2.1.0",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "log 0.4.11",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "rustc_version",
+ "rustversion",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "sha2 0.9.2",
+ "sha3",
+ "solana-frozen-abi 1.7.1",
+ "solana-frozen-abi-macro 1.7.1",
+ "solana-logger 1.7.1",
+ "solana-sdk-macro 1.7.1",
  "thiserror",
 ]
 
@@ -5243,9 +5223,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6473d8fa445520564c84e8803320721404d160ffd876a125326a726541f11534"
+version = "1.6.12"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.24",
@@ -5256,7 +5234,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.6.12"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6473d8fa445520564c84e8803320721404d160ffd876a125326a726541f11534"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.24",

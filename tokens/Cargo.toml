@@ -31,13 +31,8 @@ solana-stake-program = { path = "../programs/stake", version = "=1.6.12" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.6.12" }
 solana-version = { path = "../version", version = "=1.6.12" }
 spl-associated-token-account-v1-0 = { package = "spl-associated-token-account", version = "=1.0.2" }
-<<<<<<< HEAD
-spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
-tempfile = "3.1.0"
-=======
 spl-token-v2-0 = { package = "spl-token", version = "=3.1.1", features = ["no-entrypoint"] }
-tempfile = "3.2.0"
->>>>>>> b7de36999 (Bump spl-token to v3.1.1 (#17951))
+tempfile = "3.1.0"
 thiserror = "1.0"
 
 [dev-dependencies]
