@@ -3682,7 +3682,13 @@ mod tests {
         // assert the previous behavior is preserved where fix_stake_deactivate=false
         assert_eq!(
             (0, 0),
-            calculate_stake_points_and_credits(&stake, &vote_state, None, &mut null_tracer(), false)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                false
+            )
         );
         assert_eq!(
             (0, 4),
