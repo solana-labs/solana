@@ -401,11 +401,7 @@ pub fn process_blockstore(
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
-<<<<<<< HEAD
-=======
-        opts.shrink_ratio,
         false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -3101,11 +3097,7 @@ pub mod tests {
             None,
             AccountSecondaryIndexes::default(),
             false,
-<<<<<<< HEAD
-=======
-            AccountShrinkThreshold::default(),
             false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
         );
         *bank.epoch_schedule()
     }

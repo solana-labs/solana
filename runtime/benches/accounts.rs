@@ -59,11 +59,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         None,
         AccountSecondaryIndexes::default(),
         false,
-<<<<<<< HEAD
-=======
-        AccountShrinkThreshold::default(),
         false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -83,11 +79,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         None,
         AccountSecondaryIndexes::default(),
         false,
-<<<<<<< HEAD
-=======
-        AccountShrinkThreshold::default(),
         false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();

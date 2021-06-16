@@ -1010,11 +1010,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-<<<<<<< HEAD
-=======
-            AccountShrinkThreshold::default(),
             false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
         )
     }
 
@@ -1027,11 +1023,7 @@ impl Bank {
             None,
             AccountSecondaryIndexes::default(),
             false,
-<<<<<<< HEAD
-=======
-            AccountShrinkThreshold::default(),
             false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1052,11 +1044,7 @@ impl Bank {
             None,
             account_indexes,
             accounts_db_caching_enabled,
-<<<<<<< HEAD
-=======
-            shrink_ratio,
             false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
         )
     }
 
@@ -1068,11 +1056,7 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
-<<<<<<< HEAD
-=======
-        shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);

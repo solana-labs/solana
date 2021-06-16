@@ -106,11 +106,7 @@ mod tests {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
-<<<<<<< HEAD
-=======
-                accounts_db::AccountShrinkThreshold::default(),
                 false,
->>>>>>> dbd4dc04b (ledger tool limit_load_slot_count_from_snapshot avoids assert failures (#17974))
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
