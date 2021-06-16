@@ -24,7 +24,7 @@ byteorder = "1.3.2"
 elf = "0.0.10"
 itertools = "0.10.1"
 log = "0.4.11"
-miow = "0.2.2"
+miow = "0.3.6"
 net2 = "0.2.37"
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.8.0" }
 solana-cli-output = { path = "../../cli-output", version = "=1.8.0" }

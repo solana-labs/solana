@@ -2834,7 +2834,7 @@ dependencies = [
  "elf",
  "itertools 0.10.1",
  "log",
- "miow 0.2.2",
+ "miow 0.3.6",
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
