@@ -4555,7 +4555,7 @@ dependencies = [
  "log 0.4.11",
  "lru",
  "matches",
- "miow 0.2.2",
+ "miow 0.3.6",
  "net2",
  "num-traits",
  "num_cpus",
