@@ -145,6 +145,7 @@ mod tests {
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
+        let check_hash_calculation = false;
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_archive(
             &account_paths,
             &[],
@@ -165,6 +166,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
+            check_hash_calculation,
         )
         .unwrap();
 

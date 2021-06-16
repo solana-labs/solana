@@ -612,6 +612,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    test_hash_calculation: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
@@ -649,7 +650,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     measure.stop();
 
     let mut verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank() {
+    if !bank.verify_snapshot_bank(test_hash_calculation) {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     verify.stop();
