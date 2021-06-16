@@ -166,11 +166,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
-<<<<<<< HEAD
-=======
-            accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
->>>>>>> f558b9b6b (verify bank hash on startup with ledger tool option (#17939))
         )
         .unwrap();
 
