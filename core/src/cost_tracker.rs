@@ -42,7 +42,7 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
+    pub fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
             return Err("would exceed block cost limit");

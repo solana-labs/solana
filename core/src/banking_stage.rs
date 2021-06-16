@@ -1068,14 +1068,6 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
-        // Making a snapshot of shared cost_tracker by clone(), drop lock immediately.
-        // Local copy `cost_tracker` is used to filter transactions by cost.
-        // Shared cost_tracker is updated later by processed transactions confirmed by bank.
-        let mut cost_tracker_clone_time = Measure::start("cost_tracker_clone_time");
-        let mut cost_tracker = cost_tracker.read().unwrap().clone();
-        cost_tracker_clone_time.stop();
-        inc_new_counter_info!("banking_stage-cost_tracker_clone", 1);
-
         let mut cost_tracker_check_time: u64 = 0;
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
         let (filtered_transactions, filter_transaction_packet_indexes) = transaction_indexes
@@ -1093,7 +1085,10 @@ impl BankingStage {
                 // added to retry list. No locking here.
                 let mut cost_track_try_add_time = Measure::start("cost_tracker_try_add_time");
                 let tx_cost = cost_model.read().unwrap().calculate_cost(&tx);
-                let result = cost_tracker.try_add(tx_cost);
+                let result = cost_tracker.read().unwrap().would_fit(
+                    &tx_cost.writable_accounts,
+                    &(tx_cost.account_access_cost + tx_cost.execution_cost),
+                );
                 cost_track_try_add_time.stop();
                 cost_tracker_check_time += cost_track_try_add_time.as_us();
                 inc_new_counter_info!("banking_stage-cost_tracker_check", 1);
@@ -1112,9 +1107,6 @@ impl BankingStage {
             })
             .unzip();
 
-        banking_stage_stats
-            .cost_tracker_clone_elapsed
-            .fetch_add(cost_tracker_clone_time.as_us(), Ordering::Relaxed);
         banking_stage_stats
             .cost_tracker_check_elapsed
             .fetch_add(cost_tracker_check_time, Ordering::Relaxed);
