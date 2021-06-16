@@ -372,10 +372,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let legacy_program_feature_present = package.name == "solana-sdk";
     let root_package_dir = &package.manifest_path.parent().unwrap_or_else(|| {
-        eprintln!(
-            "Unable to get directory of {}",
-            package.manifest_path.display()
-        );
+        eprintln!("Unable to get directory of {}", package.manifest_path);
         exit(1);
     });
 
@@ -392,8 +389,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         eprintln!(
             "Unable to set current directory to {}: {}",
-            root_package_dir.display(),
-            err
+            root_package_dir, err
         );
         exit(1);
     });
@@ -553,7 +549,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_bpf_package(&config, &metadata.target_directory, root_package);
+            build_bpf_package(&config, &metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -574,7 +570,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-        build_bpf_package(&config, &metadata.target_directory, package);
+        build_bpf_package(&config, &metadata.target_directory.as_ref(), package);
     }
 }
 
