@@ -44,38 +44,29 @@ impl SpinLock {
 }
 
 enum BucketMapError {
-    DataNoSpace(u64),
+    DataNoSpace,
     IndexNoSpace,
 }
 
 impl BucketMap {
-    pub fn scan<T>(&self, accum: &mut T, scanfn: fn(&Bucket, accum: &mut T)) {
-        let masks = self.masks.write().unwrap();
-        for i in 0..masks.len() {
-            if i > 1 && masks[i].ptr_eq(masks[i - 1]) {
-                continue;
-            }
-            scanfn(&masks[i].read().unwrap(), accum)
-        }
-    }
-
-    pub fn read(&self, pubkey: &Pubkey) -> Option<&SlotSlice> {
-        let ix = Self::bucket_ix(pubkey);
+    pub fn read_value(&self, pubkey: &Pubkey) -> Option<&SlotSlice> {
         self.check_lock(pubkey);
         let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
         spinlock.lock();
-        let rv = self.masks[ix].bucket.read(pubkey);
+        let masks = self.masks.read().unwrap();
+        let ix = Self::bucket_ix(pubkey, masks.len());
+        let rv = masks[ix].read().unwrap().read_value(pubkey);
         spinlock.unlock();
         rv
     }
 
-    pub fn delete(&self, pubkey: &Pubkey) {
+    pub fn delete_key(&self, pubkey: &Pubkey) {
         self.check_lock(pubkey);
         let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
         spinlock.lock();
-        let masks = self.masks[ix].read().unwrap();
+        let masks = self.masks.read().unwrap();
         let ix = Self::bucket_ix(pubkey, masks.len());
-        masks..delete(pubkey);
+        masks[ix].read().unwrap().delete_key(pubkey);
         spinlock.unlock();
     }
 
@@ -125,13 +116,12 @@ impl BucketMap {
             }
             let new = updatefn(current);
             rv = masks[ix].read().unwrap().try_write(pubkey, new);
-            if let Err(BucketMapError::DataNoSpace(ix)) = rv {
-                //unlock the read lock
-                drop(masks);
-                let masks = self.masks.write().unwrap();
-                //ix is invalidated once we drop the lock
-                let ix = Self::bucket_ix(pubkey, masks.len());
-                masks[ix].write().unwrap().grow(new.len());
+            if let Err(BucketMapError::DataNoSpace) = rv {
+                let bucket = masks[ix].write().unwrap();
+                rv = bucket.try_write(pubkey, new);
+                if let Err(BucketMapError::DataNoSpace) = rv {
+                    bucket.grow(new.len());
+                }
                 continue;
             }
             break;
@@ -165,15 +155,16 @@ struct Bucket {
 }
 
 impl Bucket {
-    fn read_value(&mut self, key: &Pubkey) -> Option<&SlotSlice> {
+    fn read_value(&self, key: &Pubkey) -> Option<&SlotSlice> {
         None
     }
-    fn new_key(&mut self, key: &Pubkey) {}
+    fn new_key(&self, key: &Pubkey) {}
+    fn delete_key(&self, key: &Pubkey) {}
     fn grow(&mut self, size: usize) {}
     fn split(&mut self, cur_ix: usize) -> Self {
-       unimplemented!(); 
+        unimplemented!();
     }
-    fn try_write(&mut self, pubkey: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
+    fn try_write(&self, pubkey: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
         Ok(())
     }
 }
