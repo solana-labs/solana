@@ -5315,6 +5315,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-stake-monitor"
 version = "1.7.5"
 dependencies = [
@@ -5339,6 +5340,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> f859a39b8 (Remove obsolete stake-monitor command)
 name = "solana-stake-program"
 version = "1.7.5"
 dependencies = [
