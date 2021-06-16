@@ -4736,6 +4736,7 @@ impl AccountsDb {
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.slot_count();
         let mismatch_found = AtomicU64::new(0);
+        let range = bin_range.end - bin_range.start;
 
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
             accounts_cache_and_ancestors,
@@ -4744,10 +4745,13 @@ impl AccountsDb {
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
                 let pubkey = loaded_account.pubkey();
-                let pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
+                let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
                 if !bin_range.contains(&pubkey_to_bin_index) {
                     return;
                 }
+
+                // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
+                pubkey_to_bin_index -= bin_range.start;
 
                 let raw_lamports = loaded_account.lamports();
                 let zero_raw_lamports = raw_lamports == 0;
@@ -4776,7 +4780,7 @@ impl AccountsDb {
 
                 let max = accum.len();
                 if max == 0 {
-                    accum.extend(vec![Vec::new(); bins]);
+                    accum.extend(vec![Vec::new(); range]);
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
@@ -6402,18 +6406,19 @@ pub mod tests {
 
         // just the first bin of 2
         let bins = 2;
+        let half_bins = bins / 2;
         let result = AccountsDb::scan_snapshot_stores(
             &get_storage_refs(&storages),
             &mut stats,
             bins,
             &Range {
                 start: 0,
-                end: bins / 2,
+                end: half_bins,
             },
             false,
         )
         .unwrap();
-        let mut expected = vec![Vec::new(); bins];
+        let mut expected = vec![Vec::new(); half_bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
         assert_eq!(result, vec![expected]);
@@ -6431,14 +6436,15 @@ pub mod tests {
         )
         .unwrap();
 
-        let mut expected = vec![Vec::new(); bins];
-        expected[bins - 1].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected[3].clone());
+        let mut expected = vec![Vec::new(); half_bins];
+        let starting_bin_index = 0;
+        expected[starting_bin_index].push(raw_expected[2].clone());
+        expected[starting_bin_index].push(raw_expected[3].clone());
         assert_eq!(result, vec![expected]);
 
         // 1 bin at a time of 4
         let bins = 4;
-        for bin in 0..bins {
+        for (bin, expected_item) in raw_expected.iter().enumerate().take(bins) {
             let result = AccountsDb::scan_snapshot_stores(
                 &get_storage_refs(&storages),
                 &mut stats,
@@ -6450,8 +6456,8 @@ pub mod tests {
                 false,
             )
             .unwrap();
-            let mut expected = vec![Vec::new(); bins];
-            expected[bin].push(raw_expected[bin].clone());
+            let mut expected = vec![Vec::new(); 1];
+            expected[0].push(expected_item.clone());
             assert_eq!(result, vec![expected]);
         }
 
@@ -6471,8 +6477,8 @@ pub mod tests {
             .unwrap();
             let mut expected = vec![];
             if let Some(index) = bin_locations.iter().position(|&r| r == bin) {
-                expected = vec![Vec::new(); bins];
-                expected[bin].push(raw_expected[index].clone());
+                expected = vec![Vec::new(); 1];
+                expected[0].push(raw_expected[index].clone());
             }
             assert_eq!(result, vec![expected]);
         }
@@ -6505,9 +6511,9 @@ pub mod tests {
         .unwrap();
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
-        let mut expected = vec![Vec::new(); bins];
-        expected[127].push(raw_expected[1].clone());
-        assert_eq!(result[1].len(), bins);
+        let mut expected = vec![Vec::new(); 1];
+        expected[0].push(raw_expected[1].clone());
+        assert_eq!(result[1].len(), 1);
         assert_eq!(result[1], expected);
     }
 
