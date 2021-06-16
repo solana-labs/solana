@@ -78,7 +78,7 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         .cloned()
         .unwrap_or_else(|| format!("{}", target_directory.join("deploy").display()));
 
-    let manifest_path = format!("{}", package.manifest_path.display());
+    let manifest_path = format!("{}", package.manifest_path);
     let mut cargo_args = vec!["--manifest-path", &manifest_path];
     if config.no_default_features {
         cargo_args.push("--no-default-features");
@@ -143,7 +143,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            test_bpf_package(&config, &metadata.target_directory, root_package);
+            test_bpf_package(&config, &metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -164,7 +164,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-        test_bpf_package(&config, &metadata.target_directory, package);
+        test_bpf_package(&config, &metadata.target_directory.as_ref(), package);
     }
 }
 
