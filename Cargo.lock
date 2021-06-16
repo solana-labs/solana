@@ -5541,30 +5541,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-stake-monitor"
-version = "1.8.0"
-dependencies = [
- "clap 2.33.3",
- "console 0.14.1",
- "log 0.4.11",
- "serde",
- "serde_yaml",
- "serial_test 0.5.1",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-client",
- "solana-core",
- "solana-local-cluster",
- "solana-logger 1.8.0",
- "solana-metrics",
- "solana-rpc",
- "solana-sdk",
- "solana-transaction-status",
- "solana-version",
- "tempfile",
-]
-
-[[package]]
 name = "solana-stake-program"
 version = "1.8.0"
 dependencies = [
