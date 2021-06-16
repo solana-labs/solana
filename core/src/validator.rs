@@ -381,6 +381,7 @@ impl Validator {
             &exit,
             config.enforce_ulimit_nofile,
             &start_progress,
+            config.no_poh_speed_test,
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -611,10 +612,6 @@ impl Validator {
             } else {
                 (None, None)
             };
-
-        if !config.no_poh_speed_test {
-            check_poh_speed(&genesis_config, None);
-        }
 
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
             config,
@@ -1009,6 +1006,7 @@ fn new_banks_from_ledger(
     exit: &Arc<AtomicBool>,
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+    no_poh_speed_test: bool,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1040,6 +1038,10 @@ fn new_banks_from_ledger(
             error!("Delete the ledger directory to continue: {:?}", ledger_path);
             abort();
         }
+    }
+
+    if !no_poh_speed_test {
+        check_poh_speed(&genesis_config, None);
     }
 
     let BlockstoreSignals {
