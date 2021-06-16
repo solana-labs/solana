@@ -255,7 +255,7 @@ Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator]
 
 ## sysvar
 
-A synthetic [account](terminology.md#account) maintained by the runtime and provided to programs which provide cluster state such as current tick height, rewards [points](terminology.md#point) values, etc.  Sysvars can either be [passed to the program as an account or queried by the program via a syscall](developing/runtime-facilities/sysvars.md).
+An [account](terminology.md#account) maintained by the runtime and provided to programs which provide cluster state such as current tick height, rewards [points](terminology.md#point) values, etc.  Sysvars can either be [passed to the program as an account or queried by the program via a syscall](developing/runtime-facilities/sysvars.md).
 
 ## thin client
 
