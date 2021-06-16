@@ -70,7 +70,7 @@ impl CostTracker {
         Ok(())
     }
 
-    fn add_transaction(&mut self, keys: &[Pubkey], cost: &u64) {
+    pub fn add_transaction(&mut self, keys: &[Pubkey], cost: &u64) {
         for account_key in keys.iter() {
             *self
                 .cost_by_writable_accounts

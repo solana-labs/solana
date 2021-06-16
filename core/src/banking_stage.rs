@@ -1060,6 +1060,7 @@ impl BankingStage {
     // and verifies secp256k1 instructions. A list of valid transactions are returned with their message hashes
     // and packet indexes.
     // Also returned is packet indexes for transaction should be retried due to cost limits.
+    #[allow(clippy::needless_collect)]
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
@@ -1068,9 +1069,9 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
-        let mut cost_tracker_check_time: u64 = 0;
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
-        let (filtered_transactions, filter_transaction_packet_indexes) = transaction_indexes
+
+        let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
@@ -1078,38 +1079,52 @@ impl BankingStage {
                 if secp256k1_program_enabled {
                     tx.verify_precompiles().ok()?;
                 }
-
-                // Get transaction cost via cost_model; try to add cost to
-                // local copy of cost_tracker, if suceeded, local copy is updated
-                // and transaction added to valid list; otherwise, transaction is
-                // added to retry list. No locking here.
-                let mut cost_track_try_add_time = Measure::start("cost_tracker_try_add_time");
-                let tx_cost = cost_model.read().unwrap().calculate_cost(&tx);
-                let result = cost_tracker.read().unwrap().would_fit(
-                    &tx_cost.writable_accounts,
-                    &(tx_cost.account_access_cost + tx_cost.execution_cost),
-                );
-                cost_track_try_add_time.stop();
-                cost_tracker_check_time += cost_track_try_add_time.as_us();
-                inc_new_counter_info!("banking_stage-cost_tracker_check", 1);
-                if result.is_err() {
-                    debug!("transaction {:?} would exceed limit: {:?}", tx, result);
-                    retryable_transaction_packet_indexes.push(*tx_index);
-                    return None;
-                }
-
-                let message_bytes = Self::packet_message(p)?;
-                let message_hash = Message::hash_raw_message(message_bytes);
-                Some((
-                    HashedTransaction::new(Cow::Owned(tx), message_hash),
-                    tx_index,
-                ))
+                Some((tx, *tx_index))
             })
-            .unzip();
+            .collect();
+        inc_new_counter_info!(
+            "banking_stage-cost_tracker_check",
+            verified_transactions_with_packet_indexes.len()
+        );
+
+        let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
+        let cost_model_readonly = cost_model.read().unwrap();
+        let cost_tracker_readonly = cost_tracker.read().unwrap();
+        let filtered_transactions_with_packet_indexes: Vec<_> =
+            verified_transactions_with_packet_indexes
+                .into_iter()
+                .filter_map(|(tx, tx_index)| {
+                    let tx_cost = cost_model_readonly.calculate_cost(&tx);
+                    let result = cost_tracker_readonly.would_fit(
+                        &tx_cost.writable_accounts,
+                        &(tx_cost.account_access_cost + tx_cost.execution_cost),
+                    );
+                    if result.is_err() {
+                        debug!("transaction {:?} would exceed limit: {:?}", tx, result);
+                        retryable_transaction_packet_indexes.push(tx_index);
+                        return None;
+                    }
+                    Some((Cow::Owned(tx), tx_index))
+                })
+                .collect();
+        drop(cost_model_readonly);
+        drop(cost_tracker_readonly);
+        cost_tracker_check_time.stop();
+
+        let (filtered_transactions, filter_transaction_packet_indexes) =
+            filtered_transactions_with_packet_indexes
+                .into_iter()
+                .filter_map(|(tx, tx_index)| {
+                    let p = &msgs.packets[tx_index];
+                    let message_bytes = Self::packet_message(p)?;
+                    let message_hash = Message::hash_raw_message(message_bytes);
+                    Some((HashedTransaction::new(tx, message_hash), tx_index))
+                })
+                .unzip();
 
         banking_stage_stats
             .cost_tracker_check_elapsed
-            .fetch_add(cost_tracker_check_time, Ordering::Relaxed);
+            .fetch_add(cost_tracker_check_time.as_us(), Ordering::Relaxed);
 
         (
             filtered_transactions,
@@ -1219,7 +1234,10 @@ impl BankingStage {
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
                 let tx_cost = cost_model_readonly.calculate_cost(&tx.transaction());
-                cost_tracker_mutable.try_add(tx_cost).ok();
+                cost_tracker_mutable.add_transaction(
+                    &tx_cost.writable_accounts,
+                    &(tx_cost.account_access_cost + tx_cost.execution_cost),
+                );
             }
         });
         drop(cost_tracker_mutable);
