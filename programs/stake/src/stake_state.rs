@@ -2766,11 +2766,7 @@ mod tests {
         // Lockup expired: custodian cannot change it
         assert_eq!(
             stake_keyed_account.set_lockup(
-                &LockupArgs {
-                    unix_timestamp: Some(3),
-                    epoch: None,
-                    custodian: None,
-                },
+                &LockupArgs::default(),
                 &vec![custodian].into_iter().collect(),
                 Some(&Clock {
                     unix_timestamp: UnixTimestamp::MAX,
@@ -2784,11 +2780,7 @@ mod tests {
         // Lockup expired: authorized withdrawer can change it
         assert_eq!(
             stake_keyed_account.set_lockup(
-                &LockupArgs {
-                    unix_timestamp: Some(3),
-                    epoch: None,
-                    custodian: None,
-                },
+                &LockupArgs::default(),
                 &vec![stake_pubkey].into_iter().collect(),
                 Some(&Clock {
                     unix_timestamp: UnixTimestamp::MAX,
@@ -2797,6 +2789,34 @@ mod tests {
                 })
             ),
             Ok(())
+        );
+
+        // Change authorized withdrawer
+        let new_withdraw_authority = solana_sdk::pubkey::new_rand();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &vec![stake_pubkey].into_iter().collect(),
+                &new_withdraw_authority,
+                StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None
+            ),
+            Ok(())
+        );
+
+        // Previous authorized withdrawer cannot change the lockup anymore
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &LockupArgs::default(),
+                &vec![stake_pubkey].into_iter().collect(),
+                Some(&Clock {
+                    unix_timestamp: UnixTimestamp::MAX,
+                    epoch: Epoch::MAX,
+                    ..Clock::default()
+                })
+            ),
+            Err(InstructionError::MissingRequiredSignature)
         );
     }
 
