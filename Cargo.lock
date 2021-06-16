@@ -995,11 +995,11 @@ dependencies = [
 
 [[package]]
 name = "ctrlc"
-version = "3.1.5"
+version = "3.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54dedab740bc412d514cfbc4a1d9d5d16fed02c4b14a7be129003c07fdc33b9b"
+checksum = "232295399409a8b7ae41276757b5a1cc21032848d42bff2352261f958b3ca29a"
 dependencies = [
- "nix 0.17.0",
+ "nix",
  "winapi 0.3.8",
 ]
 
@@ -2600,19 +2600,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "nix"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e4785f2c3b7589a0d0c1dd60285e1188adac4006e8abd6dd578e1567027363"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 0.1.10",
- "libc",
- "void",
 ]
 
 [[package]]
@@ -4850,7 +4837,7 @@ dependencies = [
  "dirs-next",
  "indicatif",
  "lazy_static",
- "nix 0.20.0",
+ "nix",
  "reqwest",
  "semver 1.0.3",
  "serde",
@@ -5105,7 +5092,7 @@ dependencies = [
  "bincode",
  "clap 2.33.3",
  "log 0.4.11",
- "nix 0.20.0",
+ "nix",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -5637,7 +5624,7 @@ version = "1.8.0"
 dependencies = [
  "libc",
  "log 0.4.11",
- "nix 0.20.0",
+ "nix",
  "solana-logger 1.8.0",
  "solana-measure",
  "solana-metrics",
@@ -5653,7 +5640,7 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log 0.4.11",
- "nix 0.20.0",
+ "nix",
  "solana-clap-utils",
  "solana-logger 1.8.0",
  "solana-version",
