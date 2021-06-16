@@ -477,9 +477,9 @@ fn run_accounts_bench(
             }
 
             if close_nth_batch > 0 {
-                let expected_closed = (total_accounts_created as u64
-                    / (close_nth_batch * batch_size as u64))
-                    * batch_size as u64;
+                let num_batches_to_close =
+                    total_accounts_created as u64 / (close_nth_batch * batch_size as u64);
+                let expected_closed = num_batches_to_close * batch_size as u64;
                 let max_closed_seed = seed_tracker.max_closed.load(Ordering::Relaxed);
                 // Close every account we've created with seed between max_closed_seed..expected_closed
                 if max_closed_seed < expected_closed {
@@ -583,9 +583,8 @@ fn main() {
                 .value_name("BYTES")
                 .help(
                     "Every `n` batches, create a batch of close transactions for
-                    the first batch of accounts created.
-                    Note: a `close-frequency` value near or below `batch-size` \
-                    may result in transaction-simulation errors, as the close \
+                    the earliest remaining batch of accounts created.
+                    Note: Should be > 1 to avoid situations where the close \
                     transactions will be submitted before the corresponding \
                     create transactions have been confirmed",
                 ),
