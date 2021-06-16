@@ -1196,7 +1196,10 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
+<<<<<<< HEAD
                 vote_only_bank,
+=======
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -2452,7 +2455,10 @@ impl ReplayStage {
                     forks.root(),
                     &leader,
                     rpc_subscriptions,
+<<<<<<< HEAD
                     false,
+=======
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
                 );
                 let empty: Vec<Pubkey> = vec![];
                 Self::update_fork_propagated_threshold_from_votes(
@@ -2479,10 +2485,16 @@ impl ReplayStage {
         root_slot: u64,
         leader: &Pubkey,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
+<<<<<<< HEAD
         vote_only_bank: bool,
     ) -> Bank {
         rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
         Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
+=======
+    ) -> Bank {
+        rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
+        Bank::new_from_parent(parent, leader, slot)
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
@@ -3172,7 +3184,12 @@ mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
             );
+<<<<<<< HEAD
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+=======
+
+            let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache,
@@ -3235,7 +3252,11 @@ mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+<<<<<<< HEAD
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+=======
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),

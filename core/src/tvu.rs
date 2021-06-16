@@ -25,8 +25,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::TransactionStatusSender,
+    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_poh::poh_recorder::PohRecorder;
@@ -115,7 +114,6 @@ impl Tvu {
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -178,8 +176,12 @@ impl Tvu {
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
+<<<<<<< HEAD
             exit.clone(),
             completed_slots_receiver,
+=======
+            &exit,
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -189,7 +191,11 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
+<<<<<<< HEAD
             max_slots.clone(),
+=======
+            max_slots,
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );
@@ -393,7 +399,6 @@ pub mod tests {
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -437,7 +442,6 @@ pub mod tests {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             None,
             None,

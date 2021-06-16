@@ -87,6 +87,46 @@ use {
         thread::{sleep, Builder},
         time::{Duration, Instant},
     },
+<<<<<<< HEAD
+=======
+    rpc::JsonRpcConfig,
+    rpc_completed_slots_service::RpcCompletedSlotsService,
+    rpc_pubsub_service::{PubSubConfig, PubSubService},
+    rpc_service::JsonRpcService,
+    rpc_subscriptions::RpcSubscriptions,
+    transaction_status_service::TransactionStatusService,
+};
+use solana_runtime::{
+    accounts_db::AccountShrinkThreshold,
+    accounts_index::AccountSecondaryIndexes,
+    bank::Bank,
+    bank_forks::{BankForks, SnapshotConfig},
+    commitment::BlockCommitmentCache,
+    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+};
+use solana_sdk::{
+    clock::Slot,
+    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+    exit::Exit,
+    genesis_config::GenesisConfig,
+    hash::Hash,
+    pubkey::Pubkey,
+    shred_version::compute_shred_version,
+    signature::{Keypair, Signer},
+    timing::timestamp,
+};
+use solana_vote_program::vote_state::VoteState;
+use std::{
+    collections::HashSet,
+    net::SocketAddr,
+    ops::Deref,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::mpsc::Receiver,
+    sync::{Arc, Mutex, RwLock},
+    thread::{sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
@@ -248,6 +288,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Exit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
+    rpc_completed_slots_service: JoinHandle<()>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
@@ -455,7 +496,11 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
+<<<<<<< HEAD
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
+=======
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
+>>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -681,6 +726,10 @@ impl Validator {
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+
+        let rpc_completed_slots_service =
+            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -718,7 +767,6 @@ impl Validator {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
@@ -784,6 +832,7 @@ impl Validator {
             serve_repair_service,
             json_rpc_service,
             pubsub_service,
+            rpc_completed_slots_service,
             optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
@@ -846,6 +895,10 @@ impl Validator {
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
+
+        self.rpc_completed_slots_service
+            .join()
+            .expect("rpc_completed_slots_service");
 
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
