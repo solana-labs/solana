@@ -47,6 +47,7 @@ use solana_rpc::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
     rpc::JsonRpcConfig,
+    rpc_completed_slots_service::RpcCompletedSlotsService,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
@@ -80,7 +81,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Builder},
+    thread::{sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
 
@@ -243,6 +244,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Exit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
+    rpc_completed_slots_service: JoinHandle<()>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
@@ -446,7 +448,7 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
-        let subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -460,7 +462,7 @@ impl Validator {
         let completed_data_sets_service = CompletedDataSetsService::new(
             completed_data_sets_receiver,
             blockstore.clone(),
-            subscriptions.clone(),
+            rpc_subscriptions.clone(),
             &exit,
             max_slots.clone(),
         );
@@ -540,7 +542,7 @@ impl Validator {
                 } else {
                     Some(PubSubService::new(
                         config.pubsub_config.clone(),
-                        &subscriptions,
+                        &rpc_subscriptions,
                         rpc_pubsub_addr,
                         &exit,
                     ))
@@ -550,7 +552,7 @@ impl Validator {
                     &exit,
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
-                    subscriptions.clone(),
+                    rpc_subscriptions.clone(),
                 )),
                 Some(bank_notification_sender),
             )
@@ -660,6 +662,10 @@ impl Validator {
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+
+        let rpc_completed_slots_service =
+            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -692,12 +698,11 @@ impl Validator {
             },
             blockstore.clone(),
             ledger_signal_receiver,
-            &subscriptions,
+            &rpc_subscriptions,
             &poh_recorder,
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
@@ -740,7 +745,7 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
-            &subscriptions,
+            &rpc_subscriptions,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,
@@ -765,6 +770,7 @@ impl Validator {
             serve_repair_service,
             json_rpc_service,
             pubsub_service,
+            rpc_completed_slots_service,
             optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
@@ -827,6 +833,10 @@ impl Validator {
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
+
+        self.rpc_completed_slots_service
+            .join()
+            .expect("rpc_completed_slots_service");
 
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker

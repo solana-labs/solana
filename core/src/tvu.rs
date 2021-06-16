@@ -25,8 +25,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::TransactionStatusSender,
+    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_poh::poh_recorder::PohRecorder;
@@ -109,12 +108,11 @@ impl Tvu {
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -179,7 +177,6 @@ impl Tvu {
             repair_socket,
             verified_receiver,
             &exit,
-            completed_slots_receiver,
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -190,7 +187,7 @@ impl Tvu {
             tvu_config.repair_validators,
             completed_data_sets_sender,
             max_slots,
-            Some(subscriptions.clone()),
+            Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );
 
@@ -266,7 +263,7 @@ impl Tvu {
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
-            subscriptions: subscriptions.clone(),
+            rpc_subscriptions: rpc_subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_background_request_sender,
@@ -381,7 +378,6 @@ pub mod tests {
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -425,7 +421,6 @@ pub mod tests {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             None,
             None,
