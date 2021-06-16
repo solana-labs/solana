@@ -3937,7 +3937,7 @@ impl AccountsDb {
         self.purge_slot_cache_pubkeys(slot, purged_slot_pubkeys, pubkey_to_slot_set, is_dead_slot);
 
         if !is_dead_slot {
-            let aligned_total_size = self.page_align(total_size);
+            let aligned_total_size = Self::page_align(total_size);
             // This ensures that all updates are written to an AppendVec, before any
             // updates to the index happen, so anybody that sees a real entry in the index,
             // will be able to find the account in storage
@@ -3963,50 +3963,11 @@ impl AccountsDb {
             );
         }
 
-<<<<<<< HEAD
         // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
         // atomic switch from the cache to storage.
         // There is some racy condition for existing readers who just has read exactly while
         // flushing. That case is handled by retry_to_get_account_accessor()
         assert!(self.accounts_cache.remove_slot(slot).is_some());
-=======
-            if !is_dead_slot {
-                let aligned_total_size = Self::page_align(total_size);
-                // This ensures that all updates are written to an AppendVec, before any
-                // updates to the index happen, so anybody that sees a real entry in the index,
-                // will be able to find the account in storage
-                let flushed_store =
-                    self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
-                self.store_accounts_frozen(
-                    slot,
-                    &accounts,
-                    Some(&hashes),
-                    Some(Box::new(move |_, _| flushed_store.clone())),
-                    None,
-                );
-                // If the above sizing function is correct, just one AppendVec is enough to hold
-                // all the data for the slot
-                assert_eq!(
-                    self.storage
-                        .get_slot_stores(slot)
-                        .unwrap()
-                        .read()
-                        .unwrap()
-                        .len(),
-                    1
-                );
-            }
-
-            // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
-            // atomic switch from the cache to storage.
-            // There is some racy condition for existing readers who just has read exactly while
-            // flushing. That case is handled by retry_to_get_account_accessor()
-            assert!(self.accounts_cache.remove_slot(slot).is_some());
-            true
-        } else {
-            false
-        };
->>>>>>> 14c52ab01 (Skip shrink when it doesn't save anything (#17405))
         FlushStats {
             slot,
             num_flushed,
