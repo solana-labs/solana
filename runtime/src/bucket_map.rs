@@ -43,6 +43,11 @@ impl SpinLock {
     }
 }
 
+enum BucketMapError {
+    DataNoSpace(u64),
+    IndexNoSpace,
+}
+
 impl BucketMap {
     pub fn scan<T>(&self, accum: &mut T, scanfn: fn(&Bucket, accum: &mut T)) {
         let masks = self.masks.write().unwrap();
@@ -65,11 +70,12 @@ impl BucketMap {
     }
 
     pub fn delete(&self, pubkey: &Pubkey) {
-        let ix = Self::bucket_ix(pubkey);
         self.check_lock(pubkey);
         let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
         spinlock.lock();
-        self.masks[ix].bucket.delete(pubkey);
+        let masks = self.masks[ix].read().unwrap();
+        let ix = Self::bucket_ix(pubkey, masks.len());
+        masks..delete(pubkey);
         spinlock.unlock();
     }
 
@@ -82,15 +88,15 @@ impl BucketMap {
         loop {
             let e = self.try_update(pubkey, updatefn);
             if let Err(BucketMapError::IndexNoSpace) = e {
-                let ix = Self::bucket_ix(pubkey);
-                let mut masks = self.masks.write();
-                let new_bucket = masks[ix].split(ix);
+                let mut masks = self.masks.write().unwrap();
+                let ix = Self::bucket_ix(pubkey, masks.len());
+                let new_bucket = masks[ix].write().unwrap().split(ix);
                 let mut new_masks = Vec::new();
                 for i in 0..masks.len() {
-                    new_masks[i] = masks[i];
-                    new_masks[i + 1] = masks[i];
+                    new_masks.push(masks[i].clone());
+                    new_masks.push(masks[i].clone());
                     if i == ix {
-                        new_masks[i + 1] = new_bucket;
+                        new_masks[i * 2 + 1] = Arc::new(RwLock::new(new_bucket));
                     }
                 }
                 *masks = new_masks;
@@ -164,7 +170,12 @@ impl Bucket {
     }
     fn new_key(&mut self, key: &Pubkey) {}
     fn grow(&mut self, size: usize) {}
-    fn try_write(&mut self, pubkey: Pubkey, data: &SlotSlice) -> Result<(), DataBucketError> {}
+    fn split(&mut self, cur_ix: usize) -> Self {
+       unimplemented!(); 
+    }
+    fn try_write(&mut self, pubkey: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
+        Ok(())
+    }
 }
 
 #[repr(C)]
@@ -178,11 +189,6 @@ struct IndexEntry {
 }
 
 pub type SlotInfo = (Slot, AccountInfo);
-
-enum BucketMapError {
-    DataNoSpace(u64),
-    IndexNoSpace,
-}
 
 pub type SlotSlice = [SlotInfo];
 
