@@ -1363,9 +1363,13 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         slot: Slot,
         items: Vec<(&Pubkey, T)>,
     ) -> Vec<bool> {
+        let mut zero_lamport_pubkeys_local = Vec::with_capacity(items.len());
         let potentially_new_items = items
             .iter()
-            .map(|(_pubkey, account_info)| {
+            .map(|(pubkey, account_info)| {
+                if account_info.is_zero_lamport() {
+                    zero_lamport_pubkeys_local.push(*pubkey);
+                }
                 // this value is equivalent to what update() below would have created if we inserted a new item
                 WriteAccountMapEntry::new_entry_after_update(slot, account_info)
             })
@@ -1374,6 +1378,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let mut _reclaims = SlotList::new();
 
         let mut w_account_maps = self.get_account_maps_write_lock();
+        // this has previously been done inside the lock, so we maintain that.
+        zero_lamport_pubkeys_local.into_iter().for_each(|pubkey| {
+            self.zero_lamport_pubkeys.insert(*pubkey);
+        });
         items
             .into_iter()
             .zip(potentially_new_items.into_iter())
@@ -1383,9 +1391,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     &mut w_account_maps,
                     new_item,
                 );
-                if account_info.is_zero_lamport() {
-                    self.zero_lamport_pubkeys.insert(*pubkey);
-                }
                 if let Some(mut w_account_entry) = account_entry {
                     w_account_entry.update(slot, account_info, &mut _reclaims);
                     true
