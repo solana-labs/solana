@@ -1324,6 +1324,9 @@ impl Default for AccountsDb {
     }
 }
 
+type GenerateIndexAccountsMap<'a> =
+    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         AccountsDb::new_with_config(
@@ -5722,10 +5725,38 @@ impl AccountsDb {
         (result, slots)
     }
 
+    fn process_storage_slot(
+        storage_maps: &[Arc<AccountStorageEntry>],
+    ) -> GenerateIndexAccountsMap<'_> {
+        let num_accounts = storage_maps
+            .iter()
+            .map(|storage| storage.approx_stored_count())
+            .sum();
+        let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
+        storage_maps.iter().for_each(|storage| {
+            let accounts = storage.all_accounts();
+            accounts.into_iter().for_each(|stored_account| {
+                let this_version = stored_account.meta.write_version;
+                match accounts_map.entry(stored_account.meta.pubkey) {
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert((this_version, storage.append_vec_id(), stored_account));
+                    }
+                    std::collections::hash_map::Entry::Occupied(mut entry) => {
+                        let occupied_version = entry.get().0;
+                        if occupied_version < this_version {
+                            entry.insert((this_version, storage.append_vec_id(), stored_account));
+                        } else {
+                            assert!(occupied_version != this_version);
+                        }
+                    }
+                }
+            })
+        });
+        accounts_map
+    }
+
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>) {
-        type AccountsMap<'a> =
-            HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -5771,38 +5802,7 @@ impl AccountsDb {
                         .storage
                         .get_slot_storage_entries(*slot)
                         .unwrap_or_default();
-                    let num_accounts = storage_maps
-                        .iter()
-                        .map(|storage| storage.approx_stored_count())
-                        .sum();
-                    let mut accounts_map: AccountsMap = AccountsMap::with_capacity(num_accounts);
-                    storage_maps.iter().for_each(|storage| {
-                        let accounts = storage.all_accounts();
-                        accounts.into_iter().for_each(|stored_account| {
-                            let this_version = stored_account.meta.write_version;
-                            match accounts_map.entry(stored_account.meta.pubkey) {
-                                std::collections::hash_map::Entry::Vacant(entry) => {
-                                    entry.insert((
-                                        this_version,
-                                        storage.append_vec_id(),
-                                        stored_account,
-                                    ));
-                                }
-                                std::collections::hash_map::Entry::Occupied(mut entry) => {
-                                    let occupied_version = entry.get().0;
-                                    if occupied_version < this_version {
-                                        entry.insert((
-                                            this_version,
-                                            storage.append_vec_id(),
-                                            stored_account,
-                                        ));
-                                    } else {
-                                        assert!(occupied_version != this_version);
-                                    }
-                                }
-                            }
-                        })
-                    });
+                    let accounts_map = Self::process_storage_slot(&storage_maps);
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
