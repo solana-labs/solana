@@ -161,6 +161,23 @@ pub struct ErrorCounters {
     pub not_allowed_during_cluster_maintenance: usize,
 }
 
+#[derive(Default, Debug)]
+struct GenerateIndexTimings {
+    pub index_time: u64,
+    pub scan_time: u64,
+}
+
+impl GenerateIndexTimings {
+    pub fn report(&self) {
+        datapoint_info!(
+            "generate_index",
+            // we cannot accurately measure index insertion time because of many threads and lock contention
+            ("total_us", self.index_time, i64),
+            ("scan_stores_us", self.scan_time, i64),
+        );
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct AccountInfo {
     /// index identifying the append storage
@@ -5887,13 +5904,11 @@ impl AccountsDb {
             })
             .sum();
         index_time.stop();
-
-        datapoint_info!(
-            "generate_index",
-            // we cannot accurately measure index insertion time because of many threads and lock contention
-            ("total_us", index_time.as_us(), i64),
-            ("scan_stores_us", scan_time, i64),
-        );
+        let timings = GenerateIndexTimings {
+            scan_time,
+            index_time: index_time.as_us(),
+        };
+        timings.report();
 
         // Need to add these last, otherwise older updates will be cleaned
         for slot in slots {
