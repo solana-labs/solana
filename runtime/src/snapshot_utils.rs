@@ -803,21 +803,10 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     Ok(account_paths_map)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn rebuild_bank_from_snapshots(
+fn verify_snapshot_version_and_folder(
     snapshot_version: &str,
-    frozen_account_pubkeys: &[Pubkey],
     unpacked_snapshots_dir: &Path,
-    account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
-    genesis_config: &GenesisConfig,
-    debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
-    limit_load_slot_count_from_snapshot: Option<usize>,
-    shrink_ratio: AccountShrinkThreshold,
-) -> Result<Bank> {
+) -> Result<(SnapshotVersion, SlotSnapshotPaths)> {
     info!("snapshot version: {}", snapshot_version);
 
     let snapshot_version_enum =
@@ -834,7 +823,26 @@ fn rebuild_bank_from_snapshots(
     let root_paths = snapshot_paths
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+    Ok((snapshot_version_enum, root_paths))
+}
 
+#[allow(clippy::too_many_arguments)]
+fn rebuild_bank_from_snapshots(
+    snapshot_version: &str,
+    frozen_account_pubkeys: &[Pubkey],
+    unpacked_snapshots_dir: &Path,
+    account_paths: &[PathBuf],
+    unpacked_append_vec_map: UnpackedAppendVecMap,
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+) -> Result<Bank> {
+    let (snapshot_version_enum, root_paths) =
+        verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
     info!(
         "Loading bank from {}",
         &root_paths.snapshot_file_path.display()
