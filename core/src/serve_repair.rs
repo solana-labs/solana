@@ -17,13 +17,14 @@ use solana_gossip::{
     weighted_shuffle::weighted_best,
 };
 use solana_ledger::{
+    ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
     blockstore::Blockstore,
     shred::{Nonce, Shred},
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, timing::duration_as_ms};
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::HashSet,
@@ -40,43 +41,79 @@ pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
+pub const MAX_ANCESTOR_RESPONSES: usize = 20;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum RepairType {
+pub enum ShredRepairType {
     Orphan(Slot),
     HighestShred(Slot, u64),
     Shred(Slot, u64),
 }
 
-impl RepairType {
+impl ShredRepairType {
     pub fn slot(&self) -> Slot {
         match self {
-            RepairType::Orphan(slot) => *slot,
-            RepairType::HighestShred(slot, _) => *slot,
-            RepairType::Shred(slot, _) => *slot,
+            ShredRepairType::Orphan(slot) => *slot,
+            ShredRepairType::HighestShred(slot, _) => *slot,
+            ShredRepairType::Shred(slot, _) => *slot,
         }
     }
 }
 
-impl RequestResponse for RepairType {
+impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            RepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
-            RepairType::HighestShred(_, _) => 1,
-            RepairType::Shred(_, _) => 1,
+            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
+            ShredRepairType::HighestShred(_, _) => 1,
+            ShredRepairType::Shred(_, _) => 1,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
         match self {
-            RepairType::Orphan(slot) => response_shred.slot() <= *slot,
-            RepairType::HighestShred(slot, index) => {
+            ShredRepairType::Orphan(slot) => response_shred.slot() <= *slot,
+            ShredRepairType::HighestShred(slot, index) => {
                 response_shred.slot() as u64 == *slot && response_shred.index() as u64 >= *index
             }
-            RepairType::Shred(slot, index) => {
+            ShredRepairType::Shred(slot, index) => {
                 response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
             }
         }
+    }
+}
+
+pub struct AncestorHashesRepair(Slot);
+#[derive(Serialize, Deserialize)]
+pub enum AncestorHashesResponseVersion {
+    Current(Vec<(Slot, Hash)>),
+}
+impl AncestorHashesResponseVersion {
+    fn into_slot_hashes(self) -> Vec<(Slot, Hash)> {
+        match self {
+            AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
+        }
+    }
+
+    fn slot_hashes(&self) -> &[(Slot, Hash)] {
+        match self {
+            AncestorHashesResponseVersion::Current(slot_hashes) => &slot_hashes,
+        }
+    }
+
+    fn max_ancestors_in_response(&self) -> usize {
+        match self {
+            AncestorHashesResponseVersion::Current(_) => MAX_ANCESTOR_RESPONSES,
+        }
+    }
+}
+
+impl RequestResponse for AncestorHashesRepair {
+    type Response = AncestorHashesResponseVersion;
+    fn num_expected_responses(&self) -> u32 {
+        1
+    }
+    fn verify_response(&self, response: &AncestorHashesResponseVersion) -> bool {
+        response.slot_hashes().len() <= response.max_ancestors_in_response()
     }
 }
 
@@ -89,17 +126,19 @@ pub struct ServeRepairStats {
     pub window_index: usize,
     pub highest_window_index: usize,
     pub orphan: usize,
+    pub ancestor_hashes: usize,
 }
 
 /// Window protocol messages
 #[derive(Serialize, Deserialize, Debug)]
 pub enum RepairProtocol {
-    WindowIndex(ContactInfo, u64, u64),
-    HighestWindowIndex(ContactInfo, u64, u64),
-    Orphan(ContactInfo, u64),
-    WindowIndexWithNonce(ContactInfo, u64, u64, Nonce),
-    HighestWindowIndexWithNonce(ContactInfo, u64, u64, Nonce),
-    OrphanWithNonce(ContactInfo, u64, Nonce),
+    WindowIndex(ContactInfo, Slot, u64),
+    HighestWindowIndex(ContactInfo, Slot, u64),
+    Orphan(ContactInfo, Slot),
+    WindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
+    HighestWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
+    OrphanWithNonce(ContactInfo, Slot, Nonce),
+    AncestorHashes(ContactInfo, Slot, Nonce),
 }
 
 #[derive(Clone)]
@@ -168,6 +207,7 @@ impl ServeRepair {
             RepairProtocol::WindowIndexWithNonce(ref from, _, _, _) => from,
             RepairProtocol::HighestWindowIndexWithNonce(ref from, _, _, _) => from,
             RepairProtocol::OrphanWithNonce(ref from, _, _) => from,
+            RepairProtocol::AncestorHashes(ref from, _, _) => from,
         }
     }
 
@@ -233,6 +273,13 @@ impl ServeRepair {
                             *nonce,
                         ),
                         "OrphanWithNonce",
+                    )
+                }
+                RepairProtocol::AncestorHashes(_, slot, nonce) => {
+                    stats.ancestor_hashes += 1;
+                    (
+                        Self::run_ancestor_hashes(recycler, &from_addr, blockstore, *slot, *nonce),
+                        "AncestorHashes",
                     )
                 }
                 _ => (None, "Unsupported repair type"),
@@ -319,7 +366,10 @@ impl ServeRepair {
             stats.highest_window_index
         );
         inc_new_counter_debug!("serve_repair-request-orphan", stats.orphan);
-
+        inc_new_counter_debug!(
+            "serve_repair-request-ancestor-hashes",
+            stats.ancestor_hashes
+        );
         *stats = ServeRepairStats::default();
     }
 
@@ -420,7 +470,7 @@ impl ServeRepair {
     pub(crate) fn repair_request(
         &self,
         cluster_slots: &ClusterSlots,
-        repair_request: RepairType,
+        repair_request: ShredRepairType,
         peers_cache: &mut LruCache<Slot, RepairPeers>,
         repair_stats: &mut RepairStats,
         repair_validators: &Option<HashSet<Pubkey>>,
@@ -464,25 +514,25 @@ impl ServeRepair {
 
     pub fn map_repair_request(
         &self,
-        repair_request: &RepairType,
+        repair_request: &ShredRepairType,
         repair_peer_id: &Pubkey,
         repair_stats: &mut RepairStats,
         nonce: Nonce,
     ) -> Result<Vec<u8>> {
         match repair_request {
-            RepairType::Shred(slot, shred_index) => {
+            ShredRepairType::Shred(slot, shred_index) => {
                 repair_stats
                     .shred
                     .update(repair_peer_id, *slot, *shred_index);
                 Ok(self.window_index_request_bytes(*slot, *shred_index, nonce)?)
             }
-            RepairType::HighestShred(slot, shred_index) => {
+            ShredRepairType::HighestShred(slot, shred_index) => {
                 repair_stats
                     .highest_shred
                     .update(repair_peer_id, *slot, *shred_index);
                 Ok(self.window_highest_index_request_bytes(*slot, *shred_index, nonce)?)
             }
-            RepairType::Orphan(slot) => {
+            ShredRepairType::Orphan(slot) => {
                 repair_stats.orphan.update(repair_peer_id, *slot, 0);
                 Ok(self.orphan_bytes(*slot, nonce)?)
             }
@@ -620,6 +670,41 @@ impl ServeRepair {
         }
         Some(res)
     }
+
+    fn run_ancestor_hashes(
+        recycler: &PacketsRecycler,
+        from_addr: &SocketAddr,
+        blockstore: Option<&Arc<Blockstore>>,
+        slot: Slot,
+        nonce: Nonce,
+    ) -> Option<Packets> {
+        let blockstore = blockstore?;
+        let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
+            let ancestor_iterator =
+                AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
+            // TODO: figure out the maximum that can fit in MTU, write test
+            ancestor_iterator.take(MAX_ANCESTOR_RESPONSES).collect()
+        } else {
+            // If this slot is not duplicate confirmed, return nothing
+            vec![]
+        };
+        let response = AncestorHashesResponseVersion::Current(ancestor_slot_hashes);
+        let serialized_response = serialize(&response).ok()?;
+
+        // Could probably directly write response into packet via `serialize_into()`
+        // instead of incurring extra copy in `repair_response_packet_from_bytes`, but
+        // serialize_into doesn't return the written size...
+        let packet = repair_response::repair_response_packet_from_bytes(
+            serialized_response,
+            from_addr,
+            nonce,
+        )?;
+        Some(Packets::new_unpinned_with_recycler_data(
+            recycler,
+            "run_ancestor_hashes",
+            vec![packet],
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -676,7 +761,7 @@ mod tests {
                 nonce,
             )
             .expect("packets");
-            let request = RepairType::HighestShred(slot, index);
+            let request = ShredRepairType::HighestShred(slot, index);
             verify_responses(&request, rv.packets.iter());
 
             let rv: Vec<Shred> = rv
@@ -762,7 +847,7 @@ mod tests {
                 nonce,
             )
             .expect("packets");
-            let request = RepairType::Shred(slot, index);
+            let request = ShredRepairType::Shred(slot, index);
             verify_responses(&request, rv.packets.iter());
             let rv: Vec<Shred> = rv
                 .packets
@@ -788,7 +873,7 @@ mod tests {
         let mut outstanding_requests = OutstandingRepairs::default();
         let rv = serve_repair.repair_request(
             &cluster_slots,
-            RepairType::Shred(0, 0),
+            ShredRepairType::Shred(0, 0),
             &mut LruCache::new(100),
             &mut RepairStats::default(),
             &None,
@@ -816,7 +901,7 @@ mod tests {
         let rv = serve_repair
             .repair_request(
                 &cluster_slots,
-                RepairType::Shred(0, 0),
+                ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &None,
@@ -850,7 +935,7 @@ mod tests {
             let rv = serve_repair
                 .repair_request(
                     &cluster_slots,
-                    RepairType::Shred(0, 0),
+                    ShredRepairType::Shred(0, 0),
                     &mut LruCache::new(100),
                     &mut RepairStats::default(),
                     &None,
@@ -923,7 +1008,7 @@ mod tests {
             .collect();
 
             // Verify responses
-            let request = RepairType::Orphan(slot);
+            let request = ShredRepairType::Orphan(slot);
             verify_responses(&request, rv.iter());
 
             let expected: Vec<_> = (slot..slot + num_slots)
@@ -1031,7 +1116,7 @@ mod tests {
             assert!(serve_repair
                 .repair_request(
                     &cluster_slots,
-                    RepairType::Shred(0, 0),
+                    ShredRepairType::Shred(0, 0),
                     &mut LruCache::new(100),
                     &mut RepairStats::default(),
                     &trusted_validators,
@@ -1048,7 +1133,7 @@ mod tests {
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,
-                RepairType::Shred(0, 0),
+                ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &trusted_validators,
@@ -1069,7 +1154,7 @@ mod tests {
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,
-                RepairType::Shred(0, 0),
+                ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &None,
@@ -1080,12 +1165,12 @@ mod tests {
 
     #[test]
     fn test_verify_response() {
-        let repair = RepairType::Orphan(9);
+        let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
-            RepairType::Orphan(_) => (),
-            RepairType::HighestShred(_, _) => (),
-            RepairType::Shred(_, _) => (),
+            ShredRepairType::Orphan(_) => (),
+            ShredRepairType::HighestShred(_, _) => (),
+            ShredRepairType::Shred(_, _) => (),
         };
 
         let slot = 9;
@@ -1094,7 +1179,7 @@ mod tests {
         // Orphan
         let mut shred = Shred::new_empty_data_shred();
         shred.set_slot(slot);
-        let request = RepairType::Orphan(slot);
+        let request = ShredRepairType::Orphan(slot);
         assert!(request.verify_response(&shred));
         shred.set_slot(slot - 1);
         assert!(request.verify_response(&shred));
@@ -1105,7 +1190,7 @@ mod tests {
         shred = Shred::new_empty_data_shred();
         shred.set_slot(slot);
         shred.set_index(index);
-        let request = RepairType::HighestShred(slot, index as u64);
+        let request = ShredRepairType::HighestShred(slot, index as u64);
         assert!(request.verify_response(&shred));
         shred.set_index(index + 1);
         assert!(request.verify_response(&shred));
@@ -1121,7 +1206,7 @@ mod tests {
         shred = Shred::new_empty_data_shred();
         shred.set_slot(slot);
         shred.set_index(index);
-        let request = RepairType::Shred(slot, index as u64);
+        let request = ShredRepairType::Shred(slot, index as u64);
         assert!(request.verify_response(&shred));
         shred.set_index(index + 1);
         assert!(!request.verify_response(&shred));
@@ -1130,7 +1215,7 @@ mod tests {
         assert!(!request.verify_response(&shred));
     }
 
-    fn verify_responses<'a>(request: &RepairType, packets: impl Iterator<Item = &'a Packet>) {
+    fn verify_responses<'a>(request: &ShredRepairType, packets: impl Iterator<Item = &'a Packet>) {
         for packet in packets {
             let shred_payload = packet.data.to_vec();
             let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();

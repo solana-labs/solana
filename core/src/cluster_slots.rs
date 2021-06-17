@@ -1,4 +1,4 @@
-use crate::serve_repair::RepairType;
+use crate::serve_repair::ShredRepairType;
 use itertools::Itertools;
 use solana_gossip::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
@@ -186,14 +186,14 @@ impl ClusterSlots {
         &self,
         self_id: &Pubkey,
         root: Slot,
-    ) -> Vec<RepairType> {
+    ) -> Vec<ShredRepairType> {
         let my_slots = self.collect(self_id);
         self.cluster_slots
             .read()
             .unwrap()
             .keys()
             .filter(|x| **x > root && !my_slots.contains(*x))
-            .map(|x| RepairType::HighestShred(*x, 0))
+            .map(|x| ShredRepairType::HighestShred(*x, 0))
             .collect()
     }
 }
@@ -390,7 +390,7 @@ mod tests {
         let self_id = solana_sdk::pubkey::new_rand();
         assert_eq!(
             cs.generate_repairs_for_missing_slots(&self_id, 0),
-            vec![RepairType::HighestShred(1, 0)]
+            vec![ShredRepairType::HighestShred(1, 0)]
         )
     }
 
