@@ -524,7 +524,7 @@ pub struct AccountsIndexRootsStats {
 }
 
 pub struct AccountsIndexIterator<'a, T> {
-    account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+    account_maps: &'a LockMapType<T>,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
@@ -539,10 +539,7 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         }
     }
 
-    pub fn new<R>(
-        account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
-        range: Option<R>,
-    ) -> Self
+    pub fn new<R>(account_maps: &'a LockMapType<T>, range: Option<R>) -> Self
     where
         R: RangeBounds<Pubkey>,
     {
@@ -592,8 +589,9 @@ pub trait ZeroLamport {
 }
 
 type MapType<T> = AccountMap<Pubkey, AccountMapEntry<T>>;
-type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
-type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, AccountMap<Pubkey, AccountMapEntry<T>>>;
+type LockMapType<T> = RwLock<MapType<T>>;
+type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, MapType<T>>;
+type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, MapType<T>>;
 
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
@@ -613,7 +611,7 @@ impl ScanSlotTracker {
 
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
-    pub account_maps: RwLock<MapType<T>>,
+    pub account_maps: LockMapType<T>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
@@ -636,7 +634,7 @@ pub struct AccountsIndex<T> {
 impl<T> Default for AccountsIndex<T> {
     fn default() -> Self {
         Self {
-            account_maps: RwLock::<AccountMap<Pubkey, AccountMapEntry<T>>>::default(),
+            account_maps: LockMapType::<T>::default(),
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",
             ),
