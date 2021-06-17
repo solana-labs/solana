@@ -69,7 +69,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 tempfile = "3.2.0"
 thiserror = "1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
-trees = "0.2.1"
+trees = "0.4.2"
 
 [dev-dependencies]
 jsonrpc-core = "17.1.0"
