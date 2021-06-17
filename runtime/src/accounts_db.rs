@@ -5834,7 +5834,6 @@ impl AccountsDb {
                     scan_time_sum += scan_time.as_us();
 
                     if !accounts_map.is_empty() {
-                        let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                         let len = accounts_map.len();
 
                         let mut items = Vec::with_capacity(len);
