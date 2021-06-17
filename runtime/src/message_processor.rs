@@ -9,7 +9,7 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_sysvar_write_locks, instructions_sysvar_enabled, FeatureSet},
-    ic_msg,
+    ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
     message::Message,
@@ -396,6 +396,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .invoke_stack
             .last()
             .ok_or(InstructionError::CallDepth)?;
+        let logger = self.get_logger();
         MessageProcessor::verify_and_update(
             message,
             instruction,
@@ -406,6 +407,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             caller_write_privileges,
             &mut self.timings,
             self.feature_set.is_active(&demote_sysvar_write_locks::id()),
+            logger,
         )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
@@ -1008,6 +1010,7 @@ impl MessageProcessor {
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         demote_sysvar_write_locks: bool,
+        logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -1024,14 +1027,24 @@ impl MessageProcessor {
                         .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                 }
                 let account = accounts[account_index].borrow();
-                pre_accounts[unique_index].verify(
-                    &program_id,
-                    message.is_writable(account_index, demote_sysvar_write_locks),
-                    rent,
-                    &account,
-                    timings,
-                    true,
-                )?;
+                pre_accounts[unique_index]
+                    .verify(
+                        &program_id,
+                        message.is_writable(account_index, demote_sysvar_write_locks),
+                        rent,
+                        &account,
+                        timings,
+                        true,
+                    )
+                    .map_err(|err| {
+                        ic_logger_msg!(
+                            logger,
+                            "failed to verify account {}: {}",
+                            pre_accounts[unique_index].key,
+                            err
+                        );
+                        err
+                    })?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports());
                 Ok(())
@@ -1047,6 +1060,7 @@ impl MessageProcessor {
     }
 
     /// Verify the results of a cross-program instruction
+    #[allow(clippy::too_many_arguments)]
     fn verify_and_update(
         message: &Message,
         instruction: &CompiledInstruction,
@@ -1057,6 +1071,7 @@ impl MessageProcessor {
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
         demote_sysvar_write_locks: bool,
+        logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -1079,14 +1094,12 @@ impl MessageProcessor {
                                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                         }
                         let account = account.borrow();
-                        pre_account.verify(
-                            &program_id,
-                            is_writable,
-                            &rent,
-                            &account,
-                            timings,
-                            false,
-                        )?;
+                        pre_account
+                            .verify(&program_id, is_writable, &rent, &account, timings, false)
+                            .map_err(|err| {
+                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                err
+                            })?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports());
                         if is_writable && !account.executable() {
@@ -1175,6 +1188,7 @@ impl MessageProcessor {
             &rent_collector.rent,
             timings,
             demote_sysvar_write_locks,
+            invoke_context.get_logger(),
         )?;
 
         timings.accumulate(&invoke_context.timings);
