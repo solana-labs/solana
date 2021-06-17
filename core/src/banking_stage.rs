@@ -1,7 +1,10 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::{cost_model::CostModel, cost_tracker::CostTracker, packet_hasher::PacketHasher};
+use crate::{
+    cost_model::CostModel, cost_model::TransactionCost, cost_tracker::CostTracker,
+    packet_hasher::PacketHasher,
+};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -75,6 +78,8 @@ const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
 const DEFAULT_LRU_SIZE: usize = 200_000;
+
+const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
@@ -1088,13 +1093,14 @@ impl BankingStage {
         );
 
         let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
+        let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
         let cost_model_readonly = cost_model.read().unwrap();
         let cost_tracker_readonly = cost_tracker.read().unwrap();
         let filtered_transactions_with_packet_indexes: Vec<_> =
             verified_transactions_with_packet_indexes
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
-                    let tx_cost = cost_model_readonly.calculate_cost(&tx);
+                    cost_model_readonly.calculate_cost_no_alloc(&tx, &mut tx_cost);
                     let result = cost_tracker_readonly.would_fit(
                         &tx_cost.writable_accounts,
                         &(tx_cost.account_access_cost + tx_cost.execution_cost),
@@ -1229,11 +1235,12 @@ impl BankingStage {
 
         // applying cost of processed transactions to shared cost_tracker
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
+        let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
         let cost_model_readonly = cost_model.read().unwrap();
         let mut cost_tracker_mutable = cost_tracker.write().unwrap();
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
-                let tx_cost = cost_model_readonly.calculate_cost(&tx.transaction());
+                cost_model_readonly.calculate_cost_no_alloc(&tx.transaction(), &mut tx_cost);
                 cost_tracker_mutable.add_transaction(
                     &tx_cost.writable_accounts,
                     &(tx_cost.account_access_cost + tx_cost.execution_cost),
