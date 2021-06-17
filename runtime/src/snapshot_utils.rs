@@ -806,20 +806,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
 fn verify_snapshot_version_and_folder(
     snapshot_version: &str,
     unpacked_snapshots_dir: &Path,
-<<<<<<< HEAD
-    account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
-    genesis_config: &GenesisConfig,
-    debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
-    limit_load_slot_count_from_snapshot: Option<usize>,
-    shrink_ratio: AccountShrinkThreshold,
-) -> Result<Bank> {
-=======
 ) -> Result<(SnapshotVersion, SlotSnapshotPaths)> {
->>>>>>> bb7413c9f (refactor rebuild_bank_from_snapshots (#17988))
     info!("snapshot version: {}", snapshot_version);
 
     let snapshot_version_enum =
