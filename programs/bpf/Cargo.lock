@@ -478,23 +478,6 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0994e656bba7b922d8dd1245db90672ffb701e684e45be58f20719d69abc5a"
-dependencies = [
- "encode_unicode",
- "lazy_static",
- "libc",
- "regex",
- "terminal_size",
- "termios",
- "unicode-width",
- "winapi 0.3.8",
- "winapi-util",
-]
-
-[[package]]
-name = "console"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3993e6445baa160675931ec041a5e03ca84b9c6e32a056150d3aa2bdda0a1f45"
@@ -743,13 +726,14 @@ dependencies = [
 
 [[package]]
 name = "dialoguer"
-version = "0.6.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4aa86af7b19b40ef9cbef761ed411a49f0afa06b7b6dcd3dfe2f96a3c546138"
+checksum = "c9dd058f8b65922819fabb4a41e7d1964e56344042c26efbccd465202c23fa0c"
 dependencies = [
- "console 0.11.3",
+ "console",
  "lazy_static",
  "tempfile",
+ "zeroize",
 ]
 
 [[package]]
@@ -1402,7 +1386,7 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
 dependencies = [
- "console 0.14.1",
+ "console",
  "lazy_static",
  "number_prefix",
  "regex",
@@ -3157,7 +3141,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
- "console 0.14.1",
+ "console",
  "humantime",
  "indicatif",
  "serde",
@@ -3484,7 +3468,7 @@ name = "solana-remote-wallet"
 version = "1.8.0"
 dependencies = [
  "base32",
- "console 0.14.1",
+ "console",
  "dialoguer",
  "hidapi",
  "log",
@@ -3905,15 +3889,6 @@ checksum = "4bd2d183bd3fac5f5fe38ddbeb4dc9aec4a39a9d7d59e7491d900302da01cbe1"
 dependencies = [
  "libc",
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "termios"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "411c5bf740737c7918b8b1fe232dca4dc9f8e754b8ad5e20966814001ed0ac6b"
-dependencies = [
- "libc",
 ]
 
 [[package]]
