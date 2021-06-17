@@ -528,7 +528,8 @@ impl AccountsHash {
                     Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, bin);
                 {
                     let mut overall = overall_sum.lock().unwrap();
-                    *overall = Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
+                    *overall =
+                        Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
                 }
                 unreduced_entries.fetch_add(unreduced_entries_count, Ordering::Relaxed);
                 hashes
@@ -1392,19 +1393,7 @@ pub mod tests {
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
             AccountsHash::compare_two_hash_entries(&val, &val2)
         );
-        /*
-        let list = vec![val.clone(), val2.clone()];
-        let mut list_bkup = list.clone();
-        list_bkup.sort_by(AccountsHash::compare_two_hash_entries);
-        let list = AccountsHash::sort_hash_intermediate(vec![list], &mut HashStats::default());
-        assert_eq!(list, vec![list_bkup]);
 
-        let list = vec![val2, val.clone()]; // reverse args
-        let mut list_bkup = list.clone();
-        list_bkup.sort_by(AccountsHash::compare_two_hash_entries);
-        let list = AccountsHash::sort_hash_intermediate(vec![list], &mut HashStats::default());
-        assert_eq!(list, vec![list_bkup]);
-        */
         // slot same, vers =
         let hash3 = Hash::new_unique();
         let val3 = CalculateHashIntermediate::new_without_slot(hash3, 2, key);
