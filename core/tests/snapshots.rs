@@ -106,6 +106,7 @@ mod tests {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
+                false,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);

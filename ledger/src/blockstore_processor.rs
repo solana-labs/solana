@@ -401,6 +401,7 @@ pub fn process_blockstore(
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
         opts.accounts_db_caching_enabled,
+        false,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -3095,6 +3096,7 @@ pub mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
+            false,
             false,
         );
         *bank.epoch_schedule()

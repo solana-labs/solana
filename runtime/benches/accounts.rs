@@ -59,6 +59,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         None,
         AccountSecondaryIndexes::default(),
         false,
+        false,
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -77,6 +78,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         None,
         None,
         AccountSecondaryIndexes::default(),
+        false,
         false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
