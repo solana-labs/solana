@@ -376,7 +376,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn consume_buffered_packets(
+    fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -635,7 +635,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn process_loop(
+    fn process_loop(
         my_pubkey: Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -1279,7 +1279,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
-    pub fn process_packets(
+    fn process_packets(
         my_pubkey: &Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh: &Arc<Mutex<PohRecorder>>,
