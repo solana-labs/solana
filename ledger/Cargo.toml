@@ -52,7 +52,7 @@ tempfile = "3.2.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
-trees = "0.2.1"
+trees = "0.4.2"
 
 # Disable reed-solomon-erasure/simd-accel feature on aarch64 only since it
 # requires clang to support -march=native.

@@ -1438,13 +1438,13 @@ pub mod test {
             forks: Tree<u64>,
             cluster_votes: &HashMap<Pubkey, Vec<u64>>,
         ) {
-            let root = forks.root().data;
+            let root = *forks.root().data();
             assert!(self.bank_forks.read().unwrap().get(root).is_some());
 
             let mut walk = TreeWalk::from(forks);
 
             while let Some(visit) = walk.get() {
-                let slot = visit.node().data;
+                let slot = *visit.node().data();
                 self.progress
                     .entry(slot)
                     .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
@@ -1452,7 +1452,7 @@ pub mod test {
                     walk.forward();
                     continue;
                 }
-                let parent = walk.get_parent().unwrap().data;
+                let parent = *walk.get_parent().unwrap().data();
                 let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
                 let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
                 for (pubkey, vote) in cluster_votes.iter() {

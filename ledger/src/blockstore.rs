@@ -410,13 +410,13 @@ impl Blockstore {
         let mut walk = TreeWalk::from(forks);
         let mut blockhashes = HashMap::new();
         while let Some(visit) = walk.get() {
-            let slot = visit.node().data;
+            let slot = *visit.node().data();
             if self.meta(slot).unwrap().is_some() && self.orphan(slot).unwrap().is_none() {
                 // If slot exists in blockstore and is not an orphan, then skip it
                 walk.forward();
                 continue;
             }
-            let parent = walk.get_parent().map(|n| n.data);
+            let parent = walk.get_parent().map(|n| *n.data());
             if parent.is_some() || !is_orphan {
                 let parent_hash = parent
                     // parent won't exist for first node in a tree where
