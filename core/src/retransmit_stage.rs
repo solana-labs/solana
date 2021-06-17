@@ -704,6 +704,7 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
+            accounts_db_test_hash_calculation: true,
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
