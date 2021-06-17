@@ -2145,6 +2145,8 @@ pub fn main() {
         expected_bank_hash: matches
             .value_of("expected_bank_hash")
             .map(|s| Hash::from_str(s).unwrap()),
+        // TODO: Once entrypoints are updated to return shred-version, obtain
+        // cluster shred version from ip-addr-server if this is None.
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {

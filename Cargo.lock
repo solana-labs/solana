@@ -5098,6 +5098,7 @@ dependencies = [
  "socket2",
  "solana-clap-utils",
  "solana-logger 1.8.0",
+ "solana-sdk",
  "solana-version",
  "tokio 1.6.1",
  "url 2.2.0",

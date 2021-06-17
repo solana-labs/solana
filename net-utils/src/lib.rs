@@ -15,8 +15,8 @@ use {
 };
 
 mod ip_echo_server;
-use ip_echo_server::IpEchoServerMessage;
 pub use ip_echo_server::{ip_echo_server, IpEchoServer, MAX_PORT_COUNT_PER_MESSAGE};
+use ip_echo_server::{IpEchoServerMessage, IpEchoServerResponse};
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
@@ -28,17 +28,12 @@ pub struct UdpSocketPair {
 pub type PortRange = (u16, u16);
 
 pub(crate) const HEADER_LENGTH: usize = 4;
-pub(crate) fn ip_echo_server_reply_length() -> usize {
-    let largest_ip_addr = IpAddr::from([0u16; 8]); // IPv6 variant
-    HEADER_LENGTH + bincode::serialized_size(&largest_ip_addr).unwrap() as usize
-}
+pub(crate) const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23;
 
 fn ip_echo_server_request(
     ip_echo_server_addr: &SocketAddr,
     msg: IpEchoServerMessage,
-) -> Result<IpAddr, String> {
-    let mut data = vec![0u8; ip_echo_server_reply_length()];
-
+) -> Result<IpEchoServerResponse, String> {
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
         .and_then(|mut stream| {
@@ -54,9 +49,11 @@ fn ip_echo_server_request(
             stream.set_read_timeout(Some(Duration::new(10, 0)))?;
             stream.write_all(&bytes)?;
             stream.shutdown(std::net::Shutdown::Write)?;
-            stream.read(data.as_mut_slice())
+            let mut data = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+            let _ = stream.read(&mut data[..])?;
+            Ok(data)
         })
-        .and_then(|_| {
+        .and_then(|data| {
             // It's common for users to accidentally confuse the validator's gossip port and JSON
             // RPC port.  Attempt to detect when this occurs by looking for the standard HTTP
             // response header and provide the user with a helpful error message
@@ -102,7 +99,14 @@ fn ip_echo_server_request(
 /// Determine the public IP address of this machine by asking an ip_echo_server at the given
 /// address
 pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, String> {
-    ip_echo_server_request(ip_echo_server_addr, IpEchoServerMessage::default())
+    let resp = ip_echo_server_request(ip_echo_server_addr, IpEchoServerMessage::default())?;
+    Ok(resp.address)
+}
+
+pub fn get_cluster_shred_version(ip_echo_server_addr: &SocketAddr) -> Result<u16, String> {
+    let resp = ip_echo_server_request(ip_echo_server_addr, IpEchoServerMessage::default())?;
+    resp.shred_version
+        .ok_or_else(|| String::from("IP echo server does not return a shred-version"))
 }
 
 // Checks if any of the provided TCP/UDP ports are not reachable by the machine at
@@ -525,6 +529,57 @@ mod tests {
     use std::net::Ipv4Addr;
 
     #[test]
+    fn test_response_length() {
+        let resp = IpEchoServerResponse {
+            address: IpAddr::from([u16::MAX; 8]), // IPv6 variant
+            shred_version: Some(u16::MAX),
+        };
+        let resp_size = bincode::serialized_size(&resp).unwrap();
+        assert_eq!(
+            IP_ECHO_SERVER_RESPONSE_LENGTH,
+            HEADER_LENGTH + resp_size as usize
+        );
+    }
+
+    // Asserts that an old client can parse the response from a new server.
+    #[test]
+    fn test_backward_compat() {
+        let address = IpAddr::from([
+            525u16, 524u16, 523u16, 522u16, 521u16, 520u16, 519u16, 518u16,
+        ]);
+        let response = IpEchoServerResponse {
+            address,
+            shred_version: Some(42),
+        };
+        let mut data = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+        bincode::serialize_into(&mut data[HEADER_LENGTH..], &response).unwrap();
+        data.truncate(HEADER_LENGTH + 20);
+        assert_eq!(
+            bincode::deserialize::<IpAddr>(&data[HEADER_LENGTH..]).unwrap(),
+            address
+        );
+    }
+
+    // Asserts that a new client can parse the response from an old server.
+    #[test]
+    fn test_forward_compat() {
+        let address = IpAddr::from([
+            525u16, 524u16, 523u16, 522u16, 521u16, 520u16, 519u16, 518u16,
+        ]);
+        let mut data = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+        bincode::serialize_into(&mut data[HEADER_LENGTH..], &address).unwrap();
+        let response: Result<IpEchoServerResponse, _> =
+            bincode::deserialize(&data[HEADER_LENGTH..]);
+        assert_eq!(
+            response.unwrap(),
+            IpEchoServerResponse {
+                address,
+                shred_version: None,
+            }
+        );
+    }
+
+    #[test]
     fn test_parse_port_or_addr() {
         let p1 = parse_port_or_addr(Some("9000"), SocketAddr::from(([1, 2, 3, 4], 1)));
         assert_eq!(p1.port(), 9000);
@@ -624,14 +679,14 @@ mod tests {
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
-        let _runtime = ip_echo_server(server_tcp_listener);
+        let _runtime = ip_echo_server(server_tcp_listener, /*shred_version=*/ Some(42));
 
         let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
         assert_eq!(
             get_public_ip_addr(&server_ip_echo_addr),
             parse_host("127.0.0.1"),
         );
-
+        assert_eq!(get_cluster_shred_version(&server_ip_echo_addr), Ok(42));
         assert!(verify_reachable_ports(&server_ip_echo_addr, vec![], &[],));
     }
 
@@ -644,14 +699,14 @@ mod tests {
         let (client_port, (client_udp_socket, client_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
-        let _runtime = ip_echo_server(server_tcp_listener);
+        let _runtime = ip_echo_server(server_tcp_listener, /*shred_version=*/ Some(65535));
 
         let ip_echo_server_addr = server_udp_socket.local_addr().unwrap();
         assert_eq!(
             get_public_ip_addr(&ip_echo_server_addr),
             parse_host("127.0.0.1"),
         );
-
+        assert_eq!(get_cluster_shred_version(&ip_echo_server_addr), Ok(65535));
         assert!(verify_reachable_ports(
             &ip_echo_server_addr,
             vec![(client_port, client_tcp_listener)],
