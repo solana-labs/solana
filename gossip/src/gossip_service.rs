@@ -121,7 +121,7 @@ pub fn discover_cluster(
 }
 
 pub fn discover(
-    keypair: Option<Arc<Keypair>>,
+    keypair: Option<Keypair>,
     entrypoint: Option<&SocketAddr>,
     num_nodes: Option<usize>, // num_nodes only counts validators, excludes spy nodes
     timeout: Duration,
@@ -133,8 +133,10 @@ pub fn discover(
     Vec<ContactInfo>, // all gossip peers
     Vec<ContactInfo>, // tvu peers (validators)
 )> {
-    let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
-
+    let keypair = {
+        #[allow(clippy::redundant_closure)]
+        keypair.unwrap_or_else(|| Keypair::new())
+    };
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, ip_echo, spy_ref) = make_gossip_node(
         keypair,
@@ -295,7 +297,7 @@ fn spy(
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
 fn make_gossip_node(
-    keypair: Arc<Keypair>,
+    keypair: Keypair,
     entrypoint: Option<&SocketAddr>,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
@@ -307,7 +309,7 @@ fn make_gossip_node(
     } else {
         ClusterInfo::spy_node(keypair.pubkey(), shred_version)
     };
-    let cluster_info = ClusterInfo::new(node, keypair);
+    let cluster_info = ClusterInfo::new(node, Arc::new(keypair));
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }

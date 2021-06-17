@@ -339,7 +339,8 @@ impl ReplayStage {
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
-                let my_pubkey = cluster_info.id();
+                let mut identity_keypair = cluster_info.keypair().clone();
+                let mut my_pubkey = identity_keypair.pubkey();
                 let (
                     mut progress,
                     mut heaviest_subtree_fork_choice,
@@ -515,6 +516,7 @@ impl ReplayStage {
                                                     heaviest_bank_on_same_voted_fork,
                                                     &poh_recorder, my_latest_landed_vote,
                                                     &vote_account,
+                                                    &identity_keypair,
                                                     &authorized_voter_keypairs.read().unwrap(),
                                                     &mut voted_signatures,
                                                     has_new_vote_been_rooted, &mut
@@ -582,6 +584,7 @@ impl ReplayStage {
                             &mut tower,
                             &mut progress,
                             &vote_account,
+                            &identity_keypair,
                             &authorized_voter_keypairs.read().unwrap(),
                             &cluster_info,
                             &blockstore,
@@ -627,6 +630,14 @@ impl ReplayStage {
                                     i64
                                 ),
                             );
+
+                            if my_pubkey != cluster_info.id() {
+                                identity_keypair = cluster_info.keypair().clone();
+                                let my_old_pubkey = my_pubkey;
+                                my_pubkey = identity_keypair.pubkey();
+                                warn!("Identity changed from {} to {}", my_old_pubkey, my_pubkey);
+                            }
+
                             Self::reset_poh_recorder(
                                 &my_pubkey,
                                 &blockstore,
@@ -1290,6 +1301,7 @@ impl ReplayStage {
         tower: &mut Tower,
         progress: &mut ProgressMap,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         cluster_info: &Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
@@ -1314,7 +1326,7 @@ impl ReplayStage {
         trace!("handle votable bank {}", bank.slot());
         let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
 
-        if let Err(err) = tower.save(&cluster_info.keypair) {
+        if let Err(err) = tower.save(identity_keypair) {
             error!("Unable to save tower: {:?}", err);
             std::process::exit(1);
         }
@@ -1386,6 +1398,7 @@ impl ReplayStage {
             bank,
             poh_recorder,
             vote_account_pubkey,
+            identity_keypair,
             authorized_voter_keypairs,
             tower,
             switch_fork_decision,
@@ -1396,7 +1409,7 @@ impl ReplayStage {
     }
 
     fn generate_vote_tx(
-        node_keypair: &Arc<Keypair>,
+        node_keypair: &Keypair,
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
@@ -1465,7 +1478,7 @@ impl ReplayStage {
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
         let blockhash = bank.last_blockhash();
-        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+        vote_tx.partial_sign(&[node_keypair], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
 
         if !has_new_vote_been_rooted {
@@ -1488,6 +1501,7 @@ impl ReplayStage {
         poh_recorder: &Mutex<PohRecorder>,
         my_latest_landed_vote: Slot,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
@@ -1526,7 +1540,7 @@ impl ReplayStage {
         // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
         // have changed from the original timestamp of the vote.
         let vote_tx = Self::generate_vote_tx(
-            &cluster_info.keypair,
+            identity_keypair,
             heaviest_bank_on_same_fork,
             vote_account_pubkey,
             authorized_voter_keypairs,
@@ -1563,6 +1577,7 @@ impl ReplayStage {
         bank: &Bank,
         poh_recorder: &Mutex<PohRecorder>,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         tower: &mut Tower,
         switch_fork_decision: &SwitchForkDecision,
@@ -1572,7 +1587,7 @@ impl ReplayStage {
     ) {
         let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
-            &cluster_info.keypair,
+            identity_keypair,
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
@@ -4668,6 +4683,7 @@ mod tests {
         let has_new_vote_been_rooted = false;
         let mut voted_signatures = vec![];
 
+        let identity_keypair = cluster_info.keypair().clone();
         let my_vote_keypair = vec![Arc::new(
             validator_keypairs.remove(&my_pubkey).unwrap().vote_keypair,
         )];
@@ -4693,6 +4709,7 @@ mod tests {
             &bank0,
             &poh_recorder,
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
@@ -4723,6 +4740,7 @@ mod tests {
                 &poh_recorder,
                 Tower::last_voted_slot_in_bank(refresh_bank, &my_vote_pubkey).unwrap(),
                 &my_vote_pubkey,
+                &identity_keypair,
                 &my_vote_keypair,
                 &mut voted_signatures,
                 has_new_vote_been_rooted,
@@ -4745,6 +4763,7 @@ mod tests {
             &bank1,
             &poh_recorder,
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
@@ -4768,6 +4787,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&bank2, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -4804,6 +4824,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&expired_bank, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -4860,6 +4881,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&expired_bank_sibling, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,

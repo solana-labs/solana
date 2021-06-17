@@ -331,7 +331,6 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
-        let my_pubkey = cluster_info.id();
         let duplicates = Arc::new(Mutex::new((
             LruCache::new(DEFAULT_LRU_SIZE),
             PacketHasher::default(),
@@ -358,7 +357,6 @@ impl BankingStage {
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
                         Self::process_loop(
-                            my_pubkey,
                             &verified_receiver,
                             &poh_recorder,
                             &cluster_info,
@@ -699,7 +697,6 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        my_pubkey: Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
@@ -718,6 +715,7 @@ impl BankingStage {
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         loop {
+            let my_pubkey = cluster_info.id();
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
                     &my_pubkey,

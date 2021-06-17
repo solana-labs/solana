@@ -349,7 +349,7 @@ fn get_trusted_snapshot_hashes(
 }
 
 fn start_gossip_node(
-    identity_keypair: &Arc<Keypair>,
+    identity_keypair: Arc<Keypair>,
     cluster_entrypoints: &[ContactInfo],
     ledger_path: &Path,
     gossip_addr: &SocketAddr,
@@ -358,14 +358,12 @@ fn start_gossip_node(
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
-    let mut cluster_info = ClusterInfo::new(
-        ClusterInfo::gossip_contact_info(
-            identity_keypair.pubkey(),
-            *gossip_addr,
-            expected_shred_version.unwrap_or(0),
-        ),
-        identity_keypair.clone(),
+    let contact_info = ClusterInfo::gossip_contact_info(
+        identity_keypair.pubkey(),
+        *gossip_addr,
+        expected_shred_version.unwrap_or(0),
     );
+    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair);
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);
@@ -776,7 +774,7 @@ fn rpc_bootstrap(
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
             gossip = Some(start_gossip_node(
-                identity_keypair,
+                identity_keypair.clone(),
                 cluster_entrypoints,
                 ledger_path,
                 &node.info.gossip,
@@ -1915,6 +1913,20 @@ pub fn main() {
             .about("Run the validator")
         )
         .subcommand(
+            SubCommand::with_name("set-identity")
+            .about("Set the validator identity")
+            .arg(
+                Arg::with_name("identity")
+                    .index(1)
+                    .value_name("KEYPAIR")
+                    .takes_value(true)
+                    .validator(is_keypair)
+                    .help("Validator identity keypair")
+            )
+            .after_help("Note: the new identity only applies to the \
+                         currently running validator instance")
+        )
+        .subcommand(
             SubCommand::with_name("set-log-filter")
             .about("Adjust the validator log filter")
             .arg(
@@ -2028,6 +2040,29 @@ pub fn main() {
             monitor_validator(&ledger_path);
             return;
         }
+        ("set-identity", Some(subcommand_matches)) => {
+            let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
+
+            let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
+                println!("Unable to access path: {}: {:?}", identity_keypair, err);
+                exit(1);
+            });
+            println!("Validator identity: {}", identity_keypair.display());
+
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .set_identity(identity_keypair.display().to_string())
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("setIdentity request failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
         ("set-log-filter", Some(subcommand_matches)) => {
             let filter = value_t_or_exit!(subcommand_matches, "filter", String);
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -2050,17 +2085,21 @@ pub fn main() {
         _ => unreachable!(),
     };
 
-    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(|| {
+    let identity_keypair = keypair_of(&matches, "identity").unwrap_or_else(|| {
         clap::Error::with_description(
             "The --identity <KEYPAIR> argument is required",
             clap::ErrorKind::ArgumentNotFound,
         )
         .exit();
-    }));
+    });
 
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
-        .unwrap_or_else(|| vec![identity_keypair.clone()]);
+        .unwrap_or_else(|| {
+            vec![Arc::new(
+                keypair_of(&matches, "identity").expect("identity"),
+            )]
+        });
     let authorized_voter_keypairs = Arc::new(RwLock::new(authorized_voter_keypairs));
 
     let init_complete_file = matches.value_of("init_complete_file");
@@ -2472,6 +2511,7 @@ pub fn main() {
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+    let admin_service_cluster_info = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -2480,6 +2520,7 @@ pub fn main() {
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            cluster_info: admin_service_cluster_info.clone(),
         },
     );
 
@@ -2582,6 +2623,8 @@ pub fn main() {
     solana_ledger::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_output_dir);
 
+    let identity_keypair = Arc::new(identity_keypair);
+
     let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
     if !cluster_entrypoints.is_empty() {
         rpc_bootstrap(
@@ -2612,7 +2655,7 @@ pub fn main() {
 
     let validator = Validator::new(
         node,
-        &identity_keypair,
+        identity_keypair,
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
@@ -2621,6 +2664,7 @@ pub fn main() {
         should_check_duplicate_instance,
         start_progress,
     );
+    *admin_service_cluster_info.write().unwrap() = Some(validator.cluster_info.clone());
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

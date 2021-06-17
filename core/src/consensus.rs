@@ -32,7 +32,6 @@ use std::{
         Deref,
     },
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use thiserror::Error;
 
@@ -1190,7 +1189,7 @@ impl Tower {
         path.with_extension("bin.new")
     }
 
-    pub fn save(&self, node_keypair: &Arc<Keypair>) -> Result<()> {
+    pub fn save(&self, node_keypair: &Keypair) -> Result<()> {
         let mut measure = Measure::start("tower_save-ms");
 
         if self.node_pubkey != node_keypair.pubkey() {
@@ -1293,7 +1292,7 @@ pub struct SavedTower {
 }
 
 impl SavedTower {
-    pub fn new<T: Signer>(tower: &Tower, keypair: &Arc<T>) -> Result<Self> {
+    pub fn new<T: Signer>(tower: &Tower, keypair: &T) -> Result<Self> {
         let data = bincode::serialize(tower)?;
         let signature = keypair.sign_message(&data);
         Ok(Self { signature, data })
@@ -1391,7 +1390,7 @@ pub mod test {
         collections::HashMap,
         fs::{remove_file, OpenOptions},
         io::{Read, Seek, SeekFrom, Write},
-        sync::RwLock,
+        sync::{Arc, RwLock},
     };
     use tempfile::TempDir;
     use trees::{tr, Tree, TreeWalk};
