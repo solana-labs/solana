@@ -526,8 +526,10 @@ impl AccountsHash {
             .map(|bin| {
                 let (hashes, sum, unreduced_entries_count) =
                     Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, bin);
-                let mut overall = overall_sum.lock().unwrap();
-                *overall = Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
+                {
+                    let mut overall = overall_sum.lock().unwrap();
+                    *overall = Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
+                }
                 unreduced_entries.fetch_add(unreduced_entries_count, Ordering::Relaxed);
                 hashes
             })
