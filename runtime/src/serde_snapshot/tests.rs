@@ -3,7 +3,7 @@ use {
     super::*,
     crate::{
         accounts::{create_test_accounts, Accounts},
-        accounts_db::get_temp_accounts_paths,
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, StatusCacheRc},
         hardened_unpack::UnpackedAppendVecMap,
     },
@@ -74,6 +74,7 @@ where
         AccountSecondaryIndexes::default(),
         false,
         None,
+        AccountShrinkThreshold::default(),
     )
 }
 
@@ -129,6 +130,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
 
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -228,6 +230,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         AccountSecondaryIndexes::default(),
         false,
         None,
+        AccountShrinkThreshold::default(),
     )
     .unwrap();
     dbank.src = ref_sc;

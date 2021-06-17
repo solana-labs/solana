@@ -1,7 +1,9 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
+        accounts_db::{
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo,
+        },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
@@ -137,6 +139,7 @@ pub(crate) fn bank_from_stream<R>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -157,6 +160,7 @@ where
                 account_indexes,
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
+                shrink_ratio,
             )?;
             Ok(bank)
         }};
@@ -247,6 +251,7 @@ fn reconstruct_bank_from_fields<E>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -259,6 +264,7 @@ where
         account_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
+        shrink_ratio,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -289,6 +295,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     account_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -298,6 +305,7 @@ where
         cluster_type,
         account_indexes,
         caching_enabled,
+        shrink_ratio,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 

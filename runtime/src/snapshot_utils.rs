@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::AccountsDb,
+        accounts_db::{AccountShrinkThreshold, AccountsDb},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
@@ -612,6 +612,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
@@ -646,6 +647,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         account_indexes,
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
+        shrink_ratio,
     )?;
     measure.stop();
 
@@ -814,6 +816,7 @@ fn rebuild_bank_from_snapshots(
     account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
 ) -> Result<Bank> {
     info!("snapshot version: {}", snapshot_version);
 
@@ -850,6 +853,7 @@ fn rebuild_bank_from_snapshots(
                 account_indexes,
                 accounts_db_caching_enabled,
                 limit_load_slot_count_from_snapshot,
+                shrink_ratio,
             ),
         }?)
     })?;

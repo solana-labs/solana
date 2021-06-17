@@ -106,6 +106,7 @@ mod tests {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
+                accounts_db::AccountShrinkThreshold::default(),
                 false,
             );
             bank0.freeze();
@@ -167,6 +168,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             None,
+            accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
         )
         .unwrap();
