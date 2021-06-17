@@ -215,11 +215,11 @@ impl HeaviestSubtreeForkChoice {
 
     #[cfg(test)]
     pub(crate) fn new_from_tree<T: GetSlotHash>(forks: Tree<T>) -> Self {
-        let root = forks.root().data.slot_hash();
+        let root = forks.root().data().slot_hash();
         let mut walk = TreeWalk::from(forks);
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
         while let Some(visit) = walk.get() {
-            let slot_hash = visit.node().data.slot_hash();
+            let slot_hash = visit.node().data().slot_hash();
             if heaviest_subtree_fork_choice
                 .fork_infos
                 .contains_key(&slot_hash)
@@ -227,7 +227,7 @@ impl HeaviestSubtreeForkChoice {
                 walk.forward();
                 continue;
             }
-            let parent_slot_hash = walk.get_parent().map(|n| n.data.slot_hash());
+            let parent_slot_hash = walk.get_parent().map(|n| n.data().slot_hash());
             heaviest_subtree_fork_choice.add_new_leaf_slot(slot_hash, parent_slot_hash);
             walk.forward();
         }

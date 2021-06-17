@@ -3315,7 +3315,7 @@ pub mod tests {
         */
         let starting_fork_slot = 5;
         let mut main_fork = tr(starting_fork_slot);
-        let mut main_fork_ref = main_fork.root_mut();
+        let mut main_fork_ref = main_fork.root_mut().get_mut();
 
         // Make enough slots to make a root slot > blockstore_root
         let expected_root_slot = starting_fork_slot + blockstore_root.unwrap_or(0);
@@ -3333,7 +3333,7 @@ pub mod tests {
                 main_fork_ref.push_front(minor_fork.clone());
             }
             main_fork_ref.push_front(tr(slot));
-            main_fork_ref = main_fork_ref.first_mut().unwrap();
+            main_fork_ref = main_fork_ref.front_mut().unwrap().get_mut();
         }
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / main_fork);
         let validator_keypairs = ValidatorVoteKeypairs::new_rand();
