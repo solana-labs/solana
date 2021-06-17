@@ -219,7 +219,6 @@ pub struct ClusterInfo {
     outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
     ping_cache: Mutex<PingCache>,
-    id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
     local_message_pending_push_queue: Mutex<Vec<CrdsValue>>,
@@ -478,7 +477,6 @@ impl ClusterInfo {
                 GOSSIP_PING_CACHE_TTL,
                 GOSSIP_PING_CACHE_CAPACITY,
             )),
-            id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: Mutex::default(),
@@ -510,7 +508,6 @@ impl ClusterInfo {
             outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
             ping_cache: Mutex::new(self.ping_cache.lock().unwrap().mock_clone()),
-            id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: Mutex::new(
@@ -680,7 +677,7 @@ impl ClusterInfo {
     }
 
     pub fn id(&self) -> Pubkey {
-        self.id
+        self.my_contact_info().id
     }
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
@@ -1588,7 +1585,7 @@ impl ClusterInfo {
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
-        gossip.process_push_message(&self.id, pending_push_messages, timestamp());
+        gossip.process_push_message(&self.id(), pending_push_messages, timestamp());
     }
     fn new_push_requests(
         &self,
@@ -1759,7 +1756,7 @@ impl ClusterInfo {
             .unwrap()
             .iter()
             .map(|k| k.id)
-            .chain(std::iter::once(self.id))
+            .chain(std::iter::once(self.id()))
             .collect();
         let mut gossip = self.gossip.write().unwrap();
         match gossip.crds.trim(cap, &keep, stakes, timestamp()) {
@@ -2209,7 +2206,7 @@ impl ClusterInfo {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
-        trace!("PullResponse me: {} from: {} len={}", self.id, from, len);
+        trace!("PullResponse me: {} from: {} len={}", self.id(), from, len);
         let shred_version = {
             let gossip = self.gossip.read().unwrap();
             gossip.crds.get_shred_version(from).unwrap_or_default()
@@ -3865,7 +3862,7 @@ mod tests {
         // shred-version.
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert_eq!(slots.len(), 1);
-        assert_eq!(slots[0].from, cluster_info.id);
+        assert_eq!(slots[0].from, cluster_info.id());
         // Match shred versions.
         {
             let mut node = cluster_info.my_contact_info.write().unwrap();
@@ -3879,7 +3876,7 @@ mod tests {
         // Should now include both epoch slots.
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert_eq!(slots.len(), 2);
-        assert_eq!(slots[0].from, cluster_info.id);
+        assert_eq!(slots[0].from, cluster_info.id());
         assert_eq!(slots[1].from, node_pubkey);
     }
 
