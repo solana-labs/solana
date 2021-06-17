@@ -1003,6 +1003,8 @@ pub fn main() {
         PubSubConfig::default().max_in_buffer_capacity.to_string();
     let default_rpc_pubsub_max_out_buffer_capacity =
         PubSubConfig::default().max_out_buffer_capacity.to_string();
+    let default_rpc_pubsub_max_active_subscriptions =
+        PubSubConfig::default().max_active_subscriptions.to_string();
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
@@ -1611,6 +1613,16 @@ pub fn main() {
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_max_active_subscriptions")
+                .long("rpc-pubsub-max-active-subscriptions")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_active_subscriptions)
+                .help("The maximum number of active subscriptions that RPC PubSub will accept \
+                       across all connections."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
                 .long("rpc-send-retry-ms")
                 .value_name("MILLISECS")
@@ -2185,6 +2197,11 @@ pub fn main() {
             max_out_buffer_capacity: value_t_or_exit!(
                 matches,
                 "rpc_pubsub_max_out_buffer_capacity",
+                usize
+            ),
+            max_active_subscriptions: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_max_active_subscriptions",
                 usize
             ),
         },
