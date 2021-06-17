@@ -79,5 +79,22 @@ if (process.env.TEST_LIVE) {
 
       await connection.removeSignatureListener(id);
     });
+
+    it('reconnects once subscription are created', async () => {
+      // wait for websocket to disconnect
+      await sleep(1100);
+      expect(connection._rpcWebSocketConnected).to.be.false;
+      expect(connection._rpcWebSocketIdleTimeout).to.eq(null);
+
+      const testSignature = bs58.encode(Buffer.alloc(64));
+      const id = connection.onSignature(testSignature, () => {});
+      
+      // wait for websocket to connect
+      await sleep(100);
+      expect(connection._rpcWebSocketConnected).to.be.true;
+      expect(connection._rpcWebSocketIdleTimeout).to.eq(null);
+
+      await connection.removeSignatureListener(id);
+    });
   });
 }
