@@ -173,7 +173,7 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        keypair: &Keypair,
+        cluster_info: Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
@@ -182,7 +182,7 @@ impl BroadcastStage {
     ) -> BroadcastStageReturnType {
         loop {
             let res = broadcast_stage_run.run(
-                keypair,
+                &cluster_info.keypair(),
                 blockstore,
                 receiver,
                 socket_sender,
@@ -248,21 +248,23 @@ impl BroadcastStage {
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
-        let keypair = cluster_info.keypair.clone();
-        let thread_hdl = Builder::new()
-            .name("solana-broadcaster".to_string())
-            .spawn(move || {
-                let _finalizer = Finalizer::new(exit);
-                Self::run(
-                    &keypair,
-                    &btree,
-                    &receiver,
-                    &socket_sender_,
-                    &blockstore_sender,
-                    bs_run,
-                )
-            })
-            .unwrap();
+        let thread_hdl = {
+            let cluster_info = cluster_info.clone();
+            Builder::new()
+                .name("solana-broadcaster".to_string())
+                .spawn(move || {
+                    let _finalizer = Finalizer::new(exit);
+                    Self::run(
+                        cluster_info,
+                        &btree,
+                        &receiver,
+                        &socket_sender_,
+                        &blockstore_sender,
+                        bs_run,
+                    )
+                })
+                .unwrap()
+        };
         let mut thread_hdls = vec![thread_hdl];
         let socket_receiver = Arc::new(Mutex::new(socket_receiver));
         for sock in socks.into_iter() {

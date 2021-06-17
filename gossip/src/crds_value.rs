@@ -395,24 +395,26 @@ pub struct NodeInstance {
 }
 
 impl NodeInstance {
-    pub fn new<R>(rng: &mut R, pubkey: Pubkey, now: u64) -> Self
+    pub fn new<R>(rng: &mut R, from: Pubkey, now: u64) -> Self
     where
         R: Rng + CryptoRng,
     {
         Self {
-            from: pubkey,
+            from,
             wallclock: now,
             timestamp: now,
             token: rng.gen(),
         }
     }
 
+    // Clones the value with an updated id.
+    pub(crate) fn with_id(&self, from: Pubkey) -> Self {
+        Self { from, ..*self }
+    }
+
     // Clones the value with an updated wallclock.
-    pub(crate) fn with_wallclock(&self, now: u64) -> Self {
-        Self {
-            wallclock: now,
-            ..*self
-        }
+    pub(crate) fn with_wallclock(&self, wallclock: u64) -> Self {
+        Self { wallclock, ..*self }
     }
 
     // Returns true if the crds-value is a duplicate instance

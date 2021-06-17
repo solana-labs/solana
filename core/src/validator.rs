@@ -259,6 +259,7 @@ pub struct Validator {
     tpu: Tpu,
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
+    pub cluster_info: Arc<ClusterInfo>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -278,7 +279,7 @@ pub(crate) fn abort() -> ! {
 impl Validator {
     pub fn new(
         mut node: Node,
-        identity_keypair: &Arc<Keypair>,
+        identity_keypair: Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -436,7 +437,7 @@ impl Validator {
             }
         }
 
-        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
+        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair);
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
@@ -788,6 +789,7 @@ impl Validator {
             poh_recorder,
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
+            cluster_info,
         }
     }
 
@@ -827,6 +829,8 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.cluster_info);
+
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
@@ -1601,7 +1605,7 @@ mod tests {
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
             validator_node,
-            &Arc::new(validator_keypair),
+            Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair.clone()])),
@@ -1679,7 +1683,7 @@ mod tests {
                 };
                 Validator::new(
                     validator_node,
-                    &Arc::new(validator_keypair),
+                    Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
