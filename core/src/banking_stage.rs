@@ -376,7 +376,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn consume_buffered_packets(
+    pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
