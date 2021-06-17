@@ -27,7 +27,7 @@ use {
     },
 };
 
-const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
+pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
 
 // Suppress needless_return due to
 //   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
@@ -194,25 +194,35 @@ pub trait RpcSolPubSub {
 pub struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
     subscriptions: Arc<RpcSubscriptions>,
+    max_active_subscriptions: usize,
 }
 
 impl RpcSolPubSubImpl {
-    pub fn new(subscriptions: Arc<RpcSubscriptions>) -> Self {
+    pub fn new(subscriptions: Arc<RpcSubscriptions>, max_active_subscriptions: usize) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
-        Self { uid, subscriptions }
+        Self {
+            uid,
+            subscriptions,
+            max_active_subscriptions,
+        }
     }
 
     #[cfg(test)]
     fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(bank_forks));
-        Self { uid, subscriptions }
+        let max_active_subscriptions = MAX_ACTIVE_SUBSCRIPTIONS;
+        Self {
+            uid,
+            subscriptions,
+            max_active_subscriptions,
+        }
     }
 
     fn check_subscription_count(&self) -> Result<()> {
         let num_subscriptions = self.subscriptions.total();
         debug!("Total existing subscriptions: {}", num_subscriptions);
-        if num_subscriptions >= MAX_ACTIVE_SUBSCRIPTIONS {
+        if num_subscriptions >= self.max_active_subscriptions {
             info!("Node subscription limit reached");
             Err(Error {
                 code: ErrorCode::InternalError,
@@ -630,6 +640,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
 
         // Test signature subscriptions
@@ -810,6 +821,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -920,6 +932,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
