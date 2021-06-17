@@ -7,7 +7,6 @@ use solana_sdk::{
 };
 use std::{
     convert::TryInto,
-    ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
     sync::Mutex,
 };
@@ -510,7 +509,7 @@ impl AccountsHash {
     fn de_dup_and_eliminate_zeros(
         sorted_data_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
         stats: &mut HashStats,
-        range: &Range<usize>,
+        max_bin: usize,
     ) -> (Vec<Vec<Hash>>, u64) {
         // 1. eliminate zero lamport accounts
         // 2. pick the highest slot or (slot = and highest version) of each pubkey
@@ -521,7 +520,7 @@ impl AccountsHash {
         let mut zeros = Measure::start("eliminate zeros");
         let overall_sum = Mutex::new(0u64);
         let unreduced_entries = AtomicUsize::new(0);
-        let hashes: Vec<Vec<Hash>> = (range.start..range.end)
+        let hashes: Vec<Vec<Hash>> = (0..max_bin)
             .into_par_iter()
             .map(|bin| {
                 let (hashes, sum, unreduced_entries_count) =
@@ -672,10 +671,10 @@ impl AccountsHash {
         mut stats: &mut HashStats,
         is_last_pass: bool,
         mut previous_state: PreviousPass,
-        range: &Range<usize>,
+        max_bin: usize,
     ) -> (Hash, u64, PreviousPass) {
         let (mut hashes, mut total_lamports) =
-            Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, &mut stats, range);
+            Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, &mut stats, max_bin);
 
         total_lamports += previous_state.lamports;
 
@@ -825,7 +824,7 @@ pub mod tests {
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
-            &one_range(),
+            one_range(),
         );
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 88));
@@ -841,7 +840,7 @@ pub mod tests {
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
-            &one_range(),
+            one_range(),
         );
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 108));
@@ -857,18 +856,18 @@ pub mod tests {
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
-            &one_range(),
+            one_range(),
         );
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 118));
     }
 
-    fn one_range() -> Range<usize> {
-        Range { start: 0, end: 1 }
+    fn one_range() -> usize {
+        1
     }
 
-    fn zero_range() -> Range<usize> {
-        Range { start: 0, end: 0 }
+    fn zero_range() -> usize {
+        0
     }
 
     #[test]
@@ -903,7 +902,7 @@ pub mod tests {
                     &mut HashStats::default(),
                     false, // not last pass
                     previous_pass,
-                    &one_range(),
+                    one_range(),
                 );
                 assert_eq!(result.0, Hash::default());
                 assert_eq!(result.1, 0);
@@ -918,7 +917,7 @@ pub mod tests {
                 &mut HashStats::default(),
                 false, // not last pass
                 previous_pass,
-                &one_range(),
+                one_range(),
             );
 
             assert_eq!(result.0, Hash::default());
@@ -936,7 +935,7 @@ pub mod tests {
                     &mut HashStats::default(),
                     false,
                     previous_pass,
-                    &one_range(),
+                    one_range(),
                 );
 
                 previous_pass = result.2;
@@ -950,7 +949,7 @@ pub mod tests {
                 &mut HashStats::default(),
                 true, // finally, last pass
                 previous_pass,
-                &one_range(),
+                one_range(),
             );
             let previous_pass = result.2;
 
@@ -983,7 +982,7 @@ pub mod tests {
             &mut HashStats::default(),
             false, // not last pass
             PreviousPass::default(),
-            &one_range(),
+            one_range(),
         );
 
         assert_eq!(result.0, Hash::default());
@@ -998,7 +997,7 @@ pub mod tests {
             &mut HashStats::default(),
             false, // not last pass
             previous_pass,
-            &one_range(),
+            one_range(),
         );
 
         assert_eq!(result.0, Hash::default());
@@ -1017,7 +1016,7 @@ pub mod tests {
             &mut HashStats::default(),
             true,
             previous_pass,
-            &one_range(),
+            one_range(),
         );
 
         let previous_pass = result.2;
@@ -1068,7 +1067,7 @@ pub mod tests {
             &mut HashStats::default(),
             false, // not last pass
             PreviousPass::default(),
-            &one_range(),
+            one_range(),
         );
 
         assert_eq!(result.0, Hash::default());
@@ -1113,7 +1112,7 @@ pub mod tests {
             &mut HashStats::default(),
             false, // not last pass
             previous_pass,
-            &one_range(),
+            one_range(),
         );
 
         assert_eq!(result.0, Hash::default());
@@ -1141,7 +1140,7 @@ pub mod tests {
             &mut HashStats::default(),
             true,
             previous_pass,
-            &one_range(),
+            one_range(),
         );
 
         let previous_pass = result.2;
@@ -1182,7 +1181,7 @@ pub mod tests {
         let (hashes, lamports) = AccountsHash::de_dup_and_eliminate_zeros(
             vec![vec![], vec![]],
             &mut HashStats::default(),
-            &one_range(),
+            one_range(),
         );
         assert_eq!(
             vec![Hash::default(); 0],
@@ -1193,7 +1192,7 @@ pub mod tests {
         let (hashes, lamports) = AccountsHash::de_dup_and_eliminate_zeros(
             vec![],
             &mut HashStats::default(),
-            &zero_range(),
+            zero_range(),
         );
         let empty: Vec<Vec<Hash>> = Vec::default();
         assert_eq!(empty, hashes);
@@ -1293,26 +1292,17 @@ pub mod tests {
                     let (hashes4, lamports4) = AccountsHash::de_dup_and_eliminate_zeros(
                         slice.to_vec(),
                         &mut HashStats::default(),
-                        &Range {
-                            start: 0,
-                            end: end - start,
-                        },
+                        end - start,
                     );
                     let (hashes5, lamports5) = AccountsHash::de_dup_and_eliminate_zeros(
                         slice.to_vec(),
                         &mut HashStats::default(),
-                        &Range {
-                            start: 0,
-                            end: end - start,
-                        },
+                        end - start,
                     );
                     let (hashes6, lamports6) = AccountsHash::de_dup_and_eliminate_zeros(
                         slice.to_vec(),
                         &mut HashStats::default(),
-                        &Range {
-                            start: 0,
-                            end: end - start,
-                        },
+                        end - start,
                     );
 
                     assert_eq!(hashes2, hashes3);
@@ -1843,7 +1833,7 @@ pub mod tests {
         AccountsHash::de_dup_and_eliminate_zeros(
             vec![input],
             &mut HashStats::default(),
-            &Range { start: 0, end: 2 }, // accounts above are in 2 groups
+            2, // accounts above are in 2 groups
         );
     }
 }

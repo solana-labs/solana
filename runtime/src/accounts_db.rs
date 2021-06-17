@@ -4932,7 +4932,7 @@ impl AccountsDb {
                     &mut stats,
                     pass == num_scan_passes - 1,
                     previous_pass,
-                    &bounds,
+                    bins_per_pass,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
