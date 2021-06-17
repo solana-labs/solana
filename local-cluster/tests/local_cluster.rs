@@ -2184,11 +2184,21 @@ fn test_optimistic_confirmation_violation_detection() {
             OptimisticConfirmationVerifier::format_optimistic_confirmed_slot_violation_log(
                 prev_voted_slot,
             );
+        // Violation detection thread can be behind so poll logs up to 10 seconds
         if let Some(mut buf) = buf {
+            let start = Instant::now();
+            let mut success = false;
             let mut output = String::new();
-            buf.read_to_string(&mut output).unwrap();
-            assert!(output.contains(&expected_log));
+            while start.elapsed().as_secs() < 10 {
+                buf.read_to_string(&mut output).unwrap();
+                if output.contains(&expected_log) {
+                    success = true;
+                    break;
+                }
+                sleep(Duration::from_millis(10));
+            }
             print!("{}", output);
+            assert!(success);
         } else {
             panic!("dumped log and disabled testing");
         }
