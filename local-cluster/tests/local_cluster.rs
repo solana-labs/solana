@@ -2195,6 +2195,7 @@ fn test_optimistic_confirmation_violation_detection() {
                     success = true;
                     break;
                 }
+                sleep(Duration::from_millis(10));
             }
             print!("{}", output);
             assert!(success);
