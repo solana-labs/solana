@@ -573,9 +573,13 @@ impl Validator {
             *start_progress.write().unwrap() = ValidatorStartProgress::Halted;
             std::thread::park();
         }
-
-        let ip_echo_server = node.sockets.ip_echo.map(solana_net_utils::ip_echo_server);
-
+        let ip_echo_server = match node.sockets.ip_echo {
+            None => None,
+            Some(tcp_listener) => Some(solana_net_utils::ip_echo_server(
+                tcp_listener,
+                Some(node.info.shred_version),
+            )),
+        };
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),

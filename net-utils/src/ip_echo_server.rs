@@ -1,8 +1,13 @@
 use {
-    crate::{ip_echo_server_reply_length, HEADER_LENGTH},
+    crate::{HEADER_LENGTH, IP_ECHO_SERVER_RESPONSE_LENGTH},
     log::*,
     serde_derive::{Deserialize, Serialize},
-    std::{io, net::SocketAddr, time::Duration},
+    solana_sdk::deserialize_utils::default_on_eof,
+    std::{
+        io,
+        net::{IpAddr, SocketAddr},
+        time::Duration,
+    },
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::{TcpListener, TcpStream},
@@ -21,6 +26,15 @@ const IO_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) struct IpEchoServerMessage {
     tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
     udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct IpEchoServerResponse {
+    // Public IP address of request echoed back to the node.
+    pub(crate) address: IpAddr,
+    // Cluster shred-version of the node running the server.
+    #[serde(deserialize_with = "default_on_eof")]
+    pub(crate) shred_version: Option<u16>,
 }
 
 impl IpEchoServerMessage {
@@ -42,7 +56,11 @@ pub(crate) fn ip_echo_server_request_length() -> usize {
         + REQUEST_TERMINUS_LENGTH
 }
 
-async fn process_connection(mut socket: TcpStream, peer_addr: SocketAddr) -> io::Result<()> {
+async fn process_connection(
+    mut socket: TcpStream,
+    peer_addr: SocketAddr,
+    shred_version: Option<u16>,
+) -> io::Result<()> {
     info!("connection from {:?}", peer_addr);
 
     let mut data = vec![0u8; ip_echo_server_request_length()];
@@ -113,16 +131,19 @@ async fn process_connection(mut socket: TcpStream, peer_addr: SocketAddr) -> io:
             let _ = tcp_stream.shutdown();
         }
     }
-
+    let response = IpEchoServerResponse {
+        address: peer_addr.ip(),
+        shred_version,
+    };
     // "\0\0\0\0" header is added to ensure a valid response will never
     // conflict with the first four bytes of a valid HTTP response.
-    let mut bytes = vec![0u8; ip_echo_server_reply_length()];
-    bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &peer_addr.ip()).unwrap();
+    let mut bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+    bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &response).unwrap();
     trace!("response: {:?}", bytes);
     writer.write_all(&bytes).await
 }
 
-async fn run_echo_server(tcp_listener: std::net::TcpListener) {
+async fn run_echo_server(tcp_listener: std::net::TcpListener, shred_version: Option<u16>) {
     info!("bound to {:?}", tcp_listener.local_addr().unwrap());
     let tcp_listener =
         TcpListener::from_std(tcp_listener).expect("Failed to convert std::TcpListener");
@@ -131,7 +152,7 @@ async fn run_echo_server(tcp_listener: std::net::TcpListener) {
         match tcp_listener.accept().await {
             Ok((socket, peer_addr)) => {
                 runtime::Handle::current().spawn(async move {
-                    if let Err(err) = process_connection(socket, peer_addr).await {
+                    if let Err(err) = process_connection(socket, peer_addr, shred_version).await {
                         info!("session failed: {:?}", err);
                     }
                 });
@@ -143,10 +164,14 @@ async fn run_echo_server(tcp_listener: std::net::TcpListener) {
 
 /// Starts a simple TCP server on the given port that echos the IP address of any peer that
 /// connects.  Used by |get_public_ip_addr|
-pub fn ip_echo_server(tcp_listener: std::net::TcpListener) -> IpEchoServer {
+pub fn ip_echo_server(
+    tcp_listener: std::net::TcpListener,
+    // Cluster shred-version of the node running the server.
+    shred_version: Option<u16>,
+) -> IpEchoServer {
     tcp_listener.set_nonblocking(true).unwrap();
 
     let runtime = Runtime::new().expect("Failed to create Runtime");
-    runtime.spawn(run_echo_server(tcp_listener));
+    runtime.spawn(run_echo_server(tcp_listener, shred_version));
     runtime
 }
