@@ -21,16 +21,8 @@ fn process_instruction(
         let mut lamports = accounts[0].lamports();
         let owner = &accounts[0].owner;
         let mut data = accounts[0].try_borrow_mut_data()?;
-        let account = AccountInfo::new(
-            &key,
-            false,
-            false,
-            &mut lamports,
-            &mut data,
-            &owner,
-            true,
-            0,
-        );
+        let account =
+            AccountInfo::new(&key, false, false, &mut lamports, &mut data, owner, true, 0);
         msg!("{:?} calling {:?}", program_id, key);
         invoke(&ix, &[account])?;
     } else {
