@@ -215,9 +215,13 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable =
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&data, None, config).unwrap();
-    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
+    let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        &data,
+        None,
+        config,
+        register_syscalls(&mut invoke_context).unwrap(),
+    )
+    .unwrap();
     executable.jit_compile().unwrap();
 
     let mut instruction_count = 0;
