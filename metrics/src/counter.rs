@@ -222,7 +222,7 @@ mod tests {
             INIT_HOOK.call_once(|| {
                 ENV_LOCK = Some(RwLock::new(()));
             });
-            &ENV_LOCK.as_ref().unwrap()
+            ENV_LOCK.as_ref().unwrap()
         }
     }
 

@@ -495,7 +495,7 @@ impl RepairWeight {
         for ((slot, _), _) in all_slots {
             *self
                 .slot_to_tree
-                .get_mut(&slot)
+                .get_mut(slot)
                 .expect("Nodes in tree must exist in `self.slot_to_tree`") = root2;
         }
     }
@@ -521,9 +521,9 @@ impl RepairWeight {
     fn sort_by_stake_weight_slot(slot_stake_voted: &mut Vec<(Slot, u64)>) {
         slot_stake_voted.sort_by(|(slot, stake_voted), (slot_, stake_voted_)| {
             if stake_voted == stake_voted_ {
-                slot.cmp(&slot_)
+                slot.cmp(slot_)
             } else {
-                stake_voted.cmp(&stake_voted_).reverse()
+                stake_voted.cmp(stake_voted_).reverse()
             }
         });
     }
@@ -757,7 +757,7 @@ mod test {
         );
 
         for slot in &[8, 10, 11] {
-            assert_eq!(*repair_weight.slot_to_tree.get(&slot).unwrap(), 8);
+            assert_eq!(*repair_weight.slot_to_tree.get(slot).unwrap(), 8);
         }
         for slot in 0..=1 {
             assert_eq!(*repair_weight.slot_to_tree.get(&slot).unwrap(), 0);
@@ -772,7 +772,7 @@ mod test {
         );
 
         for slot in &[8, 10, 11] {
-            assert_eq!(*repair_weight.slot_to_tree.get(&slot).unwrap(), 0);
+            assert_eq!(*repair_weight.slot_to_tree.get(slot).unwrap(), 0);
         }
         assert_eq!(repair_weight.trees.len(), 1);
         assert!(repair_weight.trees.contains_key(&0));
@@ -1088,10 +1088,10 @@ mod test {
         let purged_slots = vec![0, 1, 2, 4, 8, 10];
         let mut expected_unrooted_len = 0;
         for purged_slot in &purged_slots {
-            assert!(!repair_weight.slot_to_tree.contains_key(&purged_slot));
-            assert!(!repair_weight.trees.contains_key(&purged_slot));
+            assert!(!repair_weight.slot_to_tree.contains_key(purged_slot));
+            assert!(!repair_weight.trees.contains_key(purged_slot));
             if *purged_slot > 3 {
-                assert!(repair_weight.unrooted_slots.contains(&purged_slot));
+                assert!(repair_weight.unrooted_slots.contains(purged_slot));
                 expected_unrooted_len += 1;
             }
         }

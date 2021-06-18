@@ -152,7 +152,7 @@ impl Tvu {
             repair_socket.clone(),
             &fetch_sender,
             Some(bank_forks.clone()),
-            &exit,
+            exit,
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -172,12 +172,16 @@ impl Tvu {
             bank_forks.clone(),
             leader_schedule_cache,
             blockstore.clone(),
-            &cluster_info,
+            cluster_info,
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
+<<<<<<< HEAD
             &exit,
             completed_slots_receiver,
+=======
+            exit,
+>>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -212,7 +216,7 @@ impl Tvu {
             accounts_hash_receiver,
             pending_snapshot_package,
             exit,
-            &cluster_info,
+            cluster_info,
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
@@ -300,7 +304,7 @@ impl Tvu {
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
-                &exit,
+                exit,
                 compaction_interval,
                 max_compaction_jitter,
             )
@@ -308,7 +312,7 @@ impl Tvu {
 
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
-            &exit,
+            exit,
             accounts_background_request_handler,
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,

@@ -107,24 +107,24 @@ mod test {
     #[test]
     fn compute_websocket_url() {
         assert_eq!(
-            Config::compute_websocket_url(&"http://api.devnet.solana.com"),
+            Config::compute_websocket_url("http://api.devnet.solana.com"),
             "ws://api.devnet.solana.com/".to_string()
         );
 
         assert_eq!(
-            Config::compute_websocket_url(&"https://api.devnet.solana.com"),
+            Config::compute_websocket_url("https://api.devnet.solana.com"),
             "wss://api.devnet.solana.com/".to_string()
         );
 
         assert_eq!(
-            Config::compute_websocket_url(&"http://example.com:8899"),
+            Config::compute_websocket_url("http://example.com:8899"),
             "ws://example.com:8900/".to_string()
         );
         assert_eq!(
-            Config::compute_websocket_url(&"https://example.com:1234"),
+            Config::compute_websocket_url("https://example.com:1234"),
             "wss://example.com:1235/".to_string()
         );
 
-        assert_eq!(Config::compute_websocket_url(&"garbage"), String::new());
+        assert_eq!(Config::compute_websocket_url("garbage"), String::new());
     }
 }

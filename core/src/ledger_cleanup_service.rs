@@ -187,7 +187,7 @@ impl LedgerCleanupService {
         *last_purge_slot = root;
 
         let (slots_to_clean, purge_first_slot, lowest_cleanup_slot, total_shreds) =
-            Self::find_slots_to_clean(&blockstore, root, max_ledger_shreds);
+            Self::find_slots_to_clean(blockstore, root, max_ledger_shreds);
 
         if slots_to_clean {
             let purge_complete = Arc::new(AtomicBool::new(false));

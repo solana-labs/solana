@@ -148,7 +148,7 @@ impl AccountsHashVerifier {
             for (slot, hash) in hashes.iter() {
                 slot_to_hash.insert(*slot, *hash);
             }
-            if Self::should_halt(&cluster_info, trusted_validators, &mut slot_to_hash) {
+            if Self::should_halt(cluster_info, trusted_validators, &mut slot_to_hash) {
                 exit.store(true, Ordering::Relaxed);
             }
         }

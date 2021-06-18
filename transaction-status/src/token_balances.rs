@@ -40,7 +40,7 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
     } else {
         let mint_account = bank.get_account(mint)?;
 
-        let decimals = Mint::unpack(&mint_account.data())
+        let decimals = Mint::unpack(mint_account.data())
             .map(|mint| mint.decimals)
             .ok()?;
 
@@ -69,7 +69,7 @@ pub fn collect_token_balances(
                 }
 
                 if let Some((mint, ui_token_amount)) =
-                    collect_token_balance_from_account(&bank, account_id, &mut mint_decimals)
+                    collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
                 {
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: index as u8,
@@ -91,12 +91,12 @@ pub fn collect_token_balance_from_account(
 ) -> Option<(String, UiTokenAmount)> {
     let account = bank.get_account(account_id)?;
 
-    let token_account = TokenAccount::unpack(&account.data()).ok()?;
+    let token_account = TokenAccount::unpack(account.data()).ok()?;
     let mint_string = &token_account.mint.to_string();
-    let mint = &Pubkey::from_str(&mint_string).unwrap_or_default();
+    let mint = &Pubkey::from_str(mint_string).unwrap_or_default();
 
-    let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
-        let decimals = get_mint_decimals(bank, &mint)?;
+    let decimals = mint_decimals.get(mint).cloned().or_else(|| {
+        let decimals = get_mint_decimals(bank, mint)?;
         mint_decimals.insert(*mint, decimals);
         Some(decimals)
     })?;

@@ -66,7 +66,7 @@ impl Packets {
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for m in self.packets.iter_mut() {
-            m.meta.set_addr(&addr);
+            m.meta.set_addr(addr);
         }
     }
 

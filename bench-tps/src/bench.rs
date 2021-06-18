@@ -544,12 +544,12 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
 
             // re-sign retained to_fund_txes with updated blockhash
             self.sign(blockhash);
-            self.send(&client);
+            self.send(client);
 
             // Sleep a few slots to allow transactions to process
             sleep(Duration::from_secs(1));
 
-            self.verify(&client, to_lamports);
+            self.verify(client, to_lamports);
 
             // retry anything that seems to have dropped through cracks
             //  again since these txs are all or nothing, they're fine to
@@ -564,7 +564,7 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
             .par_iter()
             .map(|(k, t)| {
-                let instructions = system_instruction::transfer_many(&k.pubkey(), &t);
+                let instructions = system_instruction::transfer_many(&k.pubkey(), t);
                 let message = Message::new(&instructions, Some(&k.pubkey()));
                 (*k, Transaction::new_unsigned(message))
             })
@@ -617,7 +617,7 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
                         return None;
                     }
 
-                    let verified = if verify_funding_transfer(&client, &tx, to_lamports) {
+                    let verified = if verify_funding_transfer(&client, tx, to_lamports) {
                         verified_txs.fetch_add(1, Ordering::Relaxed);
                         Some(k.pubkey())
                     } else {
@@ -733,7 +733,7 @@ pub fn airdrop_lamports<T: Client>(
         );
 
         let (blockhash, _fee_calculator) = get_recent_blockhash(client);
-        match request_airdrop_transaction(&faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
+        match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let mut tries = 0;
                 loop {

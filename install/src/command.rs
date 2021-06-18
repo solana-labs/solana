@@ -548,7 +548,7 @@ pub fn init(
     init_or_update(config_file, true, false)?;
 
     let path_modified = if !no_modify_path {
-        add_to_path(&config.active_release_bin_dir().to_str().unwrap())
+        add_to_path(config.active_release_bin_dir().to_str().unwrap())
     } else {
         false
     };
@@ -613,10 +613,10 @@ pub fn info(config_file: &str, local_info_only: bool, eval: bool) -> Result<(), 
         return Ok(());
     }
 
-    println_name_value("Configuration:", &config_file);
+    println_name_value("Configuration:", config_file);
     println_name_value(
         "Active release directory:",
-        &config.active_release_dir().to_str().unwrap_or("?"),
+        config.active_release_dir().to_str().unwrap_or("?"),
     );
 
     fn print_release_version(config: &Config) {
@@ -633,14 +633,14 @@ pub fn info(config_file: &str, local_info_only: bool, eval: bool) -> Result<(), 
     if let Some(explicit_release) = &config.explicit_release {
         match explicit_release {
             ExplicitRelease::Semver(release_semver) => {
-                println_name_value(&format!("{}Release version:", BULLET), &release_semver);
+                println_name_value(&format!("{}Release version:", BULLET), release_semver);
                 println_name_value(
                     &format!("{}Release URL:", BULLET),
                     &github_release_download_url(release_semver),
                 );
             }
             ExplicitRelease::Channel(release_channel) => {
-                println_name_value(&format!("{}Release channel:", BULLET), &release_channel);
+                println_name_value(&format!("{}Release channel:", BULLET), release_channel);
                 println_name_value(
                     &format!("{}Release URL:", BULLET),
                     &release_channel_download_url(release_channel),
@@ -659,7 +659,7 @@ pub fn info(config_file: &str, local_info_only: bool, eval: bool) -> Result<(), 
             Some(ref update_manifest) => {
                 println_name_value("Installed version:", "");
                 print_release_version(&config);
-                print_update_manifest(&update_manifest);
+                print_update_manifest(update_manifest);
             }
             None => {
                 println_name_value("Installed version:", "None");

@@ -325,7 +325,7 @@ impl CrdsGossip {
             assert!(timeouts.contains_key(&Pubkey::default()));
             rv = self
                 .pull
-                .purge_active(thread_pool, &mut self.crds, now, &timeouts);
+                .purge_active(thread_pool, &mut self.crds, now, timeouts);
         }
         self.crds
             .trim_purged(now.saturating_sub(5 * self.pull.crds_timeout));

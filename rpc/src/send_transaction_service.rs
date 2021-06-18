@@ -269,10 +269,10 @@ impl SendTransactionService {
                                 address_list
                             }
                         })
-                        .unwrap_or_else(|| vec![&tpu_address]);
+                        .unwrap_or_else(|| vec![tpu_address]);
                     for address in addresses {
                         Self::send_transaction(
-                            &send_socket,
+                            send_socket,
                             address,
                             &transaction_info.wire_transaction,
                         );

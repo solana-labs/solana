@@ -91,7 +91,7 @@ pub fn process_instruction(
                     keyed_account_at_index(keyed_accounts, 3).map(|ka| ka.unsigned_key());
 
                 me.authorize_with_seed(
-                    &authority_base,
+                    authority_base,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -102,7 +102,7 @@ pub fn process_instruction(
                 )
             } else {
                 me.authorize_with_seed(
-                    &authority_base,
+                    authority_base,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -119,7 +119,7 @@ pub fn process_instruction(
             let vote = keyed_account_at_index(keyed_accounts, 1)?;
 
             me.delegate(
-                &vote,
+                vote,
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
                 &config::from_keyed_account(keyed_account_at_index(keyed_accounts, 4)?)?,

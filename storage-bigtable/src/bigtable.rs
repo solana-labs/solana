@@ -628,7 +628,7 @@ where
         .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
         .1;
 
-    let data = decompress(&value)?;
+    let data = decompress(value)?;
     T::decode(&data[..]).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
         Error::ObjectCorrupt(format!("{}/{}", table, key))
@@ -649,7 +649,7 @@ where
         .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
         .1;
 
-    let data = decompress(&value)?;
+    let data = decompress(value)?;
     bincode::deserialize(&data).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
         Error::ObjectCorrupt(format!("{}/{}", table, key))

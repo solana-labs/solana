@@ -139,7 +139,7 @@ impl Authorized {
             }
             StakeAuthorize::Withdrawer => {
                 if let Some((lockup, clock, custodian)) = lockup_custodian_args {
-                    if lockup.is_in_force(&clock, None) {
+                    if lockup.is_in_force(clock, None) {
                         match custodian {
                             None => {
                                 return Err(StakeError::CustodianMissing.into());
@@ -149,7 +149,7 @@ impl Authorized {
                                     return Err(StakeError::CustodianSignatureMissing.into());
                                 }
 
-                                if lockup.is_in_force(&clock, Some(custodian)) {
+                                if lockup.is_in_force(clock, Some(custodian)) {
                                     return Err(StakeError::LockupInForce.into());
                                 }
                             }

@@ -405,7 +405,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore =
-                crate::open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
+                crate::open_blockstore(ledger_path, AccessType::TryPrimaryThenSecondary, None);
 
             runtime.block_on(upload(
                 blockstore,

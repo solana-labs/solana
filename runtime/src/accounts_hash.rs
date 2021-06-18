@@ -255,7 +255,7 @@ impl AccountsHash {
 
                 let mut hasher = Hasher::default();
                 for item in hashes.iter().take(end_index).skip(start_index) {
-                    let h = extractor(&item);
+                    let h = extractor(item);
                     hasher.hash(h.as_ref());
                 }
 

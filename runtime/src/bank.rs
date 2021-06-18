@@ -1003,7 +1003,7 @@ impl Default for BlockhashQueue {
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths(
-            &genesis_config,
+            genesis_config,
             Vec::new(),
             &[],
             None,
@@ -1017,7 +1017,7 @@ impl Bank {
 
     pub fn new_no_wallclock_throttle(genesis_config: &GenesisConfig) -> Self {
         let mut bank = Self::new_with_paths(
-            &genesis_config,
+            genesis_config,
             Vec::new(),
             &[],
             None,
@@ -1040,7 +1040,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
-            &genesis_config,
+            genesis_config,
             Vec::new(),
             &[],
             None,
@@ -1698,7 +1698,7 @@ impl Bank {
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
             create_account::<sysvar::stake_history::StakeHistory>(
-                &self.stakes.read().unwrap().history(),
+                self.stakes.read().unwrap().history(),
                 self.inherit_specially_retained_account_fields(account),
             )
         });
@@ -1756,7 +1756,7 @@ impl Bank {
             .feature_set
             .full_inflation_features_enabled()
             .iter()
-            .filter_map(|id| self.feature_set.activated_slot(&id))
+            .filter_map(|id| self.feature_set.activated_slot(id))
             .collect::<Vec<_>>();
         slots.sort_unstable();
         slots.get(0).cloned().unwrap_or_else(|| {
@@ -1903,7 +1903,7 @@ impl Bank {
             .iter()
             .for_each(|(stake_pubkey, delegation)| {
                 match (
-                    self.get_account_with_fixed_root(&stake_pubkey),
+                    self.get_account_with_fixed_root(stake_pubkey),
                     self.get_account_with_fixed_root(&delegation.voter_pubkey),
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
@@ -1969,8 +1969,8 @@ impl Bank {
             })
             .map(|(stake_account, vote_account)| {
                 stake_state::calculate_points(
-                    &stake_account,
-                    &vote_account,
+                    stake_account,
+                    vote_account,
                     Some(&stake_history),
                     fix_stake_deactivate,
                 )
@@ -2009,7 +2009,7 @@ impl Bank {
                     fix_stake_deactivate,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
-                    self.store_account(&stake_pubkey, &stake_account);
+                    self.store_account(stake_pubkey, stake_account);
                     vote_account_changed = true;
 
                     if stakers_reward > 0 {
@@ -2043,7 +2043,7 @@ impl Bank {
                         },
                     ));
                 }
-                self.store_account(&vote_pubkey, &vote_account);
+                self.store_account(vote_pubkey, vote_account);
             }
         }
         self.rewards.write().unwrap().append(&mut rewards);
@@ -2286,7 +2286,7 @@ impl Bank {
         self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
 
         for (pubkey, account) in genesis_config.accounts.iter() {
-            if self.get_account(&pubkey).is_some() {
+            if self.get_account(pubkey).is_some() {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, &AccountSharedData::from(account.clone()));
@@ -2297,7 +2297,7 @@ impl Bank {
         self.update_fees();
 
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
-            if self.get_account(&pubkey).is_some() {
+            if self.get_account(pubkey).is_some() {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, &AccountSharedData::from(account.clone()));
@@ -2344,11 +2344,11 @@ impl Bank {
     // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
         let existing_genuine_program =
-            if let Some(mut account) = self.get_account_with_fixed_root(&program_id) {
+            if let Some(mut account) = self.get_account_with_fixed_root(program_id) {
                 // it's very unlikely to be squatted at program_id as non-system account because of burden to
                 // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
                 // safe to assume it's a genuine program.
-                if native_loader::check_id(&account.owner()) {
+                if native_loader::check_id(account.owner()) {
                     Some(account)
                 } else {
                     // malicious account is pre-occupying at program_id
@@ -2359,7 +2359,7 @@ impl Bank {
                     // Resetting account balance to 0 is needed to really purge from AccountsDb and
                     // flush the Stakes cache
                     account.set_lamports(0);
-                    self.store_account(&program_id, &account);
+                    self.store_account(program_id, &account);
                     None
                 }
             } else {
@@ -2375,7 +2375,7 @@ impl Bank {
                     name, program_id
                 ),
                 Some(account) => {
-                    if *name == String::from_utf8_lossy(&account.data()) {
+                    if *name == String::from_utf8_lossy(account.data()) {
                         // nop; it seems that already AccountsDb is updated.
                         return;
                     }
@@ -2415,7 +2415,7 @@ impl Bank {
             name,
             self.inherit_specially_retained_account_fields(&existing_genuine_program),
         );
-        self.store_account_and_update_capitalization(&program_id, &account);
+        self.store_account_and_update_capitalization(program_id, &account);
 
         debug!("Added native program {} under {:?}", name, program_id);
     }
@@ -2584,7 +2584,7 @@ impl Bank {
             hashed_txs.as_transactions_iter(),
             self.demote_sysvar_write_locks(),
         );
-        TransactionBatch::new(lock_results, &self, Cow::Owned(hashed_txs))
+        TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
@@ -2595,7 +2595,7 @@ impl Bank {
             hashed_txs.as_transactions_iter(),
             self.demote_sysvar_write_locks(),
         );
-        TransactionBatch::new(lock_results, &self, Cow::Borrowed(hashed_txs))
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
     }
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
@@ -2604,7 +2604,7 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         let mut batch = TransactionBatch::new(
             vec![tx.sanitize().map_err(|e| e.into())],
-            &self,
+            self,
             Cow::Owned(vec![HashedTransaction::from(tx)]),
         );
         batch.needs_unlock = false;
@@ -2618,7 +2618,7 @@ impl Bank {
     ) -> (Result<()>, TransactionLogMessages, Vec<AccountSharedData>) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        let batch = self.prepare_simulation_batch(&transaction);
+        let batch = self.prepare_simulation_batch(transaction);
 
         let mut timings = ExecuteTimings::default();
 
@@ -2693,7 +2693,7 @@ impl Bank {
                     let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
                     if hash_age == Some(true) {
                         (Ok(()), None)
-                    } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
+                    } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
                         (Ok(()), Some(NonceRollbackPartial::new(pubkey, acc)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
@@ -2784,10 +2784,10 @@ impl Bank {
     }
 
     pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, AccountSharedData)> {
-        transaction::uses_durable_nonce(&tx)
-            .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
+        transaction::uses_durable_nonce(tx)
+            .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(nonce_ix, tx))
             .and_then(|nonce_pubkey| {
-                self.get_account(&nonce_pubkey)
+                self.get_account(nonce_pubkey)
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
@@ -3427,7 +3427,7 @@ impl Bank {
             hashed_txs.len()
         );
         timings.store_us += write_time.as_us();
-        self.update_transaction_statuses(hashed_txs, &executed);
+        self.update_transaction_statuses(hashed_txs, executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
 
@@ -4185,7 +4185,7 @@ impl Bank {
         pubkey: &Pubkey,
         new_account: &AccountSharedData,
     ) {
-        if let Some(old_account) = self.get_account_with_fixed_root(&pubkey) {
+        if let Some(old_account) = self.get_account_with_fixed_root(pubkey) {
             match new_account.lamports().cmp(&old_account.lamports()) {
                 std::cmp::Ordering::Greater => {
                     self.capitalization
@@ -5039,7 +5039,7 @@ impl Bank {
 
     pub fn deactivate_feature(&mut self, id: &Pubkey) {
         let mut feature_set = Arc::make_mut(&mut self.feature_set).clone();
-        feature_set.active.remove(&id);
+        feature_set.active.remove(id);
         feature_set.inactive.insert(*id);
         self.feature_set = Arc::new(feature_set);
     }
@@ -5139,8 +5139,8 @@ impl Bank {
     ) {
         let feature_builtins = self.feature_builtins.clone();
         for (builtin, feature, activation_type) in feature_builtins.iter() {
-            let should_populate = init_or_warp && self.feature_set.is_active(&feature)
-                || !init_or_warp && new_feature_activations.contains(&feature);
+            let should_populate = init_or_warp && self.feature_set.is_active(feature)
+                || !init_or_warp && new_feature_activations.contains(feature);
             if should_populate {
                 match activation_type {
                     ActivationType::NewProgram => self.add_builtin(
@@ -5242,10 +5242,10 @@ impl Bank {
 
         if purge_window_epoch {
             for reward_pubkey in self.rewards_pool_pubkeys.iter() {
-                if let Some(mut reward_account) = self.get_account_with_fixed_root(&reward_pubkey) {
+                if let Some(mut reward_account) = self.get_account_with_fixed_root(reward_pubkey) {
                     if reward_account.lamports() == u64::MAX {
                         reward_account.set_lamports(0);
-                        self.store_account(&reward_pubkey, &reward_account);
+                        self.store_account(reward_pubkey, &reward_account);
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
                         self.capitalization.fetch_add(1, Relaxed);
                         info!(
@@ -5290,7 +5290,7 @@ impl Drop for Bank {
 pub fn goto_end_of_slot(bank: &mut Bank) {
     let mut tick_hash = bank.last_blockhash();
     loop {
-        tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
+        tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
         bank.register_tick(&tick_hash);
         if tick_hash == bank.last_blockhash() {
             bank.freeze();
@@ -7067,7 +7067,7 @@ pub(crate) mod tests {
                 .accounts
                 .accounts_db
                 .accounts_index
-                .get(&pubkey, Some(&ancestors), None)
+                .get(pubkey, Some(ancestors), None)
                 .unwrap();
             locked_entry
                 .slot_list()
@@ -7295,7 +7295,7 @@ pub(crate) mod tests {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(&stake_account, &vote_account, None, true)
+                stake_state::calculate_points(stake_account, vote_account, None, true)
                     .unwrap_or(0)
             })
             .sum();
@@ -9432,11 +9432,11 @@ pub(crate) mod tests {
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
-            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
+            String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
         );
         assert_eq!(
             "mock_program2",
-            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data())
+            String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
         );
 
         // Re-adding builtin programs should be no-op
@@ -9452,11 +9452,11 @@ pub(crate) mod tests {
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
-            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
+            String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
         );
         assert_eq!(
             "mock_program2",
-            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data())
+            String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
         );
     }
 
@@ -9593,7 +9593,7 @@ pub(crate) mod tests {
     }
 
     fn get_nonce_account(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
-        bank.get_account(&nonce_pubkey).and_then(|acc| {
+        bank.get_account(nonce_pubkey).and_then(|acc| {
             let state =
                 StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
             match state {
@@ -10084,7 +10084,7 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let keypair0_account = AccountSharedData::new(8, 0, &Pubkey::default());
         let keypair1_account = AccountSharedData::new(9, 0, &Pubkey::default());
-        let account0 = AccountSharedData::new(11, 0, &&Pubkey::default());
+        let account0 = AccountSharedData::new(11, 0, &Pubkey::default());
         bank0.store_account(&keypair0.pubkey(), &keypair0_account);
         bank0.store_account(&keypair1.pubkey(), &keypair1_account);
         bank0.store_account(&pubkey0, &account0);
@@ -11947,7 +11947,7 @@ pub(crate) mod tests {
 
         // Write accounts to the store
         for key in &all_pubkeys {
-            bank0.store_account(&key, &starting_account);
+            bank0.store_account(key, &starting_account);
         }
 
         // Set aside a subset of accounts to modify

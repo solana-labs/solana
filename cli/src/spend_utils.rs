@@ -92,7 +92,7 @@ where
         Ok((message, spend))
     } else {
         let from_balance = rpc_client
-            .get_balance_with_commitment(&from_pubkey, commitment)?
+            .get_balance_with_commitment(from_pubkey, commitment)?
             .value;
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
             amount,

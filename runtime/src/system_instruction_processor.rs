@@ -79,7 +79,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(&account.owner()) {
+    if !account.data().is_empty() || !system_program::check_id(account.owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -115,13 +115,13 @@ fn assign(
         return Ok(());
     }
 
-    if !address.is_signer(&signers) {
+    if !address.is_signer(signers) {
         ic_msg!(invoke_context, "Assign: account {:?} must sign", address);
         return Err(InstructionError::MissingRequiredSignature);
     }
 
     // guard against sysvars being made
-    if sysvar::check_id(&owner) {
+    if sysvar::check_id(owner) {
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
         return Err(SystemError::InvalidProgramId.into());
     }
@@ -300,13 +300,13 @@ pub fn process_instruction(
             let from = keyed_account_at_index(keyed_accounts, 0)?;
             let to = keyed_account_at_index(keyed_accounts, 1)?;
             let to_address = Address::create(
-                &to.unsigned_key(),
+                to.unsigned_key(),
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
             create_account(
                 from,
-                &to,
+                to,
                 &to_address,
                 lamports,
                 space,
@@ -736,11 +736,11 @@ mod tests {
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
             &KeyedAccount::new(&to, false, &to_account),
-            &address,
+            address,
             50,
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_err());
@@ -753,11 +753,11 @@ mod tests {
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
             &KeyedAccount::new(&to, false, &to_account),
-            &address,
+            address,
             50,
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_ok());
@@ -790,7 +790,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -809,7 +809,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -827,7 +827,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -1141,7 +1141,7 @@ mod tests {
         transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             50,
@@ -1158,7 +1158,7 @@ mod tests {
         let result = transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             100,
@@ -1173,7 +1173,7 @@ mod tests {
         assert!(transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             0,
