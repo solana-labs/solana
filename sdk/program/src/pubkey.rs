@@ -613,4 +613,26 @@ mod tests {
         assert!(sysvar::id().is_native_program_id());
         assert!(vote::program::id().is_native_program_id());
     }
+
+    fn pubkey_from_seed_by_marker(marker: &[u8]) -> Result<Pubkey, PubkeyError> {
+        let key = Pubkey::new_unique();
+        let owner = Pubkey::default();
+
+        let mut to_fake = owner.to_bytes().to_vec();
+        to_fake.extend_from_slice(marker);
+
+        let seed = &String::from_utf8(to_fake[..to_fake.len() - 32].to_vec()).expect("not utf8");
+        let base = &Pubkey::try_from_slice(&to_fake[to_fake.len() - 32..]).unwrap();
+
+        Pubkey::create_with_seed(&key, seed, base)
+    }
+
+    #[test]
+    fn test_create_with_seed_rejects_illegal_owner() {
+        assert_eq!(
+            pubkey_from_seed_by_marker(PDA_MARKER),
+            Err(PubkeyError::IllegalOwner)
+        );
+        assert!(pubkey_from_seed_by_marker(&PDA_MARKER[1..]).is_ok());
+    }
 }
