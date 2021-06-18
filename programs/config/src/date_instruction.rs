@@ -54,5 +54,5 @@ pub fn create_account(
 /// transaction containing this instruction.
 pub fn store(date_pubkey: &Pubkey, date: Date<Utc>) -> Instruction {
     let date_config = DateConfig::new(date);
-    config_instruction::store(&date_pubkey, true, vec![], &date_config)
+    config_instruction::store(date_pubkey, true, vec![], &date_config)
 }

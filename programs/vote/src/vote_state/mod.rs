@@ -230,7 +230,7 @@ impl VoteState {
 
     // utility function, used by Stakes, tests
     pub fn from<T: ReadableAccount>(account: &T) -> Option<VoteState> {
-        Self::deserialize(&account.data()).ok()
+        Self::deserialize(account.data()).ok()
     }
 
     // utility function, used by Stakes, tests
@@ -239,7 +239,7 @@ impl VoteState {
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        deserialize::<VoteStateVersions>(&input)
+        deserialize::<VoteStateVersions>(input)
             .map(|versioned| versioned.convert_to_current())
             .map_err(|_| InstructionError::InvalidAccountData)
     }
@@ -638,7 +638,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     // new node must say "yay"
-    verify_authorized_signer(&node_pubkey, signers)?;
+    verify_authorized_signer(node_pubkey, signers)?;
 
     vote_state.node_pubkey = *node_pubkey;
 
@@ -938,7 +938,7 @@ mod tests {
         slot_hashes: &[SlotHash],
         epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(vote_pubkey, true, vote_account)];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         process_vote(
             &keyed_accounts[0],

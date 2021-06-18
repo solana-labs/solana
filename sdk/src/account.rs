@@ -588,7 +588,7 @@ pub mod tests {
     use super::*;
 
     fn make_two_accounts(key: &Pubkey) -> (Account, AccountSharedData) {
-        let mut account1 = Account::new(1, 2, &key);
+        let mut account1 = Account::new(1, 2, key);
         account1.executable = true;
         account1.rent_epoch = 4;
         let mut account2 = AccountSharedData::new(1, 2, key);

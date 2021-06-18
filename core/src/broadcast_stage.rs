@@ -408,7 +408,7 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
 
             (&shred.payload, &peers[broadcast_index].tvu)
         })
@@ -429,7 +429,7 @@ pub fn broadcast_shreds(
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
-    let num_live_peers = num_live_peers(&peers);
+    let num_live_peers = num_live_peers(peers);
     update_peer_stats(
         num_live_peers,
         broadcast_len as i64 + 1,

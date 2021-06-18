@@ -188,7 +188,7 @@ impl Tower {
             .delayed_votes
             .iter()
             .enumerate()
-            .map(|(i, v)| (*scores.get(&v).unwrap_or(&0), v.time, i))
+            .map(|(i, v)| (*scores.get(v).unwrap_or(&0), v.time, i))
             .collect();
         // highest score, latest vote first
         best.sort_unstable();
@@ -542,7 +542,7 @@ fn test_with_partitions(
             let mut scores: HashMap<Vote, usize> = HashMap::new();
             towers.iter().for_each(|n| {
                 n.delayed_votes.iter().for_each(|v| {
-                    *scores.entry(v.clone()).or_insert(0) += n.score(&v, &fork_tree);
+                    *scores.entry(v.clone()).or_insert(0) += n.score(v, &fork_tree);
                 })
             });
             for tower in towers.iter_mut() {

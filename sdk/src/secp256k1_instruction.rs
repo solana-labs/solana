@@ -140,7 +140,7 @@ pub fn verify_eth_addresses(
 
         // Parse out pubkey
         let eth_address_slice = get_data_slice(
-            &instruction_datas,
+            instruction_datas,
             offsets.eth_address_instruction_index,
             offsets.eth_address_offset,
             HASHED_PUBKEY_SERIALIZED_SIZE,
@@ -148,7 +148,7 @@ pub fn verify_eth_addresses(
 
         // Parse out message
         let message_slice = get_data_slice(
-            &instruction_datas,
+            instruction_datas,
             offsets.message_instruction_index,
             offsets.message_data_offset,
             offsets.message_data_size as usize,

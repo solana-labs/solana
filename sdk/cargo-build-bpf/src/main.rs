@@ -112,7 +112,7 @@ fn install_if_missing(
         url.push_str(version);
         url.push('/');
         url.push_str(file.to_str().unwrap());
-        download_file(&url.as_str(), &file, true, &mut None)?;
+        download_file(url.as_str(), file, true, &mut None)?;
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let zip = File::open(&file).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
@@ -423,14 +423,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         "solana-bpf-tools-linux.tar.bz2"
     };
     install_if_missing(
-        &config,
+        config,
         "bpf-tools",
         "v1.8",
         "https://github.com/solana-labs/bpf-tools/releases/download",
         &PathBuf::from(bpf_tools_filename),
     )
     .expect("Failed to install bpf-tools");
-    link_bpf_toolchain(&config);
+    link_bpf_toolchain(config);
 
     let llvm_bin = config
         .bpf_sdk
@@ -522,7 +522,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             postprocess_dump(&program_dump);
         }
 
-        check_undefined_symbols(&config, &program_so);
+        check_undefined_symbols(config, &program_so);
 
         println!();
         println!("To deploy this program:");

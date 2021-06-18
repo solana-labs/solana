@@ -468,7 +468,7 @@ pub fn process_create_vote_account(
     let vote_account = config.signers[vote_account];
     let vote_account_pubkey = vote_account.pubkey();
     let vote_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
+        Pubkey::create_with_seed(&vote_account_pubkey, seed, &solana_vote_program::id())?
     } else {
         vote_account_pubkey
     };
@@ -549,7 +549,7 @@ pub fn process_create_vote_account(
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, &config)
+    log_instruction_custom_error::<SystemError>(result, config)
 }
 
 pub fn process_vote_authorize(
@@ -592,7 +592,7 @@ pub fn process_vote_authorize(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<VoteError>(result, &config)
+    log_instruction_custom_error::<VoteError>(result, config)
 }
 
 pub fn process_vote_update_validator(
@@ -629,7 +629,7 @@ pub fn process_vote_update_validator(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<VoteError>(result, &config)
+    log_instruction_custom_error::<VoteError>(result, config)
 }
 
 pub fn process_vote_update_commission(
@@ -660,7 +660,7 @@ pub fn process_vote_update_commission(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<VoteError>(result, &config)
+    log_instruction_custom_error::<VoteError>(result, config)
 }
 
 fn get_vote_account(
@@ -763,7 +763,7 @@ pub fn process_withdraw_from_vote_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let withdraw_authority = config.signers[withdraw_authority];
 
-    let current_balance = rpc_client.get_balance(&vote_account_pubkey)?;
+    let current_balance = rpc_client.get_balance(vote_account_pubkey)?;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
 
     let lamports = match withdraw_amount {
@@ -798,7 +798,7 @@ pub fn process_withdraw_from_vote_account(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
-    log_instruction_custom_error::<VoteError>(result, &config)
+    log_instruction_custom_error::<VoteError>(result, config)
 }
 
 #[cfg(test)]

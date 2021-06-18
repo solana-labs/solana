@@ -19,7 +19,7 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<
         let prog_id_idx = first_instruction.program_id_index as usize;
         match message.account_keys.get(prog_id_idx) {
             Some(program_id) => {
-                if !crate::check_id(&program_id) {
+                if !crate::check_id(program_id) {
                     return None;
                 }
             }

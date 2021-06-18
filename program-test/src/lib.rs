@@ -311,7 +311,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 {
                     let mut program_signer = false;
                     for seeds in signers_seeds.iter() {
-                        let signer = Pubkey::create_program_address(&seeds, &caller).unwrap();
+                        let signer = Pubkey::create_program_address(seeds, &caller).unwrap();
                         if instruction_account.pubkey == signer {
                             program_signer = true;
                             break;
@@ -324,7 +324,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(&instruction);
+        invoke_context.record_instruction(instruction);
 
         solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
             &message,
@@ -769,7 +769,7 @@ impl ProgramTest {
 
         // Add commonly-used SPL programs as a convenience to the user
         for (program_id, account) in programs::spl_programs(&Rent::default()).iter() {
-            bank.store_account(program_id, &account);
+            bank.store_account(program_id, account);
         }
 
         // User-supplied additional builtins
@@ -782,10 +782,10 @@ impl ProgramTest {
         }
 
         for (address, account) in self.accounts.iter() {
-            if bank.get_account(&address).is_some() {
+            if bank.get_account(address).is_some() {
                 info!("Overriding account at {}", address);
             }
-            bank.store_account(&address, &account);
+            bank.store_account(address, account);
         }
         bank.set_capitalization();
         if let Some(max_units) = self.bpf_compute_max_units {

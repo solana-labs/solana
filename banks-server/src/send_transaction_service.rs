@@ -138,8 +138,8 @@ impl SendTransactionService {
                         result.retried += 1;
                         inc_new_counter_info!("send_transaction_service-retry", 1);
                         Self::send_transaction(
-                            &send_socket,
-                            &tpu_address,
+                            send_socket,
+                            tpu_address,
                             &transaction_info.wire_transaction,
                         );
                         true

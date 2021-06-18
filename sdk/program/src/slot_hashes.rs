@@ -17,7 +17,7 @@ pub struct SlotHashes(Vec<SlotHash>);
 
 impl SlotHashes {
     pub fn add(&mut self, slot: Slot, hash: Hash) {
-        match self.binary_search_by(|(probe, _)| slot.cmp(&probe)) {
+        match self.binary_search_by(|(probe, _)| slot.cmp(probe)) {
             Ok(index) => (self.0)[index] = (slot, hash),
             Err(index) => (self.0).insert(index, (slot, hash)),
         }
@@ -25,7 +25,7 @@ impl SlotHashes {
     }
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, slot: &Slot) -> Option<&Hash> {
-        self.binary_search_by(|(probe, _)| slot.cmp(&probe))
+        self.binary_search_by(|(probe, _)| slot.cmp(probe))
             .ok()
             .map(|index| &self[index].1)
     }

@@ -71,7 +71,7 @@ impl Signable for CrdsValue {
 
     fn verify(&self) -> bool {
         self.get_signature()
-            .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
+            .verify(self.pubkey().as_ref(), self.signable_data().borrow())
     }
 }
 
@@ -853,9 +853,9 @@ mod test {
         wrong_keypair: &Keypair,
     ) {
         assert!(!value.verify());
-        value.sign(&correct_keypair);
+        value.sign(correct_keypair);
         assert!(value.verify());
-        value.sign(&wrong_keypair);
+        value.sign(wrong_keypair);
         assert!(!value.verify());
         serialize_deserialize_value(value, correct_keypair);
     }

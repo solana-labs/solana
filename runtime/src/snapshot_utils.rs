@@ -622,7 +622,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let mut untar = Measure::start("untar");
     let unpacked_append_vec_map = untar_snapshot_in(
         &snapshot_tar,
-        &unpack_dir.as_ref(),
+        unpack_dir.as_ref(),
         account_paths,
         archive_format,
     )?;
@@ -913,7 +913,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
     let unpack_dir = temp_dir.path();
     untar_snapshot_in(
         snapshot_archive,
-        &unpack_dir,
+        unpack_dir,
         &[unpack_dir.to_path_buf()],
         archive_format,
     )
@@ -953,7 +953,7 @@ pub fn snapshot_bank(
 ) -> Result<()> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
+    add_snapshot(snapshot_path, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
@@ -964,7 +964,7 @@ pub fn snapshot_bank(
         .expect("no snapshots found in config snapshot_path");
 
     let package = package_snapshot(
-        &root_bank,
+        root_bank,
         latest_slot_snapshot_paths,
         snapshot_path,
         status_cache_slot_deltas,
@@ -1003,9 +1003,9 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     let temp_dir = tempfile::tempdir_in(snapshot_path)?;
 
     let storages: Vec<_> = bank.get_snapshot_storages();
-    let slot_snapshot_paths = add_snapshot(&temp_dir, &bank, &storages, snapshot_version)?;
+    let slot_snapshot_paths = add_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
     let package = package_snapshot(
-        &bank,
+        bank,
         &slot_snapshot_paths,
         &temp_dir,
         bank.src.slot_deltas(&bank.src.roots()),

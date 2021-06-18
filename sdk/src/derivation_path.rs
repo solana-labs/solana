@@ -46,7 +46,7 @@ impl TryFrom<&str> for DerivationPath {
 
 impl AsRef<[ChildIndex]> for DerivationPath {
     fn as_ref(&self) -> &[ChildIndex] {
-        &self.0.as_ref()
+        self.0.as_ref()
     }
 }
 
@@ -88,7 +88,7 @@ impl DerivationPath {
     }
 
     fn _from_absolute_path_insecure_str(path: &str) -> Result<Self, DerivationPathError> {
-        Ok(Self(DerivationPathInner::from_str(&path).map_err(
+        Ok(Self(DerivationPathInner::from_str(path).map_err(
             |err| DerivationPathError::InvalidDerivationPath(err.to_string()),
         )?))
     }

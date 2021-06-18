@@ -112,7 +112,7 @@ fn execute_batch(
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
     let pre_token_balances = if record_token_balances {
-        collect_token_balances(&bank, &batch, &mut mint_decimals)
+        collect_token_balances(bank, batch, &mut mint_decimals)
     } else {
         vec![]
     };
@@ -139,7 +139,7 @@ fn execute_batch(
     if let Some(transaction_status_sender) = transaction_status_sender {
         let txs = batch.transactions_iter().cloned().collect();
         let post_token_balances = if record_token_balances {
-            collect_token_balances(&bank, &batch, &mut mint_decimals)
+            collect_token_balances(bank, batch, &mut mint_decimals)
         } else {
             vec![]
         };
@@ -327,7 +327,7 @@ fn process_entries_with_callback(
         timings,
     )?;
     for hash in tick_hashes {
-        bank.register_tick(&hash);
+        bank.register_tick(hash);
     }
     Ok(())
 }
@@ -396,7 +396,7 @@ pub fn process_blockstore(
 
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
-        &genesis_config,
+        genesis_config,
         account_paths,
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
@@ -896,9 +896,9 @@ fn process_next_slots(
         // handles any partials
         if next_meta.is_full() {
             let next_bank = Arc::new(Bank::new_from_parent(
-                &bank,
+                bank,
                 &leader_schedule_cache
-                    .slot_leader_at(*next_slot, Some(&bank))
+                    .slot_leader_at(*next_slot, Some(bank))
                     .unwrap(),
                 *next_slot,
             ));
@@ -1048,7 +1048,7 @@ fn load_frozen_forks(
                 *root = new_root_bank.slot();
                 last_root = new_root_bank.slot();
 
-                leader_schedule_cache.set_root(&new_root_bank);
+                leader_schedule_cache.set_root(new_root_bank);
                 new_root_bank.squash();
 
                 if last_free.elapsed() > Duration::from_secs(10) {
@@ -3093,7 +3093,7 @@ pub mod tests {
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths(
-            &genesis_config,
+            genesis_config,
             account_paths,
             &[],
             None,
@@ -3274,7 +3274,7 @@ pub mod tests {
         slot_leader_keypair: &Arc<Keypair>,
     ) {
         // Add votes to `last_slot` so that `root` will be confirmed
-        let vote_entry = next_entry(&parent_blockhash, 1, vec![vote_tx]);
+        let vote_entry = next_entry(parent_blockhash, 1, vec![vote_tx]);
         let mut entries = create_ticks(ticks_per_slot, 0, vote_entry.hash);
         entries.insert(0, vote_entry);
         blockstore
@@ -3285,7 +3285,7 @@ pub mod tests {
                 ticks_per_slot,
                 Some(parent_slot),
                 true,
-                &slot_leader_keypair,
+                slot_leader_keypair,
                 entries,
                 0,
             )

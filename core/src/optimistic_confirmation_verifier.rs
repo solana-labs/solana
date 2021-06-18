@@ -36,7 +36,7 @@ impl OptimisticConfirmationVerifier {
             .into_iter()
             .filter(|(optimistic_slot, optimistic_hash)| {
                 (*optimistic_slot == root && *optimistic_hash != root_bank.hash())
-                    || (!root_ancestors.contains_key(&optimistic_slot) &&
+                    || (!root_ancestors.contains_key(optimistic_slot) &&
                     // In this second part of the `and`, we account for the possibility that
                     // there was some other root `rootX` set in BankForks where:
                     //

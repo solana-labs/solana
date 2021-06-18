@@ -17,7 +17,7 @@ use solana_sdk::{
 pub use solana_sdk::stake::config::*;
 
 pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
-    get_config_data(&account.data())
+    get_config_data(account.data())
         .ok()
         .and_then(|data| deserialize(data).ok())
 }

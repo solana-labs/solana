@@ -468,7 +468,7 @@ impl<T: Serialize + ?Sized + AbiEnumVisitor> AbiEnumVisitor for &T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
         info!("AbiEnumVisitor for (&default): {}", type_name::<T>());
         // Don't call self.visit_for_abi(...) to avoid the infinite recursion!
-        T::visit_for_abi(&self, digester)
+        T::visit_for_abi(self, digester)
     }
 }
 

@@ -122,7 +122,7 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         cargo_args.push("test-bpf");
     }
     for extra_cargo_test_arg in &config.extra_cargo_test_args {
-        cargo_args.push(&extra_cargo_test_arg);
+        cargo_args.push(extra_cargo_test_arg);
     }
     spawn(&config.cargo, &cargo_args);
 }

@@ -240,7 +240,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
+            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), account);
         }
     })
 }

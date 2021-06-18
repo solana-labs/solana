@@ -265,7 +265,7 @@ impl PruneData {
             destination: Pubkey::new_unique(),
             wallclock,
         };
-        prune_data.sign(&self_keypair);
+        prune_data.sign(self_keypair);
         prune_data
     }
 }
@@ -1325,7 +1325,7 @@ impl ClusterInfo {
                 if r_stake == l_stake {
                     peers[*r_info].id.cmp(&peers[*l_info].id)
                 } else {
-                    r_stake.cmp(&l_stake)
+                    r_stake.cmp(l_stake)
                 }
             })
             .collect();
@@ -1638,7 +1638,7 @@ impl ClusterInfo {
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
-        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
+        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         // This will flush local pending push messages before generating
         // pull-request bloom filters, preventing pull responses to return the
         // same values back to the node itself. Note that packets will arrive
@@ -1649,7 +1649,7 @@ impl ClusterInfo {
             .add_relaxed(out.len() as u64);
         if generate_pull_requests {
             let (pings, pull_requests) =
-                self.new_pull_requests(&thread_pool, gossip_validators, stakes);
+                self.new_pull_requests(thread_pool, gossip_validators, stakes);
             self.stats
                 .packets_sent_pull_requests_count
                 .add_relaxed(pull_requests.len() as u64);
@@ -2193,7 +2193,7 @@ impl ClusterInfo {
         if !responses.is_empty() {
             let timeouts = {
                 let gossip = self.gossip.read().unwrap();
-                gossip.make_timeouts(&stakes, epoch_duration)
+                gossip.make_timeouts(stakes, epoch_duration)
             };
             for (from, data) in responses {
                 self.handle_pull_response(&from, data, &timeouts);

@@ -212,9 +212,9 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .collect();
         stakes.sort_by(|(l_key, l_stake), (r_key, r_stake)| {
             if r_stake == l_stake {
-                l_key.cmp(&r_key)
+                l_key.cmp(r_key)
             } else {
-                r_stake.cmp(&l_stake)
+                r_stake.cmp(l_stake)
             }
         });
 

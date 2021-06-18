@@ -28,7 +28,7 @@ fn next_epoch(bank: &Arc<Bank>) -> Arc<Bank> {
     bank.squash();
 
     Arc::new(Bank::new_from_parent(
-        &bank,
+        bank,
         &Pubkey::default(),
         bank.get_slots_in_epoch(bank.epoch()) + bank.slot(),
     ))

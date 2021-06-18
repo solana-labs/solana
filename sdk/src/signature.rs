@@ -29,7 +29,7 @@ impl crate::sanitize::Sanitize for Signature {}
 
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {
-        Self(GenericArray::clone_from_slice(&signature_slice))
+        Self(GenericArray::clone_from_slice(signature_slice))
     }
 
     pub(self) fn verify_verbose(
@@ -54,7 +54,7 @@ pub trait Signable {
     }
     fn verify(&self) -> bool {
         self.get_signature()
-            .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
+            .verify(self.pubkey().as_ref(), self.signable_data().borrow())
     }
 
     fn pubkey(&self) -> Pubkey;
