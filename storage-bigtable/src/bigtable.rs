@@ -40,17 +40,17 @@ pub enum CellData<B, P> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("AccessToken error: {0}")]
-    AccessTokenError(String),
+    #[error("AccessToken: {0}")]
+    AccessToken(String),
 
-    #[error("Certificate error: {0}")]
-    CertificateError(String),
+    #[error("Certificate: {0}")]
+    Certificate(String),
 
-    #[error("I/O Error: {0}")]
-    IoError(std::io::Error),
+    #[error("I/O: {0}")]
+    Io(std::io::Error),
 
-    #[error("Transport error: {0}")]
-    TransportError(tonic::transport::Error),
+    #[error("Transport: {0}")]
+    Transport(tonic::transport::Error),
 
     #[error("Invalid URI {0}: {1}")]
     InvalidUri(String, String),
@@ -67,28 +67,28 @@ pub enum Error {
     #[error("Object is corrupt: {0}")]
     ObjectCorrupt(String),
 
-    #[error("RPC error: {0}")]
-    RpcError(tonic::Status),
+    #[error("RPC: {0}")]
+    Rpc(tonic::Status),
 
-    #[error("Timeout error")]
-    TimeoutError,
+    #[error("Timeout")]
+    Timeout,
 }
 
 impl std::convert::From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        Self::IoError(err)
+        Self::Io(err)
     }
 }
 
 impl std::convert::From<tonic::transport::Error> for Error {
     fn from(err: tonic::transport::Error) -> Self {
-        Self::TransportError(err)
+        Self::Transport(err)
     }
 }
 
 impl std::convert::From<tonic::Status> for Error {
     fn from(err: tonic::Status) -> Self {
-        Self::RpcError(err)
+        Self::Rpc(err)
     }
 }
 
@@ -137,7 +137,7 @@ impl BigTableConnection {
                     Scope::BigTableData
                 })
                 .await
-                .map_err(Error::AccessTokenError)?;
+                .map_err(Error::AccessToken)?;
 
                 let table_prefix = format!(
                     "projects/{}/instances/{}/tables/",
@@ -151,7 +151,7 @@ impl BigTableConnection {
                             .tls_config(
                             ClientTlsConfig::new()
                                 .ca_certificate(
-                                    root_ca_certificate::load().map_err(Error::CertificateError)?,
+                                    root_ca_certificate::load().map_err(Error::Certificate)?,
                                 )
                                 .domain_name("bigtable.googleapis.com"),
                         )?;
@@ -265,7 +265,7 @@ impl BigTable {
         while let Some(res) = rrr.message().await? {
             if let Some(timeout) = self.timeout {
                 if Instant::now().duration_since(started) > timeout {
-                    return Err(Error::TimeoutError);
+                    return Err(Error::Timeout);
                 }
             }
             for (i, mut chunk) in res.chunks.into_iter().enumerate() {

@@ -582,12 +582,12 @@ impl WindowService {
         H: Fn(),
     {
         match e {
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => true,
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => {
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => true,
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => {
                 handle_timeout();
                 false
             }
-            Error::CrossbeamSendError => true,
+            Error::CrossbeamSend => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);

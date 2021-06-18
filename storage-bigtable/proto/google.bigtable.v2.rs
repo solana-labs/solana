@@ -244,6 +244,7 @@ pub struct RowFilter {
     pub filter: ::core::option::Option<row_filter::Filter>,
 }
 /// Nested message and enum types in `RowFilter`.
+#[allow(clippy::enum_variant_names)]
 pub mod row_filter {
     /// A RowFilter which sends rows through several RowFilters in sequence.
     #[derive(Clone, PartialEq, ::prost::Message)]
