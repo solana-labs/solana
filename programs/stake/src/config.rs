@@ -11,7 +11,7 @@ use solana_sdk::{
 };
 
 // stake config ID
-solana_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
+pub use solana_sdk::stake::config::{check_id, id};
 
 // means that no more than RATE of current effective stake may be added or subtracted per
 //  epoch

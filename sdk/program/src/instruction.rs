@@ -214,6 +214,10 @@ pub enum InstructionError {
     /// Unsupported sysvar
     #[error("Unsupported sysvar")]
     UnsupportedSysvar,
+
+    /// Illegal account owner
+    #[error("Provided owner is not allowed")]
+    IllegalOwner,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

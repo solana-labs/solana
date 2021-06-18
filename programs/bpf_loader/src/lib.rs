@@ -2197,8 +2197,10 @@ mod tests {
         let upgrade_authority_address = Pubkey::new_unique();
         let buffer_address = Pubkey::new_unique();
         let program_address = Pubkey::new_unique();
-        let (programdata_address, _) =
-            Pubkey::find_program_address(&[program_address.as_ref()], &id());
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
         let spill_address = Pubkey::new_unique();
         let upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
 
@@ -2847,8 +2849,10 @@ mod tests {
         let new_upgrade_authority_address = Pubkey::new_unique();
         let new_upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let program_address = Pubkey::new_unique();
-        let (programdata_address, _) =
-            Pubkey::find_program_address(&[program_address.as_ref()], &id());
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
         let programdata_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::programdata_len(0).unwrap(),

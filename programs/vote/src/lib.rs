@@ -12,4 +12,4 @@ extern crate solana_metrics;
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 
-solana_sdk::declare_id!("Vote111111111111111111111111111111111111111");
+pub use solana_sdk::vote::program::{check_id, id};

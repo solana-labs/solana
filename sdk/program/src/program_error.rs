@@ -44,6 +44,8 @@ pub enum ProgramError {
     AccountNotRentExempt,
     #[error("Unsupported sysvar")]
     UnsupportedSysvar,
+    #[error("Provided owner is not allowed")]
+    IllegalOwner,
 }
 
 pub trait PrintProgramError {
@@ -81,6 +83,7 @@ impl PrintProgramError for ProgramError {
             Self::BorshIoError(_) => msg!("Error: BorshIoError"),
             Self::AccountNotRentExempt => msg!("Error: AccountNotRentExempt"),
             Self::UnsupportedSysvar => msg!("Error: UnsupportedSysvar"),
+            Self::IllegalOwner => msg!("Error: IllegalOwner"),
         }
     }
 }
@@ -110,6 +113,7 @@ pub const INVALID_SEEDS: u64 = to_builtin!(14);
 pub const BORSH_IO_ERROR: u64 = to_builtin!(15);
 pub const ACCOUNT_NOT_RENT_EXEMPT: u64 = to_builtin!(16);
 pub const UNSUPPORTED_SYSVAR: u64 = to_builtin!(17);
+pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -130,6 +134,7 @@ impl From<ProgramError> for u64 {
             ProgramError::BorshIoError(_) => BORSH_IO_ERROR,
             ProgramError::AccountNotRentExempt => ACCOUNT_NOT_RENT_EXEMPT,
             ProgramError::UnsupportedSysvar => UNSUPPORTED_SYSVAR,
+            ProgramError::IllegalOwner => ILLEGAL_OWNER,
 
             ProgramError::Custom(error) => {
                 if error == 0 {
@@ -160,6 +165,7 @@ impl From<u64> for ProgramError {
             INVALID_SEEDS => ProgramError::InvalidSeeds,
             UNSUPPORTED_SYSVAR => ProgramError::UnsupportedSysvar,
             CUSTOM_ZERO => ProgramError::Custom(0),
+            ILLEGAL_OWNER => ProgramError::IllegalOwner,
             _ => ProgramError::Custom(error as u32),
         }
     }
@@ -186,6 +192,7 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::BorshIoError(err) => Ok(Self::BorshIoError(err)),
             Self::Error::AccountNotRentExempt => Ok(Self::AccountNotRentExempt),
             Self::Error::UnsupportedSysvar => Ok(Self::UnsupportedSysvar),
+            Self::Error::IllegalOwner => Ok(Self::IllegalOwner),
             _ => Err(error),
         }
     }
@@ -213,6 +220,7 @@ where
             MAX_SEED_LENGTH_EXCEEDED => InstructionError::MaxSeedLengthExceeded,
             INVALID_SEEDS => InstructionError::InvalidSeeds,
             UNSUPPORTED_SYSVAR => InstructionError::UnsupportedSysvar,
+            ILLEGAL_OWNER => InstructionError::IllegalOwner,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
@@ -230,6 +238,7 @@ impl From<PubkeyError> for ProgramError {
         match error {
             PubkeyError::MaxSeedLengthExceeded => ProgramError::MaxSeedLengthExceeded,
             PubkeyError::InvalidSeeds => ProgramError::InvalidSeeds,
+            PubkeyError::IllegalOwner => ProgramError::IllegalOwner,
         }
     }
 }
