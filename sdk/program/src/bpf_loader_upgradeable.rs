@@ -189,11 +189,11 @@ pub fn upgrade(
 }
 
 pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
-    3 == instruction_data[0]
+    !instruction_data.is_empty() && 3 == instruction_data[0]
 }
 
 pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
-    4 == instruction_data[0]
+    !instruction_data.is_empty() && 4 == instruction_data[0]
 }
 
 /// Returns the instructions required to set a buffers's authority.
@@ -331,6 +331,7 @@ mod tests {
 
     #[test]
     fn test_is_set_authority_instruction() {
+        assert!(!is_set_authority_instruction(&[]));
         assert_is_instruction(
             is_set_authority_instruction,
             UpgradeableLoaderInstruction::SetAuthority {},
@@ -339,6 +340,7 @@ mod tests {
 
     #[test]
     fn test_is_upgrade_instruction() {
+        assert!(!is_upgrade_instruction(&[]));
         assert_is_instruction(
             is_upgrade_instruction,
             UpgradeableLoaderInstruction::Upgrade {},
