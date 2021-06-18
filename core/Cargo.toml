@@ -28,7 +28,7 @@ fs_extra = "1.2.0"
 flate2 = "1.0"
 indexmap = { version = "1.6", features = ["rayon"] }
 itertools = "0.10.1"
-libc = "0.2.81"
+libc = "0.2.97"
 log = "0.4.11"
 lru = "0.6.1"
 miow = "0.3.6"
