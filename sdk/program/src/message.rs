@@ -309,8 +309,8 @@ impl Message {
         nonce_authority_pubkey: &Pubkey,
     ) -> Self {
         let nonce_ix = system_instruction::advance_nonce_account(
-            &nonce_account_pubkey,
-            &nonce_authority_pubkey,
+            nonce_account_pubkey,
+            nonce_authority_pubkey,
         );
         instructions.insert(0, nonce_ix);
         Self::new(&instructions, payer)
@@ -482,20 +482,20 @@ impl Message {
         data: &[u8],
     ) -> Result<Instruction, SanitizeError> {
         let mut current = 0;
-        let num_instructions = read_u16(&mut current, &data)?;
+        let num_instructions = read_u16(&mut current, data)?;
         if index >= num_instructions as usize {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
         // index into the instruction byte-offset table.
         current += index * 2;
-        let start = read_u16(&mut current, &data)?;
+        let start = read_u16(&mut current, data)?;
 
         current = start as usize;
-        let num_accounts = read_u16(&mut current, &data)?;
+        let num_accounts = read_u16(&mut current, data)?;
         let mut accounts = Vec::with_capacity(num_accounts as usize);
         for _ in 0..num_accounts {
-            let meta_byte = read_u8(&mut current, &data)?;
+            let meta_byte = read_u8(&mut current, data)?;
             let mut is_signer = false;
             let mut is_writable = false;
             if meta_byte & (1 << Self::IS_SIGNER_BIT) != 0 {
@@ -504,16 +504,16 @@ impl Message {
             if meta_byte & (1 << Self::IS_WRITABLE_BIT) != 0 {
                 is_writable = true;
             }
-            let pubkey = read_pubkey(&mut current, &data)?;
+            let pubkey = read_pubkey(&mut current, data)?;
             accounts.push(AccountMeta {
                 pubkey,
                 is_signer,
                 is_writable,
             });
         }
-        let program_id = read_pubkey(&mut current, &data)?;
-        let data_len = read_u16(&mut current, &data)?;
-        let data = read_slice(&mut current, &data, data_len as usize)?;
+        let program_id = read_pubkey(&mut current, data)?;
+        let data_len = read_u16(&mut current, data)?;
+        let data = read_slice(&mut current, data, data_len as usize)?;
         Ok(Instruction {
             program_id,
             accounts,

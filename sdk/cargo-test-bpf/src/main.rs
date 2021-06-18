@@ -122,7 +122,7 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         cargo_args.push("test-bpf");
     }
     for extra_cargo_test_arg in &config.extra_cargo_test_args {
-        cargo_args.push(&extra_cargo_test_arg);
+        cargo_args.push(extra_cargo_test_arg);
     }
     spawn(&config.cargo, &cargo_args);
 }
@@ -143,7 +143,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            test_bpf_package(&config, &metadata.target_directory.as_ref(), root_package);
+            test_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -164,7 +164,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-        test_bpf_package(&config, &metadata.target_directory.as_ref(), package);
+        test_bpf_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 

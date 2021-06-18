@@ -170,7 +170,7 @@ pub mod tests {
             let key = item.0;
             min = std::cmp::min(min, *key);
             max = std::cmp::max(max, *key);
-            assert!(ancestors.get(&key));
+            assert!(ancestors.get(key));
         }
         for slot in min - 1..max + 2 {
             assert_eq!(ancestors.get(&slot), hashset.contains(&slot));

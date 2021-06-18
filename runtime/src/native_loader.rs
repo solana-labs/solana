@@ -112,7 +112,7 @@ impl NativeLoader {
         if let Some(entrypoint) = cache.get(name) {
             Ok(entrypoint.clone())
         } else {
-            match Self::library_open(&Self::create_path(&name)?) {
+            match Self::library_open(&Self::create_path(name)?) {
                 Ok(library) => {
                     let result = unsafe { library.get::<T>(name.as_bytes()) };
                     match result {

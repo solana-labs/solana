@@ -277,7 +277,7 @@ impl CrdsGossipPush {
         let (weights, peers): (Vec<_>, Vec<_>) = self
             .push_options(
                 crds,
-                &self_id,
+                self_id,
                 self_shred_version,
                 stakes,
                 gossip_validators,

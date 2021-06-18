@@ -28,7 +28,7 @@ fn load_local_genesis(
     ledger_path: &std::path::Path,
     expected_genesis_hash: Option<Hash>,
 ) -> Result<GenesisConfig, String> {
-    let existing_genesis = GenesisConfig::load(&ledger_path)
+    let existing_genesis = GenesisConfig::load(ledger_path)
         .map_err(|err| format!("Failed to load genesis config: {}", err))?;
     check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
 
@@ -54,12 +54,12 @@ pub fn download_then_check_genesis_hash(
     {
         unpack_genesis_archive(
             &tmp_genesis_package,
-            &ledger_path,
+            ledger_path,
             max_genesis_archive_unpacked_size,
         )
         .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
 
-        let downloaded_genesis = GenesisConfig::load(&ledger_path)
+        let downloaded_genesis = GenesisConfig::load(ledger_path)
             .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
 
         check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;

@@ -82,7 +82,7 @@ impl CostModel {
                 &non_signed_writable_accounts,
                 &non_signed_readonly_accounts,
             ),
-            execution_cost: self.find_transaction_cost(&transaction),
+            execution_cost: self.find_transaction_cost(transaction),
         };
         cost.writable_accounts.extend(&signed_writable_accounts);
         cost.writable_accounts.extend(&non_signed_writable_accounts);
@@ -109,7 +109,7 @@ impl CostModel {
     }
 
     fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(&program_key) {
+        match self.instruction_execution_cost_table.get_cost(program_key) {
             Some(cost) => *cost,
             None => {
                 let default_value = self.instruction_execution_cost_table.get_mode();

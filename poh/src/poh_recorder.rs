@@ -754,11 +754,11 @@ pub fn create_test_recorder(
         bank.ticks_per_slot(),
         &Pubkey::default(),
         blockstore,
-        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+        &Arc::new(LeaderScheduleCache::new_from_bank(bank)),
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(&bank);
+    poh_recorder.set_bank(bank);
 
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(

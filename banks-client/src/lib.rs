@@ -376,8 +376,8 @@ mod tests {
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
-        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let instruction = system_instruction::transfer(mint_pubkey, &bob_pubkey, 1);
+        let message = Message::new(&[instruction], Some(mint_pubkey));
 
         Runtime::new()?.block_on(async {
             let client_transport = start_local_server(bank_forks, block_commitment_cache).await;

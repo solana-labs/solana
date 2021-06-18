@@ -96,14 +96,14 @@ fn run_dos(
                     let res = rpc_client
                         .as_ref()
                         .unwrap()
-                        .get_account(&Pubkey::from_str(&data_input.as_ref().unwrap()).unwrap());
+                        .get_account(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
                     if res.is_err() {
                         error_count += 1;
                     }
                 }
                 "get_program_accounts" => {
                     let res = rpc_client.as_ref().unwrap().get_program_accounts(
-                        &Pubkey::from_str(&data_input.as_ref().unwrap()).unwrap(),
+                        &Pubkey::from_str(data_input.as_ref().unwrap()).unwrap(),
                     );
                     if res.is_err() {
                         error_count += 1;

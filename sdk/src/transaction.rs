@@ -459,7 +459,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
         .filter(|maybe_ix| {
             let prog_id_idx = maybe_ix.program_id_index as usize;
             match message.account_keys.get(prog_id_idx) {
-                Some(program_id) => system_program::check_id(&program_id),
+                Some(program_id) => system_program::check_id(program_id),
                 _ => false,
             }
         } && matches!(limited_deserialize(&maybe_ix.data), Ok(SystemInstruction::AdvanceNonceAccount))
@@ -968,7 +968,7 @@ mod tests {
         let (_, nonce_pubkey, tx) = nonced_transfer_tx();
         let nonce_ix = uses_durable_nonce(&tx).unwrap();
         assert_eq!(
-            get_nonce_pubkey_from_instruction(&nonce_ix, &tx),
+            get_nonce_pubkey_from_instruction(nonce_ix, &tx),
             Some(&nonce_pubkey),
         );
     }

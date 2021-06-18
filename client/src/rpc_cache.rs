@@ -31,7 +31,7 @@ impl LargestAccountsCache {
         &self,
         filter: &Option<RpcLargestAccountsFilter>,
     ) -> Option<(u64, Vec<RpcAccountBalance>)> {
-        self.cache.get(&filter).and_then(|value| {
+        self.cache.get(filter).and_then(|value| {
             if let Ok(elapsed) = value.cached_time.elapsed() {
                 if elapsed < Duration::from_secs(self.duration) {
                     return Some((value.slot, value.accounts.clone()));

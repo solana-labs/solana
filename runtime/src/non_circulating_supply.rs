@@ -70,7 +70,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
 
     let lamports = non_circulating_accounts_set
         .iter()
-        .map(|pubkey| bank.get_balance(&pubkey))
+        .map(|pubkey| bank.get_balance(pubkey))
         .sum();
 
     Ok(NonCirculatingSupply {

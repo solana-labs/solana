@@ -209,7 +209,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             .file_name()
                             .unwrap_or_else(|| std::ffi::OsStr::new(""))
                             .to_str()
-                            .unwrap_or(&"")
+                            .unwrap_or("")
                     ))
                 } else {
                     RpcRequestMiddleware::not_found()

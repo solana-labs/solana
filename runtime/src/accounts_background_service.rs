@@ -420,7 +420,7 @@ impl AccountsBackgroundService {
         total_remove_slots_time: &mut u64,
     ) {
         let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += request_handler.handle_pruned_banks(&bank, true);
+        *removed_slots_count += request_handler.handle_pruned_banks(bank, true);
         remove_slots_time.stop();
         *total_remove_slots_time += remove_slots_time.as_us();
 

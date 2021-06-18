@@ -24,7 +24,7 @@ impl EpochStakes {
     pub fn new(stakes: &Stakes, leader_schedule_epoch: Epoch) -> Self {
         let epoch_vote_accounts = Stakes::vote_accounts(stakes);
         let (total_stake, node_id_to_vote_accounts, epoch_authorized_voters) =
-            Self::parse_epoch_vote_accounts(&epoch_vote_accounts, leader_schedule_epoch);
+            Self::parse_epoch_vote_accounts(epoch_vote_accounts, leader_schedule_epoch);
         Self {
             stakes: Arc::new(stakes.clone()),
             total_stake,

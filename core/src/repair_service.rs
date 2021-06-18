@@ -229,7 +229,7 @@ impl RepairService {
 
                 add_votes_elapsed = Measure::start("add_votes");
                 repair_weight.add_votes(
-                    &blockstore,
+                    blockstore,
                     slot_to_vote_pubkeys.into_iter(),
                     root_bank.epoch_stakes_map(),
                     root_bank.epoch_schedule(),
@@ -277,7 +277,7 @@ impl RepairService {
             let mut outstanding_requests = outstanding_requests.write().unwrap();
             repairs.into_iter().for_each(|repair_request| {
                 if let Ok((to, req)) = serve_repair.repair_request(
-                    &cluster_slots,
+                    cluster_slots,
                     repair_request,
                     &mut cache,
                     &mut repair_stats,
@@ -493,7 +493,7 @@ impl RepairService {
                 repair_validators,
             );
             if let Some((repair_pubkey, repair_addr)) = status.repair_pubkey_and_addr {
-                let repairs = Self::generate_duplicate_repairs_for_slot(&blockstore, *slot);
+                let repairs = Self::generate_duplicate_repairs_for_slot(blockstore, *slot);
 
                 if let Some(repairs) = repairs {
                     let mut outstanding_requests = outstanding_requests.write().unwrap();
@@ -535,7 +535,7 @@ impl RepairService {
         nonce: Nonce,
     ) -> Result<()> {
         let req =
-            serve_repair.map_repair_request(&repair_type, repair_pubkey, repair_stats, nonce)?;
+            serve_repair.map_repair_request(repair_type, repair_pubkey, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;
         Ok(())
     }

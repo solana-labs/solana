@@ -119,7 +119,7 @@ fn parse_validator_info(
     let key_list: ConfigKeys = deserialize(&account.data)?;
     if !key_list.keys.is_empty() {
         let (validator_pubkey, _) = key_list.keys[1];
-        let validator_info_string: String = deserialize(&get_config_data(&account.data)?)?;
+        let validator_info_string: String = deserialize(get_config_data(&account.data)?)?;
         let validator_info: Map<_, _> = serde_json::from_str(&validator_info_string)?;
         Ok((validator_pubkey, validator_info))
     } else {
@@ -246,7 +246,7 @@ pub fn process_set_validator_info(
 ) -> ProcessResult {
     // Validate keybase username
     if let Some(string) = validator_info.get("keybaseUsername") {
-        let result = verify_keybase(&config.signers[0].pubkey(), &string);
+        let result = verify_keybase(&config.signers[0].pubkey(), string);
         if result.is_err() {
             if force_keybase {
                 println!("--force supplied, ignoring: {:?}", result);
@@ -272,7 +272,7 @@ pub fn process_set_validator_info(
             },
         )
         .find(|(pubkey, account)| {
-            let (validator_pubkey, _) = parse_validator_info(&pubkey, &account).unwrap();
+            let (validator_pubkey, _) = parse_validator_info(pubkey, account).unwrap();
             validator_pubkey == config.signers[0].pubkey()
         });
 
@@ -393,7 +393,7 @@ pub fn process_get_validator_info(
     }
     for (validator_info_pubkey, validator_info_account) in validator_info.iter() {
         let (validator_pubkey, validator_info) =
-            parse_validator_info(&validator_info_pubkey, &validator_info_account)?;
+            parse_validator_info(validator_info_pubkey, validator_info_account)?;
         validator_info_list.push(CliValidatorInfo {
             identity_pubkey: validator_pubkey.to_string(),
             info_pubkey: validator_info_pubkey.to_string(),
@@ -451,7 +451,7 @@ mod tests {
             "name": "Alice",
             "keybaseUsername": "alice_keybase",
         });
-        assert_eq!(parse_args(&matches), expected);
+        assert_eq!(parse_args(matches), expected);
     }
 
     #[test]

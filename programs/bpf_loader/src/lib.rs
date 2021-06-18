@@ -128,7 +128,7 @@ fn write_program_data(
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data[program_data_offset..program_data_offset + len].copy_from_slice(&bytes);
+    data[program_data_offset..program_data_offset + len].copy_from_slice(bytes);
     Ok(())
 }
 
@@ -369,7 +369,7 @@ fn process_loader_upgradeable_instruction(
             // Create ProgramData account
 
             let (derived_address, bump_seed) =
-                Pubkey::find_program_address(&[program.unsigned_key().as_ref()], &program_id);
+                Pubkey::find_program_address(&[program.unsigned_key().as_ref()], program_id);
             if derived_address != *programdata.unsigned_key() {
                 ic_logger_msg!(logger, "ProgramData address is not derived");
                 return Err(InstructionError::InvalidArgument);
@@ -759,7 +759,7 @@ impl Executor for BpfExecutor {
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let mut parameter_bytes =
-            serialize_parameters(loader_id, program_id, keyed_accounts, &instruction_data)?;
+            serialize_parameters(loader_id, program_id, keyed_accounts, instruction_data)?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
@@ -2228,7 +2228,7 @@ mod tests {
                 .unwrap();
             buffer_account.borrow_mut().data_as_mut_slice()
                 [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
-                .copy_from_slice(&elf_new);
+                .copy_from_slice(elf_new);
             let programdata_account = AccountSharedData::new_ref(
                 min_programdata_balance,
                 UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),

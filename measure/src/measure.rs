@@ -216,7 +216,7 @@ mod tests {
         {
             let some_struct = SomeStruct { x: 42 };
             let (result, _measure) = Measure::this(
-                |(obj, x)| SomeStruct::add_to(&obj, x),
+                |(obj, x)| SomeStruct::add_to(obj, x),
                 (&some_struct, 4),
                 "test",
             );

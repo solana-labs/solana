@@ -451,13 +451,13 @@ fn swapper<T>(
             let to_swap_txs: Vec<_> = to_swap
                 .par_iter()
                 .map(|(signer, swap, profit)| {
-                    let s: &Keypair = &signer;
+                    let s: &Keypair = signer;
                     let owner = &signer.pubkey();
                     let instruction = exchange_instruction::swap_request(
                         owner,
                         &swap.0.pubkey,
                         &swap.1.pubkey,
-                        &profit,
+                        profit,
                     );
                     let message = Message::new(&[instruction], Some(&s.pubkey()));
                     Transaction::new(&[s], message, blockhash)
@@ -600,7 +600,7 @@ fn trader<T>(
                             src,
                         ),
                     ];
-                    let message = Message::new(&instructions, Some(&owner_pubkey));
+                    let message = Message::new(&instructions, Some(owner_pubkey));
                     Transaction::new(&[owner.as_ref(), trade], message, blockhash)
                 })
                 .collect();
@@ -739,7 +739,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
             let mut to_fund_txs: Vec<_> = chunk
                 .par_iter()
                 .map(|(k, m)| {
-                    let instructions = system_instruction::transfer_many(&k.pubkey(), &m);
+                    let instructions = system_instruction::transfer_many(&k.pubkey(), m);
                     let message = Message::new(&instructions, Some(&k.pubkey()));
                     (k.clone(), Transaction::new_unsigned(message))
                 })
@@ -777,7 +777,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
                 let mut waits = 0;
                 loop {
                     sleep(Duration::from_millis(200));
-                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, tx, amount));
                     if to_fund_txs.is_empty() {
                         break;
                     }
@@ -836,7 +836,7 @@ pub fn create_token_accounts<T: Client>(
                     );
                     let request_ix =
                         exchange_instruction::account_request(owner_pubkey, &new_keypair.pubkey());
-                    let message = Message::new(&[create_ix, request_ix], Some(&owner_pubkey));
+                    let message = Message::new(&[create_ix, request_ix], Some(owner_pubkey));
                     (
                         (from_keypair, new_keypair),
                         Transaction::new_unsigned(message),
@@ -872,7 +872,7 @@ pub fn create_token_accounts<T: Client>(
                 let mut waits = 0;
                 while !to_create_txs.is_empty() {
                     sleep(Duration::from_millis(200));
-                    to_create_txs.retain(|(_, tx)| !verify_transaction(client, &tx));
+                    to_create_txs.retain(|(_, tx)| !verify_transaction(client, tx));
                     if to_create_txs.is_empty() {
                         break;
                     }
@@ -958,7 +958,7 @@ fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>, tot
 
 fn generate_keypairs(num: u64) -> Vec<Keypair> {
     let mut seed = [0_u8; 32];
-    seed.copy_from_slice(&Keypair::new().pubkey().as_ref());
+    seed.copy_from_slice(Keypair::new().pubkey().as_ref());
     let mut rnd = GenKeys::new(seed);
     rnd.gen_n_keypairs(num)
 }
@@ -989,7 +989,7 @@ pub fn airdrop_lamports<T: Client>(
         let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .expect("Failed to get blockhash");
-        match request_airdrop_transaction(&faucet_addr, &id.pubkey(), amount_to_drop, blockhash) {
+        match request_airdrop_transaction(faucet_addr, &id.pubkey(), amount_to_drop, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
 

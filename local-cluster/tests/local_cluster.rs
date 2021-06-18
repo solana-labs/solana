@@ -425,7 +425,7 @@ fn run_cluster_partition<C>(
 fn test_cluster_partition_1_2() {
     let empty = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
     run_cluster_partition(
         &[vec![1], vec![1, 1]],
@@ -445,7 +445,7 @@ fn test_cluster_partition_1_2() {
 fn test_cluster_partition_1_1() {
     let empty = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
     run_cluster_partition(
         &[vec![1], vec![1]],
@@ -465,7 +465,7 @@ fn test_cluster_partition_1_1() {
 fn test_cluster_partition_1_1_1() {
     let empty = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
     run_cluster_partition(
         &[vec![1], vec![1], vec![1]],
@@ -525,7 +525,7 @@ fn test_kill_heaviest_partition() {
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
         info!("Killing validator with id: {}", validator_to_kill);
         cluster.exit_node(&validator_to_kill);
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
     run_cluster_partition(
         &partitions,
@@ -594,7 +594,7 @@ fn run_kill_partition_switch_threshold<C>(
             .iter()
             .map(|validator_to_kill| {
                 info!("Killing validator with id: {}", validator_to_kill);
-                cluster.exit_node(&validator_to_kill)
+                cluster.exit_node(validator_to_kill)
             })
             .collect();
         on_partition_start(
@@ -622,7 +622,7 @@ fn find_latest_replayed_slot_from_ledger(
     mut latest_slot: Slot,
 ) -> (Slot, HashSet<Slot>) {
     loop {
-        let mut blockstore = open_blockstore(&ledger_path);
+        let mut blockstore = open_blockstore(ledger_path);
         // This is kind of a hack because we can't query for new frozen blocks over RPC
         // since the validator is not voting.
         let new_latest_slots: Vec<Slot> = blockstore
@@ -644,7 +644,7 @@ fn find_latest_replayed_slot_from_ledger(
                     break;
                 } else {
                     sleep(Duration::from_millis(50));
-                    blockstore = open_blockstore(&ledger_path);
+                    blockstore = open_blockstore(ledger_path);
                 }
             }
             // Check the slot has been replayed
@@ -666,7 +666,7 @@ fn find_latest_replayed_slot_from_ledger(
                         );
                     } else {
                         sleep(Duration::from_millis(50));
-                        blockstore = open_blockstore(&ledger_path);
+                        blockstore = open_blockstore(ledger_path);
                     }
                 }
             } else {
@@ -870,7 +870,7 @@ fn test_switch_threshold_uses_gossip_votes() {
                     0,
                     crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()),
                 ),
-                &node_keypair,
+                node_keypair,
             )],
             context
                 .dead_validator_info
@@ -962,7 +962,7 @@ fn test_kill_partition_switch_threshold_no_progress() {
         |_: &mut LocalCluster, _: &[Pubkey], _: Vec<ClusterValidatorInfo>, _: &mut ()| {};
     let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_no_new_roots(400, &"PARTITION_TEST");
+        cluster.check_no_new_roots(400, "PARTITION_TEST");
     };
 
     // This kills `max_failures_stake`, so no progress should be made
@@ -1015,7 +1015,7 @@ fn test_kill_partition_switch_threshold_progress() {
         |_: &mut LocalCluster, _: &[Pubkey], _: Vec<ClusterValidatorInfo>, _: &mut ()| {};
     let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
     run_kill_partition_switch_threshold(
         &[&[(failures_stake as usize, 16)]],
@@ -1246,7 +1246,7 @@ fn test_fork_choice_refresh_old_votes() {
     // for lockouts built during partition to resolve and gives validators an opportunity
     // to try and switch forks)
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut PartitionContext| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(16, "PARTITION_TEST");
     };
 
     run_kill_partition_switch_threshold(
@@ -1320,7 +1320,7 @@ fn test_forwarding() {
         .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
-    cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 10, 20);
+    cluster_tests::send_many_transactions(validator_info, &cluster.funding_keypair, 10, 20);
 }
 
 #[test]
@@ -1532,7 +1532,7 @@ fn test_frozen_account_from_snapshot() {
 
     trace!("Waiting for snapshot at {:?}", snapshot_package_output_path);
     let (archive_filename, _archive_snapshot_hash) =
-        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+        wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
     trace!("Found snapshot: {:?}", archive_filename);
 
@@ -1668,7 +1668,7 @@ fn test_snapshot_download() {
 
     trace!("Waiting for snapshot");
     let (archive_filename, archive_snapshot_hash) =
-        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+        wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
     trace!("found: {:?}", archive_filename);
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
@@ -1743,7 +1743,7 @@ fn test_snapshot_restart_tower() {
         .snapshot_package_output_path;
 
     let (archive_filename, archive_snapshot_hash) =
-        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+        wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
@@ -1765,7 +1765,7 @@ fn test_snapshot_restart_tower() {
     // validator's ContactInfo
     let restarted_node_info = cluster.get_contact_info(&validator_id).unwrap();
     cluster_tests::spend_and_verify_all_nodes(
-        &restarted_node_info,
+        restarted_node_info,
         &cluster.funding_keypair,
         1,
         HashSet::new(),
@@ -1926,7 +1926,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+        wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
@@ -2019,7 +2019,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let cluster = LocalCluster::new(&mut cluster_config);
 
     // Check for new roots
-    cluster.check_for_new_roots(16, &"test_faulty_node");
+    cluster.check_for_new_roots(16, "test_faulty_node");
 }
 
 #[test]
@@ -2365,7 +2365,7 @@ fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
 }
 
 fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
-    let tower = Tower::restore(&ledger_path, &node_pubkey);
+    let tower = Tower::restore(ledger_path, node_pubkey);
     if let Err(tower_err) = tower {
         if tower_err.is_file_missing() {
             return None;
@@ -2374,7 +2374,7 @@ fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
         }
     }
     // actually saved tower must have at least one vote.
-    Tower::restore(&ledger_path, &node_pubkey).ok()
+    Tower::restore(ledger_path, node_pubkey).ok()
 }
 
 fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
@@ -2386,7 +2386,7 @@ fn root_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
 }
 
 fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
-    fs::remove_file(Tower::get_filename(&ledger_path, &node_pubkey)).unwrap();
+    fs::remove_file(Tower::get_filename(ledger_path, node_pubkey)).unwrap();
 }
 
 // A bit convoluted test case; but this roughly follows this test theoretical scenario:
@@ -2847,7 +2847,7 @@ fn test_hard_fork_invalidates_tower() {
     cluster
         .lock()
         .unwrap()
-        .check_for_new_roots(16, &"hard fork");
+        .check_for_new_roots(16, "hard fork");
 }
 
 #[test]
@@ -2906,7 +2906,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     let on_partition_before_resolved = |_: &mut LocalCluster, _: &mut ()| {};
 
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(20, &"run_test_load_program_accounts_partition");
+        cluster.check_for_new_roots(20, "run_test_load_program_accounts_partition");
         exit.store(true, Ordering::Relaxed);
         t_update.join().unwrap();
         t_scan.join().unwrap();
@@ -3097,7 +3097,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     scan_client_sender.send(scan_client).unwrap();
 
     // Wait for some roots to pass
-    cluster.check_for_new_roots(40, &"run_test_load_program_accounts");
+    cluster.check_for_new_roots(40, "run_test_load_program_accounts");
 
     // Exit and ensure no violations of consistency were found
     exit.store(true, Ordering::Relaxed);

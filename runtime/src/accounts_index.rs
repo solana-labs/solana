@@ -923,7 +923,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 read_lock_timer.stop();
                 read_lock_elapsed += read_lock_timer.as_us();
                 let mut latest_slot_timer = Measure::start("latest_slot");
-                if let Some(index) = self.latest_slot(Some(ancestors), &list_r, max_root) {
+                if let Some(index) = self.latest_slot(Some(ancestors), list_r, max_root) {
                     latest_slot_timer.stop();
                     latest_slot_elapsed += latest_slot_timer.as_us();
                     let mut load_account_timer = Measure::start("load_account");
@@ -1157,7 +1157,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max: Option<Slot>,
     ) -> (SlotList<T>, RefCount) {
         (
-            self.get_rooted_entries(&locked_account_entry.slot_list(), max),
+            self.get_rooted_entries(locked_account_entry.slot_list(), max),
             locked_account_entry.ref_count().load(Ordering::Relaxed),
         )
     }
@@ -1174,7 +1174,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         if let Some(mut write_account_map_entry) = self.get_account_write_entry(pubkey) {
             write_account_map_entry.slot_list_mut(|slot_list| {
                 slot_list.retain(|(slot, item)| {
-                    let should_purge = slots_to_purge.contains(&slot);
+                    let should_purge = slots_to_purge.contains(slot);
                     if should_purge {
                         reclaims.push((*slot, item.clone()));
                         false
@@ -1228,7 +1228,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     Some(inner) => inner,
                     None => self.roots_tracker.read().unwrap(),
                 };
-                if lock.roots.contains(&slot) {
+                if lock.roots.contains(slot) {
                     rv = Some(i);
                     current_max = *slot;
                 }
@@ -1483,7 +1483,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     ) {
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let newest_root_in_slot_list =
-            Self::get_newest_root_in_slot_list(&roots_tracker.roots, &slot_list, max_clean_root);
+            Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
         let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
@@ -1946,7 +1946,7 @@ pub mod tests {
         fn remove(&mut self, slot: &u64) -> bool {
             let result = self.bitfield.remove(slot);
             assert_eq!(result, self.hash_set.remove(slot));
-            assert!(!self.bitfield.contains(&slot));
+            assert!(!self.bitfield.contains(slot));
             self.compare();
             result
         }
@@ -2211,7 +2211,7 @@ pub mod tests {
         compare_internal(hashset, bitfield);
         let clone = bitfield.clone();
         compare_internal(hashset, &clone);
-        assert!(clone.eq(&bitfield));
+        assert!(clone.eq(bitfield));
         assert_eq!(clone, *bitfield);
     }
 
@@ -2262,8 +2262,8 @@ pub mod tests {
 
                 // remove the rest, including a call that removes slot again
                 for item in all.iter() {
-                    assert!(tester.remove(&item));
-                    assert!(!tester.remove(&item));
+                    assert!(tester.remove(item));
+                    assert!(!tester.remove(item));
                 }
 
                 let min = max + ((width * 2) as u64) + 3;
@@ -2538,15 +2538,15 @@ pub mod tests {
         assert!(index.zero_lamport_pubkeys().is_empty());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(&pubkey, None, None).is_none());
+        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
+        assert!(index.get(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&pubkey, Some(&ancestors), None).is_some());
-        assert_eq!(index.ref_count_from_storage(&pubkey), 1);
+        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert_eq!(index.ref_count_from_storage(pubkey), 1);
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 1);
 
@@ -2559,15 +2559,15 @@ pub mod tests {
         assert!(!index.zero_lamport_pubkeys().is_empty());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(&pubkey, None, None).is_none());
+        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
+        assert!(index.get(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&pubkey, Some(&ancestors), None).is_some());
-        assert_eq!(index.ref_count_from_storage(&pubkey), 0); // cached, so 0
+        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 1);
     }
@@ -3681,7 +3681,7 @@ pub mod tests {
 
         // Both pubkeys will now be present in the index
         check_secondary_index_mapping_correct(
-            &secondary_index,
+            secondary_index,
             &[secondary_key1, secondary_key2],
             &account_key,
         );

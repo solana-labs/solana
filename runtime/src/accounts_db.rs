@@ -371,7 +371,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn owner(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
-            LoadedAccount::Cached((_, cached_account)) => &cached_account.account.owner(),
+            LoadedAccount::Cached((_, cached_account)) => cached_account.account.owner(),
         }
     }
 
@@ -394,7 +394,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn pubkey(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.meta.pubkey,
-            LoadedAccount::Cached((pubkey, _)) => &pubkey,
+            LoadedAccount::Cached((pubkey, _)) => pubkey,
         }
     }
 
@@ -408,7 +408,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                AccountsDb::hash_stored_account(slot, &stored_account_meta)
+                AccountsDb::hash_stored_account(slot, stored_account_meta)
             }
             LoadedAccount::Cached((_, cached_account)) => {
                 AccountsDb::hash_account(slot, &cached_account.account, pubkey)
@@ -1496,7 +1496,7 @@ impl AccountsDb {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
                     self.accounts_index.clean_rooted_entries(
-                        &pubkey,
+                        pubkey,
                         &mut reclaims,
                         max_clean_root,
                     );
@@ -1588,7 +1588,7 @@ impl AccountsDb {
 
                     let affected_pubkeys = &store_counts.get(&id).unwrap().1;
                     for key in affected_pubkeys {
-                        for (_slot, account_info) in &purges.get(&key).unwrap().0 {
+                        for (_slot, account_info) in &purges.get(key).unwrap().0 {
                             if !already_counted.contains(&account_info.store_id) {
                                 pending_store_ids.insert(account_info.store_id);
                             }
@@ -1641,7 +1641,7 @@ impl AccountsDb {
         for (pubkey, slots_set) in pubkey_to_slot_set {
             let is_empty = self
                 .accounts_index
-                .purge_exact(&pubkey, slots_set, &mut reclaims);
+                .purge_exact(pubkey, slots_set, &mut reclaims);
             if is_empty {
                 dead_keys.push(pubkey);
             }
@@ -1862,12 +1862,12 @@ impl AccountsDb {
         // Then purge if we can
         let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
         for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
-            if purged_account_slots.contains_key(&key) {
-                *ref_count = self.accounts_index.ref_count_from_storage(&key);
+            if purged_account_slots.contains_key(key) {
+                *ref_count = self.accounts_index.ref_count_from_storage(key);
             }
             account_infos.retain(|(slot, account_info)| {
                 let was_slot_purged = purged_account_slots
-                    .get(&key)
+                    .get(key)
                     .map(|slots_removed| slots_removed.contains(slot))
                     .unwrap_or(false);
                 if was_slot_purged {
@@ -2061,7 +2061,7 @@ impl AccountsDb {
             return;
         }
         let mut clean_dead_slots = Measure::start("reclaims::clean_dead_slots");
-        self.clean_stored_dead_slots(&dead_slots, purged_account_slots);
+        self.clean_stored_dead_slots(dead_slots, purged_account_slots);
         clean_dead_slots.stop();
 
         let mut purge_removed_slots = Measure::start("reclaims::purge_removed_slots");
@@ -3289,7 +3289,7 @@ impl AccountsDb {
         let path_index = thread_rng().gen_range(0, paths.len());
         let store = Arc::new(self.new_storage_entry(
             slot,
-            &Path::new(&paths[path_index]),
+            Path::new(&paths[path_index]),
             Self::page_align(size),
         ));
 
@@ -3491,7 +3491,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.0.remove(&remove_slot) {
+            if let Some((_, slot_storages_to_be_removed)) = self.storage.0.remove(remove_slot) {
                 {
                     let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
                     total_removed_storage_entries += r_slot_removed_storages.len();
@@ -3761,10 +3761,10 @@ impl AccountsDb {
         Self::hash_account_data(
             slot,
             account.lamports(),
-            &account.owner(),
+            account.owner(),
             account.executable(),
             account.rent_epoch(),
-            &account.data(),
+            account.data(),
             pubkey,
         )
     }
@@ -3772,8 +3772,8 @@ impl AccountsDb {
     fn hash_frozen_account_data(account: &AccountSharedData) -> Hash {
         let mut hasher = Hasher::default();
 
-        hasher.hash(&account.data());
-        hasher.hash(&account.owner().as_ref());
+        hasher.hash(account.data());
+        hasher.hash(account.owner().as_ref());
 
         if account.executable() {
             hasher.hash(&[1u8; 1]);
@@ -3805,7 +3805,7 @@ impl AccountsDb {
 
         hasher.update(&rent_epoch.to_le_bytes());
 
-        hasher.update(&data);
+        hasher.update(data);
 
         if executable {
             hasher.update(&[1u8; 1]);
@@ -3813,8 +3813,8 @@ impl AccountsDb {
             hasher.update(&[0u8; 1]);
         }
 
-        hasher.update(&owner.as_ref());
-        hasher.update(&pubkey.as_ref());
+        hasher.update(owner.as_ref());
+        hasher.update(pubkey.as_ref());
 
         Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
@@ -4834,7 +4834,7 @@ impl AccountsDb {
                 );
 
                 if check_hash {
-                    let computed_hash = loaded_account.compute_hash(slot, &pubkey);
+                    let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
                         info!(
                             "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -4905,7 +4905,7 @@ impl AccountsDb {
                 };
 
                 let result = Self::scan_snapshot_stores_with_cache(
-                    &storages,
+                    storages,
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
@@ -5100,8 +5100,8 @@ impl AccountsDb {
             self.accounts_index.upsert(
                 slot,
                 pubkey,
-                &pubkey_account.1.owner(),
-                &pubkey_account.1.data(),
+                pubkey_account.1.owner(),
+                pubkey_account.1.data(),
                 &self.account_indexes,
                 info,
                 &mut reclaims,
@@ -5353,7 +5353,7 @@ impl AccountsDb {
 
     pub(crate) fn freeze_accounts(&mut self, ancestors: &Ancestors, account_pubkeys: &[Pubkey]) {
         for account_pubkey in account_pubkeys {
-            if let Some((account, _slot)) = self.load_without_fixed_root(ancestors, &account_pubkey)
+            if let Some((account, _slot)) = self.load_without_fixed_root(ancestors, account_pubkey)
             {
                 let frozen_account_info = FrozenAccountInfo {
                     hash: Self::hash_frozen_account_data(&account),
@@ -5391,7 +5391,7 @@ impl AccountsDb {
                     )
                 }
 
-                let hash = Self::hash_frozen_account_data(&account);
+                let hash = Self::hash_frozen_account_data(account);
                 if hash != frozen_account_info.hash {
                     FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
                     panic!(
@@ -5735,10 +5735,10 @@ impl AccountsDb {
                             if *slot <= snapshot_slot
                                 && (self.accounts_index.is_root(*slot)
                                     || ancestors
-                                        .map(|ancestors| ancestors.contains_key(&slot))
+                                        .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
                             {
-                                self.storage.0.get(&slot).map_or_else(
+                                self.storage.0.get(slot).map_or_else(
                                     || None,
                                     |item| {
                                         let storages = item
@@ -5891,9 +5891,9 @@ impl AccountsDb {
                         if !self.account_indexes.is_empty() {
                             for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
                                 self.accounts_index.update_secondary_indexes(
-                                    &pubkey,
+                                    pubkey,
                                     &stored_account.account_meta.owner,
-                                    &stored_account.data,
+                                    stored_account.data,
                                     &self.account_indexes,
                                 );
                             }
@@ -5929,7 +5929,7 @@ impl AccountsDb {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
-                if let Some((stored_size, count)) = stored_sizes_and_counts.get(&id) {
+                if let Some((stored_size, count)) = stored_sizes_and_counts.get(id) {
                     trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
                     store.count_and_status.write().unwrap().0 = *count;
                     store.alive_bytes.store(*stored_size, Ordering::SeqCst);
@@ -6020,7 +6020,7 @@ impl AccountsDb {
 
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
         let ancestors = vec![(slot, 1)].into_iter().collect();
-        let result = self.accounts_index.get(&pubkey, Some(&ancestors), None);
+        let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
         result.map(|(list, index)| list.slot_list()[index].1.store_id)
     }
 
@@ -7296,7 +7296,7 @@ pub mod tests {
         for (i, key) in keys.iter().enumerate() {
             assert_eq!(
                 accounts
-                    .load_without_fixed_root(&ancestors, &key)
+                    .load_without_fixed_root(&ancestors, key)
                     .unwrap()
                     .0
                     .lamports(),
@@ -7462,7 +7462,7 @@ pub mod tests {
         }
 
         fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
-            self.accounts_index.ref_count_from_storage(&pubkey)
+            self.accounts_index.ref_count_from_storage(pubkey)
         }
     }
 
@@ -9390,7 +9390,7 @@ pub mod tests {
 
             current_slot += 1;
             for pubkey in &pubkeys {
-                accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+                accounts.store_uncached(current_slot, &[(pubkey, &account)]);
             }
             let shrink_slot = current_slot;
             accounts.get_accounts_delta_hash(current_slot);
@@ -9401,7 +9401,7 @@ pub mod tests {
             let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
             for pubkey in updated_pubkeys {
-                accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+                accounts.store_uncached(current_slot, &[(pubkey, &account)]);
             }
             accounts.get_accounts_delta_hash(current_slot);
             accounts.add_root(current_slot);
@@ -9459,7 +9459,7 @@ pub mod tests {
 
         current_slot += 1;
         for pubkey in &pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(current_slot, &[(pubkey, &account)]);
         }
         let shrink_slot = current_slot;
         accounts.get_accounts_delta_hash(current_slot);
@@ -9470,7 +9470,7 @@ pub mod tests {
         let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
         for pubkey in updated_pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(current_slot, &[(pubkey, &account)]);
         }
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
@@ -9517,7 +9517,7 @@ pub mod tests {
 
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot,
             dummy_id1,
             dummy_size,
@@ -9531,7 +9531,7 @@ pub mod tests {
 
         let dummy_id2 = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot,
             dummy_id2,
             dummy_size,
@@ -9553,7 +9553,7 @@ pub mod tests {
         let dummy_size = 4 * PAGE_SIZE;
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot,
             dummy_id1,
             dummy_size,
@@ -9568,7 +9568,7 @@ pub mod tests {
         let dummy_id2 = 44;
         let dummy_slot2 = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot2,
             dummy_id2,
             dummy_size,
@@ -9612,7 +9612,7 @@ pub mod tests {
 
         current_slot += 1;
         for pubkey in &pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(current_slot, &[(pubkey, &account)]);
         }
         let shrink_slot = current_slot;
         accounts.get_accounts_delta_hash(current_slot);
@@ -9623,7 +9623,7 @@ pub mod tests {
         let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
         for pubkey in updated_pubkeys {
-            accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(current_slot, &[(pubkey, &account)]);
         }
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
@@ -9766,7 +9766,7 @@ pub mod tests {
             info!(
                 "store: {:?} : {:?}",
                 store,
-                store_counts.get(&store).unwrap()
+                store_counts.get(store).unwrap()
             );
         }
         for x in 0..3 {
@@ -11037,7 +11037,7 @@ pub mod tests {
 
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot,
             dummy_id1,
             dummy_size,
@@ -11045,7 +11045,7 @@ pub mod tests {
 
         let dummy_id2 = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            &dummy_path,
+            dummy_path,
             dummy_slot,
             dummy_id2,
             dummy_size,
@@ -11584,7 +11584,7 @@ pub mod tests {
         let mut accounts = AccountsDb::new_single();
         let dummy_path = Path::new("");
         let dummy_size = 2 * PAGE_SIZE;
-        let entry = Arc::new(AccountStorageEntry::new(&dummy_path, 0, 1, dummy_size));
+        let entry = Arc::new(AccountStorageEntry::new(dummy_path, 0, 1, dummy_size));
         match accounts.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio } => {
                 assert_eq!(

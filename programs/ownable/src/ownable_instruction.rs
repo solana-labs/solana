@@ -33,7 +33,7 @@ pub fn create_account(
     let space = std::mem::size_of::<Pubkey>() as u64;
     vec![
         system_instruction::create_account(
-            &payer_pubkey,
+            payer_pubkey,
             account_pubkey,
             lamports,
             space,

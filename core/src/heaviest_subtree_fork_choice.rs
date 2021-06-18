@@ -457,7 +457,7 @@ impl HeaviestSubtreeForkChoice {
 
     pub fn is_duplicate_confirmed(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
         self.fork_infos
-            .get(&slot_hash_key)
+            .get(slot_hash_key)
             .map(|fork_info| fork_info.is_duplicate_confirmed())
     }
 
@@ -472,7 +472,7 @@ impl HeaviestSubtreeForkChoice {
     /// Returns false if the node or any of its ancestors have been marked as duplicate
     pub fn is_candidate(&self, slot_hash_key: &SlotHashKey) -> Option<bool> {
         self.fork_infos
-            .get(&slot_hash_key)
+            .get(slot_hash_key)
             .map(|fork_info| fork_info.is_candidate())
     }
 
@@ -585,7 +585,7 @@ impl HeaviestSubtreeForkChoice {
             for child_key in &fork_info.children {
                 let child_fork_info = self
                     .fork_infos
-                    .get(&child_key)
+                    .get(child_key)
                     .expect("Child must exist in fork_info map");
                 let child_stake_voted_subtree = child_fork_info.stake_voted_subtree;
                 is_duplicate_confirmed |= child_fork_info.is_duplicate_confirmed;
@@ -770,7 +770,7 @@ impl HeaviestSubtreeForkChoice {
             let epoch = epoch_schedule.get_epoch(new_vote_slot_hash.0);
             let stake_update = epoch_stakes
                 .get(&epoch)
-                .map(|epoch_stakes| epoch_stakes.vote_account_stake(&pubkey))
+                .map(|epoch_stakes| epoch_stakes.vote_account_stake(pubkey))
                 .unwrap_or(0);
 
             update_operations
@@ -896,7 +896,7 @@ impl TreeDiff for HeaviestSubtreeForkChoice {
 
     fn children(&self, slot_hash_key: &SlotHashKey) -> Option<&[SlotHashKey]> {
         self.fork_infos
-            .get(&slot_hash_key)
+            .get(slot_hash_key)
             .map(|fork_info| &fork_info.children[..])
     }
 }
@@ -1497,7 +1497,7 @@ mod test {
             .chain(std::iter::once(&duplicate_leaves_descended_from_4[1]))
         {
             assert!(heaviest_subtree_fork_choice
-                .children(&duplicate_leaf)
+                .children(duplicate_leaf)
                 .unwrap()
                 .is_empty(),);
         }
@@ -3116,11 +3116,11 @@ mod test {
             let slot = slot_hash_key.0;
             if slot <= duplicate_confirmed_slot {
                 assert!(heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
             } else {
                 assert!(!heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
             }
             assert!(heaviest_subtree_fork_choice
@@ -3139,7 +3139,7 @@ mod test {
                 // 1) Be duplicate confirmed
                 // 2) Have no invalid ancestors
                 assert!(heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert!(heaviest_subtree_fork_choice
                     .latest_invalid_ancestor(slot_hash_key)
@@ -3149,7 +3149,7 @@ mod test {
                 // 1) Not be duplicate confirmed
                 // 2) Should have an invalid ancestor == `invalid_descendant_slot`
                 assert!(!heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert_eq!(
                     heaviest_subtree_fork_choice
@@ -3162,7 +3162,7 @@ mod test {
                 // 1) Not be duplicate confirmed
                 // 2) Should not have an invalid ancestor
                 assert!(!heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert!(heaviest_subtree_fork_choice
                     .latest_invalid_ancestor(slot_hash_key)
@@ -3186,7 +3186,7 @@ mod test {
                 // 1) Be duplicate confirmed
                 // 2) Have no invalid ancestors
                 assert!(heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert!(heaviest_subtree_fork_choice
                     .latest_invalid_ancestor(slot_hash_key)
@@ -3196,7 +3196,7 @@ mod test {
                 // 1) Not be duplicate confirmed
                 // 2) Should have an invalid ancestor == `invalid_descendant_slot`
                 assert!(!heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert_eq!(
                     heaviest_subtree_fork_choice
@@ -3209,7 +3209,7 @@ mod test {
                 // 1) Not be duplicate confirmed
                 // 2) Should not have an invalid ancestor
                 assert!(!heaviest_subtree_fork_choice
-                    .is_duplicate_confirmed(&slot_hash_key)
+                    .is_duplicate_confirmed(slot_hash_key)
                     .unwrap());
                 assert!(heaviest_subtree_fork_choice
                     .latest_invalid_ancestor(slot_hash_key)
@@ -3223,7 +3223,7 @@ mod test {
         heaviest_subtree_fork_choice.mark_fork_valid_candidate(&last_duplicate_confirmed_key);
         for slot_hash_key in heaviest_subtree_fork_choice.fork_infos.keys() {
             assert!(heaviest_subtree_fork_choice
-                .is_duplicate_confirmed(&slot_hash_key)
+                .is_duplicate_confirmed(slot_hash_key)
                 .unwrap());
             assert!(heaviest_subtree_fork_choice
                 .latest_invalid_ancestor(slot_hash_key)

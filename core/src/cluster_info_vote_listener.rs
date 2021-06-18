@@ -110,7 +110,7 @@ impl VoteTracker {
             epoch_schedule: *root_bank.epoch_schedule(),
             ..VoteTracker::default()
         };
-        vote_tracker.progress_with_new_root_bank(&root_bank);
+        vote_tracker.progress_with_new_root_bank(root_bank);
         assert_eq!(
             *vote_tracker.leader_schedule_epoch.read().unwrap(),
             root_bank.get_leader_schedule_epoch(root_bank.slot())
@@ -603,7 +603,7 @@ impl ClusterInfoVoteListener {
             if slot == last_vote_slot {
                 let vote_accounts = Stakes::vote_accounts(epoch_stakes.stakes());
                 let stake = vote_accounts
-                    .get(&vote_pubkey)
+                    .get(vote_pubkey)
                     .map(|(stake, _)| *stake)
                     .unwrap_or_default();
                 let total_stake = epoch_stakes.total_stake();
@@ -692,7 +692,7 @@ impl ClusterInfoVoteListener {
         // voters trying to make votes for slots earlier than the epoch for
         // which they are authorized
         let actual_authorized_voter =
-            vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
+            vote_tracker.get_authorized_voter(vote_pubkey, *last_vote_slot);
 
         if actual_authorized_voter.is_none() {
             return false;
@@ -700,7 +700,7 @@ impl ClusterInfoVoteListener {
 
         // Voting without the correct authorized pubkey, dump the vote
         if !VoteTracker::vote_contains_authorized_voter(
-            &gossip_tx,
+            gossip_tx,
             &actual_authorized_voter.unwrap(),
         ) {
             return false;
@@ -738,7 +738,7 @@ impl ClusterInfoVoteListener {
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
-                &vote_tracker,
+                vote_tracker,
                 root_bank,
                 subscriptions,
                 verified_vote_sender,

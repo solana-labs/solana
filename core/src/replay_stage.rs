@@ -563,7 +563,7 @@ impl ReplayStage {
                         }
 
                         Self::handle_votable_bank(
-                            &vote_bank,
+                            vote_bank,
                             &poh_recorder,
                             switch_fork_decision,
                             &bank_forks,
@@ -757,8 +757,8 @@ impl ReplayStage {
         Self::initialize_progress_and_fork_choice(
             &root_bank,
             frozen_banks,
-            &my_pubkey,
-            &vote_account,
+            my_pubkey,
+            vote_account,
         )
     }
 
@@ -779,8 +779,8 @@ impl ReplayStage {
                 bank.slot(),
                 ForkProgress::new_from_bank(
                     bank,
-                    &my_pubkey,
-                    &vote_account,
+                    my_pubkey,
+                    vote_account,
                     prev_leader_slot,
                     0,
                     0,
@@ -875,7 +875,7 @@ impl ReplayStage {
             .expect("must exist based on earlier check")
         {
             descendants
-                .get_mut(&a)
+                .get_mut(a)
                 .expect("If exists in ancestor map must exist in descendants map")
                 .retain(|d| *d != slot && !slot_descendants.contains(d));
         }
@@ -885,9 +885,9 @@ impl ReplayStage {
 
         // Purge all the descendants of this slot from both maps
         for descendant in slot_descendants {
-            ancestors.remove(&descendant).expect("must exist");
+            ancestors.remove(descendant).expect("must exist");
             descendants
-                .remove(&descendant)
+                .remove(descendant)
                 .expect("must exist based on earlier check");
         }
         descendants
@@ -1345,7 +1345,7 @@ impl ReplayStage {
             );
             Self::handle_new_root(
                 new_root,
-                &bank_forks,
+                bank_forks,
                 progress,
                 accounts_background_request_sender,
                 highest_confirmed_root,
@@ -1451,7 +1451,7 @@ impl ReplayStage {
         let vote_ix = switch_fork_decision
             .to_vote_instruction(
                 vote,
-                &vote_account_pubkey,
+                vote_account_pubkey,
                 &authorized_voter_keypair.pubkey(),
             )
             .expect("Switch threshold failure should not lead to voting");
@@ -1603,9 +1603,9 @@ impl ReplayStage {
         leader_schedule_cache: &LeaderScheduleCache,
     ) {
         let next_leader_slot = leader_schedule_cache.next_leader_slot(
-            &my_pubkey,
+            my_pubkey,
             bank.slot(),
-            &bank,
+            bank,
             Some(blockstore),
             GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
         );
@@ -1683,7 +1683,7 @@ impl ReplayStage {
             let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
                 ForkProgress::new_from_bank(
                     &bank,
-                    &my_pubkey,
+                    my_pubkey,
                     vote_account,
                     prev_leader_slot,
                     num_blocks_on_fork,
@@ -1694,13 +1694,13 @@ impl ReplayStage {
                 let root_slot = bank_forks.read().unwrap().root();
                 let replay_result = Self::replay_blockstore_into_bank(
                     &bank,
-                    &blockstore,
+                    blockstore,
                     bank_progress,
                     transaction_status_sender,
                     replay_vote_sender,
                     verify_recyclers,
                 );
-                Self::update_cost_model(&cost_model, &bank_progress.replay_stats.execute_timings);
+                Self::update_cost_model(cost_model, &bank_progress.replay_stats.execute_timings);
                 debug!(
                     "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
                     cost_model.read().unwrap().get_instruction_cost_table()
@@ -1779,7 +1779,7 @@ impl ReplayStage {
                         );
                     }
                 }
-                Self::record_rewards(&bank, &rewards_recorder_sender);
+                Self::record_rewards(&bank, rewards_recorder_sender);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -1823,14 +1823,14 @@ impl ReplayStage {
                         my_vote_pubkey,
                         bank_slot,
                         bank.vote_accounts().into_iter(),
-                        &ancestors,
+                        ancestors,
                         |slot| progress.get_hash(slot),
                         latest_validator_votes_for_frozen_banks,
                     );
                     // Notify any listeners of the votes found in this newly computed
                     // bank
                     heaviest_subtree_fork_choice.compute_bank_stats(
-                        &bank,
+                        bank,
                         tower,
                         latest_validator_votes_for_frozen_banks,
                     );
@@ -1899,7 +1899,7 @@ impl ReplayStage {
         let mut cost_model_mutable = cost_model.write().unwrap();
         for (program_id, stats) in &execute_timings.details.per_program_timings {
             let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(&program_id, &cost) {
+            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
                 Ok(c) => {
                     debug!(
                         "after replayed into bank, instruction {:?} has averaged cost {}",
@@ -2013,9 +2013,9 @@ impl ReplayStage {
         let selected_fork = {
             let switch_fork_decision = tower.check_switch_threshold(
                 heaviest_bank.slot(),
-                &ancestors,
-                &descendants,
-                &progress,
+                ancestors,
+                descendants,
+                progress,
                 heaviest_bank.total_epoch_stake(),
                 heaviest_bank
                     .epoch_vote_accounts(heaviest_bank.epoch())
@@ -2261,7 +2261,7 @@ impl ReplayStage {
                 .contains(vote_pubkey);
             leader_propagated_stats.add_vote_pubkey(
                 *vote_pubkey,
-                leader_bank.epoch_vote_account_stake(&vote_pubkey),
+                leader_bank.epoch_vote_account_stake(vote_pubkey),
             );
             !exists
         });
@@ -2733,7 +2733,7 @@ mod tests {
                 &bank1,
                 bank1.collector_id(),
                 validator_node_to_vote_keys
-                    .get(&bank1.collector_id())
+                    .get(bank1.collector_id())
                     .unwrap(),
                 Some(0),
                 0,
@@ -2990,7 +2990,7 @@ mod tests {
                 &bad_hash,
                 hashes_per_tick.saturating_sub(1),
                 vec![system_transaction::transfer(
-                    &genesis_keypair,
+                    genesis_keypair,
                     &keypair2.pubkey(),
                     2,
                     blockhash,
@@ -3108,7 +3108,7 @@ mod tests {
                 entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash);
             let last_entry_hash = entries.last().unwrap().hash;
             let tx =
-                system_transaction::transfer(&genesis_keypair, &keypair.pubkey(), 2, blockhash);
+                system_transaction::transfer(genesis_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
             entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
@@ -3188,7 +3188,7 @@ mod tests {
                 &mut bank0_progress,
                 None,
                 &replay_vote_sender,
-                &&VerifyRecyclers::default(),
+                &VerifyRecyclers::default(),
             );
 
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
@@ -3228,12 +3228,12 @@ mod tests {
     #[test]
     fn test_replay_commitment_cache() {
         fn leader_vote(vote_slot: Slot, bank: &Arc<Bank>, pubkey: &Pubkey) {
-            let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
+            let mut leader_vote_account = bank.get_account(pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(vote_slot);
             let versioned = VoteStateVersions::new_current(vote_state);
             VoteState::to(&versioned, &mut leader_vote_account).unwrap();
-            bank.store_account(&pubkey, &leader_vote_account);
+            bank.store_account(pubkey, &leader_vote_account);
         }
 
         let leader_pubkey = solana_sdk::pubkey::new_rand();
@@ -3773,7 +3773,7 @@ mod tests {
         success_index: usize,
     ) {
         let stake = 10_000;
-        let (bank_forks, _, _) = initialize_state(&all_keypairs, stake);
+        let (bank_forks, _, _) = initialize_state(all_keypairs, stake);
         let root_bank = bank_forks.root_bank();
         let mut propagated_stats = PropagatedStats {
             total_epoch_stake: stake * all_keypairs.len() as u64,
@@ -4407,7 +4407,7 @@ mod tests {
         ));
         assert!(check_map_eq(
             &descendants,
-            &bank_forks.read().unwrap().descendants()
+            bank_forks.read().unwrap().descendants()
         ));
 
         // Try to purge the root
@@ -4546,7 +4546,7 @@ mod tests {
 
         // Record the vote for 4
         tower.record_bank_vote(
-            &bank_forks.read().unwrap().get(4).unwrap(),
+            bank_forks.read().unwrap().get(4).unwrap(),
             &Pubkey::default(),
         );
 
@@ -4746,7 +4746,7 @@ mod tests {
                 &cluster_info,
                 refresh_bank,
                 &poh_recorder,
-                Tower::last_voted_slot_in_bank(&refresh_bank, &my_vote_pubkey).unwrap(),
+                Tower::last_voted_slot_in_bank(refresh_bank, &my_vote_pubkey).unwrap(),
                 &my_vote_pubkey,
                 &my_vote_keypair,
                 &mut voted_signatures,
@@ -5010,12 +5010,12 @@ mod tests {
             progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
-            &bank_forks,
+            bank_forks,
             heaviest_subtree_fork_choice,
             latest_validator_votes_for_frozen_banks,
         );
         let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
-            .select_forks(&frozen_banks, &tower, &progress, &ancestors, bank_forks);
+            .select_forks(&frozen_banks, tower, progress, ancestors, bank_forks);
         assert!(heaviest_bank_on_same_fork.is_none());
         let SelectVoteAndResetForkResult {
             vote_bank,
@@ -5024,8 +5024,8 @@ mod tests {
         } = ReplayStage::select_vote_and_reset_forks(
             &heaviest_bank,
             heaviest_bank_on_same_fork.as_ref(),
-            &ancestors,
-            &descendants,
+            ancestors,
+            descendants,
             progress,
             tower,
             latest_validator_votes_for_frozen_banks,

@@ -977,7 +977,7 @@ fn post_process_restored_tower(
         })
         .unwrap_or_else(|err| {
             let voting_has_been_active =
-                active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+                active_vote_account_exists_in_bank(&bank_forks.working_bank(), vote_account);
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
@@ -1010,10 +1010,10 @@ fn post_process_restored_tower(
             }
 
             Tower::new_from_bankforks(
-                &bank_forks,
+                bank_forks,
                 tower_path,
-                &validator_identity,
-                &vote_account,
+                validator_identity,
+                vote_account,
             )
         })
 }
@@ -1081,9 +1081,9 @@ fn new_banks_from_ledger(
 
     let tower_path = config.tower_path.as_deref().unwrap_or(ledger_path);
 
-    let restored_tower = Tower::restore(tower_path, &validator_identity);
+    let restored_tower = Tower::restore(tower_path, validator_identity);
     if let Ok(tower) = &restored_tower {
-        reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
+        reconcile_blockstore_roots_with_tower(tower, &blockstore).unwrap_or_else(|err| {
             error!("Failed to reconcile blockstore with tower: {:?}", err);
             abort()
         });
@@ -1185,7 +1185,7 @@ fn new_banks_from_ledger(
             None,
             &snapshot_config.snapshot_package_output_path,
             snapshot_config.archive_format,
-            Some(&bank_forks.root_bank().get_thread_pool()),
+            Some(bank_forks.root_bank().get_thread_pool()),
             snapshot_config.maximum_snapshots_to_retain,
         )
         .unwrap_or_else(|err| {
@@ -1197,9 +1197,9 @@ fn new_banks_from_ledger(
 
     let tower = post_process_restored_tower(
         restored_tower,
-        &validator_identity,
-        &vote_account,
-        &config,
+        validator_identity,
+        vote_account,
+        config,
         tower_path,
         &bank_forks,
     );
@@ -1404,7 +1404,7 @@ fn wait_for_supermajority(
             );
         }
 
-        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info, i % 10 == 0);
+        let gossip_stake_percent = get_stake_percent_in_gossip(bank, cluster_info, i % 10 == 0);
 
         if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
             break;

@@ -58,8 +58,8 @@ pub fn load(
             )
         {
             return load_from_snapshot(
-                &genesis_config,
-                &blockstore,
+                genesis_config,
+                blockstore,
                 account_paths,
                 shrink_paths,
                 snapshot_config,
@@ -79,8 +79,8 @@ pub fn load(
     }
 
     load_from_genesis(
-        &genesis_config,
-        &blockstore,
+        genesis_config,
+        blockstore,
         account_paths,
         process_options,
         cache_block_meta_sender,
@@ -97,8 +97,8 @@ fn load_from_genesis(
     info!("Processing ledger from genesis");
     to_loadresult(
         blockstore_processor::process_blockstore(
-            &genesis_config,
-            &blockstore,
+            genesis_config,
+            blockstore,
             account_paths,
             process_options,
             cache_block_meta_sender,
