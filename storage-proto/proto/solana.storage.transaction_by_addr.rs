@@ -120,4 +120,5 @@ pub enum InstructionErrorType {
     InvalidAccountOwner = 46,
     ArithmeticOverflow = 47,
     UnsupportedSysvar = 48,
+    IllegalOwner = 49,
 }
