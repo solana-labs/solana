@@ -99,3 +99,77 @@ each builtin program's instructions.
   have to be reworded to be max fee based on the compute cap.  Actual fee would
   be equal to or less than that.
 - "Compute cost" is a lame name, ideas for something better?
+
+## Mainnet beta program performance measurements
+
+```
+Per-program instruction characteristics over 5 minutes of mainnet
+Program                                                    count               Total us        total compute units     units/us
+                                                                     max  med  avg   sd     max   med    avg     sd  med avg  sd
+
+27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv Radium v2       329    9082 1466 2298 3062  126131  58074  65212 24949   32  39  28
+4MNPdKu9wFMvEeZBMt3Eipfs5ovVWTJb31pEXDJAAxX5                  45     264   82   86   36  789       789    789     0   10  8   22
+675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8 (Radium v3?)   6183   15544  858 1310 1355  179980  43283  55484 31286   53  45  79
+7vxeyaXGLqcp66fFShqUdHxdacp4k4kwUpRSSeoZLCZ4                  27    3411 2101 2232  531  149039 115065 114843 18152   53  50 173
+9KEPoZmtHUrBbhWN1v1KWLMkkvwY6WLtAVUCPRtRjP4z                 483    3136  747  646  445   48069  35015  27749 14983   48  47 129
+9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin Serum v3     115445   31749  483  550  430   26388   2489   5232  5181    7   7   7
+ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL                 114    1485  651  681  158   47894  27498  27820  3966   42  40 158
+CBuCnLe26faBpcBP2fktp4rp8abpcAnTWft6ZrP5Q4T                  228    1188  121  240  285   35918   8010  11542  9716   63  54  94
+DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1                  82    2058  813  845   25   34272  28994  29111  1768   36  34 113
+EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q                 634    1557  111  292  294   29485   6100  11707  8519   53  47 101
+FjJ5mhdRWeuaaremiHjeQextaAw1sKWDqr3D7pXjgztv                  86    2484  951  968  226   40565  40565  40565     0   43  42 179
+J21zqcffYQU2NUJrvAKhqpKZLQK1YaB9dY5kmcxkMQvQ                  72     952  332  334   96   10645  10315  10331   128   32  31 108
+SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8                  203    9947 1076 1198  896   66633  58706  57275  4676   53  47  61
+TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA                72286    8453  101  112   98    4429   3531   3026   683   29  27  31
+Vote111111111111111111111111111111111111111                        39278  121  160  400
+11111111111111111111111111111111                                      24   11   11    3
+```
+
+- Handy compute unit conversions
+  - 10,000 units/us => 20 us @ 200k max units => 50k TPS max
+  - 250 units/us => 800 us @ 200k max units => 1250 TPS max (original tune
+    target)
+  - 25 units/us => 8000 us @ 200k max units => 125 TPS max
+  - 15 units/us => 13333 us @ 200k max units => 75 TPS max
+  - 7 units/us => 30000 us @ 200k max units => 30 TPS max
+
+Observations:
+- These numbers only include program execution (message processor, vm
+  setup/takedown, parameter ser/de) but do not include account loading/storing
+- Fairly high level of variability in program measurements (for example, vote
+  program has a mx of 38ms with med of 121)
+- Current compute budget is 200k units max units
+  - At the measured median rate of 15 units/us the max program execution time
+    should be 13ms
+  - The original target was 250 units/us for a max program execution time of 800
+    us
+- Of the 196,243 instructions logged
+  - ~600 above 100k compute units
+  - ~1,700 above 50k
+  - ~9,500 above 20k
+  - ~2,400 above 10k
+  - ~38,000 above 5k
+  - ~196,200 above 2k
+- Currently traffic is dominated by Serum v3 which is very optimized (median
+  2489 units and 483 us)
+- It's possible that some of the programs are not in the executor cache which
+  will add a large time component loading the elf - Somewhere around 80 us of
+  program overhead with 1 account containing zero data
+  - Serializing large accounts can take a significant amount of time
+- Raydium v3 transactions contain many high unit instructions taking multiple ms
+  - In this sample period it appears that all programs besides Raydium would fit
+  within a ~200k transaction-wide limit (currently set to ~200k instruction-wide
+  limit)
+
+Takeaways:
+- Establish a targeted default max transaction unit cap
+  - 200k proposed
+  - Work with Raydium to break up their transactions and possibly help them
+    optimize their programs
+  - Can allow developer requested larger or small caps later as per this
+    proposal
+  - When things like account loading get incorporated into the compute budget
+    raise the default cap accordingly.
+- Establish a new unit/us rate that will be used to calculate and set the cost
+  of new program operations (syscalls for example)
+  - What should the target be for a program's max execution time?
