@@ -147,7 +147,7 @@ impl Banks for BanksServer {
             .read()
             .unwrap()
             .root_bank()
-            .get_blockhash_last_valid_slot(&blockhash)
+            .get_blockhash_last_valid_slot(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         let info =

@@ -280,7 +280,7 @@ pub fn open_genesis_config(
     ledger_path: &Path,
     max_genesis_archive_unpacked_size: u64,
 ) -> GenesisConfig {
-    GenesisConfig::load(&ledger_path).unwrap_or_else(|load_err| {
+    GenesisConfig::load(ledger_path).unwrap_or_else(|load_err| {
         let genesis_package = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
         unpack_genesis_archive(
             &genesis_package,
@@ -296,7 +296,7 @@ pub fn open_genesis_config(
         });
 
         // loading must succeed at this moment
-        GenesisConfig::load(&ledger_path).unwrap()
+        GenesisConfig::load(ledger_path).unwrap()
     })
 }
 

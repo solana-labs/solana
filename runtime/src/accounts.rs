@@ -215,7 +215,7 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let demote_sysvar_write_locks =
                 feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
-            let mut key_check = MessageProgramIdsCache::new(&message);
+            let mut key_check = MessageProgramIdsCache::new(message);
             let mut rent_debits = RentDebits::default();
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if key_check.is_non_loader_key(key, i) {
@@ -237,7 +237,7 @@ impl Accounts {
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
-                                        .collect_from_existing_account(&key, &mut account);
+                                        .collect_from_existing_account(key, &mut account);
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -1029,7 +1029,7 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        let rent = rent_collector.collect_from_created_account(&key, account);
+                        let rent = rent_collector.collect_from_created_account(key, account);
                         loaded_transaction.rent += rent;
                         loaded_transaction
                             .rent_debits
@@ -1106,7 +1106,7 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);
         let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, &pubkey, &account);
+        accounts.store_slow_uncached(slot, pubkey, &account);
     }
 }
 
@@ -1140,7 +1140,7 @@ mod tests {
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
+        hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
         let accounts = Accounts::new_with_config(
             Vec::new(),
             &ClusterType::Development,

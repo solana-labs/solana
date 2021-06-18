@@ -149,7 +149,7 @@ mod tests {
 
         let check_hash_calculation = false;
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_archive(
-            &account_paths,
+            account_paths,
             &[],
             &old_bank_forks
                 .snapshot_config
@@ -216,7 +216,7 @@ mod tests {
         };
         for slot in 0..last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
-            f(&mut bank, &mint_keypair);
+            f(&mut bank, mint_keypair);
             let bank = bank_forks.insert(bank);
             // Set root to make sure we don't end up with too many account storage entries
             // and to allow snapshotting of bank and the purging logic on status_cache to
@@ -250,7 +250,7 @@ mod tests {
         .unwrap();
         let snapshot_package = snapshot_utils::process_accounts_package_pre(
             snapshot_package,
-            Some(&last_bank.get_thread_pool()),
+            Some(last_bank.get_thread_pool()),
         );
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
@@ -277,12 +277,12 @@ mod tests {
             |bank, mint_keypair| {
                 let key1 = Keypair::new().pubkey();
                 let tx =
-                    system_transaction::transfer(&mint_keypair, &key1, 1, bank.last_blockhash());
+                    system_transaction::transfer(mint_keypair, &key1, 1, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
 
                 let key2 = Keypair::new().pubkey();
                 let tx =
-                    system_transaction::transfer(&mint_keypair, &key2, 0, bank.last_blockhash());
+                    system_transaction::transfer(mint_keypair, &key2, 0, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
 
                 bank.freeze();
@@ -294,7 +294,7 @@ mod tests {
     fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
-            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
+            tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
             bank.register_tick(&tick_hash);
             if tick_hash == bank.last_blockhash() {
                 bank.freeze();
@@ -349,7 +349,7 @@ mod tests {
             );
             let slot = bank.slot();
             let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
+            let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
             let accounts_hash = bank.update_accounts_hash();
@@ -368,9 +368,9 @@ mod tests {
             snapshot_utils::snapshot_bank(
                 &bank,
                 vec![],
-                &package_sender,
-                &snapshot_path,
-                &snapshot_package_output_path,
+                package_sender,
+                snapshot_path,
+                snapshot_package_output_path,
                 snapshot_config.snapshot_version,
                 &snapshot_config.archive_format,
                 None,
@@ -428,7 +428,7 @@ mod tests {
 
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
-        snapshot_utils::purge_old_snapshots(&snapshot_path);
+        snapshot_utils::purge_old_snapshots(snapshot_path);
         assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
             .into_iter()
             .map(|path| path.slot)
@@ -575,14 +575,14 @@ mod tests {
                 (MAX_CACHE_ENTRIES * 2 + 1) as u64,
                 |bank, mint_keypair| {
                     let tx = system_transaction::transfer(
-                        &mint_keypair,
+                        mint_keypair,
                         &key1,
                         1,
                         bank.parent().unwrap().last_blockhash(),
                     );
                     assert_eq!(bank.process_transaction(&tx), Ok(()));
                     let tx = system_transaction::transfer(
-                        &mint_keypair,
+                        mint_keypair,
                         &key2,
                         1,
                         bank.parent().unwrap().last_blockhash(),

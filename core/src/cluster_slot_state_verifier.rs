@@ -192,7 +192,7 @@ fn get_cluster_duplicate_confirmed_hash<'a>(
                     slot, gossip_duplicate_confirmed_hash, local_duplicate_confirmed_hash
                 );
             }
-            Some(&local_frozen_hash)
+            Some(local_frozen_hash)
         }
         (Some(local_frozen_hash), None) => Some(local_frozen_hash),
         _ => gossip_duplicate_confirmed_hash,

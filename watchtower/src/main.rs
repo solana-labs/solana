@@ -66,7 +66,7 @@ fn get_config() -> Config {
                 .global(true)
                 .help("Configuration file to use");
             if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
-                arg.default_value(&config_file)
+                arg.default_value(config_file)
             } else {
                 arg
             }
@@ -190,7 +190,7 @@ fn get_cluster_info(
     for validator_identity in &config.validator_identity_pubkeys {
         validator_balances.insert(
             *validator_identity,
-            rpc_client.get_balance(&validator_identity)?,
+            rpc_client.get_balance(validator_identity)?,
         );
     }
 
@@ -299,7 +299,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         validator_errors.push(format!("{} missing", formatted_validator_identity));
                     }
 
-                    if let Some(balance) = validator_balances.get(&validator_identity) {
+                    if let Some(balance) = validator_balances.get(validator_identity) {
                         if *balance < config.minimum_validator_identity_balance {
                             failures.push((
                                 "balance",

@@ -114,7 +114,7 @@ fn process_lockup_stake_accounts(
 ) -> Result<(), ClientError> {
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let existing_lockups = get_lockups(&client, addresses)?;
+    let existing_lockups = get_lockups(client, addresses)?;
 
     let lockup = LockupArgs {
         epoch: args.lockup_epoch,
@@ -143,7 +143,7 @@ fn process_rebase_stake_accounts(
 ) -> Result<(), ClientError> {
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let balances = get_balances(&client, addresses)?;
+    let balances = get_balances(client, addresses)?;
 
     let messages = stake_accounts::rebase_stake_accounts(
         &args.fee_payer.pubkey(),
@@ -172,7 +172,7 @@ fn process_move_stake_accounts(
     let args = &move_args.rebase_args;
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let balances = get_balances(&client, addresses)?;
+    let balances = get_balances(client, addresses)?;
 
     let messages = stake_accounts::move_stake_accounts(
         &args.fee_payer.pubkey(),

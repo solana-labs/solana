@@ -18,7 +18,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     msgs.packets.resize(10, Packet::default());
     for w in msgs.packets.iter_mut() {
         w.meta.size = PACKET_DATA_SIZE;
-        w.meta.set_addr(&addr);
+        w.meta.set_addr(addr);
     }
     let msgs = Arc::new(msgs);
     spawn(move || loop {

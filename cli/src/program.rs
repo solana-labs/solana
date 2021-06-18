@@ -770,7 +770,7 @@ fn process_program_deploy(
     };
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
 
-    let default_program_keypair = get_default_program_keypair(&program_location);
+    let default_program_keypair = get_default_program_keypair(program_location);
     let (program_signer, program_pubkey) = if let Some(i) = program_signer_index {
         (Some(config.signers[i]), config.signers[i].pubkey())
     } else if let Some(program_pubkey) = program_pubkey {
@@ -846,7 +846,7 @@ fn process_program_deploy(
     };
 
     let (program_data, program_len) = if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(&program_location)?;
+        let program_data = read_and_verify_elf(program_location)?;
         let program_len = program_data.len();
         (program_data, program_len)
     } else if buffer_provided {
@@ -1262,7 +1262,7 @@ fn process_dump(
                                 UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
                             let program_data = &programdata_account.data[offset..];
                             let mut f = File::create(output_location)?;
-                            f.write_all(&program_data)?;
+                            f.write_all(program_data)?;
                             Ok(format!("Wrote program to {}", output_location))
                         } else {
                             Err(
@@ -1282,7 +1282,7 @@ fn process_dump(
                     let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
                     let program_data = &account.data[offset..];
                     let mut f = File::create(output_location)?;
-                    f.write_all(&program_data)?;
+                    f.write_all(program_data)?;
                     Ok(format!("Wrote program to {}", output_location))
                 } else {
                     Err(format!(
@@ -1313,8 +1313,8 @@ fn close(
 
     let mut tx = Transaction::new_unsigned(Message::new(
         &[bpf_loader_upgradeable::close(
-            &account_pubkey,
-            &recipient_pubkey,
+            account_pubkey,
+            recipient_pubkey,
             &authority_signer.pubkey(),
         )],
         Some(&config.signers[0].pubkey()),
@@ -1423,7 +1423,7 @@ fn process_close(
             if close(
                 rpc_client,
                 config,
-                &address,
+                address,
                 &recipient_pubkey,
                 authority_signer,
             )
@@ -1524,7 +1524,7 @@ fn do_process_program_write_and_deploy(
                 .value
             {
                 complete_partial_program_init(
-                    &loader_id,
+                    loader_id,
                     &config.signers[0].pubkey(),
                     buffer_pubkey,
                     &account,
@@ -1554,7 +1554,7 @@ fn do_process_program_write_and_deploy(
                         buffer_pubkey,
                         minimum_balance,
                         buffer_data_len as u64,
-                        &loader_id,
+                        loader_id,
                     )],
                     minimum_balance,
                 )
@@ -1582,7 +1582,7 @@ fn do_process_program_write_and_deploy(
                 } else {
                     loader_instruction::write(
                         buffer_pubkey,
-                        &loader_id,
+                        loader_id,
                         (i * DATA_CHUNK_SIZE) as u32,
                         chunk.to_vec(),
                     )
@@ -1626,7 +1626,7 @@ fn do_process_program_write_and_deploy(
             )
         } else {
             Message::new(
-                &[loader_instruction::finalize(buffer_pubkey, &loader_id)],
+                &[loader_instruction::finalize(buffer_pubkey, loader_id)],
                 Some(&config.signers[0].pubkey()),
             )
         };
@@ -1752,8 +1752,8 @@ fn do_process_program_upgrade(
     // Create and add final message
     let final_message = Message::new(
         &[bpf_loader_upgradeable::upgrade(
-            &program_id,
-            &buffer_pubkey,
+            program_id,
+            buffer_pubkey,
             &upgrade_authority.pubkey(),
             &config.signers[0].pubkey(),
         )],
@@ -1821,7 +1821,7 @@ fn complete_partial_program_init(
             account_data_len as u64,
         ));
         if account.owner != *loader_id {
-            instructions.push(system_instruction::assign(elf_pubkey, &loader_id));
+            instructions.push(system_instruction::assign(elf_pubkey, loader_id));
         }
     }
     if account.lamports < minimum_balance {
@@ -1893,7 +1893,7 @@ fn send_deploy_messages(
                 initial_transaction.try_sign(&[payer_signer], blockhash)?;
             }
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&initial_transaction);
-            log_instruction_custom_error::<SystemError>(result, &config)
+            log_instruction_custom_error::<SystemError>(result, config)
                 .map_err(|err| format!("Account allocation failed: {}", err))?;
         } else {
             return Err("Buffer account not created yet, must provide a key pair".into());

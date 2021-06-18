@@ -50,7 +50,7 @@ pub fn create_builtin_transactions(
             // Seed the signer account
             let rando0 = Keypair::new();
             bank_client
-                .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer_and_confirm(10_000, mint_keypair, &rando0.pubkey())
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
@@ -72,7 +72,7 @@ pub fn create_native_loader_transactions(
             // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
-                .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer_and_confirm(10_000, mint_keypair, &rando0.pubkey())
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
@@ -94,7 +94,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
     }
     for _ in 0..1_000_000_000_u64 {
         if bank
-            .get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
+            .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
             .is_some()
         {
             break;
@@ -102,13 +102,13 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
         sleep(Duration::from_nanos(1));
     }
     if bank
-        .get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
+        .get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
         .unwrap()
         .is_err()
     {
         error!(
             "transaction failed: {:?}",
-            bank.get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
+            bank.get_signature_status(transactions.last().unwrap().signatures.get(0).unwrap())
                 .unwrap()
         );
         panic!();

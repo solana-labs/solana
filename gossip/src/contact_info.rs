@@ -143,14 +143,14 @@ impl ContactInfo {
         }
 
         let tpu = *bind_addr;
-        let gossip = next_port(&bind_addr, 1);
-        let tvu = next_port(&bind_addr, 2);
-        let tpu_forwards = next_port(&bind_addr, 3);
-        let tvu_forwards = next_port(&bind_addr, 4);
-        let repair = next_port(&bind_addr, 5);
+        let gossip = next_port(bind_addr, 1);
+        let tvu = next_port(bind_addr, 2);
+        let tpu_forwards = next_port(bind_addr, 3);
+        let tvu_forwards = next_port(bind_addr, 4);
+        let repair = next_port(bind_addr, 5);
         let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        let serve_repair = next_port(&bind_addr, 6);
+        let serve_repair = next_port(bind_addr, 6);
         Self {
             id: *pubkey,
             gossip,

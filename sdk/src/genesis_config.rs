@@ -160,7 +160,7 @@ impl GenesisConfig {
     }
 
     pub fn load(ledger_path: &Path) -> Result<Self, std::io::Error> {
-        let filename = Self::genesis_filename(&ledger_path);
+        let filename = Self::genesis_filename(ledger_path);
         let file = OpenOptions::new()
             .read(true)
             .open(&filename)
@@ -198,7 +198,7 @@ impl GenesisConfig {
 
         std::fs::create_dir_all(&ledger_path)?;
 
-        let mut file = File::create(Self::genesis_filename(&ledger_path))?;
+        let mut file = File::create(Self::genesis_filename(ledger_path))?;
         file.write_all(&serialized)
     }
 
@@ -339,8 +339,8 @@ mod tests {
                 && account.lamports == 10_000));
 
         let path = &make_tmp_path("genesis_config");
-        config.write(&path).expect("write");
-        let loaded_config = GenesisConfig::load(&path).expect("load");
+        config.write(path).expect("write");
+        let loaded_config = GenesisConfig::load(path).expect("load");
         assert_eq!(config.hash(), loaded_config.hash());
         let _ignored = std::fs::remove_file(&path);
     }

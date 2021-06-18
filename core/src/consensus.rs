@@ -164,7 +164,7 @@ impl Tower {
         bank: &Bank,
         path: &Path,
     ) -> Self {
-        let path = Self::get_filename(&path, node_pubkey);
+        let path = Self::get_filename(path, node_pubkey);
         let tmp_path = Self::get_tmp_filename(&path);
         let mut tower = Self {
             node_pubkey: *node_pubkey,
@@ -205,8 +205,8 @@ impl Tower {
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
                 root_bank.deref(),
                 bank_forks.frozen_banks().values().cloned().collect(),
-                &my_pubkey,
-                &vote_account,
+                my_pubkey,
+                vote_account,
             );
         let root = root_bank.slot();
 
@@ -219,11 +219,11 @@ impl Tower {
             .clone();
 
         Self::new(
-            &my_pubkey,
-            &vote_account,
+            my_pubkey,
+            vote_account,
             root,
             &heaviest_bank,
-            &ledger_path,
+            ledger_path,
         )
     }
 
@@ -736,7 +736,7 @@ impl Tower {
                     // finding any lockout intervals in the `lockout_intervals` tree
                     // for this bank that contain `last_vote`.
                     let lockout_intervals = &progress
-                        .get(&candidate_slot)
+                        .get(candidate_slot)
                         .unwrap()
                         .fork_stats
                         .lockout_intervals;
@@ -1328,7 +1328,7 @@ pub fn reconcile_blockstore_roots_with_tower(
     if last_blockstore_root < tower_root {
         // Ensure tower_root itself to exist and be marked as rooted in the blockstore
         // in addition to its ancestors.
-        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
+        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, blockstore)
             .take_while(|current| match current.cmp(&last_blockstore_root) {
                 Ordering::Greater => true,
                 Ordering::Equal => false,
@@ -1490,7 +1490,7 @@ pub mod test {
             tower: &mut Tower,
         ) -> Vec<HeaviestForkFailures> {
             // Try to simulate the vote
-            let my_keypairs = self.validator_keypairs.get(&my_pubkey).unwrap();
+            let my_keypairs = self.validator_keypairs.get(my_pubkey).unwrap();
             let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
             let ancestors = self.bank_forks.read().unwrap().ancestors();
             let mut frozen_banks: Vec<_> = self
@@ -1503,7 +1503,7 @@ pub mod test {
                 .collect();
 
             let _ = ReplayStage::compute_bank_stats(
-                &my_pubkey,
+                my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
                 tower,
@@ -1582,9 +1582,9 @@ pub mod test {
                 .filter_map(|slot| {
                     let mut fork_tip_parent = tr(slot - 1);
                     fork_tip_parent.push_front(tr(slot));
-                    self.fill_bank_forks(fork_tip_parent, &cluster_votes);
+                    self.fill_bank_forks(fork_tip_parent, cluster_votes);
                     if votes_to_simulate.contains(&slot) {
-                        Some((slot, self.simulate_vote(slot, &my_pubkey, tower)))
+                        Some((slot, self.simulate_vote(slot, my_pubkey, tower)))
                     } else {
                         None
                     }
@@ -1627,7 +1627,7 @@ pub mod test {
                 fork_tip_parent.push_front(tr(start_slot + i));
                 self.fill_bank_forks(fork_tip_parent, cluster_votes);
                 if self
-                    .simulate_vote(i + start_slot, &my_pubkey, tower)
+                    .simulate_vote(i + start_slot, my_pubkey, tower)
                     .is_empty()
                 {
                     cluster_votes
@@ -2850,7 +2850,7 @@ pub mod test {
 
         tower.save(&identity_keypair).unwrap();
         modify_serialized(&tower.path);
-        let loaded = Tower::restore(&dir.path(), &identity_keypair.pubkey());
+        let loaded = Tower::restore(dir.path(), &identity_keypair.pubkey());
 
         (tower, loaded)
     }

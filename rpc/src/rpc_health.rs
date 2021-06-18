@@ -65,7 +65,7 @@ impl RpcHealth {
                     .iter()
                     .filter_map(|trusted_validator| {
                         self.cluster_info
-                            .get_accounts_hash_for_node(&trusted_validator, |hashes| {
+                            .get_accounts_hash_for_node(trusted_validator, |hashes| {
                                 hashes
                                     .iter()
                                     .max_by(|a, b| a.0.cmp(&b.0))

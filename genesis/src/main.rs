@@ -534,9 +534,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         );
 
         let vote_account = vote_state::create_account_with_authorized(
-            &identity_pubkey,
-            &identity_pubkey,
-            &identity_pubkey,
+            identity_pubkey,
+            identity_pubkey,
+            identity_pubkey,
             commission,
             VoteState::get_rent_exempt_reserve(&rent).max(1),
         );
@@ -546,8 +546,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             stake_state::create_account(
                 bootstrap_stake_authorized_pubkey
                     .as_ref()
-                    .unwrap_or(&identity_pubkey),
-                &vote_pubkey,
+                    .unwrap_or(identity_pubkey),
+                vote_pubkey,
                 &vote_account,
                 &rent,
                 bootstrap_validator_stake_lamports,
@@ -782,7 +782,7 @@ mod tests {
             let pubkey = &pubkey_str.parse().unwrap();
             assert_eq!(
                 b64_account.balance,
-                genesis_config.accounts[&pubkey].lamports,
+                genesis_config.accounts[pubkey].lamports,
             );
         }
 

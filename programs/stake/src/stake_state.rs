@@ -513,7 +513,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
         self.authorize(
             &signers,
-            &new_authority,
+            new_authority,
             stake_authorize,
             require_custodian_for_locked_stake_authorize,
             clock,
@@ -686,7 +686,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     split.set_state(&StakeState::Initialized(split_meta))?;
                 }
                 StakeState::Uninitialized => {
-                    if !signers.contains(&self.unsigned_key()) {
+                    if !signers.contains(self.unsigned_key()) {
                         return Err(InstructionError::MissingRequiredSignature);
                     }
                 }
@@ -810,7 +810,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 (meta.lockup, reserve, false)
             }
             StakeState::Uninitialized => {
-                if !signers.contains(&self.unsigned_key()) {
+                if !signers.contains(self.unsigned_key()) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 (Lockup::default(), 0, false) // no lockup, no restrictions
@@ -821,7 +821,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         // verify that lockup has expired or that the withdrawal is signed by
         //   the custodian, both epoch and unix_timestamp must have passed
         let custodian_pubkey = custodian.and_then(|keyed_account| keyed_account.signer_key());
-        if lockup.is_in_force(&clock, custodian_pubkey) {
+        if lockup.is_in_force(clock, custodian_pubkey) {
             return Err(StakeError::LockupInForce.into());
         }
 
@@ -3883,7 +3883,7 @@ mod tests {
     fn test_authorize_with_seed() {
         let base_pubkey = solana_sdk::pubkey::new_rand();
         let seed = "42";
-        let withdrawer_pubkey = Pubkey::create_with_seed(&base_pubkey, &seed, &id()).unwrap();
+        let withdrawer_pubkey = Pubkey::create_with_seed(&base_pubkey, seed, &id()).unwrap();
         let stake_lamports = 42;
         let stake_account = AccountSharedData::new_ref_data_with_space(
             stake_lamports,
@@ -3904,7 +3904,7 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &base_keyed_account,
-                &"",
+                "",
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
@@ -3919,7 +3919,7 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_keyed_account,
-                &seed,
+                seed,
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
@@ -3934,7 +3934,7 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &base_keyed_account,
-                &seed,
+                seed,
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
@@ -3949,7 +3949,7 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &base_keyed_account,
-                &seed,
+                seed,
                 &id(),
                 &new_authority,
                 StakeAuthorize::Withdrawer,
@@ -3964,7 +3964,7 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_keyed_account,
-                &seed,
+                seed,
                 &id(),
                 &new_authority,
                 StakeAuthorize::Withdrawer,

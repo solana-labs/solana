@@ -559,7 +559,7 @@ impl LedgerStorage {
             let signature = transaction.signatures[0];
 
             for address in &transaction.message.account_keys {
-                if !is_sysvar_id(&address) {
+                if !is_sysvar_id(address) {
                     by_addr
                         .entry(address)
                         .or_default()

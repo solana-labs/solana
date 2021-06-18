@@ -69,32 +69,32 @@ impl UiAccount {
     ) -> Self {
         let data = match encoding {
             UiAccountEncoding::Binary => UiAccountData::LegacyBinary(
-                bs58::encode(slice_data(&account.data(), data_slice_config)).into_string(),
+                bs58::encode(slice_data(account.data(), data_slice_config)).into_string(),
             ),
             UiAccountEncoding::Base58 => UiAccountData::Binary(
-                bs58::encode(slice_data(&account.data(), data_slice_config)).into_string(),
+                bs58::encode(slice_data(account.data(), data_slice_config)).into_string(),
                 encoding,
             ),
             UiAccountEncoding::Base64 => UiAccountData::Binary(
-                base64::encode(slice_data(&account.data(), data_slice_config)),
+                base64::encode(slice_data(account.data(), data_slice_config)),
                 encoding,
             ),
             UiAccountEncoding::Base64Zstd => {
                 let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 0).unwrap();
                 match encoder
-                    .write_all(slice_data(&account.data(), data_slice_config))
+                    .write_all(slice_data(account.data(), data_slice_config))
                     .and_then(|()| encoder.finish())
                 {
                     Ok(zstd_data) => UiAccountData::Binary(base64::encode(zstd_data), encoding),
                     Err(_) => UiAccountData::Binary(
-                        base64::encode(slice_data(&account.data(), data_slice_config)),
+                        base64::encode(slice_data(account.data(), data_slice_config)),
                         UiAccountEncoding::Base64,
                     ),
                 }
             }
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
-                    parse_account_data(pubkey, &account.owner(), &account.data(), additional_data)
+                    parse_account_data(pubkey, account.owner(), account.data(), additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {

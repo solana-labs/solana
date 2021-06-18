@@ -449,7 +449,7 @@ impl LocalCluster {
             .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         let mut tx =
-            system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
+            system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -457,7 +457,7 @@ impl LocalCluster {
             *dest_pubkey
         );
         client
-            .retry_transfer(&source_keypair, &mut tx, 10)
+            .retry_transfer(source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
             .wait_for_balance_with_commitment(
@@ -512,7 +512,7 @@ impl LocalCluster {
                     .0,
             );
             client
-                .retry_transfer(&from_account, &mut transaction, 10)
+                .retry_transfer(from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
                 .wait_for_balance_with_commitment(
@@ -616,7 +616,7 @@ impl Cluster for LocalCluster {
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
-        let mut node = self.validators.remove(&pubkey).unwrap();
+        let mut node = self.validators.remove(pubkey).unwrap();
 
         // Shut down the validator
         let mut validator = node.validator.take().expect("Validator must be running");
@@ -631,7 +631,7 @@ impl Cluster for LocalCluster {
         cluster_validator_info: &mut ClusterValidatorInfo,
     ) -> (Node, Option<ContactInfo>) {
         // Update the stored ContactInfo for this node
-        let node = Node::new_localhost_with_pubkey(&pubkey);
+        let node = Node::new_localhost_with_pubkey(pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
         cluster_validator_info.config.rpc_addrs = Some((node.info.rpc, node.info.rpc_pubsub));
 

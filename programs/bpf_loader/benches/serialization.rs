@@ -107,9 +107,9 @@ fn bench_serialize_unaligned(bencher: &mut Bencher) {
         .enumerate()
         .map(|(i, (key, account))| {
             if i <= accounts.len() / 2 {
-                KeyedAccount::new_readonly(&key, false, &account)
+                KeyedAccount::new_readonly(key, false, account)
             } else {
-                KeyedAccount::new(&key, false, &account)
+                KeyedAccount::new(key, false, account)
             }
         })
         .collect();
@@ -128,9 +128,9 @@ fn bench_serialize_aligned(bencher: &mut Bencher) {
         .enumerate()
         .map(|(i, (key, account))| {
             if i <= accounts.len() / 2 {
-                KeyedAccount::new_readonly(&key, false, &account)
+                KeyedAccount::new_readonly(key, false, account)
             } else {
-                KeyedAccount::new(&key, false, &account)
+                KeyedAccount::new(key, false, account)
             }
         })
         .collect();

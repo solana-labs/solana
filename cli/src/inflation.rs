@@ -102,7 +102,7 @@ fn process_rewards(
     rewards_epoch: Option<Epoch>,
 ) -> ProcessResult {
     let rewards = rpc_client
-        .get_inflation_reward(&addresses, rewards_epoch)
+        .get_inflation_reward(addresses, rewards_epoch)
         .map_err(|err| {
             if let Some(epoch) = rewards_epoch {
                 format!("Rewards not available for epoch {}", epoch)

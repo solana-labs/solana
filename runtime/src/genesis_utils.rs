@@ -191,15 +191,15 @@ pub fn create_genesis_config_with_leader_ex(
     mut initial_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) -> GenesisConfig {
     let validator_vote_account = vote_state::create_account(
-        &validator_vote_account_pubkey,
-        &validator_pubkey,
+        validator_vote_account_pubkey,
+        validator_pubkey,
         0,
         validator_stake_lamports,
     );
 
     let validator_stake_account = stake_state::create_account(
         validator_stake_account_pubkey,
-        &validator_vote_account_pubkey,
+        validator_vote_account_pubkey,
         &validator_vote_account,
         &rent,
         validator_stake_lamports,

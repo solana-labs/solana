@@ -37,7 +37,7 @@ fn parse_config_data<T>(data: &[u8], keys: Vec<(Pubkey, bool)>) -> Option<UiConf
 where
     T: serde::de::DeserializeOwned,
 {
-    let config_data: T = deserialize(&get_config_data(data).ok()?).ok()?;
+    let config_data: T = deserialize(get_config_data(data).ok()?).ok()?;
     let keys = keys
         .iter()
         .map(|key| UiConfigKey {
@@ -101,7 +101,7 @@ mod test {
         };
         let stake_config_account = create_config_account(vec![], &stake_config, 10);
         assert_eq!(
-            parse_config(&stake_config_account.data(), &stake_config::id()).unwrap(),
+            parse_config(stake_config_account.data(), &stake_config::id()).unwrap(),
             ConfigAccountType::StakeConfig(UiStakeConfig {
                 warmup_cooldown_rate: 0.25,
                 slash_penalty: 50,
@@ -121,7 +121,7 @@ mod test {
             10,
         );
         assert_eq!(
-            parse_config(&validator_info_config_account.data(), &info_pubkey).unwrap(),
+            parse_config(validator_info_config_account.data(), &info_pubkey).unwrap(),
             ConfigAccountType::ValidatorInfo(UiConfig {
                 keys: vec![
                     UiConfigKey {

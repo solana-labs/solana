@@ -240,7 +240,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
 
 fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &mut Network) {
     let num = network.len();
-    let (converged, bytes_tx) = network_run_pull(&thread_pool, network, 0, num * 2, 0.9);
+    let (converged, bytes_tx) = network_run_pull(thread_pool, network, 0, num * 2, 0.9);
     trace!(
         "network_simulator_pull_{}: converged: {} total_bytes: {}",
         num,
@@ -253,7 +253,7 @@ fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &mut Network) 
 fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_convergance: f64) {
     let num = network.len();
     // run for a small amount of time
-    let (converged, bytes_tx) = network_run_pull(&thread_pool, network, 0, 10, 1.0);
+    let (converged, bytes_tx) = network_run_pull(thread_pool, network, 0, 10, 1.0);
     trace!("network_simulator_push_{}: converged: {}", num, converged);
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
@@ -292,7 +292,7 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
             bytes_tx
         );
         // pull for a bit
-        let (converged, bytes_tx) = network_run_pull(&thread_pool, network, start, end, 1.0);
+        let (converged, bytes_tx) = network_run_pull(thread_pool, network, start, end, 1.0);
         total_bytes += bytes_tx;
         trace!(
             "network_simulator_push_{}: converged: {} bytes: {} total_bytes: {}",
@@ -466,7 +466,7 @@ fn network_run_pull(
                         .lock()
                         .unwrap()
                         .new_pull_request(
-                            &thread_pool,
+                            thread_pool,
                             from.keypair.deref(),
                             now,
                             None,

@@ -134,7 +134,7 @@ fn verify_repair(
         .map(|repair_meta| {
             outstanding_requests.register_response(
                 repair_meta.nonce,
-                &shred,
+                shred,
                 solana_sdk::timing::timestamp(),
             )
         })
@@ -153,7 +153,7 @@ fn prune_shreds_invalid_repair(
         let mut outstanding_requests = outstanding_requests.write().unwrap();
         shreds.retain(|shred| {
             let should_keep = (
-                verify_repair(&mut outstanding_requests, &shred, &repair_infos[i]),
+                verify_repair(&mut outstanding_requests, shred, &repair_infos[i]),
                 i += 1,
             )
                 .0;
@@ -630,7 +630,7 @@ mod test {
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(&entries, true, 0).0
+        shredder.entries_to_shreds(entries, true, 0).0
     }
 
     #[test]

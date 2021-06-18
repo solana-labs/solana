@@ -292,7 +292,7 @@ impl PropagatedStats {
     pub fn add_node_pubkey(&mut self, node_pubkey: &Pubkey, bank: &Bank) {
         if !self.propagated_node_ids.contains(node_pubkey) {
             let node_vote_accounts = bank
-                .epoch_vote_accounts_for_node_id(&node_pubkey)
+                .epoch_vote_accounts_for_node_id(node_pubkey)
                 .map(|v| &v.vote_accounts);
 
             if let Some(node_vote_accounts) = node_vote_accounts {

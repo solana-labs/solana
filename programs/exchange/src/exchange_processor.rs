@@ -193,11 +193,11 @@ impl ExchangeProcessor {
             error!("Not enough accounts");
             return Err(InstructionError::InvalidArgument);
         }
-        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].try_account_ref()?.data())?;
+        Self::is_account_unallocated(keyed_accounts[NEW_ACCOUNT_INDEX].try_account_ref()?.data())?;
         Self::serialize(
             &ExchangeState::Account(
                 TokenAccountInfo::default()
-                    .owner(&keyed_accounts[OWNER_INDEX].unsigned_key())
+                    .owner(keyed_accounts[OWNER_INDEX].unsigned_key())
                     .tokens(100_000, 100_000, 100_000, 100_000),
             ),
             &mut keyed_accounts[NEW_ACCOUNT_INDEX]
@@ -221,13 +221,13 @@ impl ExchangeProcessor {
         }
 
         let mut to_account =
-            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref()?.data())?;
+            Self::deserialize_account(keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref()?.data())?;
 
         if &faucet::id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
-                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].try_account_ref()?.data())
+                bincode::deserialize(keyed_accounts[FROM_ACCOUNT_INDEX].try_account_ref()?.data())
                     .map_err(Self::map_to_invalid_arg)?;
             match state {
                 ExchangeState::Account(mut from_account) => {
@@ -309,10 +309,10 @@ impl ExchangeProcessor {
             return Err(InstructionError::InvalidArgument);
         }
 
-        Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
+        Self::is_account_unallocated(keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
         let mut account = Self::deserialize_account(
-            &keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data(),
+            keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data(),
         )?;
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
@@ -368,7 +368,7 @@ impl ExchangeProcessor {
         }
 
         let order =
-            Self::deserialize_order(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
+            Self::deserialize_order(keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
         if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own order");
@@ -404,11 +404,11 @@ impl ExchangeProcessor {
         }
 
         let mut to_order =
-            Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].try_account_ref()?.data())?;
+            Self::deserialize_order(keyed_accounts[TO_ORDER_INDEX].try_account_ref()?.data())?;
         let mut from_order =
-            Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].try_account_ref()?.data())?;
+            Self::deserialize_order(keyed_accounts[FROM_ORDER_INDEX].try_account_ref()?.data())?;
         let mut profit_account = Self::deserialize_account(
-            &keyed_accounts[PROFIT_ACCOUNT_INDEX]
+            keyed_accounts[PROFIT_ACCOUNT_INDEX]
                 .try_account_ref()?
                 .data(),
         )?;
@@ -639,7 +639,7 @@ mod test {
     }
 
     fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = create_account(&client, &owner);
+        let new = create_account(client, owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
             .send_and_confirm_instruction(owner, instruction)
@@ -670,9 +670,9 @@ mod test {
         trade_tokens: u64,
         price: u64,
     ) -> (Pubkey, Pubkey) {
-        let trade = create_account(&client, &owner);
-        let src = create_token_account(&client, &owner);
-        transfer(&client, &owner, &src, from_token, src_tokens);
+        let trade = create_account(client, owner);
+        let src = create_token_account(client, owner);
+        transfer(client, owner, &src, from_token, src_tokens);
 
         let instruction = exchange_instruction::trade_request(
             &owner.pubkey(),

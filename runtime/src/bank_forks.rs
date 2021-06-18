@@ -516,7 +516,7 @@ mod tests {
                             slot: child.slot(),
                             timestamp: recent_timestamp + additional_timestamp_secs,
                         },
-                        &child,
+                        child,
                         &voting_keypair.pubkey(),
                     );
                 }

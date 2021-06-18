@@ -122,7 +122,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("our-localhost")
                         .takes_value(false)
                         .value_name("PORT")
-                        .default_value(&DEFAULT_RPC_PORT_STR)
+                        .default_value(DEFAULT_RPC_PORT_STR)
                         .validator(is_port)
                         .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
                 )

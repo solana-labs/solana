@@ -682,7 +682,7 @@ impl EntrySlice for [Entry] {
 }
 
 pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
-    let entry = Entry::new(&start, num_hashes, transactions);
+    let entry = Entry::new(start, num_hashes, transactions);
     *start = entry.hash;
     entry
 }
@@ -737,7 +737,7 @@ mod tests {
     #[test]
     fn test_entry_verify() {
         let zero = Hash::default();
-        let one = hash(&zero.as_ref());
+        let one = hash(zero.as_ref());
         assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case, never used
         assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
         assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
@@ -826,7 +826,7 @@ mod tests {
     fn test_verify_slice1() {
         solana_logger::setup();
         let zero = Hash::default();
-        let one = hash(&zero.as_ref());
+        let one = hash(zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
         assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
         assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
@@ -841,8 +841,8 @@ mod tests {
     fn test_verify_slice_with_hashes1() {
         solana_logger::setup();
         let zero = Hash::default();
-        let one = hash(&zero.as_ref());
-        let two = hash(&one.as_ref());
+        let one = hash(zero.as_ref());
+        let two = hash(one.as_ref());
         assert!(vec![][..].verify(&one)); // base case
         assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
         assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
@@ -861,8 +861,8 @@ mod tests {
     fn test_verify_slice_with_hashes_and_transactions() {
         solana_logger::setup();
         let zero = Hash::default();
-        let one = hash(&zero.as_ref());
-        let two = hash(&one.as_ref());
+        let one = hash(zero.as_ref());
+        let two = hash(one.as_ref());
         let alice_keypair = Keypair::new();
         let bob_keypair = Keypair::new();
         let tx0 = system_transaction::transfer(&alice_keypair, &bob_keypair.pubkey(), 1, one);

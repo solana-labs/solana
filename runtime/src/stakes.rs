@@ -134,7 +134,7 @@ impl Stakes {
             // when account is removed (lamports == 0 or data uninitialized), don't read so that
             // given `pubkey` can be used for any owner in the future, while not affecting Stakes.
             if account.lamports() != 0
-                && !(check_vote_init && VoteState::is_uninitialized_no_deser(&account.data()))
+                && !(check_vote_init && VoteState::is_uninitialized_no_deser(account.data()))
             {
                 let stake = old.as_ref().map_or_else(
                     || {
@@ -258,8 +258,8 @@ pub mod tests {
             stake_pubkey,
             stake_state::create_account(
                 &stake_pubkey,
-                &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
+                vote_pubkey,
+                &vote_state::create_account(vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
             ),
@@ -290,8 +290,8 @@ pub mod tests {
             stake_pubkey,
             stake_state::create_account_with_activation_epoch(
                 &stake_pubkey,
-                &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
+                vote_pubkey,
+                &vote_state::create_account(vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
                 epoch,

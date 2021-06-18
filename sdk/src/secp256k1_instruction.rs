@@ -38,7 +38,7 @@ pub fn new_secp256k1_instruction(
     hasher.update(&message_arr);
     let message_hash = hasher.finalize();
     let mut message_hash_arr = [0u8; 32];
-    message_hash_arr.copy_from_slice(&message_hash.as_slice());
+    message_hash_arr.copy_from_slice(message_hash.as_slice());
     let message = libsecp256k1::Message::parse(&message_hash_arr);
     let (signature, recovery_id) = libsecp256k1::sign(&message, priv_key);
     let signature_arr = signature.serialize();
@@ -143,7 +143,7 @@ pub fn verify_eth_addresses(
 
         // Parse out pubkey
         let eth_address_slice = get_data_slice(
-            &instruction_datas,
+            instruction_datas,
             offsets.eth_address_instruction_index,
             offsets.eth_address_offset,
             HASHED_PUBKEY_SERIALIZED_SIZE,
@@ -151,7 +151,7 @@ pub fn verify_eth_addresses(
 
         // Parse out message
         let message_slice = get_data_slice(
-            &instruction_datas,
+            instruction_datas,
             offsets.message_instruction_index,
             offsets.message_data_offset,
             offsets.message_data_size as usize,
