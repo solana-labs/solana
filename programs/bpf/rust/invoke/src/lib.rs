@@ -263,8 +263,10 @@ fn process_instruction(
                     )?,
                     accounts[DERIVED_KEY1_INDEX].key
                 );
+                let not_native_program_id = Pubkey::new_from_array([6u8; 32]);
+                assert!(!not_native_program_id.is_native_program_id());
                 assert_eq!(
-                    Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default())
+                    Pubkey::create_program_address(&[b"You pass butter"], &not_native_program_id)
                         .unwrap_err(),
                     PubkeyError::InvalidSeeds
                 );
@@ -276,8 +278,10 @@ fn process_instruction(
                     Pubkey::try_find_program_address(&[b"You pass butter"], program_id).unwrap();
                 assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
                 assert_eq!(bump_seed, bump_seed1);
+                let not_native_program_id = Pubkey::new_from_array([6u8; 32]);
+                assert!(!not_native_program_id.is_native_program_id());
                 assert_eq!(
-                    Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default())
+                    Pubkey::create_program_address(&[b"You pass butter"], &not_native_program_id)
                         .unwrap_err(),
                     PubkeyError::InvalidSeeds
                 );
