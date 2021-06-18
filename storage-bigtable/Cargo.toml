@@ -15,7 +15,7 @@ backoff = { version = "0.3.0", features = ["tokio"] }
 bincode = "1.2.1"
 bzip2 = "0.3.3"
 enum-iterator = "0.6.0"
-flate2 = "1.0.14"
+flate2 = "1.0.20"
 goauth = "0.10.0"
 log = "0.4.11"
 prost = "0.7.0"
