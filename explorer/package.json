@@ -8,7 +8,7 @@
     "@project-serum/serum": "^0.13.38",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.7.1",
-    "@solana/spl-token-registry": "^0.2.135",
+    "@solana/spl-token-registry": "^0.2.142",
     "@solana/web3.js": "^1.18.0",
     "@testing-library/jest-dom": "^5.13.0",
     "@testing-library/react": "^11.2.7",
@@ -46,7 +46,7 @@
     "react-scripts": "^4.0.3",
     "react-select": "^4.3.1",
     "superstruct": "^0.15.2",
-    "typescript": "^4.3.3"
+    "typescript": "^4.3.4"
   },
   "scripts": {
     "start": "react-scripts start",
