@@ -7320,8 +7320,7 @@ pub(crate) mod tests {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(stake_account, vote_account, None, true)
-                    .unwrap_or(0)
+                stake_state::calculate_points(stake_account, vote_account, None, true).unwrap_or(0)
             })
             .sum();
 

@@ -76,11 +76,10 @@ fn main() {
                     */
                     
                 }
-                let last_median = get_last_metrics(&"median".to_string(), &db, &name, branch)
+                let last_median =
+                    get_last_metrics(&"median".to_string(), &db, &name, branch).unwrap_or_default();
+                let last_deviation = get_last_metrics(&"deviation".to_string(), &db, &name, branch)
                     .unwrap_or_default();
-                let last_deviation =
-                    get_last_metrics(&"deviation".to_string(), &db, &name, branch)
-                        .unwrap_or_default();
 
                 results.insert(name, (median, deviation, last_median, last_deviation));
             }

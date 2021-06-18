@@ -754,12 +754,7 @@ impl ReplayStage {
             )
         };
 
-        Self::initialize_progress_and_fork_choice(
-            &root_bank,
-            frozen_banks,
-            my_pubkey,
-            vote_account,
-        )
+        Self::initialize_progress_and_fork_choice(&root_bank, frozen_banks, my_pubkey, vote_account)
     }
 
     pub(crate) fn initialize_progress_and_fork_choice(
@@ -777,14 +772,7 @@ impl ReplayStage {
             let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
             progress.insert(
                 bank.slot(),
-                ForkProgress::new_from_bank(
-                    bank,
-                    my_pubkey,
-                    vote_account,
-                    prev_leader_slot,
-                    0,
-                    0,
-                ),
+                ForkProgress::new_from_bank(bank, my_pubkey, vote_account, prev_leader_slot, 0, 0),
             );
         }
         let root = root_bank.slot();
@@ -3107,8 +3095,7 @@ mod tests {
             let mut entries =
                 entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash);
             let last_entry_hash = entries.last().unwrap().hash;
-            let tx =
-                system_transaction::transfer(genesis_keypair, &keypair.pubkey(), 2, blockhash);
+            let tx = system_transaction::transfer(genesis_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
             entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)

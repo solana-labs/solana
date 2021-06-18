@@ -1889,13 +1889,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey,
             output_file,
             use_lamports_unit,
-        } => process_show_account(
-            &rpc_client,
-            config,
-            pubkey,
-            output_file,
-            *use_lamports_unit,
-        ),
+        } => process_show_account(&rpc_client, config, pubkey, output_file, *use_lamports_unit),
         CliCommand::Transfer {
             amount,
             to,
