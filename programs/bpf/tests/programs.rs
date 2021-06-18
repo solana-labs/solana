@@ -1296,6 +1296,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_dep_crate", 2),
             ("solana_bpf_rust_external_spend", 521),
             ("solana_bpf_rust_iter", 724),
+<<<<<<< HEAD
             ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_mem", 3166),
             ("solana_bpf_rust_membuiltins", 4069),
@@ -1304,6 +1305,16 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_rand", 498),
             ("solana_bpf_rust_sanity", 917),
             ("solana_bpf_rust_sha", 29099),
+=======
+            ("solana_bpf_rust_many_args", 233),
+            ("solana_bpf_rust_mem", 3119),
+            ("solana_bpf_rust_membuiltins", 4065),
+            ("solana_bpf_rust_noop", 478),
+            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_rand", 481),
+            ("solana_bpf_rust_sanity", 873),
+            ("solana_bpf_rust_sha", 32295),
+>>>>>>> c1e03f341 (Updates BPF program assert_instruction_count tests.)
         ]);
     }
 
