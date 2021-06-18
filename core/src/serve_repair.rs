@@ -323,7 +323,7 @@ impl ServeRepair {
                         &mut max_packets,
                     );
                     match result {
-                        Err(Error::RecvTimeoutError(_)) | Ok(_) => {}
+                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
                         Err(err) => info!("repair listener error: {:?}", err),
                     };
                     if exit.load(Ordering::Relaxed) {
@@ -777,7 +777,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
         );
-        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
+        assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
         let nxt = ContactInfo {

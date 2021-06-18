@@ -563,8 +563,8 @@ pub fn retransmitter(
                             &rpc_subscriptions,
                         ) {
                             match e {
-                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                                Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
                                 _ => {
                                     inc_new_counter_error!("streamer-retransmit-error", 1, 1);
                                 }
