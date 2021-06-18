@@ -21,10 +21,10 @@ pub enum StreamerError {
     Io(#[from] std::io::Error),
 
     #[error("receive timeout error")]
-    RecvTimeoutError(#[from] RecvTimeoutError),
+    RecvTimeout(#[from] RecvTimeoutError),
 
     #[error("send packets error")]
-    SendError(#[from] SendError<Packets>),
+    Send(#[from] SendError<Packets>),
 }
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
@@ -148,8 +148,8 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) ->
             loop {
                 if let Err(e) = recv_send(&sock, &r) {
                     match e {
-                        StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        StreamerError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
                         _ => {
                             errors += 1;
                             last_error = Some(e);
