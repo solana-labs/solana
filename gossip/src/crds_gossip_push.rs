@@ -275,13 +275,7 @@ impl CrdsGossipPush {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
         let (weights, peers): (Vec<_>, Vec<_>) = self
-            .push_options(
-                crds,
-                self_id,
-                self_shred_version,
-                stakes,
-                gossip_validators,
-            )
+            .push_options(crds, self_id, self_shred_version, stakes, gossip_validators)
             .into_iter()
             .unzip();
         if peers.is_empty() {

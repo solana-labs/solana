@@ -2844,10 +2844,7 @@ fn test_hard_fork_invalidates_tower() {
     thread.join().unwrap();
 
     // new slots should be rooted after hard-fork cluster relaunch
-    cluster
-        .lock()
-        .unwrap()
-        .check_for_new_roots(16, "hard fork");
+    cluster.lock().unwrap().check_for_new_roots(16, "hard fork");
 }
 
 #[test]
