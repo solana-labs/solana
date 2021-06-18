@@ -218,13 +218,7 @@ impl Tower {
             )
             .clone();
 
-        Self::new(
-            my_pubkey,
-            vote_account,
-            root,
-            &heaviest_bank,
-            ledger_path,
-        )
+        Self::new(my_pubkey, vote_account, root, &heaviest_bank, ledger_path)
     }
 
     pub(crate) fn collect_vote_lockouts<F>(

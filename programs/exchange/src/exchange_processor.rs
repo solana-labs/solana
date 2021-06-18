@@ -311,9 +311,8 @@ impl ExchangeProcessor {
 
         Self::is_account_unallocated(keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
-        let mut account = Self::deserialize_account(
-            keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data(),
-        )?;
+        let mut account =
+            Self::deserialize_account(keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data())?;
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
@@ -367,8 +366,7 @@ impl ExchangeProcessor {
             return Err(InstructionError::InvalidArgument);
         }
 
-        let order =
-            Self::deserialize_order(keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
+        let order = Self::deserialize_order(keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
         if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own order");

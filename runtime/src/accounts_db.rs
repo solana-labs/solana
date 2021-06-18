@@ -1478,11 +1478,8 @@ impl AccountsDb {
             .map(|pubkeys: &[Pubkey]| {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
-                    self.accounts_index.clean_rooted_entries(
-                        pubkey,
-                        &mut reclaims,
-                        max_clean_root,
-                    );
+                    self.accounts_index
+                        .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
                 }
                 reclaims
             });
@@ -9441,10 +9438,7 @@ pub mod tests {
 
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot,
-            dummy_id1,
-            dummy_size,
+            dummy_path, dummy_slot, dummy_id1, dummy_size,
         ));
         entry1.alive_bytes.store(8000, Ordering::Relaxed);
 
@@ -9455,10 +9449,7 @@ pub mod tests {
 
         let dummy_id2 = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot,
-            dummy_id2,
-            dummy_size,
+            dummy_path, dummy_slot, dummy_id2, dummy_size,
         ));
         entry2.alive_bytes.store(3000, Ordering::Relaxed);
         candidates
@@ -9477,10 +9468,7 @@ pub mod tests {
         let dummy_size = 4 * PAGE_SIZE;
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot,
-            dummy_id1,
-            dummy_size,
+            dummy_path, dummy_slot, dummy_id1, dummy_size,
         ));
         entry1.alive_bytes.store(3500, Ordering::Relaxed);
 
@@ -10950,18 +10938,12 @@ pub mod tests {
 
         let dummy_id1 = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot,
-            dummy_id1,
-            dummy_size,
+            dummy_path, dummy_slot, dummy_id1, dummy_size,
         ));
 
         let dummy_id2 = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot,
-            dummy_id2,
-            dummy_size,
+            dummy_path, dummy_slot, dummy_id2, dummy_size,
         ));
 
         let mut recycle_stores = RecycleStores::default();
