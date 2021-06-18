@@ -20,7 +20,8 @@ use {
     tar::Archive,
 };
 
-struct Config {
+struct Config<'a> {
+    cargo_args: Option<Vec<&'a str>>,
     bpf_out_dir: Option<PathBuf>,
     bpf_sdk: PathBuf,
     dump: bool,
@@ -31,9 +32,10 @@ struct Config {
     workspace: bool,
 }
 
-impl Default for Config {
+impl Default for Config<'_> {
     fn default() -> Self {
         Self {
+            cargo_args: None,
             bpf_sdk: env::current_exe()
                 .expect("Unable to get current executable")
                 .parent()
@@ -461,6 +463,11 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         cargo_build_args.push("--verbose");
     }
+    if let Some(args) = &config.cargo_args {
+        for arg in args {
+            cargo_build_args.push(arg);
+        }
+    }
     let output = spawn(&cargo_build, &cargo_build_args);
     if config.verbose {
         println!("{}", output);
@@ -656,12 +663,16 @@ fn main() {
                 .alias("all")
                 .help("Build all BPF packages in the workspace"),
         )
+        .arg(Arg::with_name("cargo_args").multiple(true).last(true))
         .get_matches_from(args);
 
     let bpf_sdk = value_t_or_exit!(matches, "bpf_sdk", PathBuf);
     let bpf_out_dir = value_t!(matches, "bpf_out_dir", PathBuf).ok();
 
     let config = Config {
+        cargo_args: matches
+            .values_of("cargo_args")
+            .map(|vals| vals.collect::<Vec<_>>()),
         bpf_sdk: fs::canonicalize(&bpf_sdk).unwrap_or_else(|err| {
             eprintln!(
                 "BPF SDK path does not exist: {}: {}",
