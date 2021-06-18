@@ -38,15 +38,9 @@ pub fn new_secp256k1_instruction(
     hasher.update(&message_arr);
     let message_hash = hasher.finalize();
     let mut message_hash_arr = [0u8; 32];
-<<<<<<< HEAD
     message_hash_arr.copy_from_slice(&message_hash.as_slice());
     let message = secp256k1::Message::parse(&message_hash_arr);
     let (signature, recovery_id) = secp256k1::sign(&message, priv_key);
-=======
-    message_hash_arr.copy_from_slice(message_hash.as_slice());
-    let message = libsecp256k1::Message::parse(&message_hash_arr);
-    let (signature, recovery_id) = libsecp256k1::sign(&message, priv_key);
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
     let signature_arr = signature.serialize();
     assert_eq!(signature_arr.len(), SIGNATURE_SERIALIZED_SIZE);
 

@@ -176,12 +176,8 @@ impl Tvu {
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-<<<<<<< HEAD
             &exit,
             completed_slots_receiver,
-=======
-            exit,
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,

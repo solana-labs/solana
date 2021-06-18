@@ -143,11 +143,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-<<<<<<< HEAD
             test_bpf_package(&config, &metadata.target_directory, root_package);
-=======
-            test_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
             return;
         }
     }
@@ -168,11 +164,7 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-<<<<<<< HEAD
         test_bpf_package(&config, &metadata.target_directory, package);
-=======
-        test_bpf_package(&config, metadata.target_directory.as_ref(), package);
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
     }
 }
 

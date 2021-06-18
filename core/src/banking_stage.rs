@@ -231,11 +231,6 @@ impl BankingStage {
             Self::num_threads(),
             transaction_status_sender,
             gossip_vote_sender,
-<<<<<<< HEAD
-=======
-            cost_model,
-            &cost_tracker,
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
         )
     }
 
@@ -1077,19 +1072,7 @@ impl BankingStage {
         );
         process_tx_time.stop();
 
-<<<<<<< HEAD
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
-=======
-        // applying cost of processed transactions to shared cost_tracker
-        transactions.iter().enumerate().for_each(|(index, tx)| {
-            if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
-                let tx_cost = cost_model.read().unwrap().calculate_cost(tx.transaction());
-                let mut guard = cost_tracker.lock().unwrap();
-                let _result = guard.try_add(tx_cost);
-                drop(guard);
-            }
-        });
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
         let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
@@ -1134,22 +1117,11 @@ impl BankingStage {
             }
         }
 
-<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &transaction_indexes,
             bank.secp256k1_program_enabled(),
         );
-=======
-        let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
-            Self::transactions_from_packets(
-                msgs,
-                transaction_indexes,
-                bank.secp256k1_program_enabled(),
-                cost_model,
-                cost_tracker,
-            );
->>>>>>> 6514096a6 (chore: cargo +nightly clippy --fix -Z unstable-options)
 
         let tx_count = transaction_to_packet_indexes.len();
 
