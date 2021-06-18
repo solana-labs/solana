@@ -691,6 +691,7 @@ fn load_bank_forks(
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            incremental_snapshot_interval_slots: std::u64::MAX, // bprumo TODO: put in real value
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {

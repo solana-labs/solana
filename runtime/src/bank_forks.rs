@@ -27,22 +27,26 @@ pub enum ArchiveFormat {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
-    // Generate a new snapshot every this many slots
-    pub snapshot_interval_slots: u64,
+    /// Generate a new snapshot every this many slots
+    pub snapshot_interval_slots: Slot,
 
-    // Where to store the latest packaged snapshot
+    /// Where to store the latest packaged snapshot
     pub snapshot_package_output_path: PathBuf,
 
-    // Where to place the snapshots for recent slots
+    /// Where to place the snapshots for recent slots
     pub snapshot_path: PathBuf,
 
+    /// The archive format for the snapshot archive
     pub archive_format: ArchiveFormat,
 
-    // Snapshot version to generate
+    /// Snapshot version to generate
     pub snapshot_version: SnapshotVersion,
 
-    // Maximum number of snapshots to retain
+    /// Maximum number of snapshots to retain
     pub maximum_snapshots_to_retain: usize,
+
+    /// Generate a new incremental snapshot every this many slots
+    pub incremental_snapshot_interval_slots: Slot,
 }
 
 pub struct BankForks {

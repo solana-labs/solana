@@ -492,6 +492,7 @@ impl TestValidator {
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                incremental_snapshot_interval_slots: std::u64::MAX,
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,

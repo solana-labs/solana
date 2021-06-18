@@ -135,7 +135,7 @@ pub(crate) fn bank_from_stream<R>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -156,7 +156,7 @@ where
                 unpacked_append_vec_map,
                 debug_keys,
                 additional_builtins,
-                account_indexes,
+                account_secondary_indexes,
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
@@ -184,7 +184,7 @@ pub(crate) fn bank_from_stream_incremental<R>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -207,7 +207,7 @@ where
                 unpacked_append_vec_map,
                 debug_keys,
                 additional_builtins,
-                account_indexes,
+                account_secondary_indexes,
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
@@ -303,7 +303,7 @@ fn reconstruct_bank_from_fields<E>(
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -316,7 +316,7 @@ where
         account_paths,
         unpacked_append_vec_map,
         &genesis_config.cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
@@ -349,7 +349,7 @@ fn reconstruct_bank_from_fields_incremental<E>(
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -363,7 +363,7 @@ where
         account_paths,
         unpacked_append_vec_map,
         &genesis_config.cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
@@ -390,7 +390,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     cluster_type: &ClusterType,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -401,12 +401,12 @@ where
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
-    accounts_db.set_last_full_snapshot_slot(slot);
+    // bprumo TODO: accounts_db.set_last_full_snapshot_slot(slot);
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
@@ -431,7 +431,6 @@ where
             let mut new_slot_storage = HashMap::new();
             for storage_entry in slot_storage.drain(..) {
                 let file_name = AppendVec::file_name(slot, storage_entry.id());
-                debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields(): slot: {}, storage entry id: {}, appendvec filename: {:?}", slot, storage_entry.id(), file_name);
 
                 let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
                     debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields(): failed to get append vec path! file_name: {:?}", file_name);
@@ -449,7 +448,7 @@ where
                     accounts,
                     num_accounts,
                 );
-                debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields(): append vec path: {:?}", append_vec_path);
+                debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields(): slot: {}, storage entry id: {}, appendvec filename: {:?}, appendvec path: {:?}", slot, storage_entry.id(), file_name, append_vec_path);
 
                 new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
             }
@@ -501,7 +500,7 @@ fn reconstruct_accountsdb_from_fields_incremental<E>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     cluster_type: &ClusterType,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -512,17 +511,40 @@ where
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
     );
     let AccountsDbFields(fss_storage, _, fss_slot, _) = fss_accounts_db_fields;
     let AccountsDbFields(iss_storage, iss_version, iss_slot, iss_bank_hash_info) =
         iss_accounts_db_fields;
-    // bprumo TODO: what should be done if the versions are different between fss and iss? Just
-    // ignore, or error out?
 
-    accounts_db.set_last_full_snapshot_slot(fss_slot);
+    // bprumo TODO: filter out iss_storage with slot <= fss slot, and figure out if there's a way
+    // to just not have it in the AccountsDbField input at all
+    let iss_storage = iss_storage
+        .into_iter()
+        .filter(|(slot, _)| *slot > fss_slot)
+        .collect::<HashMap<_, _>>();
+
+    debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields_incremental(), fss slot: {}, iss slot: {}", fss_slot, iss_slot);
+    fss_storage.iter().for_each(|(k, v)| {
+        debug!(
+            "bprumo DEBUG\t\tfss storage, slot: {}, v.len: {}, v[1].id(): {}",
+            k,
+            v.len(),
+            v.first().unwrap().id()
+        )
+    });
+    iss_storage.iter().for_each(|(k, v)| {
+        debug!(
+            "bprumo DEBUG\t\tiss storage, slot: {}, v.len: {}, v[1].id(): {}",
+            k,
+            v.len(),
+            v.first().unwrap().id()
+        )
+    });
+
+    // bprumo DEBUG: accounts_db.set_last_full_snapshot_slot(fss_slot);
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {

@@ -1671,12 +1671,13 @@ fn test_snapshot_download() {
         wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
 
     trace!("found: {:?}", archive_filename);
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
             .to_path_buf(),
-        &archive_snapshot_hash,
+        archive_snapshot_hash.0,
+        &archive_snapshot_hash.1,
         ArchiveFormat::TarBzip2,
     );
 
@@ -1746,7 +1747,7 @@ fn test_snapshot_restart_tower() {
         wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
@@ -1808,7 +1809,7 @@ fn test_snapshots_blockstore_floor() {
 
     let (archive_filename, (archive_slot, archive_hash, _)) = loop {
         let archive =
-            snapshot_utils::get_highest_snapshot_archive_path(&snapshot_package_output_path);
+            snapshot_utils::get_highest_snapshot_archive_info(&snapshot_package_output_path);
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
@@ -1817,7 +1818,7 @@ fn test_snapshots_blockstore_floor() {
     };
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
@@ -3115,7 +3116,7 @@ fn wait_for_next_snapshot(
     );
     loop {
         if let Some((filename, (slot, hash, _))) =
-            snapshot_utils::get_highest_snapshot_archive_path(snapshot_package_output_path)
+            snapshot_utils::get_highest_snapshot_archive_info(snapshot_package_output_path)
         {
             trace!("snapshot for slot {} exists", slot);
             if slot >= last_slot {

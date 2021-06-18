@@ -9,7 +9,7 @@ use crate::{
 };
 use log::*;
 use solana_runtime::{
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+    bank_forks::{BankForks, SnapshotConfig},
     snapshot_utils,
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
@@ -52,15 +52,13 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        if let Some((archive_filename, (archive_slot, archive_hash, archive_format))) =
-            snapshot_utils::get_highest_snapshot_archive_path(
-                &snapshot_config.snapshot_package_output_path,
-            )
-        {
-            let incremental_snapshot_archive =
-                snapshot_utils::get_highest_incremental_snapshot_archive_path(
+        if let Some(full_snapshot_archive_info) = snapshot_utils::get_highest_snapshot_archive_info(
+            &snapshot_config.snapshot_package_output_path,
+        ) {
+            let incremental_snapshot_archive_info =
+                snapshot_utils::get_highest_incremental_snapshot_archive_info(
                     &snapshot_config.snapshot_package_output_path,
-                    archive_slot,
+                    full_snapshot_archive_info.slot,
                 );
 
             return load_from_snapshot(
@@ -72,11 +70,8 @@ pub fn load(
                 process_options,
                 transaction_status_sender,
                 cache_block_meta_sender,
-                archive_filename,
-                archive_slot,
-                archive_hash,
-                archive_format,
-                incremental_snapshot_archive,
+                full_snapshot_archive_info,
+                incremental_snapshot_archive_info,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -124,13 +119,13 @@ fn load_from_snapshot(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    archive_filename: PathBuf,
-    archive_slot: Slot,
-    archive_hash: Hash,
-    archive_format: ArchiveFormat,
-    incremental_snapshot_archive: Option<snapshot_utils::IncrementalSnapshotArchiveInfo>,
+    full_snapshot_archive_info: snapshot_utils::SnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<snapshot_utils::IncrementalSnapshotArchiveInfo>,
 ) -> LoadResult {
-    info!("Loading snapshot package: {:?}", archive_filename);
+    info!(
+        "Loading snapshot package: {:?}",
+        &full_snapshot_archive_info.path
+    );
 
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
@@ -139,13 +134,13 @@ fn load_from_snapshot(
     }
 
     // bprumo TODO: Simplify this to reduce duplication
-    let deserialized_bank = match incremental_snapshot_archive {
+    let deserialized_bank = match incremental_snapshot_archive_info {
         None => snapshot_utils::bank_from_snapshot_archive(
             &account_paths,
             &process_options.frozen_accounts,
             &snapshot_config.snapshot_path,
-            &archive_filename,
-            archive_format,
+            &full_snapshot_archive_info.path,
+            full_snapshot_archive_info.archive_format,
             genesis_config,
             process_options.debug_keys.clone(),
             Some(&crate::builtins::get(process_options.bpf_jit)),
@@ -154,14 +149,14 @@ fn load_from_snapshot(
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,
         ),
-        Some((incremental_snapshot_archive_path, (_, _, _, _))) => {
+        Some(incremental_snapshot_archive_info) => {
             snapshot_utils::bank_from_incremental_snapshot_archive(
                 &account_paths,
                 &process_options.frozen_accounts,
                 &snapshot_config.snapshot_path,
-                &incremental_snapshot_archive_path,
-                &archive_filename,
-                archive_format,
+                &full_snapshot_archive_info.path,
+                &incremental_snapshot_archive_info.path,
+                incremental_snapshot_archive_info.archive_format,
                 genesis_config,
                 process_options.debug_keys.clone(),
                 Some(&crate::builtins::get(process_options.bpf_jit)),
@@ -187,10 +182,19 @@ fn load_from_snapshot(
     );
 
     // bprumo TODO: If incremental_snapshot_archive is Some, then use its slot and hash instead
-    if deserialized_bank_slot_and_hash != (archive_slot, archive_hash) {
+    if deserialized_bank_slot_and_hash
+        != (
+            full_snapshot_archive_info.slot,
+            full_snapshot_archive_info.hash,
+        )
+    {
         error!(
             "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
-            archive_hash, deserialized_bank_slot_and_hash
+            (
+                full_snapshot_archive_info.slot,
+                full_snapshot_archive_info.hash
+            ),
+            deserialized_bank_slot_and_hash
         );
         process::exit(1);
     }

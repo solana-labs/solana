@@ -152,19 +152,21 @@ impl SnapshotRequestHandler {
                 let highest_slot_to_clean = snapshot_utils::get_highest_snapshot_archive_slot(
                     &self.snapshot_config.snapshot_package_output_path,
                 )
-                .or_else(|| Some(snapshot_root_bank.slot()));
-                error!(
-                    "bprumo DEBUG: handle_snapshot_requests(): highest_slot_to_clean: {:?}",
-                    highest_slot_to_clean
+                .or_else(|| Some(snapshot_root_bank.slot())).map(|slot| slot.saturating_sub(1));
+                debug!(
+                    "bprumo DEBUG: handle_snapshot_requests(): bank slot: {}, highest_slot_to_clean: {:?}, accounts db caching enabled: {}",
+                    snapshot_root_bank.slot(),
+                    highest_slot_to_clean,
+                    accounts_db_caching_enabled
                 );
 
                 let mut clean_time = Measure::start("clean_time");
-                // bprumo TODO: fix comment
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts_up_to_slot(highest_slot_to_clean, false);
+                // bprumo TODO: snapshot_root_bank.clean_accounts_up_to_slot(highest_slot_to_clean, false);
+                // bprumo TODO: snapshot_root_bank.clean_accounts(true, false);
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -352,7 +354,6 @@ impl AccountsBackgroundService {
                     // cache up to bank.slot(), so should be safe as long
                     // as any later snapshots that are taken are of
                     // slots >= bank.slot()
-                    // bprumo TODO: will need to look into this one, can not clean past last_full_snapshot_slot
                     bank.flush_accounts_cache_if_needed();
                 }
 
@@ -386,7 +387,7 @@ impl AccountsBackgroundService {
                         }
                         // bprumo TODO: only clean up to last_full_snapshot_slot; may want to store
                         // that as a loop variable
-                        // bprumo TODO remove? bank.clean_accounts(true, false);
+                        // bprumo TODO: bank.clean_accounts(true, false);
                         last_cleaned_block_height = bank.block_height();
                     }
                 }

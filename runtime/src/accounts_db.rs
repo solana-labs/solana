@@ -530,6 +530,13 @@ impl AccountStorageEntry {
     }
 
     pub fn recycle(&self, slot: Slot, id: usize) {
+        debug!(
+            "bprumo DEBUG: AccountStorageEntry::recycle(), new slot: {}, new id: {}, orig slot: {}, orig id: {}",
+            slot,
+            id,
+            self.slot(),
+            self.append_vec_id()
+        );
         let mut count_and_status = self.count_and_status.write().unwrap();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
@@ -1699,11 +1706,15 @@ impl AccountsDb {
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self, max_clean_root: Option<Slot>, is_startup: bool) {
         debug!(
-            "bprumo DEBUG: clean_accounts(), max_clean_root: {:?}, last full snapshot slot: {:?}",
+            "bprumo DEBUG: clean_accounts(), fn param max_clean_root: {:?}, last full snapshot slot: {:?}",
             max_clean_root,
             self.last_full_snapshot_slot()
         );
         let max_clean_root = self.max_clean_root(max_clean_root);
+        debug!(
+            "bprumo DEBUG:      actual max_clean_root: {:?}",
+            max_clean_root
+        );
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
@@ -2050,6 +2061,12 @@ impl AccountsDb {
         let mut original_bytes = 0;
         let mut num_stores = 0;
         for store in stores {
+            debug!(
+                "bprumo DEBUG: do_shrink_slot_stores(), slot: {}, store.slot: {}, store.id: {}",
+                slot,
+                store.slot(),
+                store.append_vec_id()
+            );
             let mut start = 0;
             original_bytes += store.total_bytes();
             while let Some((account, next)) = store.accounts.get_account(start) {
@@ -2417,6 +2434,7 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool) {
+        debug!("bprumo DEBUG: shrink_all_slots()");
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
             let chunk_size = std::cmp::max(slots.len() / 8, 1); // approximately 400k slots in a snapshot
@@ -3095,7 +3113,8 @@ impl AccountsDb {
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id.fetch_add(1, Ordering::Relaxed));
                     debug!(
-                        "recycling store: {} {:?} old_id: {}",
+                        //"recycling store: {} {:?} old_id: {}",
+                        "bprumo DEBUG: try_recycle_store(), recycling store: {} {:?} old_id: {}",
                         ret.append_vec_id(),
                         ret.get_path(),
                         old_id
@@ -3237,7 +3256,8 @@ impl AccountsDb {
         }
 
         debug!(
-            "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
+            //"creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
+            "bprumo DEBUG: create_store(), creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),
             slot,
             store.accounts.len(),
@@ -3333,6 +3353,11 @@ impl AccountsDb {
                 }
                 recycle_stores.add_entry(stores.clone());
                 recycled_count += 1;
+                debug!(
+                    "bprumo DEBUG: recycle_slot_stores(), store slot: {}, id: {}",
+                    stores.slot(),
+                    stores.append_vec_id()
+                );
             }
         }
         recycle_stores_write_elapsed.as_us()
@@ -3827,6 +3852,11 @@ impl AccountsDb {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
         let recycle_stores = self.recycle_stores.write().unwrap().expire_old_entries();
         recycle_stores_write_elapsed.stop();
+
+        debug!(
+            "bprumo DEBUG: expire_old_recycle_stores(), recycle_stores: {:?}",
+            recycle_stores
+        );
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
         drop(recycle_stores);
@@ -5882,6 +5912,10 @@ impl AccountsDb {
     // Requires all stores in the slot to be re-written otherwise the accounts_index
     // store ref count could become incorrect.
     fn do_shrink_slot_v1(&self, slot: Slot, forced: bool) -> usize {
+        debug!(
+            "bprumo DEBUG: do_shrink_slot_v1(), slot: {}, forced: {}",
+            slot, forced
+        );
         trace!("shrink_stale_slot: slot: {}", slot);
 
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
@@ -5953,6 +5987,7 @@ impl AccountsDb {
         let num_roots = self.accounts_index.num_roots();
         loop {
             if let Some(slot) = self.do_next_shrink_slot_v1(candidates) {
+                debug!("bprumo DEBUG: shrink_stale_slot_v1(), slot: {}, now calling do_strink_slot_v1()...", slot);
                 shrunken_account_total += self.do_shrink_stale_slot_v1(slot);
             } else {
                 return 0;
@@ -6008,6 +6043,10 @@ impl AccountsDb {
         // with clean_accounts().
         let mut candidates = candidates.unwrap();
 
+        debug!(
+            "bprumo DEBUG: process_stale_slot_v1(), candidates.len: {}",
+            candidates.len()
+        );
         let count = self.shrink_stale_slot_v1(&mut candidates);
         measure.stop();
         inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);

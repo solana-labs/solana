@@ -48,7 +48,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
-        snapshot_utils::get_highest_snapshot_archive_path,
+        snapshot_utils::get_highest_snapshot_archive_slot,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -2233,8 +2233,7 @@ pub mod rpc_minimal {
 
             meta.snapshot_config
                 .and_then(|snapshot_config| {
-                    get_highest_snapshot_archive_path(&snapshot_config.snapshot_package_output_path)
-                        .map(|(_, (slot, _, _))| slot)
+                    get_highest_snapshot_archive_slot(&snapshot_config.snapshot_package_output_path)
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }

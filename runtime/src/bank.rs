@@ -38,7 +38,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -4549,6 +4549,25 @@ impl Bank {
         self.rc.get_snapshot_storages(self.slot())
     }
 
+    /// Get the snapshot storages _higher than_ the `full_snapshot_slot`.  This is used when making an
+    /// incremental snapshot.
+    pub fn get_incremental_snapshot_storages(&self, full_snapshot_slot: Slot) -> SnapshotStorages {
+        debug!(
+            "bprumo DEBUG: get_incremental_snapshot_storages(), fss slot: {}",
+            full_snapshot_slot
+        );
+        self.get_snapshot_storages()
+            .into_iter()
+            .map(|storage| {
+                storage
+                    .into_iter()
+                    .filter(|entry| entry.slot() > full_snapshot_slot)
+                    .collect::<SnapshotStorage>()
+            })
+            .filter(|storage| !storage.is_empty())
+            .collect()
+    }
+
     #[must_use]
     fn verify_hash(&self) -> bool {
         assert!(self.is_frozen());
@@ -4654,6 +4673,7 @@ impl Bank {
         info!("shrinking..");
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if self.slot() > 0 {
+            debug!("bprumo DEBUG: verify_snapshot_bank(), shrinking all slots...");
             self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
@@ -4966,6 +4986,7 @@ impl Bank {
         budget_recovery_delta: usize,
     ) -> usize {
         if consumed_budget == 0 {
+            debug!("bprumo DEBUG: process_stale_slot_with_budget(), from ABS?, calling accounts_db.process_stale_slot_v1()");
             let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot_v1();
             if shrunken_account_count > 0 {
                 datapoint_info!(

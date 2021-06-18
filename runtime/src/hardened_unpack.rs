@@ -105,7 +105,6 @@ where
         let mut entry = entry?;
         let path = entry.path()?;
         let path_str = path.display().to_string();
-        debug!("bprumo DEBUG: unpack_archive(),    entry path: {:?}", path);
 
         // Although the `tar` crate safely skips at the actual unpacking, fail
         // first by ourselves when there are odd paths like including `..` or /
@@ -154,6 +153,10 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
+        debug!(
+            "bprumo DEBUG: unpack_archive(),    entry path: {:?}, unpack_dir: {:?}",
+            path, unpack_dir
+        );
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
         check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
@@ -221,6 +224,7 @@ pub fn unpack_snapshot<A: Read>(
                     account_paths.get(path_index).map(|path_buf| {
                         unpacked_append_vec_map
                             .insert(file.to_string(), path_buf.join("accounts").join(file));
+                        debug!("bprumo DEBUG: unpack_snapshot(), unpack_archive(), {{closure}}, inserting file: {:?}, path: {:?}", file.to_string(), path_buf.join("accounts").join(file));
                         path_buf.as_path()
                     })
                 } else {
