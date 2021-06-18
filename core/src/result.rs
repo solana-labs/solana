@@ -6,18 +6,18 @@ use solana_ledger::blockstore;
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
-    RecvError(std::sync::mpsc::RecvError),
-    CrossbeamRecvTimeoutError(crossbeam_channel::RecvTimeoutError),
-    ReadyTimeoutError,
-    RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
-    CrossbeamSendError,
-    TryCrossbeamSendError,
+    Recv(std::sync::mpsc::RecvError),
+    CrossbeamRecvTimeout(crossbeam_channel::RecvTimeoutError),
+    ReadyTimeout,
+    RecvTimeout(std::sync::mpsc::RecvTimeoutError),
+    CrossbeamSend,
+    TryCrossbeamSend,
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    ClusterInfoError(cluster_info::ClusterInfoError),
-    SendError,
-    BlockstoreError(blockstore::BlockstoreError),
-    WeightedIndexError(rand::distributions::weighted::WeightedError),
-    GossipError(GossipError),
+    ClusterInfo(cluster_info::ClusterInfoError),
+    Send,
+    Blockstore(blockstore::BlockstoreError),
+    WeightedIndex(rand::distributions::weighted::WeightedError),
+    Gossip(GossipError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -32,42 +32,42 @@ impl std::error::Error for Error {}
 
 impl std::convert::From<std::sync::mpsc::RecvError> for Error {
     fn from(e: std::sync::mpsc::RecvError) -> Error {
-        Error::RecvError(e)
+        Error::Recv(e)
     }
 }
 impl std::convert::From<crossbeam_channel::RecvTimeoutError> for Error {
     fn from(e: crossbeam_channel::RecvTimeoutError) -> Error {
-        Error::CrossbeamRecvTimeoutError(e)
+        Error::CrossbeamRecvTimeout(e)
     }
 }
 impl std::convert::From<crossbeam_channel::ReadyTimeoutError> for Error {
     fn from(_e: crossbeam_channel::ReadyTimeoutError) -> Error {
-        Error::ReadyTimeoutError
+        Error::ReadyTimeout
     }
 }
 impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
     fn from(e: std::sync::mpsc::RecvTimeoutError) -> Error {
-        Error::RecvTimeoutError(e)
+        Error::RecvTimeout(e)
     }
 }
 impl std::convert::From<cluster_info::ClusterInfoError> for Error {
     fn from(e: cluster_info::ClusterInfoError) -> Error {
-        Error::ClusterInfoError(e)
+        Error::ClusterInfo(e)
     }
 }
 impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
     fn from(_e: crossbeam_channel::SendError<T>) -> Error {
-        Error::CrossbeamSendError
+        Error::CrossbeamSend
     }
 }
 impl<T> std::convert::From<crossbeam_channel::TrySendError<T>> for Error {
     fn from(_e: crossbeam_channel::TrySendError<T>) -> Error {
-        Error::TryCrossbeamSendError
+        Error::TryCrossbeamSend
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {
     fn from(_e: std::sync::mpsc::SendError<T>) -> Error {
-        Error::SendError
+        Error::Send
     }
 }
 impl std::convert::From<std::io::Error> for Error {
@@ -82,17 +82,17 @@ impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
 }
 impl std::convert::From<blockstore::BlockstoreError> for Error {
     fn from(e: blockstore::BlockstoreError) -> Error {
-        Error::BlockstoreError(e)
+        Error::Blockstore(e)
     }
 }
 impl std::convert::From<rand::distributions::weighted::WeightedError> for Error {
     fn from(e: rand::distributions::weighted::WeightedError) -> Error {
-        Error::WeightedIndexError(e)
+        Error::WeightedIndex(e)
     }
 }
 impl std::convert::From<GossipError> for Error {
     fn from(e: GossipError) -> Error {
-        Error::GossipError(e)
+        Error::Gossip(e)
     }
 }
 
@@ -116,12 +116,12 @@ mod tests {
 
     #[test]
     fn from_test() {
-        assert_matches!(Error::from(RecvError {}), Error::RecvError(_));
+        assert_matches!(Error::from(RecvError {}), Error::Recv(_));
         assert_matches!(
             Error::from(RecvTimeoutError::Timeout),
-            Error::RecvTimeoutError(_)
+            Error::RecvTimeout(_)
         );
-        assert_matches!(send_error(), Err(Error::SendError));
+        assert_matches!(send_error(), Err(Error::Send));
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
         assert_matches!(Error::from(ioe), Error::Io(_));
     }

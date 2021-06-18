@@ -188,7 +188,7 @@ mod tests {
         let before = update_version;
         assert_matches!(
             verified_vote_packets.receive_and_process_vote_packets(&r, &mut update_version, true),
-            Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout))
+            Err(Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout))
         );
         assert_eq!(before, update_version);
     }
