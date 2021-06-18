@@ -1173,16 +1173,13 @@ impl ClusterInfo {
     /// Returns epoch-slots inserted since the given cursor.
     /// Excludes entries from nodes with unkown or different shred version.
     pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
-        let self_shred_version = self.my_shred_version();
+        let self_shred_version = Some(self.my_shred_version());
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
-            .filter(
-                |entry| match gossip.crds.get_contact_info(entry.value.pubkey()) {
-                    Some(node) => node.shred_version == self_shred_version,
-                    None => false,
-                },
-            )
+            .filter(|entry| {
+                gossip.crds.get_shred_version(&entry.value.pubkey()) == self_shred_version
+            })
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
@@ -2213,9 +2210,10 @@ impl ClusterInfo {
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
         trace!("PullResponse me: {} from: {} len={}", self.id, from, len);
-        let shred_version = self
-            .lookup_contact_info(from, |ci| ci.shred_version)
-            .unwrap_or(0);
+        let shred_version = {
+            let gossip = self.gossip.read().unwrap();
+            gossip.crds.get_shred_version(from).unwrap_or_default()
+        };
         Self::filter_by_shred_version(
             from,
             &mut crds_values,
@@ -2365,10 +2363,7 @@ impl ClusterInfo {
             let gossip = self.gossip.read().unwrap();
             messages
                 .iter()
-                .map(|(from, _)| match gossip.crds.get_contact_info(*from) {
-                    None => 0,
-                    Some(info) => info.shred_version,
-                })
+                .map(|(from, _)| gossip.crds.get_shred_version(from).unwrap_or_default())
                 .collect()
         };
         // Filter out data if the origin has different shred version.
