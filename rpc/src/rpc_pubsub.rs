@@ -224,6 +224,8 @@ impl RpcSolPubSubImpl {
         debug!("Total existing subscriptions: {}", num_subscriptions);
         if num_subscriptions >= self.max_active_subscriptions {
             info!("Node subscription limit reached");
+            datapoint_info!("rpc-subscription", ("total", num_subscriptions, i64));
+            inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
             Err(Error {
                 code: ErrorCode::InternalError,
                 message: "Internal Error: Subscription refused. Node subscription limit reached"
@@ -231,6 +233,7 @@ impl RpcSolPubSubImpl {
                 data: None,
             })
         } else {
+            datapoint_info!("rpc-subscription", ("total", num_subscriptions + 1, i64));
             Ok(())
         }
     }
