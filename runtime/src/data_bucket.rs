@@ -194,30 +194,4 @@ impl DataBucket {
         self.capacity = self.capacity * 2;
         remove_file(old_file).unwrap();
     }
-
-    pub fn split<T: Sized + AsRef<T> + AsMut<T> + Copy>(&mut self, testfn: fn(&T) -> bool) -> Self {
-        let (mmap, path) = Self::new_map(&self.drives, self.cell_size, self.capacity);
-        let new_bucket = Self {
-            mmap,
-            path,
-            cell_size: self.cell_size,
-            capacity: self.capacity,
-            drives: self.drives.clone(),
-            used: AtomicU64::new(0),
-        };
-        (0..self.capacity as usize).into_par_iter().for_each(|i| {
-            let ix = i as u64;
-            let uid = self.uid(ix);
-            if uid != 0 {
-                let item = self.get(ix);
-                if testfn(item) {
-                    new_bucket.allocate(ix, uid).unwrap();
-                    let new: &mut T = new_bucket.get_mut(ix);
-                    *new = *item;
-                }
-                self.free(ix, uid);
-            }
-        });
-        new_bucket
-    }
 }

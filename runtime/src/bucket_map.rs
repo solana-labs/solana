@@ -2,12 +2,8 @@
 
 use crate::accounts_db::AccountInfo;
 use crate::data_bucket::DataBucket;
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::AtomicU64;
-use core::sync::atomic::Ordering;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::slot_history::Slot;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,158 +11,68 @@ use std::sync::RwLock;
 
 pub struct BucketMap {
     // power of 2 size masks point to the same bucket
-    masks: RwLock<Vec<Arc<RwLock<Bucket>>>>,
+    buckets: Vec<RwLock<Option<Bucket>>>,
     drives: Arc<Vec<PathBuf>>,
-    key_locks: RwLock<HashMap<Pubkey, Arc<SpinLock>>>,
 }
 
-struct SpinLock {
-    lock: AtomicBool,
-}
-
-impl SpinLock {
-    fn new() -> Self {
-        SpinLock {
-            lock: AtomicBool::new(false),
-        }
-    }
-
-    fn lock(&self) {
-        while Ok(false)
-            != self
-                .lock
-                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        {}
-    }
-    fn unlock(&self) {
-        self.lock.store(false, Ordering::Relaxed)
-    }
-}
-
-enum BucketMapError {
-    DataNoSpace,
-    IndexNoSpace,
+pub enum BucketMapError {
+    DataNoSpace((usize, u64)),
+    IndexNoSpace(u64),
 }
 
 impl BucketMap {
-    pub fn read_value(&self, pubkey: &Pubkey) -> Option<&SlotSlice> {
-        self.check_lock(pubkey);
-        let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
-        spinlock.lock();
-        let masks = self.masks.read().unwrap();
-        let ix = Self::bucket_ix(pubkey, masks.len());
-        let rv = masks[ix].read().unwrap().read_value(pubkey);
-        spinlock.unlock();
-        rv
+    pub fn read_value(&self, pubkey: &Pubkey) -> Option<Vec<SlotInfo>> {
+        let ix = self.bucket_ix(pubkey);
+        self.buckets[ix].read().unwrap().as_ref().and_then(|x| x.read_value(pubkey))
     }
 
     pub fn delete_key(&self, pubkey: &Pubkey) {
-        self.check_lock(pubkey);
-        let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
-        spinlock.lock();
-        let masks = self.masks.read().unwrap();
-        let ix = Self::bucket_ix(pubkey, masks.len());
-        masks[ix].read().unwrap().delete_key(pubkey);
-        spinlock.unlock();
+        let ix = self.bucket_ix(pubkey);
+        let bucket = self.buckets[ix].read().unwrap();
+        if bucket.is_none() {
+            bucket.as_ref().unwrap().delete_key(pubkey);
+        }
     }
 
     //updatefn must be re-entrant
     pub fn update(
         &self,
         pubkey: &Pubkey,
-        updatefn: fn(Option<&SlotSlice>) -> &SlotSlice,
+        updatefn: fn(Option<Vec<SlotInfo>>) -> Vec<SlotInfo>,
     ) -> Result<(), BucketMapError> {
+        let ix = self.bucket_ix(pubkey);
+        let mut bucket = self.buckets[ix].write().unwrap();
+        if bucket.is_none() {
+            *bucket  = Some(Bucket::new(&self.drives));
+        }
+        let bucket = bucket.as_mut().unwrap();
+        let current = bucket.read_value(pubkey);
+        let new = updatefn(current);
         loop {
-            let e = self.try_update(pubkey, updatefn);
-            if let Err(BucketMapError::IndexNoSpace) = e {
-                let mut masks = self.masks.write().unwrap();
-                let ix = Self::bucket_ix(pubkey, masks.len());
-                let new_bucket = masks[ix].write().unwrap().split(ix);
-                let mut new_masks = Vec::new();
-                for i in 0..masks.len() {
-                    new_masks.push(masks[i].clone());
-                    new_masks.push(masks[i].clone());
-                    if i == ix {
-                        new_masks[i * 2 + 1] = Arc::new(RwLock::new(new_bucket));
-                    }
-                }
-                *masks = new_masks;
+            let rv = bucket.try_write(pubkey, current.is_none(), &new);
+            if let Err(BucketMapError::DataNoSpace(sz)) = rv {
+                bucket.grow_data(sz);
+                continue;
+            } else if let Err(BucketMapError::IndexNoSpace(sz)) = rv {
+                bucket.grow_index(sz);
                 continue;
             }
-            return e;
+            return rv;
         }
     }
-
-    fn try_update(
-        &self,
-        pubkey: &Pubkey,
-        updatefn: fn(Option<&SlotSlice>) -> &SlotSlice,
-    ) -> Result<(), BucketMapError> {
-        self.check_lock(pubkey);
-        let spinlock = self.key_locks.read().unwrap().get(pubkey).unwrap();
-
-        let mut rv = Ok(());
-        spinlock.lock();
-        loop {
-            let masks = self.masks.read().unwrap();
-            let ix = Self::bucket_ix(pubkey, masks.len());
-            let current = masks[ix].read().unwrap().read_value(pubkey);
-            if current.is_none() {
-                masks[ix].read().unwrap().new_key(pubkey);
-            }
-            let new = updatefn(current);
-            rv = masks[ix].read().unwrap().try_write(pubkey, new);
-            if let Err(BucketMapError::DataNoSpace) = rv {
-                let bucket = masks[ix].write().unwrap();
-                rv = bucket.try_write(pubkey, new);
-                if let Err(BucketMapError::DataNoSpace) = rv {
-                    bucket.grow(new.len());
-                }
-                continue;
-            }
-            break;
-        }
-        spinlock.unlock();
-        return rv;
-    }
-
-    fn check_lock(&self, pubkey: &Pubkey) {
-        let key_locks = self.key_locks.read().unwrap();
-        if key_locks.get(pubkey).is_none() {
-            drop(key_locks);
-            let key_locks = self.key_locks.write().unwrap();
-            key_locks.insert(*pubkey, Arc::new(SpinLock::new()));
-        }
-    }
-
-    fn bucket_ix(pubkey: &Pubkey, masks_len: usize) -> usize {
+    fn bucket_ix(&self, pubkey: &Pubkey) -> usize {
         let location = read_be_u64(pubkey.as_ref());
-        let bits = (masks_len as f64).log2() as u64;
+        let bits = (self.buckets.len() as f64).log2().ceil() as u64;
         (location >> (64 - bits)) as usize
     }
 }
 
 struct Bucket {
-    version: AtomicU64,
+    drives: Arc<Vec<PathBuf>>,
     //index
     index: DataBucket,
     //data buckets to store SlotSlice up to a power of 2 in len
-    data: Vec<Arc<DataBucket>>,
-}
-
-impl Bucket {
-    fn read_value(&self, key: &Pubkey) -> Option<&SlotSlice> {
-        None
-    }
-    fn new_key(&self, key: &Pubkey) {}
-    fn delete_key(&self, key: &Pubkey) {}
-    fn grow(&mut self, size: usize) {}
-    fn split(&mut self, cur_ix: usize) -> Self {
-        unimplemented!();
-    }
-    fn try_write(&self, pubkey: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
-        Ok(())
-    }
+    data: Vec<DataBucket>,
 }
 
 #[repr(C)]
@@ -177,6 +83,70 @@ struct IndexEntry {
     //if the bucket doubled, the index can be recomputed
     create_bucket_capacity: u64,
     num_slots: u64,
+}
+
+const MAX_SEARCH: usize = 64;
+
+impl Bucket {
+    fn new(drives: Arc<Vec<PathBuf>>) -> Self {
+        let index = DataBucket::new(drives, std::mem::size_of::<IndexEntry>());
+        Self {
+            drives
+            index,
+            data: vec![],
+        }
+        unimplemented!();
+    }
+    fn read_value(&self, key: &Pubkey) -> Option<Vec<SlotInfo>> {
+        let ix = self.index_ix(key);
+        for i in ix .. ix + MAX_SEARCH {
+            let ii = i % self.index.capacity;
+            if self.index.uid(ii) == 0 {
+                continue;
+            }
+            let elem: &IndexEntry = self.index.get(ii);
+            if elem.key == key {
+                let cur_cap = self.data[eleme.data_bucket].capacity;
+                let loc = elem.data_location << cur_cap - elem.create_bucket_capacity;
+                let slice = self.data[eleme.data_bucket].get(loc);
+                return Some(slice);
+            }
+        }
+        None
+    }
+    fn allocate(&mut self, pubkey: &Pubkey, new: bool, data: &SlotSlice) -> Result<(), BucketMapError> {
+        if new {
+        }
+        for i in ix .. ix + MAX_SEARCH {
+        }
+    }
+
+    fn try_write(&mut self, pubkey: &Pubkey, new: bool, data: &SlotSlice) -> Result<(), BucketMapError> {
+        if new {
+        }
+        for i in ix .. ix + MAX_SEARCH {
+        }
+    }
+    fn delete_key(&self, _key: &Pubkey) {}
+    fn grow_index(&mut self, sz: u64) {
+        if self.index.capacity != sz {
+            self.index.grow();
+        }
+    }
+    fn grow_data(&mut self, sz: (usize, u64)) {
+        if self.data.get(sz.0).is_none() {
+            for i in self.data.len() .. (sz.0 + 1) {
+                self.data.push(DataBucket::new(self.drives, 1<<i))
+            }
+        }
+        if self.data[sz.0].capacity == sz.1 {
+            self.data[sz.0].grow();
+        }
+    }
+    fn index_ix(&self, pubkey: &Pubkey) -> usize {
+        let location = read_be_u64(pubkey.as_ref());
+        location % self.index.capacity
+    }
 }
 
 pub type SlotInfo = (Slot, AccountInfo);
