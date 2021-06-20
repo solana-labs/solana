@@ -991,6 +991,28 @@ fn rpc_bootstrap(
     }
 }
 
+fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
+    let entrypoints = {
+        let mut index: Vec<_> = (0..entrypoints.len()).collect();
+        index.shuffle(&mut rand::thread_rng());
+        index.into_iter().map(|i| &entrypoints[i])
+    };
+    for entrypoint in entrypoints {
+        match solana_net_utils::get_cluster_shred_version(entrypoint) {
+            Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
+            Ok(0) => eprintln!("zero sherd-version from entrypoint: {}", entrypoint),
+            Ok(shred_version) => {
+                info!(
+                    "obtained shred-version {} from {}",
+                    shred_version, entrypoint
+                );
+                return Some(shred_version);
+            }
+        }
+    }
+    None
+}
+
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -2133,6 +2155,25 @@ pub fn main() {
     } else {
         AccountShrinkThreshold::IndividalStore { shrink_ratio }
     };
+    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entrypoint| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+                eprintln!("failed to parse entrypoint address: {}", e);
+                exit(1);
+            })
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    // TODO: Once entrypoints are updated to return shred-version, this should
+    // abort if it fails to obtain a shred-version, so that nodes always join
+    // gossip with a valid shred-version. The code to adopt entrypoint shred
+    // version can then be deleted from gossip and get_rpc_node above.
+    let expected_shred_version = value_t!(matches, "expected_shred_version", u16)
+        .ok()
+        .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2145,9 +2186,7 @@ pub fn main() {
         expected_bank_hash: matches
             .value_of("expected_bank_hash")
             .map(|s| Hash::from_str(s).unwrap()),
-        // TODO: Once entrypoints are updated to return shred-version, obtain
-        // cluster shred version from ip-addr-server if this is None.
-        expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
+        expected_shred_version,
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
@@ -2397,19 +2436,6 @@ pub fn main() {
     if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
         validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
     }
-
-    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|entrypoint| {
-            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
-                eprintln!("failed to parse entrypoint address: {}", e);
-                exit(1);
-            })
-        })
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
