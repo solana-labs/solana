@@ -2363,6 +2363,7 @@ impl Bank {
 
     // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
+        error!("loading: {}", program_id);
         let existing_genuine_program =
             if let Some(mut account) = self.get_account_with_fixed_root(program_id) {
                 // it's very unlikely to be squatted at program_id as non-system account because of burden to
