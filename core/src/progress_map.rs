@@ -222,17 +222,17 @@ impl ForkProgress {
 
     pub fn new_from_bank(
         bank: &Bank,
-        my_pubkey: &Pubkey,
-        voting_pubkey: &Pubkey,
+        validator_identity: &Pubkey,
+        validator_vote_pubkey: &Pubkey,
         prev_leader_slot: Option<Slot>,
         num_blocks_on_fork: u64,
         num_dropped_blocks_on_fork: u64,
     ) -> Self {
         let validator_stake_info = {
-            if bank.collector_id() == my_pubkey {
+            if bank.collector_id() == validator_identity {
                 Some(ValidatorStakeInfo::new(
-                    *voting_pubkey,
-                    bank.epoch_vote_account_stake(voting_pubkey),
+                    *validator_vote_pubkey,
+                    bank.epoch_vote_account_stake(validator_vote_pubkey),
                     bank.total_epoch_stake(),
                 ))
             } else {
