@@ -1421,6 +1421,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         )
     }
 
@@ -1430,6 +1431,7 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index: Option<AccountInfoAccountsIndex>,
     ) -> Self {
         let mut new = if !paths.is_empty() {
             Self {
@@ -1439,6 +1441,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index: accounts_index.unwrap_or_default(),
                 ..Self::default()
             }
         } else {
@@ -6024,7 +6027,7 @@ impl AccountsDb {
         */
         //panic!("stop");
 
-        let scan_time: u64 = if false {
+        let scan_time: u64 = if true {
             0
         } else {
             slots

@@ -140,6 +140,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,    
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -161,6 +162,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                accounts_index,
             )?;
             Ok(bank)
         }};
@@ -252,6 +254,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,    
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -265,6 +268,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        accounts_index,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -339,6 +343,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,        
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -350,6 +355,7 @@ where
         account_indexes,
         caching_enabled,
         shrink_ratio,
+        Some(accounts_index),
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
     create_dir(&accounts_db.paths);

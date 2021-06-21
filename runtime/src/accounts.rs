@@ -146,6 +146,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                None,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

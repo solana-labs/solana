@@ -742,6 +742,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        idx,
     )?;
     measure.stop();
 
@@ -935,6 +936,7 @@ fn rebuild_bank_from_snapshots(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,
 ) -> Result<Bank> {
     let (snapshot_version_enum, root_paths) =
         verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
@@ -957,6 +959,7 @@ fn rebuild_bank_from_snapshots(
                 accounts_db_caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                accounts_index,
             ),
         }?)
     })?;
