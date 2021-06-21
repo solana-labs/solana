@@ -360,8 +360,8 @@ impl AppendVec {
         }
         let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
         //error!("sanitizing, found: {} accounts", num_accounts);
-        if false {
-            assert_eq!(offset, aligned_current_len);
+        if true {
+            //assert_eq!(offset, aligned_current_len);
             (true, num_accounts)
         } else {
             /*
