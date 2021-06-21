@@ -362,6 +362,9 @@ impl<'a> LoadedAccountAccessor<'a> {
                         if r.is_none() {
                             error!("was none: {}", offset);
                         }
+                        else {
+                            error!("offset: {}", offset);
+                        }
 
                         r.map(LoadedAccount::Stored)
                     })
