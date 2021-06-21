@@ -5878,7 +5878,7 @@ impl AccountsDb {
                             if occupied_version == this_version && stored_account.meta.pubkey != Pubkey::default() {
                                 warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash);
                         }
-                        assert!(occupied_version != this_version);
+                        //assert!(occupied_version != this_version);
                     }
                 }
                 }
