@@ -1010,6 +1010,7 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
+        error!("{}, {}", file!(), line!());
         Self::new_with_paths(
             genesis_config,
             Vec::new(),
@@ -1047,6 +1048,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
+        error!("{}, {}", file!(), line!());
         Self::new_with_paths(
             genesis_config,
             Vec::new(),
@@ -1071,6 +1073,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
+        error!("{}, {}, {}", file!(), line!(), debug_do_not_add_builtins);
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
@@ -1313,6 +1316,7 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
     ) -> Self {
+        error!("new_from_fields");
         fn new<T: Default>() -> T {
             T::default()
         }
@@ -1374,11 +1378,13 @@ impl Bank {
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
         };
+        error!("new_from_fields2");
         bank.finish_init(
             genesis_config,
             additional_builtins,
             debug_do_not_add_builtins,
         );
+        error!("new_from_fields3");
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -4280,7 +4286,9 @@ impl Bank {
                 .feature_builtins
                 .extend_from_slice(&additional_builtins.feature_builtins);
         }
+        error!("debug_do_not_add_builtins: {}", debug_do_not_add_builtins);
         if !debug_do_not_add_builtins {
+            error!("debug_do_not_add_builtins4: {}", debug_do_not_add_builtins);
             for builtin in builtins.genesis_builtins {
                 self.add_builtin(
                     &builtin.name,
@@ -4289,6 +4297,7 @@ impl Bank {
                 );
             }
         }
+        error!("debug_do_not_add_builtins2: {}", debug_do_not_add_builtins);
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
         self.apply_feature_activations(true, debug_do_not_add_builtins);

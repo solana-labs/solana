@@ -852,7 +852,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+pub type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -1334,6 +1334,29 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
     fn rent_epoch(&self) -> Epoch {
         self.account_meta.rent_epoch
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CrossThreadQueue<T> {
+    data: Arc<Mutex<Vec<T>>>,
+}
+
+impl<T> CrossThreadQueue<T> {
+    pub fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::new(Vec::default())),
+        }
+    }
+    pub fn push(&self, item: T) {
+        self.data.lock().unwrap().insert(0, item);
+    }
+    pub fn pop(&self) -> Option<T> {
+        let mut queue = self.data.lock().unwrap();
+        queue.pop()
+    }
+    pub fn len(&self) -> usize {
+        self.data.lock().unwrap().len()
     }
 }
 
@@ -4444,8 +4467,9 @@ impl AccountsDb {
             .account_maps
             .read()
             .unwrap()
-            .keys()
-            .cloned()
+            .iter()
+            .map(|btree| btree.keys().cloned())
+            .flatten()
             .collect();
         collect.stop();
 
@@ -4912,7 +4936,7 @@ impl AccountsDb {
         let mut scan_and_hash = move || {
             // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
             // More bins means smaller vectors to sort, copy, etc.
-            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 256;
 
             // # of passes should be a function of the total # of accounts that are active.
             // higher passes = slower total time, lower dynamic memory usage
@@ -5819,18 +5843,29 @@ impl AccountsDb {
         (result, slots)
     }
 
-    fn process_storage_slot(
-        storage_maps: &[Arc<AccountStorageEntry>],
-    ) -> GenerateIndexAccountsMap<'_> {
+    pub fn process_storage_slot<'a, T>(storage_maps: T) -> GenerateIndexAccountsMap<'a>
+    where
+        T: Iterator<Item = &'a Arc<AccountStorageEntry>> + Clone,
+    {
         let num_accounts = storage_maps
-            .iter()
+            .clone()
             .map(|storage| storage.approx_stored_count())
             .sum();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
-        storage_maps.iter().for_each(|storage| {
+        storage_maps.for_each(|storage| {
             let accounts = storage.all_accounts();
-            accounts.into_iter().for_each(|stored_account| {
+            let mut iter = accounts.into_iter();
+            loop {
+                let next = iter.next();
+                if next.is_none() {
+                    break;
+                }
+                let stored_account = next.unwrap();
                 let this_version = stored_account.meta.write_version;
+                //error!("acct: {:?}, accounts: {}", stored_account, num_accounts);
+                if stored_account.meta.pubkey == Pubkey::default() {
+                    //break;;
+                }
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert((this_version, storage.append_vec_id(), stored_account));
@@ -5840,16 +5875,25 @@ impl AccountsDb {
                         if occupied_version < this_version {
                             entry.insert((this_version, storage.append_vec_id(), stored_account));
                         } else {
-                            assert!(occupied_version != this_version);
+                            if occupied_version == this_version && stored_account.meta.pubkey != Pubkey::default() {
+                                warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash);
                         }
+                        assert!(occupied_version != this_version);
                     }
                 }
-            })
+                }
+            }
         });
         accounts_map
     }
 
-    fn generate_index_for_slot<'a>(&self, accounts_map: GenerateIndexAccountsMap<'a>, slot: &Slot) {
+    pub fn generate_index_for_slot<'a>(
+        accounts_index: &AccountInfoAccountsIndex,
+        uncleaned_pubkeys: &DashMap<Slot, Vec<Pubkey>>,
+        account_indexes: &AccountSecondaryIndexes,
+        accounts_map: GenerateIndexAccountsMap<'a>,
+        slot: &Slot,
+    ) -> u64 {
         if !accounts_map.is_empty() {
             let len = accounts_map.len();
 
@@ -5871,73 +5915,150 @@ impl AccountsDb {
                 .collect::<Vec<_>>();
 
             let items_len = items.len();
-            let dirty_pubkey_mask = self
-                .accounts_index
-                .insert_new_if_missing_into_primary_index(*slot, items);
+            let (dirty_pubkey_mask, timing) =
+                accounts_index.insert_new_if_missing_into_primary_index(*slot, items);
 
-            assert_eq!(dirty_pubkey_mask.len(), items_len);
+            /*
+                        assert_eq!(dirty_pubkey_mask.len(), items_len);
 
-            let mut dirty_pubkey_mask_iter = dirty_pubkey_mask.iter();
+                        let mut dirty_pubkey_mask_iter = dirty_pubkey_mask.iter();
 
-            // dirty_pubkey_mask will return true if an item has multiple rooted entries for
-            // a given pubkey. If there is just a single item, there is no cleaning to
-            // be done on that pubkey. Prune the touched pubkey set here for only those
-            // pubkeys with multiple updates.
-            dirty_pubkeys.retain(|_k| *dirty_pubkey_mask_iter.next().unwrap());
-            if !dirty_pubkeys.is_empty() {
-                self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
-            }
+                        // dirty_pubkey_mask will return true if an item has multiple rooted entries for
+                        // a given pubkey. If there is just a single item, there is no cleaning to
+                        // be done on that pubkey. Prune the touched pubkey set here for only those
+                        // pubkeys with multiple updates.
+                        dirty_pubkeys.retain(|_k| *dirty_pubkey_mask_iter.next().unwrap());
+                        if !dirty_pubkeys.is_empty() {
+                uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+                        }
+            */
 
-            if !self.account_indexes.is_empty() {
+            if !account_indexes.is_empty() {
                 for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
-                    self.accounts_index.update_secondary_indexes(
-                        pubkey,
+                    accounts_index.update_secondary_indexes(
+                        &pubkey,
                         &stored_account.account_meta.owner,
-                        stored_account.data,
-                        &self.account_indexes,
+                        &stored_account.data,
+                        account_indexes,
                     );
                 }
             }
+            return timing;
         }
+        0
+    }
+
+    pub fn add_slot_to_accounts_index(
+        &self,
+        storage_maps: &HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+        slot: Slot,
+    ) {
+        let accounts_map = Self::process_storage_slot(storage_maps.values());
+        Self::generate_index_for_slot(
+            &self.accounts_index,
+            &self.uncleaned_pubkeys,
+            &self.account_indexes,
+            accounts_map,
+            &slot,
+        );
     }
 
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>) {
         let mut slots = self.storage.all_slots();
-        #[allow(clippy::stable_sort_primitive)]
-        slots.sort();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
+        slots.sort_unstable(); // we have to sort before adding roots below
         let total_processed_slots_across_all_threads = AtomicU64::new(0);
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
         let mut index_time = Measure::start("index");
-        let scan_time: u64 = slots
-            .par_chunks(chunk_size)
-            .map(|slots| {
-                let mut log_status = MultiThreadProgress::new(
-                    &total_processed_slots_across_all_threads,
-                    2,
-                    outer_slots_len as u64,
-                );
-                let mut scan_time_sum = 0;
-                for (index, slot) in slots.iter().enumerate() {
-                    let mut scan_time = Measure::start("scan");
-                    log_status.report(index as u64);
-                    let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                        .storage
-                        .get_slot_storage_entries(*slot)
-                        .unwrap_or_default();
-                    let accounts_map = Self::process_storage_slot(&storage_maps);
-                    scan_time.stop();
-                    scan_time_sum += scan_time.as_us();
+        /*
+        let limit = 134217728;
+        let mut pks = Vec::with_capacity(limit);
+        for i in 0..limit {
+            pks.push(Pubkey::new_rand());
+        }
 
-                    self.generate_index_for_slot(accounts_map, slot);
-                }
-                scan_time_sum
-            })
-            .sum();
+        for po in 2..28u32{
+            let idx = AccountInfoAccountsIndex::default();
+            let uncleaned_pubkeys = self.uncleaned_pubkeys.clone();
+            let secondary = AccountSecondaryIndexes::default();
+            let count = 2usize.pow(po);
+            let mut map = GenerateIndexAccountsMap::default();
+            let sm = StoredMeta                {
+                write_version: 0,
+                pubkey: Pubkey::default(),
+                data_len: 0,
+            };
+            let am = crate::append_vec::AccountMeta                {
+                lamports: 1,
+                owner: Pubkey::default(),
+                executable: false,
+                rent_epoch: 0,
+            };
+            let d = Hash::default();
+            let data = [1u8];
+            for i in 0..count {
+                //HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+                map.insert(pks[i].clone(), (0, 0, StoredAccountMeta {
+                    meta: &sm,
+                    account_meta: &am,
+                    data: &data,
+                    offset: 0,
+                    stored_size: 0,
+                    hash: &d,
+                }));
+
+            }
+            let (timing, time) = Measure::this(|_| {
+                let timing = Self::generate_index_for_slot(&idx, &uncleaned_pubkeys, &secondary, map, &1);
+                timing
+            }, &1, "");
+            let m = idx.account_maps.read().unwrap();
+            let max = m.iter().map(|i| i.len()).max();
+            let min = m.iter().map(|i| i.len()).min();
+            error!("{} {} {} {} {}", count, time.as_us(), timing, max.unwrap(), min.unwrap());
+        }
+        */
+        //panic!("stop");
+
+        let scan_time: u64 = if false {
+            0
+        } else {
+            slots
+                .par_chunks(chunk_size)
+                .map(|slots| {
+                    let mut log_status = MultiThreadProgress::new(
+                        &total_processed_slots_across_all_threads,
+                        2,
+                        outer_slots_len as u64,
+                    );
+                    let mut scan_time_sum = 0;
+                    for (index, slot) in slots.iter().enumerate() {
+                        let mut scan_time = Measure::start("scan");
+                        log_status.report(index as u64);
+                        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                            .storage
+                            .get_slot_storage_entries(*slot)
+                            .unwrap_or_default();
+                        let accounts_map = Self::process_storage_slot(storage_maps.iter());
+                        scan_time.stop();
+                        scan_time_sum += scan_time.as_us();
+
+                        Self::generate_index_for_slot(
+                            &self.accounts_index,
+                            &self.uncleaned_pubkeys,
+                            &self.account_indexes,
+                            accounts_map,
+                            slot,
+                        );
+                    }
+                    scan_time_sum
+                })
+                .sum()
+        };
         index_time.stop();
         let timings = GenerateIndexTimings {
             scan_time,
@@ -5951,7 +6072,15 @@ impl AccountsDb {
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
-        for account_entry in self.accounts_index.account_maps.read().unwrap().values() {
+        for account_entry in self
+            .accounts_index
+            .account_maps
+            .read()
+            .unwrap()
+            .iter()
+            .map(|i| i.values())
+            .flatten()
+        {
             for (_slot, account_entry) in account_entry.slot_list.read().unwrap().iter() {
                 let storage_entry_meta = stored_sizes_and_counts
                     .entry(account_entry.store_id)
@@ -6000,6 +6129,7 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
+        /*
         for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
             info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
             info!(
@@ -6007,6 +6137,7 @@ impl AccountsDb {
                 *account_entry.slot_list.read().unwrap()
             );
         }
+        */
     }
 
     fn print_count_and_status(&self, label: &str) {

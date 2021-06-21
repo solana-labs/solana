@@ -35,7 +35,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         io::{self, BufReader, BufWriter, Read, Write},
-        path::{Path, PathBuf},
+        path::PathBuf,
         result::Result,
         sync::{atomic::Ordering, Arc, RwLock},
     },
@@ -286,23 +286,48 @@ where
 
     Ok(bank)
 }
-
-fn reconstruct_single_storage<E>(
+use std::ffi::OsStr;
+pub fn reconstruct_single_storage(
     slot: &Slot,
-    append_vec_path: &Path,
-    storage_entry: &E,
+    append_vec_path: &PathBuf,
+    current_len: usize,
+    id: AppendVecId,
     new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+    drop: bool,
 ) -> Result<(), Error>
-where
-    E: SerializableStorage,
 {
-    let (accounts, num_accounts) =
-        AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
+        let result = 
+        AppendVec::new_from_file(append_vec_path, current_len);
+        if result.is_err() {
+            panic!("failed to create append vec: {}", current_len);
+        }
+        let (mut accounts, num_accounts) =result?;
+        if !drop {
+            accounts.set_no_remove_on_drop();
+        }
+        else {
+            //panic!("drop");
+        }
+    assert_eq!(Some(OsStr::new(&slot.to_string())), append_vec_path.file_stem());
+    
     let u_storage_entry =
-        AccountStorageEntry::new_existing(*slot, storage_entry.id(), accounts, num_accounts);
+        AccountStorageEntry::new_existing(*slot, id, accounts, num_accounts);
+        use std::fs;
 
-    new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
+        //let metadata = fs::metadata(append_vec_path)?;        
+        //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
+    //error!("path2: {:?}, id: {}", append_vec_path, id);
+
+    new_slot_storage.insert(id, Arc::new(u_storage_entry));
     Ok(())
+}
+
+fn create_dir(paths: &[PathBuf]) {
+    // Ensure all account paths exist
+    for path in paths {
+        std::fs::create_dir_all(path)
+            .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
+    }
 }
 
 fn reconstruct_accountsdb_from_fields<E>(
@@ -318,6 +343,7 @@ fn reconstruct_accountsdb_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
+    //panic!("recon");
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
@@ -326,46 +352,73 @@ where
         shrink_ratio,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
-
-    // Ensure all account paths exist
-    for path in &accounts_db.paths {
-        std::fs::create_dir_all(path)
-            .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
-    }
+    create_dir(&accounts_db.paths);
 
     let storage = storage.into_iter().collect::<Vec<_>>();
+    let mut tm = std::sync::atomic::AtomicU64::new(0);
+
+    let len = storage.len();
+    let chunks = 8;
+    let chunk_size = len / chunks + 1;
+
+    error!("path2 here");
+    //panic!("");
 
     // Remap the deserialized AppendVec paths to point to correct local paths
-    let mut storage = (0..storage.len())
+    let mut storage_vecs = (0..chunks)
         .into_par_iter()
-        .map(|i| {
-            let (slot, slot_storage) = &storage[i];
-            let mut new_slot_storage = HashMap::new();
-            for storage_entry in slot_storage {
-                let file_name = AppendVec::file_name(*slot, storage_entry.id());
+        .map(|chunk| {
+            let start = std::cmp::min(len, chunk_size * chunk);
+            let end = std::cmp::min(len, chunk_size * (chunk + 1));
+            storage[start..end]
+                .iter()
+                .map(|(slot, slot_storage)| {
+                    let mut new_slot_storage = HashMap::new();
+                    for storage_entry in slot_storage {
+                        let file_name = AppendVec::file_name(*slot, storage_entry.id());
 
-                let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::NotFound,
-                        format!("{} not found in unpacked append vecs", file_name),
-                    )
-                })?;
+                        let append_vec_path =
+                            unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
+                                io::Error::new(
+                                    io::ErrorKind::NotFound,
+                                    format!("{} not found in unpacked append vecs", file_name),
+                                )
+                            })?;
 
-                reconstruct_single_storage(
-                    slot,
-                    append_vec_path,
-                    storage_entry,
-                    &mut new_slot_storage,
-                )?;
-            }
-            Ok((*slot, new_slot_storage))
+                        reconstruct_single_storage(
+                            slot,
+                            append_vec_path,
+                            storage_entry.current_len(),
+                            storage_entry.id(),
+                            &mut new_slot_storage,
+                            true,
+                        )?;
+                    }
+
+                    let mut m = solana_measure::measure::Measure::start("");
+                    accounts_db.add_slot_to_accounts_index(&new_slot_storage, *slot);
+                    m.stop();
+                    tm.fetch_add(m.as_us(), Ordering::Relaxed);
+
+                    Ok((*slot, new_slot_storage))
+                })
+                .collect::<Result<Vec<_>, Error>>()
         })
-        .collect::<Result<HashMap<Slot, _>, Error>>()?;
+        .collect::<Result<Vec<_>, Error>>()?;
+    let mut storage = HashMap::new(); //<Slot, Arc<AccountStorageEntry>>
+    storage_vecs
+        .into_iter()
+        .flatten()
+        .for_each(|(slot, a_storage)| {
+            if !a_storage.is_empty() {
+                // discard any slots with no storage entries
+                // this can happen if a non-root slot was serialized
+                // but non-root stores should not be included in the snapshot
+                storage.insert(slot, a_storage);
+            }
+        });
 
-    // discard any slots with no storage entries
-    // this can happen if a non-root slot was serialized
-    // but non-root stores should not be included in the snapshot
-    storage.retain(|_slot, stores| !stores.is_empty());
+    error!("generate index: {}", tm.load(Ordering::Relaxed));
 
     accounts_db
         .bank_hashes

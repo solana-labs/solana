@@ -130,6 +130,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
+    error!("strating bank_from_archive");
     let (deserialized_bank, timings) = snapshot_utils::bank_from_archive(
         &account_paths,
         &process_options.frozen_accounts,
@@ -146,6 +147,7 @@ fn load_from_snapshot(
         process_options.accounts_db_test_hash_calculation,
     )
     .expect("Load from snapshot failed");
+    //panic!("done with bank_from_archive");
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }

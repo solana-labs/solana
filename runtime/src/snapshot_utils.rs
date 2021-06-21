@@ -1,12 +1,17 @@
+use rayon::{prelude::*, ThreadPool};
+use std::sync::{
+    atomic::{AtomicBool},
+};
+use std::collections::HashMap;
 use {
     crate::{
-        accounts_db::{AccountShrinkThreshold, AccountsDb},
+        accounts_db::{AccountShrinkThreshold, AccountsDb, AppendVecId},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
-            bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
+            bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,reconstruct_single_storage,
         },
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
@@ -17,7 +22,6 @@ use {
     bzip2::bufread::BzDecoder,
     flate2::read::GzDecoder,
     log::*,
-    rayon::ThreadPool,
     regex::Regex,
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
@@ -598,9 +602,14 @@ pub struct BankFromArchiveTimings {
     pub untar_us: u64,
     pub verify_snapshot_bank_us: u64,
 }
+use crossbeam_channel::{
+    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+};
+
+use crate::accounts_db::CrossThreadQueue;
 
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_archive<P: AsRef<Path>>(
+pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &Path,
@@ -619,14 +628,99 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
+    error!("account_paths: {:?}", &account_paths[0]);
+
+
+    let (sender, receiver) = unbounded();
+
+    let mut queue = CrossThreadQueue::new();
+    let mut queue2 = queue.clone();
+
+    rayon::spawn(move || {
+        loop {
+            match receiver.recv() {
+                Ok(path) => {
+                    //error!("path: {:?}", path);
+                    queue2.push(path);
+                }
+                Err(err) => {
+                    break;
+                }
+            }
+        }
+    });
+
+    let mut exit = Arc::new(AtomicBool::new(false));
+    let exit_ = exit.clone();
+    let queue_ = queue.clone();
+
+    //let slot_storage
+
+    let idx = crate::accounts_db::AccountInfoAccountsIndex::default();
+    let uncleaned_pubkeys = dashmap::DashMap::<Slot, Vec<Pubkey>>::default();
+    let secondary = AccountSecondaryIndexes::default();
+
+    let result = std::sync::Mutex::new(None);
+    let sender = std::sync::Mutex::new(Some(sender));
     let mut untar = Measure::start("untar");
-    let unpacked_append_vec_map = untar_snapshot_in(
-        &snapshot_tar,
-        unpack_dir.as_ref(),
-        account_paths,
-        archive_format,
-    )?;
+
+    let parallel = vec![(queue_.clone(), exit_.clone()); 32];
+    parallel.into_par_iter().enumerate().for_each(|(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
+        if i == 0 {
+            let unpacked_append_vec_map = untar_snapshot_in(
+                &snapshot_tar,
+                &unpack_dir.as_ref(),
+                account_paths,
+                archive_format,
+                Some(sender.lock().unwrap().take().unwrap()),
+            );
+            *result.lock().unwrap() = Some(unpacked_append_vec_map);
+            exit.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        else {
+        let mut count = 0;
+        let mut count_overall = 0;
+        if false {
+            let mut new_slot_storage = HashMap::default();
+            loop {
+                count_overall += 1;
+                if let Some(item) = queue.pop() {
+                    count += 1;
+                    let slot = Slot::from_str(item.file_stem().unwrap().to_str().unwrap()).unwrap();
+                    {
+                        let id = AppendVecId::from_str(item.extension().unwrap().to_str().unwrap()).unwrap();
+                        use std::fs;
+
+                        let metadata = fs::metadata(item.clone()).unwrap();        
+                                    //error!("path: slot: {}, {:?}, {}, len: {}", slot, item, id, metadata.len());
+                        
+                        reconstruct_single_storage(&slot, &item, metadata.len() as usize, id, &mut new_slot_storage, false);
+                        let result = AccountsDb::process_storage_slot(new_slot_storage.values());
+                        if result.len() > 0 {
+                            //error!("found: {}, slot: {}", result.len(), slot);
+                            AccountsDb::generate_index_for_slot(&idx, &uncleaned_pubkeys, &secondary, result, &slot);
+                            //error!("dropping: {:?}", item);
+                            new_slot_storage.clear();
+                            //error!("dropped: {:?}", item);
+                        }
+                    }
+                } else {
+                    if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                        //error!("exit is true, quitting");
+                        break;
+                    }
+                }
+            }
+        }
+        //error!("popped: {}, attempts: {}, storages: {}", count, count_overall, new_slot_storage.len());
+    }
+    });
+    let unpacked_append_vec_map = result.lock().unwrap().take().unwrap().unwrap();
     untar.stop();
+
+    error!("in queue: {}, {:?}", queue.len(), queue.pop());
+    //handle.unwrap().join();
+    error!("joined, accounts: {}", idx.account_maps.read().unwrap().iter().map(|x| x.len()).sum::<usize>());
 
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
@@ -773,6 +867,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
+    sender: Option<CrossbeamSender<PathBuf>>,
 ) -> Result<UnpackedAppendVecMap> {
     let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
@@ -780,22 +875,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
         }
     };
     measure.stop();
@@ -916,6 +1011,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         unpack_dir,
         &[unpack_dir.to_path_buf()],
         archive_format,
+        None,
     )
     .unwrap();
 
