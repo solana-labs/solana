@@ -1,8 +1,9 @@
 #![cfg(feature = "full")]
 
-use crate::instruction::Instruction;
+use crate::{instruction::Instruction, transaction::TransactionError};
 use digest::Digest;
 use serde_derive::{Deserialize, Serialize};
+use solana_program::instruction::InstructionError;
 
 #[derive(Debug, PartialEq)]
 pub enum Secp256k1Error {
@@ -10,6 +11,12 @@ pub enum Secp256k1Error {
     InvalidRecoveryId,
     InvalidDataOffsets,
     InvalidInstructionDataSize,
+}
+
+impl From<(u8, Secp256k1Error)> for TransactionError {
+    fn from(e_enum: (u8, Secp256k1Error)) -> Self {
+        TransactionError::InstructionError(e_enum.0, InstructionError::Custom(e_enum.1 as u32))
+    }
 }
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;

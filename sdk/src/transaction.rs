@@ -388,7 +388,7 @@ impl Transaction {
     }
 
     pub fn verify_precompiles(&self) -> Result<()> {
-        for instruction in &self.message().instructions {
+        for (i, instruction) in self.message().instructions.iter().enumerate() {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
                 return Err(TransactionError::AccountNotFound);
@@ -403,7 +403,7 @@ impl Transaction {
                     .collect();
                 let data = &instruction.data;
                 let e = verify_eth_addresses(data, &instruction_datas);
-                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
+                e.map_err(|e| (i as u8, e))?;
             }
         }
         Ok(())
