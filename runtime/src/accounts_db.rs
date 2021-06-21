@@ -5880,6 +5880,9 @@ impl AccountsDb {
                 if stored_account.meta.pubkey == Pubkey::default() {
                     //break;;
                 }
+                if slot == 76817171{
+                    error!("found: slot: {}, {}, {}", slot, stored_account.meta.pubkey, stored_account.account_meta.lamports);
+                }
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert((this_version, storage.append_vec_id(), stored_account));
