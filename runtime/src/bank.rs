@@ -50,6 +50,7 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
+    snapshot_info::SyncSnapshotInfo,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -1012,6 +1013,7 @@ impl Bank {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         )
     }
 
@@ -1025,6 +1027,7 @@ impl Bank {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1047,6 +1050,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            None,
         )
     }
 
@@ -1059,6 +1063,7 @@ impl Bank {
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        snapshot_info: Option<SyncSnapshotInfo>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1071,6 +1076,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            snapshot_info,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
@@ -4666,6 +4672,7 @@ impl Bank {
         info!("cleaning..");
         let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
+            // bprumo TODO: how should this one be handled?
             self.clean_accounts(true, true);
         }
         clean_time.stop();
@@ -4953,19 +4960,14 @@ impl Bank {
     }
 
     pub fn clean_accounts(&self, skip_last: bool, is_startup: bool) {
-        let highest_slot_to_clean = if skip_last {
-            // Don't clean the slot we're snapshotting because it may have zero-lamport
-            // accounts that were included in the bank delta hash when the bank was frozen,
-            // and if we clean them here, any newly created snapshot's hash for this bank
-            // may not match the frozen hash.
-            Some(self.slot().saturating_sub(1))
-        } else {
-            None
-        };
-        self.clean_accounts_up_to_slot(highest_slot_to_clean, is_startup);
-    }
-
-    pub fn clean_accounts_up_to_slot(&self, highest_slot_to_clean: Option<Slot>, is_startup: bool) {
+        // Don't clean the slot we're snapshotting because it may have zero-lamport
+        // accounts that were included in the bank delta hash when the bank was frozen,
+        // and if we clean them here, any newly created snapshot's hash for this bank
+        // may not match the frozen hash.
+        //
+        // So when we're snapshotting, set `skip_last` to true so the highest slot to clean is
+        // lowered by one.
+        let highest_slot_to_clean = skip_last.then(|| self.slot().saturating_sub(1));
         self.rc
             .accounts
             .accounts_db

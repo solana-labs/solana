@@ -107,6 +107,7 @@ mod tests {
                 AccountSecondaryIndexes::default(),
                 false,
                 accounts_db::AccountShrinkThreshold::default(),
+                None,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -169,6 +170,7 @@ mod tests {
             false,
             None,
             accounts_db::AccountShrinkThreshold::default(),
+            None,
         )
         .unwrap();
 
@@ -451,6 +453,7 @@ mod tests {
             &exit,
             &cluster_info,
             DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            None,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();

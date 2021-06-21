@@ -9,6 +9,8 @@ use {
             bank_from_stream, bank_from_stream_incremental, bank_to_stream, SerdeStyle,
             SnapshotStorage, SnapshotStorages,
         },
+        snapshot_info,
+        snapshot_info::SyncSnapshotInfo,
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
@@ -432,7 +434,7 @@ pub fn archive_snapshot_package(
 
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.storages.iter().flatten() {
-        warn!(
+        debug!(
             "bprumo DEBUG: storage path: {:?}",
             storage.get_path().as_path()
         );
@@ -535,10 +537,6 @@ pub fn archive_snapshot_package(
     // Atomically move the archive into position for other validators to find
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
-
-    // bprumo TODO: Here is a place that we could set AccountsDb::last_full_snapshot_slot.  At this
-    // point we would know definitively that the full snapshot was successfully created.  However,
-    // there is no bank or reference back to AccountsDb...
 
     purge_old_snapshot_archives(
         snapshot_package.tar_output_file.parent().unwrap(),
@@ -871,6 +869,59 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
     Ok(())
 }
 
+/// Rebuild a bank from snapshot archives
+#[allow(clippy::too_many_arguments)]
+pub fn bank_from_snapshot_archives(
+    account_paths: &[PathBuf],
+    frozen_account_pubkeys: &[Pubkey],
+    snapshot_path: &Path,
+    full_snapshot_archive_info: &SnapshotArchiveInfo,
+    incremental_snapshot_archive_info: &Option<IncrementalSnapshotArchiveInfo>,
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
+) -> Result<Bank> {
+    if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+        bank_from_incremental_snapshot_archive(
+            account_paths,
+            frozen_account_pubkeys,
+            snapshot_path,
+            &full_snapshot_archive_info.path,
+            &incremental_snapshot_archive_info.path,
+            incremental_snapshot_archive_info.archive_format,
+            genesis_config,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            limit_load_slot_count_from_snapshot,
+            shrink_ratio,
+            snapshot_info,
+        )
+    } else {
+        bank_from_snapshot_archive(
+            account_paths,
+            frozen_account_pubkeys,
+            snapshot_path,
+            &full_snapshot_archive_info.path,
+            full_snapshot_archive_info.archive_format,
+            genesis_config,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            limit_load_slot_count_from_snapshot,
+            shrink_ratio,
+            snapshot_info,
+        )
+    }
+}
+
 /// Rebuild a bank from a snapshot archive
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_archive<P: AsRef<Path>>(
@@ -886,6 +937,7 @@ pub fn bank_from_snapshot_archive<P: AsRef<Path>>(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank> {
     let listfiles = |dir| {
         debug!("bprumo DEBUG: files in  {:?}:", dir);
@@ -933,7 +985,9 @@ pub fn bank_from_snapshot_archive<P: AsRef<Path>>(
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_info.clone(),
     )?;
+    snapshot_info::set_last_full_snapshot_slot(snapshot_info.as_ref(), bank.slot());
 
     assert!(
         bank.verify_snapshot_bank(),
@@ -962,6 +1016,7 @@ pub fn bank_from_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank> {
     let listfiles = |dir| {
         debug!("bprumo DEBUG: files in  {:?}:", dir);
@@ -976,7 +1031,7 @@ pub fn bank_from_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
         incremental_snapshot_archive_path.as_ref()
     );
 
-    check_are_snapshots_compatible(
+    let (full_snapshot_slot, _incremental_snapshot_slot) = check_are_snapshots_compatible(
         &full_snapshot_archive_path,
         &incremental_snapshot_archive_path,
     )?;
@@ -1053,7 +1108,15 @@ pub fn bank_from_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_info.clone(),
     )?;
+    snapshot_info::set_last_full_snapshot_slot(snapshot_info.as_ref(), full_snapshot_slot);
+    snapshot_info::set_last_incremental_snapshot_slot(snapshot_info.as_ref(), bank.slot());
+
+    info!(
+        "bprumo DEBUG: bank_from_incremental_snapshot_archive(), snapshot info: {:?}",
+        snapshot_info
+    );
 
     assert!(
         bank.verify_snapshot_bank(),
@@ -1068,11 +1131,12 @@ pub fn bank_from_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 
 /// Check if an incremental snapshot is compatible with a full snapshot.  This function parses the
 /// paths to see if the incremental snapshot's base slot is the same as the full snapshot's slot.
-/// Return an error if they are incompatible (or if the paths cannot be parsed).
+/// Return an error if they are incompatible (or if the paths cannot be parsed), otherwise return a
+/// tuple of the full snapshot slot and the incremental snapshot slot.
 fn check_are_snapshots_compatible<P, Q>(
     full_snapshot_archive_path: P,
     incremental_snapshot_archive_path: Q,
-) -> Result<()>
+) -> Result<(Slot, Slot)>
 where
     P: AsRef<Path>,
     Q: AsRef<Path>,
@@ -1092,7 +1156,7 @@ where
 
     let incremental_snapshot_filename =
         path_to_filename_str(incremental_snapshot_archive_path.as_ref())?;
-    let (incremental_snapshot_base_slot, _, _, _) =
+    let (incremental_snapshot_base_slot, incremental_snapshot_slot, _, _) =
         parse_incremental_snapshot_archive_filename(incremental_snapshot_filename).ok_or({
             SnapshotError::PathParseError(
                 "Could not parse incremental snapshot archive's filename!",
@@ -1100,7 +1164,7 @@ where
         })?;
 
     (full_snapshot_slot == incremental_snapshot_base_slot)
-        .then(|| ())
+        .then(|| (full_snapshot_slot, incremental_snapshot_slot))
         .ok_or(SnapshotError::IncompatibleSnapshots(
             full_snapshot_slot,
             incremental_snapshot_base_slot,
@@ -1388,8 +1452,8 @@ fn untar_snapshot_in<P: AsRef<Path>>(
 fn rebuild_bank_from_incremental_snapshots(
     snapshot_version: &str,
     frozen_account_pubkeys: &[Pubkey],
-    fss_unpacked_snapshots_dir: &Path,
-    iss_unpacked_snapshots_dir: &Path,
+    full_snapshot_unpacked_snapshots_dir: &Path,
+    incremental_snapshot_unpacked_snapshots_dir: &Path,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
@@ -1399,6 +1463,7 @@ fn rebuild_bank_from_incremental_snapshots(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank> {
     info!("snapshot version: {}", snapshot_version);
 
@@ -1409,46 +1474,48 @@ fn rebuild_bank_from_incremental_snapshots(
                 snapshot_version
             ))
         })?;
-    let mut fss_snapshot_paths = get_snapshot_paths(&fss_unpacked_snapshots_dir);
-    let mut iss_snapshot_paths = get_snapshot_paths(&iss_unpacked_snapshots_dir);
+    let mut full_snapshot_snapshot_paths =
+        get_snapshot_paths(&full_snapshot_unpacked_snapshots_dir);
+    let mut incremental_snapshot_snapshot_paths =
+        get_snapshot_paths(&incremental_snapshot_unpacked_snapshots_dir);
     debug!(
         "bprumo DEBUG rebuild_bank_from_snapshots()\n\tfss snapshot_paths: {:?}\n\tiss snapshot paths: {:?}",
-        fss_snapshot_paths,
-        iss_snapshot_paths
+        full_snapshot_snapshot_paths,
+        incremental_snapshot_snapshot_paths
     );
-    if fss_snapshot_paths.len() > 1 || iss_snapshot_paths.len() > 1 {
+    if full_snapshot_snapshot_paths.len() > 1 || incremental_snapshot_snapshot_paths.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
     }
 
-    let fss_root_paths = fss_snapshot_paths
+    let full_snapshot_root_paths = full_snapshot_snapshot_paths
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
-    let iss_root_paths = iss_snapshot_paths
+    let incremental_snapshot_root_paths = incremental_snapshot_snapshot_paths
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
     info!(
         "Loading bank from {} and {}",
-        &fss_root_paths.snapshot_file_path.display(),
-        &iss_root_paths.snapshot_file_path.display()
+        &full_snapshot_root_paths.snapshot_file_path.display(),
+        &incremental_snapshot_root_paths.snapshot_file_path.display()
     );
 
     debug!(
         "bprumo DEBUG: rebuild_bank_from_incremental_snapshots(), Loading bank from {} and {}",
-        &fss_root_paths.snapshot_file_path.display(),
-        &iss_root_paths.snapshot_file_path.display()
+        &full_snapshot_root_paths.snapshot_file_path.display(),
+        &incremental_snapshot_root_paths.snapshot_file_path.display()
     );
 
     let bank = deserialize_incremental_snapshot_data_file(
-        &fss_root_paths.snapshot_file_path,
-        &iss_root_paths.snapshot_file_path,
-        |mut fss_stream, mut iss_stream| {
+        &full_snapshot_root_paths.snapshot_file_path,
+        &incremental_snapshot_root_paths.snapshot_file_path,
+        |mut full_snapshot_stream, mut incremental_snapshot_stream| {
             Ok(match snapshot_version_enum {
                 SnapshotVersion::V1_2_0 => bank_from_stream_incremental(
                     SerdeStyle::Newer,
-                    &mut fss_stream,
-                    &mut iss_stream,
+                    &mut full_snapshot_stream,
+                    &mut incremental_snapshot_stream,
                     account_paths,
                     unpacked_append_vec_map,
                     genesis_config,
@@ -1459,12 +1526,16 @@ fn rebuild_bank_from_incremental_snapshots(
                     accounts_db_caching_enabled,
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
+                    snapshot_info,
                 ),
             }?)
         },
     )?;
 
-    let status_cache_path = iss_unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+    // Use the status cache from the incremental snapshot to rebuild the bank slot deltas, since
+    // we're rebuilding the bank from the incremental snapshot.
+    let status_cache_path =
+        incremental_snapshot_unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",
@@ -1498,6 +1569,7 @@ fn rebuild_bank_from_snapshots(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank> {
     info!("snapshot version: {}", snapshot_version);
 
@@ -1544,6 +1616,7 @@ fn rebuild_bank_from_snapshots(
                 accounts_db_caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                snapshot_info,
             ),
         }?)
     })?;
@@ -1783,6 +1856,13 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     let package = process_accounts_package_pre(package, thread_pool);
 
     archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+
+    // At this point a full snapshot has successfully been taken, so update the SnapshotInfo.
+    snapshot_info::set_last_full_snapshot_slot(
+        bank.rc.accounts.accounts_db.snapshot_info(),
+        bank.slot(),
+    );
+
     Ok(package.tar_output_file)
 }
 
@@ -1801,23 +1881,12 @@ pub fn bank_to_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf>
-where
-    P: fmt::Debug,
-{
+) -> Result<PathBuf> {
     assert!(bank.is_complete());
     assert!(bank.slot() > full_snapshot_slot);
-
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-
-    // bprumo TODO: Cleaning still needs to be figured out.  Below are the different
-    // `clean_accounts()` options:
-    //      bank.clean_accounts(true, false);
-    //      bank.clean_accounts_up_to_slot(Some(full_snapshot_slot), false);
-    //      bank.clean_accounts_up_to_slot(Some(full_snapshot_slot.saturating_sub(1)), false);
     bank.clean_accounts(true, false);
-
     bank.update_accounts_hash();
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
@@ -1844,7 +1913,18 @@ where
 
     // bprumo TODO: need to make an archive_incremental_snapshot_package so that it handles the
     // number of full snapshots and incremental snapshots to keep correctly
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+    archive_incremental_snapshot_package(
+        &package,
+        maximum_snapshots_to_retain,
+        full_snapshot_slot,
+    )?;
+
+    // At this point an incremental snapshot has successfully been taken, so update the SnapshotInfo.
+    snapshot_info::set_last_incremental_snapshot_slot(
+        bank.rc.accounts.accounts_db.snapshot_info(),
+        bank.slot(),
+    );
+
     Ok(package.tar_output_file)
 }
 
@@ -2494,6 +2574,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            None,
         )
         .unwrap();
 
@@ -2581,6 +2662,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            None,
         )
         .unwrap();
 
@@ -2688,6 +2770,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            None,
         )
         .unwrap();
 

@@ -16,6 +16,14 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
             }
 
             #[test]
+            fn test_incremental_snapshots_and_zero_lamport_accounts() {
+                run_test_incremental_snapshots_and_zero_lamport_accounts(
+                    SNAPSHOT_VERSION,
+                    CLUSTER_TYPE,
+                )
+            }
+
+            #[test]
             fn test_concurrent_snapshot_packaging() {
                 run_test_concurrent_snapshot_packaging(SNAPSHOT_VERSION, CLUSTER_TYPE)
             }
@@ -44,6 +52,8 @@ mod tests {
         bank::{Bank, BankSlotDelta},
         bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        snapshot_info,
+        snapshot_info::SyncSnapshotInfo,
         snapshot_utils,
         snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
         status_cache::MAX_CACHE_ENTRIES,
@@ -82,6 +92,7 @@ mod tests {
         snapshot_config: SnapshotConfig,
         bank_forks: BankForks,
         genesis_config_info: GenesisConfigInfo,
+        snapshot_info: SyncSnapshotInfo,
     }
 
     impl IncrementalSnapshotTestConfig {
@@ -91,6 +102,7 @@ mod tests {
             snapshot_interval_slots: Slot,
             incremental_snapshot_interval_slots: Slot,
         ) -> IncrementalSnapshotTestConfig {
+            let snapshot_info = SyncSnapshotInfo::default();
             let accounts_dir = TempDir::new().unwrap();
             let snapshot_dir = TempDir::new().unwrap();
             let snapshot_output_path = TempDir::new().unwrap();
@@ -105,6 +117,7 @@ mod tests {
                 AccountSecondaryIndexes::default(),
                 false,
                 accounts_db::AccountShrinkThreshold::default(),
+                Some(snapshot_info.clone()),
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -126,6 +139,7 @@ mod tests {
                 snapshot_config,
                 bank_forks,
                 genesis_config_info,
+                snapshot_info,
             }
         }
     }
@@ -431,6 +445,7 @@ mod tests {
 
         info!("Restoring bank from full snapshot slot: {}, and incremental snapshot slot: {} (with base slot: {})",
         full_snapshot_archive_info.slot, incremental_snapshot_archive_info.slot, incremental_snapshot_archive_info.base_slot);
+
         let deserialized_bank = snapshot_utils::bank_from_incremental_snapshot_archive(
             &account_paths,
             &[],
@@ -445,6 +460,7 @@ mod tests {
             false,
             None,
             accounts_db::AccountShrinkThreshold::default(),
+            Some(SyncSnapshotInfo::default()),
         )?;
 
         Ok((
@@ -455,6 +471,243 @@ mod tests {
             ),
             deserialized_bank,
         ))
+    }
+
+    /// Test that cleaning works well in the edge cases of zero-lamport accounts and snapshots.
+    /// Here's the scenario:
+    ///
+    /// slot 1:
+    ///     - send some lamports to Account1 (from Account2) to bring it to life
+    ///     - take a full snapshot
+    /// slot 2:
+    ///     - make Account1 have zero lamports (send back to Account2)
+    ///     - take an incremental snapshot
+    ///     - ensure deserializing from this snapshots is equal to this slot
+    /// slot 3:
+    ///     - transfer from the mint to Account2 so that Account2's latest value is not from slot 2
+    /// slot 4:
+    ///     - ensure cleaning/purging has run and that Account1 is gone
+    ///         - it should be gone from AccountsDb and from AppendVecs too
+    ///     - take another incremental snapshot
+    ///     - ensure deserializing from this snapshots is equal to this slot
+    ///     - ensure Account1 hasn't come back from the dead
+    ///
+    /// The check at slot 4 will fail with the pre-incremental-snapshot cleaning logic.  Because
+    /// of the cleaning/purging at slot 4, the incremental snapshot at slot 4 will no longer have
+    /// information about Account1, but the full snapshost _does_ have info for Account1, which is
+    /// no longer correct!
+    fn run_test_incremental_snapshots_and_zero_lamport_accounts(
+        _snapshot_version: SnapshotVersion,
+        cluster_type: ClusterType,
+    ) {
+        solana_logger::setup();
+        let snapshot_info = SyncSnapshotInfo::default();
+
+        let collector = Pubkey::new_unique();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+
+        let mut genesis_config_info = create_genesis_config(1_000_000);
+        genesis_config_info.genesis_config.cluster_type = cluster_type;
+
+        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_package_output_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archive_format = ArchiveFormat::Tar;
+
+        let lamports_to_transfer = 111;
+        let bank0 = Arc::new(Bank::new_with_paths(
+            &genesis_config_info.genesis_config,
+            vec![accounts_dir.path().to_path_buf()],
+            &[],
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            accounts_db::AccountShrinkThreshold::default(),
+            Some(snapshot_info.clone()),
+        ));
+        bank0
+            .transfer(
+                lamports_to_transfer,
+                &genesis_config_info.mint_keypair,
+                &key2.pubkey(),
+            )
+            .unwrap();
+        while !bank0.is_complete() {
+            bank0.register_tick(&Hash::new_unique());
+        }
+
+        let slot = 1;
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
+        bank1
+            .transfer(lamports_to_transfer, &key2, &key1.pubkey())
+            .unwrap();
+        while !bank1.is_complete() {
+            bank1.register_tick(&Hash::new_unique());
+        }
+
+        let full_snapshot_slot = slot;
+        info!(
+            "bprumo DEBUG: taking full snapshot of slot: {}",
+            full_snapshot_slot
+        );
+        let full_snapshot_archive_path = snapshot_utils::bank_to_snapshot_archive(
+            snapshot_dir.path(),
+            &bank1,
+            None,
+            snapshot_package_output_dir.path(),
+            snapshot_archive_format,
+            None,
+            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        )
+        .unwrap();
+        snapshot_info::set_last_full_snapshot_slot(Some(&snapshot_info), full_snapshot_slot);
+
+        let slot = slot + 1;
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
+        bank2
+            .transfer(lamports_to_transfer, &key1, &key2.pubkey())
+            .unwrap();
+        while !bank2.is_complete() {
+            bank2.register_tick(&Hash::new_unique());
+        }
+
+        // Ensure Account1's lamports == zero
+        assert_eq!(bank2.get_balance(&key1.pubkey()), 0);
+
+        // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
+        // deserializes correctly.
+        info!(
+            "bprumo DEBUG: taking incremental snapshot of slot: {}",
+            slot
+        );
+        let incremental_snapshot_archive_path =
+            snapshot_utils::bank_to_incremental_snapshot_archive(
+                snapshot_dir.path(),
+                &bank2,
+                full_snapshot_slot,
+                None,
+                snapshot_package_output_dir.path(),
+                snapshot_archive_format,
+                None,
+                DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            )
+            .unwrap();
+        snapshot_info::set_last_incremental_snapshot_slot(Some(&snapshot_info), slot);
+        info!("bprumo DEBUG: about to load bank from incremental snapshots, should be slots fss slot: {}, iss slot: {}", full_snapshot_slot, slot);
+        let deserialized_bank_snapshot_info = SyncSnapshotInfo::default();
+        let deserialized_bank = snapshot_utils::bank_from_incremental_snapshot_archive(
+            &[PathBuf::from(accounts_dir.path())],
+            &[],
+            snapshot_dir.path(),
+            &full_snapshot_archive_path,
+            &incremental_snapshot_archive_path,
+            snapshot_archive_format,
+            &genesis_config_info.genesis_config,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            None,
+            accounts_db::AccountShrinkThreshold::default(),
+            Some(deserialized_bank_snapshot_info),
+        )
+        .unwrap();
+        assert_eq!(deserialized_bank, *bank2);
+
+        let slot = slot + 1;
+        let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
+        // Update Account2 so that it no longer holds a reference to slot2
+        bank3
+            .transfer(
+                lamports_to_transfer,
+                &genesis_config_info.mint_keypair,
+                &key2.pubkey(),
+            )
+            .unwrap();
+        while !bank3.is_complete() {
+            bank3.register_tick(&Hash::new_unique());
+        }
+
+        let slot = slot + 1;
+        let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
+        while !bank4.is_complete() {
+            bank4.register_tick(&Hash::new_unique());
+        }
+
+        // Ensure account1 has been cleaned/purged from everywhere
+        bank4.squash();
+        bank4.exhaustively_free_unused_resource();
+        assert_eq!(bank4.get_account(&key1.pubkey()), None);
+        // bprumo TODO: figure out if check below is needed
+        /*
+         * assert_eq!(
+         *     bank4
+         *         .rc
+         *         .accounts
+         *         .accounts_db
+         *         .accounts_index
+         *         .ref_count_from_storage(&key1.pubkey()),
+         *     0,
+         * );
+         */
+
+        // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
+        // deserializes correctly
+        info!(
+            "bprumo DEBUG: taking incremental snapshot of slot: {}",
+            slot
+        );
+        let incremental_snapshot_archive_path =
+            snapshot_utils::bank_to_incremental_snapshot_archive(
+                snapshot_dir.path(),
+                &bank4,
+                full_snapshot_slot,
+                None,
+                snapshot_package_output_dir.path(),
+                snapshot_archive_format,
+                None,
+                DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            )
+            .unwrap();
+        snapshot_info::set_last_incremental_snapshot_slot(Some(&snapshot_info), slot);
+
+        info!("bprumo DEBUG: about to load bank from incremental snapshots, should be slots fss slot: {}, iss slot: {}", full_snapshot_slot, slot);
+        let deserialized_bank_snapshot_info = SyncSnapshotInfo::default();
+        let deserialized_bank = snapshot_utils::bank_from_incremental_snapshot_archive(
+            &[PathBuf::from(accounts_dir.path())],
+            &[],
+            snapshot_dir.path(),
+            &full_snapshot_archive_path,
+            &incremental_snapshot_archive_path,
+            snapshot_archive_format,
+            &genesis_config_info.genesis_config,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            None,
+            accounts_db::AccountShrinkThreshold::default(),
+            Some(deserialized_bank_snapshot_info),
+        )
+        .unwrap();
+        assert_eq!(deserialized_bank, *bank4);
+
+        // Ensure Account1 has not been brought back from the dead
+        assert_eq!(deserialized_bank.get_account(&key1.pubkey()), None);
+        // bprumo TODO: figure out if check below is needed
+        /*
+         * assert_eq!(
+         *     deserialized_bank
+         *         .rc
+         *         .accounts
+         *         .accounts_db
+         *         .accounts_index
+         *         .ref_count_from_storage(&key1.pubkey()),
+         *     0,
+         * );
+         */
     }
 
     fn run_test_concurrent_snapshot_packaging(
@@ -607,6 +860,7 @@ mod tests {
             &exit,
             &cluster_info,
             DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            None, // bprumo TODO: maybe make this a real snapshot_info?
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();

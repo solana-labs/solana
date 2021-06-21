@@ -59,6 +59,7 @@ use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_info::SyncSnapshotInfo,
 };
 use solana_sdk::{
     clock::Slot,
@@ -357,6 +358,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
+        let snapshot_info = SyncSnapshotInfo::default();
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
             genesis_config,
@@ -385,6 +387,7 @@ impl Validator {
             &exit,
             config.enforce_ulimit_nofile,
             &start_progress,
+            Some(snapshot_info.clone()),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -607,6 +610,7 @@ impl Validator {
                     &exit,
                     &cluster_info,
                     snapshot_config.maximum_snapshots_to_retain,
+                    Some(snapshot_info),
                 );
                 (
                     Some(snapshot_packager_service),
@@ -1021,6 +1025,7 @@ fn new_banks_from_ledger(
     exit: &Arc<AtomicBool>,
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1118,6 +1123,7 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
+    // since it creates the bank/bank forks (maybe from snapshot too)
     let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
         &genesis_config,
         &blockstore,
@@ -1131,6 +1137,7 @@ fn new_banks_from_ledger(
         transaction_history_services
             .cache_block_meta_sender
             .as_ref(),
+        snapshot_info,
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);

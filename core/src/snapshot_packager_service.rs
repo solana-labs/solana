@@ -1,5 +1,8 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
+use solana_runtime::{
+    snapshot_info, snapshot_info::SyncSnapshotInfo, snapshot_package::AccountsPackage,
+    snapshot_utils,
+};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
@@ -23,6 +26,7 @@ impl SnapshotPackagerService {
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         maximum_snapshots_to_retain: usize,
+        snapshot_info: Option<SyncSnapshotInfo>,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -48,6 +52,12 @@ impl SnapshotPackagerService {
                         ) {
                             warn!("Failed to create snapshot archive: {}", err);
                         } else {
+                            // At this point a full snapshot has successfully been taken, so update the SnapshotInfo.
+                            snapshot_info::set_last_full_snapshot_slot(
+                                snapshot_info.as_ref(),
+                                snapshot_package.slot,
+                            );
+
                             hashes.push((snapshot_package.slot, snapshot_package.hash));
                             while hashes.len() > MAX_SNAPSHOT_HASHES {
                                 hashes.remove(0);

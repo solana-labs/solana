@@ -31,6 +31,8 @@ use crate::{
     contains::Contains,
     pubkey_bins::PubkeyBinCalculator16,
     read_only_accounts_cache::ReadOnlyAccountsCache,
+    snapshot_info,
+    snapshot_info::SyncSnapshotInfo,
     sorted_storages::SortedStorages,
 };
 use blake3::traits::digest::Digest;
@@ -884,9 +886,8 @@ pub struct AccountsDb {
 
     shrink_ratio: AccountShrinkThreshold,
 
-    /// Save the slot number of the last full snapshot.  Clean-type functions must not clean higher
-    /// than this slot to support incremental snapshots.
-    last_full_snapshot_slot: Option<Slot>, // bprumo TODO: does Slot need to be atomic?
+    /// bprumo TODO: doc
+    snapshot_info: Option<SyncSnapshotInfo>,
 }
 
 #[derive(Debug, Default)]
@@ -1331,7 +1332,7 @@ impl Default for AccountsDb {
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
-            last_full_snapshot_slot: None,
+            snapshot_info: None,
         }
     }
 }
@@ -1344,6 +1345,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         )
     }
 
@@ -1353,6 +1355,7 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        snapshot_info: Option<SyncSnapshotInfo>,
     ) -> Self {
         let mut new = if !paths.is_empty() {
             Self {
@@ -1362,6 +1365,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                snapshot_info,
                 ..Self::default()
             }
         } else {
@@ -1375,6 +1379,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                snapshot_info,
                 ..Self::default()
             }
         };
@@ -1612,9 +1617,9 @@ impl AccountsDb {
 
         min3(
             proposed_clean_root,
-            self.last_full_snapshot_slot()
-                .map(|slot| slot.saturating_sub(1)),
             self.accounts_index.min_ongoing_scan_root(),
+            snapshot_info::get_last_full_snapshot_slot(self.snapshot_info())
+                .map(|slot| slot.saturating_sub(1)),
         )
     }
 
@@ -1705,13 +1710,14 @@ impl AccountsDb {
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self, max_clean_root: Option<Slot>, is_startup: bool) {
-        debug!(
-            "bprumo DEBUG: clean_accounts(), fn param max_clean_root: {:?}, last full snapshot slot: {:?}",
+        warn!(
+            "bprumo DEBUG: clean_accounts(), &self: {:p}, fn param max_clean_root: {:?}, snapshot info: {:?}",
+            self,
             max_clean_root,
-            self.last_full_snapshot_slot()
+            self.snapshot_info
         );
         let max_clean_root = self.max_clean_root(max_clean_root);
-        debug!(
+        warn!(
             "bprumo DEBUG:      actual max_clean_root: {:?}",
             max_clean_root
         );
@@ -5860,14 +5866,9 @@ impl AccountsDb {
         }
     }
 
-    /// Get a the last full snapshot slot
-    pub fn last_full_snapshot_slot(&self) -> Option<Slot> {
-        self.last_full_snapshot_slot
-    }
-
-    /// Set the last full snapshot slot
-    pub fn set_last_full_snapshot_slot(&mut self, last_full_snapshot_slot: Slot) {
-        self.last_full_snapshot_slot = Some(last_full_snapshot_slot);
+    /// bprumo TODO: doc
+    pub(crate) fn snapshot_info(&self) -> Option<&SyncSnapshotInfo> {
+        self.snapshot_info.as_ref()
     }
 }
 
@@ -7540,6 +7541,7 @@ pub mod tests {
             spl_token_mint_index_enabled(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -9097,7 +9099,7 @@ pub mod tests {
         // pubkey1 to be revived as the state of step A.
         // So, prevent that from happening by introducing refcount
         accounts.clean_accounts(None, false);
-        let mut accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.clean_accounts(None, false);
 
         info!("pubkey: {}", pubkey1);
@@ -9114,7 +9116,6 @@ pub mod tests {
 
         // Do clean
         // Clear the last full snapshot slot before calling `clean_accounts()` otherwise cleaning will stop at that slot
-        accounts.last_full_snapshot_slot = None;
         accounts.clean_accounts(None, false);
 
         // Ensure pubkey2 is cleaned from the index finally
@@ -9939,6 +9940,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -9987,6 +9989,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -10036,6 +10039,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let zero_lamport_account_key = Pubkey::new_unique();
@@ -10168,6 +10172,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -10273,6 +10278,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let slot: Slot = 0;
         let num_keys = 10;
@@ -10328,6 +10334,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
         let stall_slot = num_slots as Slot;
@@ -10727,6 +10734,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -10990,6 +10998,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11062,6 +11071,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11138,6 +11148,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let db = Arc::new(db);
         let num_cached_slots = 100;

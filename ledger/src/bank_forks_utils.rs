@@ -10,6 +10,7 @@ use crate::{
 use log::*;
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
+    snapshot_info::SyncSnapshotInfo,
     snapshot_utils,
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
@@ -42,6 +43,7 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -72,6 +74,7 @@ pub fn load(
                 cache_block_meta_sender,
                 full_snapshot_archive_info,
                 incremental_snapshot_archive_info,
+                snapshot_info,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -121,6 +124,7 @@ fn load_from_snapshot(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     full_snapshot_archive_info: snapshot_utils::SnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<snapshot_utils::IncrementalSnapshotArchiveInfo>,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> LoadResult {
     info!(
         "Loading snapshot package: {:?}",
@@ -133,40 +137,21 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    // bprumo TODO: Simplify this to reduce duplication
-    let deserialized_bank = match incremental_snapshot_archive_info {
-        None => snapshot_utils::bank_from_snapshot_archive(
-            &account_paths,
-            &process_options.frozen_accounts,
-            &snapshot_config.snapshot_path,
-            &full_snapshot_archive_info.path,
-            full_snapshot_archive_info.archive_format,
-            genesis_config,
-            process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(process_options.bpf_jit)),
-            process_options.account_indexes.clone(),
-            process_options.accounts_db_caching_enabled,
-            process_options.limit_load_slot_count_from_snapshot,
-            process_options.shrink_ratio,
-        ),
-        Some(incremental_snapshot_archive_info) => {
-            snapshot_utils::bank_from_incremental_snapshot_archive(
-                &account_paths,
-                &process_options.frozen_accounts,
-                &snapshot_config.snapshot_path,
-                &full_snapshot_archive_info.path,
-                &incremental_snapshot_archive_info.path,
-                incremental_snapshot_archive_info.archive_format,
-                genesis_config,
-                process_options.debug_keys.clone(),
-                Some(&crate::builtins::get(process_options.bpf_jit)),
-                process_options.account_indexes.clone(),
-                process_options.accounts_db_caching_enabled,
-                process_options.limit_load_slot_count_from_snapshot,
-                process_options.shrink_ratio,
-            )
-        }
-    }
+    let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
+        &account_paths,
+        &process_options.frozen_accounts,
+        &snapshot_config.snapshot_path,
+        &full_snapshot_archive_info,
+        &incremental_snapshot_archive_info,
+        genesis_config,
+        process_options.debug_keys.clone(),
+        Some(&crate::builtins::get(process_options.bpf_jit)),
+        process_options.account_indexes.clone(),
+        process_options.accounts_db_caching_enabled,
+        process_options.limit_load_slot_count_from_snapshot,
+        process_options.shrink_ratio,
+        snapshot_info,
+    )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
@@ -180,21 +165,22 @@ fn load_from_snapshot(
         deserialized_bank.slot(),
         deserialized_bank.get_accounts_hash(),
     );
-
-    // bprumo TODO: If incremental_snapshot_archive is Some, then use its slot and hash instead
-    if deserialized_bank_slot_and_hash
-        != (
-            full_snapshot_archive_info.slot,
-            full_snapshot_archive_info.hash,
-        )
-    {
-        error!(
-            "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
+    let archive_bank_slot_and_hash =
+        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+            (
+                incremental_snapshot_archive_info.slot,
+                incremental_snapshot_archive_info.hash,
+            )
+        } else {
             (
                 full_snapshot_archive_info.slot,
-                full_snapshot_archive_info.hash
-            ),
-            deserialized_bank_slot_and_hash
+                full_snapshot_archive_info.hash,
+            )
+        };
+    if deserialized_bank_slot_and_hash != archive_bank_slot_and_hash {
+        error!(
+            "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
+            archive_bank_slot_and_hash, deserialized_bank_slot_and_hash
         );
         process::exit(1);
     }

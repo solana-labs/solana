@@ -33,6 +33,7 @@ mod read_only_accounts_cache;
 pub mod rent_collector;
 pub mod secondary_index;
 pub mod serde_snapshot;
+pub mod snapshot_info;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod sorted_storages;

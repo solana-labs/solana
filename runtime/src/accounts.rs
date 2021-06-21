@@ -11,6 +11,7 @@ use crate::{
     },
     blockhash_queue::BlockhashQueue,
     rent_collector::RentCollector,
+    snapshot_info::SyncSnapshotInfo,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
 };
 use dashmap::{
@@ -129,6 +130,7 @@ impl Accounts {
             AccountSecondaryIndexes::default(),
             false,
             shrink_ratio,
+            None,
         )
     }
 
@@ -138,6 +140,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        snapshot_info: Option<SyncSnapshotInfo>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -146,6 +149,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                snapshot_info,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -1127,6 +1131,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         for ka in ka.iter() {
             accounts.store_slow_uncached(0, &ka.0, &ka.1);
@@ -1665,6 +1670,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         // Load accounts owned by various programs into AccountsDb
@@ -1694,6 +1700,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1718,6 +1725,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         accounts.bank_hash_at(1);
     }
@@ -1740,6 +1748,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -1867,6 +1876,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -2018,6 +2028,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         {
             accounts
@@ -2071,6 +2082,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let mut old_pubkey = Pubkey::default();
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -2119,6 +2131,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
@@ -2405,6 +2418,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2525,6 +2539,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2560,6 +2575,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         let pubkey0 = Pubkey::new_unique();

@@ -14,6 +14,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::RentCollector,
         serde_snapshot::future::SerializableStorage,
+        snapshot_info::SyncSnapshotInfo,
         stakes::Stakes,
     },
     bincode,
@@ -139,6 +140,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -160,6 +162,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                snapshot_info,
             )?;
             Ok(bank)
         }};
@@ -176,8 +179,8 @@ where
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bank_from_stream_incremental<R>(
     serde_style: SerdeStyle,
-    fss_stream: &mut BufReader<R>,
-    iss_stream: &mut BufReader<R>,
+    full_snapshot_stream: &mut BufReader<R>,
+    incremental_snapshot_stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
@@ -188,19 +191,22 @@ pub(crate) fn bank_from_stream_incremental<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
 {
     macro_rules! INTO {
         ($x:ident) => {{
-            let (_, fss_accounts_db_fields) = $x::deserialize_bank_fields(fss_stream)?;
-            let (bank_fields, iss_accounts_db_fields) = $x::deserialize_bank_fields(iss_stream)?;
+            let (_, full_snapshot_accounts_db_fields) =
+                $x::deserialize_bank_fields(full_snapshot_stream)?;
+            let (bank_fields, incremental_snapshot_accounts_db_fields) =
+                $x::deserialize_bank_fields(incremental_snapshot_stream)?;
 
             let bank = reconstruct_bank_from_fields_incremental(
                 bank_fields,
-                fss_accounts_db_fields,
-                iss_accounts_db_fields,
+                full_snapshot_accounts_db_fields,
+                incremental_snapshot_accounts_db_fields,
                 genesis_config,
                 frozen_account_pubkeys,
                 account_paths,
@@ -211,6 +217,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                snapshot_info,
             )?;
             Ok(bank)
         }};
@@ -307,6 +314,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage,
@@ -320,6 +328,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_info,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -341,8 +350,8 @@ where
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields_incremental<E>(
     bank_fields: BankFieldsToDeserialize,
-    fss_accounts_db_fields: AccountsDbFields<E>,
-    iss_accounts_db_fields: AccountsDbFields<E>,
+    full_snapshot_accounts_db_fields: AccountsDbFields<E>,
+    incremental_snapshot_accounts_db_fields: AccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
     account_paths: &[PathBuf],
@@ -353,13 +362,14 @@ fn reconstruct_bank_from_fields_incremental<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage,
 {
     let mut accounts_db = reconstruct_accountsdb_from_fields_incremental(
-        fss_accounts_db_fields,
-        iss_accounts_db_fields,
+        full_snapshot_accounts_db_fields,
+        incremental_snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
         &genesis_config.cluster_type,
@@ -367,6 +377,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_info,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -394,6 +405,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage,
@@ -404,9 +416,14 @@ where
         account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
+        snapshot_info,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
-    // bprumo TODO: accounts_db.set_last_full_snapshot_slot(slot);
+
+    // bprumo TODO: fix this below
+    //accounts_db.set_last_full_snapshot_slot(slot);
+    //warn!("bprumo DEBUG: reconstruct_accountsdb_from_fields(), &accounts_db: {:p}, setting last full snapshot slot, slot: {}, accounts_db.last_full_snapshot_slot(): {:?}", &accounts_db, slot, accounts_db.last_full_snapshot_slot());
+    //snapshot_info::set_last_full_snapshot_slot(&snapshot_info, slot);
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
@@ -494,9 +511,10 @@ where
     Ok(accounts_db)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_accountsdb_from_fields_incremental<E>(
-    fss_accounts_db_fields: AccountsDbFields<E>,
-    iss_accounts_db_fields: AccountsDbFields<E>,
+    full_snapshot_accounts_db_fields: AccountsDbFields<E>,
+    incremental_snapshot_accounts_db_fields: AccountsDbFields<E>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     cluster_type: &ClusterType,
@@ -504,6 +522,7 @@ fn reconstruct_accountsdb_from_fields_incremental<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_info: Option<SyncSnapshotInfo>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage,
@@ -514,20 +533,32 @@ where
         account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
+        snapshot_info,
     );
-    let AccountsDbFields(fss_storage, _, fss_slot, _) = fss_accounts_db_fields;
-    let AccountsDbFields(iss_storage, iss_version, iss_slot, iss_bank_hash_info) =
-        iss_accounts_db_fields;
+    let AccountsDbFields(full_snapshot_storage, _, full_snapshot_slot, _) =
+        full_snapshot_accounts_db_fields;
+    let AccountsDbFields(
+        incremental_snapshot_storage,
+        incremental_snapshot_version,
+        incremental_snapshot_slot,
+        incremental_snapshot_bank_hash_info,
+    ) = incremental_snapshot_accounts_db_fields;
 
-    // bprumo TODO: filter out iss_storage with slot <= fss slot, and figure out if there's a way
+    // bprumo TODO: fix this below
+    //accounts_db.set_last_full_snapshot_slot(full_snapshot_slot);
+    //warn!("bprumo DEBUG: reconstruct_accountsdb_from_fields_incremental(), &accounts_db: {:p}, setting last full snapshot slot, fss slot: {}, accounts_db.last_full_snapshot_slot(): {:?}", &accounts_db, full_snapshot_slot, accounts_db.last_full_snapshot_slot());
+    //snapshot_info::set_last_full_snapshot_slot(&snapshot_info, full_snapshot_slot);
+    //snapshot_info::set_last_incremental_snapshot_slot(&snapshot_info, incremental_snapshot_slot);
+
+    // bprumo TODO: filter out incremental_snapshot_storage with slot <= fss slot, and figure out if there's a way
     // to just not have it in the AccountsDbField input at all
-    let iss_storage = iss_storage
+    let incremental_snapshot_storage = incremental_snapshot_storage
         .into_iter()
-        .filter(|(slot, _)| *slot > fss_slot)
+        .filter(|(slot, _)| *slot > full_snapshot_slot)
         .collect::<HashMap<_, _>>();
 
-    debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields_incremental(), fss slot: {}, iss slot: {}", fss_slot, iss_slot);
-    fss_storage.iter().for_each(|(k, v)| {
+    debug!("bprumo DEBUG: reconstruct_accountsdb_from_fields_incremental(), fss slot: {}, iss slot: {}", full_snapshot_slot, incremental_snapshot_slot);
+    full_snapshot_storage.iter().for_each(|(k, v)| {
         debug!(
             "bprumo DEBUG\t\tfss storage, slot: {}, v.len: {}, v[1].id(): {}",
             k,
@@ -535,7 +566,7 @@ where
             v.first().unwrap().id()
         )
     });
-    iss_storage.iter().for_each(|(k, v)| {
+    incremental_snapshot_storage.iter().for_each(|(k, v)| {
         debug!(
             "bprumo DEBUG\t\tiss storage, slot: {}, v.len: {}, v[1].id(): {}",
             k,
@@ -544,8 +575,6 @@ where
         )
     });
 
-    // bprumo DEBUG: accounts_db.set_last_full_snapshot_slot(fss_slot);
-
     // Ensure all account paths exist
     for path in &accounts_db.paths {
         std::fs::create_dir_all(path)
@@ -553,11 +582,16 @@ where
     }
 
     let mut last_log_update = Instant::now();
-    let mut remaining_slots_to_process = fss_storage.len() + iss_storage.len();
+    let mut remaining_slots_to_process =
+        full_snapshot_storage.len() + incremental_snapshot_storage.len();
 
     // Remap the deserialized AppendVec paths to point to correct local paths
-    let mut storage = fss_storage.into_iter().chain(iss_storage.into_iter())
+    let mut slots_seen_so_far = HashSet::new();
+    let mut storage = full_snapshot_storage.into_iter().chain(incremental_snapshot_storage.into_iter())
         .map(|(slot, mut slot_storage)| {
+            assert!(!slots_seen_so_far.contains(&slot), "There should only be one storage per slot");
+            slots_seen_so_far.insert(slot);
+
             let now = Instant::now();
             if now.duration_since(last_log_update).as_secs() >= 10 {
                 info!("{} slots remaining...", remaining_slots_to_process);
@@ -598,11 +632,10 @@ where
     // but non-root stores should not be included in the snapshot
     storage.retain(|_slot, stores| !stores.is_empty());
 
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(iss_slot, iss_bank_hash_info);
+    accounts_db.bank_hashes.write().unwrap().insert(
+        incremental_snapshot_slot,
+        incremental_snapshot_bank_hash_info,
+    );
 
     // Process deserialized data, set necessary fields in self
     let max_id: usize = *storage
@@ -626,7 +659,7 @@ where
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
     accounts_db
         .write_version
-        .fetch_add(iss_version, Ordering::Relaxed);
+        .fetch_add(incremental_snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot);
     Ok(accounts_db)
 }
