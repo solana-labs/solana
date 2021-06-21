@@ -403,7 +403,9 @@ impl Transaction {
                     .collect();
                 let data = &instruction.data;
                 let e = verify_eth_addresses(data, &instruction_datas);
-                e.map_err(|e| (i as u8, e))?;
+                e.map_err(|e| {
+                    TransactionError::InstructionError(i as u8, InstructionError::Custom(e as u32))
+                })?;
             }
         }
         Ok(())
