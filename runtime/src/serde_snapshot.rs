@@ -140,7 +140,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,    
+    accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -254,7 +254,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,    
+    accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -298,28 +298,27 @@ pub fn reconstruct_single_storage(
     id: AppendVecId,
     new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
     drop: bool,
-) -> Result<(), Error>
-{
-        let result = 
-        AppendVec::new_from_file(append_vec_path, current_len);
-        if result.is_err() {
-            error!("failed to create append vec: {}", current_len);
-        }
-        let (mut accounts, num_accounts) =result?;
-        if !drop {
-            accounts.set_no_remove_on_drop();
-        }
-        else {
-            //panic!("drop");
-        }
-    assert_eq!(Some(OsStr::new(&slot.to_string())), append_vec_path.file_stem());
-    
-    let u_storage_entry =
-        AccountStorageEntry::new_existing(*slot, id, accounts, num_accounts);
-        use std::fs;
+) -> Result<(), Error> {
+    let result = AppendVec::new_from_file(append_vec_path, current_len);
+    if result.is_err() {
+        error!("failed to create append vec: {}", current_len);
+    }
+    let (mut accounts, num_accounts) = result?;
+    if !drop {
+        accounts.set_no_remove_on_drop();
+    } else {
+        //panic!("drop");
+    }
+    assert_eq!(
+        Some(OsStr::new(&slot.to_string())),
+        append_vec_path.file_stem()
+    );
 
-        //let metadata = fs::metadata(append_vec_path)?;        
-        //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
+    let u_storage_entry = AccountStorageEntry::new_existing(*slot, id, accounts, num_accounts);
+    use std::fs;
+
+    //let metadata = fs::metadata(append_vec_path)?;
+    //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
     //error!("path2: {:?}, id: {}", append_vec_path, id);
 
     new_slot_storage.insert(id, Arc::new(u_storage_entry));
@@ -343,7 +342,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-    accounts_index: crate::accounts_db::AccountInfoAccountsIndex,        
+    accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -355,7 +354,7 @@ where
         account_indexes,
         caching_enabled,
         shrink_ratio,
-        Some(accounts_index),
+        accounts_index,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
     create_dir(&accounts_db.paths);

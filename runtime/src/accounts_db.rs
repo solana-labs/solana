@@ -335,8 +335,7 @@ impl<'a> LoadedAccountAccessor<'a> {
                 let res = self.get_loaded_account();
                 if res.is_none() {
                     panic!("If a storage entry was found in the storage map, it must not have been reset yet, self: {:?}", s);
-                }
-                else {
+                } else {
                     res.expect("If a storage entry was found in the storage map, it must not have been reset yet")
                 }
             }
@@ -359,15 +358,12 @@ impl<'a> LoadedAccountAccessor<'a> {
                 maybe_storage_entry
                     .as_ref()
                     .and_then(|(storage_entry, offset)| {
-                        let r = 
-                        storage_entry
-                            .get_stored_account_meta(*offset);
-                            if r.is_none() {
-                                error!("was none: {}", offset);
-                            }
+                        let r = storage_entry.get_stored_account_meta(*offset);
+                        if r.is_none() {
+                            error!("was none: {}", offset);
+                        }
 
-                            r
-                            .map(LoadedAccount::Stored)
+                        r.map(LoadedAccount::Stored)
                     })
             }
         }
