@@ -4574,7 +4574,7 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, B>(
+    fn scan_account_storage_no_bank<F, F2, B, C>(
         accounts_cache_and_ancestors: Option<(
             &AccountsCache,
             &Ancestors,
@@ -4582,10 +4582,13 @@ impl AccountsDb {
         )>,
         snapshot_storages: &SortedStorages,
         scan_func: F,
-    ) -> Vec<B>
+        after_func: F2,
+    ) -> Vec<C>
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        F2: Fn(B) -> C + Send + Sync,
         B: Send + Default,
+        C: Send + Default,
     {
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -4630,7 +4633,7 @@ impl AccountsDb {
                         }
                     }
                 }
-                retval
+                after_func(retval)
             })
             .collect()
     }
@@ -4808,6 +4811,7 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
+            Self::sort_slot_storage_scan,
         );
 
         if check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
@@ -4822,6 +4826,19 @@ impl AccountsDb {
         stats.scan_time_total_us += time.as_us();
 
         Ok(result)
+    }
+
+    fn sort_slot_storage_scan(
+        accum: Vec<Vec<CalculateHashIntermediate>>,
+    ) -> Vec<Vec<CalculateHashIntermediate>> {
+        accum
+            .into_par_iter()
+            .map(|mut items| {
+                // sort_by vs unstable because slot and write_version are already in order
+                items.sort_by(AccountsHash::compare_two_hash_entries);
+                items
+            })
+            .collect()
     }
 
     // modeled after get_accounts_delta_hash
@@ -4876,6 +4893,7 @@ impl AccountsDb {
                     &mut stats,
                     pass == num_scan_passes - 1,
                     previous_pass,
+                    bins_per_pass,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
@@ -6595,6 +6613,7 @@ pub mod tests {
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
+            |a| a,
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
