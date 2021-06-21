@@ -5833,6 +5833,58 @@ impl AccountsDb {
         accounts_map
     }
 
+    fn generate_index_for_slot<'a>(&self, accounts_map: GenerateIndexAccountsMap<'a>, slot: &Slot) {
+        if !accounts_map.is_empty() {
+            let len = accounts_map.len();
+
+            let mut items = Vec::with_capacity(len);
+            let mut dirty_pubkeys = accounts_map
+                .iter()
+                .map(|(pubkey, (_, store_id, stored_account))| {
+                    items.push((
+                        pubkey,
+                        AccountInfo {
+                            store_id: *store_id,
+                            offset: stored_account.offset,
+                            stored_size: stored_account.stored_size,
+                            lamports: stored_account.account_meta.lamports,
+                        },
+                    ));
+                    *pubkey
+                })
+                .collect::<Vec<_>>();
+
+            let items_len = items.len();
+            let dirty_pubkey_mask = self
+                .accounts_index
+                .insert_new_if_missing_into_primary_index(*slot, items);
+
+            assert_eq!(dirty_pubkey_mask.len(), items_len);
+
+            let mut dirty_pubkey_mask_iter = dirty_pubkey_mask.iter();
+
+            // dirty_pubkey_mask will return true if an item has multiple rooted entries for
+            // a given pubkey. If there is just a single item, there is no cleaning to
+            // be done on that pubkey. Prune the touched pubkey set here for only those
+            // pubkeys with multiple updates.
+            dirty_pubkeys.retain(|_k| *dirty_pubkey_mask_iter.next().unwrap());
+            if !dirty_pubkeys.is_empty() {
+                self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+            }
+
+            if !self.account_indexes.is_empty() {
+                for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
+                    self.accounts_index.update_secondary_indexes(
+                        pubkey,
+                        &stored_account.account_meta.owner,
+                        stored_account.data,
+                        &self.account_indexes,
+                    );
+                }
+            }
+        }
+    }
+
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>) {
         let mut slots = self.storage.all_slots();
@@ -5865,55 +5917,7 @@ impl AccountsDb {
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
-                    if !accounts_map.is_empty() {
-                        let len = accounts_map.len();
-
-                        let mut items = Vec::with_capacity(len);
-                        let mut dirty_pubkeys = accounts_map
-                            .iter()
-                            .map(|(pubkey, (_, store_id, stored_account))| {
-                                items.push((
-                                    pubkey,
-                                    AccountInfo {
-                                        store_id: *store_id,
-                                        offset: stored_account.offset,
-                                        stored_size: stored_account.stored_size,
-                                        lamports: stored_account.account_meta.lamports,
-                                    },
-                                ));
-                                *pubkey
-                            })
-                            .collect::<Vec<_>>();
-
-                        let items_len = items.len();
-                        let dirty_pubkey_mask = self
-                            .accounts_index
-                            .insert_new_if_missing_into_primary_index(*slot, items);
-
-                        assert_eq!(dirty_pubkey_mask.len(), items_len);
-
-                        let mut dirty_pubkey_mask_iter = dirty_pubkey_mask.iter();
-
-                        // dirty_pubkey_mask will return true if an item has multiple rooted entries for
-                        // a given pubkey. If there is just a single item, there is no cleaning to
-                        // be done on that pubkey. Prune the touched pubkey set here for only those
-                        // pubkeys with multiple updates.
-                        dirty_pubkeys.retain(|_k| *dirty_pubkey_mask_iter.next().unwrap());
-                        if !dirty_pubkeys.is_empty() {
-                            self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
-                        }
-
-                        if !self.account_indexes.is_empty() {
-                            for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
-                                self.accounts_index.update_secondary_indexes(
-                                    pubkey,
-                                    &stored_account.account_meta.owner,
-                                    stored_account.data,
-                                    &self.account_indexes,
-                                );
-                            }
-                        }
-                    }
+                    self.generate_index_for_slot(accounts_map, slot);
                 }
                 scan_time_sum
             })
