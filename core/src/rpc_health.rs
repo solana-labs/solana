@@ -98,7 +98,15 @@ impl RpcHealth {
                         RpcHealthStatus::Behind { num_slots }
                     }
                 }
-                _ => RpcHealthStatus::Unknown,
+                (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) => {
+                    if latest_account_hash_slot.is_none() {
+                        warn!("health check: latest_account_hash_slot not available");
+                    }
+                    if latest_trusted_validator_account_hash_slot.is_none() {
+                        warn!("health check: latest_trusted_validator_account_hash_slot not available");
+                    }
+                    RpcHealthStatus::Unknown
+                }
             }
         } else {
             // No trusted validator point of reference available, so this validator is healthy
