@@ -4,6 +4,7 @@ use crate::accounts_db::AccountInfo;
 use crate::data_bucket::DataBucket;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::slot_history::Slot;
+use rand::thread_rng;
 use std::convert::TryInto;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,7 +24,12 @@ pub enum BucketMapError {
 impl BucketMap {
     pub fn read_value(&self, pubkey: &Pubkey) -> Option<Vec<SlotInfo>> {
         let ix = self.bucket_ix(pubkey);
-        self.buckets[ix].read().unwrap().as_ref().and_then(|x| x.read_value(pubkey))
+        self.buckets[ix].read().unwrap().as_ref().and_then(|x| {
+            let slice = x.read_value(pubkey)?;
+            let mut vec = Vec::with_capacity(slice.len());
+            vec.extend_from_slice(slice);
+            Some(vec)
+        })
     }
 
     pub fn delete_key(&self, pubkey: &Pubkey) {
@@ -38,18 +44,23 @@ impl BucketMap {
     pub fn update(
         &self,
         pubkey: &Pubkey,
-        updatefn: fn(Option<Vec<SlotInfo>>) -> Vec<SlotInfo>,
+        updatefn: fn(Option<&[SlotInfo]>) -> Option<&[SlotInfo]>,
     ) -> Result<(), BucketMapError> {
         let ix = self.bucket_ix(pubkey);
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
-            *bucket  = Some(Bucket::new(&self.drives));
+            *bucket  = Some(Bucket::new(self.drives.clone()));
         }
         let bucket = bucket.as_mut().unwrap();
         let current = bucket.read_value(pubkey);
         let new = updatefn(current);
+        if new.is_none() {
+            bucket.delete_key(pubkey);
+            return Ok(());
+        }
+        let new = new.unwrap();
         loop {
-            let rv = bucket.try_write(pubkey, current.is_none(), &new);
+            let rv = bucket.try_write(pubkey, &new);
             if let Err(BucketMapError::DataNoSpace(sz)) = rv {
                 bucket.grow_data(sz);
                 continue;
@@ -68,6 +79,7 @@ impl BucketMap {
 }
 
 struct Bucket {
+    version: u64,
     drives: Arc<Vec<PathBuf>>,
     //index
     index: DataBucket,
@@ -85,49 +97,123 @@ struct IndexEntry {
     num_slots: u64,
 }
 
-const MAX_SEARCH: usize = 64;
+impl IndexEntry {
+    fn data_loc(&self, elem_cap: usize) -> usize {
+        (self.data_location << elem_cap as u64 - self.create_bucket_capacity) as usize
+    }
+}
+
+const MAX_SEARCH: usize = 16;
 
 impl Bucket {
     fn new(drives: Arc<Vec<PathBuf>>) -> Self {
         let index = DataBucket::new(drives, std::mem::size_of::<IndexEntry>());
         Self {
-            drives
+            version: 0,
+            drives,
             index,
             data: vec![],
         }
-        unimplemented!();
     }
-    fn read_value(&self, key: &Pubkey) -> Option<Vec<SlotInfo>> {
+
+    fn find_index(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {
         let ix = self.index_ix(key);
         for i in ix .. ix + MAX_SEARCH {
-            let ii = i % self.index.capacity;
+            let ii = i as u64 % self.index.capacity;
             if self.index.uid(ii) == 0 {
                 continue;
             }
-            let elem: &IndexEntry = self.index.get(ii);
-            if elem.key == key {
-                let cur_cap = self.data[eleme.data_bucket].capacity;
-                let loc = elem.data_location << cur_cap - elem.create_bucket_capacity;
-                let slice = self.data[eleme.data_bucket].get(loc);
-                return Some(slice);
-            }
+           let elem: &IndexEntry = self.index.get(ii);
+           if elem.key == *key {
+               return Some((elem, ii));
+           }
         }
         None
     }
-    fn allocate(&mut self, pubkey: &Pubkey, new: bool, data: &SlotSlice) -> Result<(), BucketMapError> {
-        if new {
-        }
+
+    fn create_key(&mut self, key: &Pubkey) -> Result<(&IndexEntry, u64), BucketMapError> {
+        let ix = self.index_ix(key);
         for i in ix .. ix + MAX_SEARCH {
+           let ii = i as u64 % self.index.capacity;
+           if self.index.uid(ii) != 0 {
+               continue;
+           }
+           let uid = self.version;
+           self.index.allocate(ii, self.version);
+           self.version += 1;
+           let mut elem: &mut IndexEntry = self.index.get_mut(ii);
+           elem.key = *key;
+           elem.data_bucket = 0;
+           elem.data_location = 0;
+           elem.create_bucket_capacity = 0;
+           elem.num_slots = 0;
+           return Ok((elem, ii));
+        }
+        Err(BucketMapError::IndexNoSpace(self.index.capacity))
+    }
+
+    pub fn read_value(&self, key: &Pubkey) -> Option<&[SlotInfo]> {
+        let (elem, _) = self.find_index(key)?;
+        let data_bucket = &self.data[elem.data_bucket as usize];
+        let cur_cap = data_bucket.capacity;
+        let loc = elem.data_location << cur_cap - elem.create_bucket_capacity as u64;
+        let cell_size = data_bucket.cell_size;
+        let slice = self.data[elem.data_bucket as usize].get_slice(loc * cell_size, elem.num_slots);
+        Some(slice)
+    }
+
+    fn try_write(&mut self, key: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
+        let index_entry = self.find_index(key);
+        let (elem, elem_ix) = if index_entry.is_none() {
+            self.create_key(key)?
+        } else {
+            index_entry.unwrap()
+        };
+        let elem_uid = self.index.uid(elem_ix);
+        let cur_cap = self.data[elem.data_bucket as usize].capacity;
+        let elem_loc = elem.data_location << cur_cap - elem.create_bucket_capacity;
+        let best_fit_bucket = self.bucket_ix(data.len());
+        if self.data.get(best_fit_bucket).is_none() {
+            return Err(BucketMapError::NoSpaceData((best_fit_bucket, 0)));  
+        }
+        let cap = self.data[best_fit_bucket].capacity;
+        if best_fit_bucket == elem.data_bucket {
+            let slice = self.data[elem.data_bucket].get_mut(elem_loc);
+            slice.clone_from_slice(data);
+            return Ok(());
+        } else {
+            let cap = self.data[best_fit_bucket].capacity;
+            let pos = thread_rng().gen_range(0, cap);
+            for i in pos..pos + MAX_SEARCH {
+                let ix = i % cap;
+                if self.data[best_fit_bucket].uid(ix) == 0 {
+                    self.data[elem.data_bucket].free(elem_loc, elem_uid);
+                    self.data[best_fit_bucket].allocate(ix, elem_uid);
+                    let slice = self.data[elem.data_bucket].get_mut(ix);
+                    elem.data_bucket = best_fit_bucket;
+                    elem.data_location = ix;
+                    elem.crate_bucket_capacity = self.data[best_fit_bucket].capacity;
+                    elem.num_slots = data.len();
+                    slice.clone_from_slice(data);
+                    return Ok(());
+                }
+            }
+            Err(BucketMapError::NoSpaceData((best_fit_bucket, cap)))
         }
     }
 
-    fn try_write(&mut self, pubkey: &Pubkey, new: bool, data: &SlotSlice) -> Result<(), BucketMapError> {
-        if new {
-        }
-        for i in ix .. ix + MAX_SEARCH {
+    fn delete_key(&mut self, key: &Pubkey) {
+        if let Some((elem, elem_ix)) = self.find_index(key) {
+            let elem_uid = self.index.uid(elem_ix);
+            if elem.num_slots > 0 {
+                let data_bucket = self.data[elem.data_bucket as usize];
+                let loc = elem.data_loc(data_bucket.capacity);
+                data_bucket.free(loc, elem_uid);
+            }
+            self.index.free(elem_ix, elem_uid);
         }
     }
-    fn delete_key(&self, _key: &Pubkey) {}
+
     fn grow_index(&mut self, sz: u64) {
         if self.index.capacity != sz {
             self.index.grow();
@@ -145,7 +231,7 @@ impl Bucket {
     }
     fn index_ix(&self, pubkey: &Pubkey) -> usize {
         let location = read_be_u64(pubkey.as_ref());
-        location % self.index.capacity
+        (location % self.index.capacity) as usize
     }
 }
 

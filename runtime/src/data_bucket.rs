@@ -40,7 +40,7 @@ pub struct DataBucket {
     drives: Arc<Vec<PathBuf>>,
     path: PathBuf,
     mmap: MmapMut,
-    pub cell_size: usize,
+    pub cell_size: u64,
     pub capacity: u64,
     pub used: AtomicU64,
 }
@@ -115,7 +115,7 @@ impl DataBucket {
         };
     }
 
-    pub fn get<T: Sized + AsRef<T>>(&self, ix: u64) -> &T {
+    pub fn get<T: Sized>(&self, ix: u64) -> &T {
         if ix >= self.capacity {
             panic!("bad index size");
         }
@@ -124,11 +124,25 @@ impl DataBucket {
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
-            return item.as_ref().unwrap();
+            &*item
         };
     }
 
-    pub fn get_mut<T: Sized + AsMut<T>>(&self, ix: u64) -> &mut T {
+    pub fn get_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+        if ix >= self.capacity {
+            panic!("bad index size");
+        }
+        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let end = start + std::mem::size_of::<T>();
+        let item_slice = &self.mmap[start..end];
+        unsafe {
+            let item = item_slice.as_ptr() as *const T;
+            std::slice::from_raw_parts(item, len)
+        };
+    }
+
+
+    pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
         if ix >= self.capacity {
             panic!("bad index size");
         }
@@ -137,7 +151,7 @@ impl DataBucket {
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
-            return item.as_mut().unwrap();
+            &mut *item
         };
     }
 
