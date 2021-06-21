@@ -5857,7 +5857,7 @@ impl AccountsDb {
         (result, slots)
     }
 
-    pub fn process_storage_slot<'a, T>(storage_maps: T) -> GenerateIndexAccountsMap<'a>
+    pub fn process_storage_slot<'a, T>(storage_maps: T, slot: Slot,) -> GenerateIndexAccountsMap<'a>
     where
         T: Iterator<Item = &'a Arc<AccountStorageEntry>> + Clone,
     {
@@ -5889,8 +5889,8 @@ impl AccountsDb {
                         if occupied_version < this_version {
                             entry.insert((this_version, storage.append_vec_id(), stored_account));
                         } else {
-                            if occupied_version == this_version && stored_account.meta.pubkey != Pubkey::default() {
-                                warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash);
+                            if occupied_version == this_version /* && stored_account.meta.pubkey != Pubkey::default()*/ {
+                                warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}, slot: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash, slot);
                         }
                         //assert!(occupied_version != this_version);
                     }
@@ -5967,7 +5967,7 @@ impl AccountsDb {
         storage_maps: &HashMap<AppendVecId, Arc<AccountStorageEntry>>,
         slot: Slot,
     ) {
-        let accounts_map = Self::process_storage_slot(storage_maps.values());
+        let accounts_map = Self::process_storage_slot(storage_maps.values(), slot);
         Self::generate_index_for_slot(
             &self.accounts_index,
             &self.uncleaned_pubkeys,
@@ -6057,7 +6057,7 @@ impl AccountsDb {
                             .storage
                             .get_slot_storage_entries(*slot)
                             .unwrap_or_default();
-                        let accounts_map = Self::process_storage_slot(storage_maps.iter());
+                        let accounts_map = Self::process_storage_slot(storage_maps.iter(), *slot);
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
 

@@ -707,7 +707,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                                     false,
                                 );
                                 let result =
-                                    AccountsDb::process_storage_slot(new_slot_storage.values());
+                                    AccountsDb::process_storage_slot(new_slot_storage.values(), slot);
                                 if result.len() > 0 {
                                     //error!("found: {}, slot: {}", result.len(), slot);
                                     AccountsDb::generate_index_for_slot(
