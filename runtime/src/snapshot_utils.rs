@@ -680,7 +680,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         else {
         let mut count = 0;
         let mut count_overall = 0;
-        if false {
+        if true {
             let mut new_slot_storage = HashMap::default();
             loop {
                 count_overall += 1;
