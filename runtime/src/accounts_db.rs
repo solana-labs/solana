@@ -331,8 +331,14 @@ impl<'a> LoadedAccountAccessor<'a> {
                 // was still in the storage map. This means even if the storage entry is removed
                 // from the storage map after we grabbed the storage entry, the recycler should not
                 // reset the storage entry until we drop the reference to the storage entry.
-                self.get_loaded_account()
-                    .expect("If a storage entry was found in the storage map, it must not have been reset yet")
+                let s = format!("{:?}", self);
+                let res = self.get_loaded_account();
+                if res.is_none() {
+                    panic!("If a storage entry was found in the storage map, it must not have been reset yet, self: {:?}", s);
+                }
+                else {
+                    res.expect("If a storage entry was found in the storage map, it must not have been reset yet")
+                }
             }
         }
     }
