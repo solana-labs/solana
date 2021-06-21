@@ -662,7 +662,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     let sender = std::sync::Mutex::new(Some(sender));
     let mut untar = Measure::start("untar");
 
-    let this_way = false;
+    let this_way = true;
 
     let parallel = vec![(queue_.clone(), exit_.clone()); 32];
     parallel.into_par_iter().enumerate().for_each(
