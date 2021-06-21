@@ -1,5 +1,5 @@
 import React from "react";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 import { BlockResponse, PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 
@@ -49,11 +49,15 @@ export function BlockRewardsCard({ block }: { block: BlockResponse }) {
                     <Address pubkey={new PublicKey(reward.pubkey)} link />
                   </td>
                   <td>{reward.rewardType}</td>
-                  <td>{lamportsToSolString(reward.lamports)}</td>
                   <td>
-                    {reward.postBalance
-                      ? lamportsToSolString(reward.postBalance)
-                      : "-"}
+                    <SolBalance lamports={reward.lamports} />
+                  </td>
+                  <td>
+                    {reward.postBalance ? (
+                      <SolBalance lamports={reward.postBalance} />
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td>{percentChange ? percentChange + "%" : "-"}</td>
                 </tr>

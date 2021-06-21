@@ -5,7 +5,7 @@ import { AccountBalancePair } from "@solana/web3.js";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 import { useQuery } from "utils/url";
 import { useSupply } from "providers/supply";
 import { Address } from "./common/Address";
@@ -133,7 +133,9 @@ const renderAccountRow = (
       <td>
         <Address pubkey={account.address} link />
       </td>
-      <td className="text-right">{lamportsToSolString(account.lamports, 0)}</td>
+      <td className="text-right">
+        <SolBalance lamports={account.lamports} maximumFractionDigits={0} />
+      </td>
       <td className="text-right">{`${(
         (100 * account.lamports) /
         supply

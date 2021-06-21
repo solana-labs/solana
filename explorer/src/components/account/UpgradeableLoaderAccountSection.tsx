@@ -1,6 +1,6 @@
 import React from "react";
 import { TableCardBody } from "components/common/TableCardBody";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Address } from "components/common/Address";
 import {
@@ -98,7 +98,7 @@ export function UpgradeableProgramSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(account.lamports || 0)}
+            <SolBalance lamports={account.lamports || 0} />
           </td>
         </tr>
         <tr>
@@ -169,7 +169,7 @@ export function UpgradeableProgramDataSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(account.lamports || 0)}
+            <SolBalance lamports={account.lamports || 0} />
           </td>
         </tr>
         {account.details?.space !== undefined && (
@@ -236,7 +236,7 @@ export function UpgradeableProgramBufferSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(account.lamports || 0)}
+            <SolBalance lamports={account.lamports || 0} />
           </td>
         </tr>
         {account.details?.space !== undefined && (
