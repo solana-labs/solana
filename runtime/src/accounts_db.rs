@@ -5878,7 +5878,7 @@ impl AccountsDb {
                 let stored_account = next.unwrap();
                 let this_version = stored_account.meta.write_version;
                 //error!("acct: {:?}, accounts: {}", stored_account, num_accounts);
-                if stored_account.meta.pubkey == Pubkey::default() && stored_account.hash == Hash::default() && stored_account.account_meta.lamports == 0 {
+                if stored_account.meta.pubkey == Pubkey::default() && stored_account.hash == &Hash::default() && stored_account.account_meta.lamports == 0 {
                     continue;
                 }
                 if slot == 76817171{
