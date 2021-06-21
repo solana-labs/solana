@@ -86,7 +86,7 @@ releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 - See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
-NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
+NAT traversal issues. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
 
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.
