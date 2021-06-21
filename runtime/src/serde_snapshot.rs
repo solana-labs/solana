@@ -352,7 +352,7 @@ where
                 })?;
 
                 reconstruct_single_storage(
-                    &slot,
+                    slot,
                     append_vec_path,
                     storage_entry,
                     &mut new_slot_storage,
