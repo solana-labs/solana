@@ -84,15 +84,17 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     Ok(())
 }
 
-fn unpack_archive<'a, A: Read, C>(
-    archive: &mut Archive<A>,
+fn unpack_archive<'a, A: Read, C, D>(
+    archive: &'a mut Archive<A>,
     apparent_limit_size: u64,
     actual_limit_size: u64,
     limit_count: u64,
     mut entry_checker: C,
+    mut file_notifier: D,
 ) -> Result<()>
 where
-    C: FnMut(&[&str], tar::EntryType) -> Option<&'a Path>,
+C: FnMut(&[&str], tar::EntryType) -> Option<(&'a Path, bool)>,
+D: FnMut(PathBuf, bool),
 {
     let mut apparent_total_size: u64 = 0;
     let mut actual_total_size: u64 = 0;
@@ -128,7 +130,8 @@ where
             )));
         }
 
-        let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
+        let parts: Vec<_> = parts.map(|p| p.unwrap()).collect::<Vec<_>>().clone();
+        let mut result_bool = false;
         let unpack_dir = match entry_checker(parts.as_slice(), kind) {
             None => {
                 return Err(UnpackError::Archive(format!(
@@ -137,7 +140,7 @@ where
                     entry.header().entry_type(),
                 )));
             }
-            Some(unpack_dir) => unpack_dir,
+            Some((unpack_dir, result_bool_in)) => {result_bool = result_bool_in; unpack_dir},
         };
 
         apparent_total_size = checked_total_size_sum(
@@ -152,6 +155,8 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
+        let pb = unpack_dir.join(entry.path()?).to_path_buf();
+
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
         check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
@@ -162,6 +167,7 @@ where
             _ => 0o755,
         };
         set_perms(&unpack_dir.join(entry.path()?), mode)?;
+        file_notifier(pb, result_bool);
 
         total_entries += 1;
         let now = Instant::now();
@@ -193,10 +199,14 @@ where
 /// Map from AppendVec file name to unpacked file system location
 pub type UnpackedAppendVecMap = HashMap<String, PathBuf>;
 
+use     crossbeam_channel::Sender;
+
+
 pub fn unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
     account_paths: &[PathBuf],
+    account_path_sender: Option<Sender<PathBuf>>,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
@@ -214,16 +224,30 @@ pub fn unpack_snapshot<A: Read>(
                     account_paths.get(path_index).map(|path_buf| {
                         unpacked_append_vec_map
                             .insert(file.to_string(), path_buf.join("accounts").join(file));
-                        path_buf.as_path()
-                    })
+                            //error!("accounts: {:?}", ledger_dir);
+                            path_buf.as_path()
+                    }).map(|i| (i, true))
                 } else {
-                    Some(ledger_dir)
+                    //error!("path: {:?}", ledger_dir);
+                    Some((ledger_dir, false))
                 }
             } else {
                 None
             }
         },
-    )
+        |path, account| {
+            match &account_path_sender {
+                Some(sender) => {
+                    if account {
+                        sender.send(path);
+                        //error!("path: {:?}", path);
+                    }
+                },
+                None => {
+                }
+            }
+        }
+        )
     .map(|_| unpacked_append_vec_map)
 }
 
@@ -337,11 +361,12 @@ fn unpack_genesis<A: Read>(
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         |p, k| {
             if is_valid_genesis_archive_entry(p, k) {
-                Some(unpack_dir)
+                Some((unpack_dir, false))
             } else {
                 None
             }
         },
+        |_, _| {},
     )
 }
 

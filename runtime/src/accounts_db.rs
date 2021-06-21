@@ -852,7 +852,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+pub type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -1337,6 +1337,29 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CrossThreadQueue<T> {
+    data: Arc<Mutex<Vec<T>>>,
+}
+
+impl<T> CrossThreadQueue<T> {
+    pub fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::new(Vec::default())),
+        }
+    }
+    pub fn push(&self, item: T) {
+        self.data.lock().unwrap().insert(0, item);
+    }
+    pub fn pop(&self) -> Option<T> {
+        let mut queue = self.data.lock().unwrap();
+        queue.pop()
+    }
+    pub fn len(&self) -> usize {
+        self.data.lock().unwrap().len()
+    }
+}
+
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
@@ -1398,6 +1421,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         )
     }
 
@@ -1407,6 +1431,7 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index: Option<AccountInfoAccountsIndex>,
     ) -> Self {
         let mut new = if !paths.is_empty() {
             Self {
@@ -1416,6 +1441,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index: accounts_index.unwrap_or_default(),
                 ..Self::default()
             }
         } else {
@@ -5803,18 +5829,29 @@ impl AccountsDb {
         (result, slots)
     }
 
-    fn process_storage_slot(
-        storage_maps: &[Arc<AccountStorageEntry>],
-    ) -> GenerateIndexAccountsMap<'_> {
+    pub fn process_storage_slot<'a, T>(storage_maps: T) -> GenerateIndexAccountsMap<'a>
+    where
+        T: Iterator<Item = &'a Arc<AccountStorageEntry>> + Clone,
+    {
         let num_accounts = storage_maps
-            .iter()
+            .clone()
             .map(|storage| storage.approx_stored_count())
             .sum();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
-        storage_maps.iter().for_each(|storage| {
+        storage_maps.for_each(|storage| {
             let accounts = storage.all_accounts();
-            accounts.into_iter().for_each(|stored_account| {
+            let mut iter = accounts.into_iter();
+            loop {
+                let next = iter.next();
+                if next.is_none() {
+                    break;
+                }
+                let stored_account = next.unwrap();
                 let this_version = stored_account.meta.write_version;
+                //error!("acct: {:?}, accounts: {}", stored_account, num_accounts);
+                if stored_account.meta.pubkey == Pubkey::default() {
+                    //break;;
+                }
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert((this_version, storage.append_vec_id(), stored_account));
@@ -5824,16 +5861,25 @@ impl AccountsDb {
                         if occupied_version < this_version {
                             entry.insert((this_version, storage.append_vec_id(), stored_account));
                         } else {
-                            assert!(occupied_version != this_version);
+                            if occupied_version == this_version && stored_account.meta.pubkey != Pubkey::default() {
+                                warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash);
+                        }
+                        //assert!(occupied_version != this_version);
                         }
                     }
                 }
-            })
+            }
         });
         accounts_map
     }
 
-    fn generate_index_for_slot<'a>(&self, accounts_map: GenerateIndexAccountsMap<'a>, slot: &Slot) {
+    pub fn generate_index_for_slot<'a>(
+        accounts_index: &AccountInfoAccountsIndex,
+        uncleaned_pubkeys: &DashMap<Slot, Vec<Pubkey>>,
+        account_indexes: &AccountSecondaryIndexes,
+        accounts_map: GenerateIndexAccountsMap<'a>,
+        slot: &Slot,
+    ) -> u64 {
         if !accounts_map.is_empty() {
             let len = accounts_map.len();
 
@@ -5855,10 +5901,10 @@ impl AccountsDb {
                 .collect::<Vec<_>>();
 
             let items_len = items.len();
-            let dirty_pubkey_mask = self
-                .accounts_index
-                .insert_new_if_missing_into_primary_index(*slot, items);
+            let (dirty_pubkey_mask, timing) =
+                accounts_index.insert_new_if_missing_into_primary_index(*slot, items);
 
+            /*
             assert_eq!(dirty_pubkey_mask.len(), items_len);
 
             let mut dirty_pubkey_mask_iter = dirty_pubkey_mask.iter();
@@ -5869,20 +5915,38 @@ impl AccountsDb {
             // pubkeys with multiple updates.
             dirty_pubkeys.retain(|_k| *dirty_pubkey_mask_iter.next().unwrap());
             if !dirty_pubkeys.is_empty() {
-                self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+                uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
             }
+            */
 
-            if !self.account_indexes.is_empty() {
+            if !account_indexes.is_empty() {
                 for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
-                    self.accounts_index.update_secondary_indexes(
-                        pubkey,
+                    accounts_index.update_secondary_indexes(
+                        &pubkey,
                         &stored_account.account_meta.owner,
-                        stored_account.data,
-                        &self.account_indexes,
+                        &stored_account.data,
+                        account_indexes,
                     );
                 }
             }
+            return timing;
         }
+        0
+    }
+
+    pub fn add_slot_to_accounts_index(
+        &self,
+        storage_maps: &HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+        slot: Slot,
+    ) {
+        let accounts_map = Self::process_storage_slot(storage_maps.values());
+        Self::generate_index_for_slot(
+            &self.accounts_index,
+            &self.uncleaned_pubkeys,
+            &self.account_indexes,
+            accounts_map,
+            &slot,
+        );
     }
 
     #[allow(clippy::needless_collect)]
@@ -5897,7 +5961,11 @@ impl AccountsDb {
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
         let mut index_time = Measure::start("index");
-        let scan_time: u64 = slots
+
+        let scan_time: u64 = if true {
+            0
+        } else {
+            slots
             .par_chunks(chunk_size)
             .map(|slots| {
                 let mut log_status = MultiThreadProgress::new(
@@ -5913,15 +5981,22 @@ impl AccountsDb {
                         .storage
                         .get_slot_storage_entries(*slot)
                         .unwrap_or_default();
-                    let accounts_map = Self::process_storage_slot(&storage_maps);
+                        let accounts_map = Self::process_storage_slot(storage_maps.iter());
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
-                    self.generate_index_for_slot(accounts_map, slot);
+                        Self::generate_index_for_slot(
+                            &self.accounts_index,
+                            &self.uncleaned_pubkeys,
+                            &self.account_indexes,
+                            accounts_map,
+                            slot,
+                        );
                 }
                 scan_time_sum
             })
-            .sum();
+                .sum()
+        };
         index_time.stop();
         let timings = GenerateIndexTimings {
             scan_time,

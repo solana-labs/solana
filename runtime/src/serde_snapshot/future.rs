@@ -9,9 +9,9 @@ type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct SerializableAccountStorageEntry {
-    id: AppendVecId,
-    accounts_current_len: usize,
+pub(crate) struct SerializableAccountStorageEntry {
+    pub id: AppendVecId,
+    pub accounts_current_len: usize,
 }
 
 pub trait SerializableStorage {
