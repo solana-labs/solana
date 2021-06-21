@@ -359,8 +359,14 @@ impl<'a> LoadedAccountAccessor<'a> {
                 maybe_storage_entry
                     .as_ref()
                     .and_then(|(storage_entry, offset)| {
+                        let r = 
                         storage_entry
-                            .get_stored_account_meta(*offset)
+                            .get_stored_account_meta(*offset);
+                            if r.is_none() {
+                                error!("was none: {}", offset);
+                            }
+
+                            r
                             .map(LoadedAccount::Stored)
                     })
             }
