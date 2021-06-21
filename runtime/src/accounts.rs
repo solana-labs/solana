@@ -666,6 +666,7 @@ impl Accounts {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {
+            warn!("verify_bank_hash succeeded: {}", total_lamports);
             true
         }
     }
