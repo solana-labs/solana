@@ -1486,14 +1486,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             Self::get_newest_root_in_slot_list(&roots_tracker.roots, slot_list, max_clean_root);
         let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
 
-        let mut purged_slots: HashSet<Slot> = HashSet::new();
         slot_list.retain(|(slot, value)| {
             let should_purge =
                 Self::can_purge_older_entries(max_clean_root, newest_root_in_slot_list, *slot)
                     && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
-                purged_slots.insert(*slot);
             }
             !should_purge
         });
