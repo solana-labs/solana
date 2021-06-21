@@ -140,7 +140,7 @@ function useSimulator(message: Message) {
         let depth = 0;
         let instructionLogs: InstructionLogs[] = [];
         const prefixBuilder = (depth: number) => {
-          const prefix = new Array(depth - 1).fill("\u00A0\u00A0").join();
+          const prefix = new Array(depth - 1).fill("\u00A0\u00A0").join("");
           return prefix + "> ";
         };
 

@@ -111,7 +111,7 @@ export function TransactionInspectorPage({
       ) : transaction ? (
         <LoadedView transaction={transaction} onClear={reset} />
       ) : (
-        <RawInput value={paramString} setMessage={setTransaction} />
+        <RawInput value={paramString} setTransactionData={setTransaction} />
       )}
     </div>
   );
