@@ -627,10 +627,10 @@ mod test {
         entries: &[Entry],
         slot: Slot,
         parent: Slot,
-        keypair: &Arc<Keypair>,
+        keypair: &Keypair,
     ) -> Vec<Shred> {
-        let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(entries, true, 0).0
+        let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
+        shredder.entries_to_shreds(keypair, entries, true, 0).0
     }
 
     #[test]
@@ -639,7 +639,7 @@ mod test {
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, 0, Hash::default());
-        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
+        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Keypair::new());
         shreds.reverse();
         blockstore
             .insert_shreds(shreds, None, false)
