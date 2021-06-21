@@ -157,6 +157,8 @@ pub struct ExecuteTimings {
     pub load_us: u64,
     pub execute_us: u64,
     pub store_us: u64,
+    pub total_batches_len: usize,
+    pub num_execute_batches: u64,
     pub details: ExecuteDetailsTimings,
 }
 
@@ -166,6 +168,8 @@ impl ExecuteTimings {
         self.load_us += other.load_us;
         self.execute_us += other.execute_us;
         self.store_us += other.store_us;
+        self.total_batches_len += other.total_batches_len;
+        self.num_execute_batches += other.num_execute_batches;
         self.details.accumulate(&other.details);
     }
 }
