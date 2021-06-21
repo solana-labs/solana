@@ -11,22 +11,17 @@ use std::{
     time::Duration,
 };
 
-pub const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
-pub const MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST: u32 = 25;
-pub const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
-
-pub enum EstimateType {
-    Bounded(MaxAllowableDrift), // Value represents max allowable drift percentage
-    Unbounded,                  // Deprecated.  Remove in the Solana v1.6.0 timeframe
-}
+pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
+pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST: u32 = 25;
+pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
 
 #[derive(Copy, Clone)]
-pub struct MaxAllowableDrift {
+pub(crate) struct MaxAllowableDrift {
     pub fast: u32, // Max allowable drift percentage faster than poh estimate
     pub slow: u32, // Max allowable drift percentage slower than poh estimate
 }
 
-pub fn calculate_stake_weighted_timestamp<I, K, V, T>(
+pub(crate) fn calculate_stake_weighted_timestamp<I, K, V, T>(
     unique_timestamps: I,
     stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
