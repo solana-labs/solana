@@ -31,11 +31,7 @@ pub mod secondary_index;
 pub mod serde_snapshot;
 pub mod snapshot_package;
 pub mod snapshot_utils;
-<<<<<<< HEAD
-=======
-pub mod sorted_storages;
 pub mod stake_weighted_timestamp;
->>>>>>> 19fe1dd46 (Move stake_weighted_timestamp module (#18114))
 pub mod stakes;
 pub mod status_cache;
 mod system_instruction_processor;
