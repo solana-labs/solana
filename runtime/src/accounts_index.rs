@@ -47,7 +47,7 @@ unsafe impl<T> Sync for EvilPtr<T> {}
 unsafe impl<T> Send for EvilPtr<T> {}
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-const BINS: usize = 2;
+const BINS: usize = 1;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
