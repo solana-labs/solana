@@ -5889,7 +5889,7 @@ impl AccountsDb {
                         if occupied_version < this_version {
                             entry.insert((this_version, storage.append_vec_id(), stored_account));
                         } else {
-                            if occupied_version == this_version && stored_account.hash != &Hash::default() {//} /* && stored_account.meta.pubkey != Pubkey::default()*/ {
+                            if occupied_version == this_version && stored_account.hash != &Hash::default() && occupied_version != 0 {//} /* && stored_account.meta.pubkey != Pubkey::default()*/ {
                                 warn!("maybe occupied failure, occupied_version != this_version, occupied: {}, {}, stored_account.meta.pubkey: {}, hash: {}, slot: {}", occupied_version, this_version, stored_account.meta.pubkey, stored_account.hash, slot);
                         }
                         //assert!(occupied_version != this_version);
