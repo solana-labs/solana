@@ -35,7 +35,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         io::{self, BufReader, BufWriter, Read, Write},
-        path::PathBuf,
+        path::{Path, PathBuf},
         result::Result,
         sync::{atomic::Ordering, Arc, RwLock},
     },
@@ -287,6 +287,24 @@ where
     Ok(bank)
 }
 
+fn reconstruct_single_storage<E>(
+    slot: &Slot,
+    append_vec_path: &Path,
+    storage_entry: &E,
+    new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+) -> Result<(), Error>
+where
+    E: SerializableStorage,
+{
+    let (accounts, num_accounts) =
+        AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
+    let u_storage_entry =
+        AccountStorageEntry::new_existing(*slot, storage_entry.id(), accounts, num_accounts);
+
+    new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
+    Ok(())
+}
+
 fn reconstruct_accountsdb_from_fields<E>(
     accounts_db_fields: AccountsDbFields<E>,
     account_paths: &[PathBuf],
@@ -333,16 +351,12 @@ where
                     )
                 })?;
 
-                let (accounts, num_accounts) =
-                    AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
-                let u_storage_entry = AccountStorageEntry::new_existing(
-                    *slot,
-                    storage_entry.id(),
-                    accounts,
-                    num_accounts,
-                );
-
-                new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
+                reconstruct_single_storage(
+                    &slot,
+                    append_vec_path,
+                    storage_entry,
+                    &mut new_slot_storage,
+                )?;
             }
             Ok((*slot, new_slot_storage))
         })
