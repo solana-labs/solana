@@ -299,7 +299,7 @@ pub fn reconstruct_single_storage(
         let result = 
         AppendVec::new_from_file(append_vec_path, current_len);
         if result.is_err() {
-            panic!("failed to create append vec: {}", current_len);
+            error!("failed to create append vec: {}", current_len);
         }
         let (mut accounts, num_accounts) =result?;
         if !drop {
