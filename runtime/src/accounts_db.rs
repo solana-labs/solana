@@ -4803,6 +4803,7 @@ impl AccountsDb {
         stats.num_snapshot_storage = storage.slot_count();
         let mismatch_found = AtomicU64::new(0);
         let range = bin_range.end - bin_range.start;
+        let sort_time = AtomicU64::new(0);
 
         let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
             accounts_cache_and_ancestors,
@@ -4850,8 +4851,14 @@ impl AccountsDb {
                 }
                 accum[pubkey_to_bin_index].push(source_item);
             },
-            Self::sort_slot_storage_scan,
+            |x| {
+                let (result, timing) = Self::sort_slot_storage_scan(x);
+                sort_time.fetch_add(timing, Ordering::Relaxed);
+                result
+            },
         );
+
+        stats.sort_time_total_us += sort_time.load(Ordering::Relaxed);
 
         if check_hash && mismatch_found.load(Ordering::Relaxed) > 0 {
             warn!(
@@ -4869,15 +4876,24 @@ impl AccountsDb {
 
     fn sort_slot_storage_scan(
         accum: Vec<Vec<CalculateHashIntermediate>>,
-    ) -> Vec<Vec<CalculateHashIntermediate>> {
-        accum
-            .into_par_iter()
-            .map(|mut items| {
-                // sort_by vs unstable because slot and write_version are already in order
-                items.sort_by(AccountsHash::compare_two_hash_entries);
-                items
-            })
-            .collect()
+    ) -> (Vec<Vec<CalculateHashIntermediate>>, u64) {
+        let time = AtomicU64::new(0);
+        (
+            accum
+                .into_par_iter()
+                .map(|mut items| {
+                    let mut sort_time = Measure::start("sort");
+                    {
+                        // sort_by vs unstable because slot and write_version are already in order
+                        items.sort_by(AccountsHash::compare_two_hash_entries);
+                    }
+                    sort_time.stop();
+                    time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
+                    items
+                })
+                .collect(),
+            time.load(Ordering::Relaxed),
+        )
     }
 
     // modeled after get_accounts_delta_hash
