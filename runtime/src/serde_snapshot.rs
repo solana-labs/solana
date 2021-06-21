@@ -317,9 +317,14 @@ pub fn reconstruct_single_storage(
     let u_storage_entry = AccountStorageEntry::new_existing(*slot, id, accounts, num_accounts);
     use std::fs;
 
-    //let metadata = fs::metadata(append_vec_path)?;
+    let metadata = fs::metadata(append_vec_path)?;
     //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
     //error!("path2: {:?}, id: {}", append_vec_path, id);
+
+    if slot == &76817171{
+        error!("reconstruct_single_storage: {}, file len: {}", current_len, metadata.len());
+    }
+
 
     new_slot_storage.insert(id, Arc::new(u_storage_entry));
     Ok(())
