@@ -114,7 +114,6 @@ struct SkippedSlotsInfo {
 }
 
 pub struct ReplayStageConfig {
-    pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub exit: Arc<AtomicBool>,
@@ -298,7 +297,6 @@ impl ReplayStage {
         cost_model: Arc<RwLock<CostModel>>,
     ) -> Self {
         let ReplayStageConfig {
-            my_pubkey,
             vote_account,
             authorized_voter_keypairs,
             exit,
@@ -328,6 +326,7 @@ impl ReplayStage {
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
+                let my_pubkey = cluster_info.id();
                 let (
                     mut progress,
                     mut heaviest_subtree_fork_choice,

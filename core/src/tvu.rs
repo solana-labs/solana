@@ -42,10 +42,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use std::{
     boxed::Box,
     collections::HashSet,
@@ -131,8 +128,6 @@ impl Tvu {
         max_slots: &Arc<MaxSlots>,
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
-        let keypair: Arc<Keypair> = cluster_info.keypair.clone();
-
         let Sockets {
             repair: repair_socket,
             fetch: fetch_sockets,
@@ -259,7 +254,6 @@ impl Tvu {
         };
 
         let replay_stage_config = ReplayStageConfig {
-            my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
@@ -353,6 +347,7 @@ pub mod tests {
     use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
+    use solana_sdk::signature::Signer;
     use std::sync::atomic::Ordering;
 
     #[ignore]
