@@ -23,7 +23,7 @@ impl ServeRepairService {
         let serve_repair_socket = Arc::new(serve_repair_socket);
         trace!(
             "ServeRepairService: id: {}, listening on: {:?}",
-            &serve_repair.read().unwrap().my_info().id,
+            &serve_repair.read().unwrap().my_id(),
             serve_repair_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::receiver(
