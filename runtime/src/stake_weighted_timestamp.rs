@@ -15,11 +15,6 @@ pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST: u32 = 25;
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
 
-pub(crate) enum EstimateType {
-    Bounded(MaxAllowableDrift), // Value represents max allowable drift percentage
-    Unbounded,                  // Deprecated.  Remove in the Solana v1.6.0 timeframe
-}
-
 #[derive(Copy, Clone)]
 pub(crate) struct MaxAllowableDrift {
     pub fast: u32, // Max allowable drift percentage faster than poh estimate
