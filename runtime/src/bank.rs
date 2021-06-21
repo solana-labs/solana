@@ -4978,6 +4978,9 @@ impl Bank {
     ) {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id, false);
+        if program_id == Pubkey::default() {
+            panic!("added 111");
+        }
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
     }
