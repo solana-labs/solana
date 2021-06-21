@@ -85,11 +85,28 @@ releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 - We build and run on Ubuntu 20.04.
 - See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
 
-Be sure to ensure that the machine used is not behind a residential NAT to avoid
-NAT traversal issues. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
-
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.
+
+## Networking
+Internet service should be at least 300Mbit/s symmetric, commercial. 1GBit/s preferred
+
+### Port Forwarding
+The following ports need to be open to the internet for both inbound and outbound
+
+It is not recommended to run a validator behind a NAT. Operators who choose to
+do so should be comfortable configuring their networking equipment and debugging
+any traversal issues on their own.
+
+#### Required
+- 8000-10000 TCP/UDP - P2P protocols (gossip, turbine, repair, etc). This can
+be limited to any free 11 port range with `--dynamic-port-range`
+
+#### Optional
+For security purposes, it is not suggested that the following ports be open to
+the internet on staked, mainnet-beta validators.
+- 8899 TCP - JSONRPC over HTTP. Change with `--rpc-port RPC_PORT``
+- 8900 TCP - JSONRPC over Websockets. Derived. Uses `RPC_PORT + 1`
 
 ## GPU Requirements
 
