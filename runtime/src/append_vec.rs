@@ -329,7 +329,8 @@ impl AppendVec {
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
-            panic!("incorrect");
+            //panic!("incorrect");
+            error!("new_from_file: sanitize failed: {:?}", path);
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "incorrect layout/length/data",
@@ -359,13 +360,16 @@ impl AppendVec {
         }
         let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
         //error!("sanitizing, found: {} accounts", num_accounts);
-        assert_eq!(offset, aligned_current_len);
-        (true, num_accounts)
-        /*
-        assert_eq!(offset, aligned_current_len);
+        if false {
+            assert_eq!(offset, aligned_current_len);
+            (true, num_accounts)
+        } else {
+            /*
+            assert_eq!(offset, aligned_current_len);
 
-        (offset == aligned_current_len, num_accounts)
-        */
+            */
+            (offset == aligned_current_len, num_accounts)
+        }
     }
 
     /// Get a reference to the data at `offset` of `size` bytes if that slice
