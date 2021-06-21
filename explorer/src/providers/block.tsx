@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { Connection, ConfirmedBlock } from "@solana/web3.js";
+import { Connection, BlockResponse } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -16,7 +16,7 @@ export enum ActionType {
 }
 
 type Block = {
-  block?: ConfirmedBlock;
+  block?: BlockResponse;
 };
 
 type State = Cache.State<Block>;
@@ -72,18 +72,18 @@ export async function fetchBlock(
 
   try {
     const connection = new Connection(url, "finalized");
-    data = { block: await connection.getConfirmedBlock(Number(key)) };
-    status = FetchStatus.Fetched;
-  } catch (err) {
-    const error = err as Error;
-    if (error.message.includes("not found")) {
-      data = {} as Block;
+    const block = await connection.getBlock(Number(key));
+    if (block === null) {
+      data = {};
       status = FetchStatus.Fetched;
     } else {
-      status = FetchStatus.FetchFailed;
-      if (cluster !== Cluster.Custom) {
-        Sentry.captureException(error, { tags: { url } });
-      }
+      data = { block };
+      status = FetchStatus.Fetched;
+    }
+  } catch (err) {
+    status = FetchStatus.FetchFailed;
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(err, { tags: { url } });
     }
   }
 

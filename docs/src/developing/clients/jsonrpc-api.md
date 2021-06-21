@@ -21,6 +21,7 @@ gives a convenient interface for the RPC methods.
 - [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 - [getBalance](jsonrpc-api.md#getbalance)
 - [getBlock](jsonrpc-api.md#getblock)
+- [getBlockHeight](jsonrpc-api.md#getblockheight)
 - [getBlockProduction](jsonrpc-api.md#getblockproduction)
 - [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 - [getBlocks](jsonrpc-api.md#getblocks)
@@ -349,7 +350,7 @@ Result:
 ### getBlock
 
 **NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getBlock](jsonrpc-api.md#getblock) for solana-core v1.6**
+[getConfirmedBlock](jsonrpc-api.md#getconfirmedblock) for solana-core v1.6**
 
 Returns identity and transaction information about a confirmed block in the ledger
 
@@ -393,6 +394,7 @@ The result field will be an object with the following fields:
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
+  - `blockHeight: <u64 | null>` - the number of blocks beneath this block
 
 #### Example:
 
@@ -408,6 +410,7 @@ Result:
 {
   "jsonrpc": "2.0",
   "result": {
+    "blockHeight": 428,
     "blockTime": null,
     "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
     "parentSlot": 429,
@@ -491,6 +494,7 @@ Result:
 {
   "jsonrpc": "2.0",
   "result": {
+    "blockHeight": 428,
     "blockTime": null,
     "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
     "parentSlot": 429,
@@ -577,6 +581,32 @@ The JSON structure of token balances is defined as a list of objects in the foll
   - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
   - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
 
+
+### getBlockHeight
+
+Returns the current block height of the node
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `<u64>` - Current block height
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockHeight"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":1233,"id":1}
+```
 
 ### getBlockProduction
 
@@ -836,6 +866,8 @@ The result field will be an array of JSON objects, each with the following sub f
 - `tpu: <string>` - TPU network address for the node
 - `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
 - `version: <string>|null` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <number>|null` - The unique identifier of the node's feature set
+- `shredVersion: <number>|null` - The shred version the node has been configured to use
 
 #### Example:
 
@@ -1064,6 +1096,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 - `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which a blockhash will be valid
 
 #### Example:
 
@@ -1087,7 +1120,8 @@ Result:
       "feeCalculator": {
         "lamportsPerSignature": 5000
       },
-      "lastValidSlot": 297
+      "lastValidSlot": 297,
+      "lastValidBlockHeight": 296
     }
   },
   "id": 1
@@ -2772,6 +2806,12 @@ Returns transaction details for a confirmed transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
+    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+      - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+      - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+      - `postBalance: <u64>` - account balance in lamports after the reward was applied
+      - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
+
 
 #### Example:
 Request:
@@ -2964,7 +3004,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.7.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.8.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -3202,10 +3242,16 @@ Simulate sending a transaction
 #### Parameters:
 
 - `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
-- `<object>` - (optional) Configuration object containing the following field:
-  - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false, conflicts with `replaceRecentBlockhash`)
   - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+  - `replaceRecentBlockhash: <bool>` - (optional) if true the transaction recent blockhash will be replaced with the most recent blockhash.
+  (default: false, conflicts with `sigVerify`)
+  - `accounts: <object>` - (optional) Accounts configuration object containing the following fields:
+     - `encoding: <string>` - (optional) encoding for returned Account data, either  "base64" (default), "base64+zstd" or "jsonParsed".
+        "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+     - `addresses: <array>` - An array of accounts to return, as base-58 encoded strings
 
 #### Results:
 
@@ -3214,6 +3260,14 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 - `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+- `accounts: <array> | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
+  - `<null>` - if the account doesn't exist or if `err` is not null
+  - `<object>` - otherwise, a JSON object containing:
+    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+    - `data: <[string, encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -3240,6 +3294,7 @@ Result:
     },
     "value": {
       "err": null,
+      "accounts": null,
       "logs": [
         "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
       ]

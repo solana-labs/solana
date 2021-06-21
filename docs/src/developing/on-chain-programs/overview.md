@@ -7,12 +7,12 @@ Developers can write and deploy their own programs to the Solana blockchain.
 The [Helloworld example](examples.md#helloworld) is a good starting place to see
 how a program is written, built, deployed, and interacted with on-chain.
 
-## Berkley Packet Filter (BPF)
+## Berkeley Packet Filter (BPF)
 
 Solana on-chain programs are compiled via the [LLVM compiler
 infrastructure](https://llvm.org/) to an [Executable and Linkable Format
 (ELF)](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) containing
-a variation of the [Berkley Packet Filter
+a variation of the [Berkeley Packet Filter
 (BPF)](https://en.wikipedia.org/wiki/Berkeley_Packet_Filter) bytecode.
 
 Because Solana uses the LLVM compiler infrastructure, a program may be written

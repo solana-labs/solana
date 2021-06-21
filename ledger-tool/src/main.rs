@@ -14,6 +14,8 @@ use solana_clap_utils::{
         is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
+use solana_core::cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST};
+use solana_core::cost_tracker::CostTracker;
 use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -42,16 +44,16 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     shred_version::compute_shred_version,
+    stake::{self, state::StakeState},
     system_program,
 };
-use solana_stake_program::stake_state::{self, PointValue, StakeState};
+use solana_stake_program::stake_state::{self, PointValue};
 use solana_vote_program::{
     self,
     vote_state::{self, VoteState},
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    convert::TryInto,
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, BufRead, BufReader, Write},
@@ -76,12 +78,27 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
         if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
             if !rewards.is_empty() {
                 println!("  Rewards:");
+                println!(
+                    "    {:<44}  {:^15}  {:<15}  {:<20}",
+                    "Address", "Type", "Amount", "New Balance"
+                );
+
                 for reward in rewards {
+                    let sign = if reward.lamports < 0 { "-" } else { "" };
                     println!(
-                        "    Account {}: {}{} SOL",
+                        "    {:<44}  {:^15}  {:<15}  {}",
                         reward.pubkey,
-                        if reward.lamports < 0 { '-' } else { ' ' },
-                        lamports_to_sol(reward.lamports.abs().try_into().unwrap())
+                        if let Some(reward_type) = reward.reward_type {
+                            format!("{}", reward_type)
+                        } else {
+                            "-".to_string()
+                        },
+                        format!(
+                            "{}◎{:<14.9}",
+                            sign,
+                            lamports_to_sol(reward.lamports.abs() as u64)
+                        ),
+                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance))
                     );
                 }
             }
@@ -119,7 +136,7 @@ fn output_entry(
                     .map(|transaction_status| transaction_status.into());
 
                 solana_cli_output::display::println_transaction(
-                    &transaction,
+                    transaction,
                     &transaction_status,
                     "      ",
                     None,
@@ -438,7 +455,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
     let mut lowest_total_stake = 0;
     for (node_pubkey, (last_vote_slot, vote_state, stake, total_stake)) in &last_votes {
         all_votes.entry(*node_pubkey).and_modify(|validator_votes| {
-            validator_votes.remove(&last_vote_slot);
+            validator_votes.remove(last_vote_slot);
         });
 
         dot.push(format!(
@@ -458,7 +475,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
         dot.push(format!(
             r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
             node_pubkey,
-            if styled_slots.contains(&last_vote_slot) {
+            if styled_slots.contains(last_vote_slot) {
                 last_vote_slot.to_string()
             } else {
                 if *last_vote_slot < lowest_last_vote_slot {
@@ -505,7 +522,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
                     r#"  "{} vote {}" -> "{}" [style=dotted,label="vote"];"#,
                     node_pubkey,
                     vote_slot,
-                    if styled_slots.contains(&vote_slot) {
+                    if styled_slots.contains(vote_slot) {
                         vote_slot.to_string()
                     } else {
                         "...".to_string()
@@ -697,8 +714,8 @@ fn load_bank_forks(
     };
 
     bank_forks_utils::load(
-        &genesis_config,
-        &blockstore,
+        genesis_config,
+        blockstore,
         account_paths,
         None,
         snapshot_config.as_ref(),
@@ -708,6 +725,58 @@ fn load_bank_forks(
     )
 }
 
+fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+
+    let mut transactions = 0;
+    let mut programs = 0;
+    let mut program_ids = HashMap::new();
+    let cost_model = CostModel::new(ACCOUNT_MAX_COST, BLOCK_MAX_COST);
+    let mut cost_tracker = CostTracker::new(
+        cost_model.get_account_cost_limit(),
+        cost_model.get_block_cost_limit(),
+    );
+
+    for entry in &entries {
+        transactions += entry.transactions.len();
+        for transaction in &entry.transactions {
+            programs += transaction.message().instructions.len();
+            let tx_cost = cost_model.calculate_cost(transaction);
+            if cost_tracker.try_add(tx_cost).is_err() {
+                println!(
+                    "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
+                    slot,
+                    transaction,
+                    cost_tracker.get_stats()
+                );
+            }
+            for instruction in &transaction.message().instructions {
+                let program_id =
+                    transaction.message().account_keys[instruction.program_id_index as usize];
+                *program_ids.entry(program_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    println!(
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
+        slot,
+        entries.len(),
+        transactions,
+        programs,
+        cost_tracker.get_stats()
+    );
+    println!("  Programs: {:?}", program_ids);
+
+    Ok(())
+}
+
 fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
@@ -715,7 +784,8 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 }
 
 fn assert_capitalization(bank: &Bank) {
-    assert!(bank.calculate_and_verify_capitalization());
+    let debug_verify = true;
+    assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -762,12 +832,21 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
+    let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
+        .long("accounts-db-test-hash-calculation")
+        .help("Enable hash calculation test");
     let halt_at_slot_arg = Arg::with_name("halt_at_slot")
         .long("halt-at-slot")
         .value_name("SLOT")
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let limit_load_slot_count_from_snapshot_arg = Arg::with_name("limit_load_slot_count_from_snapshot")
+        .long("limit-load-slot-count-from-snapshot")
+        .value_name("SLOT")
+        .validator(is_slot)
+        .takes_value(true)
+        .help("For debugging and profiling with large snapshots, artificially limit how many slots are loaded from a snapshot.");
     let hard_forks_arg = Arg::with_name("hard_forks")
         .long("hard-fork")
         .value_name("SLOT")
@@ -808,7 +887,7 @@ fn main() {
         .long("maximum-snapshots-to-retain")
         .value_name("NUMBER")
         .takes_value(true)
-        .default_value(&default_max_snapshot_to_retain)
+        .default_value(default_max_snapshot_to_retain)
         .help("Maximum number of snapshots to hold on to during snapshot purge");
 
     let rent = Rent::default();
@@ -1037,8 +1116,10 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
+            .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1380,6 +1461,20 @@ fn main() {
             SubCommand::with_name("analyze-storage")
                 .about("Output statistics in JSON format about \
                         all column families in the ledger rocksdb")
+        )
+        .subcommand(
+            SubCommand::with_name("compute-slot-cost")
+            .about("runs cost_model over the block at the given slots, \
+                   computes how expensive a block was based on cost_model")
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .multiple(true)
+                    .takes_value(true)
+                    .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
+            )
         )
         .get_matches();
 
@@ -1740,7 +1835,15 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 bpf_jit: !matches.is_present("no_bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                limit_load_slot_count_from_snapshot: value_t!(
+                    arg_matches,
+                    "limit_load_slot_count_from_snapshot",
+                    usize
+                )
+                .ok(),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
+                accounts_db_test_hash_calculation: arg_matches
+                    .is_present("accounts_db_test_hash_calculation"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -1824,14 +1927,14 @@ fn main() {
             let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
             let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
 
-            let faucet_pubkey = pubkey_of(&arg_matches, "faucet_pubkey");
+            let faucet_pubkey = pubkey_of(arg_matches, "faucet_pubkey");
             let faucet_lamports = value_t!(arg_matches, "faucet_lamports", u64).unwrap_or(0);
 
             let rent_burn_percentage = value_t!(arg_matches, "rent_burn_percentage", u8);
             let hashes_per_tick = arg_matches.value_of("hashes_per_tick");
 
             let bootstrap_stake_authorized_pubkey =
-                pubkey_of(&arg_matches, "bootstrap_stake_authorized_pubkey");
+                pubkey_of(arg_matches, "bootstrap_stake_authorized_pubkey");
             let bootstrap_validator_lamports =
                 value_t_or_exit!(arg_matches, "bootstrap_validator_lamports", u64);
             let bootstrap_validator_stake_lamports =
@@ -1845,9 +1948,9 @@ fn main() {
                 );
                 exit(1);
             }
-            let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
+            let bootstrap_validator_pubkeys = pubkeys_of(arg_matches, "bootstrap_validator");
             let accounts_to_remove =
-                pubkeys_of(&arg_matches, "accounts_to_remove").unwrap_or_default();
+                pubkeys_of(arg_matches, "accounts_to_remove").unwrap_or_default();
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -1938,7 +2041,8 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_stake_program::id())
+                            .get_program_accounts(&stake::program::id())
+                            .unwrap()
                             .into_iter()
                         {
                             account.set_lamports(0);
@@ -1972,6 +2076,7 @@ fn main() {
                         // Delete existing vote accounts
                         for (address, mut account) in bank
                             .get_program_accounts(&solana_vote_program::id())
+                            .unwrap()
                             .into_iter()
                         {
                             account.set_lamports(0);
@@ -2000,9 +2105,9 @@ fn main() {
                             );
 
                             let vote_account = vote_state::create_account_with_authorized(
-                                &identity_pubkey,
-                                &identity_pubkey,
-                                &identity_pubkey,
+                                identity_pubkey,
+                                identity_pubkey,
+                                identity_pubkey,
                                 100,
                                 VoteState::get_rent_exempt_reserve(&rent).max(1),
                             );
@@ -2012,8 +2117,8 @@ fn main() {
                                 &stake_state::create_account(
                                     bootstrap_stake_authorized_pubkey
                                         .as_ref()
-                                        .unwrap_or(&identity_pubkey),
-                                    &vote_pubkey,
+                                        .unwrap_or(identity_pubkey),
+                                    vote_pubkey,
                                     &vote_account,
                                     &rent,
                                     bootstrap_validator_stake_lamports,
@@ -2133,6 +2238,7 @@ fn main() {
 
                     let accounts: BTreeMap<_, _> = bank
                         .get_all_accounts_with_modified_slots()
+                        .unwrap()
                         .into_iter()
                         .filter(|(pubkey, _account, _slot)| {
                             include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
@@ -2438,7 +2544,7 @@ fn main() {
                             }
                         };
                         let warped_bank = Bank::new_from_parent_with_tracer(
-                            &base_bank,
+                            base_bank,
                             base_bank.collector_id(),
                             next_epoch,
                             tracer,
@@ -2455,7 +2561,7 @@ fn main() {
 
                         println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
-                        assert_capitalization(&base_bank);
+                        assert_capitalization(base_bank);
                         assert_capitalization(&warped_bank);
                         let interest_per_epoch = ((warped_bank.capitalization() as f64)
                             / (base_bank.capitalization() as f64)
@@ -2483,7 +2589,7 @@ fn main() {
                                     pubkey,
                                     account,
                                     base_bank
-                                        .get_account(&pubkey)
+                                        .get_account(pubkey)
                                         .map(|a| a.lamports())
                                         .unwrap_or_default(),
                                 )
@@ -2682,7 +2788,7 @@ fn main() {
                             );
                         }
 
-                        assert_capitalization(&bank);
+                        assert_capitalization(bank);
                         println!("Inflation: {:?}", bank.inflation());
                         println!("RentCollector: {:?}", bank.rent_collector());
                         println!("Capitalization: {}", Sol(bank.capitalization()));
@@ -2961,6 +3067,28 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
             ));
             println!("Ok.");
+        }
+        ("compute-slot-cost", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+
+            let mut slots: Vec<u64> = vec![];
+            if !arg_matches.is_present("slots") {
+                if let Ok(metas) = blockstore.slot_meta_iterator(0) {
+                    slots = metas.map(|(slot, _)| slot).collect();
+                }
+            } else {
+                slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            }
+
+            for slot in slots {
+                if let Err(err) = compute_slot_cost(&blockstore, slot) {
+                    eprintln!("{}", err);
+                }
+            }
         }
         ("", _) => {
             eprintln!("{}", matches.usage());

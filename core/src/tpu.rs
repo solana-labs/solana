@@ -4,18 +4,19 @@
 use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
         ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
         VerifiedVoteSender, VoteTracker,
     },
+    cost_model::CostModel,
     fetch_stage::FetchStage,
-    poh_recorder::{PohRecorder, WorkingBankEntry},
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry};
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -69,14 +70,15 @@ impl Tpu {
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
+        cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
-            &exit,
+            exit,
             &packet_sender,
-            &poh_recorder,
+            poh_recorder,
             tpu_coalesce_ms,
         );
         let (verified_sender, verified_receiver) = unbounded();
@@ -88,10 +90,10 @@ impl Tpu {
 
         let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
-            &exit,
+            exit,
             cluster_info.clone(),
             verified_vote_packets_sender,
-            &poh_recorder,
+            poh_recorder,
             vote_tracker,
             bank_forks,
             subscriptions.clone(),
@@ -104,12 +106,13 @@ impl Tpu {
         );
 
         let banking_stage = BankingStage::new(
-            &cluster_info,
+            cluster_info,
             poh_recorder,
             verified_receiver,
             verified_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
+            cost_model,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -117,7 +120,7 @@ impl Tpu {
             cluster_info.clone(),
             entry_receiver,
             retransmit_slots_receiver,
-            &exit,
+            exit,
             blockstore,
             shred_version,
         );

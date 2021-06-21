@@ -2,7 +2,7 @@ use log::*;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
-    ic_msg,
+    feature_set, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
     nonce,
@@ -79,7 +79,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(&account.owner()) {
+    if !account.data().is_empty() || !system_program::check_id(account.owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -115,13 +115,13 @@ fn assign(
         return Ok(());
     }
 
-    if !address.is_signer(&signers) {
+    if !address.is_signer(signers) {
         ic_msg!(invoke_context, "Assign: account {:?} must sign", address);
         return Err(InstructionError::MissingRequiredSignature);
     }
 
     // guard against sysvars being made
-    if sysvar::check_id(&owner) {
+    if sysvar::check_id(owner) {
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
         return Err(SystemError::InvalidProgramId.into());
     }
@@ -200,7 +200,9 @@ fn transfer(
     lamports: u64,
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    if lamports == 0 {
+    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+        && lamports == 0
+    {
         return Ok(());
     }
 
@@ -225,7 +227,9 @@ fn transfer_with_seed(
     lamports: u64,
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    if lamports == 0 {
+    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+        && lamports == 0
+    {
         return Ok(());
     }
 
@@ -296,13 +300,13 @@ pub fn process_instruction(
             let from = keyed_account_at_index(keyed_accounts, 0)?;
             let to = keyed_account_at_index(keyed_accounts, 1)?;
             let to_address = Address::create(
-                &to.unsigned_key(),
+                to.unsigned_key(),
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
             create_account(
                 from,
-                &to,
+                to,
                 &to_address,
                 lamports,
                 space,
@@ -666,21 +670,21 @@ mod tests {
     fn test_create_with_zero_lamports() {
         // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = solana_sdk::pubkey::new_rand();
-        let from_account = AccountSharedData::new_ref(100, 1, &solana_sdk::pubkey::new_rand()); // not from system account
+        let from = Pubkey::new_unique();
+        let from_account = AccountSharedData::new_ref(100, 0, &Pubkey::new_unique()); // not from system account
 
-        let to = solana_sdk::pubkey::new_rand();
+        let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             create_account(
-                &KeyedAccount::new(&from, false, &from_account), // no signer
-                &KeyedAccount::new(&to, false, &to_account),
+                &KeyedAccount::new(&from, true, &from_account),
+                &KeyedAccount::new(&to, true, &to_account),
                 &to.into(),
                 0,
                 2,
                 &new_owner,
-                &[to].iter().cloned().collect::<HashSet<_>>(),
+                &[from, to].iter().cloned().collect::<HashSet<_>>(),
                 &MockInvokeContext::new(vec![]),
             ),
             Ok(())
@@ -732,11 +736,11 @@ mod tests {
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
             &KeyedAccount::new(&to, false, &to_account),
-            &address,
+            address,
             50,
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_err());
@@ -749,11 +753,11 @@ mod tests {
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
             &KeyedAccount::new(&to, false, &to_account),
-            &address,
+            address,
             50,
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_ok());
@@ -786,7 +790,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -805,7 +809,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -823,7 +827,7 @@ mod tests {
             50,
             2,
             &new_owner,
-            &signers,
+            signers,
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
@@ -870,11 +874,11 @@ mod tests {
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
-        // support creation/assignment with zero lamports (ephemeral account)
+        // Don't support unsigned creation with zero lamports (ephemeral account)
         let owned_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
         let result = create_account(
             &KeyedAccount::new(&from, false, &from_account),
-            &KeyedAccount::new(&owned_key, false, &owned_account),
+            &KeyedAccount::new(&owned_key, true, &owned_account),
             &owned_address,
             0,
             2,
@@ -882,7 +886,7 @@ mod tests {
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
             &MockInvokeContext::new(vec![]),
         );
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
     }
 
     #[test]
@@ -1094,9 +1098,7 @@ mod tests {
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
         assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
 
-        // test unsigned transfer of zero
-        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-
+        // test signed transfer of zero
         assert!(transfer(
             &from_keyed_account,
             &to_keyed_account,
@@ -1104,6 +1106,21 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         )
         .is_ok(),);
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
+
+        // test unsigned transfer of zero
+        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
+
+        assert_eq!(
+            transfer(
+                &from_keyed_account,
+                &to_keyed_account,
+                0,
+                &MockInvokeContext::new(vec![]),
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
         assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
     }
@@ -1124,7 +1141,7 @@ mod tests {
         transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             50,
@@ -1141,7 +1158,7 @@ mod tests {
         let result = transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             100,
@@ -1156,7 +1173,7 @@ mod tests {
         assert!(transfer_with_seed(
             &from_keyed_account,
             &from_base_keyed_account,
-            &from_seed,
+            from_seed,
             &from_owner,
             &to_keyed_account,
             0,

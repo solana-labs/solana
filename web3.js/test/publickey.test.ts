@@ -12,39 +12,8 @@ describe('PublicKey', function () {
   it('invalid', () => {
     expect(() => {
       new PublicKey([
-        3,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
       ]);
     }).to.throw();
 
@@ -73,38 +42,8 @@ describe('PublicKey', function () {
 
   it('equals', () => {
     const arrayKey = new PublicKey([
-      3,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
     ]);
     const base58Key = new PublicKey(
       'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',
@@ -126,38 +65,8 @@ describe('PublicKey', function () {
     expect(key3.toBase58()).to.eq('11111111111111111111111111111111');
 
     const key4 = new PublicKey([
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
     ]);
     expect(key4.toBase58()).to.eq('11111111111111111111111111111111');
   });
@@ -178,38 +87,8 @@ describe('PublicKey', function () {
 
   it('equals (II)', () => {
     const key1 = new PublicKey([
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 1,
     ]);
     const key2 = new PublicKey(key1.toBuffer());
 
@@ -347,6 +226,13 @@ describe('PublicKey', function () {
     const publicKey = Keypair.generate().publicKey;
     const encoded = publicKey.encode();
     const decoded = PublicKey.decode(encoded);
+    expect(decoded.equals(publicKey)).to.be.true;
+  });
+
+  it('canBeDeserializedUncheckedWithBorsh', () => {
+    const publicKey = Keypair.generate().publicKey;
+    const encoded = Buffer.concat([publicKey.encode(), new Uint8Array(10)]);
+    const decoded = PublicKey.decodeUnchecked(encoded);
     expect(decoded.equals(publicKey)).to.be.true;
   });
 });

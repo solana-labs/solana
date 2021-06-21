@@ -426,6 +426,20 @@ impl RpcClient {
         )
     }
 
+    pub fn get_block_height(&self) -> ClientResult<u64> {
+        self.get_block_height_with_commitment(self.commitment_config)
+    }
+
+    pub fn get_block_height_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
+        self.send(
+            RpcRequest::GetBlockHeight,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        )
+    }
+
     pub fn get_slot_leaders(&self, start_slot: Slot, limit: u64) -> ClientResult<Vec<Pubkey>> {
         self.send(RpcRequest::GetSlotLeaders, json!([start_slot, limit]))
             .and_then(|slot_leaders: Vec<String>| {
@@ -1230,12 +1244,26 @@ impl RpcClient {
                     blockhash,
                     fee_calculator,
                     last_valid_slot,
+                    ..
                 },
         }) = self
             .send::<Response<RpcFees>>(
                 RpcRequest::GetFees,
                 json!([self.maybe_map_commitment(commitment_config)?]),
             ) {
+            (context, blockhash, fee_calculator, last_valid_slot)
+        } else if let Ok(Response {
+            context,
+            value:
+                DeprecatedRpcFees {
+                    blockhash,
+                    fee_calculator,
+                    last_valid_slot,
+                },
+        }) = self.send::<Response<DeprecatedRpcFees>>(
+            RpcRequest::GetFees,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        ) {
             (context, blockhash, fee_calculator, last_valid_slot)
         } else if let Ok(Response {
             context,
@@ -1599,7 +1627,7 @@ impl RpcClient {
     ) -> ClientResult<u64> {
         let now = Instant::now();
         loop {
-            match self.get_balance_with_commitment(&pubkey, commitment_config) {
+            match self.get_balance_with_commitment(pubkey, commitment_config) {
                 Ok(bal) => {
                     return Ok(bal.value);
                 }
@@ -1668,7 +1696,7 @@ impl RpcClient {
         let now = Instant::now();
         loop {
             if let Ok(Some(_)) =
-                self.get_signature_status_with_commitment(&signature, commitment_config)
+                self.get_signature_status_with_commitment(signature, commitment_config)
             {
                 break;
             }
@@ -1818,18 +1846,18 @@ impl RpcClient {
 
         let progress_bar = new_spinner_progress_bar();
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, signature,
         ));
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
             let status = self
-                .get_signature_status_with_commitment(&signature, CommitmentConfig::processed())?;
+                .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
             if status.is_none() {
                 if self
                     .get_fee_calculator_for_blockhash_with_commitment(
-                        &recent_blockhash,
+                        recent_blockhash,
                         CommitmentConfig::processed(),
                     )?
                     .value
@@ -1863,7 +1891,7 @@ impl RpcClient {
             // Return when specified commitment is reached
             // Failed transactions have already been eliminated, `is_some` check is sufficient
             if self
-                .get_signature_status_with_commitment(&signature, commitment)?
+                .get_signature_status_with_commitment(signature, commitment)?
                 .is_some()
             {
                 progress_bar.set_message("Transaction confirmed");
@@ -1871,7 +1899,7 @@ impl RpcClient {
                 return Ok(());
             }
 
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Finalizing transaction {}",
                 min(confirmations + 1, desired_confirmations),
                 desired_confirmations,
@@ -1879,7 +1907,7 @@ impl RpcClient {
             ));
             sleep(Duration::from_millis(500));
             confirmations = self
-                .get_num_blocks_since_signature_confirmation(&signature)
+                .get_num_blocks_since_signature_confirmation(signature)
                 .unwrap_or(confirmations);
             if now.elapsed().as_secs() >= MAX_HASH_AGE_IN_SECONDS as u64 {
                 return Err(

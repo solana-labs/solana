@@ -37,9 +37,10 @@ if (process.env.TEST_LIVE) {
         const payerBalance = await connection.getMinimumBalanceForRentExemption(
           0,
         );
-        const executableBalance = await connection.getMinimumBalanceForRentExemption(
-          programData.length,
-        );
+        const executableBalance =
+          await connection.getMinimumBalanceForRentExemption(
+            programData.length,
+          );
 
         await helpers.airdrop({
           connection,

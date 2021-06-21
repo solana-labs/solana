@@ -3,7 +3,7 @@ use {
     super::*,
     crate::{
         accounts::{create_test_accounts, Accounts},
-        accounts_db::get_temp_accounts_paths,
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, StatusCacheRc},
         hardened_unpack::UnpackedAppendVecMap,
     },
@@ -28,7 +28,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<UnpackedAppendVecMap> {
-    let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
+    let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value(), None).0;
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
     for storage in storage_entries.iter().flatten() {
         let storage_path = storage.get_path();
@@ -73,6 +73,8 @@ where
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        None,
+        AccountShrinkThreshold::default(),
     )
 }
 
@@ -128,6 +130,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
 
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -141,7 +144,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &*accounts.accounts_db,
         0,
-        &accounts.accounts_db.get_snapshot_storages(0),
+        &accounts.accounts_db.get_snapshot_storages(0, None).0,
     )
     .unwrap();
 
@@ -226,6 +229,8 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         AccountSecondaryIndexes::default(),
         false,
+        None,
+        AccountShrinkThreshold::default(),
     )
     .unwrap();
     dbank.src = ref_sc;
@@ -241,11 +246,11 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(slot);
+    let snapshot_storages = accounts.get_snapshot_storages(slot, None).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
-        &accounts,
+        accounts,
         slot,
         &snapshot_storages,
     )
@@ -256,7 +261,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let unpacked_append_vec_map = copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
+    let unpacked_append_vec_map = copy_append_vecs(accounts, copied_accounts.path()).unwrap();
     let mut accounts_db =
         accountsdb_from_stream(SerdeStyle::Newer, &mut reader, &[], unpacked_append_vec_map)
             .unwrap();
@@ -288,7 +293,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "DuRGntVwLGNAv5KooafUSpxk67BPAx2yC7Z8A9c8wr2G")]
+    #[frozen_abi(digest = "6msodEzE7YzFtorBhiP6ax4PKBaPZTkmYdGAdpoxLCvV")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]
@@ -299,7 +304,12 @@ mod test_bank_serialize {
     where
         S: serde::Serializer,
     {
-        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
+        let snapshot_storages = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_snapshot_storages(0, None)
+            .0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);
 

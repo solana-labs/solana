@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 pub mod alloc;
 pub mod allocator_bump;
-pub mod bpf_verifier;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
@@ -10,7 +9,6 @@ pub mod upgradeable_with_jit;
 pub mod with_jit;
 
 use crate::{
-    bpf_verifier::VerifierError,
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
@@ -21,6 +19,8 @@ use solana_rbpf::{
     ebpf::{HOST_ALIGN, MM_HEAP_START},
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
+    static_analysis::Analysis,
+    verifier::{self, VerifierError},
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::message_processor::MessageProcessor;
@@ -31,13 +31,14 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::{skip_ro_deserialization, upgradeable_close_instruction},
+    feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
     process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext},
+    program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,
@@ -95,8 +96,8 @@ pub fn create_executor(
     let (_, elf_bytes) = executable
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    bpf_verifier::check(elf_bytes)
-        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
+    verifier::check(elf_bytes)
+        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     executable.set_syscall_registry(syscall_registry);
     if use_jit {
         if let Err(err) = executable.jit_compile() {
@@ -127,7 +128,7 @@ fn write_program_data(
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data[program_data_offset..program_data_offset + len].copy_from_slice(&bytes);
+    data[program_data_offset..program_data_offset + len].copy_from_slice(bytes);
     Ok(())
 }
 
@@ -368,7 +369,7 @@ fn process_loader_upgradeable_instruction(
             // Create ProgramData account
 
             let (derived_address, bump_seed) =
-                Pubkey::find_program_address(&[program.unsigned_key().as_ref()], &program_id);
+                Pubkey::find_program_address(&[program.unsigned_key().as_ref()], program_id);
             if derived_address != *programdata.unsigned_key() {
                 ic_logger_msg!(logger, "ProgramData address is not derived");
                 return Err(InstructionError::InvalidArgument);
@@ -750,13 +751,15 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
+        let add_missing_program_error_mappings =
+            invoke_context.is_feature_active(&add_missing_program_error_mappings::id());
 
         invoke_context.remove_first_keyed_account()?;
 
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let mut parameter_bytes =
-            serialize_parameters(loader_id, program_id, keyed_accounts, &instruction_data)?;
+            serialize_parameters(loader_id, program_id, keyed_accounts, instruction_data)?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
@@ -794,16 +797,23 @@ impl Executor for BpfExecutor {
                 before
             );
             if log_enabled!(Trace) {
-                let mut trace_buffer = String::new();
-                vm.get_tracer()
-                    .write(&mut trace_buffer, vm.get_program())
-                    .unwrap();
-                trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+                let mut trace_buffer = Vec::<u8>::new();
+                let analysis = Analysis::from_executable(self.executable.as_ref());
+                vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
+                let trace_string = String::from_utf8(trace_buffer).unwrap();
+                trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
-                        let error: InstructionError = status.into();
+                        let error: InstructionError = if !add_missing_program_error_mappings
+                            && (status == ACCOUNT_NOT_RENT_EXEMPT || status == BORSH_IO_ERROR)
+                        {
+                            // map originally missing error mappings to InvalidError
+                            InstructionError::InvalidError
+                        } else {
+                            status.into()
+                        };
                         stable_log::program_failure(&logger, program_id, &error);
                         return Err(error);
                     }
@@ -826,12 +836,7 @@ impl Executor for BpfExecutor {
         }
         let mut deserialize_time = Measure::start("deserialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        deserialize_parameters(
-            loader_id,
-            keyed_accounts,
-            parameter_bytes.as_slice(),
-            invoke_context.is_feature_active(&skip_ro_deserialization::id()),
-        )?;
+        deserialize_parameters(loader_id, keyed_accounts, parameter_bytes.as_slice())?;
         deserialize_time.stop();
         invoke_context.update_timing(
             serialize_time.as_us(),
@@ -896,9 +901,11 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
-
+        let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
+        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
         let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
             program,
+            bpf_functions,
             None,
             Config::default(),
         )
@@ -911,12 +918,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "VerifierError(LDDWCannotBeLast)")]
+    #[should_panic(expected = "LDDWCannotBeLast")]
     fn test_bpf_loader_check_load_dw() {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        bpf_verifier::check(prog).unwrap();
+        verifier::check(prog).unwrap();
     }
 
     #[test]
@@ -2221,7 +2228,7 @@ mod tests {
                 .unwrap();
             buffer_account.borrow_mut().data_as_mut_slice()
                 [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
-                .copy_from_slice(&elf_new);
+                .copy_from_slice(elf_new);
             let programdata_account = AccountSharedData::new_ref(
                 min_programdata_balance,
                 UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),

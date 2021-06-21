@@ -32,6 +32,19 @@ impl Blockstore {
         }
     }
 
+    /// Usually this is paired with .purge_slots() but we can't internally call this in
+    /// that function unconditionally. That's because set_max_expired_slot()
+    /// expects to purge older slots by the successive chronological order, while .purge_slots()
+    /// can also be used to purge *future* slots for --hard-fork thing, preserving older
+    /// slots. It'd be quite dangerous to purge older slots in that case.
+    /// So, current legal user of this function is LedgerCleanupService.
+    pub fn set_max_expired_slot(&self, to_slot: Slot) {
+        // convert here from inclusive purged range end to inclusive alive range start to align
+        // with Slot::default() for initial compaction filter behavior consistency
+        let to_slot = to_slot.checked_add(1).unwrap();
+        self.db.set_oldest_slot(to_slot);
+    }
+
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {
         self.purge_slots(from_slot, to_slot, PurgeType::Exact);
         if let Err(e) = self.compact_storage(from_slot, to_slot) {
@@ -165,6 +178,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::PerfSamples>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::BlockHeight>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
@@ -180,6 +197,13 @@ impl Blockstore {
                     to_slot,
                 )?;
             }
+            PurgeType::CompactionFilter => {
+                // No explicit action is required here because this purge type completely and
+                // indefinitely relies on the proper working of compaction filter for those
+                // special column families, never toggling the primary index from the current
+                // one. Overall, this enables well uniformly distributed writes, resulting
+                // in no spiky periodic huge delete_range for them.
+            }
         }
         delete_range_timer.stop();
         let mut write_timer = Measure::start("write_batch");
@@ -193,6 +217,10 @@ impl Blockstore {
         write_timer.stop();
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
+        // only drop w_active_transaction_status_index after we do db.write(write_batch);
+        // otherwise, readers might be confused with inconsistent state between
+        // self.active_transaction_status_index and RockDb's TransactionStatusIndex contents
+        drop(w_active_transaction_status_index);
         Ok(columns_purged)
     }
 
@@ -263,6 +291,10 @@ impl Blockstore {
             && self
                 .perf_samples_cf
                 .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .block_height_cf
+                .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         compact_timer.stop();
         if !result {
@@ -323,18 +355,26 @@ impl Blockstore {
         w_active_transaction_status_index: &mut u64,
         to_slot: Slot,
     ) -> Result<()> {
-        if let Some(index) = self.toggle_transaction_status_index(
+        if let Some(purged_index) = self.toggle_transaction_status_index(
             write_batch,
             w_active_transaction_status_index,
             to_slot,
         )? {
             *columns_purged &= self
                 .db
-                .delete_range_cf::<cf::TransactionStatus>(write_batch, index, index + 1)
+                .delete_range_cf::<cf::TransactionStatus>(
+                    write_batch,
+                    purged_index,
+                    purged_index + 1,
+                )
                 .is_ok()
                 & self
                     .db
-                    .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
+                    .delete_range_cf::<cf::AddressSignatures>(
+                        write_batch,
+                        purged_index,
+                        purged_index + 1,
+                    )
                     .is_ok();
         }
         Ok(())

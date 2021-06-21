@@ -361,7 +361,7 @@ mod tests {
         let nonce_pubkey = Pubkey::new(&[4u8; 32]);
         let rpc_nonce_account = UiAccount::encode(
             &nonce_pubkey,
-            nonce_account,
+            &nonce_account,
             UiAccountEncoding::Base64,
             None,
             None,

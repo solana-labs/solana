@@ -46,7 +46,9 @@ use solana_sdk::{
     rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
     signature::Signature,
-    slot_history, system_instruction, system_program,
+    slot_history,
+    stake::{self, state::StakeState},
+    system_instruction, system_program,
     sysvar::{
         self,
         slot_history::SlotHistory,
@@ -55,7 +57,6 @@ use solana_sdk::{
     timing,
     transaction::Transaction,
 };
-use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::UiTransactionEncoding;
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -121,7 +122,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("our-localhost")
                         .takes_value(false)
                         .value_name("PORT")
-                        .default_value(&DEFAULT_RPC_PORT_STR)
+                        .default_value(DEFAULT_RPC_PORT_STR)
                         .validator(is_port)
                         .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
                 )
@@ -737,12 +738,10 @@ pub fn process_catchup(
                     if let Some(rpc_addr) = contact_info.rpc {
                         break rpc_addr;
                     }
-                    progress_bar.set_message(&format!("RPC service not found for {}", node_pubkey));
+                    progress_bar.set_message(format!("RPC service not found for {}", node_pubkey));
                 } else {
-                    progress_bar.set_message(&format!(
-                        "Contact information not found for {}",
-                        node_pubkey
-                    ));
+                    progress_bar
+                        .set_message(format!("Contact information not found for {}", node_pubkey));
                 }
                 sleep(Duration::from_secs(sleep_interval as u64));
             };
@@ -758,7 +757,7 @@ pub fn process_catchup(
             Ok(reported_node_pubkey) => break reported_node_pubkey,
             Err(err) => {
                 if let ClientErrorKind::Reqwest(err) = err.kind() {
-                    progress_bar.set_message(&format!("Connection failed: {}", err));
+                    progress_bar.set_message(format!("Connection failed: {}", err));
                     sleep(Duration::from_secs(sleep_interval as u64));
                     continue;
                 }
@@ -858,7 +857,7 @@ pub fn process_catchup(
             }
         };
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "{} slot(s) {} (us:{} them:{}){}",
             slot_distance.abs(),
             if slot_distance >= 0 {
@@ -1093,8 +1092,8 @@ pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessR
 }
 
 pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
-    Ok(epoch_info.block_height.to_string())
+    let block_height = rpc_client.get_block_height()?;
+    Ok(block_height.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -1134,7 +1133,7 @@ pub fn process_show_block_production(
     };
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!(
+    progress_bar.set_message(format!(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
     ));
@@ -1197,7 +1196,7 @@ pub fn process_show_block_production(
     let mut leader_slot_count = HashMap::new();
     let mut leader_skipped_slots = HashMap::new();
 
-    progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
+    progress_bar.set_message(format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
         .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::finalized())?;
     if leader_schedule.is_none() {
@@ -1216,7 +1215,7 @@ pub fn process_show_block_production(
         }
     }
 
-    progress_bar.set_message(&format!(
+    progress_bar.set_message(format!(
         "Processing {} slots containing {} blocks and {} empty slots...",
         total_slots, total_blocks_produced, total_slots_skipped
     ));
@@ -1610,9 +1609,8 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                         "{:?} | root slot advancing at {:.2} slots/second",
                         new_info, slots_per_second
                     )
-                }
-                .to_owned();
-                slot_progress.set_message(&message);
+                };
+                slot_progress.set_message(message.clone());
 
                 if let Some(previous) = current {
                     let slot_delta: i64 = new_info.slot as i64 - previous.slot as i64;
@@ -1707,7 +1705,7 @@ pub fn process_show_stakes(
         }
     }
     let all_stake_accounts = rpc_client
-        .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
+        .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {
@@ -2098,10 +2096,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner {
-            path: default_keypair_file,
-            arg_name: String::new(),
-        };
+        let default_signer = DefaultSigner::new("", &default_keypair_file);
 
         let test_cluster_version = test_commands
             .clone()

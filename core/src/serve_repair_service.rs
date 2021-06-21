@@ -28,11 +28,12 @@ impl ServeRepairService {
         );
         let t_receiver = streamer::receiver(
             serve_repair_socket.clone(),
-            &exit,
+            exit,
             request_sender,
             Recycler::default(),
             "serve_repair_receiver",
             1,
+            false,
         );
         let (response_sender, response_receiver) = channel();
         let t_responder =

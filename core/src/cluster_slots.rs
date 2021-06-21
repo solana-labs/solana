@@ -1,8 +1,8 @@
-use crate::{
-    cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
-    serve_repair::RepairType,
-};
+use crate::serve_repair::RepairType;
 use itertools::Itertools;
+use solana_gossip::{
+    cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+};
 use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{

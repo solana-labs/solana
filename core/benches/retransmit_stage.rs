@@ -4,9 +4,9 @@ extern crate solana_core;
 extern crate test;
 
 use log::*;
-use solana_core::cluster_info::{ClusterInfo, Node};
-use solana_core::contact_info::ContactInfo;
 use solana_core::retransmit_stage::retransmitter;
+use solana_gossip::cluster_info::{ClusterInfo, Node};
+use solana_gossip::contact_info::ContactInfo;
 use solana_ledger::entry::Entry;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -39,7 +39,12 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
-        let id = pubkey::new_rand();
+        // This ensures that cluster_info.id() is the root of turbine
+        // retransmit tree and so the shreds are retransmited to all other
+        // nodes in the cluster.
+        let id = std::iter::repeat_with(pubkey::new_rand)
+            .find(|pk| cluster_info.id() < *pk)
+            .unwrap();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();

@@ -58,11 +58,11 @@ export const DEVNET_URL = clusterApiUrl("devnet");
 export function clusterUrl(cluster: Cluster, customUrl: string): string {
   switch (cluster) {
     case Cluster.Devnet:
-      return DEVNET_URL;
+      return DEVNET_URL.replace("api", "explorer-api");
     case Cluster.MainnetBeta:
-      return MAINNET_BETA_URL;
+      return MAINNET_BETA_URL.replace("api", "explorer-api");
     case Cluster.Testnet:
-      return TESTNET_URL;
+      return TESTNET_URL.replace("api", "explorer-api");
     case Cluster.Custom:
       return customUrl;
   }

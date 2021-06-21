@@ -7,7 +7,7 @@ use solana_sdk::{
     instruction::InstructionError,
     process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
-    system_program,
+    stake, system_program,
 };
 
 fn process_instruction_with_program_logging(
@@ -56,7 +56,7 @@ fn genesis_builtins() -> Vec<Builtin> {
         ),
         Builtin::new(
             "stake_program",
-            solana_stake_program::id(),
+            stake::program::id(),
             with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
         ),
         Builtin::new(

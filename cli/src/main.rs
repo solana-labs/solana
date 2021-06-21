@@ -179,15 +179,12 @@ pub fn parse_args<'a>(
         &config.keypair_path,
     );
 
-    let default_signer = DefaultSigner {
-        arg_name: default_signer_arg_name,
-        path: default_signer_path.clone(),
-    };
+    let default_signer = DefaultSigner::new(default_signer_arg_name, &default_signer_path);
 
     let CliCommandInfo {
         command,
         mut signers,
-    } = parse_command(&matches, &default_signer, &mut wallet_manager)?;
+    } = parse_command(matches, &default_signer, &mut wallet_manager)?;
 
     if signers.is_empty() {
         if let Ok(signer_info) =
@@ -260,7 +257,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .help("Configuration file to use");
         if let Some(ref config_file) = *CONFIG_FILE {
-            arg.default_value(&config_file)
+            arg.default_value(config_file)
         } else {
             arg
         }
@@ -414,10 +411,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
-    if parse_settings(&matches)? {
+    if parse_settings(matches)? {
         let mut wallet_manager = None;
 
-        let (mut config, signers) = parse_args(&matches, &mut wallet_manager)?;
+        let (mut config, signers) = parse_args(matches, &mut wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
         println!("{}", result);

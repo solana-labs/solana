@@ -150,6 +150,8 @@ pub struct StoredTransactionStatusMeta {
     pub pre_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub post_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub rewards: Option<Vec<StoredExtendedReward>>,
 }
 
 impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
@@ -163,6 +165,7 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         } = value;
         Self {
             status,
@@ -175,6 +178,8 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             post_token_balances: post_token_balances
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
+            rewards: rewards
+                .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
         }
     }
 }
@@ -190,6 +195,7 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
             log_messages,
             pre_token_balances,
             post_token_balances,
+            rewards,
         } = value;
         Self {
             status,
@@ -202,6 +208,8 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             post_token_balances: post_token_balances
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
+            rewards: rewards
+                .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
         }
     }
 }

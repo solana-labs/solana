@@ -20,8 +20,29 @@ module.exports = {
     },
   ],
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en', 'zh'],
+    defaultLocale: "en",
+    locales: ["en", "de", "es", "ru", "ar"],
+    // localesNotBuilding: ["ko", "pt", "vi", "zh", "ja"],
+    localeConfigs: {
+      en: {
+        label: "English",
+      },
+      ru: {
+        label: "Русский",
+      },
+      es: {
+        label: "Español",
+      },
+      de: {
+        label: "Deutsch",
+      },
+      ar: {
+        label: "العربية",
+      },
+      ko: {
+        label: "한국어",
+      },
+    },
   },
   themeConfig: {
     navbar: {
@@ -57,8 +78,8 @@ module.exports = {
           position: "left",
         },
         {
-          type: 'localeDropdown',
-          position: 'right',
+          type: "localeDropdown",
+          position: "right",
         },
         {
           href: "https://discordapp.com/invite/pquxPsq",

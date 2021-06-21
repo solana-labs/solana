@@ -41,7 +41,7 @@ Create and manage accounts representing stake and rewards for delegations to
 validators.
 
 - Program id: `Stake11111111111111111111111111111111111111`
-- Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
+- Instructions: [StakeInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/stake/instruction/enum.StakeInstruction.html)
 
 ## Vote Program
 

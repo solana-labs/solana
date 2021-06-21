@@ -9,14 +9,14 @@ use crate::{
 };
 use inflector::Inflector;
 use serde_json::Value;
-use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program, sysvar};
+use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar};
 use std::collections::HashMap;
 use thiserror::Error;
 
 lazy_static! {
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
     static ref CONFIG_PROGRAM_ID: Pubkey = solana_config_program::id();
-    static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
+    static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();

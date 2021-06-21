@@ -6,11 +6,11 @@ use crate::{
 use itertools::izip;
 use log::*;
 use solana_client::thin_client::{create_client, ThinClient};
-use solana_core::{
+use solana_core::validator::{Validator, ValidatorConfig, ValidatorStartProgress};
+use solana_gossip::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
-    validator::{Validator, ValidatorConfig, ValidatorStartProgress},
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
@@ -29,13 +29,14 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    stake::{
+        config as stake_config, instruction as stake_instruction,
+        state::{Authorized, Lockup},
+    },
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_program::{
-    config as stake_config, stake_instruction,
-    stake_state::{Authorized, Lockup, StakeState},
-};
+use solana_stake_program::{config::create_account as create_stake_config_account, stake_state};
 use solana_vote_program::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
@@ -190,7 +191,7 @@ impl LocalCluster {
         // Replace staking config
         genesis_config.add_account(
             stake_config::id(),
-            stake_config::create_account(
+            create_stake_config_account(
                 1,
                 &stake_config::Config {
                     warmup_cooldown_rate: 1_000_000_000.0f64,
@@ -447,8 +448,7 @@ impl LocalCluster {
         let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let mut tx =
-            system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
+        let mut tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -456,7 +456,7 @@ impl LocalCluster {
             *dest_pubkey
         );
         client
-            .retry_transfer(&source_keypair, &mut tx, 10)
+            .retry_transfer(source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
             .wait_for_balance_with_commitment(
@@ -511,7 +511,7 @@ impl LocalCluster {
                     .0,
             );
             client
-                .retry_transfer(&from_account, &mut transaction, 10)
+                .retry_transfer(from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
                 .wait_for_balance_with_commitment(
@@ -568,7 +568,7 @@ impl LocalCluster {
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
-                    StakeState::stake_from(&stake_account),
+                    stake_state::stake_from(&stake_account),
                     VoteState::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {
@@ -615,7 +615,7 @@ impl Cluster for LocalCluster {
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
-        let mut node = self.validators.remove(&pubkey).unwrap();
+        let mut node = self.validators.remove(pubkey).unwrap();
 
         // Shut down the validator
         let mut validator = node.validator.take().expect("Validator must be running");
@@ -628,9 +628,9 @@ impl Cluster for LocalCluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>) {
+    ) -> (Node, Option<ContactInfo>) {
         // Update the stored ContactInfo for this node
-        let node = Node::new_localhost_with_pubkey(&pubkey);
+        let node = Node::new_localhost_with_pubkey(pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
         cluster_validator_info.config.rpc_addrs = Some((node.info.rpc, node.info.rpc_pubsub));
 

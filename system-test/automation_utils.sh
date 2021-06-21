@@ -60,7 +60,7 @@ function analyze_packet_loss {
   )
 }
 
-function wait_for_bootstrap_validator_stake_drop {
+function wait_for_max_stake {
   max_stake="$1"
   if [[ $max_stake -eq 100 ]]; then
     return
@@ -74,6 +74,16 @@ function wait_for_bootstrap_validator_stake_drop {
   ssh "${sshOptions[@]}" "${validatorIpList[0]}" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
 }
 
+function wait_for_equal_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+
+  max_stake=$((100 / ${#validatorIpList[@]} + 1))
+  execution_step "Waiting for max stake to fall below ${max_stake}%"
+
+  wait_for_max_stake $max_stake
+}
+
 function get_slot {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
@@ -84,6 +94,20 @@ function get_bootstrap_validator_ip_address {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
   echo "${validatorIpList[0]}"
+}
+
+function get_active_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 validators --output=json | grep -o "totalActiveStake\": [0-9]*" | cut -d: -f2'
+}
+
+function get_current_stake {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" \
+    '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 validators --output=json | grep -o "totalCurrentStake\": [0-9]*" | cut -d: -f2'
 }
 
 function collect_performance_statistics {

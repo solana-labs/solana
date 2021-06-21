@@ -4,6 +4,12 @@ import {Buffer} from 'buffer';
 import {Keypair} from '../src';
 
 describe('Keypair', () => {
+  it('new keypair', () => {
+    const keypair = new Keypair();
+    expect(keypair.secretKey).to.have.length(64);
+    expect(keypair.publicKey.toBytes()).to.have.length(32);
+  });
+
   it('generate new keypair', () => {
     const keypair = Keypair.generate();
     expect(keypair.secretKey).to.have.length(64);

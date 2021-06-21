@@ -38,6 +38,20 @@ transaction for each block the validator agrees with, which can cost up to
   - Motherboard and power supply speced to add one or more high-end GPUs in the
     future suggested
 
+### RPC Node Recommendations
+The [hardware recommendations](#hardware-recommendations) above should be considered
+bare minimums if the validator is intended to be employed as an RPC node. To provide
+full functionality and improved reliability, the following adjustments should be
+made.
+
+- CPU
+  - 16 cores / 32 threads, or more
+- RAM
+  - 256 GB, or more
+- Disk
+  - Consider a larger ledger disk if longer transaction history is required
+  - Accounts and ledger should not be stored on the same disk
+
 ## Virtual machines on Cloud Platforms
 
 While you can run a validator on a cloud computing platform, it may not

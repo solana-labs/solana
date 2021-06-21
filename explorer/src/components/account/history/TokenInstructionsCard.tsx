@@ -59,10 +59,8 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
 
         extractMintDetails(parsed, mintMap);
 
-        let instructions: (
-          | ParsedInstruction
-          | PartiallyDecodedInstruction
-        )[] = [];
+        let instructions: (ParsedInstruction | PartiallyDecodedInstruction)[] =
+          [];
 
         InstructionContainer.create(parsed).instructions.forEach(
           ({ instruction, inner }, index) => {

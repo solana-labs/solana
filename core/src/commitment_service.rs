@@ -352,15 +352,15 @@ mod tests {
             if *a <= root {
                 let mut expected = BlockCommitment::default();
                 expected.increase_rooted_stake(lamports);
-                assert_eq!(*commitment.get(&a).unwrap(), expected);
+                assert_eq!(*commitment.get(a).unwrap(), expected);
             } else if i <= 4 {
                 let mut expected = BlockCommitment::default();
                 expected.increase_confirmation_stake(2, lamports);
-                assert_eq!(*commitment.get(&a).unwrap(), expected);
+                assert_eq!(*commitment.get(a).unwrap(), expected);
             } else if i <= 6 {
                 let mut expected = BlockCommitment::default();
                 expected.increase_confirmation_stake(1, lamports);
-                assert_eq!(*commitment.get(&a).unwrap(), expected);
+                assert_eq!(*commitment.get(a).unwrap(), expected);
             }
         }
         assert_eq!(rooted_stake[0], (root, lamports));

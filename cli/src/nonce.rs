@@ -364,7 +364,7 @@ pub fn process_authorize_nonce_account(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<NonceError>(result, &config)
+    log_instruction_custom_error::<NonceError>(result, config)
 }
 
 pub fn process_create_nonce_account(
@@ -449,7 +449,7 @@ pub fn process_create_nonce_account(
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, &config)
+    log_instruction_custom_error::<SystemError>(result, config)
 }
 
 pub fn process_get_nonce(
@@ -474,10 +474,10 @@ pub fn process_new_nonce(
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
-        (&nonce_account, "nonce_account_pubkey".to_string()),
+        (nonce_account, "nonce_account_pubkey".to_string()),
     )?;
 
-    if let Err(err) = rpc_client.get_account(&nonce_account) {
+    if let Err(err) = rpc_client.get_account(nonce_account) {
         return Err(CliError::BadParameter(format!(
             "Unable to advance nonce account {}. error: {}",
             nonce_account, err
@@ -487,7 +487,7 @@ pub fn process_new_nonce(
 
     let nonce_authority = config.signers[nonce_authority];
     let ixs = vec![advance_nonce_account(
-        &nonce_account,
+        nonce_account,
         &nonce_authority.pubkey(),
     )]
     .with_memo(memo);
@@ -503,7 +503,7 @@ pub fn process_new_nonce(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, &config)
+    log_instruction_custom_error::<SystemError>(result, config)
 }
 
 pub fn process_show_nonce_account(
@@ -522,7 +522,7 @@ pub fn process_show_nonce_account(
             use_lamports_unit,
             ..CliNonceAccount::default()
         };
-        if let Some(ref data) = data {
+        if let Some(data) = data {
             nonce_account.nonce = Some(data.blockhash.to_string());
             nonce_account.lamports_per_signature = Some(data.fee_calculator.lamports_per_signature);
             nonce_account.authority = Some(data.authority.to_string());
@@ -566,7 +566,7 @@ pub fn process_withdraw_from_nonce_account(
         config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<NonceError>(result, &config)
+    log_instruction_custom_error::<NonceError>(result, config)
 }
 
 #[cfg(test)]
@@ -596,10 +596,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner {
-            path: default_keypair_file.clone(),
-            arg_name: String::new(),
-        };
+        let default_signer = DefaultSigner::new("", &default_keypair_file);
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let nonce_account_keypair = Keypair::new();
         write_keypair(&nonce_account_keypair, tmp_file.as_file_mut()).unwrap();

@@ -1,15 +1,22 @@
 //! stakes generator
-use crate::{
-    address_generator::AddressGenerator,
-    unlocks::{UnlockInfo, Unlocks},
-};
-use solana_sdk::{
-    account::Account, clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, system_program,
-    timing::years_as_slots,
-};
-use solana_stake_program::{
-    self,
-    stake_state::{create_lockup_stake_account, Authorized, Lockup, StakeState},
+use {
+    crate::{
+        address_generator::AddressGenerator,
+        unlocks::{UnlockInfo, Unlocks},
+    },
+    solana_sdk::{
+        account::Account,
+        clock::Slot,
+        genesis_config::GenesisConfig,
+        pubkey::Pubkey,
+        stake::{
+            self,
+            state::{Authorized, Lockup, StakeState},
+        },
+        system_program,
+        timing::years_as_slots,
+    },
+    solana_stake_program::stake_state::create_lockup_stake_account,
 };
 
 #[derive(Debug)]
@@ -98,8 +105,7 @@ pub fn create_and_add_stakes(
         genesis_config.ticks_per_slot,
     );
 
-    let mut address_generator =
-        AddressGenerator::new(&authorized.staker, &solana_stake_program::id());
+    let mut address_generator = AddressGenerator::new(&authorized.staker, &stake::program::id());
 
     let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 

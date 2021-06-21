@@ -1,21 +1,23 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
-use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
-    SubCommand,
-};
-use solana_clap_utils::{
-    input_parsers::keypair_of,
-    input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
-};
-use solana_core::{contact_info::ContactInfo, gossip_service::discover};
-use solana_sdk::pubkey::Pubkey;
-use std::{
-    error,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    process::exit,
-    sync::Arc,
-    time::Duration,
+use {
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
+        SubCommand,
+    },
+    solana_clap_utils::{
+        input_parsers::keypair_of,
+        input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
+    },
+    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    solana_sdk::pubkey::Pubkey,
+    std::{
+        error,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        process::exit,
+        sync::Arc,
+        time::Duration,
+    },
 };
 
 fn parse_matches() -> ArgMatches<'static> {
@@ -223,7 +225,7 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
         .value_of("node_pubkey")
         .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
-    let identity_keypair = keypair_of(&matches, "identity").map(Arc::new);
+    let identity_keypair = keypair_of(matches, "identity").map(Arc::new);
 
     let entrypoint_addr = parse_entrypoint(matches);
 
@@ -268,7 +270,7 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
 fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
-    let entrypoint_addr = parse_entrypoint(&matches);
+    let entrypoint_addr = parse_entrypoint(matches);
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let (_all_peers, validators) = discover(

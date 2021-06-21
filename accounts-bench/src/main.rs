@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     ancestors::Ancestors,
 };
@@ -64,6 +65,7 @@ fn main() {
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
@@ -89,9 +91,9 @@ fn main() {
         create_time
     );
     let mut ancestors = Vec::with_capacity(num_slots);
-    ancestors.push((0, 0));
+    ancestors.push(0);
     for i in 1..num_slots {
-        ancestors.push((i as u64, i - 1));
+        ancestors.push(i as u64);
         accounts.add_root(i as u64);
     }
     let ancestors = Ancestors::from(ancestors);
@@ -119,6 +121,7 @@ fn main() {
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
                 None,
+                false,
             );
             time_store.stop();
             if results != results_store {

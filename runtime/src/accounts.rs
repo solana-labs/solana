@@ -1,11 +1,13 @@
 use crate::{
     accounts_db::{
-        AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+        AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
+        ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::Ancestors,
     bank::{
-        NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
+        NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
+        TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
     rent_collector::RentCollector,
@@ -21,7 +23,7 @@ use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Slot, INITIAL_RENT_EPOCH},
+    clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -105,6 +107,7 @@ pub struct LoadedTransaction {
     pub account_deps: TransactionAccountDeps,
     pub loaders: TransactionLoaders,
     pub rent: TransactionRent,
+    pub rent_debits: RentDebits,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);
@@ -115,12 +118,17 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
+            shrink_ratio,
         )
     }
 
@@ -129,6 +137,7 @@ impl Accounts {
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -136,6 +145,7 @@ impl Accounts {
                 cluster_type,
                 account_indexes,
                 caching_enabled,
+                shrink_ratio,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -205,7 +215,8 @@ impl Accounts {
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let demote_sysvar_write_locks =
                 feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
-            let mut key_check = MessageProgramIdsCache::new(&message);
+            let mut key_check = MessageProgramIdsCache::new(message);
+            let mut rent_debits = RentDebits::default();
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if key_check.is_non_loader_key(key, i) {
                     if payer_index.is_none() {
@@ -226,7 +237,7 @@ impl Accounts {
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
-                                        .collect_from_existing_account(&key, &mut account);
+                                        .collect_from_existing_account(key, &mut account);
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -258,6 +269,8 @@ impl Accounts {
                         }
 
                         tx_rent += rent;
+                        rent_debits.push(key, rent, account.lamports());
+
                         account
                     }
                 } else {
@@ -319,6 +332,7 @@ impl Accounts {
                             account_deps,
                             loaders,
                             rent: tx_rent,
+                            rent_debits,
                         })
                     }
                 }
@@ -571,15 +585,17 @@ impl Accounts {
     pub fn load_largest_accounts(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
-    ) -> Vec<(Pubkey, u64)> {
+    ) -> ScanResult<Vec<(Pubkey, u64)>> {
         if num == 0 {
-            return vec![];
+            return Ok(vec![]);
         }
         let account_balances = self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
                 if let Some((pubkey, account, _slot)) = option {
                     if account.lamports() == 0 {
@@ -605,28 +621,32 @@ impl Accounts {
                     collector.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
-        );
-        account_balances
+        )?;
+        Ok(account_balances
             .into_sorted_vec()
             .into_iter()
             .map(|Reverse((balance, pubkey))| (pubkey, balance))
-            .collect()
+            .collect())
     }
 
-    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
-        self.accounts_db.unchecked_scan_accounts(
-            "calculate_capitalization_scan_elapsed",
-            ancestors,
-            |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
-                let lamports = loaded_account.lamports();
-                if Self::is_loadable(lamports) {
-                    *total_capitalization = AccountsDb::checked_iterative_sum_for_capitalization(
-                        *total_capitalization,
-                        lamports,
-                    );
-                }
-            },
-        )
+    pub fn calculate_capitalization(
+        &self,
+        ancestors: &Ancestors,
+        slot: Slot,
+        can_cached_slot_be_unflushed: bool,
+        debug_verify: bool,
+    ) -> u64 {
+        let use_index = false;
+        self.accounts_db
+            .update_accounts_hash_with_index_option(
+                use_index,
+                debug_verify,
+                slot,
+                ancestors,
+                None,
+                can_cached_slot_be_unflushed,
+            )
+            .1
     }
 
     #[must_use]
@@ -635,11 +655,14 @@ impl Accounts {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
+        test_hash_calculation: bool,
     ) -> bool {
-        if let Err(err) =
-            self.accounts_db
-                .verify_bank_hash_and_lamports(slot, ancestors, total_lamports)
-        {
+        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
+            slot,
+            ancestors,
+            total_lamports,
+            test_hash_calculation,
+        ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {
@@ -669,10 +692,12 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         program_id: &Pubkey,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id
@@ -684,11 +709,13 @@ impl Accounts {
     pub fn load_by_program_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         program_id: &Pubkey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id && filter(account)
@@ -700,12 +727,14 @@ impl Accounts {
     pub fn load_by_index_key_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
+        bank_id: BankId,
         index_key: &IndexKey,
         filter: F,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db
             .index_scan_accounts(
                 ancestors,
+                bank_id,
                 *index_key,
                 |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
@@ -713,16 +742,21 @@ impl Accounts {
                     })
                 },
             )
-            .0
+            .map(|result| result.0)
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
         self.accounts_db.account_indexes.include_key(key)
     }
 
-    pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, AccountSharedData, Slot)> {
+    pub fn load_all(
+        &self,
+        ancestors: &Ancestors,
+        bank_id: BankId,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
         self.accounts_db.scan_accounts(
             ancestors,
+            bank_id,
             |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) = some_account_tuple
                     .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
@@ -912,8 +946,9 @@ impl Accounts {
 
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
-    pub fn purge_slot(&self, slot: Slot) {
-        self.accounts_db.purge_slot(slot);
+    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
+        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -994,8 +1029,11 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        loaded_transaction.rent +=
-                            rent_collector.collect_from_created_account(&key, account);
+                        let rent = rent_collector.collect_from_created_account(key, account);
+                        loaded_transaction.rent += rent;
+                        loaded_transaction
+                            .rent_debits
+                            .push(key, rent, account.lamports());
                     }
                     accounts.push((key, &*account));
                 }
@@ -1068,7 +1106,7 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);
         let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, &pubkey, &account);
+        accounts.store_slow_uncached(slot, pubkey, &account);
     }
 }
 
@@ -1102,12 +1140,13 @@ mod tests {
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
+        hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
         let accounts = Accounts::new_with_config(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
             accounts.store_slow_uncached(0, &ka.0, &ka.1);
@@ -1645,6 +1684,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
 
         // Load accounts owned by various programs into AccountsDb
@@ -1673,6 +1713,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1696,6 +1737,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         accounts.bank_hash_at(1);
     }
@@ -1717,6 +1759,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -1843,6 +1886,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -1967,6 +2011,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders0,
                 rent: transaction_rent0,
+                rent_debits: RentDebits::default(),
             }),
             None,
         );
@@ -1980,6 +2025,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders1,
                 rent: transaction_rent1,
+                rent_debits: RentDebits::default(),
             }),
             None,
         );
@@ -1991,6 +2037,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         {
             accounts
@@ -2043,6 +2090,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         let mut old_pubkey = Pubkey::default();
         let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -2090,6 +2138,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
 
         let instructions_key = solana_sdk::sysvar::instructions::id();
@@ -2362,6 +2411,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
+                rent_debits: RentDebits::default(),
             }),
             nonce_rollback,
         );
@@ -2374,6 +2424,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2480,6 +2531,7 @@ mod tests {
                 account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
+                rent_debits: RentDebits::default(),
             }),
             nonce_rollback,
         );
@@ -2492,6 +2544,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
         let collected_accounts = accounts.collect_accounts_to_store(
             txs.iter(),
@@ -2526,6 +2579,7 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
         );
 
         let pubkey0 = Pubkey::new_unique();
@@ -2542,108 +2596,160 @@ mod tests {
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
 
         // num == 0 should always return empty set
+        let bank_id = 0;
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                0,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    0,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                0,
-                &all_pubkeys,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    0,
+                    &all_pubkeys,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![]
         );
 
         // list should be sorted by balance, then pubkey, descending
         assert!(pubkey1 > pubkey0);
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                1,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                2,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                3,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
         );
 
         // larger num should not affect results
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                6,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    6,
+                    &HashSet::new(),
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
         );
 
         // AccountAddressFilter::Exclude should exclude entry
         let exclude1: HashSet<_> = vec![pubkey1].into_iter().collect();
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 1, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 2, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(&ancestors, 3, &exclude1, AccountAddressFilter::Exclude),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &exclude1,
+                    AccountAddressFilter::Exclude
+                )
+                .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
         );
 
         // AccountAddressFilter::Include should limit entries
         let include1_2: HashSet<_> = vec![pubkey1, pubkey2].into_iter().collect();
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                1,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    1,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                2,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    2,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
         );
         assert_eq!(
-            accounts.load_largest_accounts(
-                &ancestors,
-                3,
-                &include1_2,
-                AccountAddressFilter::Include
-            ),
+            accounts
+                .load_largest_accounts(
+                    &ancestors,
+                    bank_id,
+                    3,
+                    &include1_2,
+                    AccountAddressFilter::Include
+                )
+                .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
         );
     }

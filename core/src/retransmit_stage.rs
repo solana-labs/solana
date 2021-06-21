@@ -2,32 +2,27 @@
 #![allow(clippy::rc_buffer)]
 
 use crate::{
-    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
-    cluster_slots_service::ClusterSlotsService,
+    cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
     completed_data_sets_service::CompletedDataSetsSender,
-    contact_info::ContactInfo,
-    repair_service::DuplicateSlotsResetSender,
-    repair_service::RepairInfo,
+    repair_service::{DuplicateSlotsResetSender, RepairInfo},
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::{Receiver, Sender};
 use lru::LruCache;
 use solana_client::rpc_response::SlotUpdate;
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    leader_schedule_cache::LeaderScheduleCache,
+use solana_gossip::{
+    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    contact_info::ContactInfo,
 };
+use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
+use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
-use solana_rpc::{
-    max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
-    rpc_subscriptions::RpcSubscriptions,
-};
+use solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
 use solana_streamer::streamer::PacketReceiver;
@@ -427,7 +422,9 @@ fn retransmit(
         // neighborhood), then we expect that the packet arrives at tvu socket
         // as opposed to tvu-forwards. If this is not the case, then the
         // turbine broadcast/retransmit tree is mismatched across nodes.
-        if packet.meta.forward == (my_index % DATA_PLANE_FANOUT == 0) {
+        let anchor_node = my_index % DATA_PLANE_FANOUT == 0;
+        if packet.meta.forward == anchor_node {
+            // TODO: Consider forwarding the packet to the root node here.
             retransmit_tree_mismatch += 1;
         }
         peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
@@ -463,10 +460,19 @@ fn retransmit(
             .or_default() += 1;
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        if !packet.meta.forward {
-            ClusterInfo::retransmit_to(&neighbors, packet, sock, true)?;
+        // If the node is on the critical path (i.e. the first node in each
+        // neighborhood), it should send the packet to tvu socket of its
+        // children and also tvu_forward socket of its neighbors. Otherwise it
+        // should only forward to tvu_forward socket of its children.
+        if anchor_node {
+            ClusterInfo::retransmit_to(&neighbors, packet, sock, /*forward socket=*/ true);
         }
-        ClusterInfo::retransmit_to(&children, packet, sock, packet.meta.forward)?;
+        ClusterInfo::retransmit_to(
+            &children,
+            packet,
+            sock,
+            !anchor_node, // send to forward socket!
+        );
         retransmit_time.stop();
         retransmit_total += retransmit_time.as_us();
     }
@@ -557,8 +563,8 @@ pub fn retransmitter(
                             &rpc_subscriptions,
                         ) {
                             match e {
-                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                                Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
                                 _ => {
                                     inc_new_counter_error!("streamer-retransmit-error", 1, 1);
                                 }
@@ -590,7 +596,7 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receivers: [CompletedSlotsReceiver; 2],
+        cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
@@ -606,26 +612,22 @@ impl RetransmitStage {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
-        let t_retransmit = retransmitter(
+        let thread_hdls = retransmitter(
             retransmit_sockets,
             bank_forks.clone(),
             leader_schedule_cache,
             cluster_info.clone(),
             retransmit_receiver,
             max_slots,
-            rpc_subscriptions.clone(),
+            rpc_subscriptions,
         );
 
-        let [rpc_completed_slots_receiver, cluster_completed_slots_receiver] =
-            completed_slots_receivers;
-        let rpc_completed_slots_hdl =
-            RpcCompletedSlotsService::spawn(rpc_completed_slots_receiver, rpc_subscriptions);
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
             cluster_slots.clone(),
             bank_forks.clone(),
             cluster_info.clone(),
-            cluster_completed_slots_receiver,
+            cluster_slots_update_receiver,
             exit.clone(),
         );
 
@@ -666,11 +668,6 @@ impl RetransmitStage {
             duplicate_slots_sender,
         );
 
-        let mut thread_hdls = t_retransmit;
-        if let Some(thread_hdl) = rpc_completed_slots_hdl {
-            thread_hdls.push(thread_hdl);
-        }
-
         Self {
             thread_hdls,
             window_service,
@@ -691,7 +688,7 @@ impl RetransmitStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
+    use solana_gossip::contact_info::ContactInfo;
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
@@ -707,6 +704,7 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
+            accounts_db_test_hash_calculation: true,
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
@@ -726,8 +724,13 @@ mod tests {
             .unwrap()
             .local_addr()
             .unwrap();
-
-        let other = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        // This fixes the order of nodes returned by shuffle_peers_and_index,
+        // and makes turbine retransmit tree deterministic for the purpose of
+        // the test.
+        let other = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+            .find(|pk| me.id < *pk)
+            .unwrap();
+        let other = ContactInfo::new_localhost(&other, 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
@@ -735,7 +738,7 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
-        let t_retransmit = retransmitter(
+        let _t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
             &leader_schedule_cache,
@@ -744,7 +747,6 @@ mod tests {
             &Arc::new(MaxSlots::default()),
             None,
         );
-        let _thread_hdls = vec![t_retransmit];
 
         let mut shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
         let mut packet = Packet::default();

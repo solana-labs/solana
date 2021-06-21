@@ -7,16 +7,18 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::banking_stage::{create_test_recorder, BankingStage, BankingStageStats};
-use solana_core::cluster_info::ClusterInfo;
-use solana_core::cluster_info::Node;
-use solana_core::poh_recorder::WorkingBankEntry;
+use solana_core::banking_stage::{BankingStage, BankingStageStats};
+use solana_core::cost_model::CostModel;
+use solana_core::cost_tracker::CostTracker;
+use solana_gossip::cluster_info::ClusterInfo;
+use solana_gossip::cluster_info::Node;
 use solana_ledger::blockstore_processor::process_entries;
 use solana_ledger::entry::{next_hash, Entry};
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_perf::packet::to_packets_chunked;
 use solana_perf::test_tx::test_tx;
+use solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry};
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
@@ -32,7 +34,7 @@ use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -91,6 +93,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
+                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(Mutex::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
             );
         });
 
@@ -183,7 +187,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {
-        let res = bank.process_transaction(&tx);
+        let res = bank.process_transaction(tx);
         assert!(res.is_ok(), "sanity test transactions");
     });
     bank.clear_signatures();
@@ -204,13 +208,14 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
-        let _banking_stage = BankingStage::new(
+        let _banking_stage = BankingStage::new_with_cost_limit(
             &cluster_info,
             &poh_recorder,
             verified_receiver,
             vote_receiver,
             None,
             s,
+            &Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

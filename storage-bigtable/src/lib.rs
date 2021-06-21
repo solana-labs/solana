@@ -3,6 +3,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
+    deserialize_utils::default_on_eof,
     pubkey::Pubkey,
     signature::Signature,
     sysvar::is_sysvar_id,
@@ -81,6 +82,9 @@ fn key_to_slot(key: &str) -> Option<Slot> {
 // StoredConfirmedBlock holds the same contents as ConfirmedBlock, but is slightly compressed and avoids
 // some serde JSON directives that cause issues with bincode
 //
+// Note: in order to continue to support old bincode-serialized bigtable entries, if new fields are
+// added to ConfirmedBlock, they must either be excluded or set to `default_on_eof` here
+//
 #[derive(Serialize, Deserialize)]
 struct StoredConfirmedBlock {
     previous_blockhash: String,
@@ -89,6 +93,8 @@ struct StoredConfirmedBlock {
     transactions: Vec<StoredConfirmedBlockTransaction>,
     rewards: StoredConfirmedBlockRewards,
     block_time: Option<UnixTimestamp>,
+    #[serde(deserialize_with = "default_on_eof")]
+    block_height: Option<u64>,
 }
 
 impl From<ConfirmedBlock> for StoredConfirmedBlock {
@@ -100,6 +106,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Self {
@@ -109,6 +116,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
+            block_height,
         }
     }
 }
@@ -122,6 +130,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             transactions,
             rewards,
             block_time,
+            block_height,
         } = confirmed_block;
 
         Self {
@@ -131,6 +140,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
+            block_height,
         }
     }
 }
@@ -188,6 +198,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             log_messages: None,
             pre_token_balances: None,
             post_token_balances: None,
+            rewards: None,
         }
     }
 }
@@ -548,7 +559,7 @@ impl LedgerStorage {
             let signature = transaction.signatures[0];
 
             for address in &transaction.message.account_keys {
-                if !is_sysvar_id(&address) {
+                if !is_sysvar_id(address) {
                     by_addr
                         .entry(address)
                         .or_default()

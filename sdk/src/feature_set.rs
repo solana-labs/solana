@@ -91,14 +91,6 @@ pub mod check_program_owner {
     solana_sdk::declare_id!("5XnbR5Es9YXEARRuP6mdvoxiW3hx5atNNeBmwVd8P3QD");
 }
 
-pub mod cpi_share_ro_and_exec_accounts {
-    solana_sdk::declare_id!("6VgVBi3uRVqp56TtEwNou8idgdmhCD1aYqX8FaJ1fnJb");
-}
-
-pub mod skip_ro_deserialization {
-    solana_sdk::declare_id!("6Sw5JV84f7QkDe8gvRxpcPWFnPpfpgEnNziiy8sELaCp");
-}
-
 pub mod require_stake_for_gossip {
     solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
 }
@@ -143,6 +135,26 @@ pub mod stake_program_v4 {
     solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
 }
 
+pub mod memory_ops_syscalls {
+    solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
+}
+
+pub mod add_missing_program_error_mappings {
+    solana_sdk::declare_id!("3QEUpjhgPEt92nz3Mqf6pABkHPGCQwSvKtyGMq4SuQyL");
+}
+
+pub mod system_transfer_zero_check {
+    solana_sdk::declare_id!("BrTR9hzw4WBGFP65AJMbpAo64DcA3U6jdPSga9fMV5cS");
+}
+
+pub mod blake3_syscall_enabled {
+    solana_sdk::declare_id!("HTW2pSyErTj4BV6KBM9NZ9VBUJVxt7sacNWcf76wtzb3");
+}
+
+pub mod dedupe_config_program_signers {
+    solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -166,8 +178,6 @@ lazy_static! {
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (cpi_share_ro_and_exec_accounts::id(), "share RO and Executable accounts during cross-program invocations"),
-        (skip_ro_deserialization::id(), "skip deserialization of read-only accounts"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
@@ -179,6 +189,11 @@ lazy_static! {
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
+        (memory_ops_syscalls::id(), "add syscalls for memory operations"),
+        (add_missing_program_error_mappings::id(), "add missing program error mappings"),
+        (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
+        (blake3_syscall_enabled::id(), "blake3 syscall"),
+        (dedupe_config_program_signers::id(), "dedupe config program signers"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

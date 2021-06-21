@@ -46,6 +46,15 @@ pub struct RpcFees {
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,
     pub last_valid_slot: Slot,
+    pub last_valid_block_height: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DeprecatedRpcFees {
+    pub blockhash: String,
+    pub fee_calculator: FeeCalculator,
+    pub last_valid_slot: Slot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -309,6 +318,7 @@ pub struct RpcSignatureConfirmation {
 pub struct RpcSimulateTransactionResult {
     pub err: Option<TransactionError>,
     pub logs: Option<Vec<String>>,
+    pub accounts: Option<Vec<Option<UiAccount>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

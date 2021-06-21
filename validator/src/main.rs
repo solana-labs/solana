@@ -20,36 +20,39 @@ use {
         rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
         rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
-    solana_core::ledger_cleanup_service::{
-        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
-    },
     solana_core::{
-        cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-        gossip_service::GossipService,
-        poh_service,
-        rpc::JsonRpcConfig,
+        ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
         },
     },
-    solana_download_utils::{download_genesis_if_missing, download_snapshot},
+    solana_download_utils::{download_snapshot, DownloadProgressRecord},
+    solana_genesis_utils::download_then_check_genesis_hash,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+        contact_info::ContactInfo,
+        gossip_service::GossipService,
+    },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
-    solana_rpc::rpc_pubsub_service::PubSubConfig,
+    solana_poh::poh_service,
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
+        accounts_db::{
+            AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
         },
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
-        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_utils::{get_highest_snapshot_archive_path, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
         commitment_config::CommitmentConfig,
-        genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -83,6 +86,10 @@ enum Operation {
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
+// The default minimal snapshot download speed (bytes/second)
+const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
+// The maximum times of snapshot download abort and retry
+const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -105,7 +112,7 @@ fn wait_for_restart_window(
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
-    let admin_client = admin_rpc_service::connect(&ledger_path);
+    let admin_client = admin_rpc_service::connect(ledger_path);
     let rpc_addr = admin_rpc_service::runtime()
         .block_on(async move { admin_client.await?.rpc_addr().await })
         .map_err(|err| format!("Unable to get validator RPC address: {}", err))?;
@@ -156,7 +163,7 @@ fn wait_for_restart_window(
             None => true,
             Some(current_epoch) => current_epoch != epoch_info.epoch,
         } {
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "Fetching leader schedule for epoch {}...",
                 epoch_info.epoch
             ));
@@ -281,7 +288,7 @@ fn wait_for_restart_window(
             }
         };
 
-        progress_bar.set_message(&format!(
+        progress_bar.set_message(format!(
             "{} | Processed Slot: {} | Snapshot Slot: {} | {:.2}% delinquent stake | {}",
             {
                 let elapsed =
@@ -467,7 +474,7 @@ fn get_rpc_node(
             rpc_peers
         } else {
             let trusted_snapshot_hashes =
-                get_trusted_snapshot_hashes(&cluster_info, &validator_config.trusted_validators);
+                get_trusted_snapshot_hashes(cluster_info, &validator_config.trusted_validators);
 
             let mut eligible_rpc_peers = vec![];
 
@@ -591,7 +598,7 @@ fn check_vote_account(
         }
 
         for (_, vote_account_authorized_voter_pubkey) in vote_state.authorized_voters().iter() {
-            if !authorized_voter_pubkeys.contains(&vote_account_authorized_voter_pubkey) {
+            if !authorized_voter_pubkeys.contains(vote_account_authorized_voter_pubkey) {
                 return Err(format!(
                     "authorized voter {} not available",
                     vote_account_authorized_voter_pubkey
@@ -648,74 +655,6 @@ fn validators_set(
     }
 }
 
-fn check_genesis_hash(
-    genesis_config: &GenesisConfig,
-    expected_genesis_hash: Option<Hash>,
-) -> Result<(), String> {
-    let genesis_hash = genesis_config.hash();
-
-    if let Some(expected_genesis_hash) = expected_genesis_hash {
-        if expected_genesis_hash != genesis_hash {
-            return Err(format!(
-                "Genesis hash mismatch: expected {} but downloaded genesis hash is {}",
-                expected_genesis_hash, genesis_hash,
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-fn load_local_genesis(
-    ledger_path: &std::path::Path,
-    expected_genesis_hash: Option<Hash>,
-) -> Result<GenesisConfig, String> {
-    let existing_genesis = GenesisConfig::load(&ledger_path)
-        .map_err(|err| format!("Failed to load genesis config: {}", err))?;
-    check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
-
-    Ok(existing_genesis)
-}
-
-fn download_then_check_genesis_hash(
-    rpc_addr: &SocketAddr,
-    ledger_path: &std::path::Path,
-    expected_genesis_hash: Option<Hash>,
-    max_genesis_archive_unpacked_size: u64,
-    no_genesis_fetch: bool,
-    use_progress_bar: bool,
-) -> Result<Hash, String> {
-    if no_genesis_fetch {
-        let genesis_config = load_local_genesis(ledger_path, expected_genesis_hash)?;
-        return Ok(genesis_config.hash());
-    }
-
-    let genesis_package = ledger_path.join("genesis.tar.bz2");
-    let genesis_config = if let Ok(tmp_genesis_package) =
-        download_genesis_if_missing(rpc_addr, &genesis_package, use_progress_bar)
-    {
-        unpack_genesis_archive(
-            &tmp_genesis_package,
-            &ledger_path,
-            max_genesis_archive_unpacked_size,
-        )
-        .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
-
-        let downloaded_genesis = GenesisConfig::load(&ledger_path)
-            .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
-
-        check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;
-        std::fs::rename(tmp_genesis_package, genesis_package)
-            .map_err(|err| format!("Unable to rename: {:?}", err))?;
-
-        downloaded_genesis
-    } else {
-        load_local_genesis(ledger_path, expected_genesis_hash)?
-    };
-
-    Ok(genesis_config.hash())
-}
-
 fn verify_reachable_ports(
     node: &Node,
     cluster_entrypoint: &ContactInfo,
@@ -747,7 +686,7 @@ fn verify_reachable_ports(
             ("RPC", rpc_addr, &node.info.rpc),
             ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
         ] {
-            if ContactInfo::is_valid_address(&public_addr) {
+            if ContactInfo::is_valid_address(public_addr) {
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
@@ -810,13 +749,15 @@ fn rpc_bootstrap(
     maximum_local_snapshot_age: Slot,
     should_check_duplicate_instance: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+    minimal_snapshot_download_speed: f32,
+    maximum_snapshot_download_abort: u64,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
         order.shuffle(&mut thread_rng());
         if order
             .into_iter()
-            .all(|i| !verify_reachable_ports(&node, &cluster_entrypoints[i], &validator_config))
+            .all(|i| !verify_reachable_ports(node, &cluster_entrypoints[i], validator_config))
         {
             exit(1);
         }
@@ -828,13 +769,14 @@ fn rpc_bootstrap(
 
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
+    let mut download_abort_count = 0;
     loop {
         if gossip.is_none() {
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
             gossip = Some(start_gossip_node(
-                &identity_keypair,
-                &cluster_entrypoints,
+                identity_keypair,
+                cluster_entrypoints,
                 ledger_path,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
@@ -846,8 +788,8 @@ fn rpc_bootstrap(
 
         let rpc_node_details = get_rpc_node(
             &gossip.as_ref().unwrap().0,
-            &cluster_entrypoints,
-            &validator_config,
+            cluster_entrypoints,
+            validator_config,
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
             bootstrap_config.no_untrusted_rpc,
@@ -872,16 +814,17 @@ fn rpc_bootstrap(
             Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
         }
         .and_then(|_| {
-            let genesis_hash = download_then_check_genesis_hash(
+            let genesis_config = download_then_check_genesis_hash(
                 &rpc_contact_info.rpc,
-                &ledger_path,
+                ledger_path,
                 validator_config.expected_genesis_hash,
                 bootstrap_config.max_genesis_archive_unpacked_size,
                 bootstrap_config.no_genesis_fetch,
                 use_progress_bar,
             );
 
-            if let Ok(genesis_hash) = genesis_hash {
+            if let Ok(genesis_config) = genesis_config {
+                let genesis_hash = genesis_config.hash();
                 if validator_config.expected_genesis_hash.is_none() {
                     info!("Expected genesis hash set to {}", genesis_hash);
                     validator_config.expected_genesis_hash = Some(genesis_hash);
@@ -954,11 +897,42 @@ fn rpc_bootstrap(
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
-                                &snapshot_output_dir,
+                                snapshot_output_dir,
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
+                                &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
+                                    debug!("Download progress: {:?}", download_progress);
+
+                                    if download_progress.last_throughput <  minimal_snapshot_download_speed
+                                       && download_progress.notification_count <= 1
+                                       && download_progress.percentage_done <= 2_f32
+                                       && download_progress.estimated_remaining_time > 60_f32
+                                       && download_abort_count < maximum_snapshot_download_abort {
+                                        if let Some(ref trusted_validators) = validator_config.trusted_validators {
+                                            if trusted_validators.contains(&rpc_contact_info.id)
+                                               && trusted_validators.len() == 1
+                                               && bootstrap_config.no_untrusted_rpc {
+                                                warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
+                                                      and try a different node as it is the only trusted validator and the no-untrusted-rpc is set. \
+                                                      Abort count: {}, Progress detail: {:?}",
+                                                      download_progress.last_throughput, minimal_snapshot_download_speed,
+                                                      download_abort_count, download_progress);
+                                                return true; // Do not abort download from the one-and-only trusted validator
+                                            }
+                                        }
+                                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
+                                               and try a different node. Abort count: {}, Progress detail: {:?}",
+                                               download_progress.last_throughput, minimal_snapshot_download_speed,
+                                               download_abort_count, download_progress);
+                                        download_abort_count += 1;
+                                        false
+                                    } else {
+                                        true
+                                    }
+                                })),
                             );
+
                             gossip_service.join().unwrap();
                             ret
                         })
@@ -972,7 +946,7 @@ fn rpc_bootstrap(
                 check_vote_account(
                     &rpc_client,
                     &identity_keypair.pubkey(),
-                    &vote_account,
+                    vote_account,
                     &authorized_voter_keypairs
                         .read()
                         .unwrap()
@@ -1029,6 +1003,8 @@ pub fn main() {
         PubSubConfig::default().max_in_buffer_capacity.to_string();
     let default_rpc_pubsub_max_out_buffer_capacity =
         PubSubConfig::default().max_out_buffer_capacity.to_string();
+    let default_rpc_pubsub_max_active_subscriptions =
+        PubSubConfig::default().max_active_subscriptions.to_string();
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
@@ -1037,6 +1013,11 @@ pub fn main() {
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
+    let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
+    let default_max_snapshot_download_abort = &MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string();
+    let default_accounts_shrink_optimize_total_space =
+        &DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE.to_string();
+    let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1341,6 +1322,25 @@ pub fn main() {
                 .help("The maximum number of snapshots to hold on to when purging older snapshots.")
         )
         .arg(
+            Arg::with_name("minimal_snapshot_download_speed")
+                .long("minimal-snapshot-download-speed")
+                .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
+                .takes_value(true)
+                .default_value(default_min_snapshot_download_speed)
+                .help("The minimal speed of snapshot downloads measured in bytes/second. \
+                      If the initial download speed falls below this threshold, the system will \
+                      retry the download against a different rpc node."),
+        )
+        .arg(
+            Arg::with_name("maximum_snapshot_download_abort")
+                .long("maximum-snapshot-download-abort")
+                .value_name("MAXIMUM_SNAPSHOT_DOWNLOAD_ABORT")
+                .takes_value(true)
+                .default_value(default_max_snapshot_download_abort)
+                .help("The maximum number of times to abort and retry when encountering a \
+                      slow snapshot download."),
+        )
+        .arg(
             Arg::with_name("contact_debug_interval")
                 .long("contact-debug-interval")
                 .value_name("CONTACT_DEBUG_INTERVAL")
@@ -1508,7 +1508,7 @@ pub fn main() {
             Arg::with_name("no_rocksdb_compaction")
                 .long("no-rocksdb-compaction")
                 .takes_value(false)
-                .help("Disable manual compaction of the ledger database. May increase storage requirements.")
+                .help("Disable manual compaction of the ledger database (this is ignored).")
         )
         .arg(
             Arg::with_name("rocksdb_compaction_interval")
@@ -1613,6 +1613,16 @@ pub fn main() {
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_max_active_subscriptions")
+                .long("rpc-pubsub-max-active-subscriptions")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_active_subscriptions)
+                .help("The maximum number of active subscriptions that RPC PubSub will accept \
+                       across all connections."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
                 .long("rpc-send-retry-ms")
                 .value_name("MILLISECS")
@@ -1629,6 +1639,13 @@ pub fn main() {
                 .validator(is_parsable::<u64>)
                 .default_value(&default_rpc_send_transaction_leader_forward_count)
                 .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
+        )
+        .arg(
+            Arg::with_name("rpc_scan_and_fix_roots")
+                .long("rpc-scan-and-fix-roots")
+                .takes_value(false)
+                .requires("enable_rpc_transaction_history")
+                .help("Verifies blockstore roots on boot and fixes any gaps"),
         )
         .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
@@ -1663,7 +1680,7 @@ pub fn main() {
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
-                .default_value(&default_genesis_archive_unpacked_size)
+                .default_value(default_genesis_archive_unpacked_size)
                 .help(
                     "maximum total uncompressed file size of downloaded genesis archive",
                 ),
@@ -1778,6 +1795,29 @@ pub fn main() {
                 .long("accounts-db-caching-enabled")
                 .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
+        )
+        .arg(
+            Arg::with_name("accounts_shrink_optimize_total_space")
+                .long("accounts-shrink-optimize-total-space")
+                .takes_value(true)
+                .value_name("BOOLEAN")
+                .default_value(default_accounts_shrink_optimize_total_space)
+                .help("When this is set to true, the system will shrink the most \
+                       sparse accounts and when the overall shrink ratio is above \
+                       the specified accounts-shrink-ratio, the shrink will stop and \
+                       it will skip all other less sparse accounts."),
+        )
+        .arg(
+            Arg::with_name("accounts_shrink_ratio")
+                .long("accounts-shrink-ratio")
+                .takes_value(true)
+                .value_name("RATIO")
+                .default_value(default_accounts_shrink_ratio)
+                .help("Specifies the shrink ratio for the accounts to be shrunk. \
+                       The shrink ratio is defined as the ratio of the bytes alive over the  \
+                       total bytes used. If the account's shrink ratio is less than this ratio \
+                       it becomes a candidate for shrinking. The value must between 0. and 1.0 \
+                       inclusive."),
         )
         .arg(
             Arg::with_name("no_duplicate_instance_check")
@@ -2017,7 +2057,7 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let no_port_check = matches.is_present("no_port_check");
-    let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
+    let no_rocksdb_compaction = true;
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
@@ -2077,6 +2117,23 @@ pub fn main() {
     let account_indexes = process_account_indexes(&matches);
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
+    let accounts_shrink_optimize_total_space =
+        value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
+    let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
+    if !(0.0..=1.0).contains(&shrink_ratio) {
+        eprintln!(
+            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0 inclusive: {}",
+            shrink_ratio
+        );
+        exit(1);
+    }
+
+    let accounts_shrink_ratio = if accounts_shrink_optimize_total_space {
+        AccountShrinkThreshold::TotalSpace { shrink_ratio }
+    } else {
+        AccountShrinkThreshold::IndividalStore { shrink_ratio }
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_path: value_t!(matches, "tower", PathBuf).ok(),
@@ -2084,10 +2141,10 @@ pub fn main() {
         cuda: matches.is_present("cuda"),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
-            .map(|s| Hash::from_str(&s).unwrap()),
+            .map(|s| Hash::from_str(s).unwrap()),
         expected_bank_hash: matches
             .value_of("expected_bank_hash")
-            .map(|s| Hash::from_str(&s).unwrap()),
+            .map(|s| Hash::from_str(s).unwrap()),
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
@@ -2117,6 +2174,7 @@ pub fn main() {
                 .ok()
                 .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
+            rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
@@ -2139,6 +2197,11 @@ pub fn main() {
             max_out_buffer_capacity: value_t_or_exit!(
                 matches,
                 "rpc_pubsub_max_out_buffer_capacity",
+                usize
+            ),
+            max_active_subscriptions: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_max_active_subscriptions",
                 usize
             ),
         },
@@ -2173,6 +2236,7 @@ pub fn main() {
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
+        accounts_shrink_ratio,
         ..ValidatorConfig::default()
     };
 
@@ -2244,6 +2308,11 @@ pub fn main() {
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_snapshots_to_retain =
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
+    let minimal_snapshot_download_speed =
+        value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
+    let maximum_snapshot_download_abort =
+        value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
+
     let snapshot_output_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
@@ -2503,6 +2572,8 @@ pub fn main() {
             maximum_local_snapshot_age,
             should_check_duplicate_instance,
             &start_progress,
+            minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
         );
         *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }

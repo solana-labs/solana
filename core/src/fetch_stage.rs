@@ -1,11 +1,11 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
 use crate::banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET;
-use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::packet::PacketsRecycler;
 use solana_perf::recycler::Recycler;
+use solana_poh::poh_recorder::PohRecorder;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
@@ -34,7 +34,7 @@ impl FetchStage {
                 tpu_forwards_sockets,
                 exit,
                 &sender,
-                &poh_recorder,
+                poh_recorder,
                 coalesce_ms,
             ),
             receiver,
@@ -54,8 +54,8 @@ impl FetchStage {
             tx_sockets,
             tpu_forwards_sockets,
             exit,
-            &sender,
-            &poh_recorder,
+            sender,
+            poh_recorder,
             coalesce_ms,
         )
     }
@@ -85,7 +85,7 @@ impl FetchStage {
             inc_new_counter_debug!("fetch_stage-honor_forwards", len);
             for packets in batch {
                 if sendr.send(packets).is_err() {
-                    return Err(Error::SendError);
+                    return Err(Error::Send);
                 }
             }
         } else {
@@ -108,11 +108,12 @@ impl FetchStage {
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
-                &exit,
+                exit,
                 sender.clone(),
                 recycler.clone(),
                 "fetch_stage",
                 coalesce_ms,
+                true,
             )
         });
 
@@ -120,11 +121,12 @@ impl FetchStage {
         let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
-                &exit,
+                exit,
                 forward_sender.clone(),
                 recycler.clone(),
                 "fetch_forward_stage",
                 coalesce_ms,
+                true,
             )
         });
 
@@ -138,10 +140,10 @@ impl FetchStage {
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::RecvError(_) => break,
-                        Error::SendError => break,
+                        Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
+                        Error::Recv(_) => break,
+                        Error::Send => break,
                         _ => error!("{:?}", e),
                     }
                 }

@@ -1,4 +1,5 @@
 use crate::{
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{LockoutIntervals, ProgressMap},
 };
@@ -163,7 +164,7 @@ impl Tower {
         bank: &Bank,
         path: &Path,
     ) -> Self {
-        let path = Self::get_filename(&path, node_pubkey);
+        let path = Self::get_filename(path, node_pubkey);
         let tmp_path = Self::get_tmp_filename(&path);
         let mut tower = Self {
             node_pubkey: *node_pubkey,
@@ -204,8 +205,8 @@ impl Tower {
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
                 root_bank.deref(),
                 bank_forks.frozen_banks().values().cloned().collect(),
-                &my_pubkey,
-                &vote_account,
+                my_pubkey,
+                vote_account,
             );
         let root = root_bank.slot();
 
@@ -217,13 +218,7 @@ impl Tower {
             )
             .clone();
 
-        Self::new(
-            &my_pubkey,
-            &vote_account,
-            root,
-            &heaviest_bank,
-            &ledger_path,
-        )
+        Self::new(my_pubkey, vote_account, root, &heaviest_bank, ledger_path)
     }
 
     pub(crate) fn collect_vote_lockouts<F>(
@@ -573,6 +568,7 @@ impl Tower {
             .map(|candidate_slot_ancestors| candidate_slot_ancestors.contains(&last_voted_slot))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_check_switch_threshold_decision(
         &self,
         switch_slot: u64,
@@ -582,9 +578,10 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
+        heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
-        self.last_voted_slot()
-            .map(|last_voted_slot| {
+        self.last_voted_slot_hash()
+            .map(|(last_voted_slot, last_voted_hash)| {
                 let root = self.root();
                 let empty_ancestors = HashSet::default();
                 let empty_ancestors_due_to_minor_unsynced_ledger = || {
@@ -673,7 +670,7 @@ impl Tower {
                 if last_vote_ancestors.contains(&switch_slot) {
                     if self.is_stray_last_vote() {
                         return suspended_decision_due_to_major_unsynced_ledger();
-                    } else if let Some(latest_duplicate_ancestor) = progress.latest_unconfirmed_duplicate_ancestor(last_voted_slot) {
+                    } else if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice.latest_invalid_ancestor(&(last_voted_slot, last_voted_hash)) {
                         // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
                         // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
                         // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
@@ -733,7 +730,7 @@ impl Tower {
                     // finding any lockout intervals in the `lockout_intervals` tree
                     // for this bank that contain `last_vote`.
                     let lockout_intervals = &progress
-                        .get(&candidate_slot)
+                        .get(candidate_slot)
                         .unwrap()
                         .fork_stats
                         .lockout_intervals;
@@ -821,6 +818,7 @@ impl Tower {
             .unwrap_or(SwitchForkDecision::SameFork)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn check_switch_threshold(
         &mut self,
         switch_slot: u64,
@@ -830,6 +828,7 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
+        heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
         let decision = self.make_check_switch_threshold_decision(
             switch_slot,
@@ -839,6 +838,7 @@ impl Tower {
             total_stake,
             epoch_vote_accounts,
             latest_validator_votes_for_frozen_banks,
+            heaviest_subtree_fork_choice,
         );
         let new_check = Some((switch_slot, decision.clone()));
         if new_check != self.last_switch_threshold_check {
@@ -1322,7 +1322,7 @@ pub fn reconcile_blockstore_roots_with_tower(
     if last_blockstore_root < tower_root {
         // Ensure tower_root itself to exist and be marked as rooted in the blockstore
         // in addition to its ancestors.
-        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
+        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, blockstore)
             .take_while(|current| match current.cmp(&last_blockstore_root) {
                 Ordering::Greater => true,
                 Ordering::Equal => false,
@@ -1358,11 +1358,11 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
-        cluster_slot_state_verifier::GossipDuplicateConfirmedSlots,
+        cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
         cluster_slots::ClusterSlots,
-        fork_choice::SelectVoteAndResetForkResult,
-        heaviest_subtree_fork_choice::{HeaviestSubtreeForkChoice, SlotHashKey},
-        progress_map::{DuplicateStats, ForkProgress},
+        fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
+        heaviest_subtree_fork_choice::SlotHashKey,
+        progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     };
@@ -1432,21 +1432,21 @@ pub mod test {
             forks: Tree<u64>,
             cluster_votes: &HashMap<Pubkey, Vec<u64>>,
         ) {
-            let root = forks.root().data;
+            let root = *forks.root().data();
             assert!(self.bank_forks.read().unwrap().get(root).is_some());
 
             let mut walk = TreeWalk::from(forks);
 
             while let Some(visit) = walk.get() {
-                let slot = visit.node().data;
-                self.progress.entry(slot).or_insert_with(|| {
-                    ForkProgress::new(Hash::default(), None, DuplicateStats::default(), None, 0, 0)
-                });
+                let slot = *visit.node().data();
+                self.progress
+                    .entry(slot)
+                    .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
                 if self.bank_forks.read().unwrap().get(slot).is_some() {
                     walk.forward();
                     continue;
                 }
-                let parent = walk.get_parent().unwrap().data;
+                let parent = *walk.get_parent().unwrap().data();
                 let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
                 let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
                 for (pubkey, vote) in cluster_votes.iter() {
@@ -1484,7 +1484,7 @@ pub mod test {
             tower: &mut Tower,
         ) -> Vec<HeaviestForkFailures> {
             // Try to simulate the vote
-            let my_keypairs = self.validator_keypairs.get(&my_pubkey).unwrap();
+            let my_keypairs = self.validator_keypairs.get(my_pubkey).unwrap();
             let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
             let ancestors = self.bank_forks.read().unwrap().ancestors();
             let mut frozen_banks: Vec<_> = self
@@ -1497,7 +1497,7 @@ pub mod test {
                 .collect();
 
             let _ = ReplayStage::compute_bank_stats(
-                &my_pubkey,
+                my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
                 tower,
@@ -1530,6 +1530,7 @@ pub mod test {
                 &self.progress,
                 tower,
                 &self.latest_validator_votes_for_frozen_banks,
+                &self.heaviest_subtree_fork_choice,
             );
 
             // Make sure this slot isn't locked out or failing threshold
@@ -1554,6 +1555,7 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut DuplicateSlotsTracker::default(),
                 &mut GossipDuplicateConfirmedSlots::default(),
                 &mut UnfrozenGossipVerifiedVoteHashes::default(),
                 &mut true,
@@ -1574,9 +1576,9 @@ pub mod test {
                 .filter_map(|slot| {
                     let mut fork_tip_parent = tr(slot - 1);
                     fork_tip_parent.push_front(tr(slot));
-                    self.fill_bank_forks(fork_tip_parent, &cluster_votes);
+                    self.fill_bank_forks(fork_tip_parent, cluster_votes);
                     if votes_to_simulate.contains(&slot) {
-                        Some((slot, self.simulate_vote(slot, &my_pubkey, tower)))
+                        Some((slot, self.simulate_vote(slot, my_pubkey, tower)))
                     } else {
                         None
                     }
@@ -1592,9 +1594,7 @@ pub mod test {
         ) {
             self.progress
                 .entry(slot)
-                .or_insert_with(|| {
-                    ForkProgress::new(Hash::default(), None, DuplicateStats::default(), None, 0, 0)
-                })
+                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0))
                 .fork_stats
                 .lockout_intervals
                 .entry(lockout_interval.1)
@@ -1621,7 +1621,7 @@ pub mod test {
                 fork_tip_parent.push_front(tr(start_slot + i));
                 self.fill_bank_forks(fork_tip_parent, cluster_votes);
                 if self
-                    .simulate_vote(i + start_slot, &my_pubkey, tower)
+                    .simulate_vote(i + start_slot, my_pubkey, tower)
                     .is_empty()
                 {
                     cluster_votes
@@ -1701,14 +1701,7 @@ pub mod test {
         let mut progress = ProgressMap::default();
         progress.insert(
             0,
-            ForkProgress::new(
-                bank0.last_blockhash(),
-                None,
-                DuplicateStats::default(),
-                None,
-                0,
-                0,
-            ),
+            ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
         );
         let bank_forks = BankForks::new(bank0);
         let heaviest_subtree_fork_choice =
@@ -1867,21 +1860,46 @@ pub mod test {
         let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
 
         // Last vote is 47
-        tower.record_vote(47, Hash::default());
+        tower.record_vote(
+            47,
+            vote_simulator
+                .bank_forks
+                .read()
+                .unwrap()
+                .get(47)
+                .unwrap()
+                .hash(),
+        );
 
         // Trying to switch to an ancestor of last vote should only not panic
         // if the current vote has a duplicate ancestor
         let ancestor_of_voted_slot = 43;
         let duplicate_ancestor1 = 44;
         let duplicate_ancestor2 = 45;
-        vote_simulator.progress.set_unconfirmed_duplicate_slot(
-            duplicate_ancestor1,
-            &descendants.get(&duplicate_ancestor1).unwrap(),
-        );
-        vote_simulator.progress.set_unconfirmed_duplicate_slot(
-            duplicate_ancestor2,
-            &descendants.get(&duplicate_ancestor2).unwrap(),
-        );
+        vote_simulator
+            .heaviest_subtree_fork_choice
+            .mark_fork_invalid_candidate(&(
+                duplicate_ancestor1,
+                vote_simulator
+                    .bank_forks
+                    .read()
+                    .unwrap()
+                    .get(duplicate_ancestor1)
+                    .unwrap()
+                    .hash(),
+            ));
+        vote_simulator
+            .heaviest_subtree_fork_choice
+            .mark_fork_invalid_candidate(&(
+                duplicate_ancestor2,
+                vote_simulator
+                    .bank_forks
+                    .read()
+                    .unwrap()
+                    .get(duplicate_ancestor2)
+                    .unwrap()
+                    .hash(),
+            ));
         assert_eq!(
             tower.check_switch_threshold(
                 ancestor_of_voted_slot,
@@ -1890,7 +1908,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchDuplicateRollback(duplicate_ancestor2)
         );
@@ -1903,11 +1922,18 @@ pub mod test {
             confirm_ancestors.push(duplicate_ancestor2);
         }
         for (i, duplicate_ancestor) in confirm_ancestors.into_iter().enumerate() {
-            vote_simulator.progress.set_confirmed_duplicate_slot(
-                duplicate_ancestor,
-                ancestors.get(&duplicate_ancestor).unwrap(),
-                &descendants.get(&duplicate_ancestor).unwrap(),
-            );
+            vote_simulator
+                .heaviest_subtree_fork_choice
+                .mark_fork_valid_candidate(&(
+                    duplicate_ancestor,
+                    vote_simulator
+                        .bank_forks
+                        .read()
+                        .unwrap()
+                        .get(duplicate_ancestor)
+                        .unwrap()
+                        .hash(),
+                ));
             let res = tower.check_switch_threshold(
                 ancestor_of_voted_slot,
                 &ancestors,
@@ -1916,6 +1942,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
                 &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             );
             if i == 0 {
                 assert_eq!(
@@ -1951,7 +1978,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SameFork
         );
@@ -1965,7 +1993,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -1981,7 +2010,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -1997,7 +2027,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2013,7 +2044,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2031,7 +2063,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2047,7 +2080,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
         );
@@ -2064,7 +2098,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
         );
@@ -2090,7 +2125,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2122,7 +2158,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, num_validators * 10000)
         );
@@ -2137,7 +2174,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2169,7 +2207,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
         );
@@ -2193,7 +2232,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2804,7 +2844,7 @@ pub mod test {
 
         tower.save(&identity_keypair).unwrap();
         modify_serialized(&tower.path);
-        let loaded = Tower::restore(&dir.path(), &identity_keypair.pubkey());
+        let loaded = Tower::restore(dir.path(), &identity_keypair.pubkey());
 
         (tower, loaded)
     }
@@ -2872,7 +2912,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SameFork
         );
@@ -2886,7 +2927,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2901,7 +2943,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
         );
@@ -2971,7 +3014,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -2986,7 +3030,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
@@ -3001,7 +3046,8 @@ pub mod test {
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
-                &vote_simulator.latest_validator_votes_for_frozen_banks
+                &vote_simulator.latest_validator_votes_for_frozen_banks,
+                &vote_simulator.heaviest_subtree_fork_choice,
             ),
             SwitchForkDecision::SwitchProof(Hash::default())
         );

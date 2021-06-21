@@ -3,9 +3,8 @@ use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_client::rpc_client::RpcClient;
-use solana_core::{
-    contact_info::ContactInfo, gossip_service::discover, serve_repair::RepairProtocol,
-};
+use solana_core::serve_repair::RepairProtocol;
+use solana_gossip::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
@@ -97,14 +96,14 @@ fn run_dos(
                     let res = rpc_client
                         .as_ref()
                         .unwrap()
-                        .get_account(&Pubkey::from_str(&data_input.as_ref().unwrap()).unwrap());
+                        .get_account(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
                     if res.is_err() {
                         error_count += 1;
                     }
                 }
                 "get_program_accounts" => {
                     let res = rpc_client.as_ref().unwrap().get_program_accounts(
-                        &Pubkey::from_str(&data_input.as_ref().unwrap()).unwrap(),
+                        &Pubkey::from_str(data_input.as_ref().unwrap()).unwrap(),
                     );
                     if res.is_err() {
                         error_count += 1;

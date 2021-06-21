@@ -1,25 +1,26 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
 use self::{
+    broadcast_duplicates_run::BroadcastDuplicatesRun,
     broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
-use crate::contact_info::ContactInfo;
-use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::weighted_shuffle::weighted_best;
-use crate::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
-    poh_recorder::WorkingBankEntry,
-    result::{Error, Result},
-};
+use crate::result::{Error, Result};
 use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
 };
+use solana_gossip::{
+    cluster_info::{self, ClusterInfo, ClusterInfoError},
+    contact_info::ContactInfo,
+    crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+    weighted_shuffle::weighted_best,
+};
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -35,6 +36,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod broadcast_duplicates_run;
 mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
@@ -53,10 +55,19 @@ pub enum BroadcastStageReturnType {
 }
 
 #[derive(PartialEq, Clone, Debug)]
+pub struct BroadcastDuplicatesConfig {
+    /// Percentage of stake to send different version of slots to
+    pub stake_partition: u8,
+    /// Number of slots to wait before sending duplicate shreds
+    pub duplicate_send_delay: usize,
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
     BroadcastFakeShreds,
+    BroadcastDuplicates(BroadcastDuplicatesConfig),
 }
 
 impl BroadcastStageType {
@@ -100,6 +111,16 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 BroadcastFakeShredsRun::new(keypair, 0, shred_version),
+            ),
+
+            BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
             ),
         }
     }
@@ -170,15 +191,15 @@ impl BroadcastStage {
     fn handle_error(r: Result<()>, name: &str) -> Option<BroadcastStageReturnType> {
         if let Err(e) = r {
             match e {
-                Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
-                | Error::SendError
-                | Error::RecvError(RecvError)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => {
+                Error::RecvTimeout(RecvTimeoutError::Disconnected)
+                | Error::Send
+                | Error::Recv(RecvError)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Disconnected) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
-                Error::RecvTimeoutError(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Timeout) => (),
-                Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                Error::RecvTimeout(RecvTimeoutError::Timeout)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout) => (),
+                Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
                     error!("{} broadcaster error: {:?}", name, e);
@@ -363,7 +384,6 @@ pub fn get_broadcast_peers(
     cluster_info: &ClusterInfo,
     stakes: Option<&HashMap<Pubkey, u64>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
-    use crate::cluster_info;
     let mut peers = cluster_info.tvu_peers();
     let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
     (peers, peers_and_stakes)
@@ -388,7 +408,7 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
 
             (&shred.payload, &peers[broadcast_index].tvu)
         })
@@ -409,7 +429,7 @@ pub fn broadcast_shreds(
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
-    let num_live_peers = num_live_peers(&peers);
+    let num_live_peers = num_live_peers(peers);
     update_peer_stats(
         num_live_peers,
         broadcast_len as i64 + 1,
@@ -440,8 +460,8 @@ fn num_live_peers(peers: &[ContactInfo]) -> i64 {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
     use crossbeam_channel::unbounded;
+    use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{
         blockstore::{make_slot_entries, Blockstore},
         entry::create_ticks,

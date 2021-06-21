@@ -13,14 +13,14 @@ use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
     account_utils::StateMut,
-    bpf_loader, bpf_loader_deprecated,
+    blake3, bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
@@ -74,6 +74,8 @@ pub enum SyscallError {
     InstructionTooLarge(usize, usize),
     #[error("Too many accounts passed to inner instruction")]
     TooManyAccounts,
+    #[error("Overlapping copy")]
+    CopyOverlapping,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -132,6 +134,10 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
     }
 
+    if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
+    }
+
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
@@ -145,10 +151,20 @@ pub fn register_syscalls(
             .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
     }
 
+    if invoke_context.is_feature_active(&memory_ops_syscalls::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
+    }
+
+    // Cross-program invocation syscalls
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+
+    // Memory allocator
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     Ok(syscall_registry)
@@ -268,6 +284,53 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemcpy {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemmove {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemcmp {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        Box::new(SyscallMemset {
+            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&blake3_syscall_enabled::id()),
+        Box::new(SyscallBlake3 {
+            base_cost: bpf_compute_budget.sha256_base_cost,
+            byte_cost: bpf_compute_budget.sha256_byte_cost,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
     let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
@@ -322,7 +385,6 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
 
     // Memory allocator
-
     vm.bind_syscall_context_object(
         Box::new(SyscallAllocFree {
             aligned: *loader_id != bpf_loader_deprecated::id(),
@@ -535,7 +597,7 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
             memory_mapping,
             file,
             len,
-            &self.loader_id,
+            self.loader_id,
             self.enforce_aligned_host_addrs,
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         );
@@ -566,7 +628,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
                 memory_mapping,
                 addr,
                 len,
-                &self.loader_id,
+                self.loader_id,
                 self.enforce_aligned_host_addrs,
                 &mut |string: &str| {
                     stable_log::program_log(&self.logger, string);
@@ -1137,6 +1199,209 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
     }
 }
 
+/// memcpy
+pub struct SyscallMemcpy<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
+    fn call(
+        &mut self,
+        dst_addr: u64,
+        src_addr: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        // cannot be overlapping
+        if dst_addr + n > src_addr && src_addr > dst_addr {
+            *result = Err(SyscallError::CopyOverlapping.into());
+            return;
+        }
+
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let dst = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
+            result
+        );
+        let src = question_mark!(
+            translate_slice::<u8>(memory_mapping, src_addr, n, self.loader_id, true),
+            result
+        );
+        unsafe {
+            std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), n as usize);
+        }
+        *result = Ok(0);
+    }
+}
+/// memcpy
+pub struct SyscallMemmove<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
+    fn call(
+        &mut self,
+        dst_addr: u64,
+        src_addr: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let dst = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
+            result
+        );
+        let src = question_mark!(
+            translate_slice::<u8>(memory_mapping, src_addr, n, self.loader_id, true),
+            result
+        );
+        unsafe {
+            std::ptr::copy(src.as_ptr(), dst.as_mut_ptr(), n as usize);
+        }
+        *result = Ok(0);
+    }
+}
+/// memcmp
+pub struct SyscallMemcmp<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
+    fn call(
+        &mut self,
+        s1_addr: u64,
+        s2_addr: u64,
+        n: u64,
+        cmp_result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let s1 = question_mark!(
+            translate_slice::<u8>(memory_mapping, s1_addr, n, self.loader_id, true),
+            result
+        );
+        let s2 = question_mark!(
+            translate_slice::<u8>(memory_mapping, s2_addr, n, self.loader_id, true),
+            result
+        );
+        let cmp_result = question_mark!(
+            translate_type_mut::<i32>(memory_mapping, cmp_result_addr, self.loader_id, true),
+            result
+        );
+        let mut i = 0;
+        while i < n as usize {
+            let a = s1[i];
+            let b = s2[i];
+            if a != b {
+                *cmp_result = a as i32 - b as i32;
+                *result = Ok(0);
+                return;
+            }
+            i += 1;
+        }
+        *cmp_result = 0;
+        *result = Ok(0);
+    }
+}
+/// memset
+pub struct SyscallMemset<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
+    fn call(
+        &mut self,
+        s_addr: u64,
+        c: u64,
+        n: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        let s = question_mark!(
+            translate_slice_mut::<u8>(memory_mapping, s_addr, n, self.loader_id, true),
+            result
+        );
+        for val in s.iter_mut().take(n as usize) {
+            *val = c as u8;
+        }
+        *result = Ok(0);
+    }
+}
+
+// Blake3
+pub struct SyscallBlake3<'a> {
+    base_cost: u64,
+    byte_cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallBlake3<'a> {
+    fn call(
+        &mut self,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(self.base_cost), result);
+        let hash_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                blake3::HASH_BYTES as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let mut hasher = blake3::Hasher::default();
+        if vals_len > 0 {
+            let vals = question_mark!(
+                translate_slice::<&[u8]>(memory_mapping, vals_addr, vals_len, self.loader_id, true),
+                result
+            );
+            for val in vals.iter() {
+                let bytes = question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        val.as_ptr() as u64,
+                        val.len() as u64,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+                question_mark!(
+                    self.compute_meter
+                        .consume(self.byte_cost * (val.len() as u64 / 2)),
+                    result
+                );
+                hasher.hash(bytes);
+            }
+        }
+        hash_result.copy_from_slice(&hasher.result().to_bytes());
+        *result = Ok(0);
+    }
+}
+
 // Cross-program invocation syscalls
 
 struct AccountReferences<'a> {
@@ -1169,7 +1434,6 @@ trait SyscallInvokeSigned<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1246,7 +1510,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1368,7 +1631,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
         get_translated_accounts(
             account_keys,
-            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1585,7 +1847,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1689,7 +1950,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
         get_translated_accounts(
             account_keys,
-            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1779,7 +2039,6 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 
 fn get_translated_accounts<'a, T, F>(
     account_keys: &[Pubkey],
-    caller_write_privileges: &[bool],
     program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
@@ -1792,7 +2051,7 @@ where
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
     for (i, ref account_key) in account_keys.iter().enumerate() {
-        let account = invoke_context.get_account(&account_key).ok_or_else(|| {
+        let account = invoke_context.get_account(account_key).ok_or_else(|| {
             ic_msg!(
                 invoke_context,
                 "Instruction references an unknown account {}",
@@ -1801,11 +2060,7 @@ where
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?;
 
-        if i == program_account_index
-            || account.borrow().executable()
-            || (invoke_context.is_feature_active(&cpi_share_ro_and_exec_accounts::id())
-                && !caller_write_privileges[i])
-        {
+        if i == program_account_index || account.borrow().executable() {
             // Use the known account
             accounts.push(account);
             refs.push(None);
@@ -1960,7 +2215,7 @@ fn call<'a>(
 
         let instruction = syscall.translate_instruction(
             instruction_addr,
-            &memory_mapping,
+            memory_mapping,
             enforce_aligned_host_addrs,
         )?;
         let signers = syscall.translate_signers(
@@ -2000,7 +2255,6 @@ fn call<'a>(
         check_authorized_program(&callee_program_id, &instruction.data, &invoke_context)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
-            &caller_write_privileges,
             callee_program_id_index,
             account_infos_addr,
             account_infos_len,

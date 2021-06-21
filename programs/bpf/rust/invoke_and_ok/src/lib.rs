@@ -27,7 +27,7 @@ fn process_instruction(
         data: instruction_data.to_owned(),
         program_id: *to_call,
     };
-    let _ = invoke(&instruction, &infos);
+    let _ = invoke(&instruction, infos);
 
     Ok(())
 }

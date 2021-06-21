@@ -1,15 +1,14 @@
-use log::*;
 /// Cluster independent integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
+use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::thin_client::create_client;
-use solana_core::validator::ValidatorExit;
-use solana_core::{
-    cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
-    gossip_service::discover_cluster,
+use solana_core::consensus::VOTE_THRESHOLD_DEPTH;
+use solana_gossip::{
+    cluster_info::VALIDATOR_PORT_RANGE, contact_info::ContactInfo, gossip_service::discover_cluster,
 };
 use solana_ledger::{
     blockstore::Blockstore,
@@ -20,6 +19,7 @@ use solana_sdk::{
     clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+    exit::Exit,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -63,10 +63,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
         let mut transaction =
-            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
+            system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 10, confs)
+            .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(&validator.id) {
@@ -114,14 +114,14 @@ pub fn send_many_transactions(
         let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
-            &funding_keypair,
+            funding_keypair,
             &random_keypair.pubkey(),
             transfer_amount,
             blockhash,
         );
 
         client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .retry_transfer(funding_keypair, &mut transaction, 5)
             .unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
@@ -178,7 +178,7 @@ pub fn sleep_n_epochs(
 
 pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
-    entry_point_validator_exit: &Arc<RwLock<ValidatorExit>>,
+    entry_point_validator_exit: &Arc<RwLock<Exit>>,
     funding_keypair: &Keypair,
     nodes: usize,
     slot_millis: u64,
@@ -236,7 +236,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                 .unwrap();
             let mut transaction = system_transaction::transfer(
-                &funding_keypair,
+                funding_keypair,
                 &random_keypair.pubkey(),
                 1,
                 blockhash,
@@ -245,7 +245,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
                 let sig = client.retry_transfer_until_confirmed(
-                    &funding_keypair,
+                    funding_keypair,
                     &mut transaction,
                     5,
                     confs,
@@ -260,7 +260,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 }
             };
             info!("poll_all_nodes_for_signature()");
-            match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig, confs) {
+            match poll_all_nodes_for_signature(entry_point_info, &cluster_nodes, &sig, confs) {
                 Err(e) => {
                     info!("poll_all_nodes_for_signature() failed {:?}", e);
                     result = Err(e);
@@ -280,18 +280,23 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
     let mut last_print = Instant::now();
     let loop_start = Instant::now();
     let loop_timeout = Duration::from_secs(60);
+    let mut num_roots_map = HashMap::new();
     while !done {
         assert!(loop_start.elapsed() < loop_timeout);
+
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
-            let slot = client.get_slot().unwrap_or(0);
-            roots[i].insert(slot);
-            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            done = min_node >= num_new_roots;
+            let root_slot = client
+                .get_slot_with_commitment(CommitmentConfig::finalized())
+                .unwrap_or(0);
+            roots[i].insert(root_slot);
+            num_roots_map.insert(ingress_node.id, roots[i].len());
+            let num_roots = roots.iter().map(|r| r.len()).min().unwrap();
+            done = num_roots >= num_new_roots;
             if done || last_print.elapsed().as_secs() > 3 {
                 info!(
-                    "{} {} min observed roots {}/16",
-                    test_name, ingress_node.id, min_node
+                    "{} waiting for {} new roots.. observed: {:?}",
+                    test_name, num_new_roots, num_roots_map
                 );
                 last_print = Instant::now();
             }
@@ -372,7 +377,7 @@ fn poll_all_nodes_for_signature(
             continue;
         }
         let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
-        client.poll_for_signature_confirmation(&sig, confs)?;
+        client.poll_for_signature_confirmation(sig, confs)?;
     }
 
     Ok(())

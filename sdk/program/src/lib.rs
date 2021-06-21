@@ -6,6 +6,7 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
@@ -30,6 +31,7 @@ pub mod native_token;
 pub mod nonce;
 pub mod program;
 pub mod program_error;
+pub mod program_memory;
 pub mod program_option;
 pub mod program_pack;
 pub mod program_stubs;
@@ -41,6 +43,7 @@ pub mod serialize_utils;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
+pub mod stake;
 pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;

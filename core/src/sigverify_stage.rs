@@ -24,10 +24,10 @@ const RECV_BATCH_MAX_GPU: usize = 5_000;
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
     #[error("send packets batch error")]
-    SendError(#[from] SendError<Vec<Packets>>),
+    Send(#[from] SendError<Vec<Packets>>),
 
     #[error("streamer error")]
-    StreamerError(#[from] StreamerError),
+    Streamer(#[from] StreamerError),
 }
 
 type Result<T> = std::result::Result<T, SigVerifyServiceError>;
@@ -126,13 +126,13 @@ impl SigVerifyStage {
             .spawn(move || loop {
                 if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, id, &verifier) {
                     match e {
-                        SigVerifyServiceError::StreamerError(StreamerError::RecvTimeoutError(
+                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                             RecvTimeoutError::Disconnected,
                         )) => break,
-                        SigVerifyServiceError::StreamerError(StreamerError::RecvTimeoutError(
+                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                             RecvTimeoutError::Timeout,
                         )) => (),
-                        SigVerifyServiceError::SendError(_) => {
+                        SigVerifyServiceError::Send(_) => {
                             break;
                         }
                         _ => error!("{:?}", e),

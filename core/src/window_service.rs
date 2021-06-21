@@ -2,7 +2,6 @@
 //!   blockstore and retransmitting where required
 //!
 use crate::{
-    cluster_info::ClusterInfo,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
@@ -17,6 +16,7 @@ use crossbeam_channel::{
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
+use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
@@ -134,7 +134,7 @@ fn verify_repair(
         .map(|repair_meta| {
             outstanding_requests.register_response(
                 repair_meta.nonce,
-                &shred,
+                shred,
                 solana_sdk::timing::timestamp(),
             )
         })
@@ -153,7 +153,7 @@ fn prune_shreds_invalid_repair(
         let mut outstanding_requests = outstanding_requests.write().unwrap();
         shreds.retain(|shred| {
             let should_keep = (
-                verify_repair(&mut outstanding_requests, &shred, &repair_infos[i]),
+                verify_repair(&mut outstanding_requests, shred, &repair_infos[i]),
                 i += 1,
             )
                 .0;
@@ -270,13 +270,6 @@ where
                                     }
                                 };
                                 if shred_filter(&shred, last_root) {
-                                    // Mark slot as dead if the current shred is on the boundary
-                                    // of max shreds per slot. However, let the current shred
-                                    // get retransmitted. It'll allow peer nodes to see this shred
-                                    // and trigger them to mark the slot as dead.
-                                    if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
-                                        let _ = blockstore.set_dead_slot(shred.slot());
-                                    }
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed = shred.seed();
                                     Some((shred, repair_info))
@@ -589,12 +582,12 @@ impl WindowService {
         H: Fn(),
     {
         match e {
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => true,
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => {
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => true,
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => {
                 handle_timeout();
                 false
             }
-            Error::CrossbeamSendError => true,
+            Error::CrossbeamSend => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);
@@ -614,7 +607,7 @@ impl WindowService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::contact_info::ContactInfo;
+    use solana_gossip::contact_info::ContactInfo;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
@@ -637,7 +630,7 @@ mod test {
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(&entries, true, 0).0
+        shredder.entries_to_shreds(entries, true, 0).0
     }
 
     #[test]

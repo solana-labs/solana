@@ -1,10 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
-pub use solana_core::{cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, test_validator};
+pub use solana_core::test_validator;
+pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
 use {
     console::style,
     indicatif::{ProgressDrawTarget, ProgressStyle},
     log::*,
-    std::{env, process::exit, thread::JoinHandle},
+    std::{borrow::Cow, env, fmt::Display, process::exit, thread::JoinHandle},
 };
 
 pub mod admin_rpc_service;
@@ -60,7 +61,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             #[cfg(not(unix))]
             {
                 println!("logging to a file is not supported on this platform");
-                ()
+                None
             }
         }
     };
@@ -116,7 +117,7 @@ pub struct ProgressBar {
 }
 
 impl ProgressBar {
-    pub fn set_message(&self, msg: &str) {
+    pub fn set_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {
         if self.is_term {
             self.progress_bar.set_message(msg);
         } else {
@@ -124,7 +125,7 @@ impl ProgressBar {
         }
     }
 
-    pub fn abandon_with_message(&self, msg: &str) {
+    pub fn abandon_with_message<T: Into<Cow<'static, str>> + Display>(&self, msg: T) {
         if self.is_term {
             self.progress_bar.abandon_with_message(msg);
         } else {

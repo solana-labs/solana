@@ -1,7 +1,7 @@
 import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import {parse as urlParse, format as urlFormat} from 'url';
+import {parse as urlParse} from 'url';
 import fetch, {Response} from 'node-fetch';
 import {
   type as pick,
@@ -27,6 +27,7 @@ import RpcClient from 'jayson/lib/client/browser';
 import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
+import {EpochSchedule} from './epoch-schedule';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -36,6 +37,7 @@ import {Message} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
+import {makeWebsocketUrl} from './util/url';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -372,23 +374,6 @@ const GetEpochInfoResult = pick({
   transactionCount: optional(number()),
 });
 
-/**
- * Epoch schedule
- * (see https://docs.solana.com/terminology#epoch)
- */
-export type EpochSchedule = {
-  /** The maximum number of slots in each epoch */
-  slotsPerEpoch: number;
-  /** The number of slots before beginning of an epoch to calculate a leader schedule for that epoch */
-  leaderScheduleSlotOffset: number;
-  /** Indicates whether epochs start short and grow */
-  warmup: boolean;
-  /** The first epoch with `slotsPerEpoch` slots */
-  firstNormalEpoch: number;
-  /** The first slot of `firstNormalEpoch` */
-  firstNormalSlot: number;
-};
-
 const GetEpochScheduleResult = pick({
   slotsPerEpoch: number(),
   leaderScheduleSlotOffset: number(),
@@ -511,6 +496,25 @@ export type ConfirmedTransactionMeta = {
 };
 
 /**
+ * A processed transaction from the RPC API
+ */
+export type TransactionResponse = {
+  /** The slot during which the transaction was processed */
+  slot: number;
+  /** The transaction */
+  transaction: {
+    /** The transaction message */
+    message: Message;
+    /** The transaction signatures */
+    signatures: string[];
+  };
+  /** Metadata produced from the transaction */
+  meta: ConfirmedTransactionMeta | null;
+  /** The unix timestamp of when the transaction was processed */
+  blockTime?: number | null;
+};
+
+/**
  * A confirmed transaction on the ledger
  */
 export type ConfirmedTransaction = {
@@ -597,6 +601,43 @@ export type ParsedConfirmedTransaction = {
 };
 
 /**
+ * A processed block fetched from the RPC API
+ */
+export type BlockResponse = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of transactions with status meta and original message */
+  transactions: Array<{
+    /** The transaction */
+    transaction: {
+      /** The transaction message */
+      message: Message;
+      /** The transaction signatures */
+      signatures: string[];
+    };
+    /** Metadata produced from the transaction */
+    meta: ConfirmedTransactionMeta | null;
+  }>;
+  /** Vector of block rewards */
+  rewards?: Array<{
+    /** Public key of reward recipient */
+    pubkey: string;
+    /** Reward value in lamports */
+    lamports: number;
+    /** Account balance after reward is applied */
+    postBalance: number | null;
+    /** Type of reward received */
+    rewardType: string | null;
+  }>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
+};
+
+/**
  * A ConfirmedBlock on the ledger
  */
 export type ConfirmedBlock = {
@@ -657,6 +698,7 @@ function createRpcClient(
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
   fetchMiddleware?: FetchMiddleware,
+  disableRetryOnRateLimit?: boolean,
 ): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
@@ -705,6 +747,9 @@ function createRpcClient(
         }
 
         if (res.status !== 429 /* Too many requests */) {
+          break;
+        }
+        if (disableRetryOnRateLimit === true) {
           break;
         }
         too_many_requests_retries -= 1;
@@ -1234,9 +1279,6 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
  */
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult(number());
 
-/**
- * @internal
- */
 const ConfirmedTransactionResult = pick({
   signatures: array(string()),
   message: pick({
@@ -1256,15 +1298,6 @@ const ConfirmedTransactionResult = pick({
     recentBlockhash: string(),
   }),
 });
-
-const TransactionFromConfirmed = coerce(
-  instance(Transaction),
-  ConfirmedTransactionResult,
-  result => {
-    const {message, signatures} = result;
-    return Transaction.populate(new Message(message), signatures);
-  },
-);
 
 const ParsedInstructionResult = pick({
   parsed: unknown(),
@@ -1395,7 +1428,7 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
       parentSlot: number(),
       transactions: array(
         pick({
-          transaction: TransactionFromConfirmed,
+          transaction: ConfirmedTransactionResult,
           meta: nullable(ConfirmedTransactionMetaResult),
         }),
       ),
@@ -1436,9 +1469,9 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
   nullable(
     pick({
       slot: number(),
-      transaction: TransactionFromConfirmed,
       meta: ConfirmedTransactionMetaResult,
       blockTime: optional(nullable(number())),
+      transaction: ConfirmedTransactionResult,
     }),
   ),
 );
@@ -1873,10 +1906,14 @@ export type FetchMiddleware = (
 export type ConnectionConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
+  /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
+  wsEndpoint?: string;
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
+  /** Optional Disable retring calls when server responds with HTTP 429 (Too Many Requests) */
+  disableRetryOnRateLimit?: boolean;
 };
 
 /**
@@ -1885,6 +1922,7 @@ export type ConnectionConfig = {
 export class Connection {
   /** @internal */ _commitment?: Commitment;
   /** @internal */ _rpcEndpoint: string;
+  /** @internal */ _rpcWsEndpoint: string;
   /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
   /** @internal */ _rpcBatchRequest: RpcBatchRequest;
@@ -1904,6 +1942,11 @@ export class Connection {
     lastFetch: number;
     simulatedSignatures: Array<string>;
     transactionSignatures: Array<string>;
+  } = {
+    recentBlockhash: null,
+    lastFetch: 0,
+    transactionSignatures: [],
+    simulatedSignatures: [],
   };
 
   /** @internal */ _accountChangeSubscriptionCounter: number = 0;
@@ -1951,50 +1994,37 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    this._rpcEndpoint = endpoint;
-
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
+    let wsEndpoint;
     let httpHeaders;
     let fetchMiddleware;
+    let disableRetryOnRateLimit;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
       this._commitment = commitmentOrConfig.commitment;
+      wsEndpoint = commitmentOrConfig.wsEndpoint;
       httpHeaders = commitmentOrConfig.httpHeaders;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
+      disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
+
+    this._rpcEndpoint = endpoint;
+    this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
       url.href,
       useHttps,
       httpHeaders,
       fetchMiddleware,
+      disableRetryOnRateLimit,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
 
-    this._blockhashInfo = {
-      recentBlockhash: null,
-      lastFetch: 0,
-      transactionSignatures: [],
-      simulatedSignatures: [],
-    };
-
-    url.protocol = useHttps ? 'wss:' : 'ws:';
-    url.host = '';
-    // Only shift the port by +1 as a convention for ws(s) only if given endpoint
-    // is explictly specifying the endpoint port (HTTP-based RPC), assuming
-    // we're directly trying to connect to solana-validator's ws listening port.
-    // When the endpoint omits the port, we're connecting to the protocol
-    // default ports: http(80) or https(443) and it's assumed we're behind a reverse
-    // proxy which manages WebSocket upgrade and backend port redirection.
-    if (url.port !== null) {
-      url.port = String(Number(url.port) + 1);
-    }
-
-    this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
+    this._rpcWebSocket = new RpcWebSocketClient(this._rpcWsEndpoint, {
       autoconnect: false,
       max_reconnects: Infinity,
     });
@@ -2668,7 +2698,8 @@ export class Connection {
 
   /**
    * Fetch the current total currency supply of the cluster in lamports
-   * @deprecated Deprecated since v1.2.8. Use `Connection.getSupply()` instead.
+   *
+   * @deprecated Deprecated since v1.2.8. Please use {@link getSupply} instead.
    */
   async getTotalSupply(commitment?: Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
@@ -2741,7 +2772,14 @@ export class Connection {
     if ('error' in res) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
-    return res.result;
+    const epochSchedule = res.result;
+    return new EpochSchedule(
+      epochSchedule.slotsPerEpoch,
+      epochSchedule.leaderScheduleSlotOffset,
+      epochSchedule.warmup,
+      epochSchedule.firstNormalEpoch,
+      epochSchedule.firstNormalSlot,
+    );
   }
 
   /**
@@ -2870,24 +2908,99 @@ export class Connection {
   }
 
   /**
+   * Fetch a processed block from the cluster.
+   */
+  async getBlock(
+    slot: number,
+    opts?: {commitment?: Finality},
+  ): Promise<BlockResponse | null> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [slot],
+      opts && opts.commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
+    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+
+    if ('error' in res) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
+    }
+
+    const result = res.result;
+    if (!result) return result;
+
+    return {
+      ...result,
+      transactions: result.transactions.map(({transaction, meta}) => {
+        const message = new Message(transaction.message);
+        return {
+          meta,
+          transaction: {
+            ...transaction,
+            message,
+          },
+        };
+      }),
+    };
+  }
+
+  /**
+   * Fetch a processed transaction from the cluster.
+   */
+  async getTransaction(
+    signature: string,
+    opts?: {commitment?: Finality},
+  ): Promise<TransactionResponse | null> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [signature],
+      opts && opts.commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
+    const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
+    if ('error' in res) {
+      throw new Error(
+        'failed to get confirmed transaction: ' + res.error.message,
+      );
+    }
+
+    const result = res.result;
+    if (!result) return result;
+
+    return {
+      ...result,
+      transaction: {
+        ...result.transaction,
+        message: new Message(result.transaction.message),
+      },
+    };
+  }
+
+  /**
    * Fetch a list of Transactions and transaction statuses from the cluster
-   * for a confirmed block
+   * for a confirmed block.
+   *
+   * @deprecated Deprecated since v1.13.0. Please use {@link getBlock} instead.
    */
   async getConfirmedBlock(
     slot: number,
     commitment?: Finality,
   ): Promise<ConfirmedBlock> {
-    const args = this._buildArgsAtLeastConfirmed([slot], commitment);
-    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
-    if ('error' in res) {
-      throw new Error('failed to get confirmed block: ' + res.error.message);
-    }
-    const result = res.result;
+    const result = await this.getBlock(slot, {commitment});
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
     }
-    return result;
+
+    return {
+      ...result,
+      transactions: result.transactions.map(({transaction, meta}) => {
+        return {
+          meta,
+          transaction: Transaction.populate(
+            transaction.message,
+            transaction.signatures,
+          ),
+        };
+      }),
+    };
   }
 
   /**
@@ -2925,15 +3038,13 @@ export class Connection {
     signature: TransactionSignature,
     commitment?: Finality,
   ): Promise<ConfirmedTransaction | null> {
-    const args = this._buildArgsAtLeastConfirmed([signature], commitment);
-    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
-    if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed transaction: ' + res.error.message,
-      );
-    }
-    return res.result;
+    const result = await this.getTransaction(signature, {commitment});
+    if (!result) return result;
+    const {message, signatures} = result.transaction;
+    return {
+      ...result,
+      transaction: Transaction.populate(message, signatures),
+    };
   }
 
   /**
@@ -2994,7 +3105,8 @@ export class Connection {
   /**
    * Fetch a list of all the confirmed signatures for transactions involving an address
    * within a specified slot range. Max range allowed is 10,000 slots.
-   * @deprecated Deprecated since v1.3. Use `Connection.getConfirmedSignaturesForAddress2()` instead.
+   *
+   * @deprecated Deprecated since v1.3. Please use {@link getConfirmedSignaturesForAddress2} instead.
    *
    * @param address queried address
    * @param startSlot start slot, inclusive
@@ -3020,9 +3132,8 @@ export class Connection {
           'finalized',
         );
         if (block.signatures.length > 0) {
-          options.until = block.signatures[
-            block.signatures.length - 1
-          ].toString();
+          options.until =
+            block.signatures[block.signatures.length - 1].toString();
         }
       } catch (err) {
         if (err.message.includes('skipped')) {
@@ -3043,9 +3154,8 @@ export class Connection {
       try {
         const block = await this.getConfirmedBlockSignatures(endSlot);
         if (block.signatures.length > 0) {
-          options.before = block.signatures[
-            block.signatures.length - 1
-          ].toString();
+          options.before =
+            block.signatures[block.signatures.length - 1].toString();
         }
       } catch (err) {
         if (err.message.includes('skipped')) {
@@ -3138,15 +3248,26 @@ export class Connection {
   }
 
   /**
-   * Request an allocation of lamports to the specified account
+   * Request an allocation of lamports to the specified address
+   *
+   * ```typescript
+   * import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+   *
+   * (async () => {
+   *   const connection = new Connection("https://api.testnet.solana.com", "confirmed");
+   *   const myAddress = new PublicKey("2nr1bHFT86W9tGnyvmYW4vcHKsQB3sVQfnddasz4kExM");
+   *   const signature = await connection.requestAirdrop(myAddress, LAMPORTS_PER_SOL);
+   *   await connection.confirmTransaction(signature);
+   * })();
+   * ```
    */
   async requestAirdrop(
     to: PublicKey,
-    amount: number,
+    lamports: number,
   ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('requestAirdrop', [
       to.toBase58(),
-      amount,
+      lamports,
     ]);
     const res = create(unsafeRes, RequestAirdropRpcResult);
     if ('error' in res) {

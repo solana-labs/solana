@@ -9,6 +9,7 @@ import {
   Account,
   Authorized,
   Connection,
+  EpochSchedule,
   SystemProgram,
   Transaction,
   LAMPORTS_PER_SOL,
@@ -24,7 +25,6 @@ import {
   BLOCKHASH_CACHE_TIMEOUT_MS,
   Commitment,
   EpochInfo,
-  EpochSchedule,
   InflationGovernor,
   SlotInfo,
 } from '../src/connection';
@@ -383,9 +383,8 @@ describe('Connection', () => {
         value: [],
       });
 
-      const programAccountsDontMatchFilter = await connection.getProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDontMatchFilter =
+        await connection.getProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [
             {
@@ -395,8 +394,7 @@ describe('Connection', () => {
               },
             },
           ],
-        },
-      );
+        });
       expect(programAccountsDontMatchFilter).to.have.length(0);
     }
 
@@ -472,13 +470,11 @@ describe('Connection', () => {
         value: [],
       });
 
-      const programAccountsDontMatchFilter = await connection.getParsedProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDontMatchFilter =
+        await connection.getParsedProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [{dataSize: 2}],
-        },
-      );
+        });
       expect(programAccountsDontMatchFilter).to.have.length(0);
     }
 
@@ -525,9 +521,8 @@ describe('Connection', () => {
         ],
       });
 
-      const programAccountsDoMatchFilter = await connection.getParsedProgramAccounts(
-        programId.publicKey,
-        {
+      const programAccountsDoMatchFilter =
+        await connection.getParsedProgramAccounts(programId.publicKey, {
           commitment: 'confirmed',
           filters: [
             {
@@ -537,8 +532,7 @@ describe('Connection', () => {
               },
             },
           ],
-        },
-      );
+        });
       expect(programAccountsDoMatchFilter).to.have.length(2);
     }
   });
@@ -889,8 +883,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -914,10 +907,8 @@ describe('Connection', () => {
       slot++;
       const block = await connection.getConfirmedBlock(slot);
       if (block.transactions.length > 0) {
-        const {
-          signature,
-          publicKey,
-        } = block.transactions[0].transaction.signatures[0];
+        const {signature, publicKey} =
+          block.transactions[0].transaction.signatures[0];
         if (signature) {
           address = publicKey;
           expectedSignature = bs58.encode(signature);
@@ -973,11 +964,12 @@ describe('Connection', () => {
       ],
     });
 
-    const confirmedSignatures = await connection.getConfirmedSignaturesForAddress(
-      address,
-      slot,
-      slot + 1,
-    );
+    const confirmedSignatures =
+      await connection.getConfirmedSignaturesForAddress(
+        address,
+        slot,
+        slot + 1,
+      );
     expect(confirmedSignatures.includes(expectedSignature)).to.be.true;
 
     const badSlot = Number.MAX_SAFE_INTEGER - 1;
@@ -1008,10 +1000,8 @@ describe('Connection', () => {
       ],
     });
 
-    const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
-      address,
-      {limit: 1},
-    );
+    const confirmedSignatures2 =
+      await connection.getConfirmedSignaturesForAddress2(address, {limit: 1});
     expect(confirmedSignatures2).to.have.length(1);
     if (mockServer) {
       expect(confirmedSignatures2[0].signature).to.eq(expectedSignature);
@@ -1066,8 +1056,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -1294,6 +1283,149 @@ describe('Connection', () => {
     expect(result).to.be.empty;
   });
 
+  it('get transaction', async () => {
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 1,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [1],
+      value: {
+        blockTime: 1614281964,
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // Find a block that has a transaction, usually Block 1
+    let slot = 0;
+    let confirmedTransaction: string | undefined;
+    while (!confirmedTransaction) {
+      slot++;
+      const block = await connection.getBlock(slot);
+      if (block && block.transactions.length > 0) {
+        confirmedTransaction = block.transactions[0].transaction.signatures[0];
+      }
+    }
+
+    await mockRpcResponse({
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction],
+      value: {
+        slot,
+        transaction: {
+          message: {
+            accountKeys: [
+              'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+              '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+              'SysvarS1otHashes111111111111111111111111111',
+              'SysvarC1ock11111111111111111111111111111111',
+              'Vote111111111111111111111111111111111111111',
+            ],
+            header: {
+              numReadonlySignedAccounts: 0,
+              numReadonlyUnsignedAccounts: 3,
+              numRequiredSignatures: 2,
+            },
+            instructions: [
+              {
+                accounts: [1, 2, 3],
+                data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                programIdIndex: 4,
+              },
+            ],
+            recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+          },
+          signatures: [
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+          ],
+        },
+        meta: {
+          fee: 10000,
+          postBalances: [499260347380, 15298080, 1, 1, 1],
+          preBalances: [499260357380, 15298080, 1, 1, 1],
+          status: {Ok: null},
+          err: null,
+        },
+      },
+    });
+
+    const result = await connection.getTransaction(confirmedTransaction);
+
+    if (!result) {
+      expect(result).to.be.ok;
+      return;
+    }
+
+    const resultSignature = result.transaction.signatures[0];
+    expect(resultSignature).to.eq(confirmedTransaction);
+
+    const newAddress = Keypair.generate().publicKey;
+    const recentSignature = await helpers.airdrop({
+      connection,
+      address: newAddress,
+      amount: 1,
+    });
+
+    await mockRpcResponse({
+      method: 'getConfirmedTransaction',
+      params: [recentSignature],
+      value: null,
+    });
+
+    // Signature hasn't been finalized yet
+    const nullResponse = await connection.getTransaction(recentSignature);
+    expect(nullResponse).to.be.null;
+  });
+
   it('get confirmed transaction', async () => {
     await mockRpcResponse({
       method: 'getSlot',
@@ -1339,8 +1471,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],
@@ -1391,8 +1522,7 @@ describe('Connection', () => {
             instructions: [
               {
                 accounts: [1, 2, 3],
-                data:
-                  '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                 programIdIndex: 4,
               },
             ],
@@ -1470,8 +1600,7 @@ describe('Connection', () => {
               instructions: [
                 {
                   accounts: ['va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf'],
-                  data:
-                    '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                  data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                   programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
                 },
               ],
@@ -1549,6 +1678,120 @@ describe('Connection', () => {
     });
   }
 
+  it('get block', async () => {
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 1,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [0],
+      value: {
+        blockTime: 1614281964,
+        blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [],
+      },
+    });
+
+    // Block 0 never has any transactions in test validator
+    const block0 = await connection.getBlock(0);
+    if (!block0) {
+      expect(block0).not.to.be.null;
+      return;
+    }
+
+    const blockhash0 = block0.blockhash;
+    expect(block0.transactions).to.have.length(0);
+    expect(blockhash0).not.to.be.null;
+    expect(block0.previousBlockhash).not.to.be.null;
+    expect(block0.parentSlot).to.eq(0);
+
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [1],
+      value: {
+        blockTime: 1614281964,
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // Find a block that has a transaction, usually Block 1
+    let x = 1;
+    while (x < 10) {
+      const block1 = await connection.getBlock(x);
+      if (block1 && block1.transactions.length >= 1) {
+        expect(block1.previousBlockhash).to.eq(blockhash0);
+        expect(block1.blockhash).not.to.be.null;
+        expect(block1.parentSlot).to.eq(0);
+        expect(block1.transactions[0].transaction).not.to.be.null;
+        break;
+      }
+      x++;
+    }
+
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [Number.MAX_SAFE_INTEGER],
+      error: {
+        message: `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
+      },
+    });
+    await expect(
+      connection.getBlock(Number.MAX_SAFE_INTEGER),
+    ).to.be.rejectedWith(
+      `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
+    );
+  });
+
   it('get confirmed block', async () => {
     await mockRpcResponse({
       method: 'getSlot',
@@ -1614,8 +1857,7 @@ describe('Connection', () => {
                 instructions: [
                   {
                     accounts: [1, 2, 3],
-                    data:
-                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
                     programIdIndex: 4,
                   },
                 ],

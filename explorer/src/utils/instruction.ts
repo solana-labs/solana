@@ -168,10 +168,8 @@ export function getTokenInstructionType(
   signatureInfo: ConfirmedSignatureInfo,
   index: number
 ): InstructionType | undefined {
-  const innerInstructions: (
-    | ParsedInstruction
-    | PartiallyDecodedInstruction
-  )[] = [];
+  const innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[] =
+    [];
 
   if (transaction.meta?.innerInstructions) {
     transaction.meta.innerInstructions.forEach((ix) => {

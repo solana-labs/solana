@@ -93,13 +93,15 @@ impl NativeLoader {
 
     #[cfg(windows)]
     fn library_open(path: &Path) -> Result<Library, libloading::Error> {
-        Library::new(path)
+        unsafe { Library::new(path) }
     }
 
     #[cfg(not(windows))]
     fn library_open(path: &Path) -> Result<Library, libloading::Error> {
-        // Linux tls bug can cause crash on dlclose(), workaround by never unloading
-        Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+        unsafe {
+            // Linux tls bug can cause crash on dlclose(), workaround by never unloading
+            Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+        }
     }
 
     fn get_entrypoint<T>(
@@ -110,7 +112,7 @@ impl NativeLoader {
         if let Some(entrypoint) = cache.get(name) {
             Ok(entrypoint.clone())
         } else {
-            match Self::library_open(&Self::create_path(&name)?) {
+            match Self::library_open(&Self::create_path(name)?) {
                 Ok(library) => {
                     let result = unsafe { library.get::<T>(name.as_bytes()) };
                     match result {

@@ -36,16 +36,17 @@ use solana_sdk::{
     feature, feature_set,
     message::Message,
     pubkey::Pubkey,
+    stake::{
+        self,
+        instruction::{self as stake_instruction, LockupArgs, StakeError},
+        state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
+    },
     system_instruction::SystemError,
     sysvar::{
         clock,
         stake_history::{self, StakeHistory},
     },
     transaction::Transaction,
-};
-use solana_stake_program::{
-    stake_instruction::{self, LockupArgs, StakeError},
-    stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{ops::Deref, sync::Arc};
@@ -971,7 +972,7 @@ pub fn process_create_stake_account(
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
+        Pubkey::create_with_seed(&stake_account.pubkey(), seed, &stake::program::id())?
     } else {
         stake_account.pubkey()
     };
@@ -1039,7 +1040,7 @@ pub fn process_create_stake_account(
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
-            let err_msg = if stake_account.owner == solana_stake_program::id() {
+            let err_msg = if stake_account.owner == stake::program::id() {
                 format!("Stake account {} already exists", stake_account_address)
             } else {
                 format!(
@@ -1084,7 +1085,7 @@ pub fn process_create_stake_account(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<SystemError>(result, &config)
+        log_instruction_custom_error::<SystemError>(result, config)
     }
 }
 
@@ -1171,7 +1172,7 @@ pub fn process_stake_authorize(
         } else {
             rpc_client.send_and_confirm_transaction_with_spinner(&tx)
         };
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -1195,7 +1196,7 @@ pub fn process_deactivate_stake_account(
     let stake_authority = config.signers[stake_authority];
 
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account_pubkey, seed, &solana_stake_program::id())?
+        Pubkey::create_with_seed(stake_account_pubkey, seed, &stake::program::id())?
     } else {
         *stake_account_pubkey
     };
@@ -1247,7 +1248,7 @@ pub fn process_deactivate_stake_account(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -1273,7 +1274,7 @@ pub fn process_withdraw_stake(
     let custodian = custodian.map(|index| config.signers[index]);
 
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account_pubkey, seed, &solana_stake_program::id())?
+        Pubkey::create_with_seed(stake_account_pubkey, seed, &stake::program::id())?
     } else {
         *stake_account_pubkey
     };
@@ -1346,7 +1347,7 @@ pub fn process_withdraw_stake(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<SystemError>(result, &config)
+        log_instruction_custom_error::<SystemError>(result, config)
     }
 }
 
@@ -1381,10 +1382,10 @@ pub fn process_split_stake(
     }
     check_unique_pubkeys(
         (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
-        (&stake_account_pubkey, "stake_account".to_string()),
+        (stake_account_pubkey, "stake_account".to_string()),
     )?;
     check_unique_pubkeys(
-        (&stake_account_pubkey, "stake_account".to_string()),
+        (stake_account_pubkey, "stake_account".to_string()),
         (
             &split_stake_account.pubkey(),
             "split_stake_account".to_string(),
@@ -1394,18 +1395,14 @@ pub fn process_split_stake(
     let stake_authority = config.signers[stake_authority];
 
     let split_stake_account_address = if let Some(seed) = split_stake_account_seed {
-        Pubkey::create_with_seed(
-            &split_stake_account.pubkey(),
-            &seed,
-            &solana_stake_program::id(),
-        )?
+        Pubkey::create_with_seed(&split_stake_account.pubkey(), seed, &stake::program::id())?
     } else {
         split_stake_account.pubkey()
     };
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == solana_stake_program::id() {
+            let err_msg = if stake_account.owner == stake::program::id() {
                 format!(
                     "Stake account {} already exists",
                     split_stake_account_address
@@ -1436,7 +1433,7 @@ pub fn process_split_stake(
 
     let ixs = if let Some(seed) = split_stake_account_seed {
         stake_instruction::split_with_seed(
-            &stake_account_pubkey,
+            stake_account_pubkey,
             &stake_authority.pubkey(),
             lamports,
             &split_stake_account_address,
@@ -1446,7 +1443,7 @@ pub fn process_split_stake(
         .with_memo(memo)
     } else {
         stake_instruction::split(
-            &stake_account_pubkey,
+            stake_account_pubkey,
             &stake_authority.pubkey(),
             lamports,
             &split_stake_account_address,
@@ -1495,7 +1492,7 @@ pub fn process_split_stake(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -1518,19 +1515,19 @@ pub fn process_merge_stake(
 
     check_unique_pubkeys(
         (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
-        (&stake_account_pubkey, "stake_account".to_string()),
+        (stake_account_pubkey, "stake_account".to_string()),
     )?;
     check_unique_pubkeys(
         (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
         (
-            &source_stake_account_pubkey,
+            source_stake_account_pubkey,
             "source_stake_account".to_string(),
         ),
     )?;
     check_unique_pubkeys(
-        (&stake_account_pubkey, "stake_account".to_string()),
+        (stake_account_pubkey, "stake_account".to_string()),
         (
-            &source_stake_account_pubkey,
+            source_stake_account_pubkey,
             "source_stake_account".to_string(),
         ),
     )?;
@@ -1540,7 +1537,7 @@ pub fn process_merge_stake(
     if !sign_only {
         for stake_account_address in &[stake_account_pubkey, source_stake_account_pubkey] {
             if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
-                if stake_account.owner != solana_stake_program::id() {
+                if stake_account.owner != stake::program::id() {
                     return Err(CliError::BadParameter(format!(
                         "Account {} is not a stake account",
                         stake_account_address
@@ -1555,8 +1552,8 @@ pub fn process_merge_stake(
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = stake_instruction::merge(
-        &stake_account_pubkey,
-        &source_stake_account_pubkey,
+        stake_account_pubkey,
+        source_stake_account_pubkey,
         &stake_authority.pubkey(),
     )
     .with_memo(memo);
@@ -1606,7 +1603,7 @@ pub fn process_merge_stake(
             config.commitment,
             config.send_transaction_config,
         );
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -1677,7 +1674,7 @@ pub fn process_stake_set_lockup(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -1876,7 +1873,7 @@ pub fn process_show_stake_account(
     with_rewards: Option<usize>,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
-    if stake_account.owner != solana_stake_program::id() {
+    if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a stake account",
             stake_account_address,
@@ -2079,7 +2076,7 @@ pub fn process_delegate_stake(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<StakeError>(result, &config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
@@ -2117,10 +2114,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner {
-            path: default_keypair_file.clone(),
-            arg_name: String::new(),
-        };
+        let default_signer = DefaultSigner::new("", &default_keypair_file);
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();

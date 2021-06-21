@@ -1,12 +1,11 @@
 import React from "react";
-import { ConfirmedBlock } from "@solana/web3.js";
+import { BlockResponse } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
-import bs58 from "bs58";
 
 const PAGE_SIZE = 25;
 
-export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
+export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
 
   if (block.transactions.length === 0) {
@@ -32,7 +31,7 @@ export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
               let statusText;
               let statusClass;
               let signature: React.ReactNode;
-              if (tx.meta?.err || !tx.transaction.signature) {
+              if (tx.meta?.err || tx.transaction.signatures.length === 0) {
                 statusClass = "warning";
                 statusText = "Failed";
               } else {
@@ -40,12 +39,9 @@ export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
                 statusText = "Success";
               }
 
-              if (tx.transaction.signature) {
+              if (tx.transaction.signatures.length > 0) {
                 signature = (
-                  <Signature
-                    signature={bs58.encode(tx.transaction.signature)}
-                    link
-                  />
+                  <Signature signature={tx.transaction.signatures[0]} link />
                 );
               }
 

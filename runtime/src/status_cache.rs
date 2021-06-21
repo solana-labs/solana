@@ -143,7 +143,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(stored_forks) = keymap.get(key_slice) {
             let res = stored_forks
                 .iter()
-                .find(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
+                .find(|(f, _)| ancestors.get(f) || self.roots.get(f).is_some())
                 .cloned();
             if res.is_some() {
                 return res;
@@ -251,7 +251,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 .iter()
                 .for_each(|(tx_hash, (key_index, statuses))| {
                     for (key_slice, res) in statuses.iter() {
-                        self.insert_with_slice(&tx_hash, *slot, *key_index, *key_slice, res.clone())
+                        self.insert_with_slice(tx_hash, *slot, *key_index, *key_slice, res.clone())
                     }
                 });
             if *is_root {

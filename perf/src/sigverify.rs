@@ -519,11 +519,11 @@ mod tests {
         let packet_offsets = sigverify::get_packet_offsets(&packet, 0);
 
         assert_eq!(
-            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            memfind(&tx_bytes, tx.signatures[0].as_ref()),
             Some(SIG_OFFSET)
         );
         assert_eq!(
-            memfind(&tx_bytes, &tx.message().account_keys[0].as_ref()),
+            memfind(&tx_bytes, tx.message().account_keys[0].as_ref()),
             Some(packet_offsets.pubkey_start as usize)
         );
         assert_eq!(
@@ -531,7 +531,7 @@ mod tests {
             Some(packet_offsets.msg_start as usize)
         );
         assert_eq!(
-            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            memfind(&tx_bytes, tx.signatures[0].as_ref()),
             Some(packet_offsets.sig_start as usize)
         );
         assert_eq!(packet_offsets.sig_len, 1);
@@ -667,7 +667,7 @@ mod tests {
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() <= PACKET_DATA_SIZE);
         assert_eq!(
-            memfind(&tx_bytes, &tx0.signatures[0].as_ref()),
+            memfind(&tx_bytes, tx0.signatures[0].as_ref()),
             Some(SIG_OFFSET)
         );
         let tx1 = deserialize(&tx_bytes).unwrap();

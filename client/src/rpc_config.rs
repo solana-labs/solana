@@ -23,14 +23,24 @@ pub struct RpcSendTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionAccountsConfig {
+    pub encoding: Option<UiAccountEncoding>,
+    pub addresses: Vec<String>,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSimulateTransactionConfig {
     #[serde(default)]
     pub sig_verify: bool,
+    #[serde(default)]
+    pub replace_recent_blockhash: bool,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub encoding: Option<UiTransactionEncoding>,
+    pub accounts: Option<RpcSimulateTransactionAccountsConfig>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]

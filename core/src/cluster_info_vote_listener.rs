@@ -1,9 +1,5 @@
 use crate::{
-    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    crds::Cursor,
-    crds_value::CrdsValueLabel,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    poh_recorder::PohRecorder,
     replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
     sigverify,
@@ -15,9 +11,15 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
+use solana_gossip::{
+    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+    crds::Cursor,
+    crds_value::CrdsValueLabel,
+};
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     rpc_subscriptions::RpcSubscriptions,
@@ -31,7 +33,7 @@ use solana_runtime::{
     vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
 };
 use solana_sdk::{
-    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT},
+    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     hash::Hash,
     pubkey::Pubkey,
@@ -108,7 +110,7 @@ impl VoteTracker {
             epoch_schedule: *root_bank.epoch_schedule(),
             ..VoteTracker::default()
         };
-        vote_tracker.progress_with_new_root_bank(&root_bank);
+        vote_tracker.progress_with_new_root_bank(root_bank);
         assert_eq!(
             *vote_tracker.leader_schedule_epoch.read().unwrap(),
             root_bank.get_leader_schedule_epoch(root_bank.slot())
@@ -382,15 +384,20 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
+            let would_be_leader = poh_recorder
+                .lock()
+                .unwrap()
+                .would_be_leader(20 * DEFAULT_TICKS_PER_SLOT);
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 &mut update_version,
+                would_be_leader,
             ) {
                 match e {
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
                         return Ok(());
                     }
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -472,8 +479,8 @@ impl ClusterInfoVoteListener {
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
                 }
                 Err(e) => match e {
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)
-                    | Error::ReadyTimeoutError => (),
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout)
+                    | Error::ReadyTimeout => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -596,7 +603,7 @@ impl ClusterInfoVoteListener {
             if slot == last_vote_slot {
                 let vote_accounts = Stakes::vote_accounts(epoch_stakes.stakes());
                 let stake = vote_accounts
-                    .get(&vote_pubkey)
+                    .get(vote_pubkey)
                     .map(|(stake, _)| *stake)
                     .unwrap_or_default();
                 let total_stake = epoch_stakes.total_stake();
@@ -685,7 +692,7 @@ impl ClusterInfoVoteListener {
         // voters trying to make votes for slots earlier than the epoch for
         // which they are authorized
         let actual_authorized_voter =
-            vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
+            vote_tracker.get_authorized_voter(vote_pubkey, *last_vote_slot);
 
         if actual_authorized_voter.is_none() {
             return false;
@@ -693,7 +700,7 @@ impl ClusterInfoVoteListener {
 
         // Voting without the correct authorized pubkey, dump the vote
         if !VoteTracker::vote_contains_authorized_voter(
-            &gossip_tx,
+            gossip_tx,
             &actual_authorized_voter.unwrap(),
         ) {
             return false;
@@ -731,7 +738,7 @@ impl ClusterInfoVoteListener {
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
-                &vote_tracker,
+                vote_tracker,
                 root_bank,
                 subscriptions,
                 verified_vote_sender,

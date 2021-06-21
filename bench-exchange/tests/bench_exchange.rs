@@ -1,13 +1,11 @@
 use log::*;
 use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
-use solana_core::{
-    gossip_service::{discover_cluster, get_multi_client},
-    validator::ValidatorConfig,
-};
+use solana_core::validator::ValidatorConfig;
 use solana_exchange_program::{
     exchange_processor::process_instruction, id, solana_exchange_program,
 };
 use solana_faucet::faucet::run_local_faucet_with_port;
+use solana_gossip::gossip_service::{discover_cluster, get_multi_client};
 use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
     validator_configs::make_identical_validator_configs,

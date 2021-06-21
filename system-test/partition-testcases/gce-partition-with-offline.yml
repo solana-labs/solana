@@ -1,0 +1,27 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "GCE - CPU Only 5 Node - 20% network offline with 2 partitions"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "gce"
+      TESTNET_TAG: "gce-perf-cpu-only"
+      NUMBER_OF_VALIDATOR_NODES: 4
+      ENABLE_GPU: "false"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 10000 --thread-batch-sleep-ms 250"
+      TESTNET_ZONES: "us-west1-a"
+      USE_PUBLIC_IP_ADDRESSES: "true"
+      ADDITIONAL_FLAGS: "--dedicated"
+      APPLY_PARTITIONS: "true"
+      NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
+      PARTITION_ACTIVE_DURATION: 30
+      PARTITION_INACTIVE_DURATION: 30
+      PARTITION_ITERATION_COUNT: 5
+      TEST_TYPE: "partition"
+      EXTRA_PRIMORDIAL_STAKES: 4
+      WAIT_FOR_EQUAL_STAKE: "true"
+      WARMUP_SLOTS_BEFORE_TEST: 400
+      NUMBER_OF_OFFLINE_NODES: 1
+    agents:
+      - "queue=gce-deploy"

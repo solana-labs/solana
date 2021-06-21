@@ -95,6 +95,7 @@ else
     solana-net-shaper
     solana-sys-tuner
     solana-validator
+    rbpf-cli
   )
 
   # Speed up net.sh deploys by excluding unused binaries
@@ -105,7 +106,6 @@ else
       solana-dos
       solana-install-init
       solana-stake-accounts
-      solana-stake-monitor
       solana-test-validator
       solana-tokens
       solana-watchtower

@@ -161,7 +161,7 @@ impl StandardBroadcastRun {
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
-        self.process_receive_results(&blockstore, &ssend, &bsend, receive_results)?;
+        self.process_receive_results(blockstore, &ssend, &bsend, receive_results)?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
         //data
@@ -494,7 +494,7 @@ impl BroadcastRun for StandardBroadcastRun {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
+    use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::genesis_utils::create_genesis_config;
     use solana_ledger::{
         blockstore::Blockstore, entry::create_ticks, get_tmp_ledger_path,

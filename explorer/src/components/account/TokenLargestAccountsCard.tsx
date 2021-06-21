@@ -19,10 +19,10 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const mintInfo = useMintAccountInfo(mintAddress);
   const largestAccounts = useTokenLargestTokens(mintAddress);
   const fetchLargestAccounts = useFetchTokenLargestAccounts();
-  const refreshLargest = React.useCallback(() => fetchLargestAccounts(pubkey), [
-    pubkey,
-    fetchLargestAccounts,
-  ]);
+  const refreshLargest = React.useCallback(
+    () => fetchLargestAccounts(pubkey),
+    [pubkey, fetchLargestAccounts]
+  );
   const { tokenRegistry } = useTokenRegistry();
   const unit = tokenRegistry.get(mintAddress)?.symbol;
   const unitLabel = unit ? `(${unit})` : "";

@@ -9,7 +9,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
+use solana_bpf_loader_program::{BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
@@ -25,7 +25,10 @@ use solana_client::{
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_rbpf::vm::{Config, Executable};
+use solana_rbpf::{
+    verifier,
+    vm::{Config, Executable},
+};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
@@ -150,7 +153,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             pubkey!(Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades \
+                                "Executable program's address, must be a keypair for initial deploys, can be a pubkey for upgrades \
                                 [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
@@ -767,7 +770,7 @@ fn process_program_deploy(
     };
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
 
-    let default_program_keypair = get_default_program_keypair(&program_location);
+    let default_program_keypair = get_default_program_keypair(program_location);
     let (program_signer, program_pubkey) = if let Some(i) = program_signer_index {
         (Some(config.signers[i]), config.signers[i].pubkey())
     } else if let Some(program_pubkey) = program_pubkey {
@@ -843,7 +846,7 @@ fn process_program_deploy(
     };
 
     let (program_data, program_len) = if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(&program_location)?;
+        let program_data = read_and_verify_elf(program_location)?;
         let program_len = program_data.len();
         (program_data, program_len)
     } else if buffer_provided {
@@ -886,6 +889,11 @@ fn process_program_deploy(
     )?;
 
     let result = if do_deploy {
+        if program_signer.is_none() {
+            return Err(
+                "Initial deployments require a keypair be provided for the program id".into(),
+            );
+        }
         do_process_program_write_and_deploy(
             rpc_client.clone(),
             config,
@@ -1254,7 +1262,7 @@ fn process_dump(
                                 UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
                             let program_data = &programdata_account.data[offset..];
                             let mut f = File::create(output_location)?;
-                            f.write_all(&program_data)?;
+                            f.write_all(program_data)?;
                             Ok(format!("Wrote program to {}", output_location))
                         } else {
                             Err(
@@ -1274,7 +1282,7 @@ fn process_dump(
                     let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
                     let program_data = &account.data[offset..];
                     let mut f = File::create(output_location)?;
-                    f.write_all(&program_data)?;
+                    f.write_all(program_data)?;
                     Ok(format!("Wrote program to {}", output_location))
                 } else {
                     Err(format!(
@@ -1305,8 +1313,8 @@ fn close(
 
     let mut tx = Transaction::new_unsigned(Message::new(
         &[bpf_loader_upgradeable::close(
-            &account_pubkey,
-            &recipient_pubkey,
+            account_pubkey,
+            recipient_pubkey,
             &authority_signer.pubkey(),
         )],
         Some(&config.signers[0].pubkey()),
@@ -1415,7 +1423,7 @@ fn process_close(
             if close(
                 rpc_client,
                 config,
-                &address,
+                address,
                 &recipient_pubkey,
                 authority_signer,
             )
@@ -1516,7 +1524,7 @@ fn do_process_program_write_and_deploy(
                 .value
             {
                 complete_partial_program_init(
-                    &loader_id,
+                    loader_id,
                     &config.signers[0].pubkey(),
                     buffer_pubkey,
                     &account,
@@ -1546,7 +1554,7 @@ fn do_process_program_write_and_deploy(
                         buffer_pubkey,
                         minimum_balance,
                         buffer_data_len as u64,
-                        &loader_id,
+                        loader_id,
                     )],
                     minimum_balance,
                 )
@@ -1574,7 +1582,7 @@ fn do_process_program_write_and_deploy(
                 } else {
                     loader_instruction::write(
                         buffer_pubkey,
-                        &loader_id,
+                        loader_id,
                         (i * DATA_CHUNK_SIZE) as u32,
                         chunk.to_vec(),
                     )
@@ -1618,7 +1626,7 @@ fn do_process_program_write_and_deploy(
             )
         } else {
             Message::new(
-                &[loader_instruction::finalize(buffer_pubkey, &loader_id)],
+                &[loader_instruction::finalize(buffer_pubkey, loader_id)],
                 Some(&config.signers[0].pubkey()),
             )
         };
@@ -1744,8 +1752,8 @@ fn do_process_program_upgrade(
     // Create and add final message
     let final_message = Message::new(
         &[bpf_loader_upgradeable::upgrade(
-            &program_id,
-            &buffer_pubkey,
+            program_id,
+            buffer_pubkey,
             &upgrade_authority.pubkey(),
             &config.signers[0].pubkey(),
         )],
@@ -1781,7 +1789,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x)),
+        Some(|x| verifier::check(x)),
         Config::default(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
@@ -1813,7 +1821,7 @@ fn complete_partial_program_init(
             account_data_len as u64,
         ));
         if account.owner != *loader_id {
-            instructions.push(system_instruction::assign(elf_pubkey, &loader_id));
+            instructions.push(system_instruction::assign(elf_pubkey, loader_id));
         }
     }
     if account.lamports < minimum_balance {
@@ -1885,7 +1893,7 @@ fn send_deploy_messages(
                 initial_transaction.try_sign(&[payer_signer], blockhash)?;
             }
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&initial_transaction);
-            log_instruction_custom_error::<SystemError>(result, &config)
+            log_instruction_custom_error::<SystemError>(result, config)
                 .map_err(|err| format!("Account allocation failed: {}", err))?;
         } else {
             return Err("Buffer account not created yet, must provide a key pair".into());
@@ -2009,7 +2017,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     .ok();
             }
             pending_transactions.insert(transaction.signatures[0], transaction);
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Transactions sent",
                 pending_transactions.len(),
                 num_transactions
@@ -2047,7 +2055,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 }
 
                 slot = rpc_client.get_slot()?;
-                progress_bar.set_message(&format!(
+                progress_bar.set_message(format!(
                     "[{}/{}] Transactions confirmed. Retrying in {} slots",
                     num_transactions - pending_transactions.len(),
                     num_transactions,
@@ -2131,10 +2139,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2342,10 +2347,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         // defaults
         let test_command = test_commands.clone().get_matches_from(vec![
@@ -2493,10 +2495,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
@@ -2604,10 +2603,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         let buffer_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
@@ -2664,10 +2660,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file,
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         // defaults
         let buffer_pubkey = Pubkey::new_unique();
@@ -2766,10 +2759,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file.clone(),
-            arg_name: "".to_string(),
-        };
+        let default_signer = DefaultSigner::new("", &keypair_file);
 
         // defaults
         let buffer_pubkey = Pubkey::new_unique();

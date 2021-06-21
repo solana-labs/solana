@@ -7,7 +7,7 @@ process, separated from transaction creation and network broadcast. Examples
 include:
 
 - Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](cli/usage.md#multiple-witnesses)
+  [multi-signature scheme](https://spl.solana.com/token#multisig-usage)
 - Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
   signing device
 

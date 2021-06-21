@@ -296,7 +296,7 @@ fn filter_account_result(
             Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
         } else {
             Box::new(iter::once(UiAccount::encode(
-                pubkey, account, encoding, None, None,
+                pubkey, &account, encoding, None, None,
             )))
         }
     } else {
@@ -335,7 +335,7 @@ fn filter_program_results(
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
         filters.iter().all(|filter_type| match filter_type {
             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
         })
     });
     let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if program_id == &spl_token_id_v2_0()
@@ -347,7 +347,7 @@ fn filter_program_results(
         Box::new(
             keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
+                account: UiAccount::encode(&pubkey, &account, encoding, None, None),
             }),
         )
     };
@@ -614,7 +614,7 @@ impl RpcSubscriptions {
         if let Some(subscription_ids) = subscriptions.get_mut(signature) {
             subscription_ids.retain(|k, _| !notified_ids.contains(k));
             if subscription_ids.is_empty() {
-                subscriptions.remove(&signature);
+                subscriptions.remove(signature);
             }
         }
         notified_ids
@@ -1156,7 +1156,7 @@ impl RpcSubscriptions {
             &subscriptions.gossip_signature_subscriptions,
             bank_forks,
             &commitment_slots,
-            &notifier,
+            notifier,
             "gossip",
         );
     }
@@ -1182,8 +1182,8 @@ impl RpcSubscriptions {
                 pubkey,
                 bank_forks,
                 account_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
+                notifier,
+                commitment_slots,
             )
             .len();
         }
@@ -1200,8 +1200,8 @@ impl RpcSubscriptions {
                 address,
                 bank_forks,
                 logs_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
+                notifier,
+                commitment_slots,
             )
             .len();
         }
@@ -1218,8 +1218,8 @@ impl RpcSubscriptions {
                 program_id,
                 bank_forks,
                 program_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
+                notifier,
+                commitment_slots,
             )
             .len();
         }
@@ -1236,8 +1236,8 @@ impl RpcSubscriptions {
                 signature,
                 bank_forks,
                 signature_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
+                notifier,
+                commitment_slots,
             )
             .len();
         }
@@ -1304,7 +1304,7 @@ impl RpcSubscriptions {
                                     ReceivedSignatureResult::ReceivedSignature,
                                 ),
                             },
-                            &sink,
+                            sink,
                         );
                     }
                 }
@@ -1343,7 +1343,7 @@ pub(crate) mod tests {
         solana_sdk::{
             message::Message,
             signature::{Keypair, Signer},
-            system_instruction, system_program, system_transaction,
+            stake, system_instruction, system_program, system_transaction,
             transaction::Transaction,
         },
         std::{fmt::Debug, sync::mpsc::channel},
@@ -1544,7 +1544,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &stake::program::id(),
         );
         bank_forks
             .write()
@@ -1567,7 +1567,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank,
         );
         subscriptions.add_program_subscription(
-            solana_stake_program::id(),
+            stake::program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::processed()),
@@ -1584,7 +1584,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&stake::program::id()));
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -1616,7 +1616,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&stake::program::id()));
     }
 
     #[test]
@@ -2044,7 +2044,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &stake::program::id(),
         );
 
         // Add the transaction to the 1st bank and then freeze the bank

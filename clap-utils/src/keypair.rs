@@ -24,9 +24,11 @@ use {
         },
     },
     std::{
+        cell::RefCell,
         convert::TryFrom,
         error,
         io::{stdin, stdout, Write},
+        ops::Deref,
         process::exit,
         str::FromStr,
         sync::Arc,
@@ -90,12 +92,48 @@ impl CliSignerInfo {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct DefaultSigner {
     pub arg_name: String,
     pub path: String,
+    is_path_checked: RefCell<bool>,
 }
 
 impl DefaultSigner {
+    pub fn new<AN: AsRef<str>, P: AsRef<str>>(arg_name: AN, path: P) -> Self {
+        let arg_name = arg_name.as_ref().to_string();
+        let path = path.as_ref().to_string();
+        Self {
+            arg_name,
+            path,
+            ..Self::default()
+        }
+    }
+
+    fn path(&self) -> Result<&str, Box<dyn std::error::Error>> {
+        if !self.is_path_checked.borrow().deref() {
+            parse_signer_source(&self.path)
+                .and_then(|s| {
+                    if let SignerSourceKind::Filepath(path) = &s.kind {
+                        std::fs::metadata(path).map(|_| ()).map_err(|e| e.into())
+                    } else {
+                        Ok(())
+                    }
+                })
+                .map_err(|_| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!(
+                        "No default signer found, run \"solana-keygen new -o {}\" to create a new one",
+                        self.path
+                    ),
+                    )
+                })?;
+            *self.is_path_checked.borrow_mut() = true;
+        }
+        Ok(&self.path)
+    }
+
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
@@ -125,7 +163,7 @@ impl DefaultSigner {
         matches: &ArgMatches,
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
-        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
+        signer_from_path(matches, self.path()?, &self.arg_name, wallet_manager)
     }
 
     pub fn signer_from_path_with_config(
@@ -134,7 +172,13 @@ impl DefaultSigner {
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
         config: &SignerFromPathConfig,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
-        signer_from_path_with_config(matches, &self.path, &self.arg_name, wallet_manager, config)
+        signer_from_path_with_config(
+            matches,
+            self.path()?,
+            &self.arg_name,
+            wallet_manager,
+            config,
+        )
     }
 }
 
@@ -462,7 +506,7 @@ pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
 
 /// Prompts user for a passphrase and then asks for confirmirmation to check for mistakes
 pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> {
-    let passphrase = prompt_password_stderr(&prompt)?;
+    let passphrase = prompt_password_stderr(prompt)?;
     if !passphrase.is_empty() {
         let confirmed = rpassword::prompt_password_stderr("Enter same passphrase again: ")?;
         if confirmed != passphrase {
@@ -542,9 +586,9 @@ pub fn keypair_from_seed_phrase(
     let keypair = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         if legacy {
-            keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)?
+            keypair_from_seed_phrase_and_passphrase(seed_phrase, &passphrase)?
         } else {
-            let seed = generate_seed_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase);
+            let seed = generate_seed_from_seed_phrase_and_passphrase(seed_phrase, &passphrase);
             keypair_from_seed_and_derivation_path(&seed, derivation_path)?
         }
     } else {
@@ -572,7 +616,7 @@ pub fn keypair_from_seed_phrase(
         if legacy {
             keypair_from_seed(seed.as_bytes())?
         } else {
-            keypair_from_seed_and_derivation_path(&seed.as_bytes(), derivation_path)?
+            keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?
         }
     };
 

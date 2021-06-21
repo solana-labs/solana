@@ -32,6 +32,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+pub const DEFAULT_GENESIS_FILE: &str = "genesis.bin";
+pub const DEFAULT_GENESIS_ARCHIVE: &str = "genesis.tar.bz2";
+pub const DEFAULT_GENESIS_DOWNLOAD_PATH: &str = "/genesis.tar.bz2";
+
 // deprecated default that is no longer used
 pub const UNUSED_DEFAULT: u64 = 1024;
 
@@ -152,11 +156,11 @@ impl GenesisConfig {
     }
 
     fn genesis_filename(ledger_path: &Path) -> PathBuf {
-        Path::new(ledger_path).join("genesis.bin")
+        Path::new(ledger_path).join(DEFAULT_GENESIS_FILE)
     }
 
     pub fn load(ledger_path: &Path) -> Result<Self, std::io::Error> {
-        let filename = Self::genesis_filename(&ledger_path);
+        let filename = Self::genesis_filename(ledger_path);
         let file = OpenOptions::new()
             .read(true)
             .open(&filename)
@@ -194,7 +198,7 @@ impl GenesisConfig {
 
         std::fs::create_dir_all(&ledger_path)?;
 
-        let mut file = File::create(Self::genesis_filename(&ledger_path))?;
+        let mut file = File::create(Self::genesis_filename(ledger_path))?;
         file.write_all(&serialized)
     }
 
@@ -335,8 +339,8 @@ mod tests {
                 && account.lamports == 10_000));
 
         let path = &make_tmp_path("genesis_config");
-        config.write(&path).expect("write");
-        let loaded_config = GenesisConfig::load(&path).expect("load");
+        config.write(path).expect("write");
+        let loaded_config = GenesisConfig::load(path).expect("load");
         assert_eq!(config.hash(), loaded_config.hash());
         let _ignored = std::fs::remove_file(&path);
     }

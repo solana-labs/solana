@@ -1,9 +1,9 @@
 import React from "react";
-import { ConfirmedBlock, PublicKey } from "@solana/web3.js";
+import { BlockResponse, PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
 
-export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
+export function BlockProgramsCard({ block }: { block: BlockResponse }) {
   const totalTransactions = block.transactions.length;
   const txSuccesses = new Map<string, number>();
   const txFrequency = new Map<string, number>();
@@ -11,25 +11,24 @@ export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
 
   let totalInstructions = 0;
   block.transactions.forEach((tx) => {
-    totalInstructions += tx.transaction.instructions.length;
+    const message = tx.transaction.message;
+    totalInstructions += message.instructions.length;
     const programUsed = new Set<string>();
-    const trackProgramId = (programId: PublicKey) => {
+    const trackProgram = (index: number) => {
+      if (index >= message.accountKeys.length) return;
+      const programId = message.accountKeys[index];
       const programAddress = programId.toBase58();
       programUsed.add(programAddress);
       const frequency = ixFrequency.get(programAddress);
       ixFrequency.set(programAddress, frequency ? frequency + 1 : 1);
     };
 
-    tx.transaction.instructions.forEach((ix, index) => {
-      trackProgramId(ix.programId);
-      tx.meta?.innerInstructions?.forEach((inner) => {
-        if (inner.index !== index) return;
-        totalInstructions += inner.instructions.length;
-        inner.instructions.forEach((innerIx) => {
-          if (innerIx.programIdIndex >= ix.keys.length) return;
-          trackProgramId(ix.keys[innerIx.programIdIndex].pubkey);
-        });
-      });
+    message.instructions.forEach((ix) => trackProgram(ix.programIdIndex));
+    tx.meta?.innerInstructions?.forEach((inner) => {
+      totalInstructions += inner.instructions.length;
+      inner.instructions.forEach((innerIx) =>
+        trackProgram(innerIx.programIdIndex)
+      );
     });
 
     const successful = tx.meta?.err === null;

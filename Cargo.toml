@@ -21,6 +21,7 @@ members = [
     "perf",
     "validator",
     "genesis",
+    "genesis-utils",
     "gossip",
     "install",
     "keygen",
@@ -38,11 +39,11 @@ members = [
     "metrics",
     "net-shaper",
     "notifier",
+    "poh",
     "poh-bench",
     "program-test",
     "programs/secp256k1",
     "programs/bpf_loader",
-    "programs/budget",
     "programs/config",
     "programs/exchange",
     "programs/failure",
@@ -50,7 +51,9 @@ members = [
     "programs/ownable",
     "programs/stake",
     "programs/vote",
+    "rbpf-cli",
     "remote-wallet",
+    "rpc",
     "runtime",
     "runtime/store-tool",
     "sdk",
@@ -58,7 +61,6 @@ members = [
     "sdk/cargo-test-bpf",
     "scripts",
     "stake-accounts",
-    "stake-monitor",
     "sys-tuner",
     "tokens",
     "transaction-status",
@@ -74,6 +76,11 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+# TODO: Remove once the "simd-accel" feature from the reed-solomon-erasure
+# dependency is supported on Apple M1. v2 of the feature resolver is needed to
+# specify arch-specific features.
+resolver = "2"
 
 [profile.dev]
 split-debuginfo = "unpacked"
