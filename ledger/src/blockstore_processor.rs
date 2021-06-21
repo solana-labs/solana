@@ -537,7 +537,7 @@ fn do_process_blockstore_from_root(
 
     let processing_time = now.elapsed();
 
-    let debug_verify = false;
+    let debug_verify = opts.accounts_db_test_hash_calculation;
     let mut time_cap = Measure::start("capitalization");
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
@@ -1485,6 +1485,7 @@ pub mod tests {
 
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -1550,6 +1551,7 @@ pub mod tests {
 
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -1567,6 +1569,7 @@ pub mod tests {
         */
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
@@ -1636,6 +1639,7 @@ pub mod tests {
 
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -1715,6 +1719,7 @@ pub mod tests {
 
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -1929,6 +1934,7 @@ pub mod tests {
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -2073,6 +2079,7 @@ pub mod tests {
             .unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -2102,6 +2109,7 @@ pub mod tests {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -2120,6 +2128,7 @@ pub mod tests {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             override_num_threads: Some(1),
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
@@ -2136,6 +2145,7 @@ pub mod tests {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             full_leader_cache: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (_bank_forks, leader_schedule) =
@@ -2197,6 +2207,7 @@ pub mod tests {
         let opts = ProcessOptions {
             override_num_threads: Some(1),
             entry_callback: Some(entry_callback),
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
@@ -2850,6 +2861,7 @@ pub mod tests {
         let opts = ProcessOptions {
             poh_verify: true,
             dev_halt_at_slot: Some(0),
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
@@ -2900,6 +2912,7 @@ pub mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
@@ -3354,6 +3367,7 @@ pub mod tests {
 
         let opts = ProcessOptions {
             poh_verify: true,
+            accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
