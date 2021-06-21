@@ -330,7 +330,7 @@ impl AppendVec {
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
             //panic!("incorrect");
-            error!("new_from_file: sanitize failed: {:?}", path);
+            error!("new_from_file: sanitize failed");
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "incorrect layout/length/data",
