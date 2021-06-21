@@ -44,7 +44,6 @@ pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;
 pub mod signer;
-pub mod stake_weighted_timestamp;
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;

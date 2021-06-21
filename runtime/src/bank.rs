@@ -50,6 +50,10 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+        MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
+    },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -97,10 +101,6 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake::{self, state::Delegation},
-    stake_weighted_timestamp::{
-        calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
-        MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
-    },
     system_transaction,
     sysvar::{self},
     timing::years_as_slots,
