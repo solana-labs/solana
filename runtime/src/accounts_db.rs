@@ -5869,6 +5869,7 @@ impl AccountsDb {
         storage_maps.for_each(|storage| {
             let accounts = storage.all_accounts();
             let mut iter = accounts.into_iter();
+            let mut i = 0;
             loop {
                 let next = iter.next();
                 if next.is_none() {
@@ -5881,7 +5882,7 @@ impl AccountsDb {
                     //break;;
                 }
                 if slot == 76817171{
-                    error!("found: slot: {}, {}, {}", slot, stored_account.meta.pubkey, stored_account.account_meta.lamports);
+                    error!("found: slot: {}, {}, {}, {}", i, slot, stored_account.meta.pubkey, stored_account.account_meta.lamports);
                 }
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
@@ -5899,6 +5900,7 @@ impl AccountsDb {
                     }
                 }
                 }
+                i += 1;
             }
         });
         accounts_map
