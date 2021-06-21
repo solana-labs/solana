@@ -28,15 +28,10 @@ pub(super) struct BroadcastDuplicatesRun {
     last_broadcast_slot: Slot,
     next_shred_index: u32,
     shred_version: u16,
-    keypair: Arc<Keypair>,
 }
 
 impl BroadcastDuplicatesRun {
-    pub(super) fn new(
-        keypair: Arc<Keypair>,
-        shred_version: u16,
-        config: BroadcastDuplicatesConfig,
-    ) -> Self {
+    pub(super) fn new(shred_version: u16, config: BroadcastDuplicatesConfig) -> Self {
         let mut delayed_queue = DelayedQueue::new();
         delayed_queue.resize(config.duplicate_send_delay, (None, None));
         Self {
@@ -48,7 +43,6 @@ impl BroadcastDuplicatesRun {
             last_broadcast_slot: 0,
             last_duplicate_entry_hash: Hash::default(),
             shred_version,
-            keypair,
         }
     }
 
@@ -139,6 +133,7 @@ pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
 impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
         &mut self,
+        keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
@@ -166,13 +161,13 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let shredder = Shredder::new(
             bank.slot(),
             bank.parent().unwrap().slot(),
-            self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds, last_shred_index) = shredder.entries_to_shreds(
+            keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             self.next_shred_index,
@@ -182,6 +177,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             self.queue_or_create_duplicate_entries(&bank, &receive_results);
         let (duplicate_data_shreds, duplicate_coding_shreds, _) = if !duplicate_entries.is_empty() {
             shredder.entries_to_shreds(
+                keypair,
                 &duplicate_entries,
                 last_tick_height == bank.max_tick_height(),
                 next_duplicate_shred_index,
@@ -208,7 +204,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .epoch_staked_nodes(bank_epoch)
             .unwrap()
             .into_iter()
-            .filter(|(pubkey, _)| *pubkey != self.keypair.pubkey())
+            .filter(|(pubkey, _)| *pubkey != keypair.pubkey())
             .collect();
         stakes.sort_by(|(l_key, l_stake), (r_key, r_stake)| {
             if r_stake == l_stake {
@@ -234,7 +230,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             if bank.slot() > MINIMUM_DUPLICATE_SLOT && last_tick_height == bank.max_tick_height() {
                 warn!(
                     "{} sent duplicate slot {} to nodes: {:?}",
-                    self.keypair.pubkey(),
+                    keypair.pubkey(),
                     bank.slot(),
                     &duplicate_recipients,
                 );
