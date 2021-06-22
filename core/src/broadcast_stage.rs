@@ -15,7 +15,7 @@ use solana_gossip::{
     cluster_info::{self, ClusterInfo, ClusterInfoError},
     contact_info::ContactInfo,
     crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
-    weighted_shuffle::weighted_best,
+    weighted_shuffle::{weighted_best, weighted_index},
 };
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
@@ -405,10 +405,11 @@ pub fn broadcast_shreds(
         return Ok(());
     }
     let mut shred_select = Measure::start("shred_select");
+    let wi = weighted_index(peers_and_stakes);
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
+            let broadcast_index = weighted_best(peers_and_stakes, &wi, shred.seed());
 
             (&shred.payload, &peers[broadcast_index].tvu)
         })

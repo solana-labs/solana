@@ -10,7 +10,7 @@ use rand::distributions::{Distribution, WeightedIndex};
 use solana_gossip::{
     cluster_info::{ClusterInfo, ClusterInfoError},
     contact_info::ContactInfo,
-    weighted_shuffle::weighted_best,
+    weighted_shuffle::{weighted_best, weighted_index},
 };
 use solana_ledger::{
     blockstore::Blockstore,
@@ -423,7 +423,8 @@ impl ServeRepair {
             return Err(ClusterInfoError::NoPeers.into());
         }
         let weights = cluster_slots.compute_weights_exclude_noncomplete(slot, &repair_peers);
-        let n = weighted_best(&weights, solana_sdk::pubkey::new_rand().to_bytes());
+        let wi = weighted_index(&weights);
+        let n = weighted_best(&weights, &wi, solana_sdk::pubkey::new_rand().to_bytes());
         Ok((repair_peers[n].id, repair_peers[n].serve_repair))
     }
 

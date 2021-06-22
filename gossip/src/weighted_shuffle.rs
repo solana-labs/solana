@@ -3,6 +3,7 @@
 use {
     itertools::Itertools,
     num_traits::{FromPrimitive, ToPrimitive},
+    rand::{distributions::WeightedIndex, prelude::Distribution},
     rand::{Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     std::{iter, ops::Div},
@@ -36,32 +37,17 @@ where
         .collect()
 }
 
-/// Returns the highest index after computing a weighted shuffle.
-/// Saves doing any sorting for O(n) max calculation.
-// TODO: Remove in favor of rand::distributions::WeightedIndex.
-pub fn weighted_best(weights_and_indexes: &[(u64, usize)], seed: [u8; 32]) -> usize {
-    if weights_and_indexes.is_empty() {
-        return 0;
-    }
-    let mut rng = ChaChaRng::from_seed(seed);
-    let total_weight: u64 = weights_and_indexes.iter().map(|x| x.0).sum();
-    let mut lowest_weight = std::u128::MAX;
-    let mut best_index = 0;
-    for v in weights_and_indexes {
-        // This generates an "inverse" weight but it avoids floating point math
-        let x = (total_weight / v.0)
-            .to_u64()
-            .expect("values > u64::max are not supported");
-        // capture the u64 into u128s to prevent overflow
-        let computed_weight = rng.gen_range(1, u128::from(std::u16::MAX)) * u128::from(x);
-        // The highest input weight maps to the lowest computed weight
-        if computed_weight < lowest_weight {
-            lowest_weight = computed_weight;
-            best_index = v.1;
-        }
-    }
+pub fn weighted_index(weights_and_indexes: &[(u64, usize)]) -> WeightedIndex<u64> {
+    WeightedIndex::new(weights_and_indexes.iter().map(|(weight, _)| weight)).unwrap()
+}
 
-    best_index
+pub fn weighted_best(
+    weights_and_indexes: &[(u64, usize)],
+    wi: &WeightedIndex<u64>,
+    seed: [u8; 32],
+) -> usize {
+    let mut rng = ChaChaRng::from_seed(seed);
+    weights_and_indexes[wi.sample(&mut rng)].1
 }
 
 #[cfg(test)]
@@ -125,12 +111,13 @@ mod tests {
 
     #[test]
     fn test_weighted_best() {
-        let weights_and_indexes: Vec<_> = vec![100u64, 1000, 10_000, 10]
+        let weights_and_indexes: Vec<_> = vec![100u64, 1000, 10_000_000, 10]
             .into_iter()
             .enumerate()
             .map(|(i, weight)| (weight, i))
             .collect();
-        let best_index = weighted_best(&weights_and_indexes, [0x5b; 32]);
+        let wi = weighted_index(&weights_and_indexes);
+        let best_index = weighted_best(&weights_and_indexes, &wi, [0x5b; 32]);
         assert_eq!(best_index, 2);
     }
 }
