@@ -668,24 +668,31 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
-                let sender_local = sender.lock().unwrap().take().unwrap();
-                let sender = Some(&sender_local);
-                let unpacked_append_vec_map = untar_snapshot_in(
-                    &snapshot_tar,
-                    &unpack_dir.as_ref(),
-                    account_paths,
-                    archive_format,
-                    sender,
-                    false,
-                );
-                let unpacked_append_vec_map2 = untar_snapshot_in(
-                    &snapshot_tar,
-                    &unpack_dir.as_ref(),
-                    account_paths,
-                    archive_format,
-                    sender,
-                    true,
-                );
+                let unpacked_append_vec_map =  vec![false, true].into_par_iter().map(|accounts| {
+                    let mut sender_use = None;
+                    if accounts {
+                        let sender_local = sender.lock().unwrap().take().unwrap();
+                        sender_use = Some(&sender_local);
+                        untar_snapshot_in(
+                            &snapshot_tar,
+                            &unpack_dir.as_ref(),
+                            account_paths,
+                            archive_format,
+                            sender_use,
+                            accounts,
+                        )
+                    }
+                    else {
+                        untar_snapshot_in(
+                            &snapshot_tar,
+                            &unpack_dir.as_ref(),
+                            account_paths,
+                            archive_format,
+                            sender_use,
+                            accounts,
+                        )
+                    }
+                }).collect::<Vec<_>>();
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
                 exit.store(true, std::sync::atomic::Ordering::Relaxed);
             } else {
@@ -745,7 +752,9 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
             }
         },
     );
-    let unpacked_append_vec_map = result.lock().unwrap().take().unwrap().unwrap();
+    let mut unpacked_append_vec_map_raw = result.lock().unwrap().take().unwrap().into_iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+    let mut unpacked_append_vec_map: UnpackedAppendVecMap = unpacked_append_vec_map_raw.remove(0);
+    unpacked_append_vec_map.extend(unpacked_append_vec_map_raw.remove(0));
     untar.stop();
 
     error!("in queue: {}, {:?}", queue.len(), queue.pop());
