@@ -268,6 +268,9 @@ pub fn unpack_snapshot<A: Read>(
                         sender.send(path);
                         //error!("path: {:?}", path);
                     }
+                    else {
+                        error!("untar'd: path: {:?}", path);
+                    }
                 }
                 None => {}
             }
