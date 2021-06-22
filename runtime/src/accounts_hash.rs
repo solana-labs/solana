@@ -520,6 +520,7 @@ impl AccountsHash {
         let mut zeros = Measure::start("eliminate zeros");
         let overall_sum = Mutex::new(0u64);
         let unreduced_entries = AtomicUsize::new(0);
+        let hash_total = AtomicUsize::new(0);
         let hashes: Vec<Vec<Hash>> = (0..max_bin)
             .into_par_iter()
             .map(|bin| {
@@ -531,6 +532,7 @@ impl AccountsHash {
                         Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
                 }
                 unreduced_entries.fetch_add(unreduced_entries_count, Ordering::Relaxed);
+                hash_total.fetch_add(hashes.len(), Ordering::Relaxed);
                 hashes
             })
             .collect();
@@ -538,6 +540,7 @@ impl AccountsHash {
         stats.zeros_time_total_us += zeros.as_us();
         let sum = *overall_sum.lock().unwrap();
         stats.unreduced_entries += unreduced_entries.load(Ordering::Relaxed);
+        stats.hash_total += hash_total.load(Ordering::Relaxed);
         (hashes, sum)
     }
 
@@ -688,7 +691,6 @@ impl AccountsHash {
         let mut next_pass = PreviousPass::default();
         let cumulative = CumulativeOffsets::from_raw(&hashes);
         let mut hash_total = cumulative.total_count;
-        stats.hash_total += hash_total;
         next_pass.reduced_hashes = previous_state.reduced_hashes;
 
         const TARGET_FANOUT_LEVEL: usize = 3;
