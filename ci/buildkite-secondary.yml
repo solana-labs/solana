@@ -3,13 +3,16 @@
 # Pull requests to not run these steps.
 steps:
   - command: "ci/publish-tarball.sh"
+    agents: "release-build"
     timeout_in_minutes: 60
     name: "publish tarball"
   - wait
   - command: "sdk/docker-solana/build.sh"
+    agents: "release-build"
     timeout_in_minutes: 60
     name: "publish docker"
   - command: "ci/publish-crate.sh"
+    agents: "release-build"
     timeout_in_minutes: 240
     name: "publish crate"
     branches: "!master"
