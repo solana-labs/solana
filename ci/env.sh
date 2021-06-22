@@ -74,10 +74,13 @@ else
   export CI_BUILD_ID=
   export CI_COMMIT=
   export CI_JOB_ID=
-  export CI_OS_NAME=
   export CI_PULL_REQUEST=
   export CI_REPO_SLUG=
   export CI_TAG=
+  # Don't override ci/run-local.sh
+  if [[ -z $CL_LOCAL_RUN ]]; then
+    export CI_OS_NAME=
+  fi
 fi
 
 cat <<EOF
