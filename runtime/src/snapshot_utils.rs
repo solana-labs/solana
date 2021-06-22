@@ -690,7 +690,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             account_paths,
                             archive_format,
                             sender_use,
-                            accounts == 1,
+                            accounts == 0,
                             false,
                         )
                     }
