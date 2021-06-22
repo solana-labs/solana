@@ -146,6 +146,10 @@ pub mod system_transfer_zero_check {
     solana_sdk::declare_id!("BrTR9hzw4WBGFP65AJMbpAo64DcA3U6jdPSga9fMV5cS");
 }
 
+pub mod memory_ops_syscalls {
+    solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -181,6 +185,7 @@ lazy_static! {
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
+        (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
