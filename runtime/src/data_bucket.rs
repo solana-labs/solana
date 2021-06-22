@@ -59,9 +59,9 @@ impl Drop for DataBucket {
 }
 
 impl DataBucket {
-    pub fn new(drives: Arc<Vec<PathBuf>>, elem_size: usize) -> Self {
-        let cell_size = elem_size + std::mem::size_of::<Header>();
-        let (mmap, path) = Self::new_map(&drives, cell_size, DEFAULT_CAPACITY);
+    pub fn new(drives: Arc<Vec<PathBuf>>, num_elems: u64, elem_size: u64) -> Self {
+        let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
+        let (mmap, path) = Self::new_map(&drives, cell_size as usize, DEFAULT_CAPACITY);
         Self {
             path,
             mmap,
@@ -76,7 +76,7 @@ impl DataBucket {
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let ix = ix as usize * self.cell_size;
+        let ix = (ix * self.cell_size) as usize;
         let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
@@ -89,7 +89,7 @@ impl DataBucket {
             panic!("bad index size");
         }
         let mut e = Err(DataBucketError::AlreadyAllocated);
-        let ix = ix as usize * self.cell_size;
+        let ix = (ix * self.cell_size) as usize;
         let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
@@ -105,7 +105,7 @@ impl DataBucket {
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let ix = ix as usize * self.cell_size;
+        let ix = (ix * self.cell_size) as usize;
         let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
@@ -119,28 +119,28 @@ impl DataBucket {
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
             &*item
-        };
+        }
     }
 
-    pub fn get_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+    pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
+        let ix = self.cell_size * ix;
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
             std::slice::from_raw_parts(item, len)
-        };
+        }
     }
-
 
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
         if ix >= self.capacity {
@@ -152,7 +152,21 @@ impl DataBucket {
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
             &mut *item
-        };
+        }
+    }
+
+    pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
+        let ix = self.cell_size * ix;
+        if ix >= self.capacity {
+            panic!("bad index size");
+        }
+        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let end = start + std::mem::size_of::<T>();
+        let item_slice = &self.mmap[start..end];
+        unsafe {
+            let item = item_slice.as_ptr() as *mut T;
+            std::slice::from_raw_parts(item, len)
+        }
     }
 
     fn new_map(drives: &[PathBuf], cell_size: usize, capacity: u64) -> (MmapMut, PathBuf) {
