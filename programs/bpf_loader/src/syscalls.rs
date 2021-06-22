@@ -19,15 +19,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-<<<<<<< HEAD
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
-=======
-        cpi_data_cost, demote_sysvar_write_locks, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, memory_ops_syscalls, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
->>>>>>> 2b5052926 (Add memory operation syscalls (#16447))
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
