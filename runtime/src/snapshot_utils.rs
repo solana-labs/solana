@@ -627,7 +627,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
-        let debug_keys_ = Some(debug_keys.as_ref().unwrap().clone());
+        let debug_keys_ = debug_keys.as_ref().map(|k|k.clone());
 
     error!("account_paths: {:?}", &account_paths[0]);
 
