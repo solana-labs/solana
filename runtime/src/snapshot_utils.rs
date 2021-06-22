@@ -668,12 +668,14 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
+                let sender_local = sender.lock().unwrap().take().unwrap();
+                let sender = Some(&sender_local);
                 let unpacked_append_vec_map = untar_snapshot_in(
                     &snapshot_tar,
                     &unpack_dir.as_ref(),
                     account_paths,
                     archive_format,
-                    Some(&sender.lock().unwrap().take().unwrap()),
+                    sender,
                     false,
                 );
                 let unpacked_append_vec_map2 = untar_snapshot_in(
@@ -681,7 +683,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                     &unpack_dir.as_ref(),
                     account_paths,
                     archive_format,
-                    Some(&sender.lock().unwrap().take().unwrap()),
+                    sender,
                     true,
                 );
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
