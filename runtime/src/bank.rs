@@ -1241,7 +1241,7 @@ impl Bank {
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
         if parent_epoch < new.epoch() {
-            new.apply_feature_activations(false);
+            new.apply_feature_activations(false, false);
         }
 
         let cloned = new
@@ -1285,7 +1285,7 @@ impl Bank {
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(true);
+        new.apply_feature_activations(true, false);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
 
@@ -4291,7 +4291,7 @@ impl Bank {
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
-        self.apply_feature_activations(true);
+        self.apply_feature_activations(true, debug_do_not_add_builtins);
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
@@ -5082,7 +5082,11 @@ impl Bank {
 
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
-    fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
+    fn apply_feature_activations(
+        &mut self,
+        init_finish_or_warp: bool,
+        debug_do_not_add_builtins: bool,
+    ) {
         let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
@@ -5112,8 +5116,10 @@ impl Bank {
             self.rewrite_stakes();
         }
 
-        self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
-        self.reconfigure_token2_native_mint();
+        if !debug_do_not_add_builtins {
+            self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
+            self.reconfigure_token2_native_mint();
+        }
         self.ensure_no_storage_rewards_pool();
     }
 
