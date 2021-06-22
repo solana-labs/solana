@@ -272,7 +272,14 @@ pub fn unpack_snapshot<A: Read>(
                         error!("untar'd: path: {:?}", path);
                     }
                 }
-                None => {}
+                None => {
+                    if account {
+                        //error!("path: {:?}", path);
+                    }
+                    else {
+                        error!("untar'd: path: {:?}", path);
+                    }
+                }
             }
         },
     )
