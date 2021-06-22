@@ -252,7 +252,7 @@ pub fn unpack_snapshot<A: Read>(
                         if accounts {
                             None
                         } else {
-                            //error!("path: {:?}", ledger_dir);
+                            error!("path: {:?}, {:?}", ledger_dir, kind);
                             Some((ledger_dir, false))
                         }
                     }
