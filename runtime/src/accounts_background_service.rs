@@ -12,7 +12,10 @@ use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, hash::Hash};
+use solana_sdk::{
+    clock::{BankId, Slot},
+    hash::Hash,
+};
 use std::{
     boxed::Box,
     fmt::{Debug, Formatter},
@@ -39,8 +42,8 @@ const RECYCLE_STORE_EXPIRATION_INTERVAL_SECS: u64 = crate::accounts_db::EXPIRATI
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
-pub type DroppedSlotsSender = Sender<Slot>;
-pub type DroppedSlotsReceiver = Receiver<Slot>;
+pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
+pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
 #[derive(Clone)]
 pub struct SendDroppedBankCallback {
@@ -49,7 +52,7 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        if let Err(e) = self.sender.send(bank.slot()) {
+        if let Err(e) = self.sender.send((bank.slot(), bank.bank_id())) {
             warn!("Error sending dropped banks: {:?}", e);
         }
     }
@@ -273,9 +276,11 @@ impl AbsRequestHandler {
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
         let mut count = 0;
-        for pruned_slot in self.pruned_banks_receiver.try_iter() {
+        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.purge_slot(pruned_slot, is_from_abs);
+            bank.rc
+                .accounts
+                .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
         }
 
         count
@@ -465,7 +470,7 @@ mod test {
             &AccountSharedData::new(264, 0, &Pubkey::default()),
         );
         assert!(bank0.get_account(&account_key).is_some());
-        pruned_banks_sender.send(0).unwrap();
+        pruned_banks_sender.send((0, 0)).unwrap();
 
         assert!(!bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
 
