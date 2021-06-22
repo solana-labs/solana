@@ -322,7 +322,7 @@ pub fn reconstruct_single_storage(
     //error!("path2: {:?}, id: {}", append_vec_path, id);
 
     if slot == &83424826{
-        error!("reconstruct_single_storage: {}, file len: {}", current_len, metadata.len());
+        error!("reconstruct_single_storage: {}, file len: {}, slot: {}", current_len, metadata.len(), slot);
     }
 
 

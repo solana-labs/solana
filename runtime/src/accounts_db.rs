@@ -5882,7 +5882,7 @@ impl AccountsDb {
                     continue;
                 }
                 if slot == 83424826{
-                    error!("found: slot: {}, {}, {}, {}", i, slot, stored_account.meta.pubkey, stored_account.account_meta.lamports);
+                    error!("found: slot: {}, {}, {}, {}, hash: {}", i, slot, stored_account.meta.pubkey, stored_account.account_meta.lamports, stored_account.hash);
                 }
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
