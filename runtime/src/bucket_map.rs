@@ -45,7 +45,7 @@ impl BucketMap {
     pub fn update(
         &self,
         pubkey: &Pubkey,
-        updatefn: fn(Option<&[SlotInfo]>) -> Option<&[SlotInfo]>,
+        updatefn: fn(Option<&[SlotInfo]>) -> Option<Vec<SlotInfo>>,
     ) -> Result<(), BucketMapError> {
         let ix = self.bucket_ix(pubkey);
         let mut bucket = self.buckets[ix].write().unwrap();
@@ -109,7 +109,7 @@ const MIN_ELEMS: u64 = 16;
 
 impl Bucket {
     fn new(drives: Arc<Vec<PathBuf>>) -> Self {
-        let index = DataBucket::new(drives, 1, std::mem::size_of::<IndexEntry>() as u64);
+        let index = DataBucket::new(drives.clone(), 1, std::mem::size_of::<IndexEntry>() as u64);
         Self {
             version: 0,
             drives,
@@ -170,8 +170,6 @@ impl Bucket {
             index_entry.unwrap()
         };
         let elem_uid = self.index.uid(elem_ix);
-        let cur_cap = self.data[elem.data_bucket as usize].capacity;
-        let elem_loc = elem.data_location << cur_cap - elem.create_bucket_capacity;
         let best_fit_bucket = Self::best_fit(data.len() as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
@@ -179,6 +177,7 @@ impl Bucket {
         let current_bucket = self.data[elem.data_bucket as usize];
         if best_fit_bucket == elem.data_bucket {
             //in place update
+            let elem_loc = elem.data_loc(current_bucket.capacity);
             let slice: &mut [SlotInfo] =
                 current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
             slice.clone_from_slice(data);
@@ -191,6 +190,7 @@ impl Bucket {
             for i in pos..pos + MAX_SEARCH as u64 {
                 let ix = i % cap;
                 if best_bucket.uid(ix) == 0 {
+                    let elem_loc = elem.data_loc(current_bucket.capacity);
                     current_bucket.free(elem_loc, elem_uid);
                     best_bucket.allocate(ix, elem_uid);
                     let slice = best_bucket.get_mut_cell_slice(ix, data.len() as u64);
