@@ -321,7 +321,7 @@ pub fn reconstruct_single_storage(
     //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
     //error!("path2: {:?}, id: {}", append_vec_path, id);
 
-    if slot == &76817171{
+    if slot == &83424826{
         error!("reconstruct_single_storage: {}, file len: {}", current_len, metadata.len());
     }
 
