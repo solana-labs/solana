@@ -152,6 +152,7 @@ pub struct ReplayTiming {
     process_gossip_duplicate_confirmed_slots_elapsed: u64,
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
+    persist_cost_table_elapsed: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -173,6 +174,7 @@ impl ReplayTiming {
         process_gossip_duplicate_confirmed_slots_elapsed: u64,
         process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
+        persist_cost_table_elapsed: u64,
     ) {
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
@@ -192,6 +194,7 @@ impl ReplayTiming {
         self.process_unfrozen_gossip_verified_vote_hashes_elapsed +=
             process_unfrozen_gossip_verified_vote_hashes_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
+        self.persist_cost_table_elapsed += persist_cost_table_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -276,7 +279,12 @@ impl ReplayTiming {
                     "process_duplicate_slots_elapsed",
                     self.process_duplicate_slots_elapsed as i64,
                     i64
-                )
+                ),
+                (
+                    "persist_cost_table_elapsed",
+                    self.persist_cost_table_elapsed as i64,
+                    i64
+                ),
             );
 
             *self = ReplayTiming::default();
@@ -409,6 +417,11 @@ impl ReplayStage {
                         &cost_model,
                     );
                     replay_active_banks_time.stop();
+
+                    // persist cost table to blockstore
+                    let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
+                    Self::persist_cost_table(&blockstore, &cost_model);
+                    persist_cost_table_time.stop();
 
                     let forks_root = bank_forks.read().unwrap().root();
                     // Reset any duplicate slots that have been confirmed
@@ -732,13 +745,9 @@ impl ReplayStage {
                         process_gossip_duplicate_confirmed_slots_time.as_us(),
                         process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
                         process_duplicate_slots_time.as_us(),
+                        persist_cost_table_time.as_us(),
                     );
                 }
-
-                debug!("TAO - outside of TVU loop, best moment to persist. cost_table {:?} ",
-                    cost_model.read().unwrap().get_instruction_cost_table()
-                    );
-
                 Ok(())
             })
             .unwrap();
@@ -1811,6 +1820,16 @@ impl ReplayStage {
         }
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
+    }
+
+    fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
+        let cost_model_read = cost_model.read().unwrap();
+        let cost_table = cost_model_read.get_instruction_cost_table();
+        for (key, cost) in cost_table.iter() {
+            blockstore
+                .write_program_cost(key, cost)
+                .expect("persist program costs to blockstore");
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

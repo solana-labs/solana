@@ -321,9 +321,6 @@ impl Tvu {
     }
 
     pub fn join(self) -> thread::Result<()> {
-
-        debug!("TAO - tpu join");
-
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;

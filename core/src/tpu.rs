@@ -135,9 +135,6 @@ impl Tpu {
     }
 
     pub fn join(self) -> thread::Result<()> {
-
-        debug!("TAO - tpu join");
-
         let results = vec![
             self.fetch_stage.join(),
             self.sigverify_stage.join(),

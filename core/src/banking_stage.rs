@@ -372,8 +372,6 @@ impl BankingStage {
                             &cost_model,
                             &cost_tracker,
                         );
-
-                        debug!("TAO - done process_loop");
                     })
                     .unwrap()
             })
@@ -1601,9 +1599,6 @@ impl BankingStage {
     }
 
     pub fn join(self) -> thread::Result<()> {
-
-        debug!("TAO banking_stage join");
-
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }

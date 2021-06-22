@@ -2702,11 +2702,6 @@ impl Blockstore {
             .collect())
     }
 
-    // TODO TAO - do we need this to clear table? What happens to table/cf in blockstore?
-    pub fn clear_program_costs(&self) -> Result<()> {
-        Ok(())
-    }
-
     pub fn write_program_cost(&self, key: &Pubkey, value: &u64) -> Result<()> {
         self.program_costs_cf
             .put(*key, &ProgramCost { cost: *value })
@@ -8901,9 +8896,9 @@ pub mod tests {
                 assert_eq!(read_cost, *cost_table.get(&read_key).unwrap());
             }
 
-            // update value, write to db 
+            // update value, write to db
             for val in cost_table.values_mut() {
-                *val = *val + 100;
+                *val += 100;
             }
             for (key, cost) in cost_table.iter() {
                 blockstore.write_program_cost(key, cost).unwrap();
@@ -8911,7 +8906,9 @@ pub mod tests {
             // add a new record
             let new_program_key = Pubkey::new_unique();
             let new_program_cost = 999;
-            blockstore.write_program_cost(&new_program_key, &new_program_cost).unwrap();
+            blockstore
+                .write_program_cost(&new_program_key, &new_program_cost)
+                .unwrap();
 
             // confirm value updated
             let read_back = blockstore.read_program_cost().unwrap();
@@ -8920,15 +8917,14 @@ pub mod tests {
             for (key, cost) in cost_table {
                 assert_eq!(cost, read_back.iter().find(|(k, _v)| *k == key).unwrap().1);
             }
-            assert_eq!(new_program_cost, read_back.iter().find(|(k, _v)| *k == new_program_key).unwrap().1);
-
-            /* TODO Tao -- do we need clear? if so, how slow it'd be?
-            // clear
-            blockstore.clear_program_costs().unwrap();
-            let read_back = blockstore.read_program_cost().unwrap();
-            // verify
-            assert_eq!(0, read_back.len());
-            // */ 
+            assert_eq!(
+                new_program_cost,
+                read_back
+                    .iter()
+                    .find(|(k, _v)| *k == new_program_key)
+                    .unwrap()
+                    .1
+            );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

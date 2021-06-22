@@ -778,8 +778,7 @@ impl Column for columns::ProgramCosts {
     }
 
     fn index(key: &[u8]) -> Self::Index {
-        let pubkey = Pubkey::new(&key[0..32]);
-        pubkey
+        Pubkey::new(&key[0..32])
     }
 
     fn primary_index(_index: Self::Index) -> u64 {
