@@ -21,7 +21,7 @@ use solana_sdk::{
     feature_set::{
         blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
         enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
+        sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2128,16 +2128,13 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
-    invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BpfError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
-                || (bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
-                    && invoke_context
-                        .is_feature_active(&set_upgrade_authority_via_cpi_enabled::id()))))
+                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -2252,7 +2249,7 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
-        check_authorized_program(&callee_program_id, &instruction.data, &invoke_context)?;
+        check_authorized_program(&callee_program_id, &instruction.data)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             callee_program_id_index,
