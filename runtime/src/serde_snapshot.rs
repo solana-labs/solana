@@ -272,6 +272,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         accounts_index,
+        skip_accounts,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -351,6 +352,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -377,91 +379,94 @@ where
     error!("path2 here");
     //panic!("");
 
-    // Remap the deserialized AppendVec paths to point to correct local paths
-    let mut storage_vecs = (0..chunks)
-        .into_par_iter()
-        .map(|chunk| {
-            let start = std::cmp::min(len, chunk_size * chunk);
-            let end = std::cmp::min(len, chunk_size * (chunk + 1));
-            storage[start..end]
-                .iter()
-                .map(|(slot, slot_storage)| {
-                    let mut new_slot_storage = HashMap::new();
-                    for storage_entry in slot_storage {
-                        let file_name = AppendVec::file_name(*slot, storage_entry.id());
+    if !skip_accounts {
 
-                        let append_vec_path =
-                            unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
-                                io::Error::new(
-                                    io::ErrorKind::NotFound,
-                                    format!("{} not found in unpacked append vecs", file_name),
-                                )
-                            })?;
+        // Remap the deserialized AppendVec paths to point to correct local paths
+        let mut storage_vecs = (0..chunks)
+            .into_par_iter()
+            .map(|chunk| {
+                let start = std::cmp::min(len, chunk_size * chunk);
+                let end = std::cmp::min(len, chunk_size * (chunk + 1));
+                storage[start..end]
+                    .iter()
+                    .map(|(slot, slot_storage)| {
+                        let mut new_slot_storage = HashMap::new();
+                        for storage_entry in slot_storage {
+                            let file_name = AppendVec::file_name(*slot, storage_entry.id());
 
-                        reconstruct_single_storage(
-                            slot,
-                            append_vec_path,
-                            storage_entry.current_len(),
-                            storage_entry.id(),
-                            &mut new_slot_storage,
-                            true,
-                        )?;
-                    }
+                            let append_vec_path =
+                                unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
+                                    io::Error::new(
+                                        io::ErrorKind::NotFound,
+                                        format!("{} not found in unpacked append vecs", file_name),
+                                    )
+                                })?;
 
-                    let mut m = solana_measure::measure::Measure::start("");
-                    accounts_db.add_slot_to_accounts_index(&new_slot_storage, *slot);
-                    m.stop();
-                    tm.fetch_add(m.as_us(), Ordering::Relaxed);
+                            reconstruct_single_storage(
+                                slot,
+                                append_vec_path,
+                                storage_entry.current_len(),
+                                storage_entry.id(),
+                                &mut new_slot_storage,
+                                true,
+                            )?;
+                        }
 
-                    Ok((*slot, new_slot_storage))
-                })
-                .collect::<Result<Vec<_>, Error>>()
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    let mut storage = HashMap::new(); //<Slot, Arc<AccountStorageEntry>>
-    storage_vecs
-        .into_iter()
-        .flatten()
-        .for_each(|(slot, a_storage)| {
-            if !a_storage.is_empty() {
-                // discard any slots with no storage entries
-                // this can happen if a non-root slot was serialized
-                // but non-root stores should not be included in the snapshot
-                storage.insert(slot, a_storage);
-            }
-        });
+                        let mut m = solana_measure::measure::Measure::start("");
+                        accounts_db.add_slot_to_accounts_index(&new_slot_storage, *slot);
+                        m.stop();
+                        tm.fetch_add(m.as_us(), Ordering::Relaxed);
 
-    error!("generate index: {}", tm.load(Ordering::Relaxed));
+                        Ok((*slot, new_slot_storage))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let mut storage = HashMap::new(); //<Slot, Arc<AccountStorageEntry>>
+        storage_vecs
+            .into_iter()
+            .flatten()
+            .for_each(|(slot, a_storage)| {
+                if !a_storage.is_empty() {
+                    // discard any slots with no storage entries
+                    // this can happen if a non-root slot was serialized
+                    // but non-root stores should not be included in the snapshot
+                    storage.insert(slot, a_storage);
+                }
+            });
 
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(slot, bank_hash_info);
+        error!("generate index: {}", tm.load(Ordering::Relaxed));
 
-    // Process deserialized data, set necessary fields in self
-    let max_id: usize = *storage
-        .values()
-        .flat_map(HashMap::keys)
-        .max()
-        .expect("At least one storage entry must exist from deserializing stream");
+        accounts_db
+            .bank_hashes
+            .write()
+            .unwrap()
+            .insert(slot, bank_hash_info);
 
-    {
-        accounts_db.storage.0.extend(
-            storage.into_iter().map(|(slot, slot_storage_entry)| {
-                (slot, Arc::new(RwLock::new(slot_storage_entry)))
-            }),
-        );
+        // Process deserialized data, set necessary fields in self
+        let max_id: usize = *storage
+            .values()
+            .flat_map(HashMap::keys)
+            .max()
+            .expect("At least one storage entry must exist from deserializing stream");
+
+        {
+            accounts_db.storage.0.extend(
+                storage.into_iter().map(|(slot, slot_storage_entry)| {
+                    (slot, Arc::new(RwLock::new(slot_storage_entry)))
+                }),
+            );
+        }
+
+        if max_id > AppendVecId::MAX / 2 {
+            panic!("Storage id {} larger than allowed max", max_id);
+        }
+
+        accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
+        accounts_db
+            .write_version
+            .fetch_add(version, Ordering::Relaxed);
+        accounts_db.generate_index(limit_load_slot_count_from_snapshot);
     }
-
-    if max_id > AppendVecId::MAX / 2 {
-        panic!("Storage id {} larger than allowed max", max_id);
-    }
-
-    accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
-    accounts_db
-        .write_version
-        .fetch_add(version, Ordering::Relaxed);
-    accounts_db.generate_index(limit_load_slot_count_from_snapshot);
     Ok(accounts_db)
 }
