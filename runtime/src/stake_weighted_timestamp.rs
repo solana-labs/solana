@@ -1,7 +1,6 @@
 /// A helper for calculating a stake-weighted timestamp estimate from a set of timestamps and epoch
 /// stake.
 use solana_sdk::{
-    arithmetic::SaturatingArithmetic,
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
 };
@@ -39,7 +38,7 @@ where
     let mut total_stake: u128 = 0;
     for (vote_pubkey, slot_timestamp) in unique_timestamps {
         let (timestamp_slot, timestamp) = slot_timestamp.borrow();
-        let offset = slot_duration.sol_saturating_mul(slot.saturating_sub(*timestamp_slot) as u32);
+        let offset = slot_duration.saturating_mul(slot.saturating_sub(*timestamp_slot) as u32);
         let estimate = timestamp.saturating_add(offset.as_secs() as i64);
         let stake = stakes
             .get(vote_pubkey.borrow())
@@ -67,18 +66,18 @@ where
     // Bound estimate by `max_allowable_drift` since the start of the epoch
     if let Some((epoch_start_slot, epoch_start_timestamp)) = epoch_start_timestamp {
         let poh_estimate_offset =
-            slot_duration.sol_saturating_mul(slot.saturating_sub(epoch_start_slot) as u32);
+            slot_duration.saturating_mul(slot.saturating_sub(epoch_start_slot) as u32);
         let estimate_offset = Duration::from_secs(if fix_estimate_into_u64 {
             (estimate as u64).saturating_sub(epoch_start_timestamp as u64)
         } else {
             estimate.saturating_sub(epoch_start_timestamp) as u64
         });
         let max_allowable_drift_fast =
-            poh_estimate_offset.sol_saturating_mul(max_allowable_drift.fast) / 100;
+            poh_estimate_offset.saturating_mul(max_allowable_drift.fast) / 100;
         let max_allowable_drift_slow =
-            poh_estimate_offset.sol_saturating_mul(max_allowable_drift.slow) / 100;
+            poh_estimate_offset.saturating_mul(max_allowable_drift.slow) / 100;
         if estimate_offset > poh_estimate_offset
-            && estimate_offset.sol_saturating_sub(poh_estimate_offset) > max_allowable_drift_slow
+            && estimate_offset.saturating_sub(poh_estimate_offset) > max_allowable_drift_slow
         {
             // estimate offset since the start of the epoch is higher than
             // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW`
@@ -86,7 +85,7 @@ where
                 .saturating_add(poh_estimate_offset.as_secs() as i64)
                 .saturating_add(max_allowable_drift_slow.as_secs() as i64);
         } else if estimate_offset < poh_estimate_offset
-            && poh_estimate_offset.sol_saturating_sub(estimate_offset) > max_allowable_drift_fast
+            && poh_estimate_offset.saturating_sub(estimate_offset) > max_allowable_drift_fast
         {
             // estimate offset since the start of the epoch is lower than
             // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST`
