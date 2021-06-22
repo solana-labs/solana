@@ -4556,6 +4556,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "crossbeam-channel",
+ "dashmap",
  "ed25519-dalek",
  "flate2",
  "fs_extra",
