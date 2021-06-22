@@ -195,6 +195,8 @@ fn execute_batches(
             })
         });
 
+    timings.total_batches_len += batches.len();
+    timings.num_execute_batches += 1;
     for timing in new_timings {
         timings.accumulate(&timing);
     }
