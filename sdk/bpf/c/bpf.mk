@@ -222,6 +222,7 @@ endef
 
 define TEST_EXEC_RULE
 $1: $2
+	LD_LIBRARY_PATH=$(TESTFRAMEWORK_RPATH) \
 	$2$(\n)
 endef
 
