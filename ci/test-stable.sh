@@ -57,7 +57,7 @@ test-stable-perf)
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
     # lengthy and unexpected delay the first time CUDA is involved when the driver
     # is not yet loaded.
-    sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh
+    sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh || true
 
     rm -rf target/perf-libs
     ./fetch-perf-libs.sh
