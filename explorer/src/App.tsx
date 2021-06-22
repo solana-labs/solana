@@ -21,7 +21,7 @@ function App() {
   return (
     <>
       <ClusterModal />
-      <div className="main-content">
+      <div className="main-content pb-4">
         <Navbar />
         <MessageBanner />
         <ClusterStatusBanner />
