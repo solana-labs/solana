@@ -35,9 +35,9 @@ impl BucketMap {
 
     pub fn delete_key(&self, pubkey: &Pubkey) {
         let ix = self.bucket_ix(pubkey);
-        let bucket = self.buckets[ix].read().unwrap();
-        if bucket.is_none() {
-            bucket.as_ref().unwrap().delete_key(pubkey);
+        let mut bucket = self.buckets[ix].write().unwrap();
+        if !bucket.is_none() {
+            bucket.as_mut().unwrap().delete_key(pubkey);
         }
     }
 
@@ -140,7 +140,6 @@ impl Bucket {
             if self.index.uid(ii) != 0 {
                 continue;
             }
-            let uid = self.version;
             self.index.allocate(ii, self.version);
             self.version += 1;
             let mut elem: &mut IndexEntry = self.index.get_mut(ii);
@@ -159,7 +158,6 @@ impl Bucket {
         let data_bucket = &self.data[elem.data_bucket as usize];
         let cur_cap = data_bucket.capacity;
         let loc = elem.data_location << cur_cap - elem.create_bucket_capacity as u64;
-        let cell_size = data_bucket.cell_size;
         let slice = self.data[elem.data_bucket as usize].get_cell_slice(loc, elem.num_slots);
         Some(slice)
     }

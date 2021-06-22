@@ -138,7 +138,7 @@ impl DataBucket {
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
-            std::slice::from_raw_parts(item, len)
+            std::slice::from_raw_parts(item, len as usize)
         }
     }
 
@@ -146,7 +146,7 @@ impl DataBucket {
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
         let item_slice = &self.mmap[start..end];
         unsafe {
@@ -160,12 +160,12 @@ impl DataBucket {
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = ix as usize * self.cell_size + std::mem::size_of::<Header>();
+        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
         let item_slice = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
-            std::slice::from_raw_parts(item, len)
+            std::slice::from_raw_parts_mut(item, len as usize)
         }
     }
 
@@ -204,17 +204,17 @@ impl DataBucket {
         let old_cap = self.capacity;
         let old_map = &self.mmap;
         let old_file = self.path.clone();
-        let (new_map, new_file) = Self::new_map(&self.drives, self.cell_size, self.capacity * 2);
+        let (new_map, new_file) = Self::new_map(&self.drives, self.cell_size as usize, self.capacity * 2);
         (0..old_cap as usize).into_par_iter().for_each(|i| {
-            let old_ix = i * self.cell_size;
+            let old_ix = i * self.cell_size as usize;
             let new_ix = old_ix * 2;
-            let dst_slice = &new_map[new_ix..new_ix + self.cell_size];
-            let src_slice = &old_map[old_ix..old_ix + self.cell_size];
+            let dst_slice = &new_map[new_ix..new_ix + self.cell_size as usize];
+            let src_slice = &old_map[old_ix..old_ix + self.cell_size as usize];
 
             unsafe {
                 let dst = dst_slice.as_ptr() as *mut u8;
                 let src = src_slice.as_ptr() as *const u8;
-                std::ptr::copy(src, dst, self.cell_size);
+                std::ptr::copy(src, dst, self.cell_size as usize);
             };
         });
         self.mmap = new_map;
