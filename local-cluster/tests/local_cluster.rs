@@ -2084,7 +2084,6 @@ fn test_no_voting() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
