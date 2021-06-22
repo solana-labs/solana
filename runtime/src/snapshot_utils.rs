@@ -668,9 +668,9 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
-                let unpacked_append_vec_map =  vec![false, true].into_par_iter().map(|accounts| {
+                let unpacked_append_vec_map =  vec![0,1,2].into_par_iter().map(|accounts| {
                     let mut sender_use = None;
-                    if accounts {
+                    if accounts == 0 {
                         let sender_local = sender.lock().unwrap().take().unwrap();
                         sender_use = Some(&sender_local);
                         untar_snapshot_in(
@@ -679,7 +679,19 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             account_paths,
                             archive_format,
                             sender_use,
-                            accounts,
+                            accounts == 0,
+                            false,
+                        )
+                    }
+                    else if accounts == 1 {
+                        untar_snapshot_in(
+                            &snapshot_tar,
+                            &unpack_dir.as_ref(),
+                            account_paths,
+                            archive_format,
+                            sender_use,
+                            accounts == 1,
+                            false,
                         )
                     }
                     else {
@@ -689,7 +701,8 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             account_paths,
                             archive_format,
                             sender_use,
-                            accounts,
+                            false, // ignored
+                            true, // disable
                         )
                     }
                 }).collect::<Vec<_>>();
@@ -917,6 +930,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     sender: Option<&CrossbeamSender<PathBuf>>,
     accounts: bool,
+    disable: bool,
 ) -> Result<UnpackedAppendVecMap> {
     let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
@@ -924,22 +938,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
         }
     };
     measure.stop();
@@ -1064,6 +1078,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         archive_format,
         None,
         true, // TODO wrong
+        false,
     )
     .unwrap();
 

@@ -93,8 +93,8 @@ fn unpack_archive<'a, A: Read, C, D>(
     mut file_notifier: D,
 ) -> Result<()>
 where
-C: FnMut(&[&str], tar::EntryType) -> Option<(&'a Path, bool)>,
-D: FnMut(PathBuf, bool),
+    C: FnMut(&[&str], tar::EntryType) -> Option<(&'a Path, bool)>,
+    D: FnMut(PathBuf, bool),
 {
     let mut apparent_total_size: u64 = 0;
     let mut actual_total_size: u64 = 0;
@@ -145,7 +145,10 @@ D: FnMut(PathBuf, bool),
                     entry.header().entry_type(),
                 )));
             }
-            Some((unpack_dir, result_bool_in)) => {result_bool = result_bool_in; unpack_dir},
+            Some((unpack_dir, result_bool_in)) => {
+                result_bool = result_bool_in;
+                unpack_dir
+            }
         };
 
         apparent_total_size = checked_total_size_sum(
@@ -204,8 +207,7 @@ D: FnMut(PathBuf, bool),
 /// Map from AppendVec file name to unpacked file system location
 pub type UnpackedAppendVecMap = HashMap<String, PathBuf>;
 
-use     crossbeam_channel::Sender;
-
+use crossbeam_channel::Sender;
 
 pub fn unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
@@ -213,6 +215,7 @@ pub fn unpack_snapshot<A: Read>(
     account_paths: &[PathBuf], // put a channel here...
     account_path_sender: Option<&Sender<PathBuf>>,
     accounts: bool,
+    disable: bool,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
@@ -223,27 +226,39 @@ pub fn unpack_snapshot<A: Read>(
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
         |parts, kind| {
-            if is_valid_snapshot_archive_entry(parts, kind) {
-                if let ["accounts", file] = parts {
-                    if accounts {
-                    // Randomly distribute the accounts files about the available `account_paths`,
-                    let path_index = thread_rng().gen_range(0, account_paths.len());
-                    account_paths.get(path_index).map(|path_buf| {
-                        unpacked_append_vec_map
-                            .insert(file.to_string(), path_buf.join("accounts").join(file));
-                            //error!("accounts: {:?}", ledger_dir);
-                            path_buf.as_path()
-                    }).map(|i| (i, true))
-                }
-                else {None}
-                } else {
-                    if accounts { None } else {
-                    //error!("path: {:?}", ledger_dir);
-                    Some((ledger_dir, false))
-                    }
-                }
-            } else {
+            if disable {
                 None
+            } else {
+                if is_valid_snapshot_archive_entry(parts, kind) {
+                    if let ["accounts", file] = parts {
+                        if accounts {
+                            // Randomly distribute the accounts files about the available `account_paths`,
+                            let path_index = thread_rng().gen_range(0, account_paths.len());
+                            account_paths
+                                .get(path_index)
+                                .map(|path_buf| {
+                                    unpacked_append_vec_map.insert(
+                                        file.to_string(),
+                                        path_buf.join("accounts").join(file),
+                                    );
+                                    //error!("accounts: {:?}", ledger_dir);
+                                    path_buf.as_path()
+                                })
+                                .map(|i| (i, true))
+                        } else {
+                            None
+                        }
+                    } else {
+                        if accounts {
+                            None
+                        } else {
+                            //error!("path: {:?}", ledger_dir);
+                            Some((ledger_dir, false))
+                        }
+                    }
+                } else {
+                    None
+                }
             }
         },
         |path, account| {
@@ -253,12 +268,11 @@ pub fn unpack_snapshot<A: Read>(
                         sender.send(path);
                         //error!("path: {:?}", path);
                     }
-                },
-                None => {
                 }
+                None => {}
             }
-        }
-        )
+        },
+    )
     .map(|_| unpacked_append_vec_map)
 }
 
