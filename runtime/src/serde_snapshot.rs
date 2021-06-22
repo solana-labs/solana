@@ -141,6 +141,7 @@ pub(crate) fn bank_from_stream<R>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -163,6 +164,7 @@ where
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
                 accounts_index,
+                skip_accounts,
             )?;
             Ok(bank)
         }};
@@ -255,6 +257,7 @@ fn reconstruct_bank_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,

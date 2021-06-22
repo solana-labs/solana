@@ -264,13 +264,7 @@ pub fn unpack_snapshot<A: Read>(
         |path, account| {
             match &account_path_sender {
                 Some(sender) => {
-                    if account {
-                        sender.send(path);
-                        //error!("path: {:?}", path);
-                    }
-                    else {
-                        error!("untar'd: path: {:?}", path);
-                    }
+                    sender.send(path);
                 }
                 None => {
                     if account {

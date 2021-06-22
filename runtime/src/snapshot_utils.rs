@@ -627,9 +627,12 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
+        let debug_keys_ = Some(debug_keys.as_ref().unwrap().clone());
+
     error!("account_paths: {:?}", &account_paths[0]);
 
     let (sender, receiver) = unbounded();
+    let (sender_bank, receiver_bank) = unbounded();
 
     let mut queue = CrossThreadQueue::new();
     let mut queue2 = queue.clone();
@@ -660,6 +663,8 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
 
     let result = std::sync::Mutex::new(None);
     let sender = std::sync::Mutex::new(Some(sender));
+    let sender_bank = std::sync::Mutex::new(Some(sender_bank));
+    let receiver_bank = std::sync::Mutex::new(Some(receiver_bank));
     let mut untar = Measure::start("untar");
 
     let this_way = true;
@@ -684,17 +689,43 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                         )
                     }
                     else if accounts == 1 {
-                        untar_snapshot_in(
+                        let sender_local = sender_bank.lock().unwrap().take().unwrap();
+                        sender_use = Some(&sender_local);
+                        let files = untar_snapshot_in(
                             &snapshot_tar,
                             &unpack_dir.as_ref(),
                             account_paths,
                             archive_format,
                             sender_use,
-                            accounts == 0,
                             false,
-                        )
+                            false,
+                        );
+                        let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
+                        let unpacked_version_file = unpack_dir.as_ref().join("version");
+                    
+                        let mut snapshot_version = String::new();
+                        File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+                    
+                        let bank = rebuild_bank_from_snapshots(
+                            snapshot_version.trim(),
+                            frozen_account_pubkeys,
+                            &unpacked_snapshots_dir,
+                            account_paths,
+                            files.as_ref().unwrap().clone(),
+                            genesis_config,
+                            Some(debug_keys_.as_ref().unwrap().clone()),
+                            additional_builtins,
+                            account_indexes.clone(),
+                            accounts_db_caching_enabled,
+                            limit_load_slot_count_from_snapshot,
+                            shrink_ratio,
+                            None,
+                        ).unwrap();
+                    
+                        files
                     }
                     else if accounts ==2 {
+                        // do nothing - just to see how long an empty tar scan takes
                         untar_snapshot_in(
                             &snapshot_tar,
                             &unpack_dir.as_ref(),
@@ -715,6 +746,19 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             false, // ignored
                             true, // disable
                         )
+                        // do nothing
+                        /*
+                        // waiting on receiver_bank
+                        let x = receiver_bank.recv();
+                        match x {
+                            Ok(path) => {
+                                // got the bank file, so now we can extract the appendvec lens...
+                                
+                            }
+                            Err(err) => {
+                            }
+                        }
+                        */
                     }
                 }).collect::<Vec<_>>();
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
@@ -1010,6 +1054,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
 ) -> Result<Bank> {
     let (snapshot_version_enum, root_paths) =
         verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
@@ -1033,25 +1078,28 @@ fn rebuild_bank_from_snapshots(
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
                 accounts_index,
+                skip_accounts,
             ),
         }?)
     })?;
 
-    let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
-    let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
-        info!(
-            "Rebuilding status cache from {}",
-            status_cache_path.display()
-        );
-        let slot_deltas: Vec<BankSlotDelta> = bincode::options()
-            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-            .with_fixint_encoding()
-            .allow_trailing_bytes()
-            .deserialize_from(stream)?;
-        Ok(slot_deltas)
-    })?;
+    if !skip_accounts {
+        let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+        let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
+            info!(
+                "Rebuilding status cache from {}",
+                status_cache_path.display()
+            );
+            let slot_deltas: Vec<BankSlotDelta> = bincode::options()
+                .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+                .with_fixint_encoding()
+                .allow_trailing_bytes()
+                .deserialize_from(stream)?;
+            Ok(slot_deltas)
+        })?;
 
-    bank.src.append(&slot_deltas);
+        bank.src.append(&slot_deltas);
+    }
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
