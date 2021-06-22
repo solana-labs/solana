@@ -280,7 +280,9 @@ pub fn unpack_snapshot<A: Read>(
                         use std::fs;
 
                         let metadata = fs::metadata(path.clone()).unwrap();
-                        error!("untar'd: path: {:?}, len: {}", path, metadata.len());
+                        let filename = path.file_name().unwrap();
+                        let subdir = path.parent().unwrap().file_name().unwrap();
+                        error!("untar'd: path: {:?}, len: {}, {:?}, {:?}, {:?}", path, metadata.len(), filename, subdir, filename == subdir);
                     }
                 }
             }
