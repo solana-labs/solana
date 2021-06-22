@@ -102,6 +102,7 @@ D: FnMut(PathBuf, bool),
 
     let mut total_entries = 0;
     let mut last_log_update = Instant::now();
+    error!("unpack_archive");
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
@@ -132,7 +133,11 @@ D: FnMut(PathBuf, bool),
 
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect::<Vec<_>>().clone();
         let mut result_bool = false;
-        let unpack_dir = match entry_checker(parts.as_slice(), kind) {
+        let res = entry_checker(parts.as_slice(), kind);
+        if res.is_none() {
+            continue;
+        }
+        let unpack_dir = match res {
             None => {
                 return Err(UnpackError::Archive(format!(
                     "extra entry found: {:?} {:?}",
