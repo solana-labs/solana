@@ -720,6 +720,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             limit_load_slot_count_from_snapshot,
                             shrink_ratio,
                             None,
+                            true,
                         ).unwrap();
                     
                         files
@@ -858,6 +859,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         if this_way { Some(idx) } else { None },
+        false,
     )?;
     measure.stop();
 
