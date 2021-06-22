@@ -6,6 +6,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-sdk"
+readme = "README.md"
 license = "Apache-2.0"
 edition = "2018"
 
