@@ -277,7 +277,10 @@ pub fn unpack_snapshot<A: Read>(
                         //error!("path: {:?}", path);
                     }
                     else {
-                        error!("untar'd: path: {:?}", path);
+                        use std::fs;
+
+                        let metadata = fs::metadata(path.clone()).unwrap();
+                        error!("untar'd: path: {:?}, len: {}", path, metadata.len());
                     }
                 }
             }
