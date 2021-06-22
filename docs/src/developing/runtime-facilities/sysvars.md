@@ -17,6 +17,12 @@ The first is to query the sysvar at runtime via the sysvar's `get()` function:
 let clock = Clock::get()
 ```
 
+The following sysvars support `get`:
+- Clock
+- EpochSchedule
+- Fees
+- Rent
+
 The second is to pass the sysvar to the program as an account by including its address as one of the accounts in the `Instruction` and then deserializing the data during execution.  Access to sysvars accounts is
 always _readonly_.
 
