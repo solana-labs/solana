@@ -668,7 +668,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
-                let unpacked_append_vec_map =  vec![0,1,2].into_par_iter().map(|accounts| {
+                let unpacked_append_vec_map =  vec![0,1,2,3].into_par_iter().map(|accounts| {
                     let mut sender_use = None;
                     if accounts == 0 {
                         let sender_local = sender.lock().unwrap().take().unwrap();
@@ -692,6 +692,17 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             sender_use,
                             accounts == 0,
                             false,
+                        )
+                    }
+                    else if accounts ==2 {
+                        untar_snapshot_in(
+                            &snapshot_tar,
+                            &unpack_dir.as_ref(),
+                            account_paths,
+                            archive_format,
+                            sender_use,
+                            false, // ignored
+                            true, // disable
                         )
                     }
                     else {
