@@ -673,7 +673,16 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                     &unpack_dir.as_ref(),
                     account_paths,
                     archive_format,
-                    Some(sender.lock().unwrap().take().unwrap()),
+                    Some(&sender.lock().unwrap().take().unwrap()),
+                    false,
+                );
+                let unpacked_append_vec_map2 = untar_snapshot_in(
+                    &snapshot_tar,
+                    &unpack_dir.as_ref(),
+                    account_paths,
+                    archive_format,
+                    Some(&sender.lock().unwrap().take().unwrap()),
+                    true,
                 );
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
                 exit.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -895,7 +904,8 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
-    sender: Option<CrossbeamSender<PathBuf>>,
+    sender: Option<&CrossbeamSender<PathBuf>>,
+    accounts: bool,
 ) -> Result<UnpackedAppendVecMap> {
     let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
@@ -903,22 +913,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts)?
         }
     };
     measure.stop();
@@ -1042,6 +1052,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         &[unpack_dir.to_path_buf()],
         archive_format,
         None,
+        true, // TODO wrong
     )
     .unwrap();
 

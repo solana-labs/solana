@@ -206,7 +206,8 @@ pub fn unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
     account_paths: &[PathBuf], // put a channel here...
-    account_path_sender: Option<Sender<PathBuf>>,
+    account_path_sender: Option<&Sender<PathBuf>>,
+    accounts: bool,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
@@ -219,6 +220,7 @@ pub fn unpack_snapshot<A: Read>(
         |parts, kind| {
             if is_valid_snapshot_archive_entry(parts, kind) {
                 if let ["accounts", file] = parts {
+                    if accounts {
                     // Randomly distribute the accounts files about the available `account_paths`,
                     let path_index = thread_rng().gen_range(0, account_paths.len());
                     account_paths.get(path_index).map(|path_buf| {
@@ -227,9 +229,13 @@ pub fn unpack_snapshot<A: Read>(
                             //error!("accounts: {:?}", ledger_dir);
                             path_buf.as_path()
                     }).map(|i| (i, true))
+                }
+                else {None}
                 } else {
+                    if accounts { None } else {
                     //error!("path: {:?}", ledger_dir);
                     Some((ledger_dir, false))
+                    }
                 }
             } else {
                 None
