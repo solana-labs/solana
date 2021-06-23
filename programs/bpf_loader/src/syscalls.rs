@@ -5117,15 +5117,6 @@ mod tests {
             ro_len,
             rw_va,
             0,
-            &memory_mapping,
-            &mut result,
-        );
-        assert_access_violation!(result, ro_va - 1, ro_len);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall.call(
-            ro_va,
-            ro_len + 1, // AccessViolation
-            rw_va,
             0,
             &memory_mapping,
             &mut result,
@@ -5453,7 +5444,7 @@ mod tests {
             Err(e) => Err(e),
         }
     }
-    // creates new bignum with u32 value
+    // creates new bignum from a slice of data
     fn new_from_slice_bignum(val: &[u8]) -> Result<(Vec<u8>, bool), EbpfError<BpfError>> {
         let mut my_buffer = Vec::<u8>::with_capacity(val.len());
         let bytes_len = val.len();
@@ -5500,84 +5491,7 @@ mod tests {
             compute_meter,
             loader_id: &bpf_loader::id(),
         };
-        let rhs_in_ffi = FfiBigNumber {
-            data: 2048u64,
-            data_len: bn2_len as u64,
-            is_negative: bn2_is_negative,
-        };
-        let mod_in_ffi = FfiBigNumber {
-            data: 4096u64,
-            data_len: bn3_len as u64,
-            is_negative: bn3_is_negative,
-        };
-        let mut result_vec = Vec::<u8>::with_capacity(bn1_len * bn3_len);
-        let mut sol_out_ffi = FfiBigNumber {
-            data: 5120u64,
-            data_len: result_vec.capacity() as u64,
-            is_negative: false,
-        };
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![
-                MemoryRegion {
-                    host_addr: &lhs_in_ffi as *const _ as u64,
-                    vm_addr: 24,
-                    len: std::mem::size_of::<FfiBigNumber>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_arg1.as_ptr() as *const _ as u64,
-                    vm_addr: 1024,
-                    len: bn1_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: &rhs_in_ffi as *const _ as u64,
-                    vm_addr: 48,
-                    len: std::mem::size_of::<FfiBigNumber>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_arg2.as_ptr() as *const _ as u64,
-                    vm_addr: 2048,
-                    len: bn2_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: &mod_in_ffi as *const _ as u64,
-                    vm_addr: 72,
-                    len: std::mem::size_of::<FfiBigNumber>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bn_arg3.as_ptr() as *const _ as u64,
-                    vm_addr: 4096,
-                    len: bn3_len as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: &mut sol_out_ffi as *mut _ as u64,
-                    vm_addr: 96,
-                    len: std::mem::size_of::<FfiBigNumber>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-                MemoryRegion {
-                    host_addr: result_vec.as_mut_ptr() as *mut _ as u64,
-                    vm_addr: 5120,
-                    len: result_vec.capacity() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &DEFAULT_CONFIG,
-        )
-        .unwrap();
+
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(
             0,
