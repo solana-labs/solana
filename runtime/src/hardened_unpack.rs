@@ -12,7 +12,7 @@ use {
             Component::{CurDir, Normal},
             Path, PathBuf,
         },
-        sync::{Arc, RwLock},
+        sync::{Arc, atomic::{AtomicUsize, Ordering}, RwLock},
         time::Instant,
     },
     tar::{
@@ -87,7 +87,7 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
 pub struct SeekableBufferingReaderInner<T: Read> {
     pub data: Vec<Vec<u8>>,
     pub reader: RwLock<T>,
-    pub len: usize,
+    pub len: AtomicUsize,
 }
 
 use std::io;
@@ -109,21 +109,24 @@ impl<T: Read> SeekableBufferingReader<T> {
         let inner = SeekableBufferingReaderInner {
             data: vec![],
             reader: RwLock::new(reader),
-            len: 0,
+            len: AtomicUsize::new(0),
         };
         Self {
             instance: Arc::new(inner),
         }
     }
     pub fn len(&self) -> usize {
-        self.instance.len
+        self.instance.len.load(Ordering::Relaxed)
     }
 }
 
 impl<T: Read> Read for SeekableBufferingReader<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        error!("read: {}", buf.len());
-        self.instance.reader.write().unwrap().read(buf)
+        let result = self.instance.reader.write().unwrap().read(buf);
+        if let Ok(len) = &result {
+            self.instance.len.fetch_add(*len, Ordering::Relaxed);
+        }
+        result
     }
 }
 
