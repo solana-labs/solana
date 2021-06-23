@@ -601,7 +601,7 @@ fn enable_deterministic_seed(shred_slot: Slot, bank: &Bank) -> bool {
             let epoch_schedule = bank.epoch_schedule();
             let feature_epoch = epoch_schedule.get_epoch(feature_slot);
             let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
+            feature_epoch <= shred_epoch
         }
     }
 }
