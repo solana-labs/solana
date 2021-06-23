@@ -676,7 +676,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                     .map(|accounts| {
                         let mut sender_use = None;
                         if accounts == 0 {
-                            let amod = 16;
+                            let amod = 1;
                             let mut result = UnpackedAppendVecMap::new();
                             let all = (0..amod)
                                 .into_par_iter()
