@@ -793,6 +793,11 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                 }).collect::<Vec<_>>();
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
                 exit.store(true, std::sync::atomic::Ordering::Relaxed);
+                let sender_local = sender.lock().unwrap().clone().unwrap();
+                for i in 0..50 {
+                    let _ = sender_local.send(Path::new("").to_path_buf());
+                }
+
             } else {
                 if this_way {
                     let mut new_slot_storage = HashMap::default();
