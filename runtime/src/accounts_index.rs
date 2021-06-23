@@ -5,7 +5,6 @@ use crate::{
     secondary_index::*,
 };
 use bv::BitVec;
-use dashmap::DashSet;
 use log::*;
 use ouroboros::self_referencing;
 use solana_measure::measure::Measure;
@@ -628,7 +627,6 @@ pub struct AccountsIndex<T> {
     // on any of these slots fails. This is safe to purge once the associated Bank is dropped and
     // scanning the fork with that Bank at the tip is no longer possible.
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
-    zero_lamport_pubkeys: DashSet<Pubkey>,
 }
 
 impl<T> Default for AccountsIndex<T> {
@@ -647,7 +645,6 @@ impl<T> Default for AccountsIndex<T> {
             roots_tracker: RwLock::<RootsTracker>::default(),
             ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
-            zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
         }
     }
 }
@@ -1381,9 +1378,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     &mut w_account_maps,
                     new_item,
                 );
-                if account_info.is_zero_lamport() {
-                    self.zero_lamport_pubkeys.insert(*pubkey);
-                }
                 if let Some(mut w_account_entry) = account_entry {
                     w_account_entry.update(slot, account_info, &mut _reclaims);
                     true
@@ -1421,9 +1415,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             //  - The secondary index is never consulted as primary source of truth for gets/stores.
             //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
             //  account operations.
-            if account_info.is_zero_lamport() {
-                self.zero_lamport_pubkeys.insert(*pubkey);
-            }
             if let Some(mut w_account_entry) = w_account_entry {
                 w_account_entry.update(slot, account_info, reclaims);
                 false
@@ -1433,14 +1424,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         };
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
         is_newly_inserted
-    }
-
-    pub fn remove_zero_lamport_key(&self, pubkey: &Pubkey) {
-        self.zero_lamport_pubkeys.remove(pubkey);
-    }
-
-    pub fn zero_lamport_pubkeys(&self) -> &DashSet<Pubkey> {
-        &self.zero_lamport_pubkeys
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -2533,8 +2516,6 @@ pub mod tests {
         let items = vec![(pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items);
 
-        assert!(index.zero_lamport_pubkeys().is_empty());
-
         let mut ancestors = Ancestors::default();
         assert!(index.get(pubkey, Some(&ancestors), None).is_none());
         assert!(index.get(pubkey, None, None).is_none());
@@ -2553,8 +2534,6 @@ pub mod tests {
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
         let items = vec![(pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items);
-
-        assert!(!index.zero_lamport_pubkeys().is_empty());
 
         let mut ancestors = Ancestors::default();
         assert!(index.get(pubkey, Some(&ancestors), None).is_none());

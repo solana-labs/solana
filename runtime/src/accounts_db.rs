@@ -506,9 +506,9 @@ struct CleanKeyTimings {
     collect_delta_keys_us: u64,
     delta_insert_us: u64,
     hashset_to_vec_us: u64,
-    zero_lamport_key_clone_us: u64,
+    dirty_store_processing_us: u64,
     delta_key_count: u64,
-    zero_lamport_count: u64,
+    dirty_pubkeys_count: u64,
 }
 
 /// Persistent storage structure holding the accounts
@@ -939,6 +939,11 @@ pub struct AccountsDb {
     remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization,
 
     shrink_ratio: AccountShrinkThreshold,
+
+    /// Set of stores which are recently rooted or had accounts removed
+    /// such that potentially a 0-lamport account update could be present which
+    /// means we can remove the account from the index entirely.
+    dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
 }
 
 #[derive(Debug, Default)]
@@ -1383,6 +1388,7 @@ impl Default for AccountsDb {
             is_bank_drop_callback_enabled: AtomicBool::default(),
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
+            dirty_stores: DashMap::default(),
         }
     }
 }
@@ -1706,20 +1712,40 @@ impl AccountsDb {
 
     // Construct a vec of pubkeys for cleaning from:
     //   uncleaned_pubkeys - the delta set of updated pubkeys in rooted slots from the last clean
-    //   zero_lamport_pubkeys - set of all alive pubkeys containing 0-lamport updates
+    //   dirty_stores - set of stores which had accounts removed or recently rooted
     fn construct_candidate_clean_keys(
         &self,
         max_clean_root: Option<Slot>,
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
-        let mut zero_lamport_key_clone = Measure::start("zero_lamport_key");
-        let pubkeys = self.accounts_index.zero_lamport_pubkeys().clone();
-        timings.zero_lamport_count = pubkeys.len() as u64;
-        zero_lamport_key_clone.stop();
-        timings.zero_lamport_key_clone_us += zero_lamport_key_clone.as_us();
+        let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
+        let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
+        let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
+        self.dirty_stores.retain(|(slot, _store_id), store| {
+            if *slot > max_slot {
+                true
+            } else {
+                dirty_stores.push((*slot, store.clone()));
+                false
+            }
+        });
+        let dirty_stores_len = dirty_stores.len();
+        let pubkeys = DashSet::new();
+        for (_slot, store) in dirty_stores {
+            for account in store.accounts.accounts(0) {
+                pubkeys.insert(account.meta.pubkey);
+            }
+        }
+        trace!(
+            "dirty_stores.len: {} pubkeys.len: {}",
+            dirty_stores_len,
+            pubkeys.len()
+        );
+        timings.dirty_pubkeys_count = pubkeys.len() as u64;
+        dirty_store_processing_time.stop();
+        timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
 
         let mut collect_delta_keys = Measure::start("key_create");
-        let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
         let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
@@ -1782,16 +1808,6 @@ impl AccountsDb {
                                             self.accounts_index
                                                 .roots_and_ref_count(&locked_entry, max_clean_root),
                                         );
-                                    } else {
-                                        // prune zero_lamport_pubkey set which should contain all 0-lamport
-                                        // keys whether rooted or not. A 0-lamport update may become rooted
-                                        // in the future.
-                                        if !slot_list
-                                            .iter()
-                                            .any(|(_slot, account_info)| account_info.lamports == 0)
-                                        {
-                                            self.accounts_index.remove_zero_lamport_key(pubkey);
-                                        }
                                     }
                                     // Release the lock
                                     let slot = *slot;
@@ -1815,11 +1831,7 @@ impl AccountsDb {
                                     // touched in must be unrooted.
                                     purges_old_accounts.push(*pubkey);
                                 }
-                                AccountIndexGetResult::Missing(lock) => {
-                                    // pubkey is missing from index, so remove from zero_lamports_list
-                                    self.accounts_index.remove_zero_lamport_key(pubkey);
-                                    drop(lock);
-                                }
+                                AccountIndexGetResult::Missing(_lock) => {}
                             };
                         }
                         (purges_zero_lamports, purges_old_accounts)
@@ -1961,8 +1973,8 @@ impl AccountsDb {
                 i64
             ),
             (
-                "zero_lamport_key_clone_us",
-                key_timings.zero_lamport_key_clone_us,
+                "dirty_store_processing_us",
+                key_timings.dirty_store_processing_us,
                 i64
             ),
             ("accounts_scan", accounts_scan.as_us() as i64, i64),
@@ -1972,7 +1984,7 @@ impl AccountsDb {
             ("calc_deps", calc_deps_time.as_us() as i64, i64),
             ("reclaims", reclaims_time.as_us() as i64, i64),
             ("delta_key_count", key_timings.delta_key_count, i64),
-            ("zero_lamport_count", key_timings.zero_lamport_count, i64),
+            ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
             ("total_keys_count", total_keys_count, i64),
         );
     }
@@ -2254,6 +2266,8 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
                         dead_storages.push(store.clone());
                         false
                     } else {
@@ -5220,6 +5234,8 @@ impl AccountsDb {
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
+                    self.dirty_stores
+                        .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
@@ -5737,6 +5753,11 @@ impl AccountsDb {
         self.accounts_index.add_root(slot, self.caching_enabled);
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
+        }
+        if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+            for (store_id, store) in slot_stores.read().unwrap().iter() {
+                self.dirty_stores.insert((slot, *store_id), store.clone());
+            }
         }
     }
 
@@ -9303,6 +9324,9 @@ pub mod tests {
         // Do clean
         accounts.clean_accounts(None, false);
 
+        // 2nd clean needed to clean-up pubkey1
+        accounts.clean_accounts(None, false);
+
         // Ensure pubkey2 is cleaned from the index finally
         assert_not_load_account(&accounts, current_slot, pubkey1);
         assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
@@ -9850,6 +9874,55 @@ pub mod tests {
     }
 
     #[test]
+    fn test_store_clean_after_shrink() {
+        solana_logger::setup();
+        let accounts = AccountsDb::new_with_config(
+            vec![],
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            true,
+            AccountShrinkThreshold::default(),
+        );
+
+        let account = AccountSharedData::new(1, 16 * 4096, &Pubkey::default());
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        accounts.store_cached(0, &[(&pubkey1, &account)]);
+
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        accounts.store_cached(0, &[(&pubkey2, &account)]);
+
+        let zero_account = AccountSharedData::new(0, 1, &Pubkey::default());
+        accounts.store_cached(1, &[(&pubkey1, &zero_account)]);
+
+        // Add root 0 and flush separately
+        accounts.get_accounts_delta_hash(0);
+        accounts.add_root(0);
+        accounts.flush_accounts_cache(true, None);
+
+        // clear out the dirty keys
+        accounts.clean_accounts(None, false);
+
+        // flush 1
+        accounts.get_accounts_delta_hash(1);
+        accounts.add_root(1);
+        accounts.flush_accounts_cache(true, None);
+
+        accounts.print_accounts_stats("pre-clean");
+
+        // clean to remove pubkey1 from 0,
+        // shrink to shrink pubkey1 from 0
+        // then another clean to remove pubkey1 from slot 1
+        accounts.clean_accounts(None, false);
+
+        accounts.shrink_candidate_slots();
+
+        accounts.clean_accounts(None, false);
+
+        accounts.print_accounts_stats("post-clean");
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
+    }
+
+    #[test]
     fn test_store_reuse() {
         solana_logger::setup();
         let accounts = AccountsDb::new_sized(vec![], 4096);
@@ -9873,6 +9946,10 @@ pub mod tests {
         accounts.add_root(1);
         accounts.clean_accounts(None, false);
         accounts.shrink_all_slots(false);
+
+        // Clean again to flush the dirty stores
+        // and allow them to be recycled in the next step
+        accounts.clean_accounts(None, false);
         accounts.print_accounts_stats("post-shrink");
         let num_stores = accounts.recycle_stores.read().unwrap().entry_count();
         assert!(num_stores > 0);
