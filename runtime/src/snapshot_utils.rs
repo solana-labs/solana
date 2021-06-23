@@ -676,17 +676,27 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                 let unpacked_append_vec_map =  vec![0,1,2,3].into_par_iter().map(|accounts| {
                     let mut sender_use = None;
                     if accounts == 0 {
-                        let sender_local = sender.lock().unwrap().take().unwrap();
-                        sender_use = Some(&sender_local);
-                        untar_snapshot_in(
-                            &snapshot_tar,
-                            &unpack_dir.as_ref(),
-                            account_paths,
-                            archive_format,
-                            sender_use,
-                            accounts == 0,
-                            false,
-                        )
+                        let amod = 16;
+                        let mut result = UnpackedAppendVecMap::new();
+                        let all = (0..amod).into_par_iter().map(|idx| {
+                            let sender_local = sender.lock().unwrap().clone().unwrap();
+                            let mut sender_use = None;
+                            sender_use = Some(&sender_local);
+                            untar_snapshot_in(
+                                &snapshot_tar,
+                                &unpack_dir.as_ref(),
+                                account_paths,
+                                archive_format,
+                                sender_use,
+                                accounts == 0,
+                                false,
+                                Some((idx, amod)),
+                            )
+                        }).collect::<Vec<_>>(); // TODO missing FnMut?
+                        for h in all {
+                            result.extend(h?);
+                        };
+                        Ok(result)
                     }
                     else if accounts == 1 {
                         let sender_local = sender_bank.lock().unwrap().take().unwrap();
@@ -699,6 +709,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             sender_use,
                             false,
                             false,
+                            None,
                         );
                         let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
                         let unpacked_version_file = unpack_dir.as_ref().join("version");
@@ -744,6 +755,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             sender_use,
                             false, // ignored
                             true, // disable
+                            None,
                         )
                     }
                     else {
@@ -755,6 +767,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             sender_use,
                             false, // ignored
                             true, // disable
+                            None,
                         )
                         // do nothing
                         /*
@@ -992,6 +1005,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     sender: Option<&CrossbeamSender<PathBuf>>,
     accounts: bool,
     disable: bool,
+    amod: Option<(usize, usize)>,
 ) -> Result<UnpackedAppendVecMap> {
     let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
@@ -999,22 +1013,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
         }
     };
     measure.stop();
@@ -1044,7 +1058,6 @@ fn verify_snapshot_version_and_folder(
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     Ok((snapshot_version_enum, root_paths))
 }
-use crate::serde_snapshot::{AccountsDbFields, SerializableStorage};
 #[allow(clippy::too_many_arguments)]
 fn get_accounts_db_fields_from_snapshots(
     snapshot_version: &str,
@@ -1190,6 +1203,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         None,
         true, // TODO wrong
         false,
+        None,
     )
     .unwrap();
 

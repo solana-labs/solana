@@ -216,9 +216,11 @@ pub fn unpack_snapshot<A: Read>(
     account_path_sender: Option<&Sender<PathBuf>>,
     accounts: bool,
     disable: bool,
+    amod: Option<(usize, usize)>,    
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
+    let mut i =0;
 
     unpack_archive(
         archive,
@@ -232,6 +234,15 @@ pub fn unpack_snapshot<A: Read>(
                 if is_valid_snapshot_archive_entry(parts, kind) {
                     if let ["accounts", file] = parts {
                         if accounts {
+                            i += 1;
+                            match &amod {
+                                Some((idx, total)) => {
+                                    if (i-1) % total != *idx {
+                                        return None;
+                                    }
+                                },
+                                None=> {}
+                            };
                             // Randomly distribute the accounts files about the available `account_paths`,
                             let path_index = thread_rng().gen_range(0, account_paths.len());
                             account_paths
