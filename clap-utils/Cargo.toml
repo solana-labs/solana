@@ -17,7 +17,7 @@ solana-sdk = { path = "../sdk", version = "=1.8.0" }
 thiserror = "1.0.25"
 tiny-bip39 = "0.8.0"
 uriparse = "0.6.3"
-url = "2.1.0"
+url = "2.2.2"
 chrono = "0.4"
 
 [dev-dependencies]
