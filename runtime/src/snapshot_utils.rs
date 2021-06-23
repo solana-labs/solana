@@ -806,6 +806,9 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                     let mut new_slot_storage = HashMap::default();
                     loop {
                         if let Some(item) = queue.pop() {
+                            if item.len() == 0 {
+                                continue;
+                            }
                             let slot = Slot::from_str(item.file_stem().unwrap().to_str().unwrap())
                                 .unwrap();
                             {
