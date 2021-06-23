@@ -1373,6 +1373,7 @@ impl<T> CrossThreadQueue<T> {
             }
             let res = self.data.1.wait_timeout(data, std::time::Duration::from_millis(1000));
             if res.is_err() {
+                error!("timed out");
                 return None;
             }
             data = res.unwrap().0;
