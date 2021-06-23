@@ -67,7 +67,7 @@ use solana_sdk::{
     stake_history::StakeHistory,
     system_instruction,
     sysvar::stake_history,
-    transaction::{self, Transaction},
+    transaction::{self, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
@@ -3144,12 +3144,14 @@ pub mod rpc_full {
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),
                     RpcHealthStatus::Unknown => {
+                        inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: None,
                         }
                         .into());
                     }
                     RpcHealthStatus::Behind { num_slots } => {
+                        inc_new_counter_info!("rpc-send-tx_health-behind", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: Some(num_slots),
                         }
@@ -3158,6 +3160,14 @@ pub mod rpc_full {
                 }
 
                 if let (Err(err), logs, _) = preflight_bank.simulate_transaction(&transaction) {
+                    match err {
+                        TransactionError::BlockhashNotFound => {
+                            inc_new_counter_info!("rpc-send-tx_err-blockhash-not-found", 1);
+                        }
+                        _ => {
+                            inc_new_counter_info!("rpc-send-tx_err-other", 1);
+                        }
+                    }
                     return Err(RpcCustomError::SendTransactionPreflightFailure {
                         message: format!("Transaction simulation failed: {}", err),
                         result: RpcSimulateTransactionResult {
