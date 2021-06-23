@@ -483,9 +483,9 @@ impl Shred {
         let bf = bank_forks.read().unwrap();
         let maybe_bank = bf.get(self.slot());
         if let Some(bank) = maybe_bank {
-            if enable_deterministic_seed(self.slot(), &bank) {
+            if enable_deterministic_seed(self.slot(), bank) {
                 let maybe_leader_pubkey =
-                    leader_schedule_cache.slot_leader_at(self.slot(), Some(&bank));
+                    leader_schedule_cache.slot_leader_at(self.slot(), Some(bank));
                 let h = match maybe_leader_pubkey {
                     Some(pubkey) => hashv(&[
                         &self.slot().to_le_bytes(),
@@ -495,7 +495,7 @@ impl Shred {
                     None => hashv(&[
                         &self.slot().to_le_bytes(),
                         &self.index().to_le_bytes(),
-                        &self.common_header.signature.as_ref(),
+                        self.common_header.signature.as_ref(),
                     ]),
                 };
                 seed[0..].copy_from_slice(h.as_ref());

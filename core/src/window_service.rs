@@ -274,7 +274,7 @@ where
                                 if shred_filter(&shred, last_root) {
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed =
-                                        shred.seed(&leader_schedule_cache, &bank_forks);
+                                        shred.seed(leader_schedule_cache, bank_forks);
                                     Some((shred, repair_info))
                                 } else {
                                     packet.meta.discard = true;

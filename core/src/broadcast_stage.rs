@@ -443,8 +443,8 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let seed = shred.seed(&leader_schedule_cache, &bank_forks);
-            let broadcast_index = weighted_best(&peers_and_stakes, seed);
+            let seed = shred.seed(leader_schedule_cache, bank_forks);
+            let broadcast_index = weighted_best(peers_and_stakes, seed);
             (&shred.payload, &peers[broadcast_index].tvu)
         })
         .collect();
