@@ -91,7 +91,7 @@ pub struct SeekableBufferingReaderInner<T: Read> {
     pub data: Vec<Vec<u8>>,
     pub reader: RwLock<T>,
     pub len: AtomicUsize,
-    pub len: AtomicUsize,
+    pub calls: AtomicUsize,
 }
 
 use std::io;
