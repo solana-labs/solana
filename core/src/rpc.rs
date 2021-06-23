@@ -1,6 +1,5 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-<<<<<<< HEAD:core/src/rpc.rs
 use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
@@ -20,79 +19,6 @@ use solana_account_decoder::{
     parse_token::{
         get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
         token_amount_to_ui_amount, UiTokenAmount,
-=======
-use {
-    crate::{
-        max_slots::MaxSlots,
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*,
-        rpc_health::*,
-        send_transaction_service::{SendTransactionService, TransactionInfo},
-    },
-    bincode::{config::Options, serialize},
-    jsonrpc_core::{types::error, Error, Metadata, Result},
-    jsonrpc_derive::rpc,
-    serde::{Deserialize, Serialize},
-    solana_account_decoder::{
-        parse_token::{spl_token_id_v2_0, token_amount_to_ui_amount, UiTokenAmount},
-        UiAccount, UiAccountEncoding, UiDataSliceConfig,
-    },
-    solana_client::{
-        rpc_cache::LargestAccountsCache,
-        rpc_config::*,
-        rpc_custom_error::RpcCustomError,
-        rpc_deprecated_config::*,
-        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-        rpc_request::{
-            TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-            MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
-            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
-            MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
-            NUM_LARGEST_ACCOUNTS,
-        },
-        rpc_response::Response as RpcResponse,
-        rpc_response::*,
-    },
-    solana_faucet::faucet::request_airdrop_transaction,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_ledger::{
-        blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path,
-        leader_schedule_cache::LeaderScheduleCache,
-    },
-    solana_metrics::inc_new_counter_info,
-    solana_perf::packet::PACKET_DATA_SIZE,
-    solana_runtime::{
-        accounts::AccountAddressFilter,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
-        bank::Bank,
-        bank_forks::{BankForks, SnapshotConfig},
-        commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
-        inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-        non_circulating_supply::calculate_non_circulating_supply,
-        snapshot_utils::get_highest_snapshot_archive_path,
-    },
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        account_utils::StateMut,
-        clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
-        commitment_config::{CommitmentConfig, CommitmentLevel},
-        epoch_info::EpochInfo,
-        epoch_schedule::EpochSchedule,
-        exit::Exit,
-        hash::Hash,
-        pubkey::Pubkey,
-        sanitize::Sanitize,
-        signature::{Keypair, Signature, Signer},
-        stake::state::StakeState,
-        stake_history::StakeHistory,
-        system_instruction,
-        sysvar::stake_history,
-        transaction::{self, Transaction, TransactionError},
-    },
-    solana_transaction_status::{
-        EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
-        TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
->>>>>>> 64cff8c5a (Add metrics for rpc send-tx failures (#18156)):rpc/src/rpc.rs
     },
     UiAccount, UiAccountData, UiAccountEncoding, UiDataSliceConfig,
 };
@@ -141,7 +67,7 @@ use solana_sdk::{
     stake_history::StakeHistory,
     system_instruction,
     sysvar::stake_history,
-    transaction::{self, Transaction},
+    transaction::{self, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
