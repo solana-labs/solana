@@ -20,7 +20,12 @@ const DEFAULT_SIGNATURE = bs58.encode(Buffer.alloc(64).fill(0));
 
 export function SimulatorCard({ message }: { message: Message }) {
   const { cluster } = useCluster();
-  const { simulate, simulating, simulationLogs: logs } = useSimulator(message);
+  const {
+    simulate,
+    simulating,
+    simulationLogs: logs,
+    simulationError,
+  } = useSimulator(message);
   if (simulating) {
     return (
       <div className="card">
@@ -42,18 +47,25 @@ export function SimulatorCard({ message }: { message: Message }) {
             Simulate
           </button>
         </div>
-        <div className="card-body text-muted">
-          <ul>
-            <li>
-              Simulation is free and will run this transaction against the
-              latest confirmed ledger state.
-            </li>
-            <li>
-              No state changes will be persisted and all signature checks will
-              be disabled.
-            </li>
-          </ul>
-        </div>
+        {simulationError ? (
+          <div className="card-body">
+            Failed to run simulation:
+            <span className="text-warning ml-2">{simulationError}</span>
+          </div>
+        ) : (
+          <div className="card-body text-muted">
+            <ul>
+              <li>
+                Simulation is free and will run this transaction against the
+                latest confirmed ledger state.
+              </li>
+              <li>
+                No state changes will be persisted and all signature checks will
+                be disabled.
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
@@ -114,14 +126,17 @@ function useSimulator(message: Message) {
   const { cluster, url } = useCluster();
   const [simulating, setSimulating] = React.useState(false);
   const [logs, setLogs] = React.useState<Array<InstructionLogs> | null>(null);
+  const [error, setError] = React.useState<string>();
 
   React.useEffect(() => {
     setLogs(null);
     setSimulating(false);
+    setError(undefined);
   }, [url]);
 
   const onClick = React.useCallback(() => {
     if (simulating) return;
+    setError(undefined);
     setSimulating(true);
 
     const connection = new Connection(url, "confirmed");
@@ -146,17 +161,19 @@ function useSimulator(message: Message) {
 
         let instructionError;
         const responseLogs = resp.value.logs;
+        const responseErr = resp.value.err;
         if (!responseLogs) {
-          if (resp.value.err) throw new Error(JSON.stringify(resp.value.err));
+          if (resp.value.err) throw new Error(JSON.stringify(responseErr));
           throw new Error("No logs detected");
-        } else if (resp.value.err) {
-          const err = resp.value.err;
-          if (err && typeof err !== "string") {
-            let ixError = (err as any)["InstructionError"];
+        } else if (responseErr) {
+          if (typeof responseErr !== "string") {
+            let ixError = (responseErr as any)["InstructionError"];
             const [index, message] = ixError;
             if (typeof message === "string") {
               instructionError = { index, message };
             }
+          } else {
+            throw new Error(responseErr);
           }
         }
 
@@ -240,10 +257,16 @@ function useSimulator(message: Message) {
       } catch (err) {
         console.error(err);
         setLogs(null);
+        setError(err.message);
       } finally {
         setSimulating(false);
       }
     })();
   }, [cluster, url, message, simulating]);
-  return { simulate: onClick, simulating, simulationLogs: logs };
+  return {
+    simulate: onClick,
+    simulating,
+    simulationLogs: logs,
+    simulationError: error,
+  };
 }
