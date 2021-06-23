@@ -744,9 +744,24 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                         error!("map untar'd");
                     
                         files
-                    }
+                    }/*
                     else if accounts ==2 {
+                        /*
                         // do nothing - just to see how long an empty tar scan takes
+                        untar_snapshot_in(
+                            &snapshot_tar,
+                            &unpack_dir.as_ref(),
+                            account_paths,
+                            archive_format,
+                            sender_use,
+                            false, // ignored
+                            true, // disable
+                            None,
+                        )
+                        */
+                    }*/
+                    else {
+                        if false {
                         untar_snapshot_in(
                             &snapshot_tar,
                             &unpack_dir.as_ref(),
@@ -759,16 +774,8 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                         )
                     }
                     else {
-                        untar_snapshot_in(
-                            &snapshot_tar,
-                            &unpack_dir.as_ref(),
-                            account_paths,
-                            archive_format,
-                            sender_use,
-                            false, // ignored
-                            true, // disable
-                            None,
-                        )
+                        Ok(UnpackedAppendVecMap::new())
+                    }
                         // do nothing
                         /*
                         // waiting on receiver_bank
