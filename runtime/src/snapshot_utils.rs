@@ -850,7 +850,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             }
                         } else {
                             if exit.load(std::sync::atomic::Ordering::Relaxed) {
-                                error!("exit is true, quitting");
+                                //error!("exit is true, quitting");
                                 break;
                             }
                         }
