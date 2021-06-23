@@ -379,10 +379,11 @@ pub fn reconstruct_single_storage(
 
     if slot == &83424826 {
         error!(
-            "reconstruct_single_storage: {}, file len: {}, slot: {}",
+            "reconstruct_single_storage: {}, file len: {}, slot: {}, id: {}",
             current_len,
             metadata.len(),
-            slot
+            slot,
+            id
         );
     }
 
