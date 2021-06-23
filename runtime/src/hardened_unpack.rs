@@ -148,7 +148,7 @@ impl SeekableBufferingReader {
                         let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
                         calls += 1;
                         if calls % 100 == 0 {
-                            error!("calls, bytes: {}, {}", calls, bytes);
+                            error!("calls, bytes: {}, {}", calls, len);
                         }
                     }
                     Err(err) => {
