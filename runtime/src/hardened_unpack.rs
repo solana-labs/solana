@@ -122,6 +122,7 @@ impl<T: Read> SeekableBufferingReader<T> {
 
 impl<T: Read> Read for SeekableBufferingReader<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        error!("read: {}", buf.len());
         self.instance.reader.write().unwrap().read(buf)
     }
 }
