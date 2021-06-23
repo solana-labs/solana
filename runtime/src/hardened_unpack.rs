@@ -161,6 +161,7 @@ impl SeekableBufferingReader {
             time.stop();
             error!("reading entire decompressed file took: {} us", time.as_us());
         });
+        Thread::sleep(200); // give time for file to be read a little bit
     
         result
     }
