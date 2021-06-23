@@ -2629,7 +2629,7 @@ fn bignum_to_ffibignumber(
         } else if big_number_len == bnffi.data_len {
             (*bn_buffer_out).copy_from_slice(&big_number_bytes);
         } else {
-            bn_buffer_out[..big_number_bytes.len()].copy_from_slice(&&big_number_bytes);
+            bn_buffer_out[..big_number_bytes.len()].copy_from_slice(&big_number_bytes);
             (*bnffi).data_len = big_number_len;
         }
         *result = Ok(SUCCESS)
