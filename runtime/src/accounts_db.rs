@@ -5881,7 +5881,7 @@ impl AccountsDb {
                 if stored_account.meta.pubkey == Pubkey::default() && stored_account.hash == &Hash::default() && stored_account.account_meta.lamports == 0 {
                     continue;
                 }
-                if slot == 83424826{
+                if slot == 83424826 && false{
                     error!("found: slot: {}, {}, {}, {}, hash: {}", i, slot, stored_account.meta.pubkey, stored_account.account_meta.lamports, stored_account.hash);
                 }
                 match accounts_map.entry(stored_account.meta.pubkey) {
@@ -5901,6 +5901,9 @@ impl AccountsDb {
                 }
                 }
                 i += 1;
+            }
+            if slot == 83424826{
+                error!("found: slot: {}, {}, id: {}", i, slot, storage.append_vec_id());
             }
         });
         accounts_map
