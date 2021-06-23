@@ -533,16 +533,17 @@ mod tests {
         // Attempt initialization with duplicate signer inputs
         let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         let accounts = vec![
-            (true, false, &config_pubkey, &config_account),
-            (true, false, &signer0_pubkey, &signer0_account),
-            (true, false, &signer0_pubkey, &signer0_account),
+            (&config_pubkey, true, &config_account),
+            (&signer0_pubkey, true, &signer0_account),
+            (&signer0_pubkey, true, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
+                &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -567,16 +568,17 @@ mod tests {
 
         let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         let accounts = vec![
-            (true, false, &config_pubkey, &config_account),
-            (true, false, &signer0_pubkey, &signer0_account),
-            (true, false, &signer1_pubkey, &signer1_account),
+            (&config_pubkey, true, &config_account),
+            (&signer0_pubkey, true, &signer0_account),
+            (&signer1_pubkey, true, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
+                &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -590,16 +592,17 @@ mod tests {
         ];
         let instruction = config_instruction::store(&config_pubkey, false, dupe_keys, &new_config);
         let accounts = vec![
-            (false, false, &config_pubkey, &config_account),
-            (true, false, &signer0_pubkey, &signer0_account),
-            (true, false, &signer0_pubkey, &signer0_account),
+            (&config_pubkey, false, &config_account),
+            (&signer0_pubkey, true, &signer0_account),
+            (&signer0_pubkey, true, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_accounts_unified(&accounts);
+        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
+                &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidArgument),
         );
