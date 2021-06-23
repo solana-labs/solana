@@ -360,7 +360,7 @@ fn start_gossip_node(
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
-            &identity_keypair.pubkey(),
+            identity_keypair.pubkey(),
             *gossip_addr,
             expected_shred_version.unwrap_or(0),
         ),

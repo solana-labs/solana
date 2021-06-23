@@ -2725,9 +2725,9 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    pub fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr, shred_version: u16) -> ContactInfo {
+    pub fn gossip_contact_info(id: Pubkey, gossip: SocketAddr, shred_version: u16) -> ContactInfo {
         ContactInfo {
-            id: *id,
+            id,
             gossip,
             wallclock: timestamp(),
             shred_version,
@@ -2737,7 +2737,7 @@ impl ClusterInfo {
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(
-        id: &Pubkey,
+        id: Pubkey,
         gossip_addr: &SocketAddr,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
@@ -2752,7 +2752,7 @@ impl ClusterInfo {
 
     /// A Node with dummy ports to spy on gossip via pull requests
     pub fn spy_node(
-        id: &Pubkey,
+        id: Pubkey,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
@@ -3141,10 +3141,10 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-        let (node, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
+        let (node, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(&node));
         let (node, _, _) = ClusterInfo::gossip_node(
-            &solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
             &"1.1.1.1:1111".parse().unwrap(),
             0,
         );
@@ -3424,7 +3424,7 @@ mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
+        let (spy, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         cluster_info.insert_info(spy);
         cluster_info
