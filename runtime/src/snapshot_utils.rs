@@ -669,7 +669,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
 
     let this_way = true;
 
-    let parallel = vec![(queue_.clone(), exit_.clone()); 32];
+    let parallel = vec![(queue_.clone(), exit_.clone()); 16];
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
@@ -828,7 +828,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             }
                         } else {
                             if exit.load(std::sync::atomic::Ordering::Relaxed) {
-                                //error!("exit is true, quitting");
+                                error!("exit is true, quitting");
                                 break;
                             }
                         }
