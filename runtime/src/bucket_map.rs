@@ -45,7 +45,7 @@ impl BucketMap {
         &self,
         pubkey: &Pubkey,
         updatefn: fn(Option<&[SlotInfo]>) -> Option<Vec<SlotInfo>>,
-    ) -> Result<(), BucketMapError> {
+    ) -> () {
         let ix = self.bucket_ix(pubkey);
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
@@ -56,19 +56,22 @@ impl BucketMap {
         let new = updatefn(current);
         if new.is_none() {
             bucket.delete_key(pubkey);
-            return Ok(());
+            return;
         }
         let new = new.unwrap();
         loop {
             let rv = bucket.try_write(pubkey, &new);
-            if let Err(BucketMapError::DataNoSpace(sz)) = rv {
-                bucket.grow_data(sz);
-                continue;
-            } else if let Err(BucketMapError::IndexNoSpace(sz)) = rv {
-                bucket.grow_index(sz);
-                continue;
+            match rv {
+                Err(BucketMapError::DataNoSpace(sz)) => {
+                    bucket.grow_data(sz);
+                    continue;
+                },
+                Err(BucketMapError::IndexNoSpace(sz)) => {
+                    bucket.grow_index(sz);
+                    continue;
+                },
+                Ok(()) => return,
             }
-            return rv;
         }
     }
     fn bucket_ix(&self, pubkey: &Pubkey) -> usize {
