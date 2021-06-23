@@ -303,9 +303,9 @@ fn make_gossip_node(
     should_check_duplicate_instance: bool,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
-        ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr, shred_version)
+        ClusterInfo::gossip_node(keypair.pubkey(), gossip_addr, shred_version)
     } else {
-        ClusterInfo::spy_node(&keypair.pubkey(), shred_version)
+        ClusterInfo::spy_node(keypair.pubkey(), shred_version)
     };
     let cluster_info = ClusterInfo::new(node, keypair);
     if let Some(entrypoint) = entrypoint {
