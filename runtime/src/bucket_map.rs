@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 pub struct BucketMap {
-    // power of 2 size masks point to the same bucket
     buckets: Vec<RwLock<Option<Bucket>>>,
     drives: Arc<Vec<PathBuf>>,
 }
