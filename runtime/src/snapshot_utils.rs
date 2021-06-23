@@ -806,10 +806,11 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                     let mut new_slot_storage = HashMap::default();
                     loop {
                         if let Some(item) = queue.pop() {
-                            if item.len() == 0 {
+                            let stemp = item.file_stem();
+                            if stemp.is_none() {
                                 continue;
                             }
-                            let slot = Slot::from_str(item.file_stem().unwrap().to_str().unwrap())
+                            let slot = Slot::from_str(stemp.unwrap().to_str().unwrap())
                                 .unwrap();
                             {
                                 let id = AppendVecId::from_str(
