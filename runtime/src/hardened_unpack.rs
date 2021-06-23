@@ -12,7 +12,10 @@ use {
             Component::{CurDir, Normal},
             Path, PathBuf,
         },
-        sync::{Arc, atomic::{AtomicUsize, Ordering}, RwLock},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, RwLock,
+        },
         time::Instant,
     },
     tar::{
@@ -88,6 +91,7 @@ pub struct SeekableBufferingReaderInner<T: Read> {
     pub data: Vec<Vec<u8>>,
     pub reader: RwLock<T>,
     pub len: AtomicUsize,
+    pub len: AtomicUsize,
 }
 
 use std::io;
@@ -96,7 +100,7 @@ pub struct SeekableBufferingReader<T: Read> {
     pub instance: Arc<SeekableBufferingReaderInner<T>>,
 }
 
-impl<T:Read> Clone for SeekableBufferingReader<T> {
+impl<T: Read> Clone for SeekableBufferingReader<T> {
     fn clone(&self) -> Self {
         Self {
             instance: Arc::clone(&self.instance),
@@ -110,10 +114,14 @@ impl<T: Read> SeekableBufferingReader<T> {
             data: vec![],
             reader: RwLock::new(reader),
             len: AtomicUsize::new(0),
+            calls: AtomicUsize::new(0),
         };
         Self {
             instance: Arc::new(inner),
         }
+    }
+    pub fn calls(&self) -> usize {
+        self.instance.calls.load(Ordering::Relaxed)
     }
     pub fn len(&self) -> usize {
         self.instance.len.load(Ordering::Relaxed)
@@ -125,6 +133,7 @@ impl<T: Read> Read for SeekableBufferingReader<T> {
         let result = self.instance.reader.write().unwrap().read(buf);
         if let Ok(len) = &result {
             self.instance.len.fetch_add(*len, Ordering::Relaxed);
+            self.instance.calls.fetch_add(1, Ordering::Relaxed);
         }
         result
     }
@@ -235,10 +244,14 @@ where
         }
     }
     if let Some(buf) = buf {
+        let len = buf.len();
+        let calls = std::cmp::max(1, buf.calls());
         info!(
-            "unpacked {} entries total, raw bytes: {}",
+            "unpacked {} entries total, raw bytes: {}, calls: {}, bytes/call: {}",
             total_entries,
-            buf.len()
+            len,
+            calls,
+            len / calls
         );
     }
 
