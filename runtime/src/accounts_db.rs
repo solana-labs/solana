@@ -1360,18 +1360,20 @@ impl<T> CrossThreadQueue<T> {
         }
     }
     pub fn push(&self, item: T) {
-        let mut data = self.data.0.lock().unwrap();
+        let (lock, cvar) = &*self.data;
+        let mut data = lock.lock().unwrap();
         data.insert(0, item);
-        self.data.1.notify_one();
+        cvar.notify_one();
     }
     pub fn pop(&self) -> Option<T> {
-        let mut data = self.data.0.lock().unwrap();
+        let (lock, cvar) = &*self.data;
+        let mut data = lock.lock().unwrap();
         loop {
             let r = data.pop();
             if r.is_some() {
                 return r;
             }
-            let res = self.data.1.wait_timeout(data, std::time::Duration::from_millis(1000));
+            let res = cvar.wait_timeout(data, std::time::Duration::from_millis(1000));
             if res.is_err() {
                 error!("timed out");
                 return None;
@@ -1380,7 +1382,8 @@ impl<T> CrossThreadQueue<T> {
         }
     }
     pub fn len(&self) -> usize {
-        self.data.0.lock().unwrap().len()
+        let (lock, cvar) = &*self.data;
+        lock.lock().unwrap().len()
     }
 }
 
