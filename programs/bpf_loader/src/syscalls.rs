@@ -6003,20 +6003,9 @@ mod tests {
         let be_bytes_in = u32::to_be_bytes(256);
         let bn_bytes_out = BigNum::from_slice(&be_bytes_in).unwrap().to_vec();
         assert_eq!(bn_bytes_out, [1, 0]);
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 51b0df078 (Bignum encoding length variations)
+
         let be_bytes_in: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 1, 0];
         let bn_bytes_out = BigNum::from_slice(&be_bytes_in).unwrap().to_vec();
         assert_eq!(bn_bytes_out, [1, 0]);
     }
-=======
-    }
-<<<<<<< HEAD
-
-
->>>>>>> 2961987fa (Bignum syscalls)
-=======
->>>>>>> 7a46654ca (Bignum syscalls)
 }

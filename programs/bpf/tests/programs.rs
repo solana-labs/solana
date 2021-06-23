@@ -430,15 +430,7 @@ fn test_program_bpf_sanity() {
     {
         programs.extend_from_slice(&[
             ("alloc", true),
-<<<<<<< HEAD
-<<<<<<< HEAD
             ("bignumber", true),
-=======
-            ("bignum", true),
->>>>>>> e515f0c31 (Add C bindings and tests)
-=======
-            ("bignumber", true),
->>>>>>> aab413c19 (Align files with struct names)
             ("bpf_to_bpf", true),
             ("float", true),
             ("multiple_static", true),
@@ -1302,19 +1294,7 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
             ("solana_bpf_rust_alloc", 8906),
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
             ("solana_bpf_rust_bignumber", 10853),
-=======
-            ("solana_bpf_rust_bignumber", 9967),
->>>>>>> aab413c19 (Align files with struct names)
-=======
-            ("solana_bpf_rust_bignumber", 10384),
->>>>>>> 7ba04a7b8 (Bignum - fixed instruction count)
-=======
-            ("solana_bpf_rust_bignumber", 10853),
->>>>>>> 51b0df078 (Bignum encoding length variations)
             ("solana_bpf_rust_custom_heap", 539),
             ("solana_bpf_rust_dep_crate", 47),
             ("solana_bpf_rust_external_spend", 521),

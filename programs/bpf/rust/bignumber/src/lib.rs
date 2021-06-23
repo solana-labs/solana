@@ -28,32 +28,13 @@ fn test_constructors() {
     assert!(!bn_from_dec.is_negative());
     let bn_from_dec = BigNumber::from_dec_str(NEG_LONG_DEC_STRING);
     assert!(bn_from_dec.is_negative());
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 2961987fa (Bignum syscalls)
     // Test endian encoding
     let be_bytes_in = u32::to_be_bytes(256);
     let bn_bytes_out = BigNumber::from_bytes(&be_bytes_in).to_vec();
     assert_eq!(bn_bytes_out, [1, 0]);
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     let be_bytes_in: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 1, 0];
     let bn_bytes_out = BigNumber::from_bytes(&be_bytes_in).to_vec();
     assert_eq!(bn_bytes_out, [1, 0]);
-=======
->>>>>>> aab413c19 (Align files with struct names)
-=======
-
->>>>>>> 2961987fa (Bignum syscalls)
-=======
->>>>>>> 7eee92e63 (Bignum syscalls - fix format issue)
-=======
-    let be_bytes_in: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 1, 0];
-    let bn_bytes_out = BigNumber::from_bytes(&be_bytes_in).to_vec();
-    assert_eq!(bn_bytes_out, [1, 0]);
->>>>>>> 51b0df078 (Bignum encoding length variations)
 }
 
 /// BigNumber simple number and simple maths
