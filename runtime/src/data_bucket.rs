@@ -98,9 +98,6 @@ impl DataBucket {
                 e = Ok(());
                 self.used.fetch_add(1, Ordering::Relaxed);
             }
-            if hdr.as_ref().unwrap().uid() == uid {
-                e = Ok(());
-            }
         };
         e
     }
