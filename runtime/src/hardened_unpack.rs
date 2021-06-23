@@ -12,6 +12,7 @@ use {
             Component::{CurDir, Normal},
             Path, PathBuf,
         },
+        sync::{Arc, RwLock},
         time::Instant,
     },
     tar::{
@@ -83,8 +84,50 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     }
     Ok(())
 }
+pub struct SeekableBufferingReaderInner<T: Read> {
+    pub data: Vec<Vec<u8>>,
+    pub reader: RwLock<T>,
+    pub len: usize,
+}
 
-fn unpack_archive<'a, A: Read, C, D>(
+use std::io;
+
+pub struct SeekableBufferingReader<T: Read> {
+    pub instance: Arc<SeekableBufferingReaderInner<T>>,
+}
+
+impl<T:Read> Clone for SeekableBufferingReader<T> {
+    fn clone(&self) -> Self {
+        Self {
+            instance: Arc::clone(&self.instance),
+        }
+    }
+}
+
+impl<T: Read> SeekableBufferingReader<T> {
+    pub fn new(reader: T) -> Self {
+        let inner = SeekableBufferingReaderInner {
+            data: vec![],
+            reader: RwLock::new(reader),
+            len: 0,
+        };
+        Self {
+            instance: Arc::new(inner),
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.instance.len
+    }
+}
+
+impl<T: Read> Read for SeekableBufferingReader<T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.instance.reader.write().unwrap().read(buf)
+    }
+}
+
+fn unpack_archive<'a, A: Read, B: Read, C, D>(
+    buf: Option<&'a mut SeekableBufferingReader<B>>,
     archive: &'a mut Archive<A>,
     apparent_limit_size: u64,
     actual_limit_size: u64,
@@ -167,8 +210,11 @@ where
 
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
+        /*
         check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
-
+        */
+        let start = entry.raw_file_position();
+        let len = entry.size();
         // Sanitize permissions.
         let mode = match entry.header().entry_type() {
             GNUSparse | Regular => 0o644,
@@ -184,7 +230,13 @@ where
             last_log_update = now;
         }
     }
-    info!("unpacked {} entries total", total_entries);
+    if let Some(buf) = buf {
+        info!(
+            "unpacked {} entries total, raw bytes: {}",
+            total_entries,
+            buf.len()
+        );
+    }
 
     return Ok(());
 
@@ -209,20 +261,22 @@ pub type UnpackedAppendVecMap = HashMap<String, PathBuf>;
 
 use crossbeam_channel::Sender;
 
-pub fn unpack_snapshot<A: Read>(
+pub fn unpack_snapshot<A: Read, B: Read>(
+    buf: Option<&mut SeekableBufferingReader<B>>,
     archive: &mut Archive<A>,
     ledger_dir: &Path,
     account_paths: &[PathBuf], // put a channel here...
     account_path_sender: Option<&Sender<PathBuf>>,
     accounts: bool,
     disable: bool,
-    amod: Option<(usize, usize)>,    
+    amod: Option<(usize, usize)>,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
-    let mut i =0;
+    let mut i = 0;
 
     unpack_archive(
+        buf,
         archive,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
@@ -237,11 +291,11 @@ pub fn unpack_snapshot<A: Read>(
                             i += 1;
                             match &amod {
                                 Some((idx, total)) => {
-                                    if (i-1) % total != *idx {
+                                    if (i - 1) % total != *idx {
                                         return None;
                                     }
-                                },
-                                None=> {}
+                                }
+                                None => {}
                             };
                             // Randomly distribute the accounts files about the available `account_paths`,
                             let path_index = thread_rng().gen_range(0, account_paths.len());
@@ -280,12 +334,18 @@ pub fn unpack_snapshot<A: Read>(
                 None => {
                     if account {
                         //error!("path: {:?}", path);
-                    }
-                    else {
+                    } else {
                         let metadata = fs::metadata(path.clone()).unwrap();
                         let filename = path.file_name().unwrap();
                         let subdir = path.parent().unwrap().file_name().unwrap();
-                        error!("untar'd: path: {:?}, len: {}, {:?}, {:?}, {:?}", path, metadata.len(), filename, subdir, filename == subdir);
+                        error!(
+                            "untar'd: path: {:?}, len: {}, {:?}, {:?}, {:?}",
+                            path,
+                            metadata.len(),
+                            filename,
+                            subdir,
+                            filename == subdir
+                        );
                     }
                 }
             }
@@ -398,6 +458,7 @@ fn unpack_genesis<A: Read>(
     max_genesis_archive_unpacked_size: u64,
 ) -> Result<()> {
     unpack_archive(
+        None::<&mut SeekableBufferingReader<A>>,
         archive,
         max_genesis_archive_unpacked_size,
         max_genesis_archive_unpacked_size,

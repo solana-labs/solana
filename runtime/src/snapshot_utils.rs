@@ -1025,7 +1025,7 @@ pub fn purge_old_snapshot_archives<P: AsRef<Path>>(
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
     }
 }
-
+use crate::hardened_unpack::SeekableBufferingReader;
 fn untar_snapshot_in<P: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: &Path,
@@ -1041,8 +1041,10 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     let account_paths_map = match archive_format {
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
-            let mut archive = Archive::new(tar);
+            let mut buf = SeekableBufferingReader::new(tar);
+            let mut archive = Archive::new(buf.clone());
             unpack_snapshot(
+                Some(&mut buf),
                 &mut archive,
                 unpack_dir,
                 account_paths,
@@ -1054,8 +1056,10 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
-            let mut archive = Archive::new(tar);
+            let mut buf = SeekableBufferingReader::new(tar);
+            let mut archive = Archive::new(buf.clone());
             unpack_snapshot(
+                Some(&mut buf),
                 &mut archive,
                 unpack_dir,
                 account_paths,
@@ -1067,8 +1071,10 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
-            let mut archive = Archive::new(tar);
+            let mut buf = SeekableBufferingReader::new(tar);
+            let mut archive = Archive::new(buf.clone());
             unpack_snapshot(
+                Some(&mut buf),
                 &mut archive,
                 unpack_dir,
                 account_paths,
@@ -1080,8 +1086,10 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
-            let mut archive = Archive::new(tar);
+            let mut buf = SeekableBufferingReader::new(tar);
+            let mut archive = Archive::new(buf.clone());
             unpack_snapshot(
+                Some(&mut buf),
                 &mut archive,
                 unpack_dir,
                 account_paths,
