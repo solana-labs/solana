@@ -1348,9 +1348,17 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CrossThreadQueue<T> {
     data: Arc<(Mutex<Vec<T>>, Condvar)>,
+}
+
+impl<T> Clone for CrossThreadQueue<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: Arc::clone(&self.data)
+        }
+    }
 }
 
 impl<T> CrossThreadQueue<T> {
