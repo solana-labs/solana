@@ -2198,23 +2198,7 @@ impl ClusterInfo {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
-<<<<<<< HEAD
         trace!("PullResponse me: {} from: {} len={}", self.id, from, len);
-        let shred_version = {
-            let gossip = self.gossip.read().unwrap();
-            gossip.crds.get_shred_version(from).unwrap_or_default()
-        };
-        Self::filter_by_shred_version(
-            from,
-            &mut crds_values,
-            shred_version,
-            self.my_shred_version(),
-        );
-        let filtered_len = crds_values.len();
-
-=======
-        trace!("PullResponse me: {} from: {} len={}", self.id(), from, len);
->>>>>>> 69a5f0e6c (filters crds values obtained through gossip by their shred version (#18072))
         let mut pull_stats = ProcessPullStats::default();
         let (filtered_pulls, filtered_pulls_expired_timeout, failed_inserts) = self
             .time_gossip_read_lock("filter_pull_resp", &self.stats.filter_pull_response)
