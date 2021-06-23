@@ -1383,9 +1383,9 @@ impl<T> CrossThreadQueue<T> {
             if r.is_some() {
                 return r;
             }
-            let res = cvar.wait_timeout(data, std::time::Duration::from_millis(10)).unwrap();
+            let res = cvar.wait_timeout(data, std::time::Duration::from_millis(1000)).unwrap();
             if res.1.timed_out() {
-                error!("timed out");
+                //error!("timed out");
                 return None;
             }
             data = res.0;
