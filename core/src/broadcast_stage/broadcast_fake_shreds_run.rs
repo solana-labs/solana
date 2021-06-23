@@ -105,6 +105,8 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        _leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
             let peers = cluster_info.tvu_peers();

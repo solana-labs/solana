@@ -17,11 +17,13 @@ use solana_gossip::{
     crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
     weighted_shuffle::weighted_best,
 };
-use solana_ledger::{blockstore::Blockstore, shred::Shred};
+use solana_ledger::{
+    blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
 use solana_streamer::sendmmsg::send_mmsg;
@@ -31,7 +33,7 @@ use std::{
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -71,6 +73,7 @@ pub enum BroadcastStageType {
 }
 
 impl BroadcastStageType {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_broadcast_stage(
         &self,
         sock: Vec<UdpSocket>,
@@ -79,6 +82,8 @@ impl BroadcastStageType {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         shred_version: u16,
     ) -> BroadcastStage {
         match self {
@@ -89,6 +94,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                leader_schedule_cache,
+                bank_forks,
                 StandardBroadcastRun::new(shred_version),
             ),
 
@@ -99,6 +106,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                leader_schedule_cache,
+                bank_forks,
                 FailEntryVerificationBroadcastRun::new(shred_version),
             ),
 
@@ -109,6 +118,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                leader_schedule_cache,
+                bank_forks,
                 BroadcastFakeShredsRun::new(0, shred_version),
             ),
 
@@ -119,6 +130,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                leader_schedule_cache,
+                bank_forks,
                 BroadcastDuplicatesRun::new(shred_version, config.clone()),
             ),
         }
@@ -140,6 +153,8 @@ trait BroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()>;
     fn record(
         &mut self,
@@ -239,6 +254,8 @@ impl BroadcastStage {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
         let btree = blockstore.clone();
@@ -269,10 +286,18 @@ impl BroadcastStage {
             let socket_receiver = socket_receiver.clone();
             let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
+            let leader_schedule_cache = leader_schedule_cache.clone();
+            let bank_forks = bank_forks.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
-                    let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
+                    let res = bs_transmit.transmit(
+                        &socket_receiver,
+                        &cluster_info,
+                        &sock,
+                        &leader_schedule_cache,
+                        &bank_forks,
+                    );
                     let res = Self::handle_error(res, "solana-broadcaster-transmit");
                     if let Some(res) = res {
                         return res;
@@ -406,6 +431,8 @@ pub fn broadcast_shreds(
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
     transmit_stats: &mut TransmitShredsStats,
+    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
     let broadcast_len = peers_and_stakes.len();
     if broadcast_len == 0 {
@@ -416,8 +443,8 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
-
+            let seed = shred.seed(&leader_schedule_cache, &bank_forks);
+            let broadcast_index = weighted_best(&peers_and_stakes, seed);
             (&shred.payload, &peers[broadcast_index].tvu)
         })
         .collect();
@@ -641,7 +668,10 @@ pub mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Bank::new(&genesis_config);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().root_bank();
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
@@ -651,6 +681,8 @@ pub mod test {
             retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
+            &leader_schedule_cache,
+            &bank_forks,
             StandardBroadcastRun::new(0),
         );
 

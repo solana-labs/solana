@@ -130,6 +130,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         // Broadcast data
@@ -142,6 +144,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &peers,
             &Arc::new(AtomicU64::new(0)),
             &mut TransmitShredsStats::default(),
+            leader_schedule_cache,
+            bank_forks,
         )?;
 
         Ok(())

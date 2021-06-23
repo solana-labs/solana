@@ -756,6 +756,7 @@ impl Validator {
             &exit,
             node.info.shred_version,
             vote_tracker,
+            &leader_schedule_cache,
             bank_forks,
             verified_vote_sender,
             gossip_verified_vote_hash_sender,

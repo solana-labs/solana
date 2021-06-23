@@ -151,6 +151,10 @@ pub mod dedupe_config_program_signers {
     solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
 }
 
+pub mod deterministic_shred_seed_enabled {
+    solana_sdk::declare_id!("FjSRMpFe7mofQ3WrEMT7Smjk2sME1XdAoRxcv55V6M44");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -189,6 +193,7 @@ lazy_static! {
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
+        (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

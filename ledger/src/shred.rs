@@ -53,6 +53,7 @@ use crate::{
     blockstore::MAX_DATA_SHREDS_PER_SLOT,
     entry::{create_ticks, Entry},
     erasure::Session,
+    leader_schedule_cache::LeaderScheduleCache,
 };
 use bincode::config::Options;
 use core::cell::RefCell;
@@ -65,15 +66,20 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_perf::packet::{limited_deserialize, Packet};
 use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     clock::Slot,
+    feature_set,
+    hash::hashv,
     hash::Hash,
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use std::mem::size_of;
-
+use std::{
+    mem::size_of,
+    sync::{Arc, RwLock},
+};
 use thiserror::Error;
 
 #[derive(Default, Clone)]
@@ -467,8 +473,36 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn seed(&self) -> [u8; 32] {
+    pub fn seed(
+        &self,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> [u8; 32] {
         let mut seed = [0; 32];
+
+        let bf = bank_forks.read().unwrap();
+        let maybe_bank = bf.get(self.slot());
+        if let Some(bank) = maybe_bank {
+            if enable_deterministic_seed(self.slot(), &bank) {
+                let maybe_leader_pubkey =
+                    leader_schedule_cache.slot_leader_at(self.slot(), Some(&bank));
+                let h = match maybe_leader_pubkey {
+                    Some(pubkey) => hashv(&[
+                        &self.slot().to_le_bytes(),
+                        &self.index().to_le_bytes(),
+                        &pubkey.to_bytes(),
+                    ]),
+                    None => hashv(&[
+                        &self.slot().to_le_bytes(),
+                        &self.index().to_le_bytes(),
+                        &self.common_header.signature.as_ref(),
+                    ]),
+                };
+                seed[0..].copy_from_slice(h.as_ref());
+                return seed;
+            }
+        }
+
         let seed_len = seed.len();
         let sig = self.common_header.signature.as_ref();
         seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
@@ -554,6 +588,21 @@ impl Shred {
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
+    }
+}
+
+fn enable_deterministic_seed(shred_slot: Slot, bank: &Bank) -> bool {
+    let feature_slot = bank
+        .feature_set
+        .activated_slot(&feature_set::deterministic_shred_seed_enabled::id());
+    match feature_slot {
+        None => false,
+        Some(feature_slot) => {
+            let epoch_schedule = bank.epoch_schedule();
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
     }
 }
 
