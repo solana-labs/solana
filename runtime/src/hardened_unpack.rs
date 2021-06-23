@@ -143,7 +143,6 @@ impl SeekableBufferingReader {
                 let result = reader.read(&mut data);
                 match result {
                     Ok(size) => {
-                        error!("read size: {}", size);
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
                         result_.instance.len.fetch_add(size, Ordering::Relaxed);
                     }
