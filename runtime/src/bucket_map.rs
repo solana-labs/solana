@@ -133,14 +133,14 @@ impl Bucket {
         None
     }
 
-    fn create_key(&mut self, key: &Pubkey) -> Result<(&IndexEntry, u64), BucketMapError> {
+    fn create_key(&mut self, key: &Pubkey) -> Result<u64, BucketMapError> {
         let ix = self.index_ix(key);
         for i in ix..ix + MAX_SEARCH {
             let ii = i as u64 % self.index.capacity;
             if self.index.uid(ii) != 0 {
                 continue;
             }
-            self.index.allocate(ii, self.version);
+            self.index.allocate(ii, self.version).unwrap();
             self.version += 1;
             let mut elem: &mut IndexEntry = self.index.get_mut(ii);
             elem.key = *key;
@@ -148,7 +148,7 @@ impl Bucket {
             elem.data_location = 0;
             elem.create_bucket_capacity = 0;
             elem.num_slots = 0;
-            return Ok((elem, ii));
+            return Ok(ii);
         }
         Err(BucketMapError::IndexNoSpace(self.index.capacity))
     }
@@ -165,7 +165,9 @@ impl Bucket {
     fn try_write(&mut self, key: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
         let index_entry = self.find_index(key);
         let (elem, elem_ix) = if index_entry.is_none() {
-            self.create_key(key)?
+            let ii = self.create_key(key)?;
+            let elem = self.index.get(ii);
+            (elem, ii)
         } else {
             index_entry.unwrap()
         };
@@ -174,12 +176,15 @@ impl Bucket {
         if self.data.get(best_fit_bucket as usize).is_none() {
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
-        let current_bucket = self.data[elem.data_bucket as usize];
-        if best_fit_bucket == elem.data_bucket {
+        let current_bucket = &self.data[elem.data_bucket as usize];
+        if best_fit_bucket == elem.data_bucket && elem.num_slots > 0 {
             //in place update
             let elem_loc = elem.data_loc(current_bucket.capacity);
             let slice: &mut [SlotInfo] =
                 current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
+            let elem: &mut IndexEntry = self.index.get_mut(elem_ix);
+            assert!(current_bucket.uid(elem_loc) == elem_uid);
+            elem.num_slots = data.len() as u64;
             slice.clone_from_slice(data);
             return Ok(());
         } else {
@@ -191,14 +196,19 @@ impl Bucket {
                 let ix = i % cap;
                 if best_bucket.uid(ix) == 0 {
                     let elem_loc = elem.data_loc(current_bucket.capacity);
-                    current_bucket.free(elem_loc, elem_uid);
-                    best_bucket.allocate(ix, elem_uid);
-                    let slice = best_bucket.get_mut_cell_slice(ix, data.len() as u64);
+                    if elem.num_slots > 0 {
+                        current_bucket.free(elem_loc, elem_uid).unwrap();
+                    }
+                    let elem: &mut IndexEntry = self.index.get_mut(elem_ix);
                     elem.data_bucket = best_fit_bucket;
                     elem.data_location = ix;
                     elem.create_bucket_capacity = best_bucket.capacity;
                     elem.num_slots = data.len() as u64;
-                    slice.clone_from_slice(data);
+                    if elem.num_slots > 0 {
+                        best_bucket.allocate(ix, elem_uid).unwrap();
+                        let slice = best_bucket.get_mut_cell_slice(ix, data.len() as u64);
+                        slice.clone_from_slice(data);
+                    }
                     return Ok(());
                 }
             }
@@ -210,11 +220,11 @@ impl Bucket {
         if let Some((elem, elem_ix)) = self.find_index(key) {
             let elem_uid = self.index.uid(elem_ix);
             if elem.num_slots > 0 {
-                let data_bucket = self.data[elem.data_bucket as usize];
+                let data_bucket = &self.data[elem.data_bucket as usize];
                 let loc = elem.data_loc(data_bucket.capacity);
-                data_bucket.free(loc, elem_uid);
+                data_bucket.free(loc, elem_uid).unwrap();
             }
-            self.index.free(elem_ix, elem_uid);
+            self.index.free(elem_ix, elem_uid).unwrap();
         }
     }
 
@@ -232,7 +242,7 @@ impl Bucket {
         if self.data.get(sz.0 as usize).is_none() {
             for i in self.data.len() as u64..(sz.0 + 1) {
                 self.data.push(DataBucket::new(
-                    self.drives,
+                    self.drives.clone(),
                     (1 << i) + MIN_ELEMS,
                     std::mem::size_of::<SlotInfo>() as u64,
                 ))

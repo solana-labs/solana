@@ -48,6 +48,7 @@ pub struct DataBucket {
 #[derive(Debug)]
 pub enum DataBucketError {
     AlreadyAllocated,
+    InvalidFree,
 }
 
 impl Drop for DataBucket {
@@ -97,22 +98,28 @@ impl DataBucket {
                 e = Ok(());
                 self.used.fetch_add(1, Ordering::Relaxed);
             }
+            if hdr.as_ref().unwrap().uid() == uid {
+                e = Ok(());
+            }
         };
         e
     }
 
-    pub fn free(&self, ix: u64, uid: u64) {
+    pub fn free(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
         if ix >= self.capacity {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
         let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        let mut e = Err(DataBucketError::InvalidFree);
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             if hdr.as_ref().unwrap().unlock(uid) {
                 self.used.fetch_sub(1, Ordering::Relaxed);
+                e = Ok(());
             }
         };
+        e
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
