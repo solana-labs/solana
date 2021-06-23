@@ -1315,6 +1315,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
+        skip_accounts: bool,
     ) -> Self {
         error!("new_from_fields");
         fn new<T: Default>() -> T {
@@ -1378,6 +1379,9 @@ impl Bank {
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
         };
+        if skip_accounts {
+            return bank;
+        }
         error!("new_from_fields2");
         bank.finish_init(
             genesis_config,

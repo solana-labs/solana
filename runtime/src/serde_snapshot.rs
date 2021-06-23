@@ -290,6 +290,7 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
+        skip_accounts,
     );
 
     Ok(bank)
