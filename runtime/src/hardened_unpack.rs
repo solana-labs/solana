@@ -139,12 +139,17 @@ impl SeekableBufferingReader {
             let mut time = Measure::start("");
             const SIZE: usize  = 65536;
             let mut data = [0u8; SIZE];
+            let mut calls = 0;
             loop {
                 let result = reader.read(&mut data);
                 match result {
                     Ok(size) => {
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
-                        result_.instance.len.fetch_add(size, Ordering::Relaxed);
+                        let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
+                        calls += 1;
+                        if calls % 100 == 0 {
+                            error!("calls, bytes: {}, {}", calls, bytes);
+                        }
                     }
                     Err(err) => {
                         error!("error reading file");
