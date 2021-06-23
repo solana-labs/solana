@@ -134,7 +134,7 @@ impl SeekableBufferingReader {
         let result_ = result.clone();
 
         let handle = Builder::new()
-        .name("solana-rpc-banks".to_string())
+        .name("solana-compressed_file_reader".to_string())
         .spawn(move || {
             let mut time = Measure::start("");
             const SIZE: usize  = 65536;
@@ -143,10 +143,12 @@ impl SeekableBufferingReader {
                 let result = reader.read(&mut data);
                 match result {
                     Ok(size) => {
+                        error!("read size: {}", size);
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
                         result_.instance.len.fetch_add(size, Ordering::Relaxed);
                     }
                     Err(err) => {
+                        error!("error reading file");
                         *result_.instance.error.lock().unwrap() = Err(err);
                         break;
                     }
