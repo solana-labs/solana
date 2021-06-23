@@ -147,7 +147,7 @@ impl SeekableBufferingReader {
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
                         let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
                         calls += 1;
-                        if calls % 100 == 0 {
+                        if calls % 1000 == 0 {
                             error!("calls, bytes: {}, {}", calls, len);
                         }
                     }
@@ -175,11 +175,11 @@ impl SeekableBufferingReader {
 
 impl Read for SeekableBufferingReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let len = buf.len();
+        let request_len = buf.len();
         let file_len = self.instance.len.load(Ordering::Relaxed);
-        let end = self.pos + len;
+        let end = self.pos + request_len;
 
-        let mut remaining_request = len;
+        let mut remaining_request = request_len;
         let mut offset_in_dest = 0;
         while remaining_request > 0 {
             let mut lock = self.instance.data.read().unwrap();
@@ -206,11 +206,8 @@ impl Read for SeekableBufferingReader {
             }
         }
 
-        if self.pos >= file_len {
-            return Ok(0);
-        }
-
         self.instance.calls.fetch_add(1, Ordering::Relaxed);
+        error!("read: {}, returning {}", request_len, offset_in_dest);
         Ok(offset_in_dest)
     }
 }

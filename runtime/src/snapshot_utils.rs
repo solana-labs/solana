@@ -682,8 +682,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                                 .into_par_iter()
                                 .map(|idx| {
                                     let sender_local = sender.lock().unwrap().clone().unwrap();
-                                    let mut sender_use = None;
-                                    sender_use = Some(&sender_local);
+                                    let sender_use = Some(&sender_local);
                                     untar_snapshot_in(
                                         &snapshot_tar,
                                         &unpack_dir.as_ref(),
