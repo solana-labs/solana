@@ -14,8 +14,9 @@ use {
         },
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            Arc, Mutex, RwLock,
         },
+        thread::Builder,
         time::Instant,
     },
     tar::{
@@ -24,6 +25,7 @@ use {
     },
     thiserror::Error,
 };
+use solana_measure::measure::Measure;
 
 #[derive(Error, Debug)]
 pub enum UnpackError {
@@ -87,38 +89,74 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     }
     Ok(())
 }
-pub struct SeekableBufferingReaderInner<T: Read> {
-    pub data: Vec<Vec<u8>>,
-    pub reader: RwLock<T>,
+pub struct SeekableBufferingReaderInner<> {
+    pub data: RwLock<Vec<Vec<u8>>>,
     pub len: AtomicUsize,
     pub calls: AtomicUsize,
+    pub error: Mutex<io::Result<()>>,
 }
 
 use std::io;
 
-pub struct SeekableBufferingReader<T: Read> {
-    pub instance: Arc<SeekableBufferingReaderInner<T>>,
+pub struct SeekableBufferingReader {
+    pub instance: Arc<SeekableBufferingReaderInner>,
+    pub pos: usize,
+    pub last_buffer_index: usize,
+    pub next_index_within_last_buffer: usize,
 }
 
-impl<T: Read> Clone for SeekableBufferingReader<T> {
+impl Clone for SeekableBufferingReader {
     fn clone(&self) -> Self {
         Self {
             instance: Arc::clone(&self.instance),
+            pos: 0,
+            last_buffer_index: 0,
+            next_index_within_last_buffer: 0,
         }
     }
 }
 
-impl<T: Read> SeekableBufferingReader<T> {
-    pub fn new(reader: T) -> Self {
+impl SeekableBufferingReader {
+    pub fn new<T: 'static + Read + std::marker::Send>(mut reader: T) -> Self {
         let inner = SeekableBufferingReaderInner {
-            data: vec![],
-            reader: RwLock::new(reader),
+            data: RwLock::new(vec![]),
             len: AtomicUsize::new(0),
             calls: AtomicUsize::new(0),
+            error: Mutex::new(Ok(())),
         };
-        Self {
+        let result = Self {
             instance: Arc::new(inner),
-        }
+            pos: 0,
+            last_buffer_index: 0,
+            next_index_within_last_buffer: 0,
+        };
+
+        let result_ = result.clone();
+
+        let handle = Builder::new()
+        .name("solana-rpc-banks".to_string())
+        .spawn(move || {
+            let mut time = Measure::start("");
+            const SIZE: usize  = 65536;
+            let mut data = [0u8; SIZE];
+            loop {
+                let result = reader.read(&mut data);
+                match result {
+                    Ok(size) => {
+                        result_.instance.data.write().unwrap().push(data[0..size].to_vec());
+                        result_.instance.len.fetch_add(size, Ordering::Relaxed);
+                    }
+                    Err(err) => {
+                        *result_.instance.error.lock().unwrap() = Err(err);
+                        break;
+                    }
+                }
+            }
+            time.stop();
+            error!("reading entire decompressed file took: {} us", time.as_us());
+        });
+    
+        result
     }
     pub fn calls(&self) -> usize {
         self.instance.calls.load(Ordering::Relaxed)
@@ -128,19 +166,43 @@ impl<T: Read> SeekableBufferingReader<T> {
     }
 }
 
-impl<T: Read> Read for SeekableBufferingReader<T> {
+impl Read for SeekableBufferingReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let result = self.instance.reader.write().unwrap().read(buf);
-        if let Ok(len) = &result {
-            self.instance.len.fetch_add(*len, Ordering::Relaxed);
-            self.instance.calls.fetch_add(1, Ordering::Relaxed);
+        let len = buf.len();
+        let file_len = self.instance.len.load(Ordering::Relaxed);
+        let end = self.pos + len;
+
+        let mut remaining_request = len;
+        let mut offset_in_dest = 0;
+        while remaining_request > 0 {
+            let mut lock = self.instance.data.read().unwrap();
+            let source = &lock[self.last_buffer_index];
+            let full_len = source.len();
+            let remaining_len = full_len - self.next_index_within_last_buffer;
+            if remaining_len >= remaining_request {
+                buf[offset_in_dest..(offset_in_dest + remaining_request)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + remaining_request)]);
+                self.next_index_within_last_buffer += remaining_request;
+                offset_in_dest += remaining_request;
+            }
+            else {
+                buf[offset_in_dest..(offset_in_dest + remaining_len)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + remaining_len)]);
+                offset_in_dest += remaining_len;
+                self.next_index_within_last_buffer = 0;
+                self.last_buffer_index += 1;
+            }
         }
-        result
+
+        if self.pos >= file_len {
+            return Ok(0);
+        }
+
+        self.instance.calls.fetch_add(1, Ordering::Relaxed);
+        Ok(offset_in_dest)
     }
 }
 
-fn unpack_archive<'a, A: Read, B: Read, C, D>(
-    buf: Option<&'a mut SeekableBufferingReader<B>>,
+fn unpack_archive<'a, A: Read, C, D>(
+    buf: Option<&'a mut SeekableBufferingReader>,
     archive: &'a mut Archive<A>,
     apparent_limit_size: u64,
     actual_limit_size: u64,
@@ -278,8 +340,8 @@ pub type UnpackedAppendVecMap = HashMap<String, PathBuf>;
 
 use crossbeam_channel::Sender;
 
-pub fn unpack_snapshot<A: Read, B: Read>(
-    buf: Option<&mut SeekableBufferingReader<B>>,
+pub fn unpack_snapshot<A: Read>(
+    buf: Option<&mut SeekableBufferingReader>,
     archive: &mut Archive<A>,
     ledger_dir: &Path,
     account_paths: &[PathBuf], // put a channel here...
@@ -475,7 +537,7 @@ fn unpack_genesis<A: Read>(
     max_genesis_archive_unpacked_size: u64,
 ) -> Result<()> {
     unpack_archive(
-        None::<&mut SeekableBufferingReader<A>>,
+        None::<&mut SeekableBufferingReader>,
         archive,
         max_genesis_archive_unpacked_size,
         max_genesis_archive_unpacked_size,
