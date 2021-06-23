@@ -601,9 +601,7 @@ pub struct BankFromArchiveTimings {
     pub untar_us: u64,
     pub verify_snapshot_bank_us: u64,
 }
-use crossbeam_channel::{
-    unbounded, Sender as CrossbeamSender,
-};
+use crossbeam_channel::{unbounded, Sender as CrossbeamSender};
 
 use crate::accounts_db::CrossThreadQueue;
 
@@ -627,7 +625,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
-        let debug_keys_ = debug_keys.as_ref().map(|k|k.clone());
+    let debug_keys_ = debug_keys.as_ref().map(|k| k.clone());
 
     error!("account_paths: {:?}", &account_paths[0]);
 
@@ -673,131 +671,136 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
-                let unpacked_append_vec_map =  vec![0,1,2,3].into_par_iter().map(|accounts| {
-                    let mut sender_use = None;
-                    if accounts == 0 {
-                        let amod = 16;
-                        let mut result = UnpackedAppendVecMap::new();
-                        let all = (0..amod).into_par_iter().map(|idx| {
-                            let sender_local = sender.lock().unwrap().clone().unwrap();
-                            let mut sender_use = None;
+                let unpacked_append_vec_map = vec![0, 1, 2, 3]
+                    .into_par_iter()
+                    .map(|accounts| {
+                        let mut sender_use = None;
+                        if accounts == 0 {
+                            let amod = 16;
+                            let mut result = UnpackedAppendVecMap::new();
+                            let all = (0..amod)
+                                .into_par_iter()
+                                .map(|idx| {
+                                    let sender_local = sender.lock().unwrap().clone().unwrap();
+                                    let mut sender_use = None;
+                                    sender_use = Some(&sender_local);
+                                    untar_snapshot_in(
+                                        &snapshot_tar,
+                                        &unpack_dir.as_ref(),
+                                        account_paths,
+                                        archive_format,
+                                        sender_use,
+                                        accounts == 0,
+                                        false,
+                                        Some((idx, amod)),
+                                    )
+                                })
+                                .collect::<Vec<_>>(); // TODO missing FnMut?
+                            for h in all {
+                                result.extend(h?);
+                            }
+                            Ok(result)
+                        } else if accounts == 1 {
+                            let sender_local = sender_bank.lock().unwrap().take().unwrap();
                             sender_use = Some(&sender_local);
+                            let files = untar_snapshot_in(
+                                &snapshot_tar,
+                                &unpack_dir.as_ref(),
+                                account_paths,
+                                archive_format,
+                                sender_use,
+                                false,
+                                false,
+                                None,
+                            );
+                            let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
+                            let unpacked_version_file = unpack_dir.as_ref().join("version");
+
+                            let mut snapshot_version = String::new();
+                            File::open(unpacked_version_file)
+                                .and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+
+                            let map = get_accounts_db_fields_from_snapshots(
+                                snapshot_version.trim(),
+                                frozen_account_pubkeys,
+                                &unpacked_snapshots_dir,
+                                account_paths,
+                                files.as_ref().unwrap().clone(),
+                                genesis_config,
+                                debug_keys_.as_ref().map(|k| k.clone()),
+                                additional_builtins,
+                                account_indexes.clone(),
+                                accounts_db_caching_enabled,
+                                limit_load_slot_count_from_snapshot,
+                                shrink_ratio,
+                                None,
+                                true,
+                            )
+                            .unwrap();
+
+                            for x in map.iter().flatten() {
+                                if x.0 == 1121359392 {
+                                    error!("found is: {}, len: {}", x.0, x.1);
+                                }
+                            }
+
+                            error!("map untar'd");
+
+                            files
+                        }
+                        /*
+                        else if accounts ==2 {
+                            /*
+                            // do nothing - just to see how long an empty tar scan takes
                             untar_snapshot_in(
                                 &snapshot_tar,
                                 &unpack_dir.as_ref(),
                                 account_paths,
                                 archive_format,
                                 sender_use,
-                                accounts == 0,
-                                false,
-                                Some((idx, amod)),
+                                false, // ignored
+                                true, // disable
+                                None,
                             )
-                        }).collect::<Vec<_>>(); // TODO missing FnMut?
-                        for h in all {
-                            result.extend(h?);
-                        };
-                        Ok(result)
-                    }
-                    else if accounts == 1 {
-                        let sender_local = sender_bank.lock().unwrap().take().unwrap();
-                        sender_use = Some(&sender_local);
-                        let files = untar_snapshot_in(
-                            &snapshot_tar,
-                            &unpack_dir.as_ref(),
-                            account_paths,
-                            archive_format,
-                            sender_use,
-                            false,
-                            false,
-                            None,
-                        );
-                        let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
-                        let unpacked_version_file = unpack_dir.as_ref().join("version");
-                    
-                        let mut snapshot_version = String::new();
-                        File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
-                    
-                        let map = get_accounts_db_fields_from_snapshots(
-                            snapshot_version.trim(),
-                            frozen_account_pubkeys,
-                            &unpacked_snapshots_dir,
-                            account_paths,
-                            files.as_ref().unwrap().clone(),
-                            genesis_config,
-                            debug_keys_.as_ref().map(|k|k.clone()),
-                                                        additional_builtins,
-                            account_indexes.clone(),
-                            accounts_db_caching_enabled,
-                            limit_load_slot_count_from_snapshot,
-                            shrink_ratio,
-                            None,
-                            true,
-                        ).unwrap();
-
-                        for x in map.iter().flatten() {
-                            if x.0 == 1121359392 {
-                                error!("found is: {}, len: {}", x.0, x.1);
+                            */
+                        }*/
+                        else {
+                            if false {
+                                untar_snapshot_in(
+                                    &snapshot_tar,
+                                    &unpack_dir.as_ref(),
+                                    account_paths,
+                                    archive_format,
+                                    sender_use,
+                                    false, // ignored
+                                    true,  // disable
+                                    None,
+                                )
+                            } else {
+                                Ok(UnpackedAppendVecMap::new())
                             }
+                            // do nothing
+                            /*
+                            // waiting on receiver_bank
+                            let x = receiver_bank.recv();
+                            match x {
+                                Ok(path) => {
+                                    // got the bank file, so now we can extract the appendvec lens...
+
+                                }
+                                Err(err) => {
+                                }
+                            }
+                            */
                         }
-
-
-                        error!("map untar'd");
-                    
-                        files
-                    }/*
-                    else if accounts ==2 {
-                        /*
-                        // do nothing - just to see how long an empty tar scan takes
-                        untar_snapshot_in(
-                            &snapshot_tar,
-                            &unpack_dir.as_ref(),
-                            account_paths,
-                            archive_format,
-                            sender_use,
-                            false, // ignored
-                            true, // disable
-                            None,
-                        )
-                        */
-                    }*/
-                    else {
-                        if false {
-                        untar_snapshot_in(
-                            &snapshot_tar,
-                            &unpack_dir.as_ref(),
-                            account_paths,
-                            archive_format,
-                            sender_use,
-                            false, // ignored
-                            true, // disable
-                            None,
-                        )
-                    }
-                    else {
-                        Ok(UnpackedAppendVecMap::new())
-                    }
-                        // do nothing
-                        /*
-                        // waiting on receiver_bank
-                        let x = receiver_bank.recv();
-                        match x {
-                            Ok(path) => {
-                                // got the bank file, so now we can extract the appendvec lens...
-                                
-                            }
-                            Err(err) => {
-                            }
-                        }
-                        */
-                    }
-                }).collect::<Vec<_>>();
+                    })
+                    .collect::<Vec<_>>();
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
                 exit.store(true, std::sync::atomic::Ordering::Relaxed);
                 let sender_local = sender.lock().unwrap().clone().unwrap();
                 for i in 0..50 {
                     let _ = sender_local.send(Path::new("").to_path_buf());
                 }
-
             } else {
                 if this_way {
                     let mut new_slot_storage = HashMap::default();
@@ -813,29 +816,32 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
 
                                 let metadata = fs::metadata(item.clone()).unwrap();
                                 //error!("path: slot: {}, {:?}, {}, len: {}", slot, item, id, metadata.len());
-
-                                reconstruct_single_storage(
-                                    &slot,
-                                    &item,
-                                    metadata.len() as usize,
-                                    id,
-                                    &mut new_slot_storage,
-                                    false,
-                                );
-                                let result =
-                                    AccountsDb::process_storage_slot(new_slot_storage.values(), slot);
-                                if result.len() > 0 {
-                                    //error!("found: {}, slot: {}", result.len(), slot);
-                                    AccountsDb::generate_index_for_slot(
-                                        &idx,
-                                        &uncleaned_pubkeys,
-                                        &secondary,
-                                        result,
+                                if false {
+                                    reconstruct_single_storage(
                                         &slot,
+                                        &item,
+                                        metadata.len() as usize,
+                                        id,
+                                        &mut new_slot_storage,
+                                        false,
                                     );
-                                    //error!("dropping: {:?}", item);
-                                    new_slot_storage.clear();
-                                    //error!("dropped: {:?}", item);
+                                    let result = AccountsDb::process_storage_slot(
+                                        new_slot_storage.values(),
+                                        slot,
+                                    );
+                                    if result.len() > 0 {
+                                        //error!("found: {}, slot: {}", result.len(), slot);
+                                        AccountsDb::generate_index_for_slot(
+                                            &idx,
+                                            &uncleaned_pubkeys,
+                                            &secondary,
+                                            result,
+                                            &slot,
+                                        );
+                                        //error!("dropping: {:?}", item);
+                                        new_slot_storage.clear();
+                                        //error!("dropped: {:?}", item);
+                                    }
                                 }
                             }
                         } else {
@@ -850,7 +856,14 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
             }
         },
     );
-    let mut unpacked_append_vec_map_raw = result.lock().unwrap().take().unwrap().into_iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+    let mut unpacked_append_vec_map_raw = result
+        .lock()
+        .unwrap()
+        .take()
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap())
+        .collect::<Vec<_>>();
     let mut unpacked_append_vec_map: UnpackedAppendVecMap = unpacked_append_vec_map_raw.remove(0);
     unpacked_append_vec_map.extend(unpacked_append_vec_map_raw.remove(0));
     untar.stop();
@@ -1025,22 +1038,54 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
+            unpack_snapshot(
+                &mut archive,
+                unpack_dir,
+                account_paths,
+                sender,
+                accounts,
+                disable,
+                amod,
+            )?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
+            unpack_snapshot(
+                &mut archive,
+                unpack_dir,
+                account_paths,
+                sender,
+                accounts,
+                disable,
+                amod,
+            )?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
+            unpack_snapshot(
+                &mut archive,
+                unpack_dir,
+                account_paths,
+                sender,
+                accounts,
+                disable,
+                amod,
+            )?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths, sender, accounts, disable, amod)?
+            unpack_snapshot(
+                &mut archive,
+                unpack_dir,
+                account_paths,
+                sender,
+                accounts,
+                disable,
+                amod,
+            )?
         }
     };
     measure.stop();
@@ -1086,8 +1131,7 @@ fn get_accounts_db_fields_from_snapshots(
     shrink_ratio: AccountShrinkThreshold,
     accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
     skip_accounts: bool,
-) -> Result<Vec<Vec<(usize, usize)>>>
-{
+) -> Result<Vec<Vec<(usize, usize)>>> {
     let (snapshot_version_enum, root_paths) =
         verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
     info!(
