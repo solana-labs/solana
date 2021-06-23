@@ -169,8 +169,8 @@ impl StandardBroadcastRun {
             &srecv,
             cluster_info,
             sock,
-            &leader_schedule_cache,
-            &bank_forks,
+            leader_schedule_cache,
+            bank_forks,
         );
         let _ = self.record(&brecv, blockstore);
         //coding
@@ -178,8 +178,8 @@ impl StandardBroadcastRun {
             &srecv,
             cluster_info,
             sock,
-            &leader_schedule_cache,
-            &bank_forks,
+            leader_schedule_cache,
+            bank_forks,
         );
         let _ = self.record(&brecv, blockstore);
         Ok(())
