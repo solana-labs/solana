@@ -40,7 +40,6 @@ impl BucketMap {
         }
     }
 
-    //updatefn must be re-entrant
     pub fn update(
         &self,
         pubkey: &Pubkey,
