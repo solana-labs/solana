@@ -671,7 +671,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     parallel.into_par_iter().enumerate().for_each(
         |(i, (queue, exit)): (usize, (CrossThreadQueue<PathBuf>, Arc<AtomicBool>))| {
             if i == 0 {
-                let unpacked_append_vec_map = vec![0, 1, 2, 3]
+                let unpacked_append_vec_map = vec![0]//, 1, 2, 3]
                     .into_par_iter()
                     .map(|accounts| {
                         let mut sender_use = None;
