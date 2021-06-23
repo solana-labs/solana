@@ -5917,7 +5917,7 @@ impl AccountsDb {
             let len = accounts_map.len();
 
             let mut items = Vec::with_capacity(len);
-            let mut dirty_pubkeys = accounts_map
+            let dirty_pubkeys = accounts_map
                 .iter()
                 .map(|(pubkey, (_, store_id, stored_account))| {
                     items.push((

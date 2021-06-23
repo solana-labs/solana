@@ -264,15 +264,13 @@ pub fn unpack_snapshot<A: Read>(
         |path, account| {
             match &account_path_sender {
                 Some(sender) => {
-                    sender.send(path);
+                    let _ = sender.send(path);
                 }
                 None => {
                     if account {
                         //error!("path: {:?}", path);
                     }
                     else {
-                        use std::fs;
-
                         let metadata = fs::metadata(path.clone()).unwrap();
                         let filename = path.file_name().unwrap();
                         let subdir = path.parent().unwrap().file_name().unwrap();

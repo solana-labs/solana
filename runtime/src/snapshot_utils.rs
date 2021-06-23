@@ -602,7 +602,7 @@ pub struct BankFromArchiveTimings {
     pub verify_snapshot_bank_us: u64,
 }
 use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    unbounded, Sender as CrossbeamSender,
 };
 
 use crate::accounts_db::CrossThreadQueue;
@@ -634,8 +634,8 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     let (sender, receiver) = unbounded();
     let (sender_bank, receiver_bank) = unbounded();
 
-    let mut queue = CrossThreadQueue::new();
-    let mut queue2 = queue.clone();
+    let queue = CrossThreadQueue::new();
+    let queue2 = queue.clone();
 
     rayon::spawn(move || {
         loop {
@@ -651,7 +651,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         }
     });
 
-    let mut exit = Arc::new(AtomicBool::new(false));
+    let exit = Arc::new(AtomicBool::new(false));
     let exit_ = exit.clone();
     let queue_ = queue.clone();
 
@@ -664,7 +664,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     let result = std::sync::Mutex::new(None);
     let sender = std::sync::Mutex::new(Some(sender));
     let sender_bank = std::sync::Mutex::new(Some(sender_bank));
-    let receiver_bank = std::sync::Mutex::new(Some(receiver_bank));
+    let _receiver_bank = std::sync::Mutex::new(Some(receiver_bank));
     let mut untar = Measure::start("untar");
 
     let this_way = true;
@@ -706,7 +706,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                         let mut snapshot_version = String::new();
                         File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
                     
-                        let bank = rebuild_bank_from_snapshots(
+                        let map = get_accounts_db_fields_from_snapshots(
                             snapshot_version.trim(),
                             frozen_account_pubkeys,
                             &unpacked_snapshots_dir,
@@ -723,7 +723,9 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             true,
                         ).unwrap();
 
-                        error!("bank untar'd");
+
+
+                        error!("map untar'd");
                     
                         files
                     }
@@ -767,14 +769,10 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                 *result.lock().unwrap() = Some(unpacked_append_vec_map);
                 exit.store(true, std::sync::atomic::Ordering::Relaxed);
             } else {
-                let mut count = 0;
-                let mut count_overall = 0;
                 if this_way {
                     let mut new_slot_storage = HashMap::default();
                     loop {
-                        count_overall += 1;
                         if let Some(item) = queue.pop() {
-                            count += 1;
                             let slot = Slot::from_str(item.file_stem().unwrap().to_str().unwrap())
                                 .unwrap();
                             {
@@ -782,7 +780,6 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                                     item.extension().unwrap().to_str().unwrap(),
                                 )
                                 .unwrap();
-                                use std::fs;
 
                                 let metadata = fs::metadata(item.clone()).unwrap();
                                 //error!("path: slot: {}, {:?}, {}, len: {}", slot, item, id, metadata.len());
@@ -1041,6 +1038,52 @@ fn verify_snapshot_version_and_folder(
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     Ok((snapshot_version_enum, root_paths))
+}
+use crate::serde_snapshot::{AccountsDbFields, SerializableStorage};
+#[allow(clippy::too_many_arguments)]
+fn get_accounts_db_fields_from_snapshots(
+    snapshot_version: &str,
+    frozen_account_pubkeys: &[Pubkey],
+    unpacked_snapshots_dir: &Path,
+    account_paths: &[PathBuf],
+    unpacked_append_vec_map: UnpackedAppendVecMap,
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
+) -> Result<Vec<Vec<(usize, usize)>>>
+{
+    let (snapshot_version_enum, root_paths) =
+        verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
+    info!(
+        "Loading bank from {}",
+        &root_paths.snapshot_file_path.display()
+    );
+    deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
+        Ok(match snapshot_version_enum {
+            SnapshotVersion::V1_2_0 => crate::serde_snapshot::accounts_db_fields_from_stream(
+                SerdeStyle::Newer,
+                &mut stream,
+                account_paths,
+                unpacked_append_vec_map,
+                genesis_config,
+                frozen_account_pubkeys,
+                debug_keys,
+                additional_builtins,
+                account_indexes,
+                accounts_db_caching_enabled,
+                limit_load_slot_count_from_snapshot,
+                shrink_ratio,
+                accounts_index,
+                skip_accounts,
+            ),
+        }?)
+    })
 }
 
 #[allow(clippy::too_many_arguments)]

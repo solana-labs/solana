@@ -1,4 +1,4 @@
-use rayon::{prelude::*, ThreadPool};
+use rayon::{prelude::*};
 use crate::{
     ancestors::Ancestors,
     contains::Contains,
@@ -1407,10 +1407,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         let e2 = EvilPtr::new(&mut binned);
 
         unsafe {
-            binned.into_par_iter().for_each(|mut bins|
+            binned.into_par_iter().for_each(|bins|
                 {
                     let mut _reclaims = SlotList::new();
-                    let mut w_account_maps = &mut *e1.deref();
+                    let w_account_maps = &mut *e1.deref();
                     //let mut bin = &(*e2.deref())[bin];
                     //let bin = binned[bin];
                     bins.into_iter()

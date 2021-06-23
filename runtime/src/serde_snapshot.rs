@@ -13,7 +13,6 @@ use {
         hardened_unpack::UnpackedAppendVecMap,
         message_processor::MessageProcessor,
         rent_collector::RentCollector,
-        serde_snapshot::future::SerializableStorage,
         stakes::Stakes,
     },
     bincode,
@@ -67,20 +66,20 @@ pub(crate) enum SerdeStyle {
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
-struct AccountsDbFields<T>(
+pub struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
     Slot,
     BankHashInfo,
 );
 
-trait TypeContext<'a> {
+pub(crate) trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
-        + DeserializeOwned
-        + From<&'a AccountStorageEntry>
-        + SerializableStorage
-        + Sync;
-
+    + DeserializeOwned
+    + From<&'a AccountStorageEntry>
+    + SerializableStorage
+    + Sync;
+    
     fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
         serializable_bank: &SerializableBankAndStorage<'a, Self>,
@@ -124,6 +123,53 @@ where
         .with_fixint_encoding()
         .allow_trailing_bytes()
         .deserialize_from::<R, T>(reader)
+}
+
+impl SerializableStorage for (usize, usize) {
+    fn id(&self) -> AppendVecId {
+        self.0
+    }
+    fn current_len(&self) -> usize {
+        self.1
+    }
+}
+
+//use crate::serde_snapshot::future::SerializableAccountStorageEntry;
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn accounts_db_fields_from_stream<R>(
+    serde_style: SerdeStyle,
+    stream: &mut BufReader<R>,
+    account_paths: &[PathBuf],
+    unpacked_append_vec_map: UnpackedAppendVecMap,
+    genesis_config: &GenesisConfig,
+    frozen_account_pubkeys: &[Pubkey],
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_indexes: AccountSecondaryIndexes,
+    caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    accounts_index: Option<crate::accounts_db::AccountInfoAccountsIndex>,
+    skip_accounts: bool,
+) -> std::result::Result<Vec<Vec<(usize, usize)>>, Error>
+where
+    R: Read,
+{
+    macro_rules! INTO {
+        ($x:ident) => {{
+            let (bank_fields_, accounts_db_fields) = $x::deserialize_bank_fields(stream)?;
+            let fields = accounts_db_fields.0;
+            let fields = fields.iter().map(|(k, v)| v.iter().map(|x| (x.id(), x.current_len())).collect::<Vec<_>>()).collect::<Vec<_>>();
+            Ok(fields)
+        }};
+    }
+    match serde_style {
+        SerdeStyle::Newer => INTO!(TypeContextFuture),
+    }
+    .map_err(|err| {
+        warn!("bankrc_from_stream error: {:?}", err);
+        err
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -208,7 +254,7 @@ where
     })
 }
 
-struct SerializableBankAndStorage<'a, C> {
+pub(crate) struct SerializableBankAndStorage<'a, C> {
     bank: &'a Bank,
     snapshot_storages: &'a [SnapshotStorage],
     phantom: std::marker::PhantomData<C>,
@@ -223,7 +269,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     }
 }
 
-struct SerializableAccountsDb<'a, C> {
+pub(crate) struct SerializableAccountsDb<'a, C> {
     accounts_db: &'a AccountsDb,
     slot: Slot,
     account_storage_entries: &'a [SnapshotStorage],
@@ -241,6 +287,11 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDb<'a, C> {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl<'a, C> IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
+
+pub trait SerializableStorage {
+    fn id(&self) -> AppendVecId;
+    fn current_len(&self) -> usize;
+}
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
@@ -326,10 +377,14 @@ pub fn reconstruct_single_storage(
     //assert_eq!(metadata.len(), storage_entry.current_len() as u64);
     //error!("path2: {:?}, id: {}", append_vec_path, id);
 
-    if slot == &83424826{
-        error!("reconstruct_single_storage: {}, file len: {}, slot: {}", current_len, metadata.len(), slot);
+    if slot == &83424826 {
+        error!(
+            "reconstruct_single_storage: {}, file len: {}, slot: {}",
+            current_len,
+            metadata.len(),
+            slot
+        );
     }
-
 
     new_slot_storage.insert(id, Arc::new(u_storage_entry));
     Ok(())
@@ -371,7 +426,7 @@ where
     create_dir(&accounts_db.paths);
 
     let storage = storage.into_iter().collect::<Vec<_>>();
-    let mut tm = std::sync::atomic::AtomicU64::new(0);
+    let tm = std::sync::atomic::AtomicU64::new(0);
 
     let len = storage.len();
     let chunks = 8;
@@ -381,9 +436,8 @@ where
     //panic!("");
 
     if !skip_accounts {
-
         // Remap the deserialized AppendVec paths to point to correct local paths
-        let mut storage_vecs = (0..chunks)
+        let storage_vecs = (0..chunks)
             .into_par_iter()
             .map(|chunk| {
                 let start = std::cmp::min(len, chunk_size * chunk);
@@ -452,11 +506,12 @@ where
             .expect("At least one storage entry must exist from deserializing stream");
 
         {
-            accounts_db.storage.0.extend(
-                storage.into_iter().map(|(slot, slot_storage_entry)| {
+            accounts_db
+                .storage
+                .0
+                .extend(storage.into_iter().map(|(slot, slot_storage_entry)| {
                     (slot, Arc::new(RwLock::new(slot_storage_entry)))
-                }),
-            );
+                }));
         }
 
         if max_id > AppendVecId::MAX / 2 {

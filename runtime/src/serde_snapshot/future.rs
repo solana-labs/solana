@@ -14,11 +14,6 @@ pub(crate) struct SerializableAccountStorageEntry {
     pub accounts_current_len: usize,
 }
 
-pub trait SerializableStorage {
-    fn id(&self) -> AppendVecId;
-    fn current_len(&self) -> usize;
-}
-
 impl SerializableStorage for SerializableAccountStorageEntry {
     fn id(&self) -> AppendVecId {
         self.id
