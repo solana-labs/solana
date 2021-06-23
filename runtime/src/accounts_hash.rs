@@ -5,11 +5,7 @@ use solana_sdk::{
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
-use std::{
-    convert::TryInto,
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::Mutex,
-};
+use std::{convert::TryInto, sync::Mutex};
 
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -28,12 +24,13 @@ pub struct HashStats {
     pub hash_time_total_us: u64,
     pub hash_time_pre_us: u64,
     pub sort_time_total_us: u64,
-    pub flatten_time_total_us: u64,
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
     pub collect_snapshots_us: u64,
     pub storage_sort_us: u64,
+    pub min_bin_size: usize,
+    pub max_bin_size: usize,
 }
 impl HashStats {
     fn log(&mut self) {
@@ -42,8 +39,7 @@ impl HashStats {
             + self.hash_time_total_us
             + self.sort_time_total_us
             + self.collect_snapshots_us
-            + self.storage_sort_us
-            + self.flatten_time_total_us;
+            + self.storage_sort_us;
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("accounts_scan", self.scan_time_total_us, i64),
@@ -52,7 +48,6 @@ impl HashStats {
             ("hash_time_pre_us", self.hash_time_pre_us, i64),
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
-            ("flatten", self.flatten_time_total_us, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
             ("unreduced_entries", self.unreduced_entries as i64, i64),
             (
@@ -65,6 +60,8 @@ impl HashStats {
                 self.num_snapshot_storage as i64,
                 i64
             ),
+            ("min_bin_size", self.min_bin_size as i64, i64),
+            ("max_bin_size", self.max_bin_size as i64, i64),
             ("total", total_time_us as i64, i64),
         );
     }
@@ -518,30 +515,36 @@ impl AccountsHash {
         //      vec: individual hashes in pubkey order, 1 hash per
         // b. lamports
         let mut zeros = Measure::start("eliminate zeros");
-        let overall_sum = Mutex::new(0u64);
-        let unreduced_entries = AtomicUsize::new(0);
-        let hash_total = AtomicUsize::new(0);
+        let min_max_sum_entries_hashes = Mutex::new((usize::MAX, usize::MIN, 0u64, 0usize, 0usize));
         let hashes: Vec<Vec<Hash>> = (0..max_bin)
             .into_par_iter()
             .map(|bin| {
-                let (hashes, sum, unreduced_entries_count) =
+                let (hashes, lamports_bin, unreduced_entries_count) =
                     Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, bin);
                 {
-                    let mut overall = overall_sum.lock().unwrap();
-                    *overall =
-                        Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
+                    let mut lock = min_max_sum_entries_hashes.lock().unwrap();
+                    let (mut min, mut max, mut lamports_sum, mut entries, mut hash_total) = *lock;
+                    min = std::cmp::min(min, unreduced_entries_count);
+                    max = std::cmp::max(max, unreduced_entries_count);
+                    lamports_sum = Self::checked_cast_for_capitalization(
+                        lamports_sum as u128 + lamports_bin as u128,
+                    );
+                    entries += unreduced_entries_count;
+                    hash_total += hashes.len();
+                    *lock = (min, max, lamports_sum, entries, hash_total);
                 }
-                unreduced_entries.fetch_add(unreduced_entries_count, Ordering::Relaxed);
-                hash_total.fetch_add(hashes.len(), Ordering::Relaxed);
                 hashes
             })
             .collect();
         zeros.stop();
         stats.zeros_time_total_us += zeros.as_us();
-        let sum = *overall_sum.lock().unwrap();
-        stats.unreduced_entries += unreduced_entries.load(Ordering::Relaxed);
-        stats.hash_total += hash_total.load(Ordering::Relaxed);
-        (hashes, sum)
+        let (min, max, lamports_sum, entries, hash_total) =
+            *min_max_sum_entries_hashes.lock().unwrap();
+        stats.min_bin_size = min;
+        stats.max_bin_size = max;
+        stats.unreduced_entries += entries;
+        stats.hash_total += hash_total;
+        (hashes, lamports_sum)
     }
 
     // returns true if this vector was exhausted
