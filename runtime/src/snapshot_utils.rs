@@ -722,6 +722,8 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             None,
                             true,
                         ).unwrap();
+
+                        error!("bank untar'd");
                     
                         files
                     }
