@@ -14,6 +14,7 @@ use std::sync::RwLock;
 pub struct BucketMap {
     buckets: Vec<RwLock<Option<Bucket>>>,
     drives: Arc<Vec<PathBuf>>,
+    bits: u64, 
 }
 
 pub enum BucketMapError {
@@ -22,6 +23,14 @@ pub enum BucketMapError {
 }
 
 impl BucketMap {
+    pub fn new(num_buckets_pow2: u64, drives: Arc<Vec<PathBuf>>) -> Self {
+        let mut buckets = Vec::with_capacity(1<<num_buckets_pow2);
+        buckets.resize_with(1<<num_buckets_pow2, || RwLock::new(None));
+        Self {
+            buckets, drives,
+            bits: num_buckets_pow2,
+        }
+    }
     pub fn read_value(&self, pubkey: &Pubkey) -> Option<Vec<SlotInfo>> {
         let ix = self.bucket_ix(pubkey);
         self.buckets[ix].read().unwrap().as_ref().and_then(|x| {
@@ -75,8 +84,7 @@ impl BucketMap {
     }
     fn bucket_ix(&self, pubkey: &Pubkey) -> usize {
         let location = read_be_u64(pubkey.as_ref());
-        let bits = (self.buckets.len() as f64).log2().ceil() as u64;
-        (location >> (64 - bits)) as usize
+        (location >> (64 - self.bits)) as usize
     }
 }
 
