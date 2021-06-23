@@ -15,7 +15,7 @@ lazy_static = "1.4.0"
 serde = "1.0.126"
 serde_derive = "1.0.103"
 serde_yaml = "0.8.17"
-url = "2.1.1"
+url = "2.2.2"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
