@@ -1350,24 +1350,36 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
 
 #[derive(Debug, Clone)]
 pub struct CrossThreadQueue<T> {
-    data: Arc<Mutex<Vec<T>>>,
+    data: Arc<(Mutex<Vec<T>>, Condvar)>,
 }
 
 impl<T> CrossThreadQueue<T> {
     pub fn new() -> Self {
         Self {
-            data: Arc::new(Mutex::new(Vec::default())),
+            data: Arc::new((Mutex::new(Vec::default()), Condvar::new())),
         }
     }
     pub fn push(&self, item: T) {
-        self.data.lock().unwrap().insert(0, item);
+        let mut data = self.data.0.lock().unwrap();
+        data.insert(0, item);
+        self.data.1.notify_one();
     }
     pub fn pop(&self) -> Option<T> {
-        let mut queue = self.data.lock().unwrap();
-        queue.pop()
+        let mut data = self.data.0.lock().unwrap();
+        loop {
+            let r = data.pop();
+            if r.is_some() {
+                return r;
+            }
+            let res = self.data.1.wait_timeout(data, std::time::Duration::from_millis(1000));
+            if res.is_err() {
+                return None;
+            }
+            data = res.unwrap().0;
+        }
     }
     pub fn len(&self) -> usize {
-        self.data.lock().unwrap().len()
+        self.data.0.lock().unwrap().len()
     }
 }
 
