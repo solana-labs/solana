@@ -42,8 +42,7 @@ impl TransactionCost {
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             writable_accounts: Vec::with_capacity(capacity),
-            account_access_cost: 0,
-            execution_cost: 0,
+            ..Self::default()
         }
     }
 
