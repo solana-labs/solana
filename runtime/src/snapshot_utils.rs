@@ -723,6 +723,11 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
                             true,
                         ).unwrap();
 
+                        for x in map.iter().flatten() {
+                            if x.0 == 1121359392 {
+                                error!("found is: {}, len: {}", x.0, x.1);
+                            }
+                        }
 
 
                         error!("map untar'd");
