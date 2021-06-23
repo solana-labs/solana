@@ -176,19 +176,26 @@ impl Read for SeekableBufferingReader {
         let mut offset_in_dest = 0;
         while remaining_request > 0 {
             let mut lock = self.instance.data.read().unwrap();
+            if self.last_buffer_index >= lock.len() {
+                break; // no more to read right now
+            }
             let source = &lock[self.last_buffer_index];
             let full_len = source.len();
             let remaining_len = full_len - self.next_index_within_last_buffer;
             if remaining_len >= remaining_request {
-                buf[offset_in_dest..(offset_in_dest + remaining_request)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + remaining_request)]);
-                self.next_index_within_last_buffer += remaining_request;
-                offset_in_dest += remaining_request;
+                let bytes_to_transfer = remaining_request;
+                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
+                self.next_index_within_last_buffer += bytes_to_transfer;
+                offset_in_dest += bytes_to_transfer;
+                remaining_request -= bytes_to_transfer;
             }
             else {
-                buf[offset_in_dest..(offset_in_dest + remaining_len)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + remaining_len)]);
-                offset_in_dest += remaining_len;
+                let bytes_to_transfer = remaining_len;
+                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
+                offset_in_dest += bytes_to_transfer;
                 self.next_index_within_last_buffer = 0;
                 self.last_buffer_index += 1;
+                remaining_request -= bytes_to_transfer;
             }
         }
 
