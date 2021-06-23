@@ -1369,8 +1369,10 @@ impl<T> CrossThreadQueue<T> {
     }
     pub fn push(&self, item: T) {
         let (lock, cvar) = &*self.data;
-        let mut data = lock.lock().unwrap();
-        data.insert(0, item);
+        {
+            let mut data = lock.lock().unwrap();
+            data.insert(0, item);
+        }
         cvar.notify_one();
     }
     pub fn pop(&self) -> Option<T> {
