@@ -196,10 +196,6 @@ impl Read for SeekableBufferingReader {
             let remaining_len = full_len - self.next_index_within_last_buffer;
             if remaining_len >= remaining_request {
                 let bytes_to_transfer = remaining_request;
-                error!(
-                    "copying1 {} bytes from {}, {}",
-                    bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer
-                );
                 buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(
                     &source[self.next_index_within_last_buffer
                         ..(self.next_index_within_last_buffer + bytes_to_transfer)],
@@ -209,10 +205,6 @@ impl Read for SeekableBufferingReader {
                 remaining_request -= bytes_to_transfer;
             } else {
                 let bytes_to_transfer = remaining_len;
-                error!(
-                    "copying2 {} bytes from {}, {}",
-                    bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer
-                );
                 buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(
                     &source[self.next_index_within_last_buffer
                         ..(self.next_index_within_last_buffer + bytes_to_transfer)],
@@ -225,9 +217,6 @@ impl Read for SeekableBufferingReader {
         }
 
         self.instance.calls.fetch_add(1, Ordering::Relaxed);
-        error!("read: {}, returning {}", request_len, offset_in_dest);
-        error!("{:?}", buf);
-
         Ok(offset_in_dest)
     }
 }
