@@ -661,7 +661,7 @@ impl Validator {
             ACCOUNT_MAX_COST,
             BLOCK_MAX_COST,
         )));
-        Self::initiate_cost_model(&cost_model, &blockstore.read_program_cost().unwrap());
+        Self::initiate_cost_model(&cost_model, &blockstore.read_program_costs().unwrap());
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();

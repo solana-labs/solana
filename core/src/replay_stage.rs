@@ -19,7 +19,6 @@ use crate::{
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
-    result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     window_service::DuplicateSlotReceiver,
@@ -60,7 +59,7 @@ use std::{
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, RecvTimeoutError, Sender},
+        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
         Arc, Mutex, RwLock,
     },
     thread::{self, Builder, JoinHandle},
@@ -152,7 +151,6 @@ pub struct ReplayTiming {
     process_gossip_duplicate_confirmed_slots_elapsed: u64,
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
-    persist_cost_table_elapsed: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -174,7 +172,6 @@ impl ReplayTiming {
         process_gossip_duplicate_confirmed_slots_elapsed: u64,
         process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
-        persist_cost_table_elapsed: u64,
     ) {
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
@@ -194,7 +191,6 @@ impl ReplayTiming {
         self.process_unfrozen_gossip_verified_vote_hashes_elapsed +=
             process_unfrozen_gossip_verified_vote_hashes_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
-        self.persist_cost_table_elapsed += persist_cost_table_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -280,11 +276,6 @@ impl ReplayTiming {
                     self.process_duplicate_slots_elapsed as i64,
                     i64
                 ),
-                (
-                    "persist_cost_table_elapsed",
-                    self.persist_cost_table_elapsed as i64,
-                    i64
-                ),
             );
 
             *self = ReplayTiming::default();
@@ -293,9 +284,38 @@ impl ReplayTiming {
     }
 }
 
+#[derive(Default)]
+pub struct ReplayServiceTiming {
+    last_print: u64,
+    persist_cost_table_elapsed: u64,
+}
+
+impl ReplayServiceTiming {
+    fn update(&mut self, persist_cost_table_elapsed: u64) {
+        self.persist_cost_table_elapsed += persist_cost_table_elapsed;
+        let now = timestamp();
+        let elapsed_ms = now - self.last_print;
+        if elapsed_ms > 1000 {
+            datapoint_info!(
+                "replay-service-timing-stats",
+                ("total_elapsed_us", elapsed_ms * 1000, i64),
+                (
+                    "persist_cost_table_elapsed",
+                    self.persist_cost_table_elapsed as i64,
+                    i64
+                ),
+            );
+
+            *self = ReplayServiceTiming::default();
+            self.last_print = now;
+        }
+    }
+}
+
 pub struct ReplayStage {
-    t_replay: JoinHandle<Result<()>>,
+    t_replay: JoinHandle<()>,
     commitment_service: AggregateCommitmentService,
+    t_service: JoinHandle<()>,
 }
 
 impl ReplayStage {
@@ -337,6 +357,26 @@ impl ReplayStage {
 
         trace!("replay stage");
         // Start the replay stage loop
+
+        let (cost_update_sender, cost_update_receiver): (
+            Sender<ExecuteTimings>,
+            Receiver<ExecuteTimings>,
+        ) = channel();
+
+        let exit_clone = exit.clone();
+        let blockstore_clone = blockstore.clone();
+        let t_service = Builder::new()
+            .name("solana-replay-service".to_string())
+            .spawn(move || {
+                Self::service_loop(
+                    exit_clone,
+                    blockstore_clone,
+                    cost_model,
+                    cost_update_receiver,
+                );
+            })
+            .unwrap();
+
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
             &exit,
             block_commitment_cache.clone(),
@@ -414,14 +454,9 @@ impl ReplayStage {
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
-                        &cost_model,
+                        &cost_update_sender,
                     );
                     replay_active_banks_time.stop();
-
-                    // persist cost table to blockstore
-                    let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
-                    Self::persist_cost_table(&blockstore, &cost_model);
-                    persist_cost_table_time.stop();
 
                     let forks_root = bank_forks.read().unwrap().root();
                     // Reset any duplicate slots that have been confirmed
@@ -745,16 +780,52 @@ impl ReplayStage {
                         process_gossip_duplicate_confirmed_slots_time.as_us(),
                         process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
                         process_duplicate_slots_time.as_us(),
-                        persist_cost_table_time.as_us(),
                     );
                 }
-                Ok(())
             })
             .unwrap();
 
         Self {
             t_replay,
             commitment_service,
+            t_service,
+        }
+    }
+
+    fn service_loop(
+        exit: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
+        cost_model: Arc<RwLock<CostModel>>,
+        cost_update_receiver: Receiver<ExecuteTimings>,
+    ) {
+        let mut replay_service_timing = ReplayServiceTiming::default();
+        let mut dirty = false;
+        let wait_timer = Duration::from_millis(100);
+
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+
+            debug!("TODO TAO - in service thread");
+
+            for cost_update in cost_update_receiver.try_iter() {
+                debug!(
+                    "TODO TAO - call to update cost model with updates {:?}",
+                    cost_update
+                );
+                dirty |= Self::update_cost_model(&cost_model, &cost_update);
+            }
+
+            if dirty {
+                debug!("TODO TAO - call to persist cost table to blockstore");
+                let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
+                Self::persist_cost_table(&blockstore, &cost_model);
+                persist_cost_table_time.stop();
+                replay_service_timing.update(persist_cost_table_time.as_us());
+            }
+
+            thread::sleep(wait_timer);
         }
     }
 
@@ -1682,10 +1753,11 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
-        cost_model: &RwLock<CostModel>,
+        cost_update_sender: &Sender<ExecuteTimings>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
+        let mut execute_timings = ExecuteTimings::default();
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -1733,7 +1805,9 @@ impl ReplayStage {
                     replay_vote_sender,
                     verify_recyclers,
                 );
-                Self::update_cost_model(cost_model, &bank_progress.replay_stats.execute_timings);
+                debug!("TODO TAO - accumulates timing: {:?}", bank_progress.replay_stats.execute_timings);
+                execute_timings.accumulate(&bank_progress.replay_stats.execute_timings);
+                debug!("TODO TAO - :ccumulated timing: {:?}", execute_timings);
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -1818,6 +1892,13 @@ impl ReplayStage {
                 );
             }
         }
+
+        // send accumulated excute-timings to service thread to update cost model
+        debug!("TODO TAO - sending timing to service_loop: {:?}", execute_timings);
+        cost_update_sender
+            .send(execute_timings)
+            .expect("send execution cost update to cost_model");
+
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
@@ -1825,6 +1906,9 @@ impl ReplayStage {
     fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
         let cost_model_read = cost_model.read().unwrap();
         let cost_table = cost_model_read.get_instruction_cost_table();
+        blockstore
+            .truncate_program_cost()
+            .expect("truncate program cost table");
         for (key, cost) in cost_table.iter() {
             blockstore
                 .write_program_cost(key, cost)
@@ -1934,7 +2018,8 @@ impl ReplayStage {
         new_stats
     }
 
-    fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) {
+    fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) -> bool {
+        let mut dirty = false;
         let mut update_cost_model_time = Measure::start("update_cost_model_time");
         let mut cost_model_mutable = cost_model.write().unwrap();
         for (program_id, stats) in &execute_timings.details.per_program_timings {
@@ -1945,6 +2030,7 @@ impl ReplayStage {
                         "after replayed into bank, instruction {:?} has averaged cost {}",
                         program_id, c
                     );
+                    dirty = true;
                 }
                 Err(err) => {
                     debug!(
@@ -1970,6 +2056,7 @@ impl ReplayStage {
                 i64
             )
         );
+        dirty
     }
 
     fn update_propagation_status(
@@ -2559,6 +2646,7 @@ impl ReplayStage {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        self.t_service.join().map(|_| ())?;
         self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
     }

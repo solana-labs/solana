@@ -2691,7 +2691,7 @@ impl Blockstore {
 
     // program_cost table (if possible), it'd break a bit of pattern for ReplayStage to
     // write. Can CF be gloabl - not tethed to slot?
-    pub fn read_program_cost(&self) -> Result<Vec<(Pubkey, u64)>> {
+    pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
         Ok(self
             .db
             .iter::<cf::ProgramCosts>(IteratorMode::End)?
@@ -2705,6 +2705,11 @@ impl Blockstore {
     pub fn write_program_cost(&self, key: &Pubkey, value: &u64) -> Result<()> {
         self.program_costs_cf
             .put(*key, &ProgramCost { cost: *value })
+    }
+
+    pub fn truncate_program_cost(&self) ->Result<()> {
+        // TODO TAO - imple the truncate
+        Ok(())
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
@@ -8889,7 +8894,7 @@ pub mod tests {
             }
 
             // read back from db
-            let read_back = blockstore.read_program_cost().unwrap();
+            let read_back = blockstore.read_program_costs().unwrap();
             // verify
             assert_eq!(read_back.len(), cost_table.len());
             for (read_key, read_cost) in read_back {
@@ -8911,7 +8916,7 @@ pub mod tests {
                 .unwrap();
 
             // confirm value updated
-            let read_back = blockstore.read_program_cost().unwrap();
+            let read_back = blockstore.read_program_costs().unwrap();
             // verify
             assert_eq!(read_back.len(), cost_table.len() + 1);
             for (key, cost) in cost_table {
