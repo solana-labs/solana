@@ -137,16 +137,12 @@ impl SeekableBufferingReader {
             .name("solana-compressed_file_reader".to_string())
             .spawn(move || {
                 let mut time = Measure::start("");
-                const SIZE: usize = 65536;
+                const SIZE: usize = 65536*2;
                 let mut data = [0u8; SIZE];
-                let mut calls = 0;
                 loop {
                     let result = reader.read(&mut data);
                     match result {
                         Ok(size) => {
-                            if calls < 2 {
-                                error!("{:?}", &data[0..512]);
-                            }
                             result_
                                 .instance
                                 .data
@@ -154,10 +150,6 @@ impl SeekableBufferingReader {
                                 .unwrap()
                                 .push(data[0..size].to_vec());
                             let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
-                            calls += 1;
-                            if calls % (10000 * SIZE) == 0 {
-                                error!("calls, bytes: {}, {}", calls, len);
-                            }
                         }
                         Err(err) => {
                             error!("error reading file");
