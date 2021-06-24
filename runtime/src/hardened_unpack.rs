@@ -207,6 +207,7 @@ impl Read for SeekableBufferingReader {
             if self.last_buffer_index >= lock.len() {
                 if !transferred_data {
                     transferred_data = true;
+                    drop(lock);
                     self.transfer_data();
                     continue;
                 }
