@@ -46,9 +46,12 @@ use {
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
         },
-        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::{get_highest_snapshot_archive_path, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{
+            get_highest_snapshot_archive_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        },
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
