@@ -327,8 +327,9 @@ where
             GNUSparse | Regular => 0o644,
             _ => 0o755,
         };
-        error!("{}, {}", file!(), line!());
+        error!("{}, {}, {:?}, {:?}", file!(), line!(), unpack_dir, entry.path());
         set_perms(&unpack_dir.join(entry.path()?), mode)?;
+        error!("{}, {}", file!(), line!());
         file_notifier(pb, result_bool);
 
         total_entries += 1;
