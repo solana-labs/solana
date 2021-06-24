@@ -61,6 +61,7 @@ fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> 
     );
     let total_size = total_size.saturating_add(entry_size);
     if total_size > limit_size {
+        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "too large archive: {} than limit: {}",
             total_size, limit_size,
@@ -72,6 +73,7 @@ fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> 
 fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u64> {
     let total_count = total_count + 1;
     if total_count > limit_count {
+        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "too many files in snapshot: {:?}",
             total_count
@@ -82,6 +84,7 @@ fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u
 
 fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     if !unpack_result {
+        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "failed to unpack: {:?}",
             path
@@ -145,12 +148,12 @@ impl SeekableBufferingReader {
                 match result {
                     Ok(size) => {
                         if calls < 2 {
-                            error!("{:?}", &data[0..size]);
+                            error!("{:?}", &data[0..512]);
                         }
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
                         let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
                         calls += 1;
-                        if calls % 1000 == 0 {
+                        if calls % (10000 * SIZE) == 0 {
                             error!("calls, bytes: {}, {}", calls, len);
                         }
                     }
@@ -237,9 +240,17 @@ where
     let mut total_entries = 0;
     let mut last_log_update = Instant::now();
     error!("unpack_archive");
-    for entry in archive.entries()? {
+    let entries = archive.entries();
+    if entries.is_err() {
+        error!("{}, {}", file!(), line!());
+    }
+    for entry in entries? {
         let mut entry = entry?;
-        let path = entry.path()?;
+        let path = entry.path();
+        if path.is_err() {
+            error!("{}, {}", file!(), line!());
+        }
+        let path = path?;
         let path_str = path.display().to_string();
 
         // Although the `tar` crate safely skips at the actual unpacking, fail
@@ -259,6 +270,7 @@ where
         let reject_legacy_dir_entry = legacy_dir_entry && (kind != Directory);
 
         if parts.clone().any(|p| p.is_none()) || reject_legacy_dir_entry {
+            error!("{}, {}", file!(), line!());
             return Err(UnpackError::Archive(format!(
                 "invalid path found: {:?}",
                 path_str
@@ -273,6 +285,7 @@ where
         }
         let unpack_dir = match res {
             None => {
+                error!("{}, {}", file!(), line!());
                 return Err(UnpackError::Archive(format!(
                     "extra entry found: {:?} {:?}",
                     path_str,
@@ -285,16 +298,19 @@ where
             }
         };
 
+        error!("{}, {}", file!(), line!());
         apparent_total_size = checked_total_size_sum(
             apparent_total_size,
             entry.header().size()?,
             apparent_limit_size,
         )?;
+        error!("{}, {}", file!(), line!());
         actual_total_size = checked_total_size_sum(
             actual_total_size,
             entry.header().entry_size()?,
             actual_limit_size,
         )?;
+        error!("{}, {}", file!(), line!());
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
         let pb = unpack_dir.join(entry.path()?).to_path_buf();
@@ -311,6 +327,7 @@ where
             GNUSparse | Regular => 0o644,
             _ => 0o755,
         };
+        error!("{}, {}", file!(), line!());
         set_perms(&unpack_dir.join(entry.path()?), mode)?;
         file_notifier(pb, result_bool);
 
