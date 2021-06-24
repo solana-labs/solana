@@ -84,6 +84,12 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     Ok(())
 }
 
+pub enum UnpackPath<'a> {
+    Valid(&'a Path),
+    Ignore,
+    Invalid,
+}
+
 fn unpack_archive<'a, A: Read, C>(
     archive: &mut Archive<A>,
     apparent_limit_size: u64,
@@ -92,8 +98,7 @@ fn unpack_archive<'a, A: Read, C>(
     mut entry_checker: C,
 ) -> Result<()>
 where
-    // return signature is (path, ignore)
-    C: FnMut(&[&str], tar::EntryType) -> Option<(&'a Path, bool)>,
+    C: FnMut(&[&str], tar::EntryType) -> UnpackPath<'a>,
 {
     let mut apparent_total_size: u64 = 0;
     let mut actual_total_size: u64 = 0;
@@ -131,19 +136,17 @@ where
 
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
         let unpack_dir = match entry_checker(parts.as_slice(), kind) {
-            None => {
+            UnpackPath::Invalid => {
                 return Err(UnpackError::Archive(format!(
                     "extra entry found: {:?} {:?}",
                     path_str,
                     entry.header().entry_type(),
                 )));
             }
-            Some((unpack_dir, ignore)) => {
-                if ignore {
-                    continue;
-                }
-                unpack_dir
+            UnpackPath::Ignore => {
+                continue;
             }
+            UnpackPath::Valid(unpack_dir) => unpack_dir,
         };
 
         apparent_total_size = checked_total_size_sum(
@@ -232,29 +235,27 @@ pub fn unpack_snapshot<A: Read>(
                 match &parallel_selector {
                     Some(parallel_selector) => {
                         if !parallel_selector.select_index(i - 1) {
-                            let ignore = true;
-                            return Some((Path::new(""), ignore));
+                            return UnpackPath::Ignore;
                         }
                     }
                     None => {}
                 };
-                let ignore = false;
                 if let ["accounts", file] = parts {
                     // Randomly distribute the accounts files about the available `account_paths`,
                     let path_index = thread_rng().gen_range(0, account_paths.len());
-                    account_paths
-                        .get(path_index)
-                        .map(|path_buf| {
-                            unpacked_append_vec_map
-                                .insert(file.to_string(), path_buf.join("accounts").join(file));
-                            path_buf.as_path()
-                        })
-                        .map(|x| (x, ignore))
+                    match account_paths.get(path_index).map(|path_buf| {
+                        unpacked_append_vec_map
+                            .insert(file.to_string(), path_buf.join("accounts").join(file));
+                        path_buf.as_path()
+                    }) {
+                        Some(path) => UnpackPath::Valid(path),
+                        None => UnpackPath::Invalid,
+                    }
                 } else {
-                    Some((ledger_dir, ignore))
+                    UnpackPath::Valid(ledger_dir)
                 }
             } else {
-                None
+                UnpackPath::Invalid
             }
         },
     )
@@ -371,10 +372,9 @@ fn unpack_genesis<A: Read>(
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         |p, k| {
             if is_valid_genesis_archive_entry(p, k) {
-                let ignore = false;
-                Some((unpack_dir, ignore))
+                UnpackPath::Valid(unpack_dir)
             } else {
-                None
+                UnpackPath::Invalid
             }
         },
     )
