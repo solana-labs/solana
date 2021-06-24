@@ -1,3 +1,4 @@
+use solana_measure::measure::Measure;
 use solana_sdk::genesis_config::{DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE};
 use {
     bzip2::bufread::BzDecoder,
@@ -25,7 +26,6 @@ use {
     },
     thiserror::Error,
 };
-use solana_measure::measure::Measure;
 
 #[derive(Error, Debug)]
 pub enum UnpackError {
@@ -61,7 +61,6 @@ fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> 
     );
     let total_size = total_size.saturating_add(entry_size);
     if total_size > limit_size {
-        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "too large archive: {} than limit: {}",
             total_size, limit_size,
@@ -73,7 +72,6 @@ fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> 
 fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u64> {
     let total_count = total_count + 1;
     if total_count > limit_count {
-        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "too many files in snapshot: {:?}",
             total_count
@@ -84,7 +82,6 @@ fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u
 
 fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     if !unpack_result {
-        error!("{}, {}", file!(), line!());
         return Err(UnpackError::Archive(format!(
             "failed to unpack: {:?}",
             path
@@ -92,7 +89,7 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     }
     Ok(())
 }
-pub struct SeekableBufferingReaderInner<> {
+pub struct SeekableBufferingReaderInner {
     pub data: RwLock<Vec<Vec<u8>>>,
     pub len: AtomicUsize,
     pub calls: AtomicUsize,
@@ -137,38 +134,42 @@ impl SeekableBufferingReader {
         let result_ = result.clone();
 
         let handle = Builder::new()
-        .name("solana-compressed_file_reader".to_string())
-        .spawn(move || {
-            let mut time = Measure::start("");
-            const SIZE: usize  = 512;
-            let mut data = [0u8; SIZE];
-            let mut calls = 0;
-            loop {
-                let result = reader.read(&mut data);
-                match result {
-                    Ok(size) => {
-                        if calls < 2 {
-                            error!("{:?}", &data[0..512]);
+            .name("solana-compressed_file_reader".to_string())
+            .spawn(move || {
+                let mut time = Measure::start("");
+                const SIZE: usize = 512;
+                let mut data = [0u8; SIZE];
+                let mut calls = 0;
+                loop {
+                    let result = reader.read(&mut data);
+                    match result {
+                        Ok(size) => {
+                            if calls < 2 {
+                                error!("{:?}", &data[0..512]);
+                            }
+                            result_
+                                .instance
+                                .data
+                                .write()
+                                .unwrap()
+                                .push(data[0..size].to_vec());
+                            let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
+                            calls += 1;
+                            if calls % (10000 * SIZE) == 0 {
+                                error!("calls, bytes: {}, {}", calls, len);
+                            }
                         }
-                        result_.instance.data.write().unwrap().push(data[0..size].to_vec());
-                        let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
-                        calls += 1;
-                        if calls % (10000 * SIZE) == 0 {
-                            error!("calls, bytes: {}, {}", calls, len);
+                        Err(err) => {
+                            error!("error reading file");
+                            *result_.instance.error.lock().unwrap() = Err(err);
+                            break;
                         }
-                    }
-                    Err(err) => {
-                        error!("error reading file");
-                        *result_.instance.error.lock().unwrap() = Err(err);
-                        break;
                     }
                 }
-            }
-            time.stop();
-            error!("reading entire decompressed file took: {} us", time.as_us());
-        });
+                time.stop();
+                error!("reading entire decompressed file took: {} us", time.as_us());
+            });
         std::thread::sleep(std::time::Duration::from_millis(200)); // give time for file to be read a little bit
-    
         result
     }
     pub fn calls(&self) -> usize {
@@ -195,16 +196,27 @@ impl Read for SeekableBufferingReader {
             let remaining_len = full_len - self.next_index_within_last_buffer;
             if remaining_len >= remaining_request {
                 let bytes_to_transfer = remaining_request;
-                error!("copying1 {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
-                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
+                error!(
+                    "copying1 {} bytes from {}, {}",
+                    bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer
+                );
+                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(
+                    &source[self.next_index_within_last_buffer
+                        ..(self.next_index_within_last_buffer + bytes_to_transfer)],
+                );
                 self.next_index_within_last_buffer += bytes_to_transfer;
                 offset_in_dest += bytes_to_transfer;
                 remaining_request -= bytes_to_transfer;
-            }
-            else {
+            } else {
                 let bytes_to_transfer = remaining_len;
-                error!("copying2 {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
-                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
+                error!(
+                    "copying2 {} bytes from {}, {}",
+                    bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer
+                );
+                buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(
+                    &source[self.next_index_within_last_buffer
+                        ..(self.next_index_within_last_buffer + bytes_to_transfer)],
+                );
                 offset_in_dest += bytes_to_transfer;
                 self.next_index_within_last_buffer = 0;
                 self.last_buffer_index += 1;
@@ -241,15 +253,11 @@ where
     let mut last_log_update = Instant::now();
     error!("unpack_archive");
     let entries = archive.entries();
-    if entries.is_err() {
-        error!("{}, {}", file!(), line!());
-    }
+    if entries.is_err() {}
     for entry in entries? {
         let mut entry = entry?;
         let path = entry.path();
-        if path.is_err() {
-            error!("{}, {}", file!(), line!());
-        }
+        if path.is_err() {}
         let path = path?;
         let path_str = path.display().to_string();
 
@@ -270,7 +278,6 @@ where
         let reject_legacy_dir_entry = legacy_dir_entry && (kind != Directory);
 
         if parts.clone().any(|p| p.is_none()) || reject_legacy_dir_entry {
-            error!("{}, {}", file!(), line!());
             return Err(UnpackError::Archive(format!(
                 "invalid path found: {:?}",
                 path_str
@@ -285,7 +292,6 @@ where
         }
         let unpack_dir = match res {
             None => {
-                error!("{}, {}", file!(), line!());
                 return Err(UnpackError::Archive(format!(
                     "extra entry found: {:?} {:?}",
                     path_str,
@@ -298,28 +304,23 @@ where
             }
         };
 
-        error!("{}, {}", file!(), line!());
         apparent_total_size = checked_total_size_sum(
             apparent_total_size,
             entry.header().size()?,
             apparent_limit_size,
         )?;
-        error!("{}, {}", file!(), line!());
         actual_total_size = checked_total_size_sum(
             actual_total_size,
             entry.header().entry_size()?,
             actual_limit_size,
         )?;
-        error!("{}, {}", file!(), line!());
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
         let pb = unpack_dir.join(entry.path()?).to_path_buf();
 
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
-        /*
         check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
-        */
         let start = entry.raw_file_position();
         let len = entry.size();
         // Sanitize permissions.
@@ -327,9 +328,7 @@ where
             GNUSparse | Regular => 0o644,
             _ => 0o755,
         };
-        error!("{}, {}, {:?}, {:?}", file!(), line!(), unpack_dir, entry.path());
         set_perms(&unpack_dir.join(entry.path()?), mode)?;
-        error!("{}, {}", file!(), line!());
         file_notifier(pb, result_bool);
 
         total_entries += 1;

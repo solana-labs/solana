@@ -1035,6 +1035,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     disable: bool,
     amod: Option<(usize, usize)>,
 ) -> Result<UnpackedAppendVecMap> {
+    error!("untar_snapshot_in");
     let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
     let account_paths_map = match archive_format {
