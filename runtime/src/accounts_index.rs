@@ -1357,7 +1357,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         &self,
         slot: Slot,
         items: Vec<(&Pubkey, T)>,
-    ) -> Vec<bool> {
+    ) -> Vec<Pubkey> {
+        let item_len = items.len();
         let potentially_new_items = items
             .iter()
             .map(|(_pubkey, account_info)| {
@@ -1367,12 +1368,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             .collect::<Vec<_>>(); // collect here so we have created all data prior to obtaining lock
 
         let mut _reclaims = SlotList::new();
-
+        let mut duplicate_keys = Vec::with_capacity(item_len / 100); // just an estimate
         let mut w_account_maps = self.get_account_maps_write_lock();
         items
             .into_iter()
             .zip(potentially_new_items.into_iter())
-            .map(|((pubkey, account_info), new_item)| {
+            .for_each(|((pubkey, account_info), new_item)| {
                 let account_entry = self.insert_new_entry_if_missing_with_lock(
                     pubkey,
                     &mut w_account_maps,
@@ -1380,12 +1381,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 );
                 if let Some(mut w_account_entry) = account_entry {
                     w_account_entry.update(slot, account_info, &mut _reclaims);
-                    true
-                } else {
-                    false
+                    duplicate_keys.push(*pubkey);
                 }
-            })
-            .collect()
+            });
+
+        duplicate_keys
     }
 
     // Updates the given pubkey at the given slot with the new account information.
