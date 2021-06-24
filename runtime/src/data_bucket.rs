@@ -78,7 +78,7 @@ impl DataBucket {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
-        let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             return hdr.as_ref().unwrap().uid();
@@ -91,7 +91,7 @@ impl DataBucket {
         }
         let mut e = Err(DataBucketError::AlreadyAllocated);
         let ix = (ix * self.cell_size) as usize;
-        let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             if hdr.as_ref().unwrap().try_lock(uid) {
@@ -107,7 +107,7 @@ impl DataBucket {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
-        let hdr_slice = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         let mut e = Err(DataBucketError::InvalidFree);
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
@@ -125,7 +125,7 @@ impl DataBucket {
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
-        let item_slice = &self.mmap[start..end];
+        let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
             &*item
@@ -133,13 +133,14 @@ impl DataBucket {
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        let ix = self.cell_size * ix;
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
-        let end = start + std::mem::size_of::<T>();
-        let item_slice = &self.mmap[start..end];
+        let ix = self.cell_size * ix;
+        let start = ix as usize + std::mem::size_of::<Header>();
+        let end = start + std::mem::size_of::<T>() * len as usize;
+        println!("GET slice {} {}", start, end);
+        let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *const T;
             std::slice::from_raw_parts(item, len as usize)
@@ -152,7 +153,7 @@ impl DataBucket {
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
-        let item_slice = &self.mmap[start..end];
+        let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
             &mut *item
@@ -160,13 +161,14 @@ impl DataBucket {
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        let ix = self.cell_size * ix;
         if ix >= self.capacity {
             panic!("bad index size");
         }
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
-        let end = start + std::mem::size_of::<T>();
-        let item_slice = &self.mmap[start..end];
+        let ix = self.cell_size * ix;
+        let start = ix as usize + std::mem::size_of::<Header>();
+        let end = start + std::mem::size_of::<T>() * len as usize;
+        println!("GET mut slice {} {}", start, end);
+        let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *mut T;
             std::slice::from_raw_parts_mut(item, len as usize)
@@ -196,6 +198,7 @@ impl DataBucket {
         // Theoretical performance optimization: write a zero to the end of
         // the file so that we won't have to resize it later, which may be
         // expensive.
+        println!("GROWING file {}", capacity * cell_size as u64);
         data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
             .unwrap();
         data.write_all(&[0]).unwrap();
@@ -212,8 +215,8 @@ impl DataBucket {
         (0..old_cap as usize).into_par_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
             let new_ix = old_ix * 2;
-            let dst_slice = &new_map[new_ix..new_ix + self.cell_size as usize];
-            let src_slice = &old_map[old_ix..old_ix + self.cell_size as usize];
+            let dst_slice: &[u8] = &new_map[new_ix..new_ix + self.cell_size as usize];
+            let src_slice: &[u8] = &old_map[old_ix..old_ix + self.cell_size as usize];
 
             unsafe {
                 let dst = dst_slice.as_ptr() as *mut u8;

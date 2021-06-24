@@ -11,6 +11,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+pub type SlotInfo = (Slot, AccountInfo);
+pub type SlotSlice = [SlotInfo];
+
 pub struct BucketMap {
     buckets: Vec<RwLock<Option<Bucket>>>,
     drives: Arc<Vec<PathBuf>>,
@@ -267,10 +270,25 @@ impl Bucket {
     }
 }
 
-pub type SlotInfo = (Slot, AccountInfo);
 
-pub type SlotSlice = [SlotInfo];
 
 fn read_be_u64(input: &[u8]) -> u64 {
     u64::from_be_bytes(input[0..std::mem::size_of::<u64>()].try_into().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bucket_map_test_insert() {
+        let key = Pubkey::new_unique();
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_insert");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(1, drives);
+        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+        assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
+        std::fs::remove_dir_all(tmpdir).unwrap();
+    }
 }
