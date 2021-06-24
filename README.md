@@ -19,7 +19,7 @@ $ source $HOME/.cargo/env
 $ rustup component add rustfmt
 ```
 
-Please sure you are always using the latest stable rust version by running:
+Please make sure you are always using the latest stable rust version by running:
 
 ```bash
 $ rustup update
