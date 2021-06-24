@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-const DEFAULT_CAPACITY: u64 = 16;
+const DEFAULT_CAPACITY: u8 = 4;
 
 #[repr(C)]
 struct Header {
@@ -41,7 +41,8 @@ pub struct DataBucket {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
-    pub capacity: u64,
+    //power of 2
+    pub capacity: u8,
     pub used: AtomicU64,
 }
 
@@ -74,7 +75,8 @@ impl DataBucket {
     }
 
     pub fn uid(&self, ix: u64) -> u64 {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
@@ -86,7 +88,8 @@ impl DataBucket {
     }
 
     pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let mut e = Err(DataBucketError::AlreadyAllocated);
@@ -103,7 +106,8 @@ impl DataBucket {
     }
 
     pub fn free(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
@@ -120,7 +124,8 @@ impl DataBucket {
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -133,7 +138,8 @@ impl DataBucket {
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -148,7 +154,8 @@ impl DataBucket {
     }
 
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -161,7 +168,8 @@ impl DataBucket {
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        if ix >= self.capacity {
+        let capacity = 1u64<<self.capacity;
+        if ix >= capacity {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -175,7 +183,8 @@ impl DataBucket {
         }
     }
 
-    fn new_map(drives: &[PathBuf], cell_size: usize, capacity: u64) -> (MmapMut, PathBuf) {
+    fn new_map(drives: &[PathBuf], cell_size: usize, capacity: u8) -> (MmapMut, PathBuf) {
+        let capacity = 1u64<<capacity;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
         let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
@@ -211,7 +220,7 @@ impl DataBucket {
         let old_cap = self.capacity;
         let old_map = &self.mmap;
         let old_file = self.path.clone();
-        let (new_map, new_file) = Self::new_map(&self.drives, self.cell_size as usize, self.capacity * 2);
+        let (new_map, new_file) = Self::new_map(&self.drives, self.cell_size as usize, self.capacity + 1);
         (0..old_cap as usize).into_par_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
             let new_ix = old_ix * 2;
@@ -226,7 +235,10 @@ impl DataBucket {
         });
         self.mmap = new_map;
         self.path = new_file;
-        self.capacity = self.capacity * 2;
+        self.capacity = self.capacity + 1;
         remove_file(old_file).unwrap();
+    }
+    pub fn capacity(&self) -> u64 {
+        1u64<<self.capacity
     }
 }

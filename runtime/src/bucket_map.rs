@@ -21,8 +21,8 @@ pub struct BucketMap {
 }
 
 pub enum BucketMapError {
-    DataNoSpace((u64, u64)),
-    IndexNoSpace(u64),
+    DataNoSpace((u64, u8)),
+    IndexNoSpace(u8),
 }
 
 impl BucketMap {
@@ -52,11 +52,13 @@ impl BucketMap {
         }
     }
 
-    pub fn update(
+    pub fn update<F>(
         &self,
         pubkey: &Pubkey,
-        updatefn: fn(Option<&[SlotInfo]>) -> Option<Vec<SlotInfo>>,
-    ) -> () {
+        updatefn: F,
+    ) -> () 
+    where F: Fn(Option<&[SlotInfo]>) -> Option<Vec<SlotInfo>> {
+
         let ix = self.bucket_ix(pubkey);
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
@@ -74,10 +76,12 @@ impl BucketMap {
             let rv = bucket.try_write(pubkey, &new);
             match rv {
                 Err(BucketMapError::DataNoSpace(sz)) => {
+                    println!("GROWING SPACE {:?}", sz);
                     bucket.grow_data(sz);
                     continue;
                 },
                 Err(BucketMapError::IndexNoSpace(sz)) => {
+                    println!("GROWING INDEX {}", sz);
                     bucket.grow_index(sz);
                     continue;
                 },
@@ -106,13 +110,13 @@ struct IndexEntry {
     data_bucket: u64,
     data_location: u64,
     //if the bucket doubled, the index can be recomputed
-    create_bucket_capacity: u64,
+    create_bucket_capacity: u8,
     num_slots: u64,
 }
 
 impl IndexEntry {
-    fn data_loc(&self, elem_cap: u64) -> u64 {
-        self.data_location << elem_cap as u64 - self.create_bucket_capacity
+    fn data_loc(&self, bucket: &DataBucket) -> u64 {
+        self.data_location << bucket.capacity - self.create_bucket_capacity
     }
 }
 
@@ -133,7 +137,7 @@ impl Bucket {
     fn find_index(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {
         let ix = self.index_ix(key);
         for i in ix..ix + MAX_SEARCH {
-            let ii = i % self.index.capacity;
+            let ii = i % self.index.capacity();
             if self.index.uid(ii) == 0 {
                 continue;
             }
@@ -148,7 +152,7 @@ impl Bucket {
     fn create_key(&mut self, key: &Pubkey) -> Result<u64, BucketMapError> {
         let ix = self.index_ix(key);
         for i in ix..ix + MAX_SEARCH {
-            let ii = i as u64 % self.index.capacity;
+            let ii = i as u64 % self.index.capacity();
             if self.index.uid(ii) != 0 {
                 continue;
             }
@@ -168,8 +172,7 @@ impl Bucket {
     pub fn read_value(&self, key: &Pubkey) -> Option<&[SlotInfo]> {
         let (elem, _) = self.find_index(key)?;
         let data_bucket = &self.data[elem.data_bucket as usize];
-        let cur_cap = data_bucket.capacity;
-        let loc = elem.data_location << cur_cap - elem.create_bucket_capacity as u64;
+        let loc = elem.data_loc(data_bucket);
         let slice = self.data[elem.data_bucket as usize].get_cell_slice(loc, elem.num_slots);
         Some(slice)
     }
@@ -191,7 +194,7 @@ impl Bucket {
         let current_bucket = &self.data[elem.data_bucket as usize];
         if best_fit_bucket == elem.data_bucket && elem.num_slots > 0 {
             //in place update
-            let elem_loc = elem.data_loc(current_bucket.capacity);
+            let elem_loc = elem.data_loc(current_bucket);
             let slice: &mut [SlotInfo] =
                 current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
             let elem: &mut IndexEntry = self.index.get_mut(elem_ix);
@@ -202,12 +205,13 @@ impl Bucket {
         } else {
             //need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
-            let cap = best_bucket.capacity;
+            let cap_power = best_bucket.capacity;
+            let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + MAX_SEARCH as u64 {
                 let ix = i % cap;
                 if best_bucket.uid(ix) == 0 {
-                    let elem_loc = elem.data_loc(current_bucket.capacity);
+                    let elem_loc = elem.data_loc(current_bucket);
                     if elem.num_slots > 0 {
                         current_bucket.free(elem_loc, elem_uid).unwrap();
                     }
@@ -224,7 +228,7 @@ impl Bucket {
                     return Ok(());
                 }
             }
-            Err(BucketMapError::DataNoSpace((best_fit_bucket, cap)))
+            Err(BucketMapError::DataNoSpace((best_fit_bucket, cap_power)))
         }
     }
 
@@ -233,15 +237,16 @@ impl Bucket {
             let elem_uid = self.index.uid(elem_ix);
             if elem.num_slots > 0 {
                 let data_bucket = &self.data[elem.data_bucket as usize];
-                let loc = elem.data_loc(data_bucket.capacity);
+                let loc = elem.data_loc(data_bucket);
                 data_bucket.free(loc, elem_uid).unwrap();
             }
             self.index.free(elem_ix, elem_uid).unwrap();
         }
     }
 
-    fn grow_index(&mut self, sz: u64) {
-        if self.index.capacity != sz {
+    fn grow_index(&mut self, sz: u8) {
+        if self.index.capacity == sz {
+            println!("GROW_INDEX: {}", self.index.capacity == sz);
             self.index.grow();
         }
     }
@@ -250,7 +255,7 @@ impl Bucket {
         ((sz.max(MIN_ELEMS) - MIN_ELEMS) as f64).log2().ceil() as u64
     }
 
-    fn grow_data(&mut self, sz: (u64, u64)) {
+    fn grow_data(&mut self, sz: (u64, u8)) {
         if self.data.get(sz.0 as usize).is_none() {
             for i in self.data.len() as u64..(sz.0 + 1) {
                 self.data.push(DataBucket::new(
@@ -266,10 +271,9 @@ impl Bucket {
     }
     fn index_ix(&self, pubkey: &Pubkey) -> u64 {
         let location = read_be_u64(pubkey.as_ref());
-        location % self.index.capacity
+        location % self.index.capacity()
     }
 }
-
 
 
 fn read_be_u64(input: &[u8]) -> u64 {
@@ -303,6 +307,20 @@ mod tests {
         assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
         index.update(&key, |_| Some(vec![(1, AccountInfo::default())]));
         assert_eq!(index.read_value(&key), Some(vec![(1, AccountInfo::default())]));
+        std::fs::remove_dir_all(tmpdir).unwrap();
+    }
+
+    #[test]
+    fn bucket_map_test_n_drives() {
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_n_drives");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(2, drives);
+        for i in 0..100 {
+            let key = Pubkey::new_unique();
+            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
+            assert_eq!(index.read_value(&key), Some(vec![(i, AccountInfo::default())]));
+        }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
 }
