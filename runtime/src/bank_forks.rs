@@ -259,6 +259,7 @@ impl BankForks {
                             // if another `set_root()` is called before the snapshots package
                             // can be generated
                             status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
+                            just_clean_and_shrink: false,
                         })
                     {
                         warn!(

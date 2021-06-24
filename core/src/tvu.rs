@@ -35,7 +35,8 @@ use solana_rpc::{
 };
 use solana_runtime::{
     accounts_background_service::{
-        AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+        AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequest,
+        SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
     bank_forks::{BankForks, SnapshotConfig},
@@ -247,6 +248,12 @@ impl Tvu {
         }
 
         let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+
+        accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
+            snapshot_root_bank: bank_forks.read().unwrap().working_bank(),
+            status_cache_slot_deltas: vec![],
+            just_clean_and_shrink: true,
+        });
 
         let accounts_background_request_handler = AbsRequestHandler {
             snapshot_request_handler,

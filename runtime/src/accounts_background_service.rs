@@ -77,6 +77,7 @@ impl SendDroppedBankCallback {
 pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
+    pub just_clean_and_shrink: bool,
 }
 
 pub struct SnapshotRequestHandler {
@@ -102,6 +103,7 @@ impl SnapshotRequestHandler {
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
+                    just_clean_and_shrink,
                 } = snapshot_request;
 
                 let previous_hash = if test_hash_calculation {
@@ -120,7 +122,7 @@ impl SnapshotRequestHandler {
                 shrink_time.stop();
 
                 let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
-                if accounts_db_caching_enabled {
+                if accounts_db_caching_enabled && !just_clean_and_shrink {
                     // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
                     // That's because `snapshot_root_bank.slot()` must be root at this point,
                     // and contains relevant updates because each bank has at least 1 account update due
@@ -142,15 +144,19 @@ impl SnapshotRequestHandler {
                 flush_accounts_cache_time.stop();
 
                 let mut hash_time = Measure::start("hash_time");
-                let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
-                    use_index_hash_calculation,
-                    test_hash_calculation,
-                );
-                let hash_for_testing = if test_hash_calculation {
-                    assert_eq!(previous_hash, this_hash);
-                    Some(snapshot_root_bank.get_accounts_hash())
-                } else {
+                let hash_for_testing = if just_clean_and_shrink {
                     None
+                } else {
+                    let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
+                        use_index_hash_calculation,
+                        test_hash_calculation,
+                    );
+                    if test_hash_calculation {
+                        assert_eq!(previous_hash, this_hash);
+                        Some(snapshot_root_bank.get_accounts_hash())
+                    } else {
+                        None
+                    }
                 };
                 hash_time.stop();
 
@@ -170,28 +176,32 @@ impl SnapshotRequestHandler {
 
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
-                let r = snapshot_utils::snapshot_bank(
-                    &snapshot_root_bank,
-                    status_cache_slot_deltas,
-                    &self.accounts_package_sender,
-                    &self.snapshot_config.snapshot_path,
-                    &self.snapshot_config.snapshot_package_output_path,
-                    self.snapshot_config.snapshot_version,
-                    &self.snapshot_config.archive_format,
-                    hash_for_testing,
-                );
-                if r.is_err() {
-                    warn!(
-                        "Error generating snapshot for bank: {}, err: {:?}",
-                        snapshot_root_bank.slot(),
-                        r
+                if !just_clean_and_shrink {
+                    let r = snapshot_utils::snapshot_bank(
+                        &snapshot_root_bank,
+                        status_cache_slot_deltas,
+                        &self.accounts_package_sender,
+                        &self.snapshot_config.snapshot_path,
+                        &self.snapshot_config.snapshot_package_output_path,
+                        self.snapshot_config.snapshot_version,
+                        &self.snapshot_config.archive_format,
+                        hash_for_testing,
                     );
+                    if r.is_err() {
+                        warn!(
+                            "Error generating snapshot for bank: {}, err: {:?}",
+                            snapshot_root_bank.slot(),
+                            r
+                        );
+                    }
                 }
                 snapshot_time.stop();
 
-                // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-                snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
+                if !just_clean_and_shrink {
+                    // Cleanup outdated snapshots
+                    snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
+                }
                 purge_old_snapshots_time.stop();
                 total_time.stop();
 
