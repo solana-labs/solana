@@ -150,6 +150,9 @@ impl SeekableBufferingReader {
                                 .unwrap()
                                 .push(data[0..size].to_vec());
                             let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
+                            if len == 0 {
+                                break;
+                            }
                         }
                         Err(err) => {
                             error!("error reading file");
@@ -159,7 +162,7 @@ impl SeekableBufferingReader {
                     }
                 }
                 time.stop();
-                error!("reading entire decompressed file took: {} us", time.as_us());
+                error!("reading entire decompressed file took: {} us, bytes: {}", time.as_us(), result_.instance.len.fetch_add(size, Ordering::Relaxed));
             });
         std::thread::sleep(std::time::Duration::from_millis(200)); // give time for file to be read a little bit
         result
