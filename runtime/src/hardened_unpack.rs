@@ -90,7 +90,11 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     Ok(())
 }
 pub struct SeekableBufferingReaderInner {
+    // unpacking callers read from 'data'. Data is transferred when 'data' is exhausted.
+    // This minimizes lock contention since bg file reader has to have almost constant write access.
     pub data: RwLock<Vec<Vec<u8>>>,
+    // bg thread reads to 'new_data'
+    pub new_data: RwLock<Vec<Vec<u8>>>,
     pub len: AtomicUsize,
     pub calls: AtomicUsize,
     pub error: Mutex<io::Result<()>>,
@@ -119,6 +123,7 @@ impl Clone for SeekableBufferingReader {
 impl SeekableBufferingReader {
     pub fn new<T: 'static + Read + std::marker::Send>(mut reader: T) -> Self {
         let inner = SeekableBufferingReaderInner {
+            new_data: RwLock::new(vec![]),
             data: RwLock::new(vec![]),
             len: AtomicUsize::new(0),
             calls: AtomicUsize::new(0),
@@ -137,7 +142,7 @@ impl SeekableBufferingReader {
             .name("solana-compressed_file_reader".to_string())
             .spawn(move || {
                 let mut time = Measure::start("");
-                const SIZE: usize = 65536*2;
+                const SIZE: usize = 65536 * 2;
                 let mut data = [0u8; SIZE];
                 loop {
                     let result = reader.read(&mut data);
@@ -145,7 +150,7 @@ impl SeekableBufferingReader {
                         Ok(size) => {
                             result_
                                 .instance
-                                .data
+                                .new_data
                                 .write()
                                 .unwrap()
                                 .push(data[0..size].to_vec());
@@ -162,10 +167,25 @@ impl SeekableBufferingReader {
                     }
                 }
                 time.stop();
-                error!("reading entire decompressed file took: {} us, bytes: {}", time.as_us(), result_.instance.len.load(Ordering::Relaxed));
+                error!(
+                    "reading entire decompressed file took: {} us, bytes: {}",
+                    time.as_us(),
+                    result_.instance.len.load(Ordering::Relaxed)
+                );
             });
         std::thread::sleep(std::time::Duration::from_millis(200)); // give time for file to be read a little bit
         result
+    }
+    fn transfer_data(&self) {
+        let mut from_lock = self.instance.new_data.write().unwrap();
+        if from_lock.is_empty() {
+            return;
+        }
+        let mut new_data: Vec<Vec<u8>> = vec![];
+        std::mem::swap(&mut *from_lock, &mut new_data);
+        drop(from_lock);
+        let mut to_lock = self.instance.data.write().unwrap();
+        to_lock.append(&mut new_data);
     }
     pub fn calls(&self) -> usize {
         self.instance.calls.load(Ordering::Relaxed)
@@ -181,9 +201,15 @@ impl Read for SeekableBufferingReader {
 
         let mut remaining_request = request_len;
         let mut offset_in_dest = 0;
+        let mut transferred_data = false;
         while remaining_request > 0 {
             let mut lock = self.instance.data.read().unwrap();
             if self.last_buffer_index >= lock.len() {
+                if !transferred_data {
+                    transferred_data = true;
+                    self.transfer_data();
+                    continue;
+                }
                 break; // no more to read right now
             }
             let source = &lock[self.last_buffer_index];
