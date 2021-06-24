@@ -1653,9 +1653,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.7.11"
+version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf80d3e903b34e0bd7282b218398aec54e082c840d9baf8339e0080a0c542956"
+checksum = "8c2bdb6314ec10835cd3293dd268473a835c02b7b352e788be788b3c6ca6bb16"
 dependencies = [
  "libc",
  "log",
@@ -2709,7 +2709,7 @@ dependencies = [
  "borsh 0.9.0",
  "borsh-derive 0.9.0",
  "futures 0.3.12",
- "mio 0.7.11",
+ "mio 0.7.13",
  "solana-banks-interface",
  "solana-program 1.8.0",
  "solana-sdk",
@@ -2722,7 +2722,7 @@ dependencies = [
 name = "solana-banks-interface"
 version = "1.8.0"
 dependencies = [
- "mio 0.7.11",
+ "mio 0.7.13",
  "serde",
  "solana-sdk",
  "tarpc",
@@ -2735,7 +2735,7 @@ dependencies = [
  "bincode",
  "futures 0.3.12",
  "log",
- "mio 0.7.11",
+ "mio 0.7.13",
  "solana-banks-interface",
  "solana-metrics",
  "solana-runtime",
@@ -3398,7 +3398,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "log",
- "mio 0.7.11",
+ "mio 0.7.13",
  "serde",
  "serde_derive",
  "solana-banks-client",
@@ -3963,7 +3963,7 @@ dependencies = [
  "bytes 1.0.1",
  "libc",
  "memchr",
- "mio 0.7.11",
+ "mio 0.7.13",
  "num_cpus",
  "once_cell",
  "parking_lot 0.11.1",
