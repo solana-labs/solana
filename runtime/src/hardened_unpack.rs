@@ -137,13 +137,16 @@ impl SeekableBufferingReader {
         .name("solana-compressed_file_reader".to_string())
         .spawn(move || {
             let mut time = Measure::start("");
-            const SIZE: usize  = 65536;
+            const SIZE: usize  = 512;
             let mut data = [0u8; SIZE];
             let mut calls = 0;
             loop {
                 let result = reader.read(&mut data);
                 match result {
                     Ok(size) => {
+                        if calls < 2 {
+                            error!("{:?}", &data[0..size]);
+                        }
                         result_.instance.data.write().unwrap().push(data[0..size].to_vec());
                         let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
                         calls += 1;
@@ -189,7 +192,7 @@ impl Read for SeekableBufferingReader {
             let remaining_len = full_len - self.next_index_within_last_buffer;
             if remaining_len >= remaining_request {
                 let bytes_to_transfer = remaining_request;
-                error!("copying {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
+                error!("copying1 {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
                 buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
                 self.next_index_within_last_buffer += bytes_to_transfer;
                 offset_in_dest += bytes_to_transfer;
@@ -197,7 +200,7 @@ impl Read for SeekableBufferingReader {
             }
             else {
                 let bytes_to_transfer = remaining_len;
-                error!("copying {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
+                error!("copying2 {} bytes from {}, {}", bytes_to_transfer, self.last_buffer_index, self.next_index_within_last_buffer);
                 buf[offset_in_dest..(offset_in_dest + bytes_to_transfer)].copy_from_slice(&source[self.next_index_within_last_buffer..(self.next_index_within_last_buffer + bytes_to_transfer)]);
                 offset_in_dest += bytes_to_transfer;
                 self.next_index_within_last_buffer = 0;
@@ -208,6 +211,8 @@ impl Read for SeekableBufferingReader {
 
         self.instance.calls.fetch_add(1, Ordering::Relaxed);
         error!("read: {}, returning {}", request_len, offset_in_dest);
+        error!("{:?}", buf);
+
         Ok(offset_in_dest)
     }
 }
