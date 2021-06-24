@@ -137,7 +137,7 @@ impl SeekableBufferingReader {
             .name("solana-compressed_file_reader".to_string())
             .spawn(move || {
                 let mut time = Measure::start("");
-                const SIZE: usize = 512;
+                const SIZE: usize = 65536;
                 let mut data = [0u8; SIZE];
                 let mut calls = 0;
                 loop {
