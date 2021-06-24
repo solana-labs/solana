@@ -100,6 +100,21 @@ each builtin program's instructions.
   be equal to or less than that.
 - "Compute cost" is a lame name, ideas for something better?
 
+## Mainnet beta transaction wide compute measurements
+
+Over 4 1/2 hours of Mainnet beta monitoring with a 200k instruction cap:
+675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8 (Radium v3?)
+  - exceeded 79669 times
+  - exceeded by between 1 and 800k units
+5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH (Mango!)
+  - exceeded 60 times
+  - exceeded by < 100k units
+
+Both transactions contain 2 or more instructions and both are running the same program in each instruction
+
+Takeaways:
+- If the transactions were split into single instructions per transaction they would be below the tx-wide compute limit of 200k.
+
 ## Mainnet beta program performance measurements
 
 ```
