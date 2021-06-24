@@ -4,6 +4,7 @@ use crate::accounts_db::AccountInfo;
 use crate::data_bucket::DataBucket;
 use rand::thread_rng;
 use rand::Rng;
+use log::*;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::slot_history::Slot;
 use std::convert::TryInto;
@@ -76,12 +77,12 @@ impl BucketMap {
             let rv = bucket.try_write(pubkey, &new);
             match rv {
                 Err(BucketMapError::DataNoSpace(sz)) => {
-                    println!("GROWING SPACE {:?}", sz);
+                    debug!("GROWING SPACE {:?}", sz);
                     bucket.grow_data(sz);
                     continue;
                 },
                 Err(BucketMapError::IndexNoSpace(sz)) => {
-                    println!("GROWING INDEX {}", sz);
+                    debug!("GROWING INDEX {}", sz);
                     bucket.grow_index(sz);
                     continue;
                 },
@@ -246,7 +247,7 @@ impl Bucket {
 
     fn grow_index(&mut self, sz: u8) {
         if self.index.capacity == sz {
-            println!("GROW_INDEX: {}", self.index.capacity == sz);
+            debug!("GROW_INDEX: {}", self.index.capacity == sz);
             self.index.grow();
         }
     }
@@ -311,6 +312,27 @@ mod tests {
     }
 
     #[test]
+    fn bucket_map_test_delete() {
+        let key = Pubkey::new_unique();
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_delete");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(1, drives);
+
+        assert_eq!(index.read_value(&key), None);
+
+        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+        assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
+
+        index.delete_key(&key);
+        assert_eq!(index.read_value(&key), None);
+
+        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+        assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
+    }
+
+
+    #[test]
     fn bucket_map_test_n_drives() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_n_drives");
         std::fs::create_dir_all(tmpdir.clone()).unwrap();
@@ -320,6 +342,31 @@ mod tests {
             let key = Pubkey::new_unique();
             index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
             assert_eq!(index.read_value(&key), Some(vec![(i, AccountInfo::default())]));
+        }
+        std::fs::remove_dir_all(tmpdir).unwrap();
+    }
+
+    #[test]
+    fn bucket_map_test_n_delete() {
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_n_delete");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(2, drives);
+        let keys: Vec<Pubkey> = (0..100).into_iter().map(|_| Pubkey::new_unique()).collect();
+        for key in keys.iter() {
+            let i = read_be_u64(key.as_ref());
+            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
+            assert_eq!(index.read_value(&key), Some(vec![(i, AccountInfo::default())]));
+        }
+        for k in 0..keys.len() {
+            let key = &keys[k];
+            index.delete_key(&key);
+            assert_eq!(index.read_value(&key), None);
+            for k in (k + 1)..keys.len() {
+                let key = &keys[k];
+                let i = read_be_u64(key.as_ref());
+                assert_eq!(index.read_value(&key), Some(vec![(i, AccountInfo::default())]));
+            }
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
