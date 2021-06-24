@@ -334,6 +334,8 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   11: "Cancel Order",
   12: "Cancel Order By Client Id",
   13: "Send Take",
+  14: "Close Open Orders",
+  15: "Init Open Orders",
 };
 
 export function parseSerumInstructionCode(instruction: TransactionInstruction) {
