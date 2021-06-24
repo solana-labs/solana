@@ -291,4 +291,18 @@ mod tests {
         assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
+
+    #[test]
+    fn bucket_map_test_update() {
+        let key = Pubkey::new_unique();
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_update");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(1, drives);
+        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+        assert_eq!(index.read_value(&key), Some(vec![(0, AccountInfo::default())]));
+        index.update(&key, |_| Some(vec![(1, AccountInfo::default())]));
+        assert_eq!(index.read_value(&key), Some(vec![(1, AccountInfo::default())]));
+        std::fs::remove_dir_all(tmpdir).unwrap();
+    }
 }
