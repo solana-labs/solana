@@ -60,6 +60,7 @@ use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
 };
 use solana_sdk::{
     clock::Slot,
@@ -359,6 +360,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
+        let snapshot_runtime_info = SyncSnapshotRuntimeInfo::default();
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
             genesis_config,
@@ -388,6 +390,7 @@ impl Validator {
             config.enforce_ulimit_nofile,
             &start_progress,
             config.no_poh_speed_test,
+            Some(snapshot_runtime_info.clone()),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -614,6 +617,7 @@ impl Validator {
                     &exit,
                     &cluster_info,
                     snapshot_config.maximum_snapshots_to_retain,
+                    Some(snapshot_runtime_info),
                 );
                 (
                     Some(snapshot_packager_service),
@@ -1022,7 +1026,7 @@ fn post_process_restored_tower(
         })
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
@@ -1033,6 +1037,7 @@ fn new_banks_from_ledger(
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     no_poh_speed_test: bool,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1147,6 +1152,7 @@ fn new_banks_from_ledger(
         transaction_history_services
             .cache_block_meta_sender
             .as_ref(),
+        snapshot_runtime_info,
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);

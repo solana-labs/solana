@@ -108,6 +108,7 @@ mod tests {
                 false,
                 accounts_db::AccountShrinkThreshold::default(),
                 false,
+                None,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -170,6 +171,7 @@ mod tests {
             None,
             accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
+            None,
         )
         .unwrap();
 
@@ -451,6 +453,7 @@ mod tests {
             &exit,
             &cluster_info,
             DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            None,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();
