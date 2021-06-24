@@ -993,15 +993,11 @@ impl Accounts {
             let message = &tx.message();
             let loaded_transaction = raccs.as_mut().unwrap();
             let mut fee_payer_index = None;
-            for ((i, key), (_key, account)) in message
-                .account_keys
-                .iter()
-                .enumerate()
+            for (i, (key, account)) in (0..message.account_keys.len())
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|((i, key), (_key, _account))| message.is_non_loader_key(key, *i))
+                .filter(|(i, (key, _account))| message.is_non_loader_key(key, *i))
             {
                 // REFACTOR: account_deps unification
-                assert_eq!(key, _key);
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
                     key,
@@ -1038,7 +1034,7 @@ impl Accounts {
                             .rent_debits
                             .push(key, rent, account.lamports());
                     }
-                    accounts.push((key, &*account));
+                    accounts.push((&*key, &*account));
                 }
             }
         }

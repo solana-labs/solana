@@ -631,30 +631,27 @@ impl NonceRollbackFull {
             nonce_address,
             nonce_account,
         } = partial;
-        let fee_payer = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .find(|(i, k)| message.is_non_loader_key(k, *i))
-            .and_then(|(i, k)| {
-                accounts.get(i).cloned().map(|(_k, a)| {
-                    // REFACTOR: account_deps unification
-                    assert_eq!(*k, _k);
-                    (*k, a)
-                })
-            });
+        // REFACTOR: account_deps unification
+        let fee_payer = (0..message.account_keys.len()).find_map(|i| {
+            if let Some((k, a)) = &accounts.get(i) {
+                if message.is_non_loader_key(k, i) {
+                    return Some((k, a));
+                }
+            }
+            None
+        });
         if let Some((fee_pubkey, fee_account)) = fee_payer {
-            if fee_pubkey == nonce_address {
+            if *fee_pubkey == nonce_address {
                 Ok(Self {
                     nonce_address,
-                    nonce_account: fee_account,
+                    nonce_account: fee_account.clone(),
                     fee_account: None,
                 })
             } else {
                 Ok(Self {
                     nonce_address,
                     nonce_account,
-                    fee_account: Some(fee_account),
+                    fee_account: Some(fee_account.clone()),
                 })
             }
         } else {
@@ -2958,14 +2955,11 @@ impl Bank {
         TransactionAccountDepRefCells,
         TransactionLoaderRefCells,
     ) {
-        let account_refcells: Vec<_> = message
-            .account_keys
-            .iter()
+        let account_refcells: Vec<_> = (0..message.account_keys.len())
             .zip(accounts.drain(..))
-            .map(|(pubkey, (_pubkey, account))| {
+            .map(|(_i, (pubkey, account))| {
                 // REFACTOR: account_deps unification
-                assert_eq!(*pubkey, _pubkey);
-                (*pubkey, Rc::new(RefCell::new(account)))
+                (pubkey, Rc::new(RefCell::new(account)))
             })
             .collect();
         let account_dep_refcells: Vec<_> = account_deps
@@ -4821,14 +4815,11 @@ impl Bank {
             let message = &tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (pubkey, (_pubkey, account)) in message
-                .account_keys
-                .iter()
+            for (_i, (pubkey, account)) in (0..message.account_keys.len())
                 .zip(loaded_transaction.accounts.iter())
-                .filter(|(_key, (_pubkey, account))| (Stakes::is_stake(account)))
+                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
                 // REFACTOR: account_deps unification
-                assert_eq!(pubkey, _pubkey);
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,

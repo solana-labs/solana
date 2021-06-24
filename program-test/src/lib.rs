@@ -336,16 +336,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        for (i, account_pubkey) in message.account_keys.iter().enumerate() {
+        // REFACTOR: account_deps unification
+        for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
             if !message.is_writable(i, true) {
                 continue;
             }
-
             for account_info in account_infos {
-                if account_info.unsigned_key() == account_pubkey {
-                    let (_key, account) = &accounts[i];
-                    // REFACTOR: account_deps unification
-                    assert_eq!(_key, account_pubkey);
+                if account_info.unsigned_key() == pubkey {
                     **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
 
                     let mut data = account_info.try_borrow_mut_data()?;

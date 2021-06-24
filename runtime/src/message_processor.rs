@@ -471,14 +471,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        if let Some(index) = self
-            .message
-            .account_keys
-            .iter()
-            .position(|key| key == pubkey)
+        if let Some(index) =
+            (0..self.message.account_keys.len()).position(|index| self.accounts[index].0 == *pubkey)
         {
             // REFACTOR: account_deps unification
-            assert_eq!(*pubkey, self.accounts[index].0);
             return Some(self.accounts[index].1.clone());
         }
         self.account_deps.iter().find_map(|(key, account)| {
@@ -640,11 +636,10 @@ impl MessageProcessor {
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
                 // REFACTOR: account_deps unification
-                assert_eq!(message.account_keys[index], accounts[index].0);
                 (
                     message.is_signer(index),
                     message.is_writable(index, demote_sysvar_write_locks),
-                    &message.account_keys[index],
+                    &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
                 )
             }))
@@ -994,12 +989,13 @@ impl MessageProcessor {
         let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
             let mut work = |_unique_index: usize, account_index: usize| {
-                let key = &message.account_keys[account_index];
-                let account = accounts[account_index].1.borrow();
-                // REFACTOR: account_deps unification
-                assert_eq!(*key, accounts[account_index].0);
-                pre_accounts.push(PreAccount::new(key, &account));
-                Ok(())
+                if account_index < message.account_keys.len() && account_index < accounts.len() {
+                    let account = accounts[account_index].1.borrow();
+                    // REFACTOR: account_deps unification
+                    pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
+                    return Ok(());
+                }
+                Err(InstructionError::MissingAccount)
             };
             let _ = instruction.visit_each_account(&mut work);
         }
@@ -1096,10 +1092,8 @@ impl MessageProcessor {
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |_unique_index: usize, account_index: usize| {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
-                let key = &message.account_keys[account_index];
-                let (_key, account) = &accounts[account_index];
+                let (key, account) = &accounts[account_index];
                 // REFACTOR: account_deps unification
-                assert_eq!(key, _key);
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[account_index]
                 } else {
@@ -1169,11 +1163,10 @@ impl MessageProcessor {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (i, key) in message.account_keys.iter().enumerate() {
-                if instructions::check_id(key) {
+            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+                if instructions::check_id(pubkey) {
                     // REFACTOR: account_deps unification
-                    assert_eq!(*key, accounts[i].0);
-                    let mut mut_account_ref = accounts[i].1.borrow_mut();
+                    let mut mut_account_ref = accont.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
