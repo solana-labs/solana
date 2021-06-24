@@ -155,7 +155,7 @@ impl SeekableBufferingReader {
                                 .unwrap()
                                 .push(data[0..size].to_vec());
                             let len = result_.instance.len.fetch_add(size, Ordering::Relaxed);
-                            if len == 0 {
+                            if size == 0 {
                                 break;
                             }
                         }
