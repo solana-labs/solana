@@ -1396,7 +1396,7 @@ impl Default for AccountsDb {
 }
 
 type GenerateIndexAccountsMap<'a> =
-    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+    HashMap<&'a Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
@@ -5854,7 +5854,7 @@ impl AccountsDb {
             let accounts = storage.all_accounts();
             accounts.into_iter().for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
-                match accounts_map.entry(stored_account.meta.pubkey) {
+                match accounts_map.entry(&stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert((this_version, storage.append_vec_id(), stored_account));
                     }
@@ -5881,11 +5881,12 @@ impl AccountsDb {
             return 0;
         }
 
+        let len = accounts_map.len();
         let items = accounts_map
             .iter()
             .map(|(pubkey, (_, store_id, stored_account))| {
                 (
-                    pubkey,
+                    *pubkey,
                     AccountInfo {
                         store_id: *store_id,
                         offset: stored_account.offset,
@@ -5893,12 +5894,11 @@ impl AccountsDb {
                         lamports: stored_account.account_meta.lamports,
                     },
                 )
-            })
-            .collect::<Vec<_>>();
+            });
 
         let (dirty_pubkeys, insert_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, items);
+            .insert_new_if_missing_into_primary_index(*slot, len, items);
 
         // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
         // a given pubkey. If there is just a single item, there is no cleaning to
