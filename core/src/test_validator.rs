@@ -460,9 +460,6 @@ impl TestValidator {
         let tpu = node.info.tpu;
         let gossip = node.info.gossip;
 
-        let mut rpc_config = config.rpc_config.clone();
-        rpc_config.identity_pubkey = validator_identity.pubkey();
-
         {
             let mut authorized_voter_keypairs = config.authorized_voter_keypairs.write().unwrap();
             if !authorized_voter_keypairs
@@ -481,7 +478,7 @@ impl TestValidator {
                     node.info.rpc_pubsub.port(),
                 ),
             )),
-            rpc_config,
+            rpc_config: config.rpc_config.clone(),
             accounts_hash_interval_slots: 100,
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
