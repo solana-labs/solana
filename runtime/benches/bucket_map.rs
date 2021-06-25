@@ -15,6 +15,6 @@ fn bench_bucket_map_insert(bencher: &mut Bencher) {
     let index = BucketMap::new(8, drives);
     bencher.iter(|| {
         let key = Pubkey::new_unique();
-        index.update(&key, |_| Some(vec![0, AccountsInfo::default()]));
+        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
     });
 }

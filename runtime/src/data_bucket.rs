@@ -61,17 +61,26 @@ impl Drop for DataBucket {
 }
 
 impl DataBucket {
-    pub fn new(drives: Arc<Vec<PathBuf>>, num_elems: u64, elem_size: u64) -> Self {
+    pub fn new_with_capacity(
+        drives: Arc<Vec<PathBuf>>,
+        num_elems: u64,
+        elem_size: u64,
+        capacity: u8,
+    ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, DEFAULT_CAPACITY);
+        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity);
         Self {
             path,
             mmap,
             drives,
             cell_size,
             used: AtomicU64::new(0),
-            capacity: DEFAULT_CAPACITY,
+            capacity,
         }
+    }
+
+    pub fn new(drives: Arc<Vec<PathBuf>>, num_elems: u64, elem_size: u64) -> Self {
+        Self::new_with_capacity(drives, num_elems, elem_size, DEFAULT_CAPACITY)
     }
 
     pub fn uid(&self, ix: u64) -> u64 {
@@ -186,7 +195,7 @@ impl DataBucket {
     }
 
     fn new_map(drives: &[PathBuf], cell_size: usize, capacity: u8) -> (MmapMut, PathBuf) {
-        let capacity = 1u64<<capacity;
+        let capacity = 1u64 << capacity;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
         let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
