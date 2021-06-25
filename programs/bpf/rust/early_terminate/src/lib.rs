@@ -15,9 +15,7 @@ pub fn process_instruction(
     for _ in 0..100_000 {
         if i % 500 == 0 {
             let remaining = sol_remaining_compute_units();
-            if i % 500 == 0 {
-                msg!("remaining compute units: {:?}", remaining)
-            }
+            msg!("remaining compute units: {:?}", remaining);
             if remaining < 25_000 {
                 break;
             }
