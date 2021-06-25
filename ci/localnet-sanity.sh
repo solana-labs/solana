@@ -127,7 +127,7 @@ startNode() {
 waitForNodeToInit() {
   declare initCompleteFile=$1
   while [[ ! -r $initCompleteFile ]]; do
-    if [[ $SECONDS -ge 240 ]]; then
+    if [[ $SECONDS -ge 300 ]]; then
       echo "^^^ +++"
       echo "Error: $initCompleteFile not found in $SECONDS seconds"
       exit 1
