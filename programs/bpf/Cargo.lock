@@ -1659,7 +1659,7 @@ checksum = "8c2bdb6314ec10835cd3293dd268473a835c02b7b352e788be788b3c6ca6bb16"
 dependencies = [
  "libc",
  "log",
- "miow 0.3.6",
+ "miow 0.3.7",
  "ntapi",
  "winapi 0.3.8",
 ]
@@ -1689,11 +1689,10 @@ dependencies = [
 
 [[package]]
 name = "miow"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
+checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
- "socket2",
  "winapi 0.3.8",
 ]
 
@@ -2799,7 +2798,7 @@ dependencies = [
  "elf",
  "itertools 0.10.1",
  "log",
- "miow 0.3.6",
+ "miow 0.3.7",
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
