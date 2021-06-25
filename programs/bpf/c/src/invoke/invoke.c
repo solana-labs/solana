@@ -19,6 +19,8 @@ static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
 static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 14;
 static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 15;
+static const uint8_t TEST_EXECUTABLE_LAMPORTS = 16;
+static const uint8_t ADD_LAMPORTS = 17;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -64,7 +66,7 @@ uint64_t do_nested_invokes(uint64_t num_nested_invokes,
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("Invoke C program");
 
-  SolAccountInfo accounts[11];
+  SolAccountInfo accounts[12];
   SolParameters params = (SolParameters){.ka = accounts};
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(accounts))) {
@@ -533,6 +535,29 @@ extern uint64_t entrypoint(const uint8_t *input) {
   case TEST_NESTED_INVOKE_TOO_DEEP: {
     do_nested_invokes(5, accounts, params.ka_num);
     break;
+  }
+  case TEST_EXECUTABLE_LAMPORTS: {
+      sol_log("Test executable lamports");
+      accounts[ARGUMENT_INDEX].executable = true;
+      *accounts[ARGUMENT_INDEX].lamports -= 1;
+      *accounts[DERIVED_KEY1_INDEX].lamports +=1;
+      SolAccountMeta arguments[] = {
+          {accounts[ARGUMENT_INDEX].key, true, false},
+          {accounts[DERIVED_KEY1_INDEX].key, true, false},
+      };
+      uint8_t data[] = {ADD_LAMPORTS, 0, 0, 0};
+      SolPubkey program_id;
+      sol_memcpy(&program_id, params.program_id, sizeof(SolPubkey));
+      const SolInstruction instruction = {&program_id,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+      sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+      *accounts[ARGUMENT_INDEX].lamports += 1;
+      break;
+  }
+  case ADD_LAMPORTS: {
+      *accounts[0].lamports += 1;
+      break;
   }
 
   default:
