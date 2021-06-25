@@ -73,6 +73,13 @@ import * as solanaWeb3 from '@solana/web3.js';
 console.log(solanaWeb3);
 ```
 
+### EXAMPLES
+
+For example usage of the solana-web3.js library see:
+
+- [example helloworld](https://github.com/solana-labs/example-helloworld)
+- [dApp Scaffold](https://github.com/solana-labs/dapp-scaffold)
+
 ### Browser bundle
 ```js
 // `solanaWeb3` is provided in the global namespace by the `solanaWeb3.min.js` script bundle.
