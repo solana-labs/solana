@@ -35,7 +35,7 @@ solana-sdk-macro = { path = "../macro", version = "=1.8.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-curve25519-dalek = "2.1.0"
+curve25519-dalek = "3.0.0"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.8.0" }
 

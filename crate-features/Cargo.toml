@@ -13,7 +13,7 @@ edition = "2018"
 backtrace = { version = "0.3.33", features = ["serialize-serde"] }
 bytes = { version = "0.4.12", features = ["either"] }
 cc = { version = "1.0.67", features = ["jobserver", "parallel"]}
-curve25519-dalek = { version = "2" }
+curve25519-dalek = { version = "3" }
 either= { version = "1.5.2" }
 lazy_static = { version = "1.4.0", features = ["spin", "spin_no_std"] }
 libc = { version = "0.2.62", features = ["extra_traits"] }
