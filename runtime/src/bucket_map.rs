@@ -413,6 +413,14 @@ mod tests {
                 Some(vec![(i, AccountInfo::default())])
             );
         }
+        for key in keys.iter() {
+            let i = read_be_u64(key.as_ref());
+            println!("READ: {:?} {}", key, i);
+            assert_eq!(
+                index.read_value(&key),
+                Some(vec![(i, AccountInfo::default())])
+            );
+        }
         for k in 0..keys.len() {
             let key = &keys[k];
             index.delete_key(&key);
