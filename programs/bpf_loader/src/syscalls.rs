@@ -2384,13 +2384,6 @@ mod tests {
     };
     use std::str::FromStr;
 
-    const DEFAULT_CONFIG: Config = Config {
-        max_call_depth: 20,
-        stack_frame_size: 4_096,
-        enable_instruction_meter: true,
-        enable_instruction_tracing: false,
-    };
-
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
             match $result {
@@ -2406,9 +2399,10 @@ mod tests {
         const LENGTH: u64 = 1000;
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion::new_from_slice(&data, START, 0, false)],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2445,6 +2439,7 @@ mod tests {
         // Pubkey
         let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2453,7 +2448,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_pubkey =
@@ -2475,7 +2470,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_instruction =
@@ -2494,6 +2489,7 @@ mod tests {
         let data: Vec<u8> = vec![];
         assert_eq!(0x1 as *const u8, data.as_ptr());
         let addr = good_data.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2502,7 +2498,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u8>(
@@ -2527,7 +2523,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u8>(
@@ -2570,7 +2566,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u64>(
@@ -2600,7 +2596,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<Pubkey>(
@@ -2620,6 +2616,7 @@ mod tests {
     fn test_translate_string_and_do() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2628,7 +2625,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         assert_eq!(
@@ -2651,9 +2648,9 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
+        let config = Config::default();
         let memory_mapping =
-            MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &DEFAULT_CONFIG)
-                .unwrap();
+            MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &config).unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {},
@@ -2673,6 +2670,7 @@ mod tests {
     fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2681,7 +2679,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2749,6 +2747,7 @@ mod tests {
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
         };
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2757,7 +2756,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2862,7 +2861,8 @@ mod tests {
             compute_meter,
             logger,
         };
-        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &DEFAULT_CONFIG).unwrap();
+        let config = Config::default();
+        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
@@ -2889,6 +2889,7 @@ mod tests {
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
         };
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2897,7 +2898,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2932,6 +2933,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_alloc_free() {
+        let config = Config::default();
         // large alloc
         {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
@@ -2942,7 +2944,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -2969,7 +2971,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -2995,7 +2997,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -3015,6 +3017,7 @@ mod tests {
 
         fn check_alignment<T>() {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -3022,7 +3025,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -3073,6 +3076,7 @@ mod tests {
         let ro_len = bytes_to_hash.len() as u64;
         let ro_va = 96;
         let rw_va = 192;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
@@ -3104,7 +3108,7 @@ mod tests {
                     is_writable: true,
                 },
             ],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
@@ -3170,6 +3174,7 @@ mod tests {
 
     #[test]
     fn test_syscall_get_sysvar() {
+        let config = Config::default();
         // Test clock sysvar
         {
             let got_clock = Clock::default();
@@ -3183,7 +3188,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3225,7 +3230,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3275,7 +3280,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3315,7 +3320,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 

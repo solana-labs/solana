@@ -1792,7 +1792,10 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
         Some(|x| verifier::check(x)),
-        Config::default(),
+        Config {
+            reject_unresolved_syscalls: true,
+            ..Config::default()
+        },
         register_syscalls(&mut invoke_context).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;

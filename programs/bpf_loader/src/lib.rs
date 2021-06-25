@@ -82,8 +82,8 @@ pub fn create_executor(
     let config = Config {
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
-        enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
+        ..Config::default()
     };
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
