@@ -107,6 +107,10 @@ impl CostModel {
         cost
     }
 
+    // calculate `transaction` cost, the result is passed back to caller via mutable
+    // parameter `cost`. Existing content in `cost` will be erased before adding new content
+    // This is to allow this function to reuse pre-allocated memory, as this function
+    // is often on hot-path.
     pub fn calculate_cost_no_alloc(&self, transaction: &Transaction, cost: &mut TransactionCost) {
         cost.reset();
 
