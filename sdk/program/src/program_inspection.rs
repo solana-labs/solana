@@ -8,9 +8,7 @@ pub fn sol_remaining_compute_units() -> u64 {
         extern "C" {
             fn sol_remaining_compute_units_(result: *mut u64);
         }
-        unsafe {
-            sol_remaining_compute_units_(&mut result as *mut u64);
-        }
+        sol_remaining_compute_units_(&mut result as *mut u64);
     }
     #[cfg(not(target_arch = "bpf"))]
     crate::program_stubs::sol_remaining_compute_units(&mut result);
