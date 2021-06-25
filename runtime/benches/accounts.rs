@@ -61,6 +61,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        false,
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -81,6 +82,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
@@ -114,7 +116,15 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
     let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(0, &ancestors);
-    bencher.iter(|| assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports)));
+    let test_hash_calculation = false;
+    bencher.iter(|| {
+        assert!(accounts.verify_bank_hash_and_lamports(
+            0,
+            &ancestors,
+            total_lamports,
+            test_hash_calculation
+        ))
+    });
 }
 
 #[bench]
@@ -230,7 +240,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
+            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), account);
         }
     })
 }
@@ -260,7 +270,13 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
 fn bench_concurrent_scan_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
         test::black_box(
-            accounts.load_by_program(&Ancestors::default(), AccountSharedData::default().owner()),
+            accounts
+                .load_by_program(
+                    &Ancestors::default(),
+                    0,
+                    AccountSharedData::default().owner(),
+                )
+                .unwrap(),
         );
     })
 }
@@ -389,9 +405,11 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
     let ancestors = Ancestors::from(vec![0]);
+    let bank_id = 0;
     b.iter(|| {
         accounts.load_largest_accounts(
             &ancestors,
+            bank_id,
             20,
             &HashSet::new(),
             AccountAddressFilter::Exclude,

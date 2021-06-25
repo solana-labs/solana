@@ -62,12 +62,12 @@ use {
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
+        stake::state::StakeState,
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, TransactionError},
     },
-    solana_stake_program::stake_state::StakeState,
     solana_transaction_status::{
         EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
         TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
@@ -91,6 +91,8 @@ use {
     },
     tokio::runtime::Runtime,
 };
+
+type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
@@ -128,7 +130,6 @@ fn is_finalized(
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub enable_cpi_and_log_storage: bool,
-    pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
@@ -705,18 +706,23 @@ impl JsonRpcRequestProcessor {
     fn get_largest_accounts(
         &self,
         config: Option<RpcLargestAccountsConfig>,
-    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+    ) -> RpcCustomResult<RpcResponse<Vec<RpcAccountBalance>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
 
         if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
-            Response {
+            Ok(Response {
                 context: RpcResponseContext { slot },
                 value: accounts,
-            }
+            })
         } else {
             let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
-                let non_circulating_supply = calculate_non_circulating_supply(&bank);
+                let non_circulating_supply =
+                    calculate_non_circulating_supply(&bank).map_err(|e| {
+                        RpcCustomError::ScanError {
+                            message: e.to_string(),
+                        }
+                    })?;
                 let addresses = non_circulating_supply.accounts.into_iter().collect();
                 let address_filter = match filter {
                     RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
@@ -728,6 +734,9 @@ impl JsonRpcRequestProcessor {
             };
             let accounts = bank
                 .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?
                 .into_iter()
                 .map(|(address, lamports)| RpcAccountBalance {
                     address: address.to_string(),
@@ -736,15 +745,21 @@ impl JsonRpcRequestProcessor {
                 .collect::<Vec<RpcAccountBalance>>();
 
             self.set_cached_largest_accounts(&config.filter, bank.slot(), &accounts);
-            new_response(&bank, accounts)
+            Ok(new_response(&bank, accounts))
         }
     }
 
-    fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
+    fn get_supply(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcCustomResult<RpcResponse<RpcSupply>> {
         let bank = self.bank(commitment);
-        let non_circulating_supply = calculate_non_circulating_supply(&bank);
+        let non_circulating_supply =
+            calculate_non_circulating_supply(&bank).map_err(|e| RpcCustomError::ScanError {
+                message: e.to_string(),
+            })?;
         let total_supply = bank.capitalization();
-        new_response(
+        Ok(new_response(
             &bank,
             RpcSupply {
                 total: total_supply,
@@ -756,7 +771,7 @@ impl JsonRpcRequestProcessor {
                     .map(|pubkey| pubkey.to_string())
                     .collect(),
             },
-        )
+        ))
     }
 
     fn get_vote_accounts(
@@ -1558,12 +1573,12 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token account".to_string(),
             ));
         }
-        let token_account = TokenAccount::unpack(&account.data()).map_err(|_| {
+        let token_account = TokenAccount::unpack(account.data()).map_err(|_| {
             Error::invalid_params("Invalid param: not a v2.0 Token account".to_string())
         })?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
-        let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
+        let (_, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
         let balance = token_amount_to_ui_amount(token_account.amount, decimals);
         Ok(new_response(&bank, balance))
     }
@@ -1582,7 +1597,7 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
-        let mint = Mint::unpack(&mint_account.data()).map_err(|_| {
+        let mint = Mint::unpack(mint_account.data()).map_err(|_| {
             Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
         })?;
 
@@ -1603,10 +1618,10 @@ impl JsonRpcRequestProcessor {
             ));
         }
         let mut token_balances: Vec<RpcTokenAccountBalance> = self
-            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])?
+            .get_filtered_spl_token_accounts_by_mint(&bank, mint, vec![])?
             .into_iter()
             .map(|(address, account)| {
-                let amount = TokenAccount::unpack(&account.data())
+                let amount = TokenAccount::unpack(account.data())
                     .map(|account| account.amount)
                     .unwrap_or(0);
                 let amount = token_amount_to_ui_amount(amount, decimals);
@@ -1738,11 +1753,11 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         program_id: &Pubkey,
         filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
         let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
                 RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
             })
         };
         if self
@@ -1753,21 +1768,26 @@ impl JsonRpcRequestProcessor {
             if !self.config.account_indexes.include_key(program_id) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: program_id.to_string(),
-                }
-                .into());
+                });
             }
-            Ok(
-                bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
                     // The program-id account index checks for Account owner on inclusion. However, due
                     // to the current AccountsDb implementation, an account may remain in storage as a
                     // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
                     // updates. We include the redundant filters here to avoid returning these
                     // accounts.
                     account.owner() == program_id && filter_closure(account)
-                }),
-            )
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
-            Ok(bank.get_filtered_program_accounts(program_id, filter_closure))
+            Ok(bank
+                .get_filtered_program_accounts(program_id, filter_closure)
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         }
     }
 
@@ -1777,7 +1797,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
         // The by-owner accounts index checks for Token Account state and Owner address on
         // inclusion. However, due to the current AccountsDb implementation, an account may remain
         // in storage as a zero-lamport AccountSharedData::Default() after being wiped and reinitialized in
@@ -1802,19 +1822,19 @@ impl JsonRpcRequestProcessor {
             if !self.config.account_indexes.include_key(owner_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: owner_key.to_string(),
-                }
-                .into());
+                });
             }
-            Ok(bank.get_filtered_indexed_accounts(
-                &IndexKey::SplTokenOwner(*owner_key),
-                |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
                         })
-                },
-            ))
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -1826,7 +1846,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
         // However, due to the current AccountsDb implementation, an account may remain in storage
         // as be zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
@@ -1850,18 +1870,19 @@ impl JsonRpcRequestProcessor {
             if !self.config.account_indexes.include_key(mint_key) {
                 return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
                     index_key: mint_key.to_string(),
-                }
-                .into());
+                });
             }
-            Ok(
-                bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
+            Ok(bank
+                .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
                         })
-                }),
-            )
+                })
+                .map_err(|e| RpcCustomError::ScanError {
+                    message: e.to_string(),
+                })?)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -2043,7 +2064,7 @@ fn get_token_program_id_and_mint(
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
-            let (mint_owner, _) = get_mint_owner_and_decimals(&bank, &mint)?;
+            let (mint_owner, _) = get_mint_owner_and_decimals(bank, &mint)?;
             if mint_owner != spl_token_id_v2_0() {
                 return Err(Error::invalid_params(
                     "Invalid param: not a v2.0 Token mint".to_string(),
@@ -2206,7 +2227,7 @@ pub mod rpc_minimal {
         fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity> {
             debug!("get_identity rpc request received");
             Ok(RpcIdentity {
-                identity: meta.config.identity_pubkey.to_string(),
+                identity: meta.cluster_info.id().to_string(),
             })
         }
 
@@ -2872,7 +2893,7 @@ pub mod rpc_full {
             config: Option<RpcLargestAccountsConfig>,
         ) -> Result<RpcResponse<Vec<RpcAccountBalance>>> {
             debug!("get_largest_accounts rpc request received");
-            Ok(meta.get_largest_accounts(config))
+            Ok(meta.get_largest_accounts(config)?)
         }
 
         fn get_supply(
@@ -2881,7 +2902,7 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcSupply>> {
             debug!("get_supply rpc request received");
-            Ok(meta.get_supply(commitment))
+            Ok(meta.get_supply(commitment)?)
         }
 
         fn request_airdrop(
@@ -2951,7 +2972,7 @@ pub mod rpc_full {
             let durable_nonce_info = solana_sdk::transaction::uses_durable_nonce(&transaction)
                 .and_then(|nonce_ix| {
                     solana_sdk::transaction::get_nonce_pubkey_from_instruction(
-                        &nonce_ix,
+                        nonce_ix,
                         &transaction,
                     )
                 })
@@ -2972,12 +2993,14 @@ pub mod rpc_full {
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),
                     RpcHealthStatus::Unknown => {
+                        inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: None,
                         }
                         .into());
                     }
                     RpcHealthStatus::Behind { num_slots } => {
+                        inc_new_counter_info!("rpc-send-tx_health-behind", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: Some(num_slots),
                         }
@@ -2986,6 +3009,14 @@ pub mod rpc_full {
                 }
 
                 if let (Err(err), logs, _) = preflight_bank.simulate_transaction(&transaction) {
+                    match err {
+                        TransactionError::BlockhashNotFound => {
+                            inc_new_counter_info!("rpc-send-tx_err-blockhash-not-found", 1);
+                        }
+                        _ => {
+                            inc_new_counter_info!("rpc-send-tx_err-other", 1);
+                        }
+                    }
                     return Err(RpcCustomError::SendTransactionPreflightFailure {
                         message: format!("Transaction simulation failed: {}", err),
                         result: RpcSimulateTransactionResult {
@@ -3077,7 +3108,7 @@ pub mod rpc_full {
             };
 
             Ok(new_response(
-                &bank,
+                bank,
                 RpcSimulateTransactionResult {
                     err: result.err(),
                     logs: Some(logs),
@@ -3798,17 +3829,17 @@ pub fn create_test_transactions_and_populate_blockstore(
     // Generate transactions for processing
     // Successful transaction
     let success_tx =
-        solana_sdk::system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+        solana_sdk::system_transaction::transfer(mint_keypair, &keypair1.pubkey(), 2, blockhash);
     let success_signature = success_tx.signatures[0];
     let entry_1 = solana_ledger::entry::next_entry(&blockhash, 1, vec![success_tx]);
     // Failed transaction, InstructionError
     let ix_error_tx =
-        solana_sdk::system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+        solana_sdk::system_transaction::transfer(keypair2, &keypair3.pubkey(), 10, blockhash);
     let ix_error_signature = ix_error_tx.signatures[0];
     let entry_2 = solana_ledger::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
     // Failed transaction
     let fail_tx = solana_sdk::system_transaction::transfer(
-        &mint_keypair,
+        mint_keypair,
         &keypair2.pubkey(),
         2,
         Hash::default(),
@@ -4033,7 +4064,10 @@ pub mod tests {
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
 
-        let cluster_info = Arc::new(ClusterInfo::default());
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo {
+            id: alice.pubkey(),
+            ..ContactInfo::default()
+        }));
         let tpu_address = cluster_info.my_contact_info().tpu;
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
@@ -4058,7 +4092,6 @@ pub mod tests {
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
-                identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },
             None,
@@ -4181,7 +4214,7 @@ pub mod tests {
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getClusterNodes"}"#;
 
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -4203,7 +4236,7 @@ pub mod tests {
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples"}"#;
 
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -4233,7 +4266,7 @@ pub mod tests {
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
 
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -4262,7 +4295,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, leader_pubkey);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -4292,10 +4325,10 @@ pub mod tests {
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = r#"{"jsonrpc":"2.0","result":4,"id":1}"#;
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_str(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
@@ -4307,10 +4340,10 @@ pub mod tests {
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"minimumLedgerSlot"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = r#"{"jsonrpc":"2.0","result":0,"id":1}"#;
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_str(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
@@ -4321,7 +4354,7 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
@@ -4348,7 +4381,7 @@ pub mod tests {
             io, meta, alice, ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
@@ -4385,14 +4418,14 @@ pub mod tests {
 
         // Test Circulating/NonCirculating Filter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"circulating"}]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
         assert_eq!(largest_accounts.len(), 20);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"nonCirculating"}]}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
@@ -4438,7 +4471,7 @@ pub mod tests {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationGovernor"}"#;
-        let rep = io.handle_request_sync(&req, meta.clone());
+        let rep = io.handle_request_sync(req, meta.clone());
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
         let inflation_governor: RpcInflationGovernor = if let Response::Single(res) = res {
@@ -4454,7 +4487,7 @@ pub mod tests {
         assert_eq!(inflation_governor, expected_inflation_governor);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationRate"}"#; // Queries current epoch
-        let rep = io.handle_request_sync(&req, meta);
+        let rep = io.handle_request_sync(req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
         let inflation_rate: RpcInflationRate = if let Response::Single(res) = res {
@@ -4484,7 +4517,7 @@ pub mod tests {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getEpochSchedule"}"#;
-        let rep = io.handle_request_sync(&req, meta);
+        let rep = io.handle_request_sync(req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -4519,7 +4552,7 @@ pub mod tests {
         ]
         .iter()
         {
-            let rep = io.handle_request_sync(&req, meta.clone());
+            let rep = io.handle_request_sync(req, meta.clone());
             let res: Response = serde_json::from_str(&rep.expect("actual response"))
                 .expect("actual response deserialization");
 
@@ -4548,7 +4581,7 @@ pub mod tests {
         }
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [42424242]}"#;
-        let rep = io.handle_request_sync(&req, meta.clone());
+        let rep = io.handle_request_sync(req, meta.clone());
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -5415,7 +5448,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -5446,7 +5479,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFees"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -5522,7 +5555,7 @@ pub mod tests {
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -5793,14 +5826,16 @@ pub mod tests {
     #[test]
     fn test_rpc_get_identity() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io, meta, alice, ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getIdentity"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "identity": bob_pubkey.to_string()
+                "identity": alice.pubkey().to_string()
             },
             "id": 1
         });
@@ -5835,7 +5870,7 @@ pub mod tests {
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getVersion"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let version = solana_version::Version::default();
         let expected = json!({
             "jsonrpc": "2.0",
@@ -5930,7 +5965,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[0]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let RpcBlockCommitment {
@@ -5956,7 +5991,7 @@ pub mod tests {
         assert_eq!(total_stake, 10);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let commitment_response: RpcBlockCommitment<BlockCommitmentArray> =
@@ -5985,7 +6020,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_block: Option<EncodedConfirmedBlock> =
@@ -6030,7 +6065,7 @@ pub mod tests {
         }
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,"binary"]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_block: Option<EncodedConfirmedBlock> =
@@ -6075,7 +6110,7 @@ pub mod tests {
         // disable rpc-tx-history
         meta.config.enable_rpc_transaction_history = false;
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0]}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         assert_eq!(
             res,
             Some(
@@ -6152,7 +6187,7 @@ pub mod tests {
             .set_highest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockProduction","params":[]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let block_production: RpcBlockProduction =
@@ -6228,35 +6263,35 @@ pub mod tests {
             .set_highest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, roots[1..].to_vec());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[2]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,4]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,7]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[9,11]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
@@ -6305,7 +6340,7 @@ pub mod tests {
             .set_highest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[0,500001]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         assert_eq!(
             res,
             Some(
@@ -6314,35 +6349,35 @@ pub mod tests {
         );
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[0,0]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert!(confirmed_blocks.is_empty());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,2]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,3]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,500000]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[9,500000]}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
@@ -6410,7 +6445,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta);
         let expected = r#"{"jsonrpc":"2.0","error":{"code":-32004,"message":"Block not available for slot 12345"},"id":1}"#;
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_str(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
@@ -6472,7 +6507,7 @@ pub mod tests {
         // stake but has never voted, and the vote account with no stake should not be present.
         {
             let req = r#"{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}"#;
-            let res = io.handle_request_sync(&req, meta.clone());
+            let res = io.handle_request_sync(req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
                 .expect("actual response deserialization");
 
@@ -7338,7 +7373,7 @@ pub mod tests {
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 2);
@@ -7353,7 +7388,7 @@ pub mod tests {
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 2);
@@ -7368,7 +7403,7 @@ pub mod tests {
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 2);
@@ -7384,7 +7419,7 @@ pub mod tests {
         );
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "confirmed"}]}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 3);

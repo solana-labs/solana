@@ -9,16 +9,14 @@ pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
     shred_version: u16,
-    keypair: Arc<Keypair>,
 }
 
 impl BroadcastFakeShredsRun {
-    pub(super) fn new(keypair: Arc<Keypair>, partition: usize, shred_version: u16) -> Self {
+    pub(super) fn new(partition: usize, shred_version: u16) -> Self {
         Self {
             last_blockhash: Hash::default(),
             partition,
             shred_version,
-            keypair,
         }
     }
 }
@@ -26,6 +24,7 @@ impl BroadcastFakeShredsRun {
 impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
+        keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
@@ -47,13 +46,13 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         let shredder = Shredder::new(
             bank.slot(),
             bank.parent().unwrap().slot(),
-            self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+            keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
@@ -70,6 +69,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .collect();
 
         let (fake_data_shreds, fake_coding_shreds, _) = shredder.entries_to_shreds(
+            keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,

@@ -64,6 +64,16 @@ impl ReplaySlotStats {
             ("execute_us", self.execute_timings.execute_us, i64),
             ("store_us", self.execute_timings.store_us, i64),
             (
+                "total_batches_len",
+                self.execute_timings.total_batches_len,
+                i64
+            ),
+            (
+                "num_execute_batches",
+                self.execute_timings.num_execute_batches,
+                i64
+            ),
+            (
                 "serialize_us",
                 self.execute_timings.details.serialize_us,
                 i64
@@ -222,17 +232,17 @@ impl ForkProgress {
 
     pub fn new_from_bank(
         bank: &Bank,
-        my_pubkey: &Pubkey,
-        voting_pubkey: &Pubkey,
+        validator_identity: &Pubkey,
+        validator_vote_pubkey: &Pubkey,
         prev_leader_slot: Option<Slot>,
         num_blocks_on_fork: u64,
         num_dropped_blocks_on_fork: u64,
     ) -> Self {
         let validator_stake_info = {
-            if bank.collector_id() == my_pubkey {
+            if bank.collector_id() == validator_identity {
                 Some(ValidatorStakeInfo::new(
-                    *voting_pubkey,
-                    bank.epoch_vote_account_stake(voting_pubkey),
+                    *validator_vote_pubkey,
+                    bank.epoch_vote_account_stake(validator_vote_pubkey),
                     bank.total_epoch_stake(),
                 ))
             } else {
@@ -292,7 +302,7 @@ impl PropagatedStats {
     pub fn add_node_pubkey(&mut self, node_pubkey: &Pubkey, bank: &Bank) {
         if !self.propagated_node_ids.contains(node_pubkey) {
             let node_vote_accounts = bank
-                .epoch_vote_accounts_for_node_id(&node_pubkey)
+                .epoch_vote_accounts_for_node_id(node_pubkey)
                 .map(|v| &v.vote_accounts);
 
             if let Some(node_vote_accounts) = node_vote_accounts {

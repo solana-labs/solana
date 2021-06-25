@@ -75,6 +75,10 @@ impl Ancestors {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn max_slot(&self) -> Slot {
+        self.ancestors.max() - 1
+    }
 }
 #[cfg(test)]
 pub mod tests {
@@ -166,7 +170,7 @@ pub mod tests {
             let key = item.0;
             min = std::cmp::min(min, *key);
             max = std::cmp::max(max, *key);
-            assert!(ancestors.get(&key));
+            assert!(ancestors.get(key));
         }
         for slot in min - 1..max + 2 {
             assert_eq!(ancestors.get(&slot), hashset.contains(&slot));

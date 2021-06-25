@@ -22,7 +22,7 @@ type IndexShredsMap = BTreeMap<u32, Vec<Shred>>;
 fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
     let slot = 0x1234_5678_9abc_def0;
-    let shredder = Shredder::new(slot, slot - 5, keypair.clone(), 0, 0).unwrap();
+    let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
     let num_fec_sets = 100;
     let num_data_shreds = (MAX_DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets) as usize;
     let keypair0 = Keypair::new();
@@ -46,7 +46,8 @@ fn test_multi_fec_block_coding() {
         .collect();
 
     let serialized_entries = bincode::serialize(&entries).unwrap();
-    let (data_shreds, coding_shreds, next_index) = shredder.entries_to_shreds(&entries, true, 0);
+    let (data_shreds, coding_shreds, next_index) =
+        shredder.entries_to_shreds(&keypair, &entries, true, 0);
     assert_eq!(next_index as usize, num_data_shreds);
     assert_eq!(data_shreds.len(), num_data_shreds);
     assert_eq!(coding_shreds.len(), num_data_shreds);
@@ -190,7 +191,7 @@ fn setup_different_sized_fec_blocks(
     parent_slot: Slot,
     keypair: Arc<Keypair>,
 ) -> (IndexShredsMap, IndexShredsMap, usize) {
-    let shredder = Shredder::new(slot, parent_slot, keypair, 0, 0).unwrap();
+    let shredder = Shredder::new(slot, parent_slot, 0, 0).unwrap();
     let keypair0 = Keypair::new();
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
@@ -227,7 +228,7 @@ fn setup_different_sized_fec_blocks(
     for i in 0..2 {
         let is_last = i == 1;
         let (data_shreds, coding_shreds, new_next_index) =
-            shredder.entries_to_shreds(&entries, is_last, next_index);
+            shredder.entries_to_shreds(&keypair, &entries, is_last, next_index);
         for shred in &data_shreds {
             if (shred.index() as usize) == total_num_data_shreds - 1 {
                 assert!(shred.data_complete());

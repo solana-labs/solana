@@ -27,12 +27,12 @@ use solana_sdk::{
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
+    stake::{
+        instruction::{self as stake_instruction, LockupArgs},
+        state::{Authorized, Lockup, StakeAuthorize},
+    },
     system_instruction,
     transaction::Transaction,
-};
-use solana_stake_program::{
-    stake_instruction::{self, LockupArgs},
-    stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
 use spl_associated_token_account_v1_0::get_associated_token_address;
@@ -139,7 +139,7 @@ fn apply_previous_transactions(
     for transaction_info in transaction_infos {
         let mut amount = transaction_info.amount;
         for allocation in allocations.iter_mut() {
-            if !has_same_recipient(&allocation, &transaction_info) {
+            if !has_same_recipient(allocation, transaction_info) {
                 continue;
             }
             if allocation.amount >= amount {
@@ -161,7 +161,7 @@ fn transfer<S: Signer>(
     to_pubkey: &Pubkey,
 ) -> ClientResult<Transaction> {
     let create_instruction =
-        system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
+        system_instruction::transfer(&sender_keypair.pubkey(), to_pubkey, lamports);
     let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
     let (recent_blockhash, _fees) = client.get_recent_blockhash()?;
     Ok(Transaction::new(
@@ -215,7 +215,7 @@ fn distribution_instructions(
                     }
                     stake_instruction::create_account(
                         &sender_pubkey,
-                        &new_stake_account_address,
+                        new_stake_account_address,
                         &authorized,
                         &lockup,
                         allocation.amount - unlocked_sol,
@@ -231,12 +231,12 @@ fn distribution_instructions(
                         &sender_stake_args.stake_account_address,
                         &stake_authority,
                         allocation.amount - unlocked_sol,
-                        &new_stake_account_address,
+                        new_stake_account_address,
                     );
 
                     // Make the recipient the new stake authority
                     instructions.push(stake_instruction::authorize(
-                        &new_stake_account_address,
+                        new_stake_account_address,
                         &stake_authority,
                         &recipient,
                         StakeAuthorize::Staker,
@@ -245,7 +245,7 @@ fn distribution_instructions(
 
                     // Make the recipient the new withdraw authority
                     instructions.push(stake_instruction::authorize(
-                        &new_stake_account_address,
+                        new_stake_account_address,
                         &withdraw_authority,
                         &recipient,
                         StakeAuthorize::Withdrawer,
@@ -260,7 +260,7 @@ fn distribution_instructions(
                             custodian: None,
                         };
                         instructions.push(stake_instruction::set_lockup(
-                            &new_stake_account_address,
+                            new_stake_account_address,
                             &lockup,
                             &stake_args.lockup_authority.unwrap(),
                         ));
@@ -673,7 +673,7 @@ fn update_finalized_transactions(
     {
         statuses.extend(
             client
-                .get_signature_statuses(&unconfirmed_signatures_chunk)?
+                .get_signature_statuses(unconfirmed_signatures_chunk)?
                 .value
                 .into_iter(),
         );
@@ -1204,8 +1204,10 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 mod tests {
     use super::*;
     use solana_core::test_validator::TestValidator;
-    use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
-    use solana_stake_program::stake_instruction::StakeInstruction;
+    use solana_sdk::{
+        signature::{read_keypair_file, write_keypair_file, Signer},
+        stake::instruction::StakeInstruction,
+    };
     use solana_transaction_status::TransactionConfirmationStatus;
 
     #[test]

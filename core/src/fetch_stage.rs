@@ -34,7 +34,7 @@ impl FetchStage {
                 tpu_forwards_sockets,
                 exit,
                 &sender,
-                &poh_recorder,
+                poh_recorder,
                 coalesce_ms,
             ),
             receiver,
@@ -54,8 +54,8 @@ impl FetchStage {
             tx_sockets,
             tpu_forwards_sockets,
             exit,
-            &sender,
-            &poh_recorder,
+            sender,
+            poh_recorder,
             coalesce_ms,
         )
     }
@@ -85,7 +85,7 @@ impl FetchStage {
             inc_new_counter_debug!("fetch_stage-honor_forwards", len);
             for packets in batch {
                 if sendr.send(packets).is_err() {
-                    return Err(Error::SendError);
+                    return Err(Error::Send);
                 }
             }
         } else {
@@ -108,7 +108,7 @@ impl FetchStage {
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
-                &exit,
+                exit,
                 sender.clone(),
                 recycler.clone(),
                 "fetch_stage",
@@ -121,7 +121,7 @@ impl FetchStage {
         let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
-                &exit,
+                exit,
                 forward_sender.clone(),
                 recycler.clone(),
                 "fetch_forward_stage",
@@ -140,10 +140,10 @@ impl FetchStage {
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::RecvError(_) => break,
-                        Error::SendError => break,
+                        Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
+                        Error::Recv(_) => break,
+                        Error::Send => break,
                         _ => error!("{:?}", e),
                     }
                 }

@@ -68,7 +68,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         .unwrap()
         .as_str()
         .unwrap();
-    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    let program_id = Pubkey::from_str(program_id_str).unwrap();
     let account0 = rpc_client.get_account(&program_id).unwrap();
     assert_eq!(account0.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account0.owner, bpf_loader::id());
@@ -198,7 +198,7 @@ fn test_cli_program_deploy_no_authority() {
         .unwrap()
         .as_str()
         .unwrap();
-    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    let program_id = Pubkey::from_str(program_id_str).unwrap();
 
     // Attempt to upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
@@ -284,7 +284,7 @@ fn test_cli_program_deploy_with_authority() {
         .unwrap();
     assert_eq!(
         program_keypair.pubkey(),
-        Pubkey::from_str(&program_pubkey_str).unwrap()
+        Pubkey::from_str(program_pubkey_str).unwrap()
     );
     let program_account = rpc_client.get_account(&program_keypair.pubkey()).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
@@ -328,7 +328,7 @@ fn test_cli_program_deploy_with_authority() {
         .unwrap()
         .as_str()
         .unwrap();
-    let program_pubkey = Pubkey::from_str(&program_pubkey_str).unwrap();
+    let program_pubkey = Pubkey::from_str(program_pubkey_str).unwrap();
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
@@ -397,7 +397,7 @@ fn test_cli_program_deploy_with_authority() {
         .as_str()
         .unwrap();
     assert_eq!(
-        Pubkey::from_str(&new_upgrade_authority_str).unwrap(),
+        Pubkey::from_str(new_upgrade_authority_str).unwrap(),
         new_upgrade_authority.pubkey()
     );
 
@@ -452,7 +452,7 @@ fn test_cli_program_deploy_with_authority() {
         .unwrap();
     assert_eq!(
         new_upgrade_authority.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
+        Pubkey::from_str(authority_pubkey_str).unwrap()
     );
 
     // Set no authority
@@ -510,7 +510,7 @@ fn test_cli_program_deploy_with_authority() {
         .unwrap()
         .as_str()
         .unwrap();
-    let program_pubkey = Pubkey::from_str(&program_pubkey_str).unwrap();
+    let program_pubkey = Pubkey::from_str(program_pubkey_str).unwrap();
     let (programdata_pubkey, _) =
         Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -606,7 +606,7 @@ fn test_cli_program_write_buffer() {
         .unwrap()
         .as_str()
         .unwrap();
-    let new_buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let new_buffer_pubkey = Pubkey::from_str(buffer_pubkey_str).unwrap();
     let buffer_account = rpc_client.get_account(&new_buffer_pubkey).unwrap();
     assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
     assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
@@ -641,7 +641,7 @@ fn test_cli_program_write_buffer() {
         .unwrap();
     assert_eq!(
         buffer_keypair.pubkey(),
-        Pubkey::from_str(&buffer_pubkey_str).unwrap()
+        Pubkey::from_str(buffer_pubkey_str).unwrap()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     assert_eq!(buffer_account.lamports, minimum_balance_for_buffer);
@@ -675,7 +675,7 @@ fn test_cli_program_write_buffer() {
         .unwrap();
     assert_eq!(
         keypair.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
+        Pubkey::from_str(authority_pubkey_str).unwrap()
     );
 
     // Specify buffer authority
@@ -700,7 +700,7 @@ fn test_cli_program_write_buffer() {
         .unwrap();
     assert_eq!(
         buffer_keypair.pubkey(),
-        Pubkey::from_str(&buffer_pubkey_str).unwrap()
+        Pubkey::from_str(buffer_pubkey_str).unwrap()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
@@ -735,7 +735,7 @@ fn test_cli_program_write_buffer() {
         .unwrap()
         .as_str()
         .unwrap();
-    let buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let buffer_pubkey = Pubkey::from_str(buffer_pubkey_str).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_pubkey).unwrap();
     assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
     assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
@@ -768,7 +768,7 @@ fn test_cli_program_write_buffer() {
         .unwrap();
     assert_eq!(
         authority_keypair.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
+        Pubkey::from_str(authority_pubkey_str).unwrap()
     );
 
     // Close buffer
@@ -806,7 +806,7 @@ fn test_cli_program_write_buffer() {
         .unwrap()
         .as_str()
         .unwrap();
-    let new_buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let new_buffer_pubkey = Pubkey::from_str(buffer_pubkey_str).unwrap();
 
     // Close buffers and deposit default keypair
     let pre_lamports = rpc_client.get_account(&keypair.pubkey()).unwrap().lamports;
@@ -901,7 +901,7 @@ fn test_cli_program_set_buffer_authority() {
         .as_str()
         .unwrap();
     assert_eq!(
-        Pubkey::from_str(&new_buffer_authority_str).unwrap(),
+        Pubkey::from_str(new_buffer_authority_str).unwrap(),
         new_buffer_authority.pubkey()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -928,7 +928,7 @@ fn test_cli_program_set_buffer_authority() {
         .as_str()
         .unwrap();
     assert_eq!(
-        Pubkey::from_str(&buffer_authority_str).unwrap(),
+        Pubkey::from_str(buffer_authority_str).unwrap(),
         buffer_keypair.pubkey()
     );
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -1101,7 +1101,7 @@ fn test_cli_program_show() {
         .unwrap();
     assert_eq!(
         buffer_keypair.pubkey(),
-        Pubkey::from_str(&address_str).unwrap()
+        Pubkey::from_str(address_str).unwrap()
     );
     let authority_str = json
         .as_object()
@@ -1112,7 +1112,7 @@ fn test_cli_program_show() {
         .unwrap();
     assert_eq!(
         authority_keypair.pubkey(),
-        Pubkey::from_str(&authority_str).unwrap()
+        Pubkey::from_str(authority_str).unwrap()
     );
     let data_len = json
         .as_object()
@@ -1161,7 +1161,7 @@ fn test_cli_program_show() {
         .unwrap();
     assert_eq!(
         program_keypair.pubkey(),
-        Pubkey::from_str(&address_str).unwrap()
+        Pubkey::from_str(address_str).unwrap()
     );
     let programdata_address_str = json
         .as_object()
@@ -1176,7 +1176,7 @@ fn test_cli_program_show() {
     );
     assert_eq!(
         programdata_pubkey,
-        Pubkey::from_str(&programdata_address_str).unwrap()
+        Pubkey::from_str(programdata_address_str).unwrap()
     );
     let authority_str = json
         .as_object()
@@ -1187,7 +1187,7 @@ fn test_cli_program_show() {
         .unwrap();
     assert_eq!(
         authority_keypair.pubkey(),
-        Pubkey::from_str(&authority_str).unwrap()
+        Pubkey::from_str(authority_str).unwrap()
     );
     let deployed_slot = json
         .as_object()

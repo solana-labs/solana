@@ -74,12 +74,12 @@ pub(crate) mod tests {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         signers::Signers,
+        stake::{
+            instruction as stake_instruction,
+            state::{Authorized, Delegation, Lockup, Stake},
+        },
         sysvar::stake_history::{self, StakeHistory},
         transaction::Transaction,
-    };
-    use solana_stake_program::{
-        stake_instruction,
-        stake_state::{Authorized, Delegation, Lockup, Stake},
     };
     use solana_vote_program::{
         vote_instruction,

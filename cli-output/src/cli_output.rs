@@ -25,10 +25,10 @@ use {
         native_token::lamports_to_sol,
         pubkey::Pubkey,
         signature::Signature,
+        stake::state::{Authorized, Lockup},
         stake_history::StakeHistoryEntry,
         transaction::{Transaction, TransactionError},
     },
-    solana_stake_program::stake_state::{Authorized, Lockup},
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
         UiTransactionStatusMeta,
@@ -1287,7 +1287,7 @@ impl fmt::Display for CliValidatorInfo {
             writeln_name_value(
                 f,
                 &format!("  {}:", to_title_case(key)),
-                &value.as_str().unwrap_or("?"),
+                value.as_str().unwrap_or("?"),
             )?;
         }
         Ok(())
@@ -1768,7 +1768,7 @@ impl fmt::Display for CliTokenAccount {
         writeln_name_value(
             f,
             "Close authority:",
-            &account.close_authority.as_ref().unwrap_or(&String::new()),
+            account.close_authority.as_ref().unwrap_or(&String::new()),
         )?;
         Ok(())
     }
@@ -2006,7 +2006,7 @@ pub fn return_signers_with_config(
 }
 
 pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
-    let object: Value = serde_json::from_str(&reply).unwrap();
+    let object: Value = serde_json::from_str(reply).unwrap();
     let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
     let blockhash = blockhash_str.parse::<Hash>().unwrap();
     let mut present_signers: Vec<(Pubkey, Signature)> = Vec::new();

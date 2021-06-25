@@ -49,7 +49,7 @@ impl GossipService {
         );
         let t_receiver = streamer::receiver(
             gossip_socket.clone(),
-            &exit,
+            exit,
             request_sender,
             Recycler::default(),
             "gossip_receiver",
@@ -151,9 +151,8 @@ pub fn discover(
     if let Some(my_gossip_addr) = my_gossip_addr {
         info!("Gossip Address: {:?}", my_gossip_addr);
     }
-
-    let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
-
+    let _ip_echo_server = ip_echo
+        .map(|tcp_listener| solana_net_utils::ip_echo_server(tcp_listener, Some(my_shred_version)));
     let (met_criteria, elapsed, all_peers, tvu_peers) = spy(
         spy_ref.clone(),
         num_nodes,
@@ -319,7 +318,7 @@ fn make_gossip_node(
         gossip_socket,
         None,
         should_check_duplicate_instance,
-        &exit,
+        exit,
     );
     (gossip_service, ip_echo, cluster_info)
 }

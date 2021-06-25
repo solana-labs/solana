@@ -158,7 +158,7 @@ native machine code before execting it in the virtual machine.",
             vec![0u8; allocate]
         }
         Err(_) => {
-            let input = load_accounts(&Path::new(matches.value_of("input").unwrap())).unwrap();
+            let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
             for acc in input.accounts {
                 let asd = AccountSharedData::new_ref(acc.lamports, acc.data.len(), &acc.owner);
                 asd.borrow_mut().set_data(acc.data);
@@ -244,7 +244,7 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("profile") {
         println!("Profile is saved in profile.dot");
         let tracer = &vm.get_tracer();
-        let dynamic_analysis = DynamicAnalysis::new(&tracer, &analysis);
+        let dynamic_analysis = DynamicAnalysis::new(tracer, &analysis);
         let mut file = File::create("profile.dot").unwrap();
         analysis
             .visualize_graphically(&mut file, Some(&dynamic_analysis))

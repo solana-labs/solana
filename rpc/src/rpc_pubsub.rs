@@ -27,7 +27,7 @@ use {
     },
 };
 
-const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
+pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
 
 // Suppress needless_return due to
 //   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
@@ -194,26 +194,38 @@ pub trait RpcSolPubSub {
 pub struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
     subscriptions: Arc<RpcSubscriptions>,
+    max_active_subscriptions: usize,
 }
 
 impl RpcSolPubSubImpl {
-    pub fn new(subscriptions: Arc<RpcSubscriptions>) -> Self {
+    pub fn new(subscriptions: Arc<RpcSubscriptions>, max_active_subscriptions: usize) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
-        Self { uid, subscriptions }
+        Self {
+            uid,
+            subscriptions,
+            max_active_subscriptions,
+        }
     }
 
     #[cfg(test)]
     fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(bank_forks));
-        Self { uid, subscriptions }
+        let max_active_subscriptions = MAX_ACTIVE_SUBSCRIPTIONS;
+        Self {
+            uid,
+            subscriptions,
+            max_active_subscriptions,
+        }
     }
 
     fn check_subscription_count(&self) -> Result<()> {
         let num_subscriptions = self.subscriptions.total();
         debug!("Total existing subscriptions: {}", num_subscriptions);
-        if num_subscriptions >= MAX_ACTIVE_SUBSCRIPTIONS {
+        if num_subscriptions >= self.max_active_subscriptions {
             info!("Node subscription limit reached");
+            datapoint_info!("rpc-subscription", ("total", num_subscriptions, i64));
+            inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
             Err(Error {
                 code: ErrorCode::InternalError,
                 message: "Internal Error: Subscription refused. Node subscription limit reached"
@@ -221,6 +233,7 @@ impl RpcSolPubSubImpl {
                 data: None,
             })
         } else {
+            datapoint_info!("rpc-subscription", ("total", num_subscriptions + 1, i64));
             Ok(())
         }
     }
@@ -569,13 +582,14 @@ mod tests {
             message::Message,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
+            stake::{
+                self, instruction as stake_instruction,
+                state::{Authorized, Lockup, StakeAuthorize},
+            },
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
         },
-        solana_stake_program::{
-            self, stake_instruction,
-            stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
-        },
+        solana_stake_program::stake_state,
         solana_vote_program::vote_state::Vote,
         std::{
             sync::{atomic::AtomicBool, RwLock},
@@ -629,6 +643,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
 
         // Test signature subscriptions
@@ -760,19 +775,19 @@ mod tests {
         let _res = io.handle_request_sync(&req, session.clone());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[0]}"#;
-        let res = io.handle_request_sync(&req, session.clone());
+        let res = io.handle_request_sync(req, session.clone());
 
         let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-        let expected: Response = serde_json::from_str(&expected).unwrap();
+        let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}"#;
-        let res = io.handle_request_sync(&req, session);
+        let res = io.handle_request_sync(req, session);
         let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
-        let expected: Response = serde_json::from_str(&expected).unwrap();
+        let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
@@ -791,7 +806,7 @@ mod tests {
         let stake_authority = Keypair::new();
         let from = Keypair::new();
         let stake_account = Keypair::new();
-        let stake_program_id = solana_stake_program::id();
+        let stake_program_id = stake::program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -809,6 +824,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -887,7 +903,7 @@ mod tests {
         let bank = bank_forks.read().unwrap()[1].clone();
         let account = bank.get_account(&stake_account.pubkey()).unwrap();
         assert_eq!(
-            StakeState::authorized_from(&account).unwrap().staker,
+            stake_state::authorized_from(&account).unwrap().staker,
             new_stake_authority
         );
     }
@@ -919,6 +935,7 @@ mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -1002,19 +1019,19 @@ mod tests {
         let _res = io.handle_request_sync(&req, session.clone());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[0]}"#;
-        let res = io.handle_request_sync(&req, session.clone());
+        let res = io.handle_request_sync(req, session.clone());
 
         let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-        let expected: Response = serde_json::from_str(&expected).unwrap();
+        let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}"#;
-        let res = io.handle_request_sync(&req, session);
+        let res = io.handle_request_sync(req, session);
         let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
-        let expected: Response = serde_json::from_str(&expected).unwrap();
+        let expected: Response = serde_json::from_str(expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);

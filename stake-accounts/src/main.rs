@@ -16,12 +16,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{unique_signers, Signature, Signer},
     signers::Signers,
+    stake::{instruction::LockupArgs, state::Lockup},
     transaction::Transaction,
 };
-use solana_stake_program::{
-    stake_instruction::LockupArgs,
-    stake_state::{Lockup, StakeState},
-};
+use solana_stake_program::stake_state;
 use std::env;
 use std::error::Error;
 
@@ -52,7 +50,7 @@ fn get_balances(
 fn get_lockup(client: &RpcClient, address: &Pubkey) -> Result<Lockup, ClientError> {
     client
         .get_account(address)
-        .map(|account| StakeState::lockup_from(&account).unwrap())
+        .map(|account| stake_state::lockup_from(&account).unwrap())
 }
 
 fn get_lockups(
@@ -116,7 +114,7 @@ fn process_lockup_stake_accounts(
 ) -> Result<(), ClientError> {
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let existing_lockups = get_lockups(&client, addresses)?;
+    let existing_lockups = get_lockups(client, addresses)?;
 
     let lockup = LockupArgs {
         epoch: args.lockup_epoch,
@@ -145,7 +143,7 @@ fn process_rebase_stake_accounts(
 ) -> Result<(), ClientError> {
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let balances = get_balances(&client, addresses)?;
+    let balances = get_balances(client, addresses)?;
 
     let messages = stake_accounts::rebase_stake_accounts(
         &args.fee_payer.pubkey(),
@@ -174,7 +172,7 @@ fn process_move_stake_accounts(
     let args = &move_args.rebase_args;
     let addresses =
         stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
-    let balances = get_balances(&client, addresses)?;
+    let balances = get_balances(client, addresses)?;
 
     let messages = stake_accounts::move_stake_accounts(
         &args.fee_payer.pubkey(),

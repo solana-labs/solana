@@ -58,8 +58,8 @@ pub fn load(
             )
         {
             return load_from_snapshot(
-                &genesis_config,
-                &blockstore,
+                genesis_config,
+                blockstore,
                 account_paths,
                 shrink_paths,
                 snapshot_config,
@@ -79,8 +79,8 @@ pub fn load(
     }
 
     load_from_genesis(
-        &genesis_config,
-        &blockstore,
+        genesis_config,
+        blockstore,
         account_paths,
         process_options,
         cache_block_meta_sender,
@@ -97,8 +97,8 @@ fn load_from_genesis(
     info!("Processing ledger from genesis");
     to_loadresult(
         blockstore_processor::process_blockstore(
-            &genesis_config,
-            &blockstore,
+            genesis_config,
+            blockstore,
             account_paths,
             process_options,
             cache_block_meta_sender,
@@ -130,7 +130,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let deserialized_bank = snapshot_utils::bank_from_archive(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_archive(
         &account_paths,
         &process_options.frozen_accounts,
         &snapshot_config.snapshot_path,
@@ -143,14 +143,11 @@ fn load_from_snapshot(
         process_options.accounts_db_caching_enabled,
         process_options.limit_load_slot_count_from_snapshot,
         process_options.shrink_ratio,
+        process_options.accounts_db_test_hash_calculation,
     )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
-    }
-
-    if process_options.accounts_db_test_hash_calculation {
-        deserialized_bank.update_accounts_hash_with_index_option(false, true);
     }
 
     let deserialized_bank_slot_and_hash = (
@@ -174,6 +171,7 @@ fn load_from_snapshot(
             &VerifyRecyclers::default(),
             transaction_status_sender,
             cache_block_meta_sender,
+            timings,
         ),
         Some(deserialized_bank_slot_and_hash),
     )

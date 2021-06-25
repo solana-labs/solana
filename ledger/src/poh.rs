@@ -63,7 +63,7 @@ impl Poh {
         let num_hashes = std::cmp::min(self.remaining_hashes - 1, max_num_hashes);
 
         for _ in 0..num_hashes {
-            self.hash = hash(&self.hash.as_ref());
+            self.hash = hash(self.hash.as_ref());
         }
         self.num_hashes += num_hashes;
         self.remaining_hashes -= num_hashes;
@@ -77,7 +77,7 @@ impl Poh {
             return None; // Caller needs to `tick()` first
         }
 
-        self.hash = hashv(&[&self.hash.as_ref(), &mixin.as_ref()]);
+        self.hash = hashv(&[self.hash.as_ref(), mixin.as_ref()]);
         let num_hashes = self.num_hashes + 1;
         self.num_hashes = 0;
         self.remaining_hashes -= 1;
@@ -89,7 +89,7 @@ impl Poh {
     }
 
     pub fn tick(&mut self) -> Option<PohEntry> {
-        self.hash = hash(&self.hash.as_ref());
+        self.hash = hash(self.hash.as_ref());
         self.num_hashes += 1;
         self.remaining_hashes -= 1;
 
@@ -115,7 +115,7 @@ pub fn compute_hash_time_ns(hashes_sample_size: u64) -> u64 {
     let mut v = Hash::default();
     let start = Instant::now();
     for _ in 0..hashes_sample_size {
-        v = hash(&v.as_ref());
+        v = hash(v.as_ref());
     }
     start.elapsed().as_nanos() as u64
 }
@@ -139,11 +139,11 @@ mod tests {
             assert_ne!(entry.num_hashes, 0);
 
             for _ in 1..entry.num_hashes {
-                current_hash = hash(&current_hash.as_ref());
+                current_hash = hash(current_hash.as_ref());
             }
             current_hash = match mixin {
-                Some(mixin) => hashv(&[&current_hash.as_ref(), &mixin.as_ref()]),
-                None => hash(&current_hash.as_ref()),
+                Some(mixin) => hashv(&[current_hash.as_ref(), mixin.as_ref()]),
+                None => hash(current_hash.as_ref()),
             };
             if current_hash != entry.hash {
                 return false;
@@ -192,9 +192,9 @@ mod tests {
     #[test]
     fn test_poh_verify() {
         let zero = Hash::default();
-        let one = hash(&zero.as_ref());
-        let two = hash(&one.as_ref());
-        let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
+        let one = hash(zero.as_ref());
+        let two = hash(one.as_ref());
+        let one_with_zero = hashv(&[zero.as_ref(), zero.as_ref()]);
 
         let mut poh = Poh::new(zero, None);
         assert!(verify(
@@ -262,7 +262,7 @@ mod tests {
                 (
                     PohEntry {
                         num_hashes: 1,
-                        hash: hash(&one_with_zero.as_ref()),
+                        hash: hash(one_with_zero.as_ref()),
                     },
                     None
                 )

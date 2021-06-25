@@ -209,7 +209,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             .file_name()
                             .unwrap_or_else(|| std::ffi::OsStr::new(""))
                             .to_str()
-                            .unwrap_or(&"")
+                            .unwrap_or("")
                     ))
                 } else {
                     RpcRequestMiddleware::not_found()
@@ -246,6 +246,7 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             let total_supply = bank.capitalization();
             let non_circulating_supply =
                 solana_runtime::non_circulating_supply::calculate_non_circulating_supply(&bank)
+                    .expect("Scan should not error on root banks")
                     .lamports;
             Some(format!(
                 "{}",

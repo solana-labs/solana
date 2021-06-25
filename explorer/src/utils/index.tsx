@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React from "react";
 import BN from "bn.js";
 import {
   HumanizeDuration,
@@ -51,15 +51,25 @@ export function lamportsToSol(lamports: number | BN): number {
 export function lamportsToSolString(
   lamports: number | BN,
   maximumFractionDigits: number = 9
-): ReactNode {
+): string {
   const sol = lamportsToSol(lamports);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
+}
+
+export function SolBalance({
+  lamports,
+  maximumFractionDigits = 9,
+}: {
+  lamports: number | BN;
+  maximumFractionDigits?: number;
+}) {
   return (
-    <>
+    <span>
       ◎
       <span className="text-monospace">
-        {new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol)}
+        {lamportsToSolString(lamports, maximumFractionDigits)}
       </span>
-    </>
+    </span>
   );
 }
 

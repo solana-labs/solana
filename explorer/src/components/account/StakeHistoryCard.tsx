@@ -1,5 +1,5 @@
 import React from "react";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 import {
   SysvarAccount,
   StakeHistoryInfo,
@@ -57,13 +57,13 @@ const renderAccountRow = (entry: StakeHistoryEntry, index: number) => {
     <tr key={index}>
       <td className="w-1 text-monospace">{entry.epoch}</td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.effective)}
+        <SolBalance lamports={entry.stakeHistory.effective} />
       </td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.activating)}
+        <SolBalance lamports={entry.stakeHistory.activating} />
       </td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.deactivating)}
+        <SolBalance lamports={entry.stakeHistory.deactivating} />
       </td>
     </tr>
   );

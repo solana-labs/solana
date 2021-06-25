@@ -251,7 +251,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 .iter()
                 .for_each(|(tx_hash, (key_index, statuses))| {
                     for (key_slice, res) in statuses.iter() {
-                        self.insert_with_slice(&tx_hash, *slot, *key_index, *key_slice, res.clone())
+                        self.insert_with_slice(tx_hash, *slot, *key_index, *key_slice, res.clone())
                     }
                 });
             if *is_root {

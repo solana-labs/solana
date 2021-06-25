@@ -128,6 +128,21 @@ export type ConfirmedSignaturesForAddress2Options = {
 };
 
 /**
+ * Options for getSignaturesForAddress
+ */
+export type SignaturesForAddressOptions = {
+  /**
+   * Start searching backwards from this transaction signature.
+   * @remark If not provided the search starts from the highest max confirmed block.
+   */
+  before?: TransactionSignature;
+  /** Search until this transaction signature is reached, if found before `limit`. */
+  until?: TransactionSignature;
+  /** Maximum transaction signatures to return (between 1 and 1,000, default: 1,000). */
+  limit?: number;
+};
+
+/**
  * RPC Response with extra contextual information
  */
 export type RpcResponseAndContext<T> = {
@@ -1049,6 +1064,21 @@ const StakeActivationResult = pick({
  */
 
 const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
+  array(
+    pick({
+      signature: string(),
+      slot: number(),
+      err: TransactionErrorResult,
+      memo: nullable(string()),
+      blockTime: optional(nullable(number())),
+    }),
+  ),
+);
+
+/**
+ * Expected JSON RPC response for the "getSignaturesForAddress" message
+ */
+const GetSignaturesForAddressRpcResult = jsonRpcResult(
   array(
     pick({
       signature: string(),
@@ -3200,6 +3230,35 @@ export class Connection {
     if ('error' in res) {
       throw new Error(
         'failed to get confirmed signatures for address: ' + res.error.message,
+      );
+    }
+    return res.result;
+  }
+
+  /**
+   * Returns confirmed signatures for transactions involving an
+   * address backwards in time from the provided signature or most recent confirmed block
+   *
+   *
+   * @param address queried address
+   * @param options
+   */
+  async getSignaturesForAddress(
+    address: PublicKey,
+    options?: SignaturesForAddressOptions,
+    commitment?: Finality,
+  ): Promise<Array<ConfirmedSignatureInfo>> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [address.toBase58()],
+      commitment,
+      undefined,
+      options,
+    );
+    const unsafeRes = await this._rpcRequest('getSignaturesForAddress', args);
+    const res = create(unsafeRes, GetSignaturesForAddressRpcResult);
+    if ('error' in res) {
+      throw new Error(
+        'failed to get signatures for address: ' + res.error.message,
       );
     }
     return res.result;

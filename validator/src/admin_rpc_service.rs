@@ -125,13 +125,7 @@ impl AdminRpc for AdminRpcImpl {
 
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()> {
         debug!("remove_all_authorized_voters received");
-        let mut a = meta.authorized_voter_keypairs.write().unwrap();
-
-        error!("authorized_voter_keypairs pre len: {}", a.len());
-        a.clear();
-        error!("authorized_voter_keypairs post len: {}", a.len());
-
-        //meta.authorized_voter_keypairs.write().unwrap().clear();
+        meta.authorized_voter_keypairs.write().unwrap().clear();
         Ok(())
     }
 }

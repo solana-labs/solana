@@ -11,7 +11,6 @@ pub use solana_program::*;
 
 pub mod account;
 pub mod account_utils;
-pub mod arithmetic;
 pub mod builtins;
 pub mod client;
 pub mod commitment_config;
@@ -44,7 +43,6 @@ pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;
 pub mod signer;
-pub mod stake_weighted_timestamp;
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;

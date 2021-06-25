@@ -36,6 +36,7 @@ pub mod serde_snapshot;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod sorted_storages;
+pub mod stake_weighted_timestamp;
 pub mod stakes;
 pub mod status_cache;
 mod system_instruction_processor;

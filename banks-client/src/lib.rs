@@ -22,11 +22,10 @@ use solana_sdk::{
 };
 use std::io::{self, Error, ErrorKind};
 use tarpc::{
-    client::{self, channel::RequestDispatch, NewClient},
+    client::{self, NewClient, RequestDispatch},
     context::{self, Context},
-    rpc::{ClientMessage, Response},
     serde_transport::tcp,
-    Transport,
+    ClientMessage, Response, Transport,
 };
 use tokio::{net::ToSocketAddrs, time::Duration};
 use tokio_serde::formats::Bincode;
@@ -300,14 +299,14 @@ where
     C: Transport<ClientMessage<BanksRequest>, Response<BanksResponse>> + Send + 'static,
 {
     Ok(BanksClient {
-        inner: TarpcClient::new(client::Config::default(), transport).spawn()?,
+        inner: TarpcClient::new(client::Config::default(), transport).spawn(),
     })
 }
 
 pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
     let transport = tcp::connect(addr, Bincode::default).await?;
     Ok(BanksClient {
-        inner: TarpcClient::new(client::Config::default(), transport).spawn()?,
+        inner: TarpcClient::new(client::Config::default(), transport).spawn(),
     })
 }
 
@@ -377,8 +376,8 @@ mod tests {
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
-        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let instruction = system_instruction::transfer(mint_pubkey, &bob_pubkey, 1);
+        let message = Message::new(&[instruction], Some(mint_pubkey));
 
         Runtime::new()?.block_on(async {
             let client_transport = start_local_server(bank_forks, block_commitment_cache).await;

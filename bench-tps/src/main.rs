@@ -39,7 +39,7 @@ fn main() {
     let keypair_count = *tx_count * keypair_multiplier;
     if *write_to_client_file {
         info!("Generating {} keypairs", keypair_count);
-        let (keypairs, _) = generate_keypairs(&id, keypair_count as u64);
+        let (keypairs, _) = generate_keypairs(id, keypair_count as u64);
         let num_accounts = keypairs.len() as u64;
         let max_fee =
             FeeRateGovernor::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
@@ -68,7 +68,7 @@ fn main() {
     }
 
     info!("Connecting to the cluster");
-    let nodes = discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
+    let nodes = discover_cluster(entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
@@ -135,7 +135,7 @@ fn main() {
         generate_and_fund_keypairs(
             client.clone(),
             Some(*faucet_addr),
-            &id,
+            id,
             keypair_count,
             *num_lamports_per_account,
         )

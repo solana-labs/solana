@@ -21,10 +21,19 @@ ul.log-messages {
   border-color: $input-border-color;
 }
 
+.navbar {
+  border-bottom: 1px solid $card-outline-color;
+}
+
+.search-bar__placeholder {
+  color: $input-placeholder-color !important;
+}
+
 .search-bar__control {
   background-color: $gray-800-dark !important;
   border-color: $card-outline-color !important;
   box-shadow: $card-box-shadow !important;
+  min-height: 52px !important;
 
   .search-bar__input {
     color: $white !important;
@@ -33,7 +42,7 @@ ul.log-messages {
 
 .search-bar__menu {
   background-color: $gray-800-dark !important;
-  border-color: $card-outline-color !important;
+  border: 1px solid $card-outline-color !important;
   box-shadow: $card-box-shadow !important;
 
   .search-bar__option {

@@ -106,7 +106,6 @@ else
       solana-dos
       solana-install-init
       solana-stake-accounts
-      solana-stake-monitor
       solana-test-validator
       solana-tokens
       solana-watchtower

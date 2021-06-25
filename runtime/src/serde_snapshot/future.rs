@@ -165,7 +165,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
         }
         Self {
             blockhash_queue: rhs.blockhash_queue,
-            ancestors: &rhs.ancestors,
+            ancestors: rhs.ancestors,
             hash: rhs.hash,
             parent_hash: rhs.parent_hash,
             parent_slot: rhs.parent_slot,

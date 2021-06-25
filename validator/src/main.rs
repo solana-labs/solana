@@ -112,7 +112,7 @@ fn wait_for_restart_window(
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
-    let admin_client = admin_rpc_service::connect(&ledger_path);
+    let admin_client = admin_rpc_service::connect(ledger_path);
     let rpc_addr = admin_rpc_service::runtime()
         .block_on(async move { admin_client.await?.rpc_addr().await })
         .map_err(|err| format!("Unable to get validator RPC address: {}", err))?;
@@ -474,7 +474,7 @@ fn get_rpc_node(
             rpc_peers
         } else {
             let trusted_snapshot_hashes =
-                get_trusted_snapshot_hashes(&cluster_info, &validator_config.trusted_validators);
+                get_trusted_snapshot_hashes(cluster_info, &validator_config.trusted_validators);
 
             let mut eligible_rpc_peers = vec![];
 
@@ -598,7 +598,7 @@ fn check_vote_account(
         }
 
         for (_, vote_account_authorized_voter_pubkey) in vote_state.authorized_voters().iter() {
-            if !authorized_voter_pubkeys.contains(&vote_account_authorized_voter_pubkey) {
+            if !authorized_voter_pubkeys.contains(vote_account_authorized_voter_pubkey) {
                 return Err(format!(
                     "authorized voter {} not available",
                     vote_account_authorized_voter_pubkey
@@ -686,7 +686,7 @@ fn verify_reachable_ports(
             ("RPC", rpc_addr, &node.info.rpc),
             ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
         ] {
-            if ContactInfo::is_valid_address(&public_addr) {
+            if ContactInfo::is_valid_address(public_addr) {
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
@@ -757,7 +757,7 @@ fn rpc_bootstrap(
         order.shuffle(&mut thread_rng());
         if order
             .into_iter()
-            .all(|i| !verify_reachable_ports(&node, &cluster_entrypoints[i], &validator_config))
+            .all(|i| !verify_reachable_ports(node, &cluster_entrypoints[i], validator_config))
         {
             exit(1);
         }
@@ -775,8 +775,8 @@ fn rpc_bootstrap(
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
             gossip = Some(start_gossip_node(
-                &identity_keypair,
-                &cluster_entrypoints,
+                identity_keypair,
+                cluster_entrypoints,
                 ledger_path,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
@@ -788,8 +788,8 @@ fn rpc_bootstrap(
 
         let rpc_node_details = get_rpc_node(
             &gossip.as_ref().unwrap().0,
-            &cluster_entrypoints,
-            &validator_config,
+            cluster_entrypoints,
+            validator_config,
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
             bootstrap_config.no_untrusted_rpc,
@@ -816,7 +816,7 @@ fn rpc_bootstrap(
         .and_then(|_| {
             let genesis_config = download_then_check_genesis_hash(
                 &rpc_contact_info.rpc,
-                &ledger_path,
+                ledger_path,
                 validator_config.expected_genesis_hash,
                 bootstrap_config.max_genesis_archive_unpacked_size,
                 bootstrap_config.no_genesis_fetch,
@@ -897,7 +897,7 @@ fn rpc_bootstrap(
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
-                                &snapshot_output_dir,
+                                snapshot_output_dir,
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
@@ -946,7 +946,7 @@ fn rpc_bootstrap(
                 check_vote_account(
                     &rpc_client,
                     &identity_keypair.pubkey(),
-                    &vote_account,
+                    vote_account,
                     &authorized_voter_keypairs
                         .read()
                         .unwrap()
@@ -991,6 +991,28 @@ fn rpc_bootstrap(
     }
 }
 
+fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
+    let entrypoints = {
+        let mut index: Vec<_> = (0..entrypoints.len()).collect();
+        index.shuffle(&mut rand::thread_rng());
+        index.into_iter().map(|i| &entrypoints[i])
+    };
+    for entrypoint in entrypoints {
+        match solana_net_utils::get_cluster_shred_version(entrypoint) {
+            Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
+            Ok(0) => eprintln!("zero sherd-version from entrypoint: {}", entrypoint),
+            Ok(shred_version) => {
+                info!(
+                    "obtained shred-version {} from {}",
+                    shred_version, entrypoint
+                );
+                return Some(shred_version);
+            }
+        }
+    }
+    None
+}
+
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -1003,6 +1025,8 @@ pub fn main() {
         PubSubConfig::default().max_in_buffer_capacity.to_string();
     let default_rpc_pubsub_max_out_buffer_capacity =
         PubSubConfig::default().max_out_buffer_capacity.to_string();
+    let default_rpc_pubsub_max_active_subscriptions =
+        PubSubConfig::default().max_active_subscriptions.to_string();
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
@@ -1611,6 +1635,16 @@ pub fn main() {
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_max_active_subscriptions")
+                .long("rpc-pubsub-max-active-subscriptions")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_active_subscriptions)
+                .help("The maximum number of active subscriptions that RPC PubSub will accept \
+                       across all connections."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
                 .long("rpc-send-retry-ms")
                 .value_name("MILLISECS")
@@ -1668,7 +1702,7 @@ pub fn main() {
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
-                .default_value(&default_genesis_archive_unpacked_size)
+                .default_value(default_genesis_archive_unpacked_size)
                 .help(
                     "maximum total uncompressed file size of downloaded genesis archive",
                 ),
@@ -2121,6 +2155,25 @@ pub fn main() {
     } else {
         AccountShrinkThreshold::IndividalStore { shrink_ratio }
     };
+    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entrypoint| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+                eprintln!("failed to parse entrypoint address: {}", e);
+                exit(1);
+            })
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    // TODO: Once entrypoints are updated to return shred-version, this should
+    // abort if it fails to obtain a shred-version, so that nodes always join
+    // gossip with a valid shred-version. The code to adopt entrypoint shred
+    // version can then be deleted from gossip and get_rpc_node above.
+    let expected_shred_version = value_t!(matches, "expected_shred_version", u16)
+        .ok()
+        .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2129,11 +2182,11 @@ pub fn main() {
         cuda: matches.is_present("cuda"),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
-            .map(|s| Hash::from_str(&s).unwrap()),
+            .map(|s| Hash::from_str(s).unwrap()),
         expected_bank_hash: matches
             .value_of("expected_bank_hash")
-            .map(|s| Hash::from_str(&s).unwrap()),
-        expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
+            .map(|s| Hash::from_str(s).unwrap()),
+        expected_shred_version,
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
@@ -2141,7 +2194,6 @@ pub fn main() {
             enable_bigtable_ledger_storage: matches
                 .is_present("enable_rpc_bigtable_ledger_storage"),
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
-            identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
@@ -2185,6 +2237,11 @@ pub fn main() {
             max_out_buffer_capacity: value_t_or_exit!(
                 matches,
                 "rpc_pubsub_max_out_buffer_capacity",
+                usize
+            ),
+            max_active_subscriptions: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_max_active_subscriptions",
                 usize
             ),
         },
@@ -2378,19 +2435,6 @@ pub fn main() {
     if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
         validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
     }
-
-    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|entrypoint| {
-            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
-                eprintln!("failed to parse entrypoint address: {}", e);
-                exit(1);
-            })
-        })
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {

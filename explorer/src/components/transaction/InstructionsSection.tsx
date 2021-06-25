@@ -29,7 +29,7 @@ import { isSerumInstruction } from "components/instruction/serum/types";
 import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
 import { isBonfidaBotInstruction } from "components/instruction/bonfida-bot/types";
-import { useFetchTransactionDetails } from "providers/transactions/details";
+import { useFetchTransactionDetails } from "providers/transactions/parsed";
 import {
   useTransactionDetails,
   useTransactionStatus,

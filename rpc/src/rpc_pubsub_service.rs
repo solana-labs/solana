@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+        rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl, MAX_ACTIVE_SUBSCRIPTIONS},
         rpc_subscriptions::RpcSubscriptions,
     },
     jsonrpc_pubsub::{PubSubHandler, Session},
@@ -29,6 +29,7 @@ pub struct PubSubConfig {
     pub max_fragment_size: usize,
     pub max_in_buffer_capacity: usize,
     pub max_out_buffer_capacity: usize,
+    pub max_active_subscriptions: usize,
 }
 
 impl Default for PubSubConfig {
@@ -39,6 +40,7 @@ impl Default for PubSubConfig {
             max_fragment_size: 50 * 1024, // 50KB
             max_in_buffer_capacity: 50 * 1024, // 50KB
             max_out_buffer_capacity: 15 * 1024 * 1024, // max account size (10MB), then 5MB extra for base64 encoding overhead/etc
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         }
     }
 }
@@ -55,7 +57,10 @@ impl PubSubService {
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
+        let rpc = RpcSolPubSubImpl::new(
+            subscriptions.clone(),
+            pubsub_config.max_active_subscriptions,
+        );
         let exit_ = exit.clone();
 
         let thread_hdl = Builder::new()
