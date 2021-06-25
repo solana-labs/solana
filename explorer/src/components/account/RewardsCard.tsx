@@ -61,8 +61,8 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
       </tr>
     );
   });
-
-  const { foundOldest } = rewards.data;
+  const rewardsFound = rewardsList.some((r) => r);
+  const { foundOldest, lowestFetchedEpoch, highestFetchedEpoch } = rewards.data;
   const fetching = rewards.status === FetchStatus.Fetching;
 
   return (
@@ -76,19 +76,26 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
           </div>
         </div>
 
-        <div className="table-responsive mb-0">
-          <table className="table table-sm table-nowrap card-table">
-            <thead>
-              <tr>
-                <th className="w-1 text-muted">Epoch</th>
-                <th className="text-muted">Effective Slot</th>
-                <th className="text-muted">Reward Amount</th>
-                <th className="text-muted">Post Balance</th>
-              </tr>
-            </thead>
-            <tbody className="list">{rewardsList}</tbody>
-          </table>
-        </div>
+        {rewardsFound ? (
+          <div className="table-responsive mb-0">
+            <table className="table table-sm table-nowrap card-table">
+              <thead>
+                <tr>
+                  <th className="w-1 text-muted">Epoch</th>
+                  <th className="text-muted">Effective Slot</th>
+                  <th className="text-muted">Reward Amount</th>
+                  <th className="text-muted">Post Balance</th>
+                </tr>
+              </thead>
+              <tbody className="list">{rewardsList}</tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="card-body">
+            No rewards issued between epochs {lowestFetchedEpoch} and{" "}
+            {highestFetchedEpoch}
+          </div>
+        )}
 
         <div className="card-footer">
           {foundOldest ? (

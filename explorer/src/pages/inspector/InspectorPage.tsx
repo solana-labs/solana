@@ -19,14 +19,117 @@ import {
   createFeePayerValidator,
 } from "./AddressWithContext";
 import { SimulatorCard } from "./SimulatorCard";
-import { RawInput } from "./RawInputCard";
+import { MIN_MESSAGE_LENGTH, RawInput } from "./RawInputCard";
 import { InstructionsSection } from "./InstructionsSection";
+import base58 from "bs58";
 
 export type TransactionData = {
   rawMessage: Uint8Array;
   message: Message;
   signatures?: (string | null)[];
 };
+
+// Decode a url param and return the result. If decoding fails, return whether
+// the param should be deleted.
+function decodeParam(params: URLSearchParams, name: string): string | boolean {
+  const param = params.get(name);
+  if (param === null) return false;
+  try {
+    return decodeURIComponent(param);
+  } catch (err) {
+    return true;
+  }
+}
+
+// Decode a signatures param and throw an error on failure
+function decodeSignatures(signaturesParam: string): (string | null)[] {
+  let signatures;
+  try {
+    signatures = JSON.parse(signaturesParam);
+  } catch (err) {
+    throw new Error("Signatures param is not valid JSON");
+  }
+
+  if (!Array.isArray(signatures)) {
+    throw new Error("Signatures param is not a JSON array");
+  }
+
+  const validSignatures: (string | null)[] = [];
+  for (const signature of signatures) {
+    if (signature === null) {
+      validSignatures.push(signature);
+      continue;
+    }
+
+    if (typeof signature !== "string") {
+      throw new Error("Signature is not a string");
+    }
+
+    try {
+      base58.decode(signature);
+      validSignatures.push(signature);
+    } catch (err) {
+      throw new Error("Signature is not valid base58");
+    }
+  }
+
+  return validSignatures;
+}
+
+// Decodes url params into transaction data if possible. If decoding fails,
+// URL params are returned as a string that will prefill the transaction
+// message input field for debugging. Returns a tuple of [result, shouldRefreshUrl]
+function decodeUrlParams(
+  params: URLSearchParams
+): [TransactionData | string, boolean] {
+  const messageParam = decodeParam(params, "message");
+  const signaturesParam = decodeParam(params, "signatures");
+
+  let refreshUrl = false;
+  if (signaturesParam === true) {
+    params.delete("signatures");
+    refreshUrl = true;
+  }
+
+  if (typeof messageParam === "boolean") {
+    if (messageParam) {
+      params.delete("message");
+      params.delete("signatures");
+      refreshUrl = true;
+    }
+    return ["", refreshUrl];
+  }
+
+  let signatures: (string | null)[] | undefined = undefined;
+  if (typeof signaturesParam === "string") {
+    try {
+      signatures = decodeSignatures(signaturesParam);
+    } catch (err) {
+      params.delete("signatures");
+      refreshUrl = true;
+    }
+  }
+
+  try {
+    const buffer = Uint8Array.from(atob(messageParam), (c) => c.charCodeAt(0));
+
+    if (buffer.length < MIN_MESSAGE_LENGTH) {
+      throw new Error("message buffer is too short");
+    }
+
+    const message = Message.from(buffer);
+    const data = {
+      message,
+      rawMessage: buffer,
+      signatures,
+    };
+    return [data, refreshUrl];
+  } catch (err) {
+    params.delete("message");
+    refreshUrl = true;
+    return [messageParam, true];
+  }
+}
 
 export function TransactionInspectorPage({
   signature,
@@ -43,13 +146,30 @@ export function TransactionInspectorPage({
   React.useEffect(() => {
     if (signature) return;
     if (transaction) {
+      let shouldRefreshUrl = false;
+
+      if (transaction.signatures !== undefined) {
+        const signaturesParam = encodeURIComponent(
+          JSON.stringify(transaction.signatures)
+        );
+        if (query.get("signatures") !== signaturesParam) {
+          shouldRefreshUrl = true;
+          query.set("signatures", signaturesParam);
+        }
+      }
+
       const base64 = btoa(
         String.fromCharCode.apply(null, [...transaction.rawMessage])
       );
       const newParam = encodeURIComponent(base64);
-      if (query.get("message") === newParam) return;
-      query.set("message", newParam);
-      history.push({ ...location, search: query.toString() });
+      if (query.get("message") !== newParam) {
+        shouldRefreshUrl = true;
+        query.set("message", newParam);
+      }
+
+      if (shouldRefreshUrl) {
+        history.push({ ...location, search: query.toString() });
+      }
     }
   }, [query, transaction, signature, history, location]);
 
@@ -63,39 +183,15 @@ export function TransactionInspectorPage({
   React.useEffect(() => {
     if (transaction || signature) return;
 
-    let messageParam = query.get("message");
-    if (messageParam !== null) {
-      let messageString;
-      try {
-        messageString = decodeURIComponent(messageParam);
-      } catch (err) {
-        query.delete("message");
-        history.push({ ...location, search: query.toString() });
-        return;
-      }
+    const [result, refreshUrl] = decodeUrlParams(query);
+    if (refreshUrl) {
+      history.push({ ...location, search: query.toString() });
+    }
 
-      try {
-        const buffer = Uint8Array.from(atob(messageString), (c) =>
-          c.charCodeAt(0)
-        );
-
-        if (buffer.length < 36) {
-          query.delete("message");
-          history.push({ ...location, search: query.toString() });
-          throw new Error("buffer is too short");
-        }
-
-        const message = Message.from(buffer);
-        setParamString(undefined);
-        setTransaction({
-          message,
-          rawMessage: buffer,
-        });
-      } catch (err) {
-        setParamString(messageString);
-      }
+    if (typeof result === "string") {
+      setParamString(result);
     } else {
-      setParamString(undefined);
+      setTransaction(result);
     }
   }, [query, transaction, signature, history, location]);
 

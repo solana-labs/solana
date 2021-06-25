@@ -66,7 +66,7 @@ use {
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, TransactionError},
     },
     solana_transaction_status::{
         EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
@@ -130,7 +130,6 @@ fn is_finalized(
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub enable_cpi_and_log_storage: bool,
-    pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
@@ -2228,7 +2227,7 @@ pub mod rpc_minimal {
         fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity> {
             debug!("get_identity rpc request received");
             Ok(RpcIdentity {
-                identity: meta.config.identity_pubkey.to_string(),
+                identity: meta.cluster_info.id().to_string(),
             })
         }
 
@@ -2994,12 +2993,14 @@ pub mod rpc_full {
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),
                     RpcHealthStatus::Unknown => {
+                        inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: None,
                         }
                         .into());
                     }
                     RpcHealthStatus::Behind { num_slots } => {
+                        inc_new_counter_info!("rpc-send-tx_health-behind", 1);
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: Some(num_slots),
                         }
@@ -3008,6 +3009,14 @@ pub mod rpc_full {
                 }
 
                 if let (Err(err), logs, _) = preflight_bank.simulate_transaction(&transaction) {
+                    match err {
+                        TransactionError::BlockhashNotFound => {
+                            inc_new_counter_info!("rpc-send-tx_err-blockhash-not-found", 1);
+                        }
+                        _ => {
+                            inc_new_counter_info!("rpc-send-tx_err-other", 1);
+                        }
+                    }
                     return Err(RpcCustomError::SendTransactionPreflightFailure {
                         message: format!("Transaction simulation failed: {}", err),
                         result: RpcSimulateTransactionResult {
@@ -4055,7 +4064,10 @@ pub mod tests {
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
 
-        let cluster_info = Arc::new(ClusterInfo::default());
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo {
+            id: alice.pubkey(),
+            ..ContactInfo::default()
+        }));
         let tpu_address = cluster_info.my_contact_info().tpu;
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
@@ -4080,7 +4092,6 @@ pub mod tests {
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
-                identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },
             None,
@@ -5815,14 +5826,16 @@ pub mod tests {
     #[test]
     fn test_rpc_get_identity() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler {
+            io, meta, alice, ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getIdentity"}"#;
         let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "identity": bob_pubkey.to_string()
+                "identity": alice.pubkey().to_string()
             },
             "id": 1
         });

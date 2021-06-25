@@ -4,7 +4,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
-        hardened_unpack::{unpack_snapshot, UnpackError, UnpackedAppendVecMap},
+        hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
             bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
         },
@@ -17,7 +17,7 @@ use {
     bzip2::bufread::BzDecoder,
     flate2::read::GzDecoder,
     log::*,
-    rayon::ThreadPool,
+    rayon::{prelude::*, ThreadPool},
     regex::Regex,
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
@@ -600,7 +600,7 @@ pub struct BankFromArchiveTimings {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_archive<P: AsRef<Path>>(
+pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &Path,
@@ -619,14 +619,29 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
-    let mut untar = Measure::start("untar");
-    let unpacked_append_vec_map = untar_snapshot_in(
-        &snapshot_tar,
-        unpack_dir.as_ref(),
-        account_paths,
-        archive_format,
-    )?;
+    let mut untar = Measure::start("snapshot untar");
+    // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
+    let divisions = std::cmp::min(4, std::cmp::max(1, num_cpus::get() / 4));
+    // create 'divisions' # of parallel workers, each responsible for 1/divisions of all the files to extract.
+    let all_unpacked_append_vec_map = (0..divisions)
+        .into_par_iter()
+        .map(|index| {
+            untar_snapshot_in(
+                &snapshot_tar,
+                unpack_dir.as_ref(),
+                account_paths,
+                archive_format,
+                Some(ParallelSelector { index, divisions }),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
+    for h in all_unpacked_append_vec_map {
+        unpacked_append_vec_map.extend(h?);
+    }
+
     untar.stop();
+    info!("{}", untar);
 
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
@@ -773,33 +788,31 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
+    parallel_selector: Option<ParallelSelector>,
 ) -> Result<UnpackedAppendVecMap> {
-    let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
     let account_paths_map = match archive_format {
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
     };
-    measure.stop();
-    info!("{}", measure);
     Ok(account_paths_map)
 }
 
@@ -916,6 +929,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         unpack_dir,
         &[unpack_dir.to_path_buf()],
         archive_format,
+        None,
     )
     .unwrap();
 

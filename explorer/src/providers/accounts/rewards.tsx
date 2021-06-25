@@ -6,6 +6,11 @@ import { ActionType } from "providers/block";
 import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
+const REWARDS_AVAILABLE_EPOCH = new Map<Cluster, number>([
+  [Cluster.MainnetBeta, 132],
+  [Cluster.Testnet, 43],
+]);
+
 const PAGE_SIZE = 15;
 
 export type Rewards = {
@@ -17,6 +22,8 @@ export type Rewards = {
 
 export type RewardsUpdate = {
   rewards: (InflationReward | null)[];
+  highestFetchedEpoch: number;
+  lowestFetchedEpoch: number;
   foundOldest?: boolean;
 };
 
@@ -39,8 +46,9 @@ function reconcile(
 
   return {
     rewards: combined,
-    highestFetchedEpoch: combined[0]?.epoch,
-    lowestFetchedEpoch: combined[combined.length - 1]?.epoch,
+    highestFetchedEpoch:
+      rewards?.highestFetchedEpoch || update.highestFetchedEpoch,
+    lowestFetchedEpoch: update.lowestFetchedEpoch,
     foundOldest,
   };
 }
@@ -84,11 +92,8 @@ async function fetchRewards(
     url,
   });
 
+  const lowestAvailableEpoch = REWARDS_AVAILABLE_EPOCH.get(cluster) || 0;
   const connection = new Connection(url);
-
-  if (!fromEpoch && highestEpoch) {
-    fromEpoch = highestEpoch;
-  }
 
   if (!fromEpoch) {
     try {
@@ -105,6 +110,10 @@ async function fetchRewards(
         key: pubkey.toBase58(),
         url,
       });
+    }
+
+    if (highestEpoch && highestEpoch < fromEpoch) {
+      fromEpoch = highestEpoch;
     }
   }
 
@@ -128,7 +137,7 @@ async function fetchRewards(
   }
 
   const results = await Promise.all(requests);
-  fromEpoch = fromEpoch - requests.length;
+  const lowestFetchedEpoch = fromEpoch - requests.length;
 
   dispatch({
     type: ActionType.Update,
@@ -137,7 +146,9 @@ async function fetchRewards(
     status: FetchStatus.Fetched,
     data: {
       rewards: results || [],
-      foundOldest: fromEpoch <= 0,
+      foundOldest: lowestFetchedEpoch <= lowestAvailableEpoch,
+      highestFetchedEpoch: fromEpoch,
+      lowestFetchedEpoch,
     },
   });
 }

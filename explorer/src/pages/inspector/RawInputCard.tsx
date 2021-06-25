@@ -33,7 +33,7 @@ function deserializeTransaction(bytes: Uint8Array): {
   return { message, signatures };
 }
 
-const MIN_MESSAGE_LENGTH =
+export const MIN_MESSAGE_LENGTH =
   3 + // header
   1 + // accounts length
   32 + // accounts, must have at least one address for fees

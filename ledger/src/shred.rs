@@ -478,28 +478,21 @@ impl Shred {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> [u8; 32] {
-        let mut seed = [0; 32];
-
-        {
-            let r_bf = bank_forks.read().unwrap();
-            let root_bank = r_bf.root_bank();
-            let maybe_slot_bank = r_bf.get(self.slot());
-
-            if enable_deterministic_seed(self.slot(), &root_bank) {
-                if let Some(leader_pubkey) = leader_schedule_cache
-                    .slot_leader_at(self.slot(), maybe_slot_bank.map(|x| x.as_ref()))
-                {
-                    let h = hashv(&[
-                        &self.slot().to_le_bytes(),
-                        &self.index().to_le_bytes(),
-                        &leader_pubkey.to_bytes(),
-                    ]);
-                    seed[0..].copy_from_slice(&h.to_bytes());
-                    return seed;
-                }
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        if enable_deterministic_seed(self.slot(), &root_bank) {
+            if let Some(leader_pubkey) =
+                leader_schedule_cache.slot_leader_at(self.slot(), Some(&root_bank))
+            {
+                let h = hashv(&[
+                    &self.slot().to_le_bytes(),
+                    &self.index().to_le_bytes(),
+                    &leader_pubkey.to_bytes(),
+                ]);
+                return h.to_bytes();
             }
         }
 
+        let mut seed = [0; 32];
         let seed_len = seed.len();
         let sig = self.common_header.signature.as_ref();
         seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
