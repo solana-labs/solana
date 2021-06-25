@@ -287,18 +287,38 @@ impl ReplayTiming {
 #[derive(Default)]
 pub struct ReplayServiceTiming {
     last_print: u64,
+    update_cost_model_count: u64,
+    update_cost_model_elapsed: u64,
     persist_cost_table_elapsed: u64,
 }
 
 impl ReplayServiceTiming {
-    fn update(&mut self, persist_cost_table_elapsed: u64) {
+    fn update(
+        &mut self,
+        update_cost_model_count: u64,
+        update_cost_model_elapsed: u64,
+        persist_cost_table_elapsed: u64,
+    ) {
+        self.update_cost_model_count += update_cost_model_count;
+        self.update_cost_model_elapsed += update_cost_model_elapsed;
         self.persist_cost_table_elapsed += persist_cost_table_elapsed;
+
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "replay-service-timing-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
+                (
+                    "update_cost_model_count",
+                    self.update_cost_model_count as i64,
+                    i64
+                ),
+                (
+                    "update_cost_model_elapsed",
+                    self.update_cost_model_elapsed as i64,
+                    i64
+                ),
                 (
                     "persist_cost_table_elapsed",
                     self.persist_cost_table_elapsed as i64,
@@ -807,23 +827,25 @@ impl ReplayStage {
                 break;
             }
 
-            debug!("TODO TAO - in service thread");
-
+            let mut update_count = 0_u64;
+            let mut update_cost_model_time = Measure::start("update_cost_model_time");
             for cost_update in cost_update_receiver.try_iter() {
-                debug!(
-                    "TODO TAO - call to update cost model with updates {:?}",
-                    cost_update
-                );
                 dirty |= Self::update_cost_model(&cost_model, &cost_update);
+                update_count += 1;
             }
+            update_cost_model_time.stop();
 
+            let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
             if dirty {
-                debug!("TODO TAO - call to persist cost table to blockstore");
-                let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
                 Self::persist_cost_table(&blockstore, &cost_model);
-                persist_cost_table_time.stop();
-                replay_service_timing.update(persist_cost_table_time.as_us());
             }
+            persist_cost_table_time.stop();
+
+            replay_service_timing.update(
+                update_count,
+                update_cost_model_time.as_us(),
+                persist_cost_table_time.as_us(),
+            );
 
             thread::sleep(wait_timer);
         }
@@ -1805,9 +1827,7 @@ impl ReplayStage {
                     replay_vote_sender,
                     verify_recyclers,
                 );
-                debug!("TODO TAO - accumulates timing: {:?}", bank_progress.replay_stats.execute_timings);
                 execute_timings.accumulate(&bank_progress.replay_stats.execute_timings);
-                debug!("TODO TAO - :ccumulated timing: {:?}", execute_timings);
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -1894,7 +1914,6 @@ impl ReplayStage {
         }
 
         // send accumulated excute-timings to service thread to update cost model
-        debug!("TODO TAO - sending timing to service_loop: {:?}", execute_timings);
         cost_update_sender
             .send(execute_timings)
             .expect("send execution cost update to cost_model");
@@ -1906,9 +1925,17 @@ impl ReplayStage {
     fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
         let cost_model_read = cost_model.read().unwrap();
         let cost_table = cost_model_read.get_instruction_cost_table();
-        blockstore
-            .truncate_program_cost()
-            .expect("truncate program cost table");
+        let db_records = blockstore.read_program_costs().expect("read programs");
+
+        // delete records from blockstore if they are no longer in cost_table
+        db_records.iter().for_each(|(pubkey, _)| {
+            if !cost_table.iter().any(|(key, _)| key == pubkey) {
+                blockstore
+                    .delete_program_cost(pubkey)
+                    .expect("delete old program");
+            }
+        });
+
         for (key, cost) in cost_table.iter() {
             blockstore
                 .write_program_cost(key, cost)
@@ -2020,7 +2047,6 @@ impl ReplayStage {
 
     fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) -> bool {
         let mut dirty = false;
-        let mut update_cost_model_time = Measure::start("update_cost_model_time");
         let mut cost_model_mutable = cost_model.write().unwrap();
         for (program_id, stats) in &execute_timings.details.per_program_timings {
             let cost = stats.0 / stats.1 as u64;
@@ -2044,17 +2070,6 @@ impl ReplayStage {
         debug!(
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
            cost_model.read().unwrap().get_instruction_cost_table()
-        );
-        update_cost_model_time.stop();
-
-        inc_new_counter_info!("replay_stage-update_cost_model", 1);
-        datapoint_info!(
-            "replay-loop-timing-stats",
-            (
-                "update_cost_model_elapsed",
-                update_cost_model_time.as_us() as i64,
-                i64
-            )
         );
         dirty
     }

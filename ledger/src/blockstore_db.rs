@@ -328,7 +328,7 @@ impl Rocks {
         );
         let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
             TransactionStatusIndex::NAME,
-            get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
+            get_cf_options_no_compaction::<TransactionStatusIndex>(&access_type, &oldest_slot),
         );
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(
             Rewards::NAME,
@@ -348,7 +348,7 @@ impl Rocks {
         );
         let program_costs_cf_descriptor = ColumnFamilyDescriptor::new(
             ProgramCosts::NAME,
-            get_cf_options::<ProgramCosts>(&access_type, &oldest_slot),
+            get_cf_options_no_compaction::<ProgramCosts>(&access_type, &oldest_slot),
         );
         // Don't forget to add to both run_purge_with_stats() and
         // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
@@ -414,9 +414,9 @@ impl Rocks {
         // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
         if matches!(access_type, AccessType::PrimaryOnly) {
             for cf_name in cf_names {
-                // this special column family must be excluded from LedgerCleanupService's rocksdb
+                // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
-                if cf_name == TransactionStatusIndex::NAME {
+                if cf_name == TransactionStatusIndex::NAME || cf_name == ProgramCosts::NAME {
                     continue;
                 }
 
@@ -518,6 +518,11 @@ impl Rocks {
 
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
+        Ok(())
+    }
+
+    fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
+        self.0.delete_cf(cf, key)?;
         Ok(())
     }
 
@@ -1158,6 +1163,10 @@ where
         self.backend
             .put_cf(self.handle(), &C::key(key), &serialized_value)
     }
+
+    pub fn delete(&self, key: C::Index) -> Result<()> {
+        self.backend.delete_cf(self.handle(), &C::key(key))
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1305,17 +1314,38 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
-    // compactions....
-    if matches!(access_type, AccessType::PrimaryOnly)
-        && C::NAME != columns::TransactionStatusIndex::NAME
-    {
+    if matches!(access_type, AccessType::PrimaryOnly) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
             _phantom: PhantomData::default(),
         });
     }
+
+    if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+        options.set_disable_auto_compactions(true);
+    }
+
+    options
+}
+
+fn get_cf_options_no_compaction<C: 'static + Column + ColumnName>(
+    access_type: &AccessType,
+    _oldest_slot: &OldestSlot,
+) -> Options {
+    let mut options = Options::default();
+    // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
+    options.set_max_write_buffer_number(8);
+    options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
+    let file_num_compaction_trigger = 4;
+    // Recommend that this be around the size of level 0. Level 0 estimated size in stable state is
+    // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger
+    // Source: https://docs.rs/rocksdb/0.6.0/rocksdb/struct.Options.html#method.set_level_zero_file_num_compaction_trigger
+    let total_size_base = MAX_WRITE_BUFFER_SIZE * file_num_compaction_trigger;
+    let file_size_base = total_size_base / 10;
+    options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
+    options.set_max_bytes_for_level_base(total_size_base);
+    options.set_target_file_size_base(file_size_base);
 
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
