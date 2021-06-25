@@ -480,8 +480,8 @@ impl Shred {
     ) -> [u8; 32] {
         let root_bank = bank_forks.read().unwrap().root_bank();
         if enable_deterministic_seed(self.slot(), &root_bank) {
-            if let Some(leader_pubkey) = leader_schedule_cache
-                .slot_leader_at(self.slot(), Some(&root_bank))
+            if let Some(leader_pubkey) =
+                leader_schedule_cache.slot_leader_at(self.slot(), Some(&root_bank))
             {
                 let h = hashv(&[
                     &self.slot().to_le_bytes(),
