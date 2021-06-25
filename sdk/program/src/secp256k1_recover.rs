@@ -27,8 +27,8 @@ impl From<Secp256k1RecoverError> for u64 {
     fn from(v: Secp256k1RecoverError) -> u64 {
         match v {
             Secp256k1RecoverError::InvalidHash => 1,
-            Secp256k1RecoverError::InvalidRecoveryId => 1,
-            Secp256k1RecoverError::InvalidSignature => 2,
+            Secp256k1RecoverError::InvalidRecoveryId => 2,
+            Secp256k1RecoverError::InvalidSignature => 3,
         }
     }
 }
