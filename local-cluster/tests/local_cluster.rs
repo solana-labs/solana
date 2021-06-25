@@ -2563,7 +2563,11 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
                 if votes_on_c_fork.len() >= 4 {
                     break;
                 }
+            } else {
+                warn!("last_vote == base_slot");
             }
+        } else {
+            warn!("last_vote_in_tower.is_none()");
         }
     }
     assert!(!votes_on_c_fork.is_empty());
