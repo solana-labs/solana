@@ -351,7 +351,17 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5a26c53ddf60281f18e7a29b20db7ba3db82a9d81b9650bfaa02d646f50d364"
 dependencies = [
- "borsh-derive",
+ "borsh-derive 0.8.1",
+ "hashbrown 0.9.1",
+]
+
+[[package]]
+name = "borsh"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fcabb02816fdadf90866dc9a7824491ccb63d69f55375a266dc03509ac68d36"
+dependencies = [
+ "borsh-derive 0.9.0",
  "hashbrown 0.9.1",
 ]
 
@@ -361,8 +371,21 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b637a47728b78a78cd7f4b85bf06d71ef4221840e059a38f048be2422bf673b2"
 dependencies = [
- "borsh-derive-internal",
- "borsh-schema-derive-internal",
+ "borsh-derive-internal 0.8.1",
+ "borsh-schema-derive-internal 0.8.1",
+ "proc-macro-crate",
+ "proc-macro2 1.0.24",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bd16f0729b89f0a212b0e2e1d19cc6593df63f771161a11863967780e2d033d"
+dependencies = [
+ "borsh-derive-internal 0.9.0",
+ "borsh-schema-derive-internal 0.9.0",
  "proc-macro-crate",
  "proc-macro2 1.0.24",
  "syn 1.0.60",
@@ -380,10 +403,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "borsh-derive-internal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e321a130a3ac4b88eb59a6d670bde11eec9721a397b77e0f2079060e2a1b785"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.60",
+]
+
+[[package]]
 name = "borsh-schema-derive-internal"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf78ee4a98c8cb9eba1bac3d3e2a1ea3d7673c719ce691e67b5cbafc472d3b7"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "borsh-schema-derive-internal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15151a485164b319cc7a5160fe4316dc469a27993f71b73d7617dc9032ff0fd7"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
@@ -3989,8 +4034,8 @@ name = "solana-banks-client"
 version = "1.6.15"
 dependencies = [
  "bincode",
- "borsh",
- "borsh-derive",
+ "borsh 0.9.0",
+ "borsh-derive 0.9.0",
  "futures 0.3.8",
  "mio 0.7.6",
  "solana-banks-interface",
@@ -4944,8 +4989,8 @@ dependencies = [
  "assert_matches",
  "bincode",
  "blake3",
- "borsh",
- "borsh-derive",
+ "borsh 0.8.1",
+ "borsh-derive 0.8.1",
  "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
@@ -4979,8 +5024,8 @@ checksum = "7a2df39c63e21c5b58e2012e7675bed5e8dd5100470ffddedcafb78f5a7e3abe"
 dependencies = [
  "bincode",
  "blake3",
- "borsh",
- "borsh-derive",
+ "borsh 0.9.0",
+ "borsh-derive 0.9.0",
  "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
