@@ -1361,7 +1361,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         &self,
         slot: Slot,
         items: Vec<(&Pubkey, T)>,
-    ) -> Vec<Pubkey> {
+    ) -> (Vec<Pubkey>, u64) {
+        // returns (duplicate pubkey mask, insertion time us)
         let item_len = items.len();
         let potentially_new_items = items
             .into_iter()
@@ -1377,6 +1378,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let mut _reclaims = SlotList::new();
         let mut duplicate_keys = Vec::with_capacity(item_len / 100); // just an estimate
         let mut w_account_maps = self.get_account_maps_write_lock();
+        let mut insert_time = Measure::start("insert_into_primary_index");
         potentially_new_items
             .into_iter()
             .for_each(|(pubkey, new_item)| {
@@ -1391,7 +1393,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 }
             });
 
-        duplicate_keys
+        insert_time.stop();
+        (duplicate_keys, insert_time.as_us())
     }
 
     // Updates the given pubkey at the given slot with the new account information.

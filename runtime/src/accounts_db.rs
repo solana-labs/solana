@@ -165,6 +165,7 @@ pub struct ErrorCounters {
 struct GenerateIndexTimings {
     pub index_time: u64,
     pub scan_time: u64,
+    pub insertion_time_us: u64,
 }
 
 impl GenerateIndexTimings {
@@ -174,6 +175,7 @@ impl GenerateIndexTimings {
             // we cannot accurately measure index insertion time because of many threads and lock contention
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
+            ("insertion_time_us", self.insertion_time_us, i64),
         );
     }
 }
@@ -5870,45 +5872,52 @@ impl AccountsDb {
         accounts_map
     }
 
-    fn generate_index_for_slot<'a>(&self, accounts_map: GenerateIndexAccountsMap<'a>, slot: &Slot) {
-        if !accounts_map.is_empty() {
-            let items = accounts_map
-                .iter()
-                .map(|(pubkey, (_, store_id, stored_account))| {
-                    (
-                        pubkey,
-                        AccountInfo {
-                            store_id: *store_id,
-                            offset: stored_account.offset,
-                            stored_size: stored_account.stored_size,
-                            lamports: stored_account.account_meta.lamports,
-                        },
-                    )
-                })
-                .collect::<Vec<_>>();
+    fn generate_index_for_slot<'a>(
+        &self,
+        accounts_map: GenerateIndexAccountsMap<'a>,
+        slot: &Slot,
+    ) -> u64 {
+        if accounts_map.is_empty() {
+            return 0;
+        }
 
-            let dirty_pubkeys = self
-                .accounts_index
-                .insert_new_if_missing_into_primary_index(*slot, items);
+        let items = accounts_map
+            .iter()
+            .map(|(pubkey, (_, store_id, stored_account))| {
+                (
+                    pubkey,
+                    AccountInfo {
+                        store_id: *store_id,
+                        offset: stored_account.offset,
+                        stored_size: stored_account.stored_size,
+                        lamports: stored_account.account_meta.lamports,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
 
-            // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
-            // a given pubkey. If there is just a single item, there is no cleaning to
-            // be done on that pubkey. Use only those pubkeys with multiple updates.
-            if !dirty_pubkeys.is_empty() {
-                self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
-            }
+        let (dirty_pubkeys, insert_us) = self
+            .accounts_index
+            .insert_new_if_missing_into_primary_index(*slot, items);
 
-            if !self.account_indexes.is_empty() {
-                for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
-                    self.accounts_index.update_secondary_indexes(
-                        pubkey,
-                        &stored_account.account_meta.owner,
-                        stored_account.data,
-                        &self.account_indexes,
-                    );
-                }
+        // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
+        // a given pubkey. If there is just a single item, there is no cleaning to
+        // be done on that pubkey. Use only those pubkeys with multiple updates.
+        if !dirty_pubkeys.is_empty() {
+            self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
+        }
+
+        if !self.account_indexes.is_empty() {
+            for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
+                self.accounts_index.update_secondary_indexes(
+                    pubkey,
+                    &stored_account.account_meta.owner,
+                    stored_account.data,
+                    &self.account_indexes,
+                );
             }
         }
+        insert_us
     }
 
     #[allow(clippy::needless_collect)]
@@ -5923,6 +5932,7 @@ impl AccountsDb {
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
         let mut index_time = Measure::start("index");
+        let insertion_time_us = AtomicU64::new(0);
         let scan_time: u64 = slots
             .par_chunks(chunk_size)
             .map(|slots| {
@@ -5943,7 +5953,8 @@ impl AccountsDb {
                     scan_time.stop();
                     scan_time_sum += scan_time.as_us();
 
-                    self.generate_index_for_slot(accounts_map, slot);
+                    let insert_us = self.generate_index_for_slot(accounts_map, slot);
+                    insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
                 }
                 scan_time_sum
             })
@@ -5952,6 +5963,7 @@ impl AccountsDb {
         let timings = GenerateIndexTimings {
             scan_time,
             index_time: index_time.as_us(),
+            insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
         };
         timings.report();
 
