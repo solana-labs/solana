@@ -59,10 +59,37 @@ It specifies the latest slot (last_replicated_slot) for which the replica has al
 fetched the accounts information for.
 
 The `ReplRpcUpdatedSlotsServer`, this service is responsible for serving the
-ReplRpcUpdatedSlotsRequest and sends the `ReplRpcUpdatedSlotsResponse` back to the requestor.
-The response consists of a vector of new slots which is later than the specified
-last_replicated_slot.
+`ReplRpcUpdatedSlotsRequest` and sends the `ReplRpcUpdatedSlotsResponse` back to the requestor.
+The response consists of a vector of new slots the validator knows of which is later than the
+specified last_replicated_slot. This services also runs in the main validator.
 
-### AccountsDB Modifications
+The `ReplRpcAccountsRequestor`, this service is responsible for sending the request
+`ReplRpcAccountsRequest` to its peer validator or replica for the `ReplAccountInfo` for a
+slot for which it has not completed accounts db replication. The `ReplAccountInfo` contains
+the `ReplAccountMeta`, Hash and the AccountData. The `ReplAccountMeta` contains info about
+the existing `AccountMeta` in addition to the account data length in bytes.
+
+The `ReplRpcAccountsServer`, this service is reponsible for serving the `ReplRpcAccountsRequest`
+and sends `ReplRpcAccountsResponse` to the requestor. The response contains the count of the
+ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the validator
+and the replica relaying replication information. The server can stream the account information
+from its AccountCache or from the storage if already flushed.
+
+### Compatibility Consideration
+
+For protocol compatiblilty considerations, all the requests have the replication version which is
+initially set to 1. Alternatively, we can use the validator's version. The RPC server side
+shall check the request version and fail if it is not supported.
+
+### Replication Setup
+To limit adverse effects on the validator and the replica due to replication, they can be configured
+with a list of replica nodes which can form a replication pair with it. And the replica node is
+configured with the validator which can serve its requests.
+
+
+### Fault Tolerance
+The main responsibility of making sure the replication is tolerant of faults lies with the replica.
+In case of request failures, the replica shall retry the requests. 
+
 
 ### Interface
