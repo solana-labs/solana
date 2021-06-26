@@ -1,4 +1,8 @@
-use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
+use crate::{
+    account_info::AccountInfo,
+    entrypoint::ProgramResult,
+    instruction::{BudgetedInstruction, Instruction},
+};
 
 /// Invoke a cross-program instruction
 ///
@@ -52,6 +56,67 @@ pub fn invoke_signed(
 
     #[cfg(not(target_arch = "bpf"))]
     crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
+}
+
+/// Invoke a cross-program instruction with program signatures
+///
+/// Note that the program id of the instruction being issued must also be included in
+/// `account_infos`.
+
+/// Usage:
+
+/// invoke_signed_with_budget(
+///     &BudgetedInstruction{
+///         instruction: ix,
+///         budget: my_budget,
+///     },
+///     ...
+/// );
+
+pub fn invoke_signed_with_budget<'a>(
+    budgeted_instruction: &BudgetedInstruction<'a>,
+    account_infos: &[AccountInfo],
+    signers_seeds: &[&[&[u8]]],
+) -> ProgramResult {
+    // Check that the account RefCells are consistent with the request
+    for account_meta in budgeted_instruction.instruction_ref.accounts.iter() {
+        for account_info in account_infos.iter() {
+            if account_meta.pubkey == *account_info.key {
+                if account_meta.is_writable {
+                    let _ = account_info.try_borrow_mut_lamports()?;
+                    let _ = account_info.try_borrow_mut_data()?;
+                } else {
+                    let _ = account_info.try_borrow_lamports()?;
+                    let _ = account_info.try_borrow_data()?;
+                }
+                break;
+            }
+        }
+    }
+
+    #[cfg(target_arch = "bpf")]
+    {
+        let result = unsafe {
+            sol_invoke_signed_rust(
+                budgeted_instruction as *const _ as *const u8,
+                account_infos as *const _ as *const u8,
+                account_infos.len() as u64,
+                signers_seeds as *const _ as *const u8,
+                signers_seeds.len() as u64,
+            )
+        };
+        match result {
+            crate::entrypoint::SUCCESS => Ok(()),
+            _ => Err(result.into()),
+        }
+    }
+
+    #[cfg(not(target_arch = "bpf"))]
+    crate::program_stubs::sol_invoke_signed(
+        budgeted_instruction.instruction_ref,
+        account_infos,
+        signers_seeds,
+    )
 }
 
 #[cfg(target_arch = "bpf")]

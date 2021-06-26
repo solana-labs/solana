@@ -81,6 +81,11 @@ pub trait InvokeContext {
     fn get_bpf_compute_budget(&self) -> &BpfComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+    /// Replace the invocation's compute meter, and return the old one
+    fn replace_compute_meter(
+        &mut self,
+        new_compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    ) -> Rc<RefCell<dyn ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
@@ -181,6 +186,8 @@ pub struct BpfComputeBudget {
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
+    /// Number of compute units required to set up a budgeted CPI call
+    pub budgeted_invoke_context_units: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -204,6 +211,7 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
+            budgeted_invoke_context_units: 100,
         }
     }
 }
@@ -432,6 +440,16 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.compute_meter.clone()))
+    }
+    fn replace_compute_meter(
+        &mut self,
+        _new_compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    ) -> Rc<RefCell<dyn ComputeMeter>> {
+        let result = Rc::new(RefCell::new(self.compute_meter.clone()));
+        self.compute_meter = MockComputeMeter {
+            remaining: std::i64::MAX as u64,
+        };
+        result
     }
     fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {

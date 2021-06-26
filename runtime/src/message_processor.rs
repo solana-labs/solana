@@ -244,6 +244,14 @@ impl PreAccount {
 pub struct ThisComputeMeter {
     remaining: u64,
 }
+
+// TODO: convert this to a trait fn for ComputeMeter...
+impl ThisComputeMeter {
+    pub fn new(remaining: u64) -> Self {
+        Self { remaining }
+    }
+}
+
 impl ComputeMeter for ThisComputeMeter {
     fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
         let exceeded = self.remaining < amount;
@@ -450,6 +458,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
         &self.bpf_compute_budget
+    }
+
+    fn replace_compute_meter(
+        &mut self,
+        new_compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    ) -> Rc<RefCell<dyn ComputeMeter>> {
+        let old = self.compute_meter.clone();
+        self.compute_meter = new_compute_meter;
+        old.to_owned()
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()

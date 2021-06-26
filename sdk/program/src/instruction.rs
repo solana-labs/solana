@@ -249,6 +249,13 @@ pub struct Instruction {
     pub data: Vec<u8>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct BudgetedInstruction<'a> {
+    /// Compute units allocated to executing this instruction along with any CPI overhead.
+    pub budget: u64,
+    pub instruction_ref: &'a Instruction,
+}
+
 impl Instruction {
     #[deprecated(
         since = "1.6.0",
