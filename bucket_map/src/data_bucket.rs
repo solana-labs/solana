@@ -1,8 +1,6 @@
 use log::*;
 use memmap2::MmapMut;
 use rand::{thread_rng, Rng};
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use std::fs::{remove_file, OpenOptions};
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -233,7 +231,7 @@ impl DataBucket {
         let old_file = self.path.clone();
         let (new_map, new_file) =
             Self::new_map(&self.drives, self.cell_size as usize, self.capacity + 1);
-        (0..old_cap as usize).into_par_iter().for_each(|i| {
+        (0..old_cap as usize).into_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
             let new_ix = old_ix * 2;
             let dst_slice: &[u8] = &new_map[new_ix..new_ix + self.cell_size as usize];
