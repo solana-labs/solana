@@ -16,7 +16,7 @@ use std::sync::RwLock;
 pub struct BucketMap<T> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
-    bits: u64,
+    bits: u8,
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub enum BucketMapError {
 }
 
 impl<T: Clone> BucketMap<T> {
-    pub fn new(num_buckets_pow2: u64, drives: Arc<Vec<PathBuf>>) -> Self {
+    pub fn new(num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>) -> Self {
         let mut buckets = Vec::with_capacity(1 << num_buckets_pow2);
         buckets.resize_with(1 << num_buckets_pow2, || RwLock::new(None));
         Self {

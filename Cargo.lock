@@ -5266,6 +5266,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "solana-bucket-map",
  "solana-config-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
