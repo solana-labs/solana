@@ -12,16 +12,19 @@ fn bucket_map_test_mt() {
     let items = 4096;
     let tmpdir1 = std::env::temp_dir().join("bucket_map_test_mt");
     let tmpdir2 = PathBuf::from("/mnt/data/aeyakovenko").join("bucket_map_test_mt");
-    let drives = Arc::new(vec![tmpdir1, tmpdir2]);
-    for tmpdir in drives.iter() {
-        std::fs::create_dir_all(tmpdir.clone()).unwrap();
-    }
+    let paths: Vec<PathBuf> = [tmpdir1, tmpdir2]
+        .iter()
+        .filter(|x| std::fs::create_dir_all(x).is_ok())
+        .cloned()
+        .collect();
+    assert!(!paths.is_empty());
+    let drives = Arc::new(paths);
     let index = BucketMap::new(12, drives.clone());
     (0..threads).into_iter().into_par_iter().for_each(|_| {
         let key = Pubkey::new_unique();
         index.update(&key, |_| Some(vec![0u64]));
     });
-    let mut timer = Measure::start("bucket_map_test");
+    let mut timer = Measure::start("bucket_map_test_mt");
     (0..threads).into_iter().into_par_iter().for_each(|_| {
         for _ in 0..items {
             let key = Pubkey::new_unique();
@@ -38,5 +41,5 @@ fn bucket_map_test_mt() {
         total += folder_size;
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    println!("overhead: {}", total / (threads * items));
+    println!("overhead: {}bytes per item", total / (threads * items));
 }

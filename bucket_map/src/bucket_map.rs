@@ -146,7 +146,7 @@ impl<T: Clone> Bucket<T> {
     ) -> Option<(&'a IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + MAX_SEARCH {
-            let ii = i % index.capacity();
+            let ii = i % index.num_cells();
             if index.uid(ii) == 0 {
                 continue;
             }
@@ -166,7 +166,7 @@ impl<T: Clone> Bucket<T> {
     ) -> Result<u64, BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + MAX_SEARCH {
-            let ii = i as u64 % index.capacity();
+            let ii = i as u64 % index.num_cells();
             if index.uid(ii) != 0 {
                 continue;
             }
@@ -230,7 +230,7 @@ impl<T: Clone> Bucket<T> {
             //need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
             let cap_power = best_bucket.capacity;
-            let cap = best_bucket.capacity();
+            let cap = best_bucket.num_cells();
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + MAX_SEARCH as u64 {
                 let ix = i % cap;
@@ -291,7 +291,7 @@ impl<T: Clone> Bucket<T> {
                     self.index.capacity + i * 2,
                 );
                 let random = thread_rng().gen();
-                let rvs: Vec<bool> = (0..self.index.capacity())
+                let rvs: Vec<bool> = (0..self.index.num_cells())
                     .into_iter()
                     .map(|ix| {
                         if 0 != self.index.uid(ix) {
@@ -344,13 +344,20 @@ impl<T: Clone> Bucket<T> {
 
     fn bucket_index_ix(index: &DataBucket, key: &Pubkey, random: u64) -> u64 {
         let uid = Self::key_uid(key);
-        let location = uid.overflowing_add(random).0 % index.capacity();
+        let mut s = DefaultHasher::new();
+        uid.hash(&mut s);
+        //the locally generated random will make it hard for an attacker
+        //to deterministically cause all the pubkeys to land in the same
+        //location in any bucket on all validators
+        random.hash(&mut s);
+        let ix = s.finish();
+        let location = ix % index.num_cells();
         debug!(
             "INDEX_IX: {:?} uid:{} loc: {} cap:{}",
             key,
             uid,
             location,
-            index.capacity()
+            index.num_cells()
         );
         location
     }

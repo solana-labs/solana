@@ -82,7 +82,7 @@ impl DataBucket {
     }
 
     pub fn uid(&self, ix: u64) -> u64 {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
@@ -94,7 +94,7 @@ impl DataBucket {
     }
 
     pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("allocate: bad index size");
         }
         if 0 == uid {
@@ -115,7 +115,7 @@ impl DataBucket {
     }
 
     pub fn free(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("free: bad index size");
         }
         if 0 == uid {
@@ -137,7 +137,7 @@ impl DataBucket {
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -150,7 +150,7 @@ impl DataBucket {
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -165,7 +165,7 @@ impl DataBucket {
     }
 
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -178,7 +178,7 @@ impl DataBucket {
     }
 
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        if ix >= self.capacity() {
+        if ix >= self.num_cells() {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -226,7 +226,7 @@ impl DataBucket {
     }
 
     pub fn grow(&mut self) {
-        let old_cap = self.capacity();
+        let old_cap = self.num_cells();
         let old_map = &self.mmap;
         let old_file = self.path.clone();
         let (new_map, new_file) =
@@ -248,7 +248,7 @@ impl DataBucket {
         self.capacity = self.capacity + 1;
         remove_file(old_file).unwrap();
     }
-    pub fn capacity(&self) -> u64 {
+    pub fn num_cells(&self) -> u64 {
         1u64 << self.capacity
     }
 }
