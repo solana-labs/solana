@@ -9,6 +9,7 @@ members = [
     "banks-client",
     "banks-interface",
     "banks-server",
+    "bucket_map",
     "clap-utils",
     "cli-config",
     "cli-output",

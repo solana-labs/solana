@@ -14,7 +14,6 @@ pub mod bank_forks;
 pub mod bank_utils;
 mod blockhash_queue;
 pub mod bloom;
-pub mod bucket_map;
 pub mod builtins;
 pub mod commitment;
 pub mod contains;

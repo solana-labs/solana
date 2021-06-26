@@ -1,24 +1,20 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::accounts_db::AccountInfo;
 use crate::data_bucket::DataBucket;
 use log::*;
 use rand::thread_rng;
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use solana_sdk::slot_history::Slot;
 use std::convert::TryInto;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-pub type SlotInfo = (Slot, AccountInfo);
-pub type SlotSlice = [SlotInfo];
-
-pub struct BucketMap {
-    buckets: Vec<RwLock<Option<Bucket>>>,
+pub struct BucketMap<T> {
+    buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
     bits: u64,
 }
@@ -29,7 +25,7 @@ pub enum BucketMapError {
     IndexNoSpace(u8),
 }
 
-impl BucketMap {
+impl<T: Clone> BucketMap<T> {
     pub fn new(num_buckets_pow2: u64, drives: Arc<Vec<PathBuf>>) -> Self {
         let mut buckets = Vec::with_capacity(1 << num_buckets_pow2);
         buckets.resize_with(1 << num_buckets_pow2, || RwLock::new(None));
@@ -39,7 +35,7 @@ impl BucketMap {
             bits: num_buckets_pow2,
         }
     }
-    pub fn read_value(&self, key: &Pubkey) -> Option<Vec<SlotInfo>> {
+    pub fn read_value(&self, key: &Pubkey) -> Option<Vec<T>> {
         let ix = self.bucket_ix(key);
         self.buckets[ix].read().unwrap().as_ref().and_then(|x| {
             let slice = x.read_value(key)?;
@@ -59,7 +55,7 @@ impl BucketMap {
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F) -> ()
     where
-        F: Fn(Option<&[SlotInfo]>) -> Option<Vec<SlotInfo>>,
+        F: Fn(Option<&[T]>) -> Option<Vec<T>>,
     {
         let ix = self.bucket_ix(key);
         let mut bucket = self.buckets[ix].write().unwrap();
@@ -97,7 +93,7 @@ impl BucketMap {
     }
 }
 
-struct Bucket {
+struct Bucket<T> {
     drives: Arc<Vec<PathBuf>>,
     //index
     index: DataBucket,
@@ -105,6 +101,7 @@ struct Bucket {
     random: u64,
     //data buckets to store SlotSlice up to a power of 2 in len
     data: Vec<DataBucket>,
+    _phantom: PhantomData<T>,
 }
 
 #[repr(C)]
@@ -126,7 +123,7 @@ impl IndexEntry {
 
 const MAX_SEARCH: u64 = 16;
 
-impl Bucket {
+impl<T: Clone> Bucket<T> {
     fn new(drives: Arc<Vec<PathBuf>>) -> Self {
         let index = DataBucket::new(drives.clone(), 1, std::mem::size_of::<IndexEntry>() as u64);
         Self {
@@ -134,6 +131,7 @@ impl Bucket {
             drives,
             index,
             data: vec![],
+            _phantom: PhantomData::default(),
         }
     }
 
@@ -141,7 +139,11 @@ impl Bucket {
         Self::bucket_find_entry(&self.index, key, self.random)
     }
 
-    fn bucket_find_entry<'a>(index: &'a DataBucket, key: &Pubkey, random: u64) -> Option<(&'a IndexEntry, u64)> {
+    fn bucket_find_entry<'a>(
+        index: &'a DataBucket,
+        key: &Pubkey,
+        random: u64,
+    ) -> Option<(&'a IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + MAX_SEARCH {
             let ii = i % index.capacity();
@@ -188,7 +190,7 @@ impl Bucket {
         Self::bucket_create_key(&self.index, key, Self::key_uid(key), self.random)
     }
 
-    pub fn read_value(&self, key: &Pubkey) -> Option<&[SlotInfo]> {
+    pub fn read_value(&self, key: &Pubkey) -> Option<&[T]> {
         debug!("READ_VALUE: {:?}", key);
         let (elem, ix) = self.find_entry(key)?;
         let uid = self.index.uid(ix);
@@ -200,7 +202,7 @@ impl Bucket {
         Some(slice)
     }
 
-    fn try_write(&mut self, key: &Pubkey, data: &SlotSlice) -> Result<(), BucketMapError> {
+    fn try_write(&mut self, key: &Pubkey, data: &[T]) -> Result<(), BucketMapError> {
         let index_entry = self.find_entry(key);
         let (elem, elem_ix) = if index_entry.is_none() {
             let ii = self.create_key(key)?;
@@ -218,8 +220,7 @@ impl Bucket {
         if best_fit_bucket == elem.data_bucket && elem.num_slots > 0 {
             //in place update
             let elem_loc = elem.data_loc(current_bucket);
-            let slice: &mut [SlotInfo] =
-                current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
+            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
             let elem: &mut IndexEntry = self.index.get_mut(elem_ix);
             assert!(current_bucket.uid(elem_loc) == elem_uid);
             elem.num_slots = data.len() as u64;
@@ -304,7 +305,10 @@ impl Bucket {
                             let new_elem: &mut IndexEntry = index.get_mut(new_ix);
                             *new_elem = *elem;
                             let dbg_elem: IndexEntry = *new_elem;
-                            assert_eq!(Self::bucket_find_entry(&index, &elem.key, random).unwrap(), (&dbg_elem, new_ix));
+                            assert_eq!(
+                                Self::bucket_find_entry(&index, &elem.key, random).unwrap(),
+                                (&dbg_elem, new_ix)
+                            );
                         }
                         true
                     })
@@ -328,7 +332,7 @@ impl Bucket {
                 self.data.push(DataBucket::new(
                     self.drives.clone(),
                     1 << i,
-                    std::mem::size_of::<SlotInfo>() as u64,
+                    std::mem::size_of::<T>() as u64,
                 ))
             }
         }
@@ -374,14 +378,11 @@ mod tests {
         std::fs::create_dir_all(tmpdir.clone()).unwrap();
         let drives = Arc::new(vec![tmpdir.clone()]);
         let index = BucketMap::new(1, drives);
-        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
-        assert_eq!(
-            index.read_value(&key),
-            Some(vec![(0, AccountInfo::default())])
-        );
+        index.update(&key, |_| Some(vec![0]));
+        assert_eq!(index.read_value(&key), Some(vec![0]));
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_update() {
         let key = Pubkey::new_unique();
@@ -389,19 +390,13 @@ mod tests {
         std::fs::create_dir_all(tmpdir.clone()).unwrap();
         let drives = Arc::new(vec![tmpdir.clone()]);
         let index = BucketMap::new(1, drives);
-        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
-        assert_eq!(
-            index.read_value(&key),
-            Some(vec![(0, AccountInfo::default())])
-        );
-        index.update(&key, |_| Some(vec![(1, AccountInfo::default())]));
-        assert_eq!(
-            index.read_value(&key),
-            Some(vec![(1, AccountInfo::default())])
-        );
+        index.update(&key, |_| Some(vec![0]));
+        assert_eq!(index.read_value(&key), Some(vec![0]));
+        index.update(&key, |_| Some(vec![1]));
+        assert_eq!(index.read_value(&key), Some(vec![1]));
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_delete() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_delete");
@@ -411,26 +406,20 @@ mod tests {
         for i in 0..10 {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
-    
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
-    
+
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
+
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
-    
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
             index.delete_key(&key);
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_delete_2() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_delete_2");
@@ -440,27 +429,20 @@ mod tests {
         for i in 0..100 {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
-    
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
-    
+
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
+
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
-    
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
             index.delete_key(&key);
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
-    
+
     #[test]
     fn bucket_map_test_n_drives() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_n_drives");
@@ -469,11 +451,8 @@ mod tests {
         let index = BucketMap::new(2, drives);
         for i in 0..100 {
             let key = Pubkey::new_unique();
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
@@ -487,19 +466,13 @@ mod tests {
         for k in 0..keys.len() {
             let key = &keys[k];
             let i = read_be_u64(key.as_ref());
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
             for j in 0..k {
                 let key = &keys[j];
                 let i = read_be_u64(key.as_ref());
                 debug!("READ: {:?} {}", key, i);
-                assert_eq!(
-                    index.read_value(&key),
-                    Some(vec![(i, AccountInfo::default())])
-                );
+                assert_eq!(index.read_value(&key), Some(vec![i]));
             }
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
@@ -514,19 +487,13 @@ mod tests {
         let keys: Vec<Pubkey> = (0..20).into_iter().map(|_| Pubkey::new_unique()).collect();
         for key in keys.iter() {
             let i = read_be_u64(key.as_ref());
-            index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+            index.update(&key, |_| Some(vec![i]));
+            assert_eq!(index.read_value(&key), Some(vec![i]));
         }
         for key in keys.iter() {
             let i = read_be_u64(key.as_ref());
             debug!("READ: {:?} {}", key, i);
-            assert_eq!(
-                index.read_value(&key),
-                Some(vec![(i, AccountInfo::default())])
-            );
+            assert_eq!(index.read_value(&key), Some(vec![i]));
         }
         for k in 0..keys.len() {
             let key = &keys[k];
@@ -535,10 +502,7 @@ mod tests {
             for k in (k + 1)..keys.len() {
                 let key = &keys[k];
                 let i = read_be_u64(key.as_ref());
-                assert_eq!(
-                    index.read_value(&key),
-                    Some(vec![(i, AccountInfo::default())])
-                );
+                assert_eq!(index.read_value(&key), Some(vec![i]));
             }
         }
         std::fs::remove_dir_all(tmpdir).unwrap();

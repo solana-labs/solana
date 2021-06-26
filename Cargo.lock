@@ -4214,6 +4214,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bucket-map"
+version = "1.8.0"
+dependencies = [
+ "log 0.4.11",
+ "memmap2 0.2.3",
+ "rand 0.7.3",
+ "rayon",
+ "solana-logger 1.8.0",
+ "solana-measure",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-budget-program"
 version = "1.8.0"
 dependencies = [
