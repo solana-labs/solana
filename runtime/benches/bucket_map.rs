@@ -3,6 +3,7 @@
 extern crate test;
 use solana_runtime::accounts_db::AccountInfo;
 use solana_runtime::bucket_map::BucketMap;
+use std::path::PathBuf;
 use std::collections::hash_map::HashMap;
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
@@ -33,7 +34,7 @@ fn bucket_map_bench_insert_1(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bucket_map_bench_insert_16x512_baseline(bencher: &mut Bencher) {
+fn bucket_map_bench_insert_16x32_baseline(bencher: &mut Bencher) {
     let index = RwLock::new(HashMap::new());
     (0..16).into_iter().into_par_iter().for_each(|_| {
         let key = Pubkey::new_unique();
@@ -41,7 +42,7 @@ fn bucket_map_bench_insert_16x512_baseline(bencher: &mut Bencher) {
     });
     bencher.iter(|| {
         (0..16).into_iter().into_par_iter().for_each(|_| {
-            for _ in 0..512 {
+            for _ in 0..32 {
                 let key = Pubkey::new_unique();
                 index.write().unwrap().insert(key, vec![(0, AccountInfo::default())]);
             }
@@ -50,8 +51,8 @@ fn bucket_map_bench_insert_16x512_baseline(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bucket_map_bench_insert_16x512(bencher: &mut Bencher) {
-    let tmpdir = std::env::temp_dir().join("bucket_map_bench_insert_16x512");
+fn bucket_map_bench_insert_16x32(bencher: &mut Bencher) {
+    let tmpdir = std::env::temp_dir().join("bucket_map_bench_insert_16x32");
     std::fs::create_dir_all(tmpdir.clone()).unwrap();
     let drives = Arc::new(vec![tmpdir.clone()]);
     let index = BucketMap::new(4, drives);
@@ -61,7 +62,7 @@ fn bucket_map_bench_insert_16x512(bencher: &mut Bencher) {
     });
     bencher.iter(|| {
         (0..16).into_iter().into_par_iter().for_each(|_| {
-            for _ in 0..512 {
+            for _ in 0..32 {
                 let key = Pubkey::new_unique();
                 index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
             }
@@ -69,3 +70,29 @@ fn bucket_map_bench_insert_16x512(bencher: &mut Bencher) {
     });
     std::fs::remove_dir_all(tmpdir).unwrap();
 }
+
+//#[bench]
+//fn bucket_map_bench_insert_32x32(bencher: &mut Bencher) {
+//    let tmpdir1 = std::env::temp_dir().join("bucket_map_bench_insert_32x32");
+//    let tmpdir2 = PathBuf::from("/mnt/data/aeyakovenko").join("bucket_map_bench_insert_32x32");
+//    let drives = Arc::new(vec![tmpdir1, tmpdir2]);
+//    for tmpdir in drives.iter() {  
+//        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+//    }
+//    let index = BucketMap::new(8, drives.clone());
+//    (0..32).into_iter().into_par_iter().for_each(|_| {
+//        let key = Pubkey::new_unique();
+//        index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+//    });
+//    bencher.iter(|| {
+//        (0..32).into_iter().into_par_iter().for_each(|_| {
+//            for _ in 0..32 {
+//                let key = Pubkey::new_unique();
+//                index.update(&key, |_| Some(vec![(0, AccountInfo::default())]));
+//            }
+//        })
+//    });
+//    for tmpdir in drives.iter() {  
+//        std::fs::remove_dir_all(tmpdir).unwrap();
+//    }
+//}
