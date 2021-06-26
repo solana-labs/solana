@@ -4217,6 +4217,7 @@ dependencies = [
 name = "solana-bucket-map"
 version = "1.8.0"
 dependencies = [
+ "fs_extra",
  "log 0.4.11",
  "memmap2 0.2.3",
  "rand 0.7.3",

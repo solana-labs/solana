@@ -87,7 +87,7 @@ impl<T: Clone> BucketMap<T> {
             }
         }
     }
-    fn bucket_ix(&self, key: &Pubkey) -> usize {
+    pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         let location = read_be_u64(key.as_ref());
         (location >> (64 - self.bits)) as usize
     }
