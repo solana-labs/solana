@@ -104,7 +104,7 @@ impl DataBucket {
         }
         let mut e = Err(DataBucketError::AlreadyAllocated);
         let ix = (ix * self.cell_size) as usize;
-        println!("ALLOC {} {}", ix, uid);
+        debug!("ALLOC {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
@@ -124,12 +124,12 @@ impl DataBucket {
             panic!("free: bad uid");
         }
         let ix = (ix * self.cell_size) as usize;
-        println!("FREE {} {}", ix, uid);
+        debug!("FREE {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         let mut e = Err(DataBucketError::InvalidFree);
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
-            println!("FREE uid: {}", hdr.as_ref().unwrap().uid());
+            debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());
             if hdr.as_ref().unwrap().unlock(uid) {
                 self.used.fetch_sub(1, Ordering::Relaxed);
                 e = Ok(());
