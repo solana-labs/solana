@@ -1276,12 +1276,15 @@ impl BankingStage {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
         {
-            let cost_model_readonly = cost_model.read().unwrap();
-            let mut cost_tracker_mutable = cost_tracker.write().unwrap();
+            //let cost_model_readonly = cost_model.read().unwrap();
+            //let mut cost_tracker_mutable = cost_tracker.write().unwrap();
             transactions.iter().enumerate().for_each(|(index, tx)| {
                 if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
-                    cost_model_readonly.calculate_cost_no_alloc(&tx.transaction(), &mut tx_cost);
-                    cost_tracker_mutable.add_transaction(
+                    cost_model
+                        .read()
+                        .unwrap()
+                        .calculate_cost_no_alloc(tx.transaction(), &mut tx_cost);
+                    cost_tracker.write().unwrap().add_transaction(
                         &tx_cost.writable_accounts,
                         &(tx_cost.account_access_cost + tx_cost.execution_cost),
                     );

@@ -1719,7 +1719,7 @@ impl ReplayStage {
                     replay_vote_sender,
                     verify_recyclers,
                 );
-                Self::update_cost_model(&cost_model, &bank_progress.replay_stats.execute_timings);
+                Self::update_cost_model(cost_model, &bank_progress.replay_stats.execute_timings);
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -1915,7 +1915,7 @@ impl ReplayStage {
         let mut cost_model_mutable = cost_model.write().unwrap();
         for (program_id, stats) in &execute_timings.details.per_program_timings {
             let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(&program_id, &cost) {
+            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
                 Ok(c) => {
                     debug!(
                         "after replayed into bank, instruction {:?} has averaged cost {}",

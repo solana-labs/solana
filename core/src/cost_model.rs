@@ -131,7 +131,7 @@ impl CostModel {
                 cost.account_access_cost += NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
             }
         });
-        cost.execution_cost = self.find_transaction_cost(&transaction);
+        cost.execution_cost = self.find_transaction_cost(transaction);
         debug!("transaction {:?} has cost {:?}", transaction, cost);
     }
 
