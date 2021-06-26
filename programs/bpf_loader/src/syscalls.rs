@@ -1484,7 +1484,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         *result = call_with_budget_rust(
-            &self,
+            self,
             budgeted_instruction_addr,
             account_infos_addr,
             account_infos_len,
@@ -1521,8 +1521,7 @@ fn call_with_budget_rust<'a>(
         enforce_aligned_host_addrs,
     )?;
 
-    let ix_addr_ptr = bix.instruction_ref as *const _ as *const u8;
-    let ix_addr: u64 = unsafe { std::mem::transmute(ix_addr_ptr) };
+    let ix_addr = bix.instruction_ref as *const _ as u64;
 
     let mut outer_compute_meter = invoke_context.get_compute_meter();
     let outer_remaining = outer_compute_meter.borrow().get_remaining();
