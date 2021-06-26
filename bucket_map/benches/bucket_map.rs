@@ -2,14 +2,14 @@
 
 extern crate test;
 use rayon::prelude::*;
-use solana_runtime::accounts_db::AccountInfo;
-use solana_runtime::bucket_map::BucketMap;
+use solana_bucket_map::bucket_map::BucketMap;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use test::Bencher;
+
+type AccountInfo = u64;
 
 #[bench]
 fn bucket_map_bench_hashmap_baseline(bencher: &mut Bencher) {

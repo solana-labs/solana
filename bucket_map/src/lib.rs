@@ -2,6 +2,3 @@
 #![allow(clippy::integer_arithmetic)]
 pub mod bucket_map;
 mod data_bucket;
-
-#[macro_use]
-extern crate log;
