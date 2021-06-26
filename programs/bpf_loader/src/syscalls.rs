@@ -76,6 +76,8 @@ pub enum SyscallError {
     TooManyAccounts,
     #[error("Overlapping copy")]
     CopyOverlapping,
+    #[error("Inner computational budget exceeded")]
+    InnerComputationalBudgetExceeded,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -1546,7 +1548,18 @@ fn call_with_budget_rust<'a>(
         signers_seeds_addr,
         signers_seeds_len,
         memory_mapping,
-    )?;
+    )
+    .map_err(|e| match e {
+        EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
+            InstructionError::ComputationalBudgetExceeded,
+        ))) => EbpfError::UserError(BpfError::SyscallError(
+            SyscallError::InnerComputationalBudgetExceeded,
+        )),
+        res => res,
+    })?;
+    // It is not possible for the outer context to fail, since
+    // inner_compute_budget <= outer_compute_meter.remaining
+    assert!(inner_compute_budget >= inner_compute_meter.borrow().get_remaining());
     outer_compute_meter
         .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
     let mut invoke_context = syscall.get_context_mut()?;
