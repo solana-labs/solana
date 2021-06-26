@@ -1513,11 +1513,15 @@ impl fmt::Display for CliInflation {
             "Staking rate:            {:>5.2}%",
             self.current_rate.validator * 100.
         )?;
-        writeln!(
-            f,
-            "Foundation rate:         {:>5.2}%",
-            self.current_rate.foundation * 100.
-        )
+
+        if self.current_rate.foundation > 0. {
+            writeln!(
+                f,
+                "Foundation rate:         {:>5.2}%",
+                self.current_rate.foundation * 100.
+            )?;
+        }
+        Ok(())
     }
 }
 
