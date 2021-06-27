@@ -4231,7 +4231,15 @@ impl AccountsDb {
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
         let get_hashes = || {
-            keys.par_chunks(chunks)
+            let mut hashes = vec![];
+            for ix in 0..self.accounts_index.account_maps.num_buckets() {
+                let keys = self.accounts_index.account_maps.keys(ix);
+                if keys.is_none() {
+                    continue();
+                }
+                let mut keys = keys.unwrap();
+                keys.par_sort_unstable();
+                let new_hashes = keys.par_chunks(chunks)
                 .map(|pubkeys| {
                     let mut sum = 0u128;
                     let result: Vec<Hash> = pubkeys
@@ -4289,7 +4297,9 @@ impl AccountsDb {
                     *total =
                         AccountsHash::checked_cast_for_capitalization(*total as u128 + sum);
                     result
-                }).collect()
+                });
+                hashes.extend(new_hashes);
+            }
         };
 
         let hashes: Vec<Vec<Hash>> = if check_hash {

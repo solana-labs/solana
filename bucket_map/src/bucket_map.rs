@@ -35,6 +35,12 @@ impl<T: Clone> BucketMap<T> {
             bits: num_buckets_pow2,
         }
     }
+    pub fn num_buckets(&self)-> usize {
+        self.buckets.len()
+    }
+    pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
+        Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
+    }
     pub fn read_value(&self, key: &Pubkey) -> Option<Vec<T>> {
         let ix = self.bucket_ix(key);
         self.buckets[ix].read().unwrap().as_ref().and_then(|x| {
@@ -133,6 +139,18 @@ impl<T: Clone> Bucket<T> {
             data: vec![],
             _phantom: PhantomData::default(),
         }
+    }
+
+    fn keys(&self) -> Vec<Pubkey> {
+        let mut rv = vec![];
+        for i in 0..self.index.num_cells() {
+            if self.index.uid(i) == 0 {
+                continue;
+            }
+            let ix: &IndexEntry = self.index.get(i);
+            rv.push(ix.key);
+        }
+        rv
     }
 
     fn find_entry(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {

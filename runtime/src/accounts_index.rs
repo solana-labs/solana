@@ -15,8 +15,8 @@ use solana_sdk::{
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
 use std::{
-    collections::HashSet,
     collections::BTreeMap,
+    collections::HashSet,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
@@ -560,7 +560,7 @@ type AccountMapsReadLock<T> = AccountMap<AccountMapEntry<T>>;
 
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
-    pub account_maps: RwLock<MapType<T>>,
+    account_maps: RwLock<MapType<T>>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
