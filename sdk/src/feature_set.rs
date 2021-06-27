@@ -6,6 +6,11 @@ use solana_sdk::{
 };
 use std::collections::{HashMap, HashSet};
 
+pub mod expanded_compute_unit_syscalls {
+    // TODO: replace by team
+    solana_sdk::declare_id!("GH4auHBrmun5EYthnRw8sQ6JZhGWGsUJNPzuNGKEq37C");
+}
+
 pub mod instructions_sysvar_enabled {
     solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
 }

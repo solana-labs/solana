@@ -20,8 +20,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        sysvar_via_syscall, update_data_on_realloc,
+        enforce_aligned_host_addrs, expanded_compute_unit_syscalls, keccak256_syscall_enabled,
+        memory_ops_syscalls, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -196,6 +196,8 @@ pub fn bind_syscall_context_objects<'a>(
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let enforce_aligned_host_addrs =
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
+    let expanded_compute_unit_syscalls =
+        invoke_context.is_feature_active(&expanded_compute_unit_syscalls::id());
 
     // Syscall functions common across languages
 
@@ -228,7 +230,11 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallLogBpfComputeUnits {
-            cost: 0,
+            cost: if expanded_compute_unit_syscalls {
+                bpf_compute_budget.log_compute_units_cost
+            } else {
+                0
+            },
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
@@ -245,15 +251,15 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-
-    vm.bind_syscall_context_object(
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        expanded_compute_unit_syscalls,
         Box::new(SyscallRemainingBpfComputeUnits {
-            cost: 0,
+            cost: bpf_compute_budget.get_compute_units_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-        None,
-    )?;
+    );
 
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
