@@ -623,7 +623,7 @@ static uint64_t sol_invoke(
  * Internal cross-program invocation function
  */
 uint64_t sol_invoke_signed_with_budget_c(
-  const SolBudInstruction *budgeted_instruction,
+  const SolBudgetedInstruction *budgeted_instruction,
   const SolAccountInfo *account_infos,
   int account_infos_len,
   const SolSignerSeeds *signers_seeds,
@@ -648,10 +648,9 @@ static uint64_t sol_invoke_signed_with_budget(
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  const SolBudgetedInstruction *budgeted_instruction =
-    &struct SolBudgetedInstruction budget instruction;
+  const SolBudgetedInstruction budgeted_instruction = { budget, instruction };
   return sol_invoke_signed_with_budget_c(
-    budgeted_instruction,
+    &budgeted_instruction,
     account_infos,
     account_infos_len,
     signers_seeds,
