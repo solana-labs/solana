@@ -101,12 +101,12 @@ To sign an account with program derived addresses, a program may
 `invoke_signed()`.
 
 ```rust,ignore
-        invoke_signed(
-            &instruction,
-            accounts,
-            &[&["First addresses seed"],
-              &["Second addresses first seed", "Second addresses second seed"]],
-        )?;
+invoke_signed(
+    &instruction,
+    accounts,
+    &[&["First addresses seed"],
+      &["Second addresses first seed", "Second addresses second seed"]],
+)?;
 ```
 
 ### Limiting the compute units a CPI invocation can consume
@@ -116,7 +116,7 @@ Programs can limit the compute budget available to the instruction via the
 If the CPI instruction invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::Custom(solana_program::program::BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)`, which has a value of `0x0b9f_05c1`, which can then be handled by the caller.
 
 Example usage
-```
+```rust, ignore
 let ret = invoke_signed_with_budget(
     &instruction,
     25_000,
