@@ -159,6 +159,7 @@ pub mod dedupe_config_program_signers {
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
+        (expanded_compute_unit_syscalls::id(), "expanded set of compute unit-related syscalls"),
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
