@@ -119,7 +119,7 @@ Example usage
 ```rust, ignore
 let ret = invoke_signed_with_budget(
     &instruction,
-    25_000,
+    25_000, // set the compute budget for the instruction to be 25,000
     accounts,
     &[&["First addresses seed"],
       &["Second addresses first seed", "Second addresses second seed"]],
