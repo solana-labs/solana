@@ -109,7 +109,7 @@ invoke_signed(
 )?;
 ```
 
-### Limiting the compute units a CPI invocation can consume
+### Limiting the compute units a cross-program invocation can consume
 
 Programs can limit the compute budget available to the instruction via the
 `invoke_with_budget` and `invoke_signed_with_budget` calls.
