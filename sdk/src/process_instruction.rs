@@ -186,7 +186,7 @@ pub struct BpfComputeBudget {
     pub get_compute_units_cost: u64,
     /// Number of compute units consumed to log the remaining compute units in the
     /// ComputerMeter
-    log_compute_units_cost: u64,
+    pub log_compute_units_cost: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
