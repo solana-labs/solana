@@ -560,7 +560,7 @@ type AccountMapsReadLock<T> = AccountMap<AccountMapEntry<T>>;
 
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
-    account_maps: RwLock<MapType<T>>,
+    pub account_maps: MapType<T>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
