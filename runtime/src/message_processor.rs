@@ -228,6 +228,10 @@ impl PreAccount {
         self.account.borrow().lamports
     }
 
+    pub fn executable(&self) -> bool {
+        self.account.borrow().executable
+    }
+
     pub fn is_zeroed(buf: &[u8]) -> bool {
         const ZEROS_LEN: usize = 1024;
         static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
@@ -1032,7 +1036,7 @@ impl MessageProcessor {
                         pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
-                        if is_writable && !account.executable {
+                        if is_writable && !pre_account.executable() {
                             pre_account.update(&account);
                         }
                         return Ok(());
