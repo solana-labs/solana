@@ -5,8 +5,10 @@ use {
         pubkey::Pubkey,
     },
     solana_program_test::*,
-    solana_sdk::{signature::Signer, transaction::Transaction, log::sol_log_compute_units, entrypoint::ProgramResult,
-        account_info::AccountInfo},
+    solana_sdk::{
+        account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_compute_units,
+        signature::Signer, transaction::Transaction,
+    },
     std::str::FromStr,
 };
 
@@ -40,15 +42,21 @@ async fn test_cpi_budgeted_early_termination() {
         processor!(process_instruction),
     );
 
-    let mut context = prog_test
-        .start_with_context()
-        .await;
+    let mut context = prog_test.start_with_context().await;
 
     let transaction = Transaction::new_signed_with_payer(
-        &[Instruction::new_with_bincode(program_id, &[0], vec![AccountMeta::new_readonly(program_id_inner, false)])],
+        &[Instruction::new_with_bincode(
+            program_id,
+            &[0],
+            vec![AccountMeta::new_readonly(program_id_inner, false)],
+        )],
         Some(&context.payer.pubkey()),
         &[&context.payer],
         context.last_blockhash,
     );
-    context.banks_client.process_transaction(transaction).await.unwrap();
+    context
+        .banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap();
 }
