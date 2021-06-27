@@ -41,13 +41,14 @@ impl<T: Clone> BucketMap<T> {
     pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
     }
+    pub fn values(&self, ix: usize) -> Option<Vec<Vec<T>>> {
+        Some(self.buckets[ix].read().unwrap().as_ref()?.values())
+    }
     pub fn read_value(&self, key: &Pubkey) -> Option<Vec<T>> {
         let ix = self.bucket_ix(key);
         self.buckets[ix].read().unwrap().as_ref().and_then(|x| {
             let slice = x.read_value(key)?;
-            let mut vec = Vec::with_capacity(slice.len());
-            vec.extend_from_slice(slice);
-            Some(vec)
+            Some(slice.to_vec())
         })
     }
 
@@ -125,6 +126,21 @@ impl IndexEntry {
     fn data_loc(&self, bucket: &DataBucket) -> u64 {
         self.data_location << (bucket.capacity - self.create_bucket_capacity)
     }
+
+    fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<&'a [T]> {
+        let data_bucket = &bucket.data[self.data_bucket as usize];
+        let loc = self.data_loc(data_bucket);
+        let uid = Self::key_uid(&self.key);
+        assert_eq!(uid, bucket.data[self.data_bucket as usize].uid(loc));
+        let slice = bucket.data[self.data_bucket as usize].get_cell_slice(loc, self.num_slots);
+        Some(slice)
+    }
+    fn key_uid(key: &Pubkey) -> u64 {
+        let mut s = DefaultHasher::new();
+        key.hash(&mut s);
+        s.finish().max(1u64)
+    }
+
 }
 
 const MAX_SEARCH: u64 = 16;
@@ -149,6 +165,22 @@ impl<T: Clone> Bucket<T> {
             }
             let ix: &IndexEntry = self.index.get(i);
             rv.push(ix.key);
+        }
+        rv
+    }
+
+    fn values(&self) -> Vec<Vec<T>> {
+        let mut rv = vec![];
+        for i in 0..self.index.num_cells() {
+            if self.index.uid(i) == 0 {
+                continue;
+            }
+            let ix: &IndexEntry = self.index.get(i);
+            let val = ix.read_value(self);
+            if val.is_none() {
+                continue;
+            }
+            rv.push(val.unwrap().to_vec());
         }
         rv
     }
@@ -205,19 +237,13 @@ impl<T: Clone> Bucket<T> {
     }
 
     fn create_key(&self, key: &Pubkey) -> Result<u64, BucketMapError> {
-        Self::bucket_create_key(&self.index, key, Self::key_uid(key), self.random)
+        Self::bucket_create_key(&self.index, key, IndexEntry::key_uid(key), self.random)
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<&[T]> {
         debug!("READ_VALUE: {:?}", key);
-        let (elem, ix) = self.find_entry(key)?;
-        let uid = self.index.uid(ix);
-        let data_bucket = &self.data[elem.data_bucket as usize];
-        let loc = elem.data_loc(data_bucket);
-        debug!("READ_VALUE: {:?} {} {}", key, ix, loc);
-        assert_eq!(uid, self.data[elem.data_bucket as usize].uid(loc));
-        let slice = self.data[elem.data_bucket as usize].get_cell_slice(loc, elem.num_slots);
-        Some(slice)
+        let (elem, _) = self.find_entry(key)?;
+        elem.read_value(self)
     }
 
     fn try_write(&mut self, key: &Pubkey, data: &[T]) -> Result<(), BucketMapError> {
@@ -361,7 +387,7 @@ impl<T: Clone> Bucket<T> {
     }
 
     fn bucket_index_ix(index: &DataBucket, key: &Pubkey, random: u64) -> u64 {
-        let uid = Self::key_uid(key);
+        let uid = IndexEntry::key_uid(key);
         let mut s = DefaultHasher::new();
         uid.hash(&mut s);
         //the locally generated random will make it hard for an attacker
@@ -380,11 +406,6 @@ impl<T: Clone> Bucket<T> {
         location
     }
 
-    fn key_uid(key: &Pubkey) -> u64 {
-        let mut s = DefaultHasher::new();
-        key.hash(&mut s);
-        s.finish().max(1u64)
-    }
 }
 
 fn read_be_u64(input: &[u8]) -> u64 {
