@@ -123,12 +123,12 @@ let ret = invoke_signed_with_budget(
     accounts,
     &[&["First addresses seed"],
       &["Second addresses first seed", "Second addresses second seed"]],
-  );
-  if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
-      msg!("inner CPI failed to complete");
-  } else {
-      ret?;
-  }
+);
+if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
+    msg!("inner CPI failed to complete");
+} else {
+    ret?;
+}
 ```
 
 ### Call Depth
