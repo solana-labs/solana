@@ -20,16 +20,12 @@ pub fn process_instruction(
     for _ in 0..7 {
         sol_log_compute_units();
         let ix = Instruction::new_with_bincode(*inner_program_info.key, &[0], vec![]);
-
-        match invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..]) {
-            Err(e) => {
-                if e == ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED) {
-                    msg!("inner CPI failed to complete");
-                } else {
-                    Err(e)?;
-                }
-            }
-            _ => (),
+        let ret =
+            invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..]);
+        if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
+            msg!("inner CPI failed to complete");
+        } else {
+            ret?;
         }
     }
     sol_log_compute_units();

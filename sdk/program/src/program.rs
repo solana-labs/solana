@@ -12,6 +12,18 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
     invoke_signed(instruction, account_infos, &[])
 }
 
+/// Invoke a cross-program instruction with a budget for the inner CPI call
+///
+/// Note that the program id of the instruction being issued must also be included in
+/// `account_infos`.
+pub fn invoke_with_budget(
+    instruction: &Instruction,
+    budget: u64,
+    account_infos: &[AccountInfo],
+) -> ProgramResult {
+    invoke_signed_with_budget(instruction, budget, account_infos, &[])
+}
+
 /// Invoke a cross-program instruction with program signatures
 ///
 /// Note that the program id of the instruction being issued must also be included in
