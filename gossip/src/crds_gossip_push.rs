@@ -16,7 +16,7 @@ use {
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
-        weighted_shuffle::weighted_shuffle,
+        weighted_shuffle::WeightedShuffle,
     },
     bincode::serialized_size,
     indexmap::map::IndexMap,
@@ -119,6 +119,7 @@ impl CrdsGossipPush {
         if peer_stake_total < prune_stake_threshold {
             return Vec::new();
         }
+        let mut rng = rand::thread_rng();
         let shuffled_staked_peers = {
             let peers: Vec<_> = peers
                 .iter()
@@ -126,11 +127,9 @@ impl CrdsGossipPush {
                 .filter_map(|(peer, _)| Some((*peer, *stakes.get(peer)?)))
                 .filter(|(_, stake)| *stake > 0)
                 .collect();
-            let mut seed = [0; 32];
-            rand::thread_rng().fill(&mut seed[..]);
             let weights: Vec<_> = peers.iter().map(|(_, stake)| *stake).collect();
-            weighted_shuffle(&weights, seed)
-                .into_iter()
+            WeightedShuffle::new(&mut rng, &weights)
+                .unwrap()
                 .map(move |i| peers[i])
         };
         let mut keep = HashSet::new();
@@ -282,11 +281,7 @@ impl CrdsGossipPush {
             return;
         }
         let num_bloom_items = MIN_NUM_BLOOM_ITEMS.max(network_size);
-        let shuffle = {
-            let mut seed = [0; 32];
-            rng.fill(&mut seed[..]);
-            weighted_shuffle(&weights, seed).into_iter()
-        };
+        let shuffle = WeightedShuffle::new(&mut rng, &weights).unwrap();
         for peer in shuffle.map(|i| peers[i].id) {
             if new_items.len() >= need {
                 break;
@@ -320,7 +315,7 @@ impl CrdsGossipPush {
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
-    ) -> Vec<(f32, &'a ContactInfo)> {
+    ) -> Vec<(u64, &'a ContactInfo)> {
         let now = timestamp();
         let mut rng = rand::thread_rng();
         let max_weight = u16::MAX as f32 - 1.0;
@@ -356,7 +351,9 @@ impl CrdsGossipPush {
                 let since = (now.saturating_sub(last_pushed_to).min(3600 * 1000) / 1024) as u32;
                 let stake = get_stake(&info.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
-                (weight, info)
+                // Weights are bounded by max_weight defined above.
+                // So this type-cast should be safe.
+                ((weight * 100.0) as u64, info)
             })
             .collect()
     }
