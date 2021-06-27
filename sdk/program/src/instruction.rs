@@ -250,10 +250,10 @@ pub struct Instruction {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct BudgetedInstruction<'a> {
+pub struct BudgetedInstruction {
     /// Compute units allocated to executing this instruction along with any CPI overhead.
     pub budget: u64,
-    pub instruction_ref: &'a Instruction,
+    pub instruction_addr: u64,
 }
 
 impl Instruction {

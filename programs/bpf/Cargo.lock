@@ -486,6 +486,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea221b5284a47e40033bf9b66f35f984ec0ea2931eb03505246cd27a963f981b"
 
 [[package]]
+name = "cpi-budgeted-early-termination"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+ "solana-program-test",
+ "solana-sdk",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

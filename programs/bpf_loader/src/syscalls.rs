@@ -76,8 +76,6 @@ pub enum SyscallError {
     TooManyAccounts,
     #[error("Overlapping copy")]
     CopyOverlapping,
-    #[error("Inner computational budget exceeded")]
-    InnerComputationalBudgetExceeded,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -391,6 +389,13 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedRust {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallInvokeSignedWithBudgetRust {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -1416,7 +1421,6 @@ impl<'a> SyscallObject<BpfError> for SyscallBlake3<'a> {
 }
 
 // Cross-program invocation syscalls
-
 struct AccountReferences<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
@@ -1466,6 +1470,7 @@ trait SyscallInvokeSigned<'a> {
 pub struct SyscallInvokeSignedWithBudgetRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
+    // logger: Rc<RefCell<dyn Logger>>,
 }
 impl<'a> SyscallInvokeSignedWithBudgetRust<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>> {
@@ -1512,7 +1517,6 @@ fn call_with_budget_rust<'a>(
             .get_bpf_compute_budget()
             .budgeted_invoke_context_units,
     )?;
-
     let enforce_aligned_host_addrs =
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
 
@@ -1522,9 +1526,7 @@ fn call_with_budget_rust<'a>(
         syscall.loader_id,
         enforce_aligned_host_addrs,
     )?;
-
-    let ix_addr = bix.instruction_ref as *const _ as u64;
-
+    let ix_addr = bix.instruction_addr;
     let mut outer_compute_meter = invoke_context.get_compute_meter();
     let outer_remaining = outer_compute_meter.borrow().get_remaining();
 
@@ -1540,7 +1542,8 @@ fn call_with_budget_rust<'a>(
         invoke_context: syscall.invoke_context.clone(),
         loader_id: syscall.loader_id,
     };
-    call(
+    let mut inner_error = false;
+    match call(
         &mut inner_invoke_syscall,
         ix_addr,
         account_infos_addr,
@@ -1548,15 +1551,18 @@ fn call_with_budget_rust<'a>(
         signers_seeds_addr,
         signers_seeds_len,
         memory_mapping,
-    )
-    .map_err(|e| match e {
-        EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
+    ) {
+        Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
             InstructionError::ComputationalBudgetExceeded,
-        ))) => EbpfError::UserError(BpfError::SyscallError(
-            SyscallError::InnerComputationalBudgetExceeded,
-        )),
+        ))))
+        | Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
+            InstructionError::ProgramFailedToComplete,
+        )))) => {
+            inner_error = true;
+            Ok(0)
+        }
         res => res,
-    })?;
+    }?;
     // It is not possible for the outer context to fail, since
     // inner_compute_budget <= outer_compute_meter.remaining
     assert!(inner_compute_budget >= inner_compute_meter.borrow().get_remaining());
@@ -1564,7 +1570,11 @@ fn call_with_budget_rust<'a>(
         .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context.replace_compute_meter(outer_compute_meter);
-    Ok(SUCCESS)
+    if inner_error {
+        Ok(0x0b9f_05c1)
+    } else {
+        Ok(SUCCESS)
+    }
 }
 
 /// Cross-program invocation called from Rust

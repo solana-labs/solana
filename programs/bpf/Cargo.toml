@@ -47,6 +47,7 @@ members = [
     "rust/alloc",
     "rust/call_depth",
     "rust/caller_access",
+    "rust/cpi_budgeted_early_termination",
     "rust/custom_heap",
     "rust/dep_crate",
     "rust/deprecated_loader",
