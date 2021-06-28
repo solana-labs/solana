@@ -31,6 +31,8 @@ const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
 const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
 const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
 const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
+const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
+const ADD_LAMPORTS: u8 = 17;
 
 // const MINT_INDEX: usize = 0; // unused placeholder
 const ARGUMENT_INDEX: usize = 1;
@@ -614,6 +616,33 @@ fn process_instruction(
         }
         TEST_NESTED_INVOKE_TOO_DEEP => {
             let _ = do_nested_invokes(5, accounts);
+        }
+        TEST_EXECUTABLE_LAMPORTS => {
+            msg!("Test executable lamports");
+            let mut accounts = accounts.to_vec();
+
+            // set account to executable and subtract lamports
+            accounts[ARGUMENT_INDEX].executable = true;
+            **(*accounts[ARGUMENT_INDEX].lamports).borrow_mut() -= 1;
+            // add lamports to dest account
+            **(*accounts[DERIVED_KEY1_INDEX].lamports).borrow_mut() += 1;
+
+            let instruction = create_instruction(
+                *program_id,
+                &[
+                    (accounts[ARGUMENT_INDEX].key, true, false),
+                    (accounts[DERIVED_KEY1_INDEX].key, true, false),
+                ],
+                vec![ADD_LAMPORTS, 0, 0, 0],
+            );
+            let _ = invoke(&instruction, &accounts);
+
+            // reset executable account
+            **(*accounts[ARGUMENT_INDEX].lamports).borrow_mut() += 1;
+        }
+        ADD_LAMPORTS => {
+            // make sure the total balance is fine
+            **accounts[0].lamports.borrow_mut() += 1;
         }
         _ => panic!(),
     }
