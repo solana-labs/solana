@@ -111,9 +111,9 @@ invoke_signed(
 
 ### Limiting the compute units a cross-program invocation can consume
 
-Programs can limit the compute budget available to the instruction via the
+Programs can limit the compute budget available to the invocation via the
 `invoke_with_budget` and `invoke_signed_with_budget` calls.
-If the CPI instruction invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::Custom(solana_program::program::BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)`, which has a value of `0x0b9f_05c1`, which can then be handled by the caller.
+If the invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::Custom(solana_program::program::BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)`, which has a value of `0x0b9f_05c1`. This error can then be handled by the caller.
 
 Example usage
 ```rust, ignore
@@ -121,8 +121,7 @@ let ret = invoke_signed_with_budget(
     &instruction,
     25_000, // set the compute budget for the instruction to be 25,000
     accounts,
-    &[&["First addresses seed"],
-      &["Second addresses first seed", "Second addresses second seed"]],
+    &[&["seed"]],
 );
 if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
     msg!("inner CPI failed to complete");
