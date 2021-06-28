@@ -101,7 +101,7 @@ pub fn parse(
         ParsableProgram::SplAssociatedTokenAccount => {
             serde_json::to_value(parse_associated_token(instruction, account_keys)?)?
         }
-        ParsableProgram::SplMemo => parse_memo(instruction),
+        ParsableProgram::SplMemo => parse_memo(instruction)?,
         ParsableProgram::SplToken => serde_json::to_value(parse_token(instruction, account_keys)?)?,
         ParsableProgram::BpfLoader => {
             serde_json::to_value(parse_bpf_loader(instruction, account_keys)?)?
@@ -120,8 +120,10 @@ pub fn parse(
     })
 }
 
-fn parse_memo(instruction: &CompiledInstruction) -> Value {
-    Value::String(from_utf8(&instruction.data).unwrap().to_string())
+fn parse_memo(instruction: &CompiledInstruction) -> Result<Value, ParseInstructionError> {
+    from_utf8(&instruction.data)
+        .map(|s| Value::String(s.to_string()))
+        .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplMemo))
 }
 
 pub(crate) fn check_num_accounts(
@@ -169,5 +171,28 @@ mod test {
 
         let non_parsable_program_id = Pubkey::new(&[1; 32]);
         assert!(parse(&non_parsable_program_id, &memo_instruction, &[]).is_err());
+    }
+
+    #[test]
+    fn test_parse_memo() {
+        let good_memo = "good memo".to_string();
+        assert_eq!(
+            parse_memo(&CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: good_memo.as_bytes().to_vec(),
+            })
+            .unwrap(),
+            Value::String(good_memo),
+        );
+
+        let bad_memo = vec![128u8];
+        assert!(std::str::from_utf8(&bad_memo).is_err());
+        assert!(parse_memo(&CompiledInstruction {
+            program_id_index: 0,
+            data: bad_memo,
+            accounts: vec![],
+        })
+        .is_err(),);
     }
 }
