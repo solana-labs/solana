@@ -28,9 +28,9 @@ accounts for that slot and update to its own AccountsDb.
 The same RPC replication mechansim can be used between a replica to another replica.
 This requires the replica to serve both the client and server in the replication model.
 
-On the previous client RPC serving side, the interfaces and implementation will be
-mostly kept intact. The `JsonRpcService` keeps obtaining the accounts information through
-the `Bank` interface.
+On the client RPC serving side, `JsonRpcAccountsService` is responsible for serving
+the client RPC calls for accounts related information similar to the existing
+`JsonRpcService`.
 
 The replica will also take snapshots periodically so that it can start quickly after
 a restart if the snapshot is not too old.
@@ -75,9 +75,14 @@ ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the
 and the replica relaying replication information. The server can stream the account information
 from its AccountCache or from the storage if already flushed.
 
-The `JsonRpcService`, this is the existing RPC service serving client requests for account
-information. This works with the `Bank` to query the account information. The existing JsonRpcService
-serves other client calls than AccountsDb ones. The replica node only serves the AccountsDb calls.
+The `JsonRpcAccountsService`, this is the existing RPC service serving client requests for account
+information. The existing JsonRpcService serves other client calls than AccountsDb ones.
+The replica node only serves the AccountsDb calls.
+
+The existing JsonRpcService requires `BankForks`, `OptimisticallyConfirmedBank` and
+`BlockCommitmentCache` to load the Bank. The JsonRpcAccountsService will need to use 
+information obtained from ReplRpcUpdatedSlotsResponse to construct the AccountsDb. Question,
+do we still need the Bank in the replica?
 
 ### Compatibility Consideration
 
@@ -98,7 +103,7 @@ In case of request failures, the replica shall retry the requests.
 
 ### Interface
 
-Following are the client RPC calls supported by the replica node.
+Following are the client RPC calls supported by the replica node in JsonRpcAccountsService.
 
 - getAccountInfo
 - getMultipleAccounts
