@@ -1725,6 +1725,7 @@ type ProgramAccountSubscriptionInfo = {
   callback: ProgramAccountChangeCallback;
   commitment?: Commitment;
   subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
+  filters?: GetProgramAccountsFilter[]
 };
 
 /**
@@ -3708,7 +3709,7 @@ export class Connection {
       this._subscribe(
         sub,
         'programSubscribe',
-        this._buildArgs([sub.programId], sub.commitment, 'base64'),
+        this._buildArgs([sub.programId], sub.commitment, 'base64', {filters: sub.filters}),
       );
     }
 
@@ -3836,6 +3837,7 @@ export class Connection {
     programId: PublicKey,
     callback: ProgramAccountChangeCallback,
     commitment?: Commitment,
+    filters?: GetProgramAccountsFilter[]
   ): number {
     const id = ++this._programAccountChangeSubscriptionCounter;
     this._programAccountChangeSubscriptions[id] = {
@@ -3843,6 +3845,7 @@ export class Connection {
       callback,
       commitment,
       subscriptionId: null,
+      filters,
     };
     this._updateSubscriptions();
     return id;
