@@ -233,6 +233,10 @@ pub struct CliEpochInfo {
     pub epoch_info: EpochInfo,
     #[serde(skip)]
     pub average_slot_time_ms: u64,
+    #[serde(skip)]
+    pub start_block_time: Option<UnixTimestamp>,
+    #[serde(skip)]
+    pub current_block_time: Option<UnixTimestamp>,
 }
 
 impl QuietDisplay for CliEpochInfo {}
@@ -277,21 +281,41 @@ impl fmt::Display for CliEpochInfo {
                 remaining_slots_in_epoch
             ),
         )?;
+        let (time_elapsed, annotation) = if let (Some(start_block_time), Some(current_block_time)) =
+            (self.start_block_time, self.current_block_time)
+        {
+            (
+                Duration::from_secs((current_block_time - start_block_time) as u64),
+                None,
+            )
+        } else {
+            (
+                slot_to_duration(self.epoch_info.slot_index, self.average_slot_time_ms),
+                Some("* estimated based on current slot durations"),
+            )
+        };
+        let time_remaining = slot_to_duration(remaining_slots_in_epoch, self.average_slot_time_ms);
         writeln_name_value(
             f,
             "Epoch Completed Time:",
             &format!(
-                "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index, self.average_slot_time_ms),
-                slot_to_human_time(self.epoch_info.slots_in_epoch, self.average_slot_time_ms),
-                slot_to_human_time(remaining_slots_in_epoch, self.average_slot_time_ms)
+                "{}{}/{} ({} remaining)",
+                humantime::format_duration(time_elapsed).to_string(),
+                if annotation.is_some() { "*" } else { "" },
+                humantime::format_duration(time_elapsed + time_remaining).to_string(),
+                humantime::format_duration(time_remaining).to_string(),
             ),
-        )
+        )?;
+        if let Some(annotation) = annotation {
+            writeln!(f)?;
+            writeln!(f, "{}", annotation)?;
+        }
+        Ok(())
     }
 }
 
-fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
-    humantime::format_duration(Duration::from_secs((slot * slot_time_ms) / 1000)).to_string()
+fn slot_to_duration(slot: Slot, slot_time_ms: u64) -> Duration {
+    Duration::from_secs((slot * slot_time_ms) / 1000)
 }
 
 #[derive(Serialize, Deserialize, Default)]
