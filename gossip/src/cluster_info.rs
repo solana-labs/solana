@@ -690,7 +690,7 @@ impl ClusterInfo {
         self.gossip.write().unwrap().set_self(&id);
         {
             let mut instance = self.instance.write().unwrap();
-            *instance = instance.with_id(id);
+            *instance = NodeInstance::new(&mut thread_rng(), id, timestamp());
         }
         *self.keypair.write().unwrap() = new_keypair;
         self.my_contact_info.write().unwrap().id = id;

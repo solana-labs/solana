@@ -407,11 +407,6 @@ impl NodeInstance {
         }
     }
 
-    // Clones the value with an updated id.
-    pub(crate) fn with_id(&self, from: Pubkey) -> Self {
-        Self { from, ..*self }
-    }
-
     // Clones the value with an updated wallclock.
     pub(crate) fn with_wallclock(&self, wallclock: u64) -> Self {
         Self { wallclock, ..*self }
