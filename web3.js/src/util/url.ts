@@ -1,7 +1,5 @@
-import {format as urlFormat, parse as urlParse} from 'url';
-
 export function makeWebsocketUrl(endpoint: string) {
-  let url = urlParse(endpoint);
+  let url = new URL(endpoint);
   const useHttps = url.protocol === 'https:';
 
   url.protocol = useHttps ? 'wss:' : 'ws:';
@@ -16,5 +14,5 @@ export function makeWebsocketUrl(endpoint: string) {
   if (url.port !== null) {
     url.port = String(Number(url.port) + 1);
   }
-  return urlFormat(url);
+  return url.toString();
 }
