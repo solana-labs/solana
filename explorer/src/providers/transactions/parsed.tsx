@@ -3,7 +3,6 @@ import {
   Connection,
   TransactionSignature,
   ParsedConfirmedTransaction,
-  Transaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
@@ -12,15 +11,15 @@ import { reportError } from "utils/sentry";
 
 export interface Details {
   transaction?: ParsedConfirmedTransaction | null;
-  raw?: Transaction | null;
 }
 
 type State = Cache.State<Details>;
 type Dispatch = Cache.Dispatch<Details>;
 
 export const StateContext = React.createContext<State | undefined>(undefined);
-export const DispatchContext =
-  React.createContext<Dispatch | undefined>(undefined);
+export const DispatchContext = React.createContext<Dispatch | undefined>(
+  undefined
+);
 
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {
@@ -119,54 +118,4 @@ export function useTransactionDetailsCache(): TransactionDetailsCache {
   }
 
   return context.entries;
-}
-
-async function fetchRawTransaction(
-  dispatch: Dispatch,
-  signature: TransactionSignature,
-  cluster: Cluster,
-  url: string
-) {
-  let fetchStatus;
-  try {
-    const response = await new Connection(url).getTransaction(signature);
-    fetchStatus = FetchStatus.Fetched;
-
-    let data: Details = { raw: null };
-    if (response !== null) {
-      const { message, signatures } = response.transaction;
-      data = {
-        raw: Transaction.populate(message, signatures),
-      };
-    }
-
-    dispatch({
-      type: ActionType.Update,
-      status: fetchStatus,
-      key: signature,
-      data,
-      url,
-    });
-  } catch (error) {
-    if (cluster !== Cluster.Custom) {
-      reportError(error, { url });
-    }
-  }
-}
-
-export function useFetchRawTransaction() {
-  const dispatch = React.useContext(DispatchContext);
-  if (!dispatch) {
-    throw new Error(
-      `useFetchRawTransaaction must be used within a TransactionsProvider`
-    );
-  }
-
-  const { cluster, url } = useCluster();
-  return React.useCallback(
-    (signature: TransactionSignature) => {
-      url && fetchRawTransaction(dispatch, signature, cluster, url);
-    },
-    [dispatch, cluster, url]
-  );
 }

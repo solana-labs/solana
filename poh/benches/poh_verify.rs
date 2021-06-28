@@ -18,7 +18,7 @@ const NUM_ENTRIES: usize = 800;
 fn bench_poh_verify_ticks(bencher: &mut Bencher) {
     solana_logger::setup();
     let zero = Hash::default();
-    let start_hash = hash(&zero.as_ref());
+    let start_hash = hash(zero.as_ref());
     let mut cur_hash = start_hash;
 
     let mut ticks: Vec<Entry> = Vec::with_capacity(NUM_ENTRIES);
@@ -34,7 +34,7 @@ fn bench_poh_verify_ticks(bencher: &mut Bencher) {
 #[bench]
 fn bench_poh_verify_transaction_entries(bencher: &mut Bencher) {
     let zero = Hash::default();
-    let start_hash = hash(&zero.as_ref());
+    let start_hash = hash(zero.as_ref());
     let mut cur_hash = start_hash;
 
     let keypair1 = Keypair::new();

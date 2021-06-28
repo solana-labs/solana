@@ -71,7 +71,7 @@ fn process_instruction(
                         AccountMeta::new_readonly(*accounts[3].key, true),
                     ],
                 );
-                invoke(&instruction, &accounts)?;
+                invoke(&instruction, accounts)?;
 
                 let instruction = Instruction::new_with_bytes(
                     *program_id,
@@ -83,7 +83,7 @@ fn process_instruction(
                         AccountMeta::new(*accounts[3].key, false),
                     ],
                 );
-                invoke(&instruction, &accounts)?;
+                invoke(&instruction, accounts)?;
                 assert_eq!(accounts[2].try_borrow_mut_data()?[0], 3);
                 assert_eq!(accounts[3].try_borrow_mut_data()?[0], 3);
             }

@@ -101,7 +101,7 @@ pub fn get_best_repair_shreds<'a>(
                         let new_repairs = RepairService::generate_repairs_for_slot(
                             blockstore,
                             slot,
-                            &slot_meta,
+                            slot_meta,
                             max_repairs - repairs.len(),
                         );
                         repairs.extend(new_repairs);

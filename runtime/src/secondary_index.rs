@@ -134,10 +134,10 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
                 .downgrade()
         });
 
-        let should_insert = !outer_keys.read().unwrap().contains(&key);
+        let should_insert = !outer_keys.read().unwrap().contains(key);
         if should_insert {
             let mut w_outer_keys = outer_keys.write().unwrap();
-            if !w_outer_keys.contains(&key) {
+            if !w_outer_keys.contains(key) {
                 w_outer_keys.push(*key);
             }
         }
@@ -175,11 +175,11 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         let is_outer_key_empty = {
             let inner_key_map = self
                 .index
-                .get_mut(&outer_key)
+                .get_mut(outer_key)
                 .expect("If we're removing a key, then it must have an entry in the map");
             // If we deleted a pubkey from the reverse_index, then the corresponding entry
             // better exist in this index as well or the two indexes are out of sync!
-            assert!(inner_key_map.value().remove_inner_key(&removed_inner_key));
+            assert!(inner_key_map.value().remove_inner_key(removed_inner_key));
             inner_key_map.is_empty()
         };
 

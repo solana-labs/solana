@@ -55,7 +55,7 @@ impl CostTracker {
 
         // check each account against account_cost_limit,
         for account_key in keys.iter() {
-            match self.cost_by_writable_accounts.get(&account_key) {
+            match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost + cost > self.account_cost_limit {
                         return Err("would exceed account cost limit");
@@ -143,7 +143,7 @@ mod tests {
     ) -> (Transaction, Vec<Pubkey>, u64) {
         let keypair = Keypair::new();
         let simple_transaction =
-            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, *start_hash);
+            system_transaction::transfer(mint_keypair, &keypair.pubkey(), 2, *start_hash);
 
         (simple_transaction, vec![mint_keypair.pubkey()], 5)
     }

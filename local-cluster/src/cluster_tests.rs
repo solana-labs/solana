@@ -63,10 +63,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
         let mut transaction =
-            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
+            system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 10, confs)
+            .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(&validator.id) {
@@ -114,14 +114,14 @@ pub fn send_many_transactions(
         let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
-            &funding_keypair,
+            funding_keypair,
             &random_keypair.pubkey(),
             transfer_amount,
             blockhash,
         );
 
         client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .retry_transfer(funding_keypair, &mut transaction, 5)
             .unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
@@ -236,7 +236,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                 .unwrap();
             let mut transaction = system_transaction::transfer(
-                &funding_keypair,
+                funding_keypair,
                 &random_keypair.pubkey(),
                 1,
                 blockhash,
@@ -245,7 +245,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
                 let sig = client.retry_transfer_until_confirmed(
-                    &funding_keypair,
+                    funding_keypair,
                     &mut transaction,
                     5,
                     confs,
@@ -260,7 +260,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 }
             };
             info!("poll_all_nodes_for_signature()");
-            match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig, confs) {
+            match poll_all_nodes_for_signature(entry_point_info, &cluster_nodes, &sig, confs) {
                 Err(e) => {
                     info!("poll_all_nodes_for_signature() failed {:?}", e);
                     result = Err(e);
@@ -377,7 +377,7 @@ fn poll_all_nodes_for_signature(
             continue;
         }
         let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
-        client.poll_for_signature_confirmation(&sig, confs)?;
+        client.poll_for_signature_confirmation(sig, confs)?;
     }
 
     Ok(())

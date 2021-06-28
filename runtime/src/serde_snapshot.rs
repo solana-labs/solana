@@ -19,6 +19,7 @@ use {
     bincode,
     bincode::{config::Options, Error},
     log::*,
+    rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -34,10 +35,9 @@ use {
     std::{
         collections::{HashMap, HashSet},
         io::{self, BufReader, BufWriter, Read, Write},
-        path::PathBuf,
+        path::{Path, PathBuf},
         result::Result,
         sync::{atomic::Ordering, Arc, RwLock},
-        time::Instant,
     },
 };
 
@@ -78,7 +78,8 @@ trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
-        + SerializableStorage;
+        + SerializableStorage
+        + Sync;
 
     fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
@@ -253,7 +254,7 @@ fn reconstruct_bank_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
 ) -> Result<Bank, Error>
 where
-    E: SerializableStorage,
+    E: SerializableStorage + std::marker::Sync,
 {
     let mut accounts_db = reconstruct_accountsdb_from_fields(
         accounts_db_fields,
@@ -271,15 +272,37 @@ where
     );
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+
+    // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
+    let debug_do_not_add_builtins = limit_load_slot_count_from_snapshot.is_some();
     let bank = Bank::new_from_fields(
         bank_rc,
         genesis_config,
         bank_fields,
         debug_keys,
         additional_builtins,
+        debug_do_not_add_builtins,
     );
 
     Ok(bank)
+}
+
+fn reconstruct_single_storage<E>(
+    slot: &Slot,
+    append_vec_path: &Path,
+    storage_entry: &E,
+    new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+) -> Result<(), Error>
+where
+    E: SerializableStorage,
+{
+    let (accounts, num_accounts) =
+        AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
+    let u_storage_entry =
+        AccountStorageEntry::new_existing(*slot, storage_entry.id(), accounts, num_accounts);
+
+    new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
+    Ok(())
 }
 
 fn reconstruct_accountsdb_from_fields<E>(
@@ -293,7 +316,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
 ) -> Result<AccountsDb, Error>
 where
-    E: SerializableStorage,
+    E: SerializableStorage + std::marker::Sync,
 {
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
@@ -310,23 +333,16 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
-    let mut last_log_update = Instant::now();
-    let mut remaining_slots_to_process = storage.len();
+    let storage = storage.into_iter().collect::<Vec<_>>();
 
     // Remap the deserialized AppendVec paths to point to correct local paths
-    let mut storage = storage
-        .into_iter()
-        .map(|(slot, mut slot_storage)| {
-            let now = Instant::now();
-            if now.duration_since(last_log_update).as_secs() >= 10 {
-                info!("{} slots remaining...", remaining_slots_to_process);
-                last_log_update = now;
-            }
-            remaining_slots_to_process -= 1;
-
+    let mut storage = (0..storage.len())
+        .into_par_iter()
+        .map(|i| {
+            let (slot, slot_storage) = &storage[i];
             let mut new_slot_storage = HashMap::new();
-            for storage_entry in slot_storage.drain(..) {
-                let file_name = AppendVec::file_name(slot, storage_entry.id());
+            for storage_entry in slot_storage {
+                let file_name = AppendVec::file_name(*slot, storage_entry.id());
 
                 let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
                     io::Error::new(
@@ -335,18 +351,14 @@ where
                     )
                 })?;
 
-                let (accounts, num_accounts) =
-                    AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
-                let u_storage_entry = AccountStorageEntry::new_existing(
+                reconstruct_single_storage(
                     slot,
-                    storage_entry.id(),
-                    accounts,
-                    num_accounts,
-                );
-
-                new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
+                    append_vec_path,
+                    storage_entry,
+                    &mut new_slot_storage,
+                )?;
             }
-            Ok((slot, new_slot_storage))
+            Ok((*slot, new_slot_storage))
         })
         .collect::<Result<HashMap<Slot, _>, Error>>()?;
 

@@ -67,7 +67,7 @@ impl ExecuteCostTable {
                 .map(|(key, _)| key)
                 .expect("cannot find mode from cost table");
 
-            *self.table.get(&key).unwrap()
+            *self.table.get(key).unwrap()
         }
     }
 
@@ -75,11 +75,11 @@ impl ExecuteCostTable {
     // client is advised to call `get_average()` or `get_mode()` to
     // assign a 'default' value for new program.
     pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
-        self.table.get(&key)
+        self.table.get(key)
     }
 
     pub fn upsert(&mut self, key: &Pubkey, value: &u64) {
-        let need_to_add = self.table.get(&key).is_none();
+        let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));

@@ -122,7 +122,7 @@ impl PreAccount {
             && (!is_writable // line coverage used to get branch coverage
                 || pre.executable()
                 || program_id != pre.owner()
-            || !Self::is_zeroed(&post.data()))
+            || !Self::is_zeroed(post.data()))
         {
             return Err(InstructionError::ModifiedProgramId);
         }
@@ -225,6 +225,10 @@ impl PreAccount {
 
     pub fn lamports(&self) -> u64 {
         self.account.borrow().lamports()
+    }
+
+    pub fn executable(&self) -> bool {
+        self.account.borrow().executable()
     }
 
     pub fn is_zeroed(buf: &[u8]) -> bool {
@@ -454,7 +458,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.executors.borrow_mut().insert(*pubkey, executor);
     }
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.borrow().get(&pubkey)
+        self.executors.borrow().get(pubkey)
     }
     fn record_instruction(&self, instruction: &Instruction) {
         if let Some(recorder) = &self.instruction_recorder {
@@ -657,7 +661,7 @@ impl MessageProcessor {
                     if id == root_id {
                         invoke_context.remove_first_keyed_account()?;
                         // Call the builtin program
-                        return process_instruction(&program_id, instruction_data, invoke_context);
+                        return process_instruction(program_id, instruction_data, invoke_context);
                     }
                 }
                 // Call the program via the native loader
@@ -671,7 +675,7 @@ impl MessageProcessor {
                 for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
-                        return process_instruction(&program_id, instruction_data, invoke_context);
+                        return process_instruction(program_id, instruction_data, invoke_context);
                     }
                 }
             }
@@ -782,7 +786,7 @@ impl MessageProcessor {
                 .map(|index| keyed_account_at_index(keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
             let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
+                Self::create_message(&instruction, &keyed_accounts, signers, &invoke_context)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let mut caller_write_privileges = keyed_account_indices
                 .iter()
@@ -1036,7 +1040,7 @@ impl MessageProcessor {
                 let account = accounts[account_index].borrow();
                 pre_accounts[unique_index]
                     .verify(
-                        &program_id,
+                        program_id,
                         message.is_writable(account_index, demote_sysvar_write_locks),
                         rent,
                         &account,
@@ -1102,14 +1106,14 @@ impl MessageProcessor {
                         }
                         let account = account.borrow();
                         pre_account
-                            .verify(&program_id, is_writable, &rent, &account, timings, false)
+                            .verify(program_id, is_writable, rent, &account, timings, false)
                             .map_err(|err| {
                                 ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
                                 err
                             })?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports());
-                        if is_writable && !account.executable() {
+                        if is_writable && !pre_account.executable() {
                             pre_account.update(&account);
                         }
                         return Ok(());

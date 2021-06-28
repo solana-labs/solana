@@ -358,8 +358,13 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
-command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts
+Now create `/home/sol/bin/validator.sh` to include the desired
+`solana-validator` command-line. Ensure that the 'exec' command is used to
+start the validator process (i.e. "exec solana-validator ...").  This is
+important because without it, logrotate will end up killing the validator
+every time the logs are rotated.
+
+Ensure that running `/home/sol/bin/validator.sh` manually starts
 the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
 Start the service with:
@@ -415,6 +420,12 @@ EOF
 sudo cp logrotate.sol /etc/logrotate.d/sol
 systemctl restart logrotate.service
 ```
+
+As mentioned earlier, be sure that if you use logrotate, any script you create
+which starts the solana validator process uses "exec" to do so (example: "exec
+solana-validator ..."); otherwise, when logrotate sends its signal to the
+validator, the enclosing script will die and take the validator process with
+it.
 
 ### Disable port checks to speed up restarts
 

@@ -18,7 +18,7 @@ mod stop_process;
 mod update_manifest;
 
 pub fn is_semver(semver: &str) -> Result<(), String> {
-    match semver::Version::parse(&semver) {
+    match semver::Version::parse(semver) {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{:?}", err)),
     }
@@ -60,10 +60,10 @@ pub fn explicit_release_of(
 
 fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String> {
     let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
-    let update_manifest_pubkey = pubkey_of(&matches, "update_manifest_pubkey");
+    let update_manifest_pubkey = pubkey_of(matches, "update_manifest_pubkey");
     let data_dir = matches.value_of("data_dir").unwrap();
     let no_modify_path = matches.is_present("no_modify_path");
-    let explicit_release = explicit_release_of(&matches, "explicit_release");
+    let explicit_release = explicit_release_of(matches, "explicit_release");
 
     if update_manifest_pubkey.is_none() && explicit_release.is_none() {
         Err(format!(
@@ -98,7 +98,7 @@ pub fn main() -> Result<(), String> {
                 .global(true)
                 .help("Configuration file to use");
             match *defaults::CONFIG_FILE {
-                Some(ref config_file) => arg.default_value(&config_file),
+                Some(ref config_file) => arg.default_value(config_file),
                 None => arg.required(true),
             }
         })
@@ -115,7 +115,7 @@ pub fn main() -> Result<(), String> {
                         .required(true)
                         .help("Directory to store install data");
                     match *defaults::DATA_DIR {
-                        Some(ref data_dir) => arg.default_value(&data_dir),
+                        Some(ref data_dir) => arg.default_value(data_dir),
                         None => arg,
                     }
                 })
@@ -181,7 +181,7 @@ pub fn main() -> Result<(), String> {
                         .required(true)
                         .help("Keypair file of the account that funds the deployment");
                     match *defaults::USER_KEYPAIR {
-                        Some(ref config_file) => arg.default_value(&config_file),
+                        Some(ref config_file) => arg.default_value(config_file),
                         None => arg,
                     }
                 })
@@ -242,7 +242,7 @@ pub fn main() -> Result<(), String> {
     let config_file = matches.value_of("config_file").unwrap();
 
     match matches.subcommand() {
-        ("init", Some(matches)) => handle_init(&matches, &config_file),
+        ("init", Some(matches)) => handle_init(matches, config_file),
         ("info", Some(matches)) => {
             let local_info_only = matches.is_present("local_info_only");
             let eval = matches.is_present("eval");
@@ -290,7 +290,7 @@ pub fn main_init() -> Result<(), String> {
                 .takes_value(true)
                 .help("Configuration file to use");
             match *defaults::CONFIG_FILE {
-                Some(ref config_file) => arg.default_value(&config_file),
+                Some(ref config_file) => arg.default_value(config_file),
                 None => arg.required(true),
             }
         })
@@ -303,7 +303,7 @@ pub fn main_init() -> Result<(), String> {
                 .required(true)
                 .help("Directory to store install data");
             match *defaults::DATA_DIR {
-                Some(ref data_dir) => arg.default_value(&data_dir),
+                Some(ref data_dir) => arg.default_value(data_dir),
                 None => arg,
             }
         })
@@ -342,5 +342,5 @@ pub fn main_init() -> Result<(), String> {
         .get_matches();
 
     let config_file = matches.value_of("config_file").unwrap();
-    handle_init(&matches, &config_file)
+    handle_init(&matches, config_file)
 }

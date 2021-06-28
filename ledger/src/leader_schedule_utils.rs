@@ -63,9 +63,9 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     // Note: Use unstable sort, because we dedup right after to remove the equal elements.
     stakes.sort_unstable_by(|(l_pubkey, l_stake), (r_pubkey, r_stake)| {
         if r_stake == l_stake {
-            r_pubkey.cmp(&l_pubkey)
+            r_pubkey.cmp(l_pubkey)
         } else {
-            r_stake.cmp(&l_stake)
+            r_stake.cmp(l_stake)
         }
     });
 

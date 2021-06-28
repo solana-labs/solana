@@ -114,10 +114,10 @@ impl RemoteWalletManager {
             is_valid_hid_device(device_info.usage_page(), device_info.interface_number())
                 && is_valid_ledger(device_info.vendor_id(), device_info.product_id())
         }) {
-            match usb.open_path(&device_info.path()) {
+            match usb.open_path(device_info.path()) {
                 Ok(device) => {
                     let mut ledger = LedgerWallet::new(device);
-                    let result = ledger.read_device(&device_info);
+                    let result = ledger.read_device(device_info);
                     match result {
                         Ok(info) => {
                             ledger.pretty_path = info.get_pretty_path();

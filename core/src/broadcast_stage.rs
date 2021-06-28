@@ -23,7 +23,7 @@ use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
 use solana_streamer::sendmmsg::send_mmsg;
 use std::sync::atomic::AtomicU64;
 use std::{
@@ -81,7 +81,6 @@ impl BroadcastStageType {
         blockstore: &Arc<Blockstore>,
         shred_version: u16,
     ) -> BroadcastStage {
-        let keypair = cluster_info.keypair.clone();
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
                 sock,
@@ -90,7 +89,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                StandardBroadcastRun::new(keypair, shred_version),
+                StandardBroadcastRun::new(shred_version),
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -100,7 +99,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                FailEntryVerificationBroadcastRun::new(keypair, shred_version),
+                FailEntryVerificationBroadcastRun::new(shred_version),
             ),
 
             BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
@@ -110,7 +109,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
+                BroadcastFakeShredsRun::new(0, shred_version),
             ),
 
             BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(
@@ -120,7 +119,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
+                BroadcastDuplicatesRun::new(shred_version, config.clone()),
             ),
         }
     }
@@ -130,6 +129,7 @@ pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
+        keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
@@ -173,6 +173,7 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
+        keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
@@ -180,8 +181,13 @@ impl BroadcastStage {
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            let res =
-                broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
+            let res = broadcast_stage_run.run(
+                keypair,
+                blockstore,
+                receiver,
+                socket_sender,
+                blockstore_sender,
+            );
             let res = Self::handle_error(res, "run");
             if let Some(res) = res {
                 return res;
@@ -191,15 +197,15 @@ impl BroadcastStage {
     fn handle_error(r: Result<()>, name: &str) -> Option<BroadcastStageReturnType> {
         if let Err(e) = r {
             match e {
-                Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
-                | Error::SendError
-                | Error::RecvError(RecvError)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => {
+                Error::RecvTimeout(RecvTimeoutError::Disconnected)
+                | Error::Send
+                | Error::Recv(RecvError)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Disconnected) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
-                Error::RecvTimeoutError(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Timeout) => (),
-                Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                Error::RecvTimeout(RecvTimeoutError::Timeout)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout) => (),
+                Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
                     error!("{} broadcaster error: {:?}", name, e);
@@ -242,11 +248,13 @@ impl BroadcastStage {
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
+        let keypair = cluster_info.keypair.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
                 Self::run(
+                    &keypair,
                     &btree,
                     &receiver,
                     &socket_sender_,
@@ -408,7 +416,7 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
 
             (&shred.payload, &peers[broadcast_index].tvu)
         })
@@ -429,7 +437,7 @@ pub fn broadcast_shreds(
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
-    let num_live_peers = num_live_peers(&peers);
+    let num_live_peers = num_live_peers(peers);
     update_peer_stats(
         num_live_peers,
         broadcast_len as i64 + 1,
@@ -635,7 +643,6 @@ pub mod test {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let leader_keypair = cluster_info.keypair.clone();
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
             leader_info.sockets.broadcast,
@@ -644,7 +651,7 @@ pub mod test {
             retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
-            StandardBroadcastRun::new(leader_keypair, 0),
+            StandardBroadcastRun::new(0),
         );
 
         MockBroadcastStage {

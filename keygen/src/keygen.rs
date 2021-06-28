@@ -106,9 +106,6 @@ fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
-        // Require a seed phrase to avoid generating a keypair
-        // but having no way to get the private key
-        .requires("use_mnemonic")
         .help(NO_OUTFILE_ARG.help)
 }
 
@@ -121,7 +118,6 @@ impl KeyGenerationCommonArgs for App<'_, '_> {
         self.arg(word_count_arg())
             .arg(language_arg())
             .arg(no_passphrase_arg())
-            .arg(no_outfile_arg())
     }
 }
 
@@ -157,9 +153,9 @@ fn output_keypair(
 ) -> Result<(), Box<dyn error::Error>> {
     if outfile == STDOUT_OUTFILE_TOKEN {
         let mut stdout = std::io::stdout();
-        write_keypair(&keypair, &mut stdout)?;
+        write_keypair(keypair, &mut stdout)?;
     } else {
-        write_keypair_file(&keypair, outfile)?;
+        write_keypair_file(keypair, outfile)?;
         println!("Wrote {} keypair to {}", source, outfile);
     }
     Ok(())
@@ -346,7 +342,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .global(true)
                 .help("Configuration file to use");
             if let Some(ref config_file) = *CONFIG_FILE {
-                arg.default_value(&config_file)
+                arg.default_value(config_file)
             } else {
                 arg
             }
@@ -395,6 +391,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
                 .key_generation_common_args()
+                .arg(no_outfile_arg())
         )
         .subcommand(
             SubCommand::with_name("grind")
@@ -450,6 +447,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
                 .key_generation_common_args()
+                .arg(
+                    no_outfile_arg()
+                    // Require a seed phrase to avoid generating a keypair
+                    // but having no way to get the private key
+                    .requires("use_mnemonic")
+                )
         )
         .subcommand(
             SubCommand::with_name("pubkey")
@@ -536,7 +539,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
-                check_for_overwrite(&outfile, &matches);
+                check_for_overwrite(outfile, matches);
                 write_pubkey_file(outfile, pubkey)?;
             } else {
                 println!("{}", pubkey);
@@ -555,7 +558,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
             match outfile {
                 Some(STDOUT_OUTFILE_TOKEN) => (),
-                Some(outfile) => check_for_overwrite(&outfile, &matches),
+                Some(outfile) => check_for_overwrite(outfile, matches),
                 None => (),
             }
 
@@ -574,7 +577,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
             if let Some(outfile) = outfile {
-                output_keypair(&keypair, &outfile, "new")
+                output_keypair(&keypair, outfile, "new")
                     .map_err(|err| format!("Unable to write {}: {}", outfile, err))?;
             }
 
@@ -597,7 +600,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             };
 
             if outfile != STDOUT_OUTFILE_TOKEN {
-                check_for_overwrite(&outfile, &matches);
+                check_for_overwrite(outfile, matches);
             }
 
             let keypair_name = "recover";
@@ -607,7 +610,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
                 keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
             };
-            output_keypair(&keypair, &outfile, "recovered")?;
+            output_keypair(&keypair, outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
             let ignore_case = matches.is_present("ignore_case");

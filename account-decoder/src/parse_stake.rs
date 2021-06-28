@@ -4,7 +4,7 @@ use crate::{
 };
 use bincode::deserialize;
 use solana_sdk::clock::{Epoch, UnixTimestamp};
-use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
+use solana_sdk::stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
 
 pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
     let stake_state: StakeState = deserialize(data)

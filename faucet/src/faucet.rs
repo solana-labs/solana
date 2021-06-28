@@ -654,7 +654,7 @@ mod tests {
     #[test]
     fn test_process_faucet_request() {
         let to = solana_sdk::pubkey::new_rand();
-        let blockhash = Hash::new(&to.as_ref());
+        let blockhash = Hash::new(to.as_ref());
         let lamports = 50;
         let req = FaucetRequest::GetAirdrop {
             lamports,
@@ -679,6 +679,6 @@ mod tests {
         assert_eq!(expected_vec_with_length, response_vec);
 
         let bad_bytes = "bad bytes".as_bytes();
-        assert!(faucet.process_faucet_request(&bad_bytes, ip).is_err());
+        assert!(faucet.process_faucet_request(bad_bytes, ip).is_err());
     }
 }

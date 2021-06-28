@@ -43,6 +43,7 @@ pub mod serialize_utils;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
+pub mod stake;
 pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;

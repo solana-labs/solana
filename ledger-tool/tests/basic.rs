@@ -39,11 +39,11 @@ fn nominal() {
     let ledger_path = ledger_path.to_str().unwrap();
 
     // Basic validation
-    let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);
+    let output = run_ledger_tool(&["-l", ledger_path, "verify"]);
     assert!(output.status.success());
 
     // Print everything
-    let output = run_ledger_tool(&["-l", &ledger_path, "print", "-vvv"]);
+    let output = run_ledger_tool(&["-l", ledger_path, "print", "-vvv"]);
     assert!(output.status.success());
     assert_eq!(count_newlines(&output.stdout), ticks + meta_lines);
 }

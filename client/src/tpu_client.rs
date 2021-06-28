@@ -121,7 +121,7 @@ struct LeaderTpuCache {
 impl LeaderTpuCache {
     fn new(rpc_client: &RpcClient, first_slot: Slot) -> Self {
         let leaders = Self::fetch_slot_leaders(rpc_client, first_slot).unwrap_or_default();
-        let leader_tpu_map = Self::fetch_cluster_tpu_sockets(&rpc_client).unwrap_or_default();
+        let leader_tpu_map = Self::fetch_cluster_tpu_sockets(rpc_client).unwrap_or_default();
         Self {
             first_slot,
             leaders,

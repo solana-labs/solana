@@ -19,12 +19,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
-use solana_sdk::{
-    clock::Slot,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    timing::duration_as_ms,
-};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -101,9 +96,6 @@ pub enum RepairProtocol {
 
 #[derive(Clone)]
 pub struct ServeRepair {
-    /// set the keypair that will be used to sign repair responses
-    keypair: Arc<Keypair>,
-    my_info: ContactInfo,
     cluster_info: Arc<ClusterInfo>,
 }
 
@@ -118,20 +110,15 @@ impl ServeRepair {
     }
 
     pub fn new(cluster_info: Arc<ClusterInfo>) -> Self {
-        let (keypair, my_info) = { (cluster_info.keypair.clone(), cluster_info.my_contact_info()) };
-        Self {
-            keypair,
-            my_info,
-            cluster_info,
-        }
+        Self { cluster_info }
     }
 
-    pub fn my_info(&self) -> &ContactInfo {
-        &self.my_info
+    fn my_info(&self) -> ContactInfo {
+        self.cluster_info.my_contact_info()
     }
 
-    pub fn keypair(&self) -> &Arc<Keypair> {
-        &self.keypair
+    pub(crate) fn my_id(&self) -> Pubkey {
+        self.cluster_info.id()
     }
 
     fn get_repair_sender(request: &RepairProtocol) -> &ContactInfo {
@@ -155,8 +142,8 @@ impl ServeRepair {
     ) -> Option<Packets> {
         let now = Instant::now();
 
-        //TODO verify from is signed
-        let my_id = me.read().unwrap().keypair.pubkey();
+        let my_id = me.read().unwrap().my_id();
+        //TODO: verify `from` is signed
         let from = Self::get_repair_sender(&request);
         if from.id == my_id {
             stats.self_repair += 1;
@@ -171,9 +158,9 @@ impl ServeRepair {
                         Self::run_window_request(
                             recycler,
                             from,
-                            &from_addr,
+                            from_addr,
                             blockstore,
-                            &me.read().unwrap().my_info,
+                            &my_id,
                             *slot,
                             *shred_index,
                             *nonce,
@@ -186,7 +173,7 @@ impl ServeRepair {
                     (
                         Self::run_highest_window_request(
                             recycler,
-                            &from_addr,
+                            from_addr,
                             blockstore,
                             *slot,
                             *highest_index,
@@ -200,7 +187,7 @@ impl ServeRepair {
                     (
                         Self::run_orphan(
                             recycler,
-                            &from_addr,
+                            from_addr,
                             blockstore,
                             *slot,
                             MAX_ORPHAN_REPAIR_RESPONSES,
@@ -256,7 +243,7 @@ impl ServeRepair {
 
         let mut time = Measure::start("repair::handle_packets");
         for reqs in reqs_v {
-            Self::handle_packets(obj, &recycler, blockstore, reqs, response_sender, stats);
+            Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
         time.stop();
         if total_packets >= *max_packets {
@@ -271,7 +258,7 @@ impl ServeRepair {
 
     fn report_reset_stats(me: &Arc<RwLock<Self>>, stats: &mut ServeRepairStats) {
         if stats.self_repair > 0 {
-            let my_id = me.read().unwrap().keypair.pubkey();
+            let my_id = me.read().unwrap().cluster_info.id();
             warn!(
                 "{}: Ignored received repair requests from ME: {}",
                 my_id, stats.self_repair,
@@ -323,7 +310,7 @@ impl ServeRepair {
                         &mut max_packets,
                     );
                     match result {
-                        Err(Error::RecvTimeoutError(_)) | Ok(_) => {}
+                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
                         Err(err) => info!("repair listener error: {:?}", err),
                     };
                     if exit.load(Ordering::Relaxed) {
@@ -368,8 +355,7 @@ impl ServeRepair {
         shred_index: u64,
         nonce: Nonce,
     ) -> Result<Vec<u8>> {
-        let req =
-            RepairProtocol::WindowIndexWithNonce(self.my_info.clone(), slot, shred_index, nonce);
+        let req = RepairProtocol::WindowIndexWithNonce(self.my_info(), slot, shred_index, nonce);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -380,18 +366,14 @@ impl ServeRepair {
         shred_index: u64,
         nonce: Nonce,
     ) -> Result<Vec<u8>> {
-        let req = RepairProtocol::HighestWindowIndexWithNonce(
-            self.my_info.clone(),
-            slot,
-            shred_index,
-            nonce,
-        );
+        let req =
+            RepairProtocol::HighestWindowIndexWithNonce(self.my_info(), slot, shred_index, nonce);
         let out = serialize(&req)?;
         Ok(out)
     }
 
     fn orphan_bytes(&self, slot: Slot, nonce: Nonce) -> Result<Vec<u8>> {
-        let req = RepairProtocol::OrphanWithNonce(self.my_info.clone(), slot, nonce);
+        let req = RepairProtocol::OrphanWithNonce(self.my_info(), slot, nonce);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -411,7 +393,7 @@ impl ServeRepair {
         let (repair_peers, weighted_index) = match cache.entry(slot) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
-                let repair_peers = self.repair_peers(&repair_validators, slot);
+                let repair_peers = self.repair_peers(repair_validators, slot);
                 if repair_peers.is_empty() {
                     return Err(Error::from(ClusterInfoError::NoPeers));
                 }
@@ -481,7 +463,7 @@ impl ServeRepair {
             repair_validators
                 .iter()
                 .filter_map(|key| {
-                    if *key != self.my_info.id {
+                    if *key != self.my_id() {
                         self.cluster_info.lookup_contact_info(key, |ci| ci.clone())
                     } else {
                         None
@@ -498,7 +480,7 @@ impl ServeRepair {
         from: &ContactInfo,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
-        me: &ContactInfo,
+        my_id: &Pubkey,
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
@@ -515,7 +497,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(Packets::new_with_recycler_data(
+                return Some(Packets::new_unpinned_with_recycler_data(
                     recycler,
                     "run_window_request",
                     vec![packet],
@@ -526,7 +508,7 @@ impl ServeRepair {
         inc_new_counter_debug!("serve_repair-window-request-fail", 1);
         trace!(
             "{}: failed WindowIndex {} {} {}",
-            me.id,
+            my_id,
             from.id,
             slot,
             shred_index,
@@ -555,7 +537,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_with_recycler_data(
+            return Some(Packets::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -572,7 +554,7 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<Packets> {
-        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res = Packets::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -721,7 +703,7 @@ mod tests {
                 &me,
                 &socketaddr_any!(),
                 Some(&blockstore),
-                &me,
+                &me.id,
                 slot,
                 0,
                 nonce,
@@ -739,7 +721,7 @@ mod tests {
                 &me,
                 &socketaddr_any!(),
                 Some(&blockstore),
-                &me,
+                &me.id,
                 slot,
                 index,
                 nonce,
@@ -777,7 +759,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
         );
-        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
+        assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
         let nxt = ContactInfo {

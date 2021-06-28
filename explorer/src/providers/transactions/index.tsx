@@ -6,11 +6,12 @@ import {
   TransactionConfirmationStatus,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
-import { DetailsProvider } from "./details";
+import { DetailsProvider } from "./parsed";
+import { RawDetailsProvider } from "./raw";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
-export { useTransactionDetails } from "./details";
+export { useTransactionDetails } from "./parsed";
 
 export type Confirmations = number | "max";
 
@@ -48,7 +49,9 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        <DetailsProvider>{children}</DetailsProvider>
+        <RawDetailsProvider>
+          <DetailsProvider>{children}</DetailsProvider>
+        </RawDetailsProvider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );

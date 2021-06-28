@@ -1,6 +1,6 @@
 import React from "react";
 import { BigNumber } from "bignumber.js";
-import { lamportsToSolString } from "utils";
+import { SolBalance } from "utils";
 
 export function BalanceDelta({
   delta,
@@ -12,7 +12,7 @@ export function BalanceDelta({
   let sols;
 
   if (isSol) {
-    sols = lamportsToSolString(delta.toNumber());
+    sols = <SolBalance lamports={delta.toNumber()} />;
   }
 
   if (delta.gt(0)) {

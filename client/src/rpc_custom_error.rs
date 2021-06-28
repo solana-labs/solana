@@ -1,5 +1,5 @@
 //! Implementation defined RPC server errors
-
+use thiserror::Error;
 use {
     crate::rpc_response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
@@ -17,35 +17,40 @@ pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
+pub const JSON_RPC_SCAN_ERROR: i64 = -32012;
 
+#[derive(Error, Debug)]
 pub enum RpcCustomError {
+    #[error("BlockCleanedUp")]
     BlockCleanedUp {
         slot: Slot,
         first_available_block: Slot,
     },
+    #[error("SendTransactionPreflightFailure")]
     SendTransactionPreflightFailure {
         message: String,
         result: RpcSimulateTransactionResult,
     },
+    #[error("TransactionSignatureVerificationFailure")]
     TransactionSignatureVerificationFailure,
-    BlockNotAvailable {
-        slot: Slot,
-    },
-    NodeUnhealthy {
-        num_slots_behind: Option<Slot>,
-    },
+    #[error("BlockNotAvailable")]
+    BlockNotAvailable { slot: Slot },
+    #[error("NodeUnhealthy")]
+    NodeUnhealthy { num_slots_behind: Option<Slot> },
+    #[error("TransactionPrecompileVerificationFailure")]
     TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
-    SlotSkipped {
-        slot: Slot,
-    },
+    #[error("SlotSkipped")]
+    SlotSkipped { slot: Slot },
+    #[error("NoSnapshot")]
     NoSnapshot,
-    LongTermStorageSlotSkipped {
-        slot: Slot,
-    },
-    KeyExcludedFromSecondaryIndex {
-        index_key: String,
-    },
+    #[error("LongTermStorageSlotSkipped")]
+    LongTermStorageSlotSkipped { slot: Slot },
+    #[error("KeyExcludedFromSecondaryIndex")]
+    KeyExcludedFromSecondaryIndex { index_key: String },
+    #[error("TransactionHistoryNotAvailable")]
     TransactionHistoryNotAvailable,
+    #[error("ScanError")]
+    ScanError { message: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -139,6 +144,11 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE,
                 ),
                 message: "Transaction history is not available from this node".to_string(),
+                data: None,
+            },
+            RpcCustomError::ScanError { message } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SCAN_ERROR),
+                message,
                 data: None,
             },
         }

@@ -134,7 +134,7 @@ fn verify_repair(
         .map(|repair_meta| {
             outstanding_requests.register_response(
                 repair_meta.nonce,
-                &shred,
+                shred,
                 solana_sdk::timing::timestamp(),
             )
         })
@@ -153,7 +153,7 @@ fn prune_shreds_invalid_repair(
         let mut outstanding_requests = outstanding_requests.write().unwrap();
         shreds.retain(|shred| {
             let should_keep = (
-                verify_repair(&mut outstanding_requests, &shred, &repair_infos[i]),
+                verify_repair(&mut outstanding_requests, shred, &repair_infos[i]),
                 i += 1,
             )
                 .0;
@@ -582,12 +582,12 @@ impl WindowService {
         H: Fn(),
     {
         match e {
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => true,
-            Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => {
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => true,
+            Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => {
                 handle_timeout();
                 false
             }
-            Error::CrossbeamSendError => true,
+            Error::CrossbeamSend => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);
@@ -627,10 +627,10 @@ mod test {
         entries: &[Entry],
         slot: Slot,
         parent: Slot,
-        keypair: &Arc<Keypair>,
+        keypair: &Keypair,
     ) -> Vec<Shred> {
-        let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
-        shredder.entries_to_shreds(&entries, true, 0).0
+        let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
+        shredder.entries_to_shreds(keypair, entries, true, 0).0
     }
 
     #[test]
@@ -639,7 +639,7 @@ mod test {
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, 0, Hash::default());
-        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
+        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Keypair::new());
         shreds.reverse();
         blockstore
             .insert_shreds(shreds, None, false)

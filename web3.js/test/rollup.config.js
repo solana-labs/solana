@@ -14,7 +14,7 @@ export default {
     include: ['test/**/*.test.ts'],
     exclude: ['test/agent-manager.test.ts', 'test/bpf-loader.test.ts'],
   },
-  external: ['node-forge', 'http2', '_stream_wrap'],
+  external: ['node-forge', 'http2', '_stream_wrap', 'mockttp'],
   output: {
     file: 'test/dist/bundle.js',
     format: 'es',

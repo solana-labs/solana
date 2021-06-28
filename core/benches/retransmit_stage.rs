@@ -39,7 +39,12 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
-        let id = pubkey::new_rand();
+        // This ensures that cluster_info.id() is the root of turbine
+        // retransmit tree and so the shreds are retransmited to all other
+        // nodes in the cluster.
+        let id = std::iter::repeat_with(pubkey::new_rand)
+            .find(|pk| cluster_info.id() < *pk)
+            .unwrap();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();
@@ -78,11 +83,11 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         })
         .collect();
 
-    let keypair = Arc::new(Keypair::new());
+    let keypair = Keypair::new();
     let slot = 0;
     let parent = 0;
-    let shredder = Shredder::new(slot, parent, keypair, 0, 0).unwrap();
-    let mut data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+    let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
+    let mut data_shreds = shredder.entries_to_shreds(&keypair, &entries, true, 0).0;
 
     let num_packets = data_shreds.len();
 

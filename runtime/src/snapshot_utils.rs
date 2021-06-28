@@ -4,7 +4,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
-        hardened_unpack::{unpack_snapshot, UnpackError, UnpackedAppendVecMap},
+        hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
             bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
         },
@@ -17,7 +17,7 @@ use {
     bzip2::bufread::BzDecoder,
     flate2::read::GzDecoder,
     log::*,
-    rayon::ThreadPool,
+    rayon::{prelude::*, ThreadPool},
     regex::Regex,
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
@@ -592,8 +592,15 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
     Ok(())
 }
 
+#[derive(Debug, Default)]
+pub struct BankFromArchiveTimings {
+    pub rebuild_bank_from_snapshots_us: u64,
+    pub untar_us: u64,
+    pub verify_snapshot_bank_us: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_archive<P: AsRef<Path>>(
+pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &Path,
@@ -606,17 +613,35 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-) -> Result<Bank> {
+    test_hash_calculation: bool,
+) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
 
-    let unpacked_append_vec_map = untar_snapshot_in(
-        &snapshot_tar,
-        &unpack_dir.as_ref(),
-        account_paths,
-        archive_format,
-    )?;
+    let mut untar = Measure::start("snapshot untar");
+    // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
+    let divisions = std::cmp::min(4, std::cmp::max(1, num_cpus::get() / 4));
+    // create 'divisions' # of parallel workers, each responsible for 1/divisions of all the files to extract.
+    let all_unpacked_append_vec_map = (0..divisions)
+        .into_par_iter()
+        .map(|index| {
+            untar_snapshot_in(
+                &snapshot_tar,
+                unpack_dir.as_ref(),
+                account_paths,
+                archive_format,
+                Some(ParallelSelector { index, divisions }),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
+    for h in all_unpacked_append_vec_map {
+        unpacked_append_vec_map.extend(h?);
+    }
+
+    untar.stop();
+    info!("{}", untar);
 
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_snapshots_dir = unpack_dir.as_ref().join("snapshots");
@@ -639,14 +664,22 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
     )?;
+    measure.stop();
 
-    if !bank.verify_snapshot_bank() {
+    let mut verify = Measure::start("verify");
+    if !bank.verify_snapshot_bank(test_hash_calculation)
+        && limit_load_slot_count_from_snapshot.is_none()
+    {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
-    measure.stop();
-    info!("{}", measure);
+    verify.stop();
+    let timings = BankFromArchiveTimings {
+        rebuild_bank_from_snapshots_us: measure.as_us(),
+        untar_us: untar.as_us(),
+        verify_snapshot_bank_us: verify.as_us(),
+    };
 
-    Ok(bank)
+    Ok((bank, timings))
 }
 
 pub fn get_snapshot_archive_path(
@@ -755,34 +788,55 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
+    parallel_selector: Option<ParallelSelector>,
 ) -> Result<UnpackedAppendVecMap> {
-    let mut measure = Measure::start("snapshot untar");
     let tar_name = File::open(&snapshot_tar)?;
     let account_paths_map = match archive_format {
         ArchiveFormat::TarBzip2 => {
             let tar = BzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::TarGzip => {
             let tar = GzDecoder::new(BufReader::new(tar_name));
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::TarZstd => {
             let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
         ArchiveFormat::Tar => {
             let tar = BufReader::new(tar_name);
             let mut archive = Archive::new(tar);
-            unpack_snapshot(&mut archive, unpack_dir, account_paths)?
+            unpack_snapshot(&mut archive, unpack_dir, account_paths, parallel_selector)?
         }
     };
-    measure.stop();
-    info!("{}", measure);
     Ok(account_paths_map)
+}
+
+fn verify_snapshot_version_and_folder(
+    snapshot_version: &str,
+    unpacked_snapshots_dir: &Path,
+) -> Result<(SnapshotVersion, SlotSnapshotPaths)> {
+    info!("snapshot version: {}", snapshot_version);
+
+    let snapshot_version_enum =
+        SnapshotVersion::maybe_from_string(snapshot_version).ok_or_else(|| {
+            get_io_error(&format!(
+                "unsupported snapshot version: {}",
+                snapshot_version
+            ))
+        })?;
+    let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
+    if snapshot_paths.len() > 1 {
+        return Err(get_io_error("invalid snapshot format"));
+    }
+    let root_paths = snapshot_paths
+        .pop()
+        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
+    Ok((snapshot_version_enum, root_paths))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -800,23 +854,8 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
 ) -> Result<Bank> {
-    info!("snapshot version: {}", snapshot_version);
-
-    let snapshot_version_enum =
-        SnapshotVersion::maybe_from_string(snapshot_version).ok_or_else(|| {
-            get_io_error(&format!(
-                "unsupported snapshot version: {}",
-                snapshot_version
-            ))
-        })?;
-    let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
-    if snapshot_paths.len() > 1 {
-        return Err(get_io_error("invalid snapshot format"));
-    }
-    let root_paths = snapshot_paths
-        .pop()
-        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
-
+    let (snapshot_version_enum, root_paths) =
+        verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
     info!(
         "Loading bank from {}",
         &root_paths.snapshot_file_path.display()
@@ -887,9 +926,10 @@ pub fn verify_snapshot_archive<P, Q, R>(
     let unpack_dir = temp_dir.path();
     untar_snapshot_in(
         snapshot_archive,
-        &unpack_dir,
+        unpack_dir,
         &[unpack_dir.to_path_buf()],
         archive_format,
+        None,
     )
     .unwrap();
 
@@ -927,7 +967,7 @@ pub fn snapshot_bank(
 ) -> Result<()> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
+    add_snapshot(snapshot_path, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
@@ -938,7 +978,7 @@ pub fn snapshot_bank(
         .expect("no snapshots found in config snapshot_path");
 
     let package = package_snapshot(
-        &root_bank,
+        root_bank,
         latest_slot_snapshot_paths,
         snapshot_path,
         status_cache_slot_deltas,
@@ -977,9 +1017,9 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     let temp_dir = tempfile::tempdir_in(snapshot_path)?;
 
     let storages: Vec<_> = bank.get_snapshot_storages();
-    let slot_snapshot_paths = add_snapshot(&temp_dir, &bank, &storages, snapshot_version)?;
+    let slot_snapshot_paths = add_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
     let package = package_snapshot(
-        &bank,
+        bank,
         &slot_snapshot_paths,
         &temp_dir,
         bank.src.slot_deltas(&bank.src.roots()),
@@ -1010,6 +1050,7 @@ pub fn process_accounts_package_pre(
             thread_pool,
             crate::accounts_hash::HashStats::default(),
             false,
+            None,
         )
         .unwrap();
 

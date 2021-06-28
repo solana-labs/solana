@@ -195,7 +195,7 @@ async fn wait_for_validator_startup(
         }
 
         if admin_client.is_none() {
-            match admin_rpc_service::connect(&ledger_path).await {
+            match admin_rpc_service::connect(ledger_path).await {
                 Ok(new_admin_client) => admin_client = Some(new_admin_client),
                 Err(err) => {
                     progress_bar.set_message(format!("Unable to connect to validator: {}", err));
