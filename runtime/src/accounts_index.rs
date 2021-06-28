@@ -1009,29 +1009,31 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, info);
         match w_account_maps {
             Some(w_account_maps) => {
-                self.insert_new_entry_if_missing_with_lock(pubkey, w_account_maps, new_entry)
+                self.insert_new_entry_if_missing_with_lock(*pubkey, w_account_maps, new_entry)
             }
             None => {
                 let mut w_account_maps = self.get_account_maps_write_lock();
-                self.insert_new_entry_if_missing_with_lock(pubkey, &mut w_account_maps, new_entry)
+                self.insert_new_entry_if_missing_with_lock(*pubkey, &mut w_account_maps, new_entry)
             }
         }
+        .map(|x| (x.0, x.1))
     }
 
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     fn insert_new_entry_if_missing_with_lock(
         &self,
-        pubkey: &Pubkey,
+        pubkey: Pubkey,
         w_account_maps: &mut AccountMapsWriteLock<T>,
         new_entry: AccountMapEntry<T>,
-    ) -> Option<(WriteAccountMapEntry<T>, T)> {
-        let account_entry = w_account_maps.entry(*pubkey);
+    ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
+        let account_entry = w_account_maps.entry(pubkey);
         match account_entry {
             Entry::Occupied(account_entry) => Some((
                 WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
                 // extract the new account_info from the unused 'new_entry'
                 new_entry.slot_list.write().unwrap().remove(0).1,
+                *account_entry.key(),
             )),
             Entry::Vacant(account_entry) => {
                 account_entry.insert(new_entry);
@@ -1368,7 +1370,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             .map(|(pubkey, account_info)| {
                 // this value is equivalent to what update() below would have created if we inserted a new item
                 (
-                    pubkey,
+                    *pubkey,
                     WriteAccountMapEntry::new_entry_after_update(slot, account_info),
                 )
             })
@@ -1386,9 +1388,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     &mut w_account_maps,
                     new_item,
                 );
-                if let Some((mut w_account_entry, account_info)) = already_exists {
+                if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
                     w_account_entry.update(slot, account_info, &mut _reclaims);
-                    duplicate_keys.push(*pubkey);
+                    duplicate_keys.push(pubkey);
                 }
             });
 
@@ -2721,7 +2723,7 @@ pub mod tests {
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         let mut w_account_maps = index.get_account_maps_write_lock();
         let write = index.insert_new_entry_if_missing_with_lock(
-            &key.pubkey(),
+            key.pubkey(),
             &mut w_account_maps,
             new_entry,
         );
