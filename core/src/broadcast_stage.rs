@@ -440,10 +440,11 @@ pub fn broadcast_shreds(
         return Ok(());
     }
     let mut shred_select = Measure::start("shred_select");
+    let root_bank = bank_forks.read().unwrap().root_bank();
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let seed = shred.seed(leader_schedule_cache, bank_forks);
+            let seed = shred.seed(leader_schedule_cache, &root_bank);
             let broadcast_index = weighted_best(peers_and_stakes, seed);
             (&shred.payload, &peers[broadcast_index].tvu)
         })

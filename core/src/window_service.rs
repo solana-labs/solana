@@ -233,6 +233,7 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
+    let root_bank = bank_forks.read().unwrap().root_bank();
     let last_root = blockstore.last_root();
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
@@ -274,7 +275,7 @@ where
                                 if shred_filter(&shred, last_root) {
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed =
-                                        shred.seed(leader_schedule_cache, bank_forks);
+                                        shred.seed(leader_schedule_cache, &root_bank);
                                     Some((shred, repair_info))
                                 } else {
                                     packet.meta.discard = true;
