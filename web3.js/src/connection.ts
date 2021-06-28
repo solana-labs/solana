@@ -1,8 +1,8 @@
 import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import fetch from "ky-universal";
-import type { Options } from "ky-universal";
+import fetch from 'ky-universal';
+import type {Options} from 'ky-universal';
 import {
   type as pick,
   number,
@@ -727,7 +727,7 @@ function createRpcClient(
       return new Promise<Response>((resolve, reject) => {
         fetchMiddleware(url, options, async (url: string, options: Options) => {
           try {
-            resolve(fetch(url, options));
+            resolve(await fetch(url, options));
           } catch (error) {
             reject(error);
           }
