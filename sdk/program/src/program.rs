@@ -12,7 +12,7 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
     invoke_signed(instruction, account_infos, &[])
 }
 
-/// Invoke a cross-program instruction with a budget for the inner CPI call
+/// Invoke a cross-program instruction with a caller-specified compute budget
 ///
 /// Note that the program id of the instruction being issued must also be included in
 /// `account_infos`.
@@ -70,20 +70,12 @@ pub fn invoke_signed(
     crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
 }
 
-/// Invoke a cross-program instruction with program signatures
+/// Invoke a cross-program instruction with program signatures and
+/// with a caller-specified compute budget
 ///
 /// Note that the program id of the instruction being issued must also be included in
 /// `account_infos`.
-
-/// Usage:
-
-/// invoke_signed_with_budget(
-///     &BudgetedInstruction{
-///         instruction: ix,
-///         budget: my_budget,
-///     },
-///     ...
-/// );
+///
 
 pub fn invoke_signed_with_budget(
     instruction: &Instruction,
