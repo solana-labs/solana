@@ -648,7 +648,7 @@ static uint64_t sol_invoke_signed_with_budget(
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  const SolBudgetedInstruction budgeted_instruction = { budget, instruction };
+  const SolBudgetedInstruction budgeted_instruction = { (uint64_t)budget, (uint64_t)instruction };
   return sol_invoke_signed_with_budget_c(
     &budgeted_instruction,
     account_infos,
