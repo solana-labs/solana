@@ -54,6 +54,7 @@ use std::{
     net::UdpSocket,
     ops::DerefMut,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+    sync::mpsc::{channel, Receiver, Sender},
     sync::{Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -251,6 +252,7 @@ impl BankingStageStats {
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
+    cost_model_thread_hdl: JoinHandle<()>,
 }
 
 #[derive(Debug, Clone)]
@@ -336,6 +338,27 @@ impl BankingStage {
             LruCache::new(DEFAULT_LRU_SIZE),
             PacketHasher::default(),
         )));
+
+        // start cost model thread
+        let (cost_update_sender, cost_update_receiver): (
+            Sender<Transaction>,
+            Receiver<Transaction>,
+        ) = channel();
+
+        // TODO TAO - passing `exit` to this loop to allow the thread to end
+        let cost_model_clone = cost_model.clone();
+        let cost_tracker_clone = cost_tracker.clone();
+        let cost_model_thread_hdl = Builder::new()
+            .name("solana-banking-cost-model".to_string())
+            .spawn(move || {
+                Self::cost_update_loop(
+                    &cost_model_clone,
+                    &cost_tracker_clone,
+                    cost_update_receiver,
+                );
+            })
+            .unwrap();
+
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -354,6 +377,7 @@ impl BankingStage {
                 let duplicates = duplicates.clone();
                 let cost_model = cost_model.clone();
                 let cost_tracker = cost_tracker.clone();
+                let cost_update_sender = cost_update_sender.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -371,12 +395,16 @@ impl BankingStage {
                             &duplicates,
                             &cost_model,
                             &cost_tracker,
+                            cost_update_sender,
                         );
                     })
                     .unwrap()
             })
             .collect();
-        Self { bank_thread_hdls }
+        Self {
+            bank_thread_hdls,
+            cost_model_thread_hdl,
+        }
     }
 
     fn filter_valid_packets_for_forwarding<'a>(
@@ -442,6 +470,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
         cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_sender: Sender<Transaction>,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -487,6 +516,7 @@ impl BankingStage {
                             banking_stage_stats,
                             cost_model,
                             cost_tracker,
+                            cost_update_sender.clone(),
                         );
                     if processed < verified_txs_len
                         || !Bank::should_bank_still_be_processing_txs(
@@ -591,6 +621,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
         cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_sender: Sender<Transaction>,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -640,6 +671,7 @@ impl BankingStage {
                     recorder,
                     cost_model,
                     cost_tracker,
+                    cost_update_sender.clone(),
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -697,6 +729,38 @@ impl BankingStage {
         }
     }
 
+    fn cost_update_loop(
+        cost_model: &Arc<RwLock<CostModel>>,
+        cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_receiver: Receiver<Transaction>,
+    ) {
+        // TODO TAO - sleep or hot spin? We dont want to delay counting TX too long
+        // even it is not criitcal to track the cost at micro-sec
+        let wait_timer = Duration::from_millis(10);
+        let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
+
+        loop {
+            /* TODO TAO
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+            // */
+
+            for transaction in cost_update_receiver.try_iter() {
+                cost_model
+                    .read()
+                    .unwrap()
+                    .calculate_cost_no_alloc(&transaction, &mut tx_cost);
+                cost_tracker.write().unwrap().add_transaction(
+                    &tx_cost.writable_accounts,
+                    &(tx_cost.account_access_cost + tx_cost.execution_cost),
+                );
+            }
+
+            thread::sleep(wait_timer);
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
         my_pubkey: Pubkey,
@@ -712,6 +776,7 @@ impl BankingStage {
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_sender: Sender<Transaction>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -732,6 +797,7 @@ impl BankingStage {
                     &recorder,
                     cost_model,
                     cost_tracker,
+                    cost_update_sender.clone(),
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
                     || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
@@ -768,6 +834,7 @@ impl BankingStage {
                 &recorder,
                 cost_model,
                 cost_tracker,
+                cost_update_sender.clone(),
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1230,6 +1297,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_sender: Sender<Transaction>,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
@@ -1274,12 +1342,18 @@ impl BankingStage {
 
         // applying cost of processed transactions to shared cost_tracker
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
+        /* TODO TAO - replaced
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
+        // */
         {
             //let cost_model_readonly = cost_model.read().unwrap();
             //let mut cost_tracker_mutable = cost_tracker.write().unwrap();
             transactions.iter().enumerate().for_each(|(index, tx)| {
                 if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
+                    cost_update_sender
+                        .send(tx.transaction().clone())
+                        .expect("send transaction to cost_model");
+                    /* TODO TAO - replaced
                     cost_model
                         .read()
                         .unwrap()
@@ -1288,6 +1362,7 @@ impl BankingStage {
                         &tx_cost.writable_accounts,
                         &(tx_cost.account_access_cost + tx_cost.execution_cost),
                     );
+                    // */
                 }
             });
         }
@@ -1418,6 +1493,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
         cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_update_sender: Sender<Transaction>,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1470,6 +1546,7 @@ impl BankingStage {
                     banking_stage_stats,
                     cost_model,
                     cost_tracker,
+                    cost_update_sender.clone(),
                 );
 
             new_tx_count += processed;
@@ -1602,6 +1679,7 @@ impl BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
+        self.cost_model_thread_hdl.join()?;
         Ok(())
     }
 }
