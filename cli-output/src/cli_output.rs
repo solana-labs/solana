@@ -281,24 +281,36 @@ impl fmt::Display for CliEpochInfo {
                 remaining_slots_in_epoch
             ),
         )?;
-        let time_elapsed = if let (Some(start_block_time), Some(current_block_time)) =
+        let (time_elapsed, annotation) = if let (Some(start_block_time), Some(current_block_time)) =
             (self.start_block_time, self.current_block_time)
         {
-            Duration::from_secs((current_block_time - start_block_time) as u64)
+            (
+                Duration::from_secs((current_block_time - start_block_time) as u64),
+                None,
+            )
         } else {
-            slot_to_duration(self.epoch_info.slot_index, self.average_slot_time_ms)
+            (
+                slot_to_duration(self.epoch_info.slot_index, self.average_slot_time_ms),
+                Some("* estimated based on current slot durations"),
+            )
         };
         let time_remaining = slot_to_duration(remaining_slots_in_epoch, self.average_slot_time_ms);
         writeln_name_value(
             f,
             "Epoch Completed Time:",
             &format!(
-                "{}/{} ({} remaining)",
+                "{}{}/{} ({} remaining)",
                 humantime::format_duration(time_elapsed).to_string(),
+                if annotation.is_some() { "*" } else { "" },
                 humantime::format_duration(time_elapsed + time_remaining).to_string(),
                 humantime::format_duration(time_remaining).to_string(),
             ),
-        )
+        )?;
+        if let Some(annotation) = annotation {
+            writeln!(f)?;
+            writeln!(f, "{}", annotation)?;
+        }
+        Ok(())
     }
 }
 
