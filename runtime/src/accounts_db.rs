@@ -2097,7 +2097,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2139,23 +2139,10 @@ impl AccountsDb {
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let mut alive_total = 0;
 
-        let accounts_index_map_lock = if is_startup {
-            // at startup, there is nobody else to contend with the accounts_index read lock, so it is more efficient for us to keep it held
-            Some(self.accounts_index.get_account_maps_read_lock())
-        } else {
-            None
-        };
-        let accounts_index_map_lock_ref = accounts_index_map_lock.as_ref();
-
         let mut alive_accounts: Vec<_> = Vec::with_capacity(stored_accounts.len());
         let mut unrefed_pubkeys = vec![];
         for (pubkey, stored_account) in &stored_accounts {
-            let lookup = if is_startup {
-                self.accounts_index
-                    .get_account_read_entry_with_lock(pubkey, accounts_index_map_lock_ref.unwrap())
-            } else {
-                self.accounts_index.get_account_read_entry(pubkey)
-            };
+            let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
                 let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
                     i.store_id == stored_account.store_id
@@ -2175,7 +2162,6 @@ impl AccountsDb {
             }
         }
 
-        drop(accounts_index_map_lock);
         index_read_elapsed.stop();
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
@@ -4458,10 +4444,9 @@ impl AccountsDb {
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
-            .read()
-            .unwrap()
-            .keys()
-            .cloned()
+            .iter()
+            .map(|btree| btree.read().unwrap().keys().cloned().collect::<Vec<_>>())
+            .flatten()
             .collect();
         collect.stop();
 
@@ -5973,7 +5958,13 @@ impl AccountsDb {
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
-        for account_entry in self.accounts_index.account_maps.read().unwrap().values() {
+        for account_entry in self
+            .accounts_index
+            .account_maps
+            .iter()
+            .map(|i| i.read().unwrap().values().cloned().collect::<Vec<_>>())
+            .flatten()
+        {
             for (_slot, account_entry) in account_entry.slot_list.read().unwrap().iter() {
                 let storage_entry_meta = stored_sizes_and_counts
                     .entry(account_entry.store_id)
@@ -6022,13 +6013,15 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
-        for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
-            info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
-            info!(
-                "      slots: {:?}",
-                *account_entry.slot_list.read().unwrap()
-            );
-        }
+        self.accounts_index.account_maps.iter().for_each(|i| {
+            for (pubkey, account_entry) in i.read().unwrap().iter() {
+                info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
+                info!(
+                    "      slots: {:?}",
+                    *account_entry.slot_list.read().unwrap()
+                );
+            }
+        });
     }
 
     fn print_count_and_status(&self, label: &str) {
