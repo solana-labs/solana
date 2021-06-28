@@ -229,6 +229,7 @@ module.exports = {
           "proposals/optimistic_confirmation",
           "proposals/embedding-move",
           "proposals/rip-curl",
+          "proposals/transactions-v2",
         ],
       },
     ],
