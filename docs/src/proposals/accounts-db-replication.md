@@ -75,6 +75,10 @@ ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the
 and the replica relaying replication information. The server can stream the account information
 from its AccountCache or from the storage if already flushed.
 
+The `JsonRpcService`, this is the existing RPC service serving client requests for account
+information. This works with the `Bank` to query the account information. The existing JsonRpcService
+serves other client calls than AccountsDb ones. The replica node only serves the AccountsDb calls.
+
 ### Compatibility Consideration
 
 For protocol compatiblilty considerations, all the requests have the replication version which is
@@ -93,3 +97,24 @@ In case of request failures, the replica shall retry the requests.
 
 
 ### Interface
+
+Following are the client RPC calls supported by the replica node.
+
+- getAccountInfo
+- getMultipleAccounts
+- getProgramAccounts
+- getMinimumBalanceForRentExemption
+- getInflationGovenor
+- getInflationRate
+- getEpochSchedule
+- getRecentBlockhash
+- getFeeCalculatorForBlockhash
+- getFeeRateGovernor
+- getLargestAccounts
+- getSupply
+- getStakeActivation
+- getTokenAccountBalance
+- getTokenSupply
+- getTokenLargestAccounts
+- getTokenAccountsByOwner
+- getTokenAccountsByDelegate
