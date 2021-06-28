@@ -3831,6 +3831,7 @@ export class Connection {
    * @param programId Public key of the program to monitor
    * @param callback Function to invoke whenever the account is changed
    * @param commitment Specify the commitment level account changes must reach before notification
+   * @param filters The program account filters to pass into the RPC method
    * @return subscription id
    */
   onProgramAccountChange(
