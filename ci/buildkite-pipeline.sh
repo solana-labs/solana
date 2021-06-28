@@ -224,10 +224,10 @@ pull_or_push_steps() {
   wait_step
 
   # Check for any .sh file changes
-  if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
-    wait_step
-  fi
+  # if affects .sh$; then
+  #   command_step shellcheck "ci/shellcheck.sh" 5
+  #   wait_step
+  # fi
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
