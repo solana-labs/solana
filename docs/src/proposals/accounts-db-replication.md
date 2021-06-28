@@ -75,7 +75,7 @@ ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the
 and the replica relaying replication information. The server can stream the account information
 from its AccountCache or from the storage if already flushed.
 
-The `JsonRpcAccountsService`, this is the existing RPC service serving client requests for account
+The `JsonRpcAccountsService`, this is the RPC service serving client requests for account
 information. The existing JsonRpcService serves other client calls than AccountsDb ones.
 The replica node only serves the AccountsDb calls.
 
@@ -83,6 +83,11 @@ The existing JsonRpcService requires `BankForks`, `OptimisticallyConfirmedBank` 
 `BlockCommitmentCache` to load the Bank. The JsonRpcAccountsService will need to use 
 information obtained from ReplRpcUpdatedSlotsResponse to construct the AccountsDb. Question,
 do we still need the Bank in the replica?
+
+
+The `AccountsBackgroundService`, this service also runs in the replica which is responsible
+for taking snapshots periodically and shrinking the AccountsDb and doing accounts cleaning.
+The existing code also uses BankForks which we need to keep in the replica.
 
 ### Compatibility Consideration
 
@@ -103,7 +108,7 @@ In case of request failures, the replica shall retry the requests.
 
 ### Interface
 
-Following are the client RPC calls supported by the replica node in JsonRpcAccountsService.
+Following are the client RPC APIs supported by the replica node in JsonRpcAccountsService.
 
 - getAccountInfo
 - getMultipleAccounts
@@ -113,6 +118,7 @@ Following are the client RPC calls supported by the replica node in JsonRpcAccou
 - getInflationRate
 - getEpochSchedule
 - getRecentBlockhash
+- getFees
 - getFeeCalculatorForBlockhash
 - getFeeRateGovernor
 - getLargestAccounts
@@ -123,3 +129,28 @@ Following are the client RPC calls supported by the replica node in JsonRpcAccou
 - getTokenLargestAccounts
 - getTokenAccountsByOwner
 - getTokenAccountsByDelegate
+
+Following APIs are not included:
+
+- getInflationReward
+- getEpochSchedule
+- getClusterNodes
+- getRecentPerformanceSamples
+- getBlockCommitment
+- getGenesisHash
+- getSignatueStatuses
+- getMaxRetransmitSlot
+- getMaxShredInsertSlot
+- sendTransaction
+- simulateTransaction
+- getSlotLeader
+- getSlotLeaders
+- minimumLedgerSlot
+- getBlock
+- getBlockTime
+- getBlocks
+- getBlocksWithLimit
+- getTransaction
+- getSignaturesForAddress
+- getFirstAvailableBlock
+- getBlockProduction
