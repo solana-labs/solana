@@ -11698,4 +11698,54 @@ pub mod tests {
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(&entry));
     }
+
+    #[test]
+    fn test_purge_alive_unrooted_slots_after_clean() {
+        let accounts = AccountsDb::new_single();
+
+        // Key shared between rooted and nonrooted slot
+        let shared_key = solana_sdk::pubkey::new_rand();
+        // Key to keep the storage entry for the unrooted slot alive
+        let unrooted_key = solana_sdk::pubkey::new_rand();
+        let slot0 = 0;
+        let slot1 = 1;
+
+        // Store accounts with greater than 0 lamports
+        let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
+        accounts.store_uncached(slot0, &[(&shared_key, &account)]);
+        accounts.store_uncached(slot0, &[(&unrooted_key, &account)]);
+
+        // Simulate adding dirty pubkeys on bank freeze. Note this is
+        // not a rooted slot
+        accounts.get_accounts_delta_hash(slot0);
+
+        // On the next *rooted* slot, update the `shared_key` account to zero lamports
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        accounts.store_uncached(slot1, &[(&shared_key, &zero_lamport_account)]);
+
+        // Simulate adding dirty pubkeys on bank freeze, set root
+        accounts.get_accounts_delta_hash(slot1);
+        accounts.add_root(slot1);
+
+        // The later rooted zero-lamport update to `shared_key` cannot be cleaned
+        // because it is kept alive by the unrooted slot.
+        accounts.clean_accounts(None, false);
+        assert!(accounts
+            .accounts_index
+            .get_account_read_entry(&shared_key)
+            .is_some());
+
+        // Simulate purge_slot() all from AccountsBackgroundService
+        let is_from_abs = true;
+        accounts.purge_slot(slot0, 0, is_from_abs);
+
+        // Now clean should clean up the remaining key
+        accounts.clean_accounts(None, false);
+        assert!(accounts
+            .accounts_index
+            .get_account_read_entry(&shared_key)
+            .is_none());
+        assert!(accounts.storage.get_slot_storage_entries(slot0).is_none());
+    }
 }
