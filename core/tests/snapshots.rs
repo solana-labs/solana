@@ -46,10 +46,11 @@ mod tests {
         accounts_db,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
-        bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+        bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        snapshot_utils,
-        snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_config::SnapshotConfig,
+        snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -121,6 +122,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {

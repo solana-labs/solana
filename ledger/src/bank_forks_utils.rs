@@ -9,9 +9,10 @@ use crate::{
 };
 use log::*;
 use solana_runtime::{
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+    bank_forks::BankForks,
+    snapshot_config::SnapshotConfig,
     snapshot_runtime_info::SyncSnapshotRuntimeInfo,
-    snapshot_utils,
+    snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result};

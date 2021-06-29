@@ -1,7 +1,8 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_package::AccountsPackage, snapshot_runtime_info,
-    snapshot_runtime_info::SyncSnapshotRuntimeInfo, snapshot_utils,
+    snapshot_package::AccountsPackage,
+    snapshot_runtime_info::{self, SyncSnapshotRuntimeInfo},
+    snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
@@ -88,9 +89,8 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        bank_forks::ArchiveFormat,
         snapshot_package::AccountsPackage,
-        snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
     use std::{
