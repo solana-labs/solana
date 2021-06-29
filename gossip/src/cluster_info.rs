@@ -1763,11 +1763,14 @@ impl ClusterInfo {
             .map(|k| k.id)
             .chain(std::iter::once(self.id()))
             .collect();
+        self.stats.trim_crds_table.add_relaxed(1);
         let mut gossip = self.gossip.write().unwrap();
         match gossip.crds.trim(cap, &keep, stakes, timestamp()) {
             Err(err) => {
                 self.stats.trim_crds_table_failed.add_relaxed(1);
-                error!("crds table trim failed: {:?}", err);
+                // TODO: Stakes are comming from the root-bank. Debug why/when
+                // they are empty/zero.
+                debug!("crds table trim failed: {:?}", err);
             }
             Ok(num_purged) => {
                 self.stats
