@@ -752,6 +752,7 @@ impl BankingStage {
             // */
 
             for batch in cost_update_receiver.try_iter() {
+                debug!("cost_update_loop process a batch, size {}", batch.transactions.len());
                 for ((result, _), tx) in batch.execution_results.iter().zip(batch.transactions.iter()) {
                     if result.is_ok() {
                         cost_model
@@ -762,9 +763,13 @@ impl BankingStage {
                             &tx_cost.writable_accounts,
                             &(tx_cost.account_access_cost + tx_cost.execution_cost),
                         );
+                        debug!("cost_update_loop updated for transaction {:?}, block cost {:?}", tx, cost_tracker.read().unwrap().get_stats());
                     }
                 }
             }
+            debug!("cost_update_loop cleared update channel");
+
+            // TODO TAO - handle tracker reset signal here
 
             thread::sleep(wait_timer);
         }
@@ -1018,8 +1023,9 @@ impl BankingStage {
             }
 
             // track committed transactions' cost
-            let transactions = batch.transactions_iter().cloned().collect();
+            let transactions: Vec<_> = batch.transactions_iter().cloned().collect();
             let execution_results = results.to_vec();
+            debug!("cost_update send to channel, num_to_commit {}, transactions.len {}", num_to_commit, transactions.len());
             cost_tracker_update_sender.send(
                 CommittedTransactionBatch {
                     transactions, 
@@ -2403,6 +2409,7 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
 
             BankingStage::process_and_record_transactions(
                 &bank,
@@ -2411,6 +2418,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
+                cost_update_sender.clone(),
             )
             .0
             .unwrap();
@@ -2449,6 +2457,7 @@ mod tests {
                     0,
                     None,
                     &gossip_vote_sender,
+                    cost_update_sender.clone(),
                 )
                 .0,
                 Err(PohRecorderError::MaxHeightReached)
@@ -2535,6 +2544,7 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
 
             let (result, unprocessed) = BankingStage::process_and_record_transactions(
                 &bank,
@@ -2543,6 +2553,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
+                cost_update_sender.clone(),
             );
 
             poh_recorder
@@ -2641,6 +2652,7 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &Arc::new(Mutex::new(poh_recorder)));
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
 
             let (processed_transactions_count, mut retryable_txs) =
                 BankingStage::process_transactions(
@@ -2650,6 +2662,7 @@ mod tests {
                     &recorder,
                     None,
                     &gossip_vote_sender,
+                    cost_update_sender.clone(),
                 );
 
             assert_eq!(processed_transactions_count, 0,);
@@ -2738,6 +2751,7 @@ mod tests {
             );
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
 
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
@@ -2749,6 +2763,7 @@ mod tests {
                     enable_cpi_and_log_storage: false,
                 }),
                 &gossip_vote_sender,
+                cost_update_sender.clone(),
             );
 
             transaction_status_service.join().unwrap();
@@ -2862,6 +2877,7 @@ mod tests {
             .collect();
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
 
             // When the working bank in poh_recorder is None, no packets should be processed
             assert!(!poh_recorder.lock().unwrap().has_bank());
@@ -2881,6 +2897,7 @@ mod tests {
                     ACCOUNT_MAX_COST,
                     BLOCK_MAX_COST,
                 ))),
+                cost_update_sender.clone(),
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2902,6 +2919,7 @@ mod tests {
                         ACCOUNT_MAX_COST,
                         BLOCK_MAX_COST,
                     ))),
+                    cost_update_sender.clone(),
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
@@ -2953,6 +2971,7 @@ mod tests {
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (cost_update_sender, _cost_update_receiver) = channel();
             // Start up thread to process the banks
             let t_consume = Builder::new()
                 .name("consume-buffered-packets".to_string())
@@ -2972,6 +2991,7 @@ mod tests {
                             ACCOUNT_MAX_COST,
                             BLOCK_MAX_COST,
                         ))),
+                        cost_update_sender.clone(),
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`

@@ -33,7 +33,7 @@ use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use test::Bencher;
@@ -80,6 +80,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             packets.push_back((batch, vec![0usize; batch_len], false));
         }
         let (s, _r) = unbounded();
+        let (cost_update_sender, _cost_update_receiver) = channel();
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
@@ -95,6 +96,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &recorder,
                 &Arc::new(RwLock::new(CostModel::default())),
                 &Arc::new(RwLock::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
+                cost_update_sender.clone(),
             );
         });
 
