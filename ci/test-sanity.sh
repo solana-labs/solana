@@ -4,6 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 source ci/_
+source ci/upload-ci-artifact.sh
 
 (
   echo --- git diff --check
@@ -49,5 +50,25 @@ if [[ -z $CI_TAG ]]; then
     fi
   )
 fi
+
+(
+  set -x
+  set +e
+  cargo="$(readlink -f "./cargo")"
+  cargo_build_bpf="$(readlink -f "./cargo-build-bpf")"
+  "$cargo" install rustfilt
+  if pushd programs/bpf; then
+    RUST_LOG=trace "$cargo" stable test assert_instruction_count --no-default-features --features=bpf_rust -- --nocapture &> ix-counts.log
+    bzip2 ix-counts.log
+    upload-ci-artifact ix-counts.log.bz2
+    if pushd rust/rand; then
+      "$cargo_build_bpf" --dump
+      popd
+    fi
+    tar cjvf rand-dump.tar.bz2 target/{deploy/solana_bpf_rust_rand-dump.txt,bpfel-unknown-unknown/release/solana_bpf_rust_rand.so}
+    upload-ci-artifact rand-dump.tar.bz2
+    popd
+  fi
+)
 
 echo --- ok

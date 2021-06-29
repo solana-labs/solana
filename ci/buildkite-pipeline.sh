@@ -220,7 +220,7 @@ EOF
 }
 
 pull_or_push_steps() {
-  command_step sanity "ci/test-sanity.sh" 5
+  command_step sanity "ci/test-sanity.sh" 10
   wait_step
 
   # Check for any .sh file changes
