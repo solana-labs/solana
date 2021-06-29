@@ -32,7 +32,11 @@ use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
+<<<<<<< HEAD
 use std::sync::Arc;
+=======
+use std::sync::{Arc, RwLock};
+>>>>>>> 9d6f1ebef (investigate system performance test degradation  (#17919))
 use std::time::{Duration, Instant};
 use test::Bencher;
 
@@ -91,6 +95,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
+<<<<<<< HEAD
+=======
+                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(RwLock::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
+>>>>>>> 9d6f1ebef (investigate system performance test degradation  (#17919))
             );
         });
 
