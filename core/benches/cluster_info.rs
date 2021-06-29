@@ -9,7 +9,6 @@ use solana_gossip::cluster_info::{ClusterInfo, Node};
 use solana_gossip::contact_info::ContactInfo;
 use solana_ledger::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    leader_schedule_cache::LeaderScheduleCache,
     shred::Shred,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
@@ -32,7 +31,6 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new(&genesis_config);
-    let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
     const NUM_SHREDS: usize = 32;
@@ -58,7 +56,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &peers,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
-            &leader_schedule_cache,
+            cluster_info.id(),
             &bank_forks,
         )
         .unwrap();
