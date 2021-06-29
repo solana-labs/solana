@@ -893,6 +893,62 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_and_hash_transactions_sig_len() {
+        let mut rng = rand::thread_rng();
+        let recent_blockhash = hash_new_rand(&mut rng);
+        let from_keypair = Keypair::new();
+        let to_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let to_pubkey = to_keypair.pubkey();
+
+        enum TestCase {
+            AddSignature,
+            RemoveSignature,
+        }
+
+        let make_transaction = |case: TestCase| {
+            let message = Message::new(
+                &[system_instruction::transfer(&from_pubkey, &to_pubkey, 1)],
+                Some(&from_pubkey),
+            );
+            let mut tx = Transaction::new(&[&from_keypair], message, recent_blockhash);
+            assert_eq!(tx.message.header.num_required_signatures, 1);
+            match case {
+                TestCase::AddSignature => {
+                    let signature = to_keypair.sign_message(&tx.message.serialize());
+                    tx.signatures.push(signature);
+                }
+                TestCase::RemoveSignature => {
+                    tx.signatures.remove(0);
+                }
+            }
+            tx
+        };
+        // No signatures.
+        {
+            let tx = make_transaction(TestCase::RemoveSignature);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false, false)
+                .is_some());
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false, true)
+                .is_none());
+        }
+        // Too many signatures.
+        {
+            let tx = make_transaction(TestCase::AddSignature);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false, false)
+                .is_some());
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false, true)
+                .is_none());
+        }
+    }
+
+    #[test]
     fn test_verify_and_hash_transactions_packet_data_size() {
         let mut rng = rand::thread_rng();
         let recent_blockhash = hash_new_rand(&mut rng);
@@ -913,7 +969,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false)
+                .verify_and_hash_transactions(false, false, false)
                 .is_some());
         }
         // Big transaction.
@@ -922,7 +978,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false)
+                .verify_and_hash_transactions(false, false, false)
                 .is_none());
         }
         // Assert that verify fails as soon as serialized
@@ -933,7 +989,7 @@ mod tests {
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
                 entries[..]
-                    .verify_and_hash_transactions(false, false)
+                    .verify_and_hash_transactions(false, false, false)
                     .is_some(),
             );
         }
