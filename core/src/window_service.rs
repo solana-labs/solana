@@ -273,9 +273,10 @@ where
                                     }
                                 };
                                 if shred_filter(&shred, last_root) {
+                                    let leader_pubkey = leader_schedule_cache
+                                        .slot_leader_at(shred.slot(), Some(&root_bank));
                                     packet.meta.slot = shred.slot();
-                                    packet.meta.seed =
-                                        shred.seed(leader_schedule_cache, &root_bank);
+                                    packet.meta.seed = shred.seed(leader_pubkey, &root_bank);
                                     Some((shred, repair_info))
                                 } else {
                                     packet.meta.discard = true;

@@ -53,7 +53,6 @@ use crate::{
     blockstore::MAX_DATA_SHREDS_PER_SLOT,
     entry::{create_ticks, Entry},
     erasure::Session,
-    leader_schedule_cache::LeaderScheduleCache,
 };
 use bincode::config::Options;
 use core::cell::RefCell;
@@ -76,7 +75,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use std::{mem::size_of, sync::Arc};
+use std::mem::size_of;
 use thiserror::Error;
 
 #[derive(Default, Clone)]
@@ -470,23 +469,15 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn seed(
-        &self,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        root_bank: &Bank,
-    ) -> [u8; 32] {
-        if enable_deterministic_seed(self.slot(), root_bank) {
-            if let Some(leader_pubkey) =
-                leader_schedule_cache.slot_leader_at(self.slot(), Some(root_bank))
-            {
+    pub fn seed(&self, leader_pubkey: Option<Pubkey>, root_bank: &Bank) -> [u8; 32] {
+        if let Some(leader_pubkey) = leader_pubkey {
+            if enable_deterministic_seed(self.slot(), root_bank) {
                 let h = hashv(&[
                     &self.slot().to_le_bytes(),
                     &self.index().to_le_bytes(),
                     &leader_pubkey.to_bytes(),
                 ]);
                 return h.to_bytes();
-            } else {
-                inc_new_counter_info!("shred_seed-unknown_slot_leader", 1);
             }
         }
 
