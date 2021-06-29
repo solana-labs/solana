@@ -655,7 +655,6 @@ pub mod test {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().root_bank();
 
@@ -667,7 +666,6 @@ pub mod test {
             retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
-            &leader_schedule_cache,
             &bank_forks,
             StandardBroadcastRun::new(0),
         );
