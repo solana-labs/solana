@@ -2,7 +2,7 @@ use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::I
 
 /// BPF syscall error when invoke_signed_with_budget fails due to
 /// CPI exceeding caller-specified compute units
-pub const BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED: u32 = 0x0b9f_05c1;
+pub const BPF_STATUS_CODE_1__CPI_COMPUTE_BUDGET_EXCEEDED: u32 = 0x0b9f_05c1;
 
 /// Invoke a cross-program instruction
 ///
