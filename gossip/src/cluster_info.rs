@@ -2490,11 +2490,12 @@ impl ClusterInfo {
                     .collect()
             })
         };
+
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
+        let instance = self.instance.read().unwrap();
         let check_duplicate_instance = |values: &[CrdsValue]| {
             if should_check_duplicate_instance {
-                let instance = self.instance.read().unwrap();
                 for value in values {
                     if instance.check_duplicate(value) {
                         return Err(GossipError::DuplicateNodeInstance);
