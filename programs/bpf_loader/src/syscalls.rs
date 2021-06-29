@@ -1545,8 +1545,7 @@ fn call_with_budget_rust<'a>(
     // The budget passed to the inner CPI call should be the min of the
     // caller's desired budget, and its actual available budget.
     let inner_compute_budget = bix.budget.min(outer_remaining);
-    // TODO: replace this with a generic version of `dyn ComputeMeter`...?
-    // Can't build new trait object dynamically unfortunately...
+
     let inner_compute_meter = Rc::new(RefCell::new(ThisComputeMeter::new(inner_compute_budget)));
     invoke_context.replace_compute_meter(inner_compute_meter.clone());
     drop(invoke_context);
@@ -1554,8 +1553,7 @@ fn call_with_budget_rust<'a>(
         invoke_context: syscall.invoke_context.clone(),
         loader_id: syscall.loader_id,
     };
-    let mut inner_error = false;
-    match call(
+    let ret = match call(
         &mut inner_invoke_syscall,
         ix_addr,
         account_infos_addr,
@@ -1569,24 +1567,14 @@ fn call_with_budget_rust<'a>(
         ))))
         | Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
             InstructionError::ProgramFailedToComplete,
-        )))) => {
-            inner_error = true;
-            Ok(0)
-        }
-        res => res,
-    }?;
-    // It is not possible for the outer context to fail, since
-    // inner_compute_budget <= outer_compute_meter.remaining
-    assert!(inner_compute_budget >= inner_compute_meter.borrow().get_remaining());
+        )))) => Ok(0x0b9f_05c1),
+        ret => ret,
+    };
     outer_compute_meter
         .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context.replace_compute_meter(outer_compute_meter);
-    if inner_error {
-        Ok(0x0b9f_05c1)
-    } else {
-        Ok(SUCCESS)
-    }
+    ret
 }
 
 /// Budgeted version of cross-program invocation called from Rust
@@ -1664,8 +1652,7 @@ fn call_with_budget_c<'a>(
         invoke_context: syscall.invoke_context.clone(),
         loader_id: syscall.loader_id,
     };
-    let mut inner_error = false;
-    match call(
+    let ret = match call(
         &mut inner_invoke_syscall,
         ix_addr,
         account_infos_addr,
@@ -1679,24 +1666,14 @@ fn call_with_budget_c<'a>(
         ))))
         | Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
             InstructionError::ProgramFailedToComplete,
-        )))) => {
-            inner_error = true;
-            Ok(0)
-        }
-        res => res,
-    }?;
-    // It is not possible for the outer context to fail, since
-    // inner_compute_budget <= outer_compute_meter.remaining
-    assert!(inner_compute_budget >= inner_compute_meter.borrow().get_remaining());
+        )))) => Ok(0x0b9f_05c1),
+        ret => ret,
+    };
     outer_compute_meter
         .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context.replace_compute_meter(outer_compute_meter);
-    if inner_error {
-        Ok(0x0b9f_05c1)
-    } else {
-        Ok(SUCCESS)
-    }
+    ret
 }
 
 /// Cross-program invocation called from Rust
