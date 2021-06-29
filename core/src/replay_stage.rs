@@ -335,7 +335,7 @@ impl ReplayServiceTiming {
 pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     commitment_service: AggregateCommitmentService,
-    t_service: JoinHandle<()>,
+    t_cost_model_service: JoinHandle<()>,
 }
 
 impl ReplayStage {
@@ -385,8 +385,8 @@ impl ReplayStage {
 
         let exit_clone = exit.clone();
         let blockstore_clone = blockstore.clone();
-        let t_service = Builder::new()
-            .name("solana-replay-service".to_string())
+        let t_cost_model_service = Builder::new()
+            .name("solana-replay-cost-model-service".to_string())
             .spawn(move || {
                 Self::service_loop(
                     exit_clone,
@@ -808,7 +808,7 @@ impl ReplayStage {
         Self {
             t_replay,
             commitment_service,
-            t_service,
+            t_cost_model_service,
         }
     }
 
@@ -1929,7 +1929,7 @@ impl ReplayStage {
 
         // delete records from blockstore if they are no longer in cost_table
         db_records.iter().for_each(|(pubkey, _)| {
-            if !cost_table.iter().any(|(key, _)| key == pubkey) {
+            if cost_table.get(pubkey).is_none() {
                 blockstore
                     .delete_program_cost(pubkey)
                     .expect("delete old program");
@@ -2661,7 +2661,7 @@ impl ReplayStage {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_service.join().map(|_| ())?;
+        self.t_cost_model_service.join().map(|_| ())?;
         self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
     }
