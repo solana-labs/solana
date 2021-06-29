@@ -1359,10 +1359,6 @@ impl BankingStage {
         );
         process_tx_time.stop();
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
-        inc_new_counter_info!(
-            "banking_stage-unprocessed_transactions",
-            unprocessed_tx_count
-        );
 
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         /* TODO TAO - doing in batch fashino right after committing, to 
