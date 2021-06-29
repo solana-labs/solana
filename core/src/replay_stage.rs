@@ -138,6 +138,10 @@ pub struct ReplayTiming {
     start_leader_elapsed: u64,
     reset_bank_elapsed: u64,
     voting_elapsed: u64,
+    vote_push_us: u64,
+    vote_send_us: u64,
+    generate_vote_us: u64,
+    update_commitment_cache_us: u64,
     select_forks_elapsed: u64,
     compute_slot_stats_elapsed: u64,
     generate_new_bank_forks_elapsed: u64,
@@ -191,6 +195,17 @@ impl ReplayTiming {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
+            datapoint_info!(
+                "replay-loop-voting-stats",
+                ("vote_push_us", self.vote_push_us, i64),
+                ("vote_send_us", self.vote_send_us, i64),
+                ("generate_vote_us", self.generate_vote_us, i64),
+                (
+                    "update_commitment_cache_us",
+                    self.update_commitment_cache_us,
+                    i64
+                ),
+            );
             datapoint_info!(
                 "replay-loop-timing-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
@@ -585,6 +600,7 @@ impl ReplayStage {
                             &mut unfrozen_gossip_verified_vote_hashes,
                             &mut voted_signatures,
                             &mut has_new_vote_been_rooted,
+                            &mut replay_timing,
                         );
                     };
                     voting_time.stop();
@@ -1293,6 +1309,7 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: &mut bool,
+        replay_timing: &mut ReplayTiming,
     ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1357,12 +1374,16 @@ impl ReplayStage {
             info!("new root {}", new_root);
         }
 
+        let mut update_commitment_cache_time = Measure::start("update_commitment_cache");
         Self::update_commitment_cache(
             bank.clone(),
             bank_forks.read().unwrap().root(),
             progress.get_fork_stats(bank.slot()).unwrap().total_stake,
             lockouts_sender,
         );
+        update_commitment_cache_time.stop();
+        replay_timing.update_commitment_cache_us += update_commitment_cache_time.as_us();
+
         Self::push_vote(
             cluster_info,
             bank,
@@ -1373,6 +1394,7 @@ impl ReplayStage {
             switch_fork_decision,
             vote_signatures,
             *has_new_vote_been_rooted,
+            replay_timing,
         );
     }
 
@@ -1538,6 +1560,7 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn push_vote(
         cluster_info: &ClusterInfo,
         bank: &Bank,
@@ -1548,7 +1571,9 @@ impl ReplayStage {
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
+        replay_timing: &mut ReplayTiming,
     ) {
+        let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
             &cluster_info.keypair,
             bank,
@@ -1559,13 +1584,20 @@ impl ReplayStage {
             vote_signatures,
             has_new_vote_been_rooted,
         );
+        generate_time.stop();
+        replay_timing.generate_vote_us += generate_time.as_us();
         if let Some(vote_tx) = vote_tx {
             tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
+            let mut send_time = Measure::start("send_vote");
             let _ = cluster_info.send_vote(
                 &vote_tx,
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
             );
+            send_time.stop();
+            let mut push_time = Measure::start("push_vote");
             cluster_info.push_vote(&tower.tower_slots(), vote_tx);
+            push_time.stop();
+            replay_timing.vote_push_us += push_time.as_us();
         }
     }
 
@@ -4710,6 +4742,7 @@ mod tests {
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,
+            &mut ReplayTiming::default(),
         );
         let mut cursor = Cursor::default();
         let (_, votes) = cluster_info.get_votes(&mut cursor);
@@ -4761,6 +4794,7 @@ mod tests {
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,
+            &mut ReplayTiming::default(),
         );
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);

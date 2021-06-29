@@ -1074,9 +1074,15 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
             (secs as u64).saturating_mul(1000).checked_div(slots)
         })
         .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+    let start_block_time = rpc_client
+        .get_block_time(epoch_info.absolute_slot - epoch_info.slot_index)
+        .ok();
+    let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
     let epoch_info = CliEpochInfo {
         epoch_info,
         average_slot_time_ms,
+        start_block_time,
+        current_block_time,
     };
     Ok(config.output_format.formatted_string(&epoch_info))
 }

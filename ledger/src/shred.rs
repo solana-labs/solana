@@ -66,7 +66,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_perf::packet::{limited_deserialize, Packet};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot,
     feature_set,
@@ -76,10 +76,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use std::{
-    mem::size_of,
-    sync::{Arc, RwLock},
-};
+use std::{mem::size_of, sync::Arc};
 use thiserror::Error;
 
 #[derive(Default, Clone)]
@@ -476,9 +473,8 @@ impl Shred {
     pub fn seed(
         &self,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        root_bank: &Bank,
     ) -> [u8; 32] {
-        let root_bank = bank_forks.read().unwrap().root_bank();
         if enable_deterministic_seed(self.slot(), &root_bank) {
             if let Some(leader_pubkey) =
                 leader_schedule_cache.slot_leader_at(self.slot(), Some(&root_bank))
@@ -489,6 +485,8 @@ impl Shred {
                     &leader_pubkey.to_bytes(),
                 ]);
                 return h.to_bytes();
+            } else {
+                inc_new_counter_info!("shred_seed-unknown_slot_leader", 1);
             }
         }
 
