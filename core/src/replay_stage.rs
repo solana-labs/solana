@@ -1720,10 +1720,6 @@ impl ReplayStage {
                     verify_recyclers,
                 );
                 Self::update_cost_model(cost_model, &bank_progress.replay_stats.execute_timings);
-                debug!(
-                    "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
-                    cost_model.read().unwrap().get_instruction_cost_table()
-                );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -1915,6 +1911,7 @@ impl ReplayStage {
     }
 
     fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) {
+        let mut update_cost_model_time = Measure::start("update_cost_model_time");
         let mut cost_model_mutable = cost_model.write().unwrap();
         for (program_id, stats) in &execute_timings.details.per_program_timings {
             let cost = stats.0 / stats.1 as u64;
@@ -1937,7 +1934,18 @@ impl ReplayStage {
         debug!(
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
            cost_model.read().unwrap().get_instruction_cost_table()
-       );
+        );
+        update_cost_model_time.stop();
+
+        inc_new_counter_info!("replay_stage-update_cost_model", 1);
+        datapoint_info!(
+            "replay-loop-timing-stats",
+            (
+                "update_cost_model_elapsed",
+                update_cost_model_time.as_us() as i64,
+                i64
+            )
+        );
     }
 
     fn update_propagation_status(
