@@ -49,13 +49,18 @@ use {
     },
 };
 
+#[derive(Default)]
 pub struct RpcClientConfig {
     commitment_config: CommitmentConfig,
+    confirm_transaction_initial_timeout: Option<Duration>,
 }
 
 impl RpcClientConfig {
     fn with_commitment(commitment_config: CommitmentConfig) -> Self {
-        RpcClientConfig { commitment_config }
+        RpcClientConfig {
+            commitment_config,
+            ..Self::default()
+        }
     }
 }
 
@@ -103,6 +108,21 @@ impl RpcClient {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
             RpcClientConfig::with_commitment(commitment_config),
+        )
+    }
+
+    pub fn new_with_timeouts_and_commitment(
+        url: String,
+        timeout: Duration,
+        commitment_config: CommitmentConfig,
+        confirm_transaction_initial_timeout: Duration,
+    ) -> Self {
+        Self::new_sender(
+            HttpSender::new_with_timeout(url, timeout),
+            RpcClientConfig {
+                commitment_config,
+                confirm_transaction_initial_timeout: Some(confirm_transaction_initial_timeout),
+            },
         )
     }
 
@@ -1845,19 +1865,25 @@ impl RpcClient {
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, signature,
         ));
+
+        let now = Instant::now();
+        let confirm_transaction_initial_timeout = self
+            .config
+            .confirm_transaction_initial_timeout
+            .unwrap_or_default();
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
             let status = self
                 .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
             if status.is_none() {
-                if self
+                let blockhash_not_found = self
                     .get_fee_calculator_for_blockhash_with_commitment(
                         recent_blockhash,
                         CommitmentConfig::processed(),
                     )?
                     .value
-                    .is_none()
-                {
+                    .is_none();
+                if blockhash_not_found && now.elapsed() >= confirm_transaction_initial_timeout {
                     break (signature, status);
                 }
             } else {
