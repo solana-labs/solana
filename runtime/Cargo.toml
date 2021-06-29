@@ -51,7 +51,7 @@ symlink = "0.1.0"
 tar = "0.4.35"
 tempfile = "3.2.0"
 thiserror = "1.0"
-zstd = "0.5.1"
+zstd = "0.9.0"
 
 [lib]
 crate-type = ["lib"]
