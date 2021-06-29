@@ -33,8 +33,8 @@ impl ExecuteCostTable {
     pub fn new(cap: usize) -> Self {
         Self {
             capacity: cap,
-            table: HashMap::new(),
-            occurrences: HashMap::new(),
+            table: HashMap::with_capacity(cap),
+            occurrences: HashMap::with_capacity(cap),
         }
     }
 

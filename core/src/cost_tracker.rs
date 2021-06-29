@@ -5,6 +5,8 @@ use crate::cost_model::TransactionCost;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::HashMap;
 
+const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
+
 #[derive(Debug, Clone)]
 pub struct CostTracker {
     account_cost_limit: u64,
@@ -21,7 +23,7 @@ impl CostTracker {
             account_cost_limit: chain_max,
             block_cost_limit: package_max,
             current_bank_slot: 0,
-            cost_by_writable_accounts: HashMap::new(),
+            cost_by_writable_accounts: HashMap::with_capacity(WRITABLE_ACCOUNTS_PER_BLOCK),
             block_cost: 0,
         }
     }
@@ -42,7 +44,7 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
+    pub fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
             return Err("would exceed block cost limit");
@@ -70,7 +72,7 @@ impl CostTracker {
         Ok(())
     }
 
-    fn add_transaction(&mut self, keys: &[Pubkey], cost: &u64) {
+    pub fn add_transaction(&mut self, keys: &[Pubkey], cost: &u64) {
         for account_key in keys.iter() {
             *self
                 .cost_by_writable_accounts
