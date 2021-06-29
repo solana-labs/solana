@@ -1453,6 +1453,7 @@ type TranslatedAccounts<'a> = (
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a> {
+    fn get_loader_id(&self) -> &'a Pubkey;
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>>;
     fn get_context(&self) -> Result<Ref<&'a mut dyn InvokeContext>, EbpfError<BpfError>>;
     fn translate_instruction(
@@ -1484,13 +1485,6 @@ pub struct SyscallInvokeSignedWithBudgetRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallInvokeSignedWithBudgetRust<'a> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>> {
-        self.invoke_context
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
-}
 impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
     fn call(
         &mut self,
@@ -1502,8 +1496,11 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = call_with_budget_rust(
-            self,
+        *result = call_with_budget(
+            &mut SyscallInvokeSignedRust {
+                invoke_context: self.invoke_context.clone(),
+                loader_id: self.loader_id,
+            },
             budgeted_instruction_addr,
             account_infos_addr,
             account_infos_len,
@@ -1514,80 +1511,10 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
     }
 }
 
-fn call_with_budget_rust<'a>(
-    syscall: &SyscallInvokeSignedWithBudgetRust<'a>,
-    budgeted_instruction_addr: u64,
-    account_infos_addr: u64,
-    account_infos_len: u64,
-    signers_seeds_addr: u64,
-    signers_seeds_len: u64,
-    memory_mapping: &MemoryMapping,
-) -> Result<u64, EbpfError<BpfError>> {
-    let mut invoke_context = syscall.get_context_mut()?;
-    invoke_context.get_compute_meter().consume(
-        invoke_context
-            .get_bpf_compute_budget()
-            .budgeted_invoke_context_units,
-    )?;
-    let enforce_aligned_host_addrs =
-        invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
-
-    let bix = translate_type::<BudgetedInstruction>(
-        memory_mapping,
-        budgeted_instruction_addr,
-        syscall.loader_id,
-        enforce_aligned_host_addrs,
-    )?;
-    let ix_addr = bix.instruction_addr;
-    let mut outer_compute_meter = invoke_context.get_compute_meter();
-    let outer_remaining = outer_compute_meter.borrow().get_remaining();
-
-    // The budget passed to the inner CPI call should be the min of the
-    // caller's desired budget, and its actual available budget.
-    let inner_compute_budget = bix.budget.min(outer_remaining);
-
-    let inner_compute_meter = Rc::new(RefCell::new(ThisComputeMeter::new(inner_compute_budget)));
-    invoke_context.replace_compute_meter(inner_compute_meter.clone());
-    drop(invoke_context);
-    let mut inner_invoke_syscall = SyscallInvokeSignedRust {
-        invoke_context: syscall.invoke_context.clone(),
-        loader_id: syscall.loader_id,
-    };
-    let ret = match call(
-        &mut inner_invoke_syscall,
-        ix_addr,
-        account_infos_addr,
-        account_infos_len,
-        signers_seeds_addr,
-        signers_seeds_len,
-        memory_mapping,
-    ) {
-        Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
-            InstructionError::ComputationalBudgetExceeded,
-        ))))
-        | Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
-            InstructionError::ProgramFailedToComplete,
-        )))) => Ok(0x0b9f_05c1),
-        ret => ret,
-    };
-    outer_compute_meter
-        .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
-    let mut invoke_context = syscall.get_context_mut()?;
-    invoke_context.replace_compute_meter(outer_compute_meter);
-    ret
-}
-
 /// Budgeted version of cross-program invocation called from Rust
 pub struct SyscallInvokeSignedWithBudgetC<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
-}
-impl<'a> SyscallInvokeSignedWithBudgetC<'a> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>> {
-        self.invoke_context
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
 }
 impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
     fn call(
@@ -1600,8 +1527,11 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = call_with_budget_c(
-            self,
+        *result = call_with_budget(
+            &mut SyscallInvokeSignedC {
+                invoke_context: self.invoke_context.clone(),
+                loader_id: self.loader_id,
+            },
             budgeted_instruction_addr,
             account_infos_addr,
             account_infos_len,
@@ -1612,8 +1542,8 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
     }
 }
 
-fn call_with_budget_c<'a>(
-    syscall: &SyscallInvokeSignedWithBudgetC<'a>,
+fn call_with_budget<'a>(
+    inner_invoke_syscall: &mut dyn SyscallInvokeSigned<'a>,
     budgeted_instruction_addr: u64,
     account_infos_addr: u64,
     account_infos_len: u64,
@@ -1621,7 +1551,7 @@ fn call_with_budget_c<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let mut invoke_context = syscall.get_context_mut()?;
+    let mut invoke_context = inner_invoke_syscall.get_context_mut()?;
     invoke_context.get_compute_meter().consume(
         invoke_context
             .get_bpf_compute_budget()
@@ -1633,7 +1563,7 @@ fn call_with_budget_c<'a>(
     let bix = translate_type::<BudgetedInstruction>(
         memory_mapping,
         budgeted_instruction_addr,
-        syscall.loader_id,
+        inner_invoke_syscall.get_loader_id(),
         enforce_aligned_host_addrs,
     )?;
     let ix_addr = bix.instruction_addr;
@@ -1643,17 +1573,12 @@ fn call_with_budget_c<'a>(
     // The budget passed to the inner CPI call should be the min of the
     // caller's desired budget, and its actual available budget.
     let inner_compute_budget = bix.budget.min(outer_remaining);
-    // TODO: replace this with a generic version of `dyn ComputeMeter`...?
-    // Can't build new trait object dynamically unfortunately...
+
     let inner_compute_meter = Rc::new(RefCell::new(ThisComputeMeter::new(inner_compute_budget)));
     invoke_context.replace_compute_meter(inner_compute_meter.clone());
     drop(invoke_context);
-    let mut inner_invoke_syscall = SyscallInvokeSignedC {
-        invoke_context: syscall.invoke_context.clone(),
-        loader_id: syscall.loader_id,
-    };
     let ret = match call(
-        &mut inner_invoke_syscall,
+        inner_invoke_syscall,
         ix_addr,
         account_infos_addr,
         account_infos_len,
@@ -1671,17 +1596,19 @@ fn call_with_budget_c<'a>(
     };
     outer_compute_meter
         .consume(inner_compute_budget - inner_compute_meter.borrow().get_remaining())?;
-    let mut invoke_context = syscall.get_context_mut()?;
+    let mut invoke_context = inner_invoke_syscall.get_context_mut()?;
     invoke_context.replace_compute_meter(outer_compute_meter);
     ret
 }
-
 /// Cross-program invocation called from Rust
 pub struct SyscallInvokeSignedRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
+    fn get_loader_id(&self) -> &'a Pubkey {
+        self.loader_id
+    }
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
@@ -1997,6 +1924,9 @@ pub struct SyscallInvokeSignedC<'a> {
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
+    fn get_loader_id(&self) -> &'a Pubkey {
+        self.loader_id
+    }
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
