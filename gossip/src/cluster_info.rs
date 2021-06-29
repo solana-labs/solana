@@ -955,6 +955,7 @@ impl ClusterInfo {
             None => 0,
         };
         let mut entries = Vec::default();
+        let keypair = self.keypair();
         while !update.is_empty() {
             let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
             let now = timestamp();
@@ -967,7 +968,7 @@ impl ClusterInfo {
             update = &update[n..];
             if n > 0 {
                 let epoch_slots = CrdsData::EpochSlots(ix, slots);
-                let entry = CrdsValue::new_signed(epoch_slots, &self.keypair());
+                let entry = CrdsValue::new_signed(epoch_slots, &keypair);
                 entries.push(entry);
             }
             epoch_slot_index += 1;
@@ -2286,10 +2287,11 @@ impl ClusterInfo {
     where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
+        let keypair = self.keypair();
         let packets: Vec<_> = pings
             .into_iter()
             .filter_map(|(addr, ping)| {
-                let pong = Pong::new(&ping, &self.keypair()).ok()?;
+                let pong = Pong::new(&ping, &keypair).ok()?;
                 let pong = Protocol::PongMessage(pong);
                 match Packet::from_data(Some(&addr), pong) {
                     Ok(packet) => Some(packet),
