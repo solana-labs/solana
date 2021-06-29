@@ -86,6 +86,7 @@ impl CostTracker {
 // CostStats can be collected by util, such as ledger_tool
 #[derive(Default, Debug)]
 pub struct CostStats {
+    pub bank_slot: Slot,
     pub total_cost: u64,
     pub number_of_accounts: usize,
     pub costliest_account: Pubkey,
@@ -95,6 +96,7 @@ pub struct CostStats {
 impl CostTracker {
     pub fn get_stats(&self) -> CostStats {
         let mut stats = CostStats {
+            bank_slot: self.current_bank_slot,
             total_cost: self.block_cost,
             number_of_accounts: self.cost_by_writable_accounts.len(),
             costliest_account: Pubkey::default(),
