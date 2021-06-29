@@ -354,7 +354,6 @@ impl StandardBroadcastRun {
         stakes: Option<&HashMap<Pubkey, u64>>,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         const BROADCAST_PEER_UPDATE_INTERVAL_MS: u64 = 1000;
@@ -389,7 +388,7 @@ impl StandardBroadcastRun {
             &r_broadcast_peer_cache.peers,
             &self.last_datapoint_submit,
             &mut transmit_stats,
-            leader_schedule_cache,
+            cluster_info.id(),
             bank_forks,
         )?;
         drop(r_broadcast_peer_cache);
@@ -497,7 +496,6 @@ impl BroadcastRun for StandardBroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((stakes, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
@@ -507,7 +505,6 @@ impl BroadcastRun for StandardBroadcastRun {
             stakes.as_deref(),
             shreds,
             slot_start_ts,
-            leader_schedule_cache,
             bank_forks,
         )
     }

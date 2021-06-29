@@ -15,10 +15,7 @@ use crate::{
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-    leader_schedule_cache::LeaderScheduleCache,
-};
+use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
 use solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry};
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -65,7 +62,6 @@ impl Tpu {
         exit: &Arc<AtomicBool>,
         shred_version: u16,
         vote_tracker: Arc<VoteTracker>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: Arc<RwLock<BankForks>>,
         verified_vote_sender: VerifiedVoteSender,
         gossip_verified_vote_hash_sender: GossipVerifiedVoteHashSender,
@@ -126,7 +122,6 @@ impl Tpu {
             retransmit_slots_receiver,
             exit,
             blockstore,
-            leader_schedule_cache,
             &bank_forks,
             shred_version,
         );

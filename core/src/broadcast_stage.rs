@@ -17,9 +17,7 @@ use solana_gossip::{
     crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
     weighted_shuffle::weighted_best,
 };
-use solana_ledger::{
-    blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
-};
+use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
@@ -82,7 +80,6 @@ impl BroadcastStageType {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
         shred_version: u16,
     ) -> BroadcastStage {
@@ -94,7 +91,6 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                leader_schedule_cache,
                 bank_forks,
                 StandardBroadcastRun::new(shred_version),
             ),
@@ -106,7 +102,6 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                leader_schedule_cache,
                 bank_forks,
                 FailEntryVerificationBroadcastRun::new(shred_version),
             ),
@@ -118,7 +113,6 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                leader_schedule_cache,
                 bank_forks,
                 BroadcastFakeShredsRun::new(0, shred_version),
             ),
@@ -130,7 +124,6 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                leader_schedule_cache,
                 bank_forks,
                 BroadcastDuplicatesRun::new(shred_version, config.clone()),
             ),
@@ -153,7 +146,6 @@ trait BroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()>;
     fn record(
@@ -254,7 +246,6 @@ impl BroadcastStage {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
@@ -286,18 +277,12 @@ impl BroadcastStage {
             let socket_receiver = socket_receiver.clone();
             let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
-            let leader_schedule_cache = leader_schedule_cache.clone();
             let bank_forks = bank_forks.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
-                    let res = bs_transmit.transmit(
-                        &socket_receiver,
-                        &cluster_info,
-                        &sock,
-                        &leader_schedule_cache,
-                        &bank_forks,
-                    );
+                    let res =
+                        bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
                     let res = Self::handle_error(res, "solana-broadcaster-transmit");
                     if let Some(res) = res {
                         return res;
@@ -431,7 +416,7 @@ pub fn broadcast_shreds(
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
     transmit_stats: &mut TransmitShredsStats,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    self_pubkey: Pubkey,
     bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
     let broadcast_len = peers_and_stakes.len();
@@ -444,7 +429,7 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let seed = shred.seed(leader_schedule_cache, &root_bank);
+            let seed = shred.seed(Some(self_pubkey), &root_bank);
             let broadcast_index = weighted_best(peers_and_stakes, seed);
             (&shred.payload, &peers[broadcast_index].tvu)
         })

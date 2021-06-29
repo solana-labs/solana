@@ -284,7 +284,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _leader_schedule_cache: &Arc<LeaderScheduleCache>,
         _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         // Check the delay queue for shreds that are ready to be sent
