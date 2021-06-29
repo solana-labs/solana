@@ -55,26 +55,6 @@ pub struct RpcClient {
     node_version: RwLock<Option<semver::Version>>,
 }
 
-fn serialize_encode_transaction(
-    transaction: &Transaction,
-    encoding: UiTransactionEncoding,
-) -> ClientResult<String> {
-    let serialized = serialize(transaction)
-        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
-    let encoded = match encoding {
-        UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
-        UiTransactionEncoding::Base64 => base64::encode(serialized),
-        _ => {
-            return Err(ClientErrorKind::Custom(format!(
-                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
-                encoding
-            ))
-            .into())
-        }
-    };
-    Ok(encoded)
-}
-
 impl RpcClient {
     fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
@@ -1931,6 +1911,26 @@ impl RpcClient {
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
     }
+}
+
+fn serialize_encode_transaction(
+    transaction: &Transaction,
+    encoding: UiTransactionEncoding,
+) -> ClientResult<String> {
+    let serialized = serialize(transaction)
+        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
+    let encoded = match encoding {
+        UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
+        UiTransactionEncoding::Base64 => base64::encode(serialized),
+        _ => {
+            return Err(ClientErrorKind::Custom(format!(
+                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                encoding
+            ))
+            .into())
+        }
+    };
+    Ok(encoded)
 }
 
 #[derive(Debug, Default)]
