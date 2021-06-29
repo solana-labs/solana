@@ -1899,7 +1899,7 @@ fn verify_transaction(transaction: &Transaction) -> Result<()> {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
-    if transaction.signatures.len() != transaction.message.header.num_required_signatures {
+    if transaction.signatures.len() != transaction.message.header.num_required_signatures as usize {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
 
