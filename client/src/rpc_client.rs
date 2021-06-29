@@ -49,21 +49,31 @@ use {
     },
 };
 
+pub struct RpcClientConfig {
+    commitment_config: CommitmentConfig,
+}
+
+impl RpcClientConfig {
+    fn with_commitment(commitment_config: CommitmentConfig) -> Self {
+        RpcClientConfig { commitment_config }
+    }
+}
+
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
-    commitment_config: CommitmentConfig,
+    config: RpcClientConfig,
     node_version: RwLock<Option<semver::Version>>,
 }
 
 impl RpcClient {
     fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
-        commitment_config: CommitmentConfig,
+        config: RpcClientConfig,
     ) -> Self {
         Self {
             sender: Box::new(sender),
             node_version: RwLock::new(None),
-            commitment_config,
+            config,
         }
     }
 
@@ -72,13 +82,16 @@ impl RpcClient {
     }
 
     pub fn new_with_commitment(url: String, commitment_config: CommitmentConfig) -> Self {
-        Self::new_sender(HttpSender::new(url), commitment_config)
+        Self::new_sender(
+            HttpSender::new(url),
+            RpcClientConfig::with_commitment(commitment_config),
+        )
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
-            CommitmentConfig::default(),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
         )
     }
 
@@ -89,18 +102,21 @@ impl RpcClient {
     ) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
-            commitment_config,
+            RpcClientConfig::with_commitment(commitment_config),
         )
     }
 
     pub fn new_mock(url: String) -> Self {
-        Self::new_sender(MockSender::new(url), CommitmentConfig::default())
+        Self::new_sender(
+            MockSender::new(url),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
+        )
     }
 
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
         Self::new_sender(
             MockSender::new_with_mocks(url, mocks),
-            CommitmentConfig::default(),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
         )
     }
 
@@ -139,7 +155,7 @@ impl RpcClient {
     }
 
     pub fn commitment(&self) -> CommitmentConfig {
-        self.commitment_config
+        self.config.commitment_config
     }
 
     fn use_deprecated_commitment(&self) -> Result<bool, RpcError> {
