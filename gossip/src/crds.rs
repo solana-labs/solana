@@ -533,7 +533,7 @@ impl Crds {
         stakes: &HashMap<Pubkey, u64>,
         now: u64,
     ) -> Result</*num purged:*/ usize, CrdsError> {
-        if stakes.is_empty() {
+        if stakes.values().all(|&stake| stake == 0) {
             return Err(CrdsError::UnknownStakes);
         }
         let mut keys: Vec<_> = self
