@@ -360,6 +360,7 @@ pub trait EntrySlice {
         &self,
         skip_verification: bool,
         secp256k1_program_enabled: bool,
+        verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'_>>>;
 }
 
@@ -515,6 +516,7 @@ impl EntrySlice for [Entry] {
         &'a self,
         skip_verification: bool,
         secp256k1_program_enabled: bool,
+        verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'a>>> {
         let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
             let message_hash = if !skip_verification {
@@ -525,6 +527,11 @@ impl EntrySlice for [Entry] {
                 if secp256k1_program_enabled {
                     // Verify tx precompiles if secp256k1 program is enabled.
                     tx.verify_precompiles().ok()?;
+                }
+                if verify_tx_signatures_len
+                    && tx.signatures.len() != tx.message.header.num_required_signatures as usize
+                {
+                    return None;
                 }
                 tx.verify_and_hash_message().ok()?
             } else {

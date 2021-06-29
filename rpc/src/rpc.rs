@@ -1899,6 +1899,10 @@ fn verify_transaction(transaction: &Transaction) -> Result<()> {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
+    if transaction.signatures.len() != transaction.message.header.num_required_signatures {
+        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+    }
+
     Ok(())
 }
 
