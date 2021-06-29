@@ -6,21 +6,21 @@
 //! way to get that information.
 //!
 //! This module was created to solve that problem.  Now, all threads that need runtime snapshot
-//! information can have a `SyncSnapshotInfo` object to get/set the information they need.
+//! information can have a `SyncSnapshotRuntimeInfo` object to get/set the information they need.
 //!
-//! **NOTE** Client should use `SyncSnapshotInfo` and not `SnapshotInfo`, since the later does not
+//! **NOTE** Client should use `SyncSnapshotRuntimeInfo` and not `SnapshotRuntimeInfo`, since the later does not
 //! include synchronization (and the whole point of this module is to share snapshot information
 //! between threads).
 //!
 //! **NOTE** There are helper functions to handle the common case of getting/setting snapshot
-//! information when you have a `Option<SyncSnapshotInfo>`.
+//! information when you have a `Option<SyncSnapshotRuntimeInfo>`.
 
 use solana_sdk::clock::Slot;
 use std::sync::{Arc, RwLock};
 
 /// Runtime information about snapshots
 ///
-/// **NOTE** Clients should use `SyncSnapshotInfo` instead!
+/// **NOTE** Clients should use `SyncSnapshotRuntimeInfo` instead!
 ///
 /// Information about the snapshots is needed in multiple threads at different times; for example,
 /// `AccountsDb` (and `Bank` via `AccountsDb`) need to ensure cleaning does not happen past the
@@ -30,7 +30,7 @@ use std::sync::{Arc, RwLock};
 /// Share this object between all interested parties to ensure a consistent view of the snapshot
 /// information.
 #[derive(Debug)]
-pub struct SnapshotInfo {
+pub struct SnapshotRuntimeInfo {
     /// The slot when the last full snapshot was taken.  Can be `None` if there are no full
     /// snapshots yet.
     last_full_snapshot_slot: Option<Slot>,
@@ -42,9 +42,9 @@ pub struct SnapshotInfo {
 }
 
 /// Snapshot runtime information, wrapped to make it multi-thread safe
-pub type SyncSnapshotInfo = Arc<RwLock<SnapshotInfo>>;
+pub type SyncSnapshotRuntimeInfo = Arc<RwLock<SnapshotRuntimeInfo>>;
 
-impl Default for SnapshotInfo {
+impl Default for SnapshotRuntimeInfo {
     fn default() -> Self {
         Self {
             last_full_snapshot_slot: None,
@@ -53,7 +53,7 @@ impl Default for SnapshotInfo {
     }
 }
 
-impl SnapshotInfo {
+impl SnapshotRuntimeInfo {
     /// Get the last full snapshot slot
     pub fn last_full_snapshot_slot(&self) -> Option<Slot> {
         self.last_full_snapshot_slot
@@ -75,30 +75,40 @@ impl SnapshotInfo {
     }
 }
 
-/// Helper function to get the last full snapshot slot from an option-and-sync-wrapped SnapshotInfo
-pub fn get_last_full_snapshot_slot(snapshot_info: Option<&SyncSnapshotInfo>) -> Option<Slot> {
-    snapshot_info
-        .map(|sync_snapshot_info| sync_snapshot_info.read().unwrap().last_full_snapshot_slot())
+/// Helper function to get the last full snapshot slot from an option-and-sync-wrapped SnapshotRuntimeInfo
+pub fn get_last_full_snapshot_slot(
+    snapshot_runtime_info: Option<&SyncSnapshotRuntimeInfo>,
+) -> Option<Slot> {
+    snapshot_runtime_info
+        .map(|sync_snapshot_runtime_info| {
+            sync_snapshot_runtime_info
+                .read()
+                .unwrap()
+                .last_full_snapshot_slot()
+        })
         .flatten()
 }
 
-/// Helper function to set the last full snapshot slot from an option-and-sync-wrapped SnapshotInfo
-pub fn set_last_full_snapshot_slot(snapshot_info: Option<&SyncSnapshotInfo>, slot: Slot) {
-    if let Some(sync_snapshot_info) = snapshot_info {
-        sync_snapshot_info
+/// Helper function to set the last full snapshot slot from an option-and-sync-wrapped SnapshotRuntimeInfo
+pub fn set_last_full_snapshot_slot(
+    snapshot_runtime_info: Option<&SyncSnapshotRuntimeInfo>,
+    slot: Slot,
+) {
+    if let Some(sync_snapshot_runtime_info) = snapshot_runtime_info {
+        sync_snapshot_runtime_info
             .write()
             .unwrap()
             .set_last_full_snapshot_slot(slot)
     }
 }
 
-/// Helper function to get the last incremental snapshot slot from an option-and-sync-wrapped SnapshotInfo
+/// Helper function to get the last incremental snapshot slot from an option-and-sync-wrapped SnapshotRuntimeInfo
 pub fn get_last_incremental_snapshot_slot(
-    snapshot_info: Option<&SyncSnapshotInfo>,
+    snapshot_runtime_info: Option<&SyncSnapshotRuntimeInfo>,
 ) -> Option<Slot> {
-    snapshot_info
-        .map(|sync_snapshot_info| {
-            sync_snapshot_info
+    snapshot_runtime_info
+        .map(|sync_snapshot_runtime_info| {
+            sync_snapshot_runtime_info
                 .read()
                 .unwrap()
                 .last_incremental_snapshot_slot()
@@ -106,10 +116,13 @@ pub fn get_last_incremental_snapshot_slot(
         .flatten()
 }
 
-/// Helper function to set the last incremental snapshot slot from an option-and-sync-wrapped SnapshotInfo
-pub fn set_last_incremental_snapshot_slot(snapshot_info: Option<&SyncSnapshotInfo>, slot: Slot) {
-    if let Some(sync_snapshot_info) = snapshot_info {
-        sync_snapshot_info
+/// Helper function to set the last incremental snapshot slot from an option-and-sync-wrapped SnapshotRuntimeInfo
+pub fn set_last_incremental_snapshot_slot(
+    snapshot_runtime_info: Option<&SyncSnapshotRuntimeInfo>,
+    slot: Slot,
+) {
+    if let Some(sync_snapshot_runtime_info) = snapshot_runtime_info {
+        sync_snapshot_runtime_info
             .write()
             .unwrap()
             .set_last_incremental_snapshot_slot(slot)
@@ -121,20 +134,20 @@ mod tests {
     use super::*;
 
     #[test]
-    /// Test to ensure that SyncSnapshotInfo can be used with the helper functions in two threads.
-    fn test_snapshot_info_can_synchronize_two_threads() {
+    /// Test to ensure that SyncSnapshotRuntimeInfo can be used with the helper functions in two threads.
+    fn test_snapshot_runtime_info_can_synchronize_two_threads() {
         const STOP_COUNT: Slot = 10;
-        let snapshot_info = SyncSnapshotInfo::default();
+        let snapshot_runtime_info = SyncSnapshotRuntimeInfo::default();
 
         // Loop on the last full snapshot slot, while updating the last incremental snapshot slot
-        let snapshot_info1 = snapshot_info.clone();
+        let snapshot_runtime_info1 = snapshot_runtime_info.clone();
         let handle1 = std::thread::spawn(move || {
             let mut count = 0;
             loop {
-                set_last_incremental_snapshot_slot(Some(&snapshot_info1), count);
+                set_last_incremental_snapshot_slot(Some(&snapshot_runtime_info1), count);
 
                 if let Some(last_full_snapshot_slot) =
-                    get_last_full_snapshot_slot(Some(&snapshot_info1))
+                    get_last_full_snapshot_slot(Some(&snapshot_runtime_info1))
                 {
                     if last_full_snapshot_slot >= STOP_COUNT && count >= STOP_COUNT {
                         break;
@@ -146,14 +159,14 @@ mod tests {
         });
 
         // Loop on the last incremental snapshot slot, while updating the last full snapshot slot
-        let snapshot_info2 = snapshot_info.clone();
+        let snapshot_runtime_info2 = snapshot_runtime_info.clone();
         let handle2 = std::thread::spawn(move || {
             let mut count = 0;
             loop {
-                set_last_full_snapshot_slot(Some(&snapshot_info2), count);
+                set_last_full_snapshot_slot(Some(&snapshot_runtime_info2), count);
 
                 if let Some(last_incremental_snapshot_slot) =
-                    get_last_incremental_snapshot_slot(Some(&snapshot_info2))
+                    get_last_incremental_snapshot_slot(Some(&snapshot_runtime_info2))
                 {
                     if last_incremental_snapshot_slot >= STOP_COUNT && count >= STOP_COUNT {
                         break;
@@ -167,7 +180,9 @@ mod tests {
         handle1.join().unwrap();
         handle2.join().unwrap();
 
-        assert!(get_last_full_snapshot_slot(Some(&snapshot_info)).unwrap() >= STOP_COUNT);
-        assert!(get_last_incremental_snapshot_slot(Some(&snapshot_info)).unwrap() >= STOP_COUNT);
+        assert!(get_last_full_snapshot_slot(Some(&snapshot_runtime_info)).unwrap() >= STOP_COUNT);
+        assert!(
+            get_last_incremental_snapshot_slot(Some(&snapshot_runtime_info)).unwrap() >= STOP_COUNT
+        );
     }
 }
