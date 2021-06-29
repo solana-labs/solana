@@ -840,7 +840,7 @@ impl ReplayStage {
         // TODO: handle if alternate version of descendant also got confirmed after ancestor was
         // confirmed, what happens then? Should probably keep track of purged list and skip things
         // in `duplicate_slots_to_repair` that have already been purged. Add test.
-        duplicate_slots_to_repair.retain(|(duplicate_slot, _correct_hash)| {
+        duplicate_slots_to_repair.retain(|(duplicate_slot, correct_hash)| {
             // Should not purge duplicate slots if there is currently a poh bank building
             // on top of that slot, as BankingStage might still be referencing/touching that state
             // concurrently.
@@ -863,6 +863,37 @@ impl ReplayStage {
 
             let did_purge_repair = {
                 if !is_poh_building_on_duplicate_fork {
+                    let frozen_hash = bank_forks
+                        .read()
+                        .unwrap()
+                        .get(*duplicate_slot)
+                        .map(|bank| bank.hash());
+                    if let Some(frozen_hash) = frozen_hash {
+                        if frozen_hash == *correct_hash {
+                            warn!(
+                                "Trying to purge slot {} with correct_hash {}",
+                                *duplicate_slot, *correct_hash
+                            );
+                            return false;
+                        } else if frozen_hash == Hash::default()
+                            && !progress.is_dead(*duplicate_slot).expect(
+                                "If slot exists in BankForks must exist in the progress map",
+                            )
+                        {
+                            warn!(
+                                "Trying to purge unfrozen slot {} that is not dead",
+                                *duplicate_slot
+                            );
+                            return false;
+                        }
+                    } else {
+                        warn!(
+                            "Trying to purge slot {} which does not exist in bank forks",
+                            *duplicate_slot
+                        );
+                        return false;
+                    }
+
                     Self::purge_unconfirmed_duplicate_slot(
                         *duplicate_slot,
                         ancestors,
