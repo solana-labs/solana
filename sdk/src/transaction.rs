@@ -990,4 +990,18 @@ mod tests {
         nonce_ix.accounts[0] = 255u8;
         assert_eq!(get_nonce_pubkey_from_instruction(&nonce_ix, &tx), None,);
     }
+
+    #[test]
+    fn tx_keypair_pubkey_mismatch() {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let to_pubkey = Pubkey::new_unique();
+        let instructions = [system_instruction::transfer(&from_pubkey, &to_pubkey, 42)];
+        let mut tx = Transaction::new_with_payer(&instructions, Some(&from_pubkey));
+        let unused_keypair = Keypair::new();
+        let err = tx
+            .try_partial_sign(&[&from_keypair, &unused_keypair], Hash::default())
+            .unwrap_err();
+        assert_eq!(err, SignerError::KeypairPubkeyMismatch);
+    }
 }
