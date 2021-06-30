@@ -927,7 +927,7 @@ mod tests {
         // No signatures.
         {
             let tx = make_transaction(TestCase::RemoveSignature);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
             assert!(entries[..]
                 .verify_and_hash_transactions(false, false, false)
                 .is_some());
@@ -938,7 +938,7 @@ mod tests {
         // Too many signatures.
         {
             let tx = make_transaction(TestCase::AddSignature);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
             assert!(entries[..]
                 .verify_and_hash_transactions(false, false, false)
                 .is_some());
