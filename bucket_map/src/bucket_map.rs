@@ -35,7 +35,7 @@ impl<T: Clone> BucketMap<T> {
             bits: num_buckets_pow2,
         }
     }
-    pub fn num_buckets(&self)-> usize {
+    pub fn num_buckets(&self) -> usize {
         self.buckets.len()
     }
     pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
@@ -98,6 +98,26 @@ impl<T: Clone> BucketMap<T> {
         let location = read_be_u64(key.as_ref());
         (location >> (64 - self.bits)) as usize
     }
+
+    pub fn addref(&self, key: &Pubkey) -> Option<u64> {
+        let ix = self.bucket_ix(key);
+        let mut bucket = self.buckets[ix].write().unwrap();
+        bucket.as_mut()?.addref(key)
+    }
+
+    pub fn unref(&self, key: &Pubkey) -> Option<u64> {
+        let ix = self.bucket_ix(key);
+        let mut bucket = self.buckets[ix].write().unwrap();
+        bucket.as_mut()?.unref(key)
+    }
+
+    pub fn load_ref(&self, key: &Pubkey) -> Option<u64> {
+        let ix = self.bucket_ix(key);
+        let bucket = self.buckets[ix].read().unwrap();
+        bucket.as_ref()?.load_ref(key)
+    }
+
+
 }
 
 struct Bucket<T> {
@@ -112,9 +132,10 @@ struct Bucket<T> {
 }
 
 #[repr(C)]
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 struct IndexEntry {
     key: Pubkey,
+    ref_count: u64,
     data_bucket: u64,
     data_location: u64,
     //if the bucket doubled, the index can be recomputed
@@ -140,7 +161,6 @@ impl IndexEntry {
         key.hash(&mut s);
         s.finish().max(1u64)
     }
-
 }
 
 const MAX_SEARCH: u64 = 16;
@@ -189,6 +209,30 @@ impl<T: Clone> Bucket<T> {
         Self::bucket_find_entry(&self.index, key, self.random)
     }
 
+    fn find_entry_mut(&self, key: &Pubkey) -> Option<(&mut IndexEntry, u64)> {
+        Self::bucket_find_entry_mut(&self.index, key, self.random)
+    }
+
+    fn bucket_find_entry_mut<'a>(
+        index: &'a DataBucket,
+        key: &Pubkey,
+        random: u64,
+    ) -> Option<(&'a mut IndexEntry, u64)> {
+        let ix = Self::bucket_index_ix(index, key, random);
+        for i in ix..ix + MAX_SEARCH {
+            let ii = i % index.num_cells();
+            if index.uid(ii) == 0 {
+                continue;
+            }
+            let elem: &mut IndexEntry = index.get_mut(ii);
+            if elem.key == *key {
+                return Some((elem, ii));
+            }
+        }
+        None
+    }
+
+
     fn bucket_find_entry<'a>(
         index: &'a DataBucket,
         key: &Pubkey,
@@ -223,6 +267,7 @@ impl<T: Clone> Bucket<T> {
             index.allocate(ii, elem_uid).unwrap();
             let mut elem: &mut IndexEntry = index.get_mut(ii);
             elem.key = *key;
+            elem.ref_count = 0;
             elem.data_bucket = 0;
             elem.data_location = 0;
             elem.create_bucket_capacity = 0;
@@ -234,6 +279,23 @@ impl<T: Clone> Bucket<T> {
             return Ok(ii);
         }
         Err(BucketMapError::IndexNoSpace(index.capacity))
+    }
+
+    fn addref(&mut self, key: &Pubkey) -> Option<u64> {
+        let (elem, _) = self.find_entry_mut(key)?;
+        elem.ref_count += 1;
+        Some(elem.ref_count)
+    }
+
+    fn unref(&mut self, key: &Pubkey) -> Option<u64> {
+        let (elem, _) = self.find_entry_mut(key)?;
+        elem.ref_count -= 1;
+        Some(elem.ref_count)
+    }
+
+    fn load_ref(&self, key: &Pubkey) -> Option<u64> {
+        let (elem, _) = self.find_entry(key)?;
+        Some(elem.ref_count)
     }
 
     fn create_key(&self, key: &Pubkey) -> Result<u64, BucketMapError> {
@@ -405,7 +467,6 @@ impl<T: Clone> Bucket<T> {
         );
         location
     }
-
 }
 
 fn read_be_u64(input: &[u8]) -> u64 {

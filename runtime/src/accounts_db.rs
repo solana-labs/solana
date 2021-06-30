@@ -5550,13 +5550,15 @@ impl AccountsDb {
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
-        for account_entry in self.accounts_index.account_maps.read().unwrap().values() {
-            for (_slot, account_entry) in account_entry.slot_list.read().unwrap().iter() {
-                let storage_entry_meta = stored_sizes_and_counts
-                    .entry(account_entry.store_id)
-                    .or_insert((0, 0));
-                storage_entry_meta.0 += account_entry.stored_size;
-                storage_entry_meta.1 += 1;
+        for i in 0..self.accounts_index.account_maps.num_buckets() {
+            for slot_list in self.accounts_index.account_maps.values(i).into_iter() {
+                for (_slot, account_entry) in slot_list.into_iter() {
+                    let storage_entry_meta = stored_sizes_and_counts
+                        .entry(account_entry.store_id)
+                        .or_insert((0, 0));
+                    storage_entry_meta.0 += account_entry.stored_size;
+                    storage_entry_meta.1 += 1;
+                }
             }
         }
         for slot_stores in self.storage.0.iter() {
