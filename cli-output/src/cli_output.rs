@@ -347,6 +347,8 @@ pub struct CliValidators {
     pub total_current_stake: u64,
     pub total_delinquent_stake: u64,
     pub validators: Vec<CliValidator>,
+    pub average_skip_rate: f64,
+    pub average_stake_weighted_skip_rate: f64,
     #[serde(skip_serializing)]
     pub validators_sort_order: CliValidatorsSortOrder,
     #[serde(skip_serializing)]
@@ -509,6 +511,18 @@ impl fmt::Display for CliValidators {
         if self.validators.len() > 100 {
             writeln!(f, "{}", header)?;
         }
+
+        writeln!(f)?;
+        writeln_name_value(
+            f,
+            "Average Stake-Weighted Skip Rate:",
+            &format!("{:.2}%", self.average_stake_weighted_skip_rate,),
+        )?;
+        writeln_name_value(
+            f,
+            "Average Unweighted Skip Rate:    ",
+            &format!("{:.2}%", self.average_skip_rate),
+        )?;
 
         writeln!(f)?;
         writeln_name_value(
