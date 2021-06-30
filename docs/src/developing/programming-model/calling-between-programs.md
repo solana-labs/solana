@@ -142,7 +142,7 @@ let ret = invoke_with_rollback(
     accounts,
     &[&["seed"]],
 );
-if let Err(InvokeError(ProgramError::Custom(inner_program::Error::ThisError))) {
+if let Err(InvokeError(ProgramError::Custom(inner_program::Error::ThisError))) = ret {
   msg!("inner program failed with ThisError!");
 }
 ```
