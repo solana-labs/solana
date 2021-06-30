@@ -4,7 +4,7 @@ extern crate solana_program;
 use solana_program::{
     account_info::next_account_info, account_info::AccountInfo, entrypoint,
     entrypoint::ProgramResult, instruction::Instruction, log::sol_log_compute_units, msg,
-    program::invoke_signed_with_budget, program::BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED,
+    program::invoke_signed_with_budget, program::BPF_STATUS_CODE_1__CPI_COMPUTE_BUDGET_EXCEEDED,
     program_error::ProgramError, pubkey::Pubkey,
 };
 
@@ -22,7 +22,7 @@ pub fn process_instruction(
         let ix = Instruction::new_with_bincode(*inner_program_info.key, &[0], vec![]);
         let ret =
             invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..]);
-        if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
+        if let Err(ProgramError::Custom(BPF_STATUS_CODE_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
             msg!("inner CPI failed to complete");
         } else {
             ret?;
