@@ -30,7 +30,7 @@ memmap2 = "0.2.3"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 num_cpus = "1.13.0"
-ouroboros = "0.9.3"
+ouroboros = "0.9.5"
 rand = "0.7.0"
 rayon = "1.5.1"
 regex = "1.5.4"
