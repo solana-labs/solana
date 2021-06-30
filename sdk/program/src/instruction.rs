@@ -250,10 +250,11 @@ pub struct Instruction {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct BudgetedInstruction {
+pub struct InstructionWithOptions {
+    pub instruction_addr: u64,
     /// Compute units allocated to executing this instruction along with any CPI overhead.
     pub budget: u64,
-    pub instruction_addr: u64,
+    pub throw_unrecoverable_error: bool,
 }
 
 impl Instruction {

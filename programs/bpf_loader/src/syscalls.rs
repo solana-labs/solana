@@ -25,7 +25,7 @@ use solana_sdk::{
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
-    instruction::{AccountMeta, BudgetedInstruction, Instruction, InstructionError},
+    instruction::{AccountMeta, Instruction, InstructionError, InstructionWithOptions},
     keccak,
     keyed_account::KeyedAccount,
     native_loader,
@@ -38,6 +38,7 @@ use solana_sdk::{
 use std::{
     alloc::Layout,
     cell::{Ref, RefCell, RefMut},
+    convert::TryInto,
     mem::{align_of, size_of},
     rc::Rc,
     slice::from_raw_parts_mut,
@@ -1489,7 +1490,7 @@ pub struct SyscallInvokeSignedWithBudgetRust<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
     fn call(
         &mut self,
-        budgeted_instruction_addr: u64,
+        instruction_with_options_addr: u64,
         account_infos_addr: u64,
         account_infos_len: u64,
         signers_seeds_addr: u64,
@@ -1502,7 +1503,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
                 invoke_context: self.invoke_context.clone(),
                 loader_id: self.loader_id,
             },
-            budgeted_instruction_addr,
+            instruction_with_options_addr,
             account_infos_addr,
             account_infos_len,
             signers_seeds_addr,
@@ -1520,7 +1521,7 @@ pub struct SyscallInvokeSignedWithBudgetC<'a> {
 impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
     fn call(
         &mut self,
-        budgeted_instruction_addr: u64,
+        instruction_with_options_addr: u64,
         account_infos_addr: u64,
         account_infos_len: u64,
         signers_seeds_addr: u64,
@@ -1533,7 +1534,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
                 invoke_context: self.invoke_context.clone(),
                 loader_id: self.loader_id,
             },
-            budgeted_instruction_addr,
+            instruction_with_options_addr,
             account_infos_addr,
             account_infos_len,
             signers_seeds_addr,
@@ -1545,7 +1546,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
 
 fn call_with_budget<'a>(
     inner_invoke_syscall: &mut dyn SyscallInvokeSigned<'a>,
-    budgeted_instruction_addr: u64,
+    instruction_with_options_addr: u64,
     account_infos_addr: u64,
     account_infos_len: u64,
     signers_seeds_addr: u64,
@@ -1561,25 +1562,26 @@ fn call_with_budget<'a>(
     let enforce_aligned_host_addrs =
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
 
-    let bix = translate_type::<BudgetedInstruction>(
+    let opt_ix = translate_type::<InstructionWithOptions>(
         memory_mapping,
-        budgeted_instruction_addr,
+        instruction_with_options_addr,
         inner_invoke_syscall.get_loader_id(),
         enforce_aligned_host_addrs,
     )?;
-    let ix_addr = bix.instruction_addr;
+    let ix_addr = opt_ix.instruction_addr;
     let mut outer_compute_meter = invoke_context.get_compute_meter();
     let outer_remaining = outer_compute_meter.borrow().get_remaining();
 
     // The budget passed to the inner CPI call should be the min of the
     // caller's desired budget, and its actual available budget.
-    let inner_compute_budget = bix.budget.min(outer_remaining);
+    let inner_compute_budget = opt_ix.budget.min(outer_remaining);
 
     let inner_compute_meter = Rc::new(RefCell::new(ThisComputeMeter::new(inner_compute_budget)));
     invoke_context.replace_compute_meter(inner_compute_meter.clone());
     drop(invoke_context);
     let ret = match call(
         inner_invoke_syscall,
+        opt_ix.throw_unrecoverable_error,
         ix_addr,
         account_infos_addr,
         account_infos_len,
@@ -1860,6 +1862,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a> {
     ) {
         *result = call(
             self,
+            true,
             instruction_addr,
             account_infos_addr,
             account_infos_len,
@@ -2182,6 +2185,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
     ) {
         *result = call(
             self,
+            true,
             instruction_addr,
             account_infos_addr,
             account_infos_len,
@@ -2335,6 +2339,7 @@ fn get_upgradeable_executable(
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
+    throw_unrecoverable_error: bool,
     instruction_addr: u64,
     account_infos_addr: u64,
     account_infos_len: u64,
@@ -2455,7 +2460,14 @@ fn call<'a>(
     ) {
         Ok(()) => (),
         Err(err) => {
-            return Err(SyscallError::InstructionError(err).into());
+            if throw_unrecoverable_error {
+                return Err(SyscallError::InstructionError(err).into());
+            } else {
+                let prog_err: ProgramError = err
+                    .try_into()
+                    .unwrap_or(ProgramError::ProgramFailedToComplete);
+                return Ok(prog_err.into());
+            }
         }
     }
 

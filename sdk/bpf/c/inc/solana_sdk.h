@@ -485,12 +485,13 @@ typedef struct {
 } SolAccountMeta;
 
 /**
- * BudgetedInstruction
+ * InstructionWithOptions
  */
 typedef struct {
-  uint64_t budget; /** Compute Unit Budget for the Instruction **/
   uint64_t instruction_addr; /** Addr of the instruction */
-} SolBudgetedInstruction;
+  uint64_t budget; /** Compute Unit Budget for the Instruction **/
+  bool throw_unrecoverable_error; /** Whether the instruction's execution context throws an unrecoverable error on failure **/
+} SolInstructionWithOptions;
 
 /**
  * Instruction
@@ -623,12 +624,40 @@ static uint64_t sol_invoke(
  * Internal cross-program invocation function
  */
 uint64_t sol_invoke_signed_with_budget_c(
-  const SolBudgetedInstruction *budgeted_instruction,
+  const SolInstructionWithOptions *instruction_with_options,
   const SolAccountInfo *account_infos,
   int account_infos_len,
   const SolSignerSeeds *signers_seeds,
   int signers_seeds_len
 );
+
+/**
+ * Invoke another program and sign for some of the keys
+ *
+ * @param instruction Instruction to process
+ * @param budget Budgeted compute units for the CPI call. Set to UINT64_MAX if no limit desired.
+ * @param account_infos Accounts used by instruction
+ * @param account_infos_len Length of account_infos array
+ * @param seeds Seed bytes used to sign program accounts
+ * @param seeds_len Length of the seeds array
+ */
+static uint64_t sol_invoke_with_rollback(
+    const SolInstruction *instruction,
+    int budget,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+) {
+  const SolInstructionWithOptions instruction_with_options = { (uint64_t)instruction, (uint64_t)budget, false };
+  return sol_invoke_signed_with_budget_c(
+    &instruction_with_options,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    signers_seeds_len
+  );
+}
 
 /**
  * Invoke another program and sign for some of the keys
@@ -648,9 +677,9 @@ static uint64_t sol_invoke_signed_with_budget(
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  const SolBudgetedInstruction budgeted_instruction = { (uint64_t)budget, (uint64_t)instruction };
+  const SolInstructionWithOptions instruction_with_options = { (uint64_t)instruction, (uint64_t)budget, false };
   return sol_invoke_signed_with_budget_c(
-    &budgeted_instruction,
+    &instruction_with_options,
     account_infos,
     account_infos_len,
     signers_seeds,
