@@ -133,7 +133,7 @@ if let Err(ProgramError::ComputationalBudgetExceeded) = ret {
 ### Advanced: handling errors and rolling back invocations
 To protect developers from unintended consequences, `invoke`, `invoke_signed`, `invoke_with_budget` and `invoke_signed_with_budget` will all fail unrecoverably if the invocation throws an error.
 
-However, users who would like to continue execution after recovering from an error can utilise the `invoke_with_rollback` method, which rolls back any account changes made by the invocation, but allows all account changes made prior to the invocation by the calling context  to persist.
+However, users who would like to continue execution after recovering from an error can utilise the `invoke_with_rollback` method, which rolls back any account changes made by the invocation, but allows all account changes made prior to the invocation to persist.
 
 ```rust, ignore
 let ret = invoke_with_rollback(
