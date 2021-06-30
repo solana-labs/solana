@@ -13,7 +13,6 @@ use crate::{
     consensus::{
         ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
     },
-    cost_model::CostModel,
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
@@ -59,7 +58,7 @@ use std::{
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+        mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc, Mutex, RwLock,
     },
     thread::{self, Builder, JoinHandle},
@@ -284,58 +283,9 @@ impl ReplayTiming {
     }
 }
 
-#[derive(Default)]
-pub struct ReplayServiceTiming {
-    last_print: u64,
-    update_cost_model_count: u64,
-    update_cost_model_elapsed: u64,
-    persist_cost_table_elapsed: u64,
-}
-
-impl ReplayServiceTiming {
-    fn update(
-        &mut self,
-        update_cost_model_count: u64,
-        update_cost_model_elapsed: u64,
-        persist_cost_table_elapsed: u64,
-    ) {
-        self.update_cost_model_count += update_cost_model_count;
-        self.update_cost_model_elapsed += update_cost_model_elapsed;
-        self.persist_cost_table_elapsed += persist_cost_table_elapsed;
-
-        let now = timestamp();
-        let elapsed_ms = now - self.last_print;
-        if elapsed_ms > 1000 {
-            datapoint_info!(
-                "replay-service-timing-stats",
-                ("total_elapsed_us", elapsed_ms * 1000, i64),
-                (
-                    "update_cost_model_count",
-                    self.update_cost_model_count as i64,
-                    i64
-                ),
-                (
-                    "update_cost_model_elapsed",
-                    self.update_cost_model_elapsed as i64,
-                    i64
-                ),
-                (
-                    "persist_cost_table_elapsed",
-                    self.persist_cost_table_elapsed as i64,
-                    i64
-                ),
-            );
-
-            *self = ReplayServiceTiming::default();
-            self.last_print = now;
-        }
-    }
-}
-
 pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     commitment_service: AggregateCommitmentService,
-    t_cost_model_service: JoinHandle<()>,
 }
 
 impl ReplayStage {
@@ -357,7 +307,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
-        cost_model: Arc<RwLock<CostModel>>,
+        cost_update_sender: Sender<ExecuteTimings>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -377,26 +327,6 @@ impl ReplayStage {
 
         trace!("replay stage");
         // Start the replay stage loop
-
-        let (cost_update_sender, cost_update_receiver): (
-            Sender<ExecuteTimings>,
-            Receiver<ExecuteTimings>,
-        ) = channel();
-
-        let exit_clone = exit.clone();
-        let blockstore_clone = blockstore.clone();
-        let t_cost_model_service = Builder::new()
-            .name("solana-replay-cost-model-service".to_string())
-            .spawn(move || {
-                Self::service_loop(
-                    exit_clone,
-                    blockstore_clone,
-                    cost_model,
-                    cost_update_receiver,
-                );
-            })
-            .unwrap();
-
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
             &exit,
             block_commitment_cache.clone(),
@@ -808,46 +738,6 @@ impl ReplayStage {
         Self {
             t_replay,
             commitment_service,
-            t_cost_model_service,
-        }
-    }
-
-    fn service_loop(
-        exit: Arc<AtomicBool>,
-        blockstore: Arc<Blockstore>,
-        cost_model: Arc<RwLock<CostModel>>,
-        cost_update_receiver: Receiver<ExecuteTimings>,
-    ) {
-        let mut replay_service_timing = ReplayServiceTiming::default();
-        let mut dirty = false;
-        let wait_timer = Duration::from_millis(100);
-
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
-            let mut update_count = 0_u64;
-            let mut update_cost_model_time = Measure::start("update_cost_model_time");
-            for cost_update in cost_update_receiver.try_iter() {
-                dirty |= Self::update_cost_model(&cost_model, &cost_update);
-                update_count += 1;
-            }
-            update_cost_model_time.stop();
-
-            let mut persist_cost_table_time = Measure::start("persist_cost_table_time");
-            if dirty {
-                Self::persist_cost_table(&blockstore, &cost_model);
-            }
-            persist_cost_table_time.stop();
-
-            replay_service_timing.update(
-                update_count,
-                update_cost_model_time.as_us(),
-                persist_cost_table_time.as_us(),
-            );
-
-            thread::sleep(wait_timer);
         }
     }
 
@@ -1913,34 +1803,13 @@ impl ReplayStage {
             }
         }
 
-        // send accumulated excute-timings to service thread to update cost model
+        // send accumulated excute-timings to cost_update_service
         cost_update_sender
             .send(execute_timings)
             .expect("send execution cost update to cost_model");
 
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
-    }
-
-    fn persist_cost_table(blockstore: &Blockstore, cost_model: &RwLock<CostModel>) {
-        let cost_model_read = cost_model.read().unwrap();
-        let cost_table = cost_model_read.get_instruction_cost_table();
-        let db_records = blockstore.read_program_costs().expect("read programs");
-
-        // delete records from blockstore if they are no longer in cost_table
-        db_records.iter().for_each(|(pubkey, _)| {
-            if cost_table.get(pubkey).is_none() {
-                blockstore
-                    .delete_program_cost(pubkey)
-                    .expect("delete old program");
-            }
-        });
-
-        for (key, cost) in cost_table.iter() {
-            blockstore
-                .write_program_cost(key, cost)
-                .expect("persist program costs to blockstore");
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2043,35 +1912,6 @@ impl ReplayStage {
             stats.is_recent = tower.is_recent(bank_slot);
         }
         new_stats
-    }
-
-    fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) -> bool {
-        let mut dirty = false;
-        let mut cost_model_mutable = cost_model.write().unwrap();
-        for (program_id, stats) in &execute_timings.details.per_program_timings {
-            let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
-                Ok(c) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} has averaged cost {}",
-                        program_id, c
-                    );
-                    dirty = true;
-                }
-                Err(err) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} failed to update cost, err: {}",
-                        program_id, err
-                    );
-                }
-            }
-        }
-        drop(cost_model_mutable);
-        debug!(
-           "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
-           cost_model.read().unwrap().get_instruction_cost_table()
-        );
-        dirty
     }
 
     fn update_propagation_status(
@@ -2661,7 +2501,6 @@ impl ReplayStage {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_cost_model_service.join().map(|_| ())?;
         self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
     }
@@ -5038,91 +4877,6 @@ mod tests {
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
     }
-
-    #[test]
-    fn test_update_cost_model_with_empty_execute_timings() {
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let empty_execute_timings = ExecuteTimings::default();
-        ReplayStage::update_cost_model(&cost_model, &empty_execute_timings);
-
-        assert_eq!(
-            0,
-            cost_model
-                .read()
-                .unwrap()
-                .get_instruction_cost_table()
-                .len()
-        );
-    }
-
-    #[test]
-    fn test_update_cost_model_with_execute_timings() {
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let mut execute_timings = ExecuteTimings::default();
-
-        let program_key_1 = Pubkey::new_unique();
-        let mut expected_cost: u64;
-
-        // add new program
-        {
-            let accumulated_us: u64 = 1000;
-            let count: u32 = 10;
-            expected_cost = accumulated_us / count as u64;
-
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
-            ReplayStage::update_cost_model(&cost_model, &execute_timings);
-            assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
-            );
-            assert_eq!(
-                Some(&expected_cost),
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
-            );
-        }
-
-        // update program
-        {
-            let accumulated_us: u64 = 2000;
-            let count: u32 = 10;
-            // to expect new cost is Average(new_value, existing_value)
-            expected_cost = ((accumulated_us / count as u64) + expected_cost) / 2;
-
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
-            ReplayStage::update_cost_model(&cost_model, &execute_timings);
-            assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
-            );
-            assert_eq!(
-                Some(&expected_cost),
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
-            );
-        }
-    }
-
     fn run_compute_and_select_forks(
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,

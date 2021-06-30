@@ -416,7 +416,7 @@ impl Rocks {
             for cf_name in cf_names {
                 // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
-                if excludes_from_compaction(&cf_name) {
+                if excludes_from_compaction(cf_name) {
                     continue;
                 }
 
@@ -1316,7 +1316,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
 
     // TransactionStatusIndex and ProgramCosts must be excluded from LedgerCleanupService's rocksdb
     // compactions....
-    if matches!(access_type, AccessType::PrimaryOnly) && !excludes_from_compaction(&C::NAME) {
+    if matches!(access_type, AccessType::PrimaryOnly) && !excludes_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
