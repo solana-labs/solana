@@ -22,8 +22,8 @@ pub fn process_instruction(
         let ix = Instruction::new_with_bincode(*inner_program_info.key, &[0], vec![]);
         let ret =
             invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..]);
-        if let Err(ProgramError::Custom(BPF_STATUS_CODE_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
-            msg!("inner CPI failed to complete");
+        if let Err(ProgramError::ComputationalBudgetExceeded) = ret {
+            msg!("inner CPI exceeded computational budget");
         } else {
             ret?;
         }

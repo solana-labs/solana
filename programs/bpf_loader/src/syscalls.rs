@@ -30,6 +30,7 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+    program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
     rent::Rent,
     sysvar::{self, fees::Fees, Sysvar, SysvarId},
@@ -1588,10 +1589,7 @@ fn call_with_budget<'a>(
     ) {
         Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
             InstructionError::ComputationalBudgetExceeded,
-        ))))
-        | Err(EbpfError::UserError(BpfError::SyscallError(SyscallError::InstructionError(
-            InstructionError::ProgramFailedToComplete,
-        )))) => Ok(0x0b9f_05c1),
+        )))) => Ok(ProgramError::ComputationalBudgetExceeded.into()),
         ret => ret,
     };
     outer_compute_meter

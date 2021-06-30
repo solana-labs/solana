@@ -825,7 +825,12 @@ impl Executor for BpfExecutor {
                         )) => error,
                         err => {
                             ic_logger_msg!(logger, "Program failed to complete: {}", err);
-                            InstructionError::ProgramFailedToComplete
+                            match err {
+                                EbpfError::ExceededMaxInstructions(..) => {
+                                    InstructionError::ComputationalBudgetExceeded
+                                }
+                                _ => InstructionError::ProgramFailedToComplete,
+                            }
                         }
                     };
                     stable_log::program_failure(&logger, program_id, &error);
