@@ -26,5 +26,3 @@ name = "solana_bucket_map"
 
 [[bench]]
 name = "bucket_map"
-
-

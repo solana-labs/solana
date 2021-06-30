@@ -116,8 +116,6 @@ impl<T: Clone> BucketMap<T> {
         let bucket = self.buckets[ix].read().unwrap();
         bucket.as_ref()?.load_ref(key)
     }
-
-
 }
 
 struct Bucket<T> {
@@ -231,7 +229,6 @@ impl<T: Clone> Bucket<T> {
         }
         None
     }
-
 
     fn bucket_find_entry<'a>(
         index: &'a DataBucket,
