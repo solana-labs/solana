@@ -81,6 +81,15 @@ gives a convenient interface for the RPC methods.
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
 
+### Unstable Methods
+
+Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
+
+- [slotsUpdatesSubscribe](jsonrpc-api.md#slotsupdatessubscribe---unstable)
+- [slotsUpdatesUnsubscribe](jsonrpc-api.md#slotsupdatesunsubscribe)
+- [voteSubscribe](jsonrpc-api.md#votesubscribe---unstable-disabled-by-default)
+- [voteUnsubscribe](jsonrpc-api.md#voteunsubscribe)
+
 ### Deprecated Methods
 
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
