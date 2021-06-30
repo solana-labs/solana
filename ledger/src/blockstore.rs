@@ -3093,7 +3093,7 @@ impl Blockstore {
                     return Ok(());
                 }
                 trace!("{:?}", chunk);
-                self.set_roots(&roots_to_fix)?;
+                self.set_roots(chunk)?;
             }
         } else {
             debug!(
