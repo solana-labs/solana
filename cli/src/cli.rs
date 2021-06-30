@@ -61,6 +61,7 @@ use std::{
 use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
+pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -450,6 +451,7 @@ pub struct CliConfig<'a> {
     pub output_format: OutputFormat,
     pub commitment: CommitmentConfig,
     pub send_transaction_config: RpcSendTransactionConfig,
+    pub confirm_transaction_initial_timeout: Duration,
     pub address_labels: HashMap<String, String>,
 }
 
@@ -594,6 +596,9 @@ impl Default for CliConfig<'_> {
             output_format: OutputFormat::Display,
             commitment: CommitmentConfig::confirmed(),
             send_transaction_config: RpcSendTransactionConfig::default(),
+            confirm_transaction_initial_timeout: Duration::from_secs(
+                u64::from_str(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS).unwrap(),
+            ),
             address_labels: HashMap::new(),
         }
     }
@@ -1285,10 +1290,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
     }
 
     let rpc_client = if config.rpc_client.is_none() {
-        Arc::new(RpcClient::new_with_timeout_and_commitment(
+        Arc::new(RpcClient::new_with_timeouts_and_commitment(
             config.json_rpc_url.to_string(),
             config.rpc_timeout,
             config.commitment,
+            config.confirm_transaction_initial_timeout,
         ))
     } else {
         // Primarily for testing
