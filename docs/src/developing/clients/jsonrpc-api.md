@@ -81,6 +81,15 @@ gives a convenient interface for the RPC methods.
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
 
+### Unstable Methods
+
+Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
+
+- [slotsUpdatesSubscribe](jsonrpc-api.md#slotsupdatessubscribe---unstable)
+- [slotsUpdatesUnsubscribe](jsonrpc-api.md#slotsupdatesunsubscribe)
+- [voteSubscribe](jsonrpc-api.md#votesubscribe---unstable-disabled-by-default)
+- [voteUnsubscribe](jsonrpc-api.md#voteunsubscribe)
+
 ### Deprecated Methods
 
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
@@ -3849,6 +3858,87 @@ Unsubscribe from slot notifications
 Request:
 ```json
 {"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
+
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
+### slotsUpdatesSubscribe - Unstable
+
+**This subscription is unstable; the format of this subscription may change in
+the future and it may not always be supported**
+
+Subscribe to receive a notification from the validator on a variety of updates
+on every slot
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"slotsUpdatesSubscribe"}
+
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+```bash
+{
+  "jsonrpc": "2.0",
+  "method": "slotsUpdatesNotification",
+  "params": {
+    "result": {
+      "parent": 75,
+      "slot": 76,
+      "timestamp": 1625081266243,
+      "type": "optimisticConfirmation"
+    },
+    "subscription": 0
+  }
+}
+```
+
+Types:
+- "firstShredReceived"
+- "completed"
+- "createdBank"
+- "frozen"
+- "dead"
+- "optimisticConfirmation"
+- "root"
+
+### slotsUpdatesUnsubscribe
+
+Unsubscribe from slot-update notifications
+
+#### Parameters:
+
+- `<integer>` - subscription id to cancel
+
+#### Results:
+
+- `<bool>` - unsubscribe success message
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"slotsUpdatesUnsubscribe", "params":[0]}
 
 ```
 
