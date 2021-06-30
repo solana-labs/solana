@@ -978,7 +978,7 @@ pub(crate) mod tests {
         node.mark_pull_request_creation_time(new.contact_info().unwrap().id, now);
         let offline = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
         let offline = CrdsValue::new_unsigned(CrdsData::ContactInfo(offline));
-        crds.insert(offline.clone(), now).unwrap();
+        crds.insert(offline, now).unwrap();
         let req = node.new_pull_request(
             &thread_pool,
             &crds,
