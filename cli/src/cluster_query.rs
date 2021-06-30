@@ -1892,14 +1892,40 @@ pub fn process_show_validators(
         entry.delinquent_active_stake += validator.activated_stake;
     }
 
+    let validators: Vec<_> = current_validators
+        .into_iter()
+        .chain(delinquent_validators.into_iter())
+        .collect();
+
+    let (average_skip_rate, average_stake_weighted_skip_rate) = {
+        let mut skip_rate_len = 0;
+        let mut skip_rate_sum = 0.;
+        let mut skip_rate_weighted_sum = 0.;
+        for validator in validators.iter() {
+            if let Some(skip_rate) = validator.skip_rate {
+                skip_rate_sum += skip_rate;
+                skip_rate_len += 1;
+                skip_rate_weighted_sum += skip_rate * validator.activated_stake as f64;
+            }
+        }
+
+        if skip_rate_len > 0 && total_active_stake > 0 {
+            (
+                skip_rate_sum / skip_rate_len as f64,
+                skip_rate_weighted_sum / total_active_stake as f64,
+            )
+        } else {
+            (100., 100.) // Impossible?
+        }
+    };
+
     let cli_validators = CliValidators {
         total_active_stake,
         total_current_stake,
         total_delinquent_stake,
-        validators: current_validators
-            .into_iter()
-            .chain(delinquent_validators.into_iter())
-            .collect(),
+        validators,
+        average_skip_rate,
+        average_stake_weighted_skip_rate,
         validators_sort_order,
         validators_reverse_sort,
         number_validators,
