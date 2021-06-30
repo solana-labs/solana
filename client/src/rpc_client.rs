@@ -497,7 +497,7 @@ impl RpcClient {
     #[deprecated(since = "1.5.19", note = "Please use RpcClient::supply() instead")]
     #[allow(deprecated)]
     pub fn total_supply(&self) -> ClientResult<u64> {
-        self.total_supply_with_commitment(self.commitment_config)
+        self.total_supply_with_commitment(self.commitment())
     }
 
     #[deprecated(
