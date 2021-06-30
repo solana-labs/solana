@@ -4,8 +4,7 @@ extern crate solana_program;
 use solana_program::{
     account_info::next_account_info, account_info::AccountInfo, entrypoint,
     entrypoint::ProgramResult, instruction::Instruction, log::sol_log_compute_units, msg,
-    program::invoke_signed_with_budget, program::BPF_STATUS_CODE_1__CPI_COMPUTE_BUDGET_EXCEEDED,
-    program_error::ProgramError, pubkey::Pubkey,
+    program::invoke_signed_with_budget, program_error::ProgramError, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
