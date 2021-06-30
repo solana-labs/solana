@@ -13,7 +13,7 @@ edition = "2018"
 bzip2 = "0.3.3"
 console = "0.14.1"
 indicatif = "0.16.2"
-log = "0.4.11"
+log = "0.4.14"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }

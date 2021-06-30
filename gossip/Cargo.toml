@@ -16,7 +16,7 @@ clap = "2.33.1"
 flate2 = "1.0"
 indexmap = { version = "1.7", features = ["rayon"] }
 itertools = "0.10.1"
-log = "0.4.11"
+log = "0.4.14"
 lru = "0.6.5"
 matches = "0.1.8"
 num-traits = "0.2"

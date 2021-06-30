@@ -1293,7 +1293,7 @@ checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
 dependencies = [
  "atty",
  "humantime",
- "log 0.4.11",
+ "log 0.4.14",
  "regex",
  "termcolor",
 ]
@@ -1636,7 +1636,7 @@ dependencies = [
  "aho-corasick",
  "bstr",
  "fnv",
- "log 0.4.11",
+ "log 0.4.14",
  "regex",
 ]
 
@@ -1648,7 +1648,7 @@ checksum = "4a1d5b4e896797c19dff490f9706817b42e9b7aa4adfe844464d3bbc9aabb035"
 dependencies = [
  "arc-swap 1.2.0",
  "futures 0.3.15",
- "log 0.4.11",
+ "log 0.4.14",
  "reqwest",
  "serde",
  "serde_derive",
@@ -1665,7 +1665,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c69552f48b18aa6102ce0c82dd9bc9d3f8af5fc0a5797069b1b466b90570e39c"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "plain",
  "scroll",
 ]
@@ -1683,7 +1683,7 @@ dependencies = [
  "futures-util",
  "http",
  "indexmap",
- "log 0.4.11",
+ "log 0.4.14",
  "slab",
  "tokio 0.2.22",
  "tokio-util 0.3.1",
@@ -1955,7 +1955,7 @@ checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
 dependencies = [
  "futures-util",
  "hyper 0.14.3",
- "log 0.4.11",
+ "log 0.4.14",
  "rustls",
  "tokio 1.6.1",
  "tokio-rustls",
@@ -2109,7 +2109,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "jsonrpc-server-utils",
- "log 0.4.11",
+ "log 0.4.14",
  "parity-tokio-ipc",
  "serde",
  "serde_json",
@@ -2127,7 +2127,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-executor",
  "futures-util",
- "log 0.4.11",
+ "log 0.4.14",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2165,7 +2165,7 @@ dependencies = [
  "hyper 0.13.10",
  "jsonrpc-core",
  "jsonrpc-server-utils",
- "log 0.4.11",
+ "log 0.4.14",
  "net2",
  "parking_lot 0.11.0",
  "unicase 2.6.0",
@@ -2180,7 +2180,7 @@ dependencies = [
  "futures 0.3.15",
  "jsonrpc-core",
  "jsonrpc-server-utils",
- "log 0.4.11",
+ "log 0.4.14",
  "parity-tokio-ipc",
  "parking_lot 0.11.0",
  "tower-service",
@@ -2195,7 +2195,7 @@ dependencies = [
  "futures 0.3.15",
  "jsonrpc-core",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "parking_lot 0.11.0",
  "rand 0.7.3",
  "serde",
@@ -2212,7 +2212,7 @@ dependencies = [
  "globset",
  "jsonrpc-core",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "tokio 0.2.22",
  "tokio-util 0.3.1",
  "unicase 2.6.0",
@@ -2227,7 +2227,7 @@ dependencies = [
  "futures 0.3.15",
  "jsonrpc-core",
  "jsonrpc-server-utils",
- "log 0.4.11",
+ "log 0.4.14",
  "parity-ws",
  "parking_lot 0.11.0",
  "slab",
@@ -2389,16 +2389,16 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
 ]
 
 [[package]]
 name = "log"
-version = "0.4.11"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fabed175da42fed1fa0746b0ea71f412aa9d35e76e95e59b192c64b9dc2bf8b"
+checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -2501,7 +2501,7 @@ dependencies = [
  "iovec",
  "kernel32-sys",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "miow 0.2.2",
  "net2",
  "slab",
@@ -2515,7 +2515,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c2bdb6314ec10835cd3293dd268473a835c02b7b352e788be788b3c6ca6bb16"
 dependencies = [
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "miow 0.3.7",
  "ntapi",
  "winapi 0.3.8",
@@ -2528,7 +2528,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
 dependencies = [
  "lazycell",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "slab",
 ]
@@ -2539,7 +2539,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "miow 0.3.7",
  "winapi 0.3.8",
@@ -2585,7 +2585,7 @@ checksum = "b8d96b2e1c8da3957d58100b09f102c6d9cfdfced01b7ec5a8974044bb09dbd4"
 dependencies = [
  "lazy_static",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "openssl",
  "openssl-probe",
  "openssl-sys",
@@ -2842,7 +2842,7 @@ checksum = "fd7f6c69d7687501b2205fe51ade1d7b8797bb3aa141fe5bf13dd78c0483bc89"
 dependencies = [
  "futures 0.3.15",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "mio-named-pipes",
  "miow 0.3.7",
  "rand 0.7.3",
@@ -2859,7 +2859,7 @@ dependencies = [
  "byteorder",
  "bytes 0.4.12",
  "httparse",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "mio-extras",
  "rand 0.7.3",
@@ -3603,7 +3603,7 @@ dependencies = [
  "ipnet",
  "js-sys",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "mime 0.3.16",
  "native-tls",
  "percent-encoding 2.1.0",
@@ -3713,7 +3713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "064fd21ff87c6e87ed4506e68beb42459caa4a0e2eb144932e6776768556980b"
 dependencies = [
  "base64 0.13.0",
- "log 0.4.11",
+ "log 0.4.14",
  "ring",
  "sct",
  "webpki",
@@ -4116,7 +4116,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4370044f8b20f944e05c35d77edd3518e6f21fc4de77e593919f287c6a3f428a"
 dependencies = [
  "base64 0.13.0",
- "log 0.4.11",
+ "log 0.4.14",
  "openssl",
  "serde",
  "serde_derive",
@@ -4164,7 +4164,7 @@ version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.8.0",
@@ -4179,7 +4179,7 @@ name = "solana-accounts-cluster-bench"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "solana-account-decoder",
@@ -4205,7 +4205,7 @@ version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
@@ -4258,7 +4258,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "futures 0.3.15",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.7.13",
  "solana-banks-interface",
  "solana-metrics",
@@ -4276,7 +4276,7 @@ version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
  "itertools 0.10.1",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -4317,7 +4317,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "rayon",
  "serde_json",
  "serde_yaml",
@@ -4344,7 +4344,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -4411,7 +4411,7 @@ dependencies = [
  "dirs-next",
  "humantime",
  "indicatif",
- "log 0.4.11",
+ "log 0.4.14",
  "num-traits",
  "pretty-hex",
  "reqwest",
@@ -4488,7 +4488,7 @@ dependencies = [
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
- "log 0.4.11",
+ "log 0.4.14",
  "net2",
  "rayon",
  "reqwest",
@@ -4517,7 +4517,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "chrono",
- "log 0.4.11",
+ "log 0.4.14",
  "rand_core 0.6.3",
  "serde",
  "serde_derive",
@@ -4546,7 +4546,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "lru",
  "matches",
  "miow 0.3.7",
@@ -4629,7 +4629,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
@@ -4651,7 +4651,7 @@ dependencies = [
  "bzip2",
  "console",
  "indicatif",
- "log 0.4.11",
+ "log 0.4.14",
  "reqwest",
  "solana-runtime",
  "solana-sdk",
@@ -4663,7 +4663,7 @@ name = "solana-exchange-program"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "serde",
@@ -4690,7 +4690,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "serde",
  "serde_derive",
  "solana-clap-utils",
@@ -4713,7 +4713,7 @@ dependencies = [
  "bs58 0.3.1",
  "bv",
  "generic-array 0.14.4",
- "log 0.4.11",
+ "log 0.4.14",
  "memmap2 0.1.0",
  "rustc_version 0.2.3",
  "serde",
@@ -4731,7 +4731,7 @@ dependencies = [
  "bs58 0.4.0",
  "bv",
  "generic-array 0.14.4",
- "log 0.4.11",
+ "log 0.4.14",
  "memmap2 0.2.3",
  "rustc_version 0.4.0",
  "serde",
@@ -4806,7 +4806,7 @@ dependencies = [
  "flate2",
  "indexmap",
  "itertools 0.10.1",
- "log 0.4.11",
+ "log 0.4.14",
  "lru",
  "matches",
  "num-traits",
@@ -4906,7 +4906,7 @@ dependencies = [
  "itertools 0.10.1",
  "lazy_static",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "matches",
  "num_cpus",
  "prost",
@@ -4955,7 +4955,7 @@ dependencies = [
  "futures-util",
  "histogram",
  "itertools 0.10.1",
- "log 0.4.11",
+ "log 0.4.14",
  "regex",
  "serde",
  "serde_json",
@@ -4987,7 +4987,7 @@ dependencies = [
  "fs_extra",
  "gag",
  "itertools 0.10.1",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "serial_test 0.5.1",
@@ -5030,7 +5030,7 @@ checksum = "7ea5932e186629f47859924b3773cfd8bcb4b8796898ac85c1fa0a6a2024e5c6"
 dependencies = [
  "env_logger",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
 ]
 
 [[package]]
@@ -5039,14 +5039,14 @@ version = "1.8.0"
 dependencies = [
  "env_logger",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
 ]
 
 [[package]]
 name = "solana-measure"
 version = "1.8.0"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "solana-metrics",
  "solana-sdk",
 ]
@@ -5056,7 +5056,7 @@ name = "solana-merkle-root-bench"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.8.0",
  "solana-measure",
  "solana-runtime",
@@ -5081,7 +5081,7 @@ dependencies = [
  "env_logger",
  "gethostname",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "reqwest",
  "serial_test 0.5.1",
@@ -5106,7 +5106,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "nix",
  "rand 0.7.3",
  "serde",
@@ -5124,7 +5124,7 @@ dependencies = [
 name = "solana-noop-program"
 version = "1.8.0"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.8.0",
  "solana-sdk",
 ]
@@ -5133,7 +5133,7 @@ dependencies = [
 name = "solana-notifier"
 version = "1.8.0"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "reqwest",
  "serde_json",
 ]
@@ -5159,7 +5159,7 @@ dependencies = [
  "dlopen",
  "dlopen_derive",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "matches",
  "rand 0.7.3",
  "rayon",
@@ -5177,7 +5177,7 @@ dependencies = [
  "bincode",
  "core_affinity",
  "crossbeam-channel",
- "log 0.4.11",
+ "log 0.4.14",
  "matches",
  "rand 0.7.3",
  "solana-ledger",
@@ -5196,7 +5196,7 @@ name = "solana-poh-bench"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
@@ -5224,7 +5224,7 @@ dependencies = [
  "hex",
  "itertools 0.9.0",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5257,7 +5257,7 @@ dependencies = [
  "hex",
  "itertools 0.10.1",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5287,7 +5287,7 @@ dependencies = [
  "bincode",
  "chrono",
  "chrono-humanize",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.7.13",
  "serde",
  "serde_derive",
@@ -5318,7 +5318,7 @@ dependencies = [
  "console",
  "dialoguer",
  "hidapi",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "parking_lot 0.10.2",
@@ -5345,7 +5345,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "regex",
  "serde",
  "serde_derive",
@@ -5396,7 +5396,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libloading",
- "log 0.4.11",
+ "log 0.4.14",
  "memmap2 0.2.3",
  "num-derive",
  "num-traits",
@@ -5456,7 +5456,7 @@ dependencies = [
  "itertools 0.10.1",
  "lazy_static",
  "libsecp256k1",
- "log 0.4.11",
+ "log 0.4.14",
  "memmap2 0.2.3",
  "num-derive",
  "num-traits",
@@ -5540,7 +5540,7 @@ name = "solana-stake-program"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rustc_version 0.4.0",
@@ -5568,7 +5568,7 @@ dependencies = [
  "flate2",
  "futures 0.3.15",
  "goauth",
- "log 0.4.11",
+ "log 0.4.14",
  "prost",
  "prost-types",
  "rand_core 0.6.3",
@@ -5602,7 +5602,7 @@ name = "solana-store-tool"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.8.0",
  "solana-measure",
  "solana-runtime",
@@ -5615,7 +5615,7 @@ name = "solana-streamer"
 version = "1.8.0"
 dependencies = [
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "nix",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -5631,7 +5631,7 @@ version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "nix",
  "solana-clap-utils",
  "solana-logger 1.8.0",
@@ -5722,7 +5722,7 @@ dependencies = [
  "jsonrpc-ipc-server",
  "jsonrpc-server-utils",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "num_cpus",
  "rand 0.7.3",
  "serde",
@@ -5753,7 +5753,7 @@ dependencies = [
 name = "solana-version"
 version = "1.8.0"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -5768,7 +5768,7 @@ name = "solana-vote-program"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "log 0.4.11",
+ "log 0.4.14",
  "num-derive",
  "num-traits",
  "rustc_version 0.4.0",
@@ -5788,7 +5788,7 @@ version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
  "humantime",
- "log 0.4.11",
+ "log 0.4.14",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-cli-output",
@@ -5811,7 +5811,7 @@ dependencies = [
  "goblin",
  "hash32",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "rand 0.7.3",
  "rustc-demangle",
  "scroll",
@@ -6373,7 +6373,7 @@ checksum = "57fc868aae093479e3131e3d165c93b1c7474109d13c90ec0dda2a1bbfff0674"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
- "log 0.4.11",
+ "log 0.4.14",
 ]
 
 [[package]]
@@ -6417,7 +6417,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures 0.1.29",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "num_cpus",
  "parking_lot 0.9.0",
@@ -6499,7 +6499,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures 0.1.29",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "num_cpus",
  "slab",
  "tokio-executor",
@@ -6536,7 +6536,7 @@ checksum = "e2a0b10e610b39c38b031a2fcab08e4b82f16ece36504988dcbd81dbba650d82"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "tokio-codec",
  "tokio-io",
@@ -6553,7 +6553,7 @@ dependencies = [
  "futures 0.1.29",
  "iovec",
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
  "mio 0.6.22",
  "mio-uds",
  "tokio-codec",
@@ -6570,7 +6570,7 @@ dependencies = [
  "bytes 0.5.4",
  "futures-core",
  "futures-sink",
- "log 0.4.11",
+ "log 0.4.14",
  "pin-project-lite 0.1.5",
  "tokio 0.2.22",
 ]
@@ -6584,7 +6584,7 @@ dependencies = [
  "bytes 1.0.1",
  "futures-core",
  "futures-sink",
- "log 0.4.11",
+ "log 0.4.14",
  "pin-project-lite 0.2.4",
  "slab",
  "tokio 1.6.1",
@@ -6668,7 +6668,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09adeb8c97449311ccd28a427f96fb563e7fd31aabf994189879d9da2394b89d"
 dependencies = [
  "cfg-if 1.0.0",
- "log 0.4.11",
+ "log 0.4.14",
  "pin-project-lite 0.2.4",
  "tracing-attributes",
  "tracing-core",
@@ -6763,7 +6763,7 @@ dependencies = [
  "http",
  "httparse",
  "input_buffer",
- "log 0.4.11",
+ "log 0.4.14",
  "native-tls",
  "rand 0.8.3",
  "sha-1 0.9.6",
@@ -6914,7 +6914,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa4227e95324a443c9fcb06e03d4d85e91aabe9a5a02aa818688b6918b6af486"
 dependencies = [
  "libc",
- "log 0.4.11",
+ "log 0.4.14",
 ]
 
 [[package]]
@@ -6985,7 +6985,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ce8a968cb1cd110d136ff8b819a556d6fb6d919363c61534f6860c7eb172ba0"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "try-lock",
 ]
 
@@ -7015,7 +7015,7 @@ checksum = "7bc45447f0d4573f3d65720f636bbcc3dd6ce920ed704670118650bcd47764c7"
 dependencies = [
  "bumpalo",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.67",
