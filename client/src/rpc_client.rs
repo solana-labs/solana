@@ -49,41 +49,36 @@ use {
     },
 };
 
-pub struct RpcClient {
-    sender: Box<dyn RpcSender + Send + Sync + 'static>,
+#[derive(Default)]
+pub struct RpcClientConfig {
     commitment_config: CommitmentConfig,
-    node_version: RwLock<Option<semver::Version>>,
+    confirm_transaction_initial_timeout: Option<Duration>,
 }
 
-fn serialize_encode_transaction(
-    transaction: &Transaction,
-    encoding: UiTransactionEncoding,
-) -> ClientResult<String> {
-    let serialized = serialize(transaction)
-        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
-    let encoded = match encoding {
-        UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
-        UiTransactionEncoding::Base64 => base64::encode(serialized),
-        _ => {
-            return Err(ClientErrorKind::Custom(format!(
-                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
-                encoding
-            ))
-            .into())
+impl RpcClientConfig {
+    fn with_commitment(commitment_config: CommitmentConfig) -> Self {
+        RpcClientConfig {
+            commitment_config,
+            ..Self::default()
         }
-    };
-    Ok(encoded)
+    }
+}
+
+pub struct RpcClient {
+    sender: Box<dyn RpcSender + Send + Sync + 'static>,
+    config: RpcClientConfig,
+    node_version: RwLock<Option<semver::Version>>,
 }
 
 impl RpcClient {
     fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
-        commitment_config: CommitmentConfig,
+        config: RpcClientConfig,
     ) -> Self {
         Self {
             sender: Box::new(sender),
             node_version: RwLock::new(None),
-            commitment_config,
+            config,
         }
     }
 
@@ -92,13 +87,16 @@ impl RpcClient {
     }
 
     pub fn new_with_commitment(url: String, commitment_config: CommitmentConfig) -> Self {
-        Self::new_sender(HttpSender::new(url), commitment_config)
+        Self::new_sender(
+            HttpSender::new(url),
+            RpcClientConfig::with_commitment(commitment_config),
+        )
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
-            CommitmentConfig::default(),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
         )
     }
 
@@ -109,18 +107,36 @@ impl RpcClient {
     ) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
-            commitment_config,
+            RpcClientConfig::with_commitment(commitment_config),
+        )
+    }
+
+    pub fn new_with_timeouts_and_commitment(
+        url: String,
+        timeout: Duration,
+        commitment_config: CommitmentConfig,
+        confirm_transaction_initial_timeout: Duration,
+    ) -> Self {
+        Self::new_sender(
+            HttpSender::new_with_timeout(url, timeout),
+            RpcClientConfig {
+                commitment_config,
+                confirm_transaction_initial_timeout: Some(confirm_transaction_initial_timeout),
+            },
         )
     }
 
     pub fn new_mock(url: String) -> Self {
-        Self::new_sender(MockSender::new(url), CommitmentConfig::default())
+        Self::new_sender(
+            MockSender::new(url),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
+        )
     }
 
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
         Self::new_sender(
             MockSender::new_with_mocks(url, mocks),
-            CommitmentConfig::default(),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
         )
     }
 
@@ -159,7 +175,7 @@ impl RpcClient {
     }
 
     pub fn commitment(&self) -> CommitmentConfig {
-        self.commitment_config
+        self.config.commitment_config
     }
 
     fn use_deprecated_commitment(&self) -> Result<bool, RpcError> {
@@ -201,7 +217,7 @@ impl RpcClient {
 
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
         Ok(self
-            .confirm_transaction_with_commitment(signature, self.commitment_config)?
+            .confirm_transaction_with_commitment(signature, self.commitment())?
             .value)
     }
 
@@ -227,8 +243,7 @@ impl RpcClient {
             transaction,
             RpcSendTransactionConfig {
                 preflight_commitment: Some(
-                    self.maybe_map_commitment(self.commitment_config)?
-                        .commitment,
+                    self.maybe_map_commitment(self.commitment())?.commitment,
                 ),
                 ..RpcSendTransactionConfig::default()
             },
@@ -317,7 +332,7 @@ impl RpcClient {
         self.simulate_transaction_with_config(
             transaction,
             RpcSimulateTransactionConfig {
-                commitment: Some(self.commitment_config),
+                commitment: Some(self.commitment()),
                 ..RpcSimulateTransactionConfig::default()
             },
         )
@@ -355,7 +370,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
     ) -> ClientResult<Option<transaction::Result<()>>> {
-        self.get_signature_status_with_commitment(signature, self.commitment_config)
+        self.get_signature_status_with_commitment(signature, self.commitment())
     }
 
     pub fn get_signature_statuses(
@@ -413,7 +428,7 @@ impl RpcClient {
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {
-        self.get_slot_with_commitment(self.commitment_config)
+        self.get_slot_with_commitment(self.commitment())
     }
 
     pub fn get_slot_with_commitment(
@@ -427,7 +442,7 @@ impl RpcClient {
     }
 
     pub fn get_block_height(&self) -> ClientResult<u64> {
-        self.get_block_height_with_commitment(self.commitment_config)
+        self.get_block_height_with_commitment(self.commitment())
     }
 
     pub fn get_block_height_with_commitment(
@@ -481,14 +496,14 @@ impl RpcClient {
                 stake_account.to_string(),
                 RpcEpochConfig {
                     epoch,
-                    commitment: Some(self.commitment_config),
+                    commitment: Some(self.commitment()),
                 }
             ]),
         )
     }
 
     pub fn supply(&self) -> RpcResult<RpcSupply> {
-        self.supply_with_commitment(self.commitment_config)
+        self.supply_with_commitment(self.commitment())
     }
 
     pub fn supply_with_commitment(
@@ -515,7 +530,7 @@ impl RpcClient {
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {
-        self.get_vote_accounts_with_commitment(self.commitment_config)
+        self.get_vote_accounts_with_commitment(self.commitment())
     }
 
     pub fn get_vote_accounts_with_commitment(
@@ -892,7 +907,7 @@ impl RpcClient {
     }
 
     pub fn get_epoch_info(&self) -> ClientResult<EpochInfo> {
-        self.get_epoch_info_with_commitment(self.commitment_config)
+        self.get_epoch_info_with_commitment(self.commitment())
     }
 
     pub fn get_epoch_info_with_commitment(
@@ -909,7 +924,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        self.get_leader_schedule_with_commitment(slot, self.commitment_config)
+        self.get_leader_schedule_with_commitment(slot, self.commitment())
     }
 
     pub fn get_leader_schedule_with_commitment(
@@ -979,7 +994,7 @@ impl RpcClient {
                 addresses,
                 RpcEpochConfig {
                     epoch,
-                    commitment: Some(self.commitment_config),
+                    commitment: Some(self.commitment()),
                 }
             ]),
         )
@@ -1045,7 +1060,7 @@ impl RpcClient {
     /// Note that `get_account` returns `Err(..)` if the account does not exist whereas
     /// `get_account_with_commitment` returns `Ok(None)` if the account does not exist.
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
-        self.get_account_with_commitment(pubkey, self.commitment_config)?
+        self.get_account_with_commitment(pubkey, self.commitment())?
             .value
             .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into())
     }
@@ -1101,7 +1116,7 @@ impl RpcClient {
 
     pub fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
         Ok(self
-            .get_multiple_accounts_with_commitment(pubkeys, self.commitment_config)?
+            .get_multiple_accounts_with_commitment(pubkeys, self.commitment())?
             .value)
     }
 
@@ -1155,7 +1170,7 @@ impl RpcClient {
     /// Request the balance of the account `pubkey`.
     pub fn get_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
         Ok(self
-            .get_balance_with_commitment(pubkey, self.commitment_config)?
+            .get_balance_with_commitment(pubkey, self.commitment())?
             .value)
     }
 
@@ -1213,7 +1228,7 @@ impl RpcClient {
 
     /// Request the transaction count.
     pub fn get_transaction_count(&self) -> ClientResult<u64> {
-        self.get_transaction_count_with_commitment(self.commitment_config)
+        self.get_transaction_count_with_commitment(self.commitment())
     }
 
     pub fn get_transaction_count_with_commitment(
@@ -1228,7 +1243,7 @@ impl RpcClient {
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
         let (blockhash, fee_calculator, _last_valid_slot) = self
-            .get_recent_blockhash_with_commitment(self.commitment_config)?
+            .get_recent_blockhash_with_commitment(self.commitment())?
             .value;
         Ok((blockhash, fee_calculator))
     }
@@ -1301,7 +1316,7 @@ impl RpcClient {
         blockhash: &Hash,
     ) -> ClientResult<Option<FeeCalculator>> {
         Ok(self
-            .get_fee_calculator_for_blockhash_with_commitment(blockhash, self.commitment_config)?
+            .get_fee_calculator_for_blockhash_with_commitment(blockhash, self.commitment())?
             .value)
     }
 
@@ -1383,7 +1398,7 @@ impl RpcClient {
 
     pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
         Ok(self
-            .get_token_account_with_commitment(pubkey, self.commitment_config)?
+            .get_token_account_with_commitment(pubkey, self.commitment())?
             .value)
     }
 
@@ -1444,7 +1459,7 @@ impl RpcClient {
 
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
-            .get_token_account_balance_with_commitment(pubkey, self.commitment_config)?
+            .get_token_account_balance_with_commitment(pubkey, self.commitment())?
             .value)
     }
 
@@ -1471,7 +1486,7 @@ impl RpcClient {
             .get_token_accounts_by_delegate_with_commitment(
                 delegate,
                 token_account_filter,
-                self.commitment_config,
+                self.commitment(),
             )?
             .value)
     }
@@ -1510,7 +1525,7 @@ impl RpcClient {
             .get_token_accounts_by_owner_with_commitment(
                 owner,
                 token_account_filter,
-                self.commitment_config,
+                self.commitment(),
             )?
             .value)
     }
@@ -1542,7 +1557,7 @@ impl RpcClient {
 
     pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
-            .get_token_supply_with_commitment(mint, self.commitment_config)?
+            .get_token_supply_with_commitment(mint, self.commitment())?
             .value)
     }
 
@@ -1565,7 +1580,7 @@ impl RpcClient {
             pubkey,
             lamports,
             RpcRequestAirdropConfig {
-                commitment: Some(self.commitment_config),
+                commitment: Some(self.commitment()),
                 ..RpcRequestAirdropConfig::default()
             },
         )
@@ -1581,7 +1596,7 @@ impl RpcClient {
             pubkey,
             lamports,
             RpcRequestAirdropConfig {
-                commitment: Some(self.commitment_config),
+                commitment: Some(self.commitment()),
                 recent_blockhash: Some(recent_blockhash.to_string()),
             },
         )
@@ -1684,7 +1699,7 @@ impl RpcClient {
 
     /// Poll the server to confirm a transaction.
     pub fn poll_for_signature(&self, signature: &Signature) -> ClientResult<()> {
-        self.poll_for_signature_with_commitment(signature, self.commitment_config)
+        self.poll_for_signature_with_commitment(signature, self.commitment())
     }
 
     /// Poll the server to confirm a transaction.
@@ -1794,7 +1809,7 @@ impl RpcClient {
     ) -> ClientResult<Signature> {
         self.send_and_confirm_transaction_with_spinner_and_commitment(
             transaction,
-            self.commitment_config,
+            self.commitment(),
         )
     }
 
@@ -1850,19 +1865,25 @@ impl RpcClient {
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, signature,
         ));
+
+        let now = Instant::now();
+        let confirm_transaction_initial_timeout = self
+            .config
+            .confirm_transaction_initial_timeout
+            .unwrap_or_default();
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
             let status = self
                 .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
             if status.is_none() {
-                if self
+                let blockhash_not_found = self
                     .get_fee_calculator_for_blockhash_with_commitment(
                         recent_blockhash,
                         CommitmentConfig::processed(),
                     )?
                     .value
-                    .is_none()
-                {
+                    .is_none();
+                if blockhash_not_found && now.elapsed() >= confirm_transaction_initial_timeout {
                     break (signature, status);
                 }
             } else {
@@ -1931,6 +1952,26 @@ impl RpcClient {
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
     }
+}
+
+fn serialize_encode_transaction(
+    transaction: &Transaction,
+    encoding: UiTransactionEncoding,
+) -> ClientResult<String> {
+    let serialized = serialize(transaction)
+        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
+    let encoded = match encoding {
+        UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
+        UiTransactionEncoding::Base64 => base64::encode(serialized),
+        _ => {
+            return Err(ClientErrorKind::Custom(format!(
+                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                encoding
+            ))
+            .into())
+        }
+    };
+    Ok(encoded)
 }
 
 #[derive(Debug, Default)]
