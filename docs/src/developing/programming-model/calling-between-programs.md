@@ -113,7 +113,7 @@ invoke_signed(
 
 Programs can limit the compute budget available to the invocation via the
 `invoke_with_budget` and `invoke_signed_with_budget` calls.
-If the invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::Custom(solana_program::program::BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)`, which has a value of `0x0b9f_05c1`. This error can then be handled by the caller.
+If the invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::ComputationalBudgetExceeded`. This error can then be handled by the caller.
 
 Example usage
 ```rust, ignore
@@ -123,7 +123,7 @@ let ret = invoke_signed_with_budget(
     accounts,
     &[&["seed"]],
 );
-if let Err(ProgramError::Custom(BPF_SYSCALL_ERROR_1__CPI_COMPUTE_BUDGET_EXCEEDED)) = ret {
+if let Err(ProgramError::ComputationalBudgetExceeded) = ret {
     msg!("inner CPI failed to complete");
 } else {
     ret?;
