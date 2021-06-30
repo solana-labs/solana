@@ -528,9 +528,7 @@ impl EntrySlice for [Entry] {
                     // Verify tx precompiles if secp256k1 program is enabled.
                     tx.verify_precompiles().ok()?;
                 }
-                if verify_tx_signatures_len
-                    && tx.signatures.len() != tx.message.header.num_required_signatures as usize
-                {
+                if verify_tx_signatures_len && !tx.verify_signatures_len() {
                     return None;
                 }
                 tx.verify_and_hash_message().ok()?
