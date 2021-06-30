@@ -1139,7 +1139,7 @@ mod tests {
             sysvars: vec![],
         };
         assert_eq!(
-            Err(InstructionError::ProgramFailedToComplete),
+            Err(InstructionError::ComputationalBudgetExceeded),
             process_instruction(&program_key, &[], &mut invoke_context)
         );
     }
