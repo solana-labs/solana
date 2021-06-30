@@ -2534,15 +2534,20 @@ impl Bank {
         for (hashed_tx, (res, _nonce_rollback)) in hashed_txs.iter().zip(res) {
             let tx = hashed_tx.transaction();
             if Self::can_commit(res) && !tx.signatures.is_empty() {
-                status_cache.insert(
-                    &tx.message().recent_blockhash,
-                    &tx.signatures[0],
-                    self.slot(),
-                    res.clone(),
-                );
+                // Add the message hash to the status cache to ensure that this message
+                // won't be processed again with a different signature.
                 status_cache.insert(
                     &tx.message().recent_blockhash,
                     &hashed_tx.message_hash,
+                    self.slot(),
+                    res.clone(),
+                );
+                // Add the transaction signature to the status cache so that transaction status
+                // can be queried by transaction signature over RPC. In the future, this should
+                // only be added for API nodes because voting validators don't need to do this.
+                status_cache.insert(
+                    &tx.message().recent_blockhash,
+                    &tx.signatures[0],
                     self.slot(),
                     res.clone(),
                 );
@@ -2735,18 +2740,11 @@ impl Bank {
         &self,
         hashed_tx: &HashedTransaction,
         status_cache: &StatusCache<Result<()>>,
-        check_duplicates_by_hash_enabled: bool,
     ) -> bool {
-        let tx = hashed_tx.transaction();
-        let status_cache_key: Option<&[u8]> = if check_duplicates_by_hash_enabled {
-            Some(hashed_tx.message_hash.as_ref())
-        } else {
-            tx.signatures.get(0).map(|sig0| sig0.as_ref())
-        };
-        status_cache_key
-            .and_then(|key| {
-                status_cache.get_status(key, &tx.message().recent_blockhash, &self.ancestors)
-            })
+        let key = &hashed_tx.message_hash;
+        let transaction_blockhash = &hashed_tx.transaction().message().recent_blockhash;
+        status_cache
+            .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()
     }
 
@@ -2757,18 +2755,11 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let rcache = self.src.status_cache.read().unwrap();
-        let check_duplicates_by_hash_enabled = self.check_duplicates_by_hash_enabled();
         hashed_txs
             .iter()
             .zip(lock_results)
             .map(|(hashed_tx, (lock_res, nonce_rollback))| {
-                if lock_res.is_ok()
-                    && self.is_tx_already_processed(
-                        hashed_tx,
-                        &rcache,
-                        check_duplicates_by_hash_enabled,
-                    )
-                {
+                if lock_res.is_ok() && self.is_tx_already_processed(hashed_tx, &rcache) {
                     error_counters.already_processed += 1;
                     return (Err(TransactionError::AlreadyProcessed), None);
                 }
@@ -5058,11 +5049,6 @@ impl Bank {
     pub fn check_init_vote_data_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_init_vote_data::id())
-    }
-
-    pub fn check_duplicates_by_hash_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::check_duplicates_by_hash::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -8288,8 +8274,7 @@ pub(crate) mod tests {
     #[test]
     fn test_tx_already_processed() {
         let (genesis_config, mint_keypair) = create_genesis_config(2);
-        let mut bank = Bank::new(&genesis_config);
-        assert!(!bank.check_duplicates_by_hash_enabled());
+        let bank = Bank::new(&genesis_config);
 
         let key1 = Keypair::new();
         let mut tx =
@@ -8304,11 +8289,9 @@ pub(crate) mod tests {
             Err(TransactionError::AlreadyProcessed)
         );
 
-        // Clear transaction signature
+        // Change transaction signature to simulate processing a transaction with a different signature
+        // for the same message.
         tx.signatures[0] = Signature::default();
-
-        // Enable duplicate check by message hash
-        bank.feature_set = Arc::new(FeatureSet::all_enabled());
 
         // Ensure that message hash check works
         assert_eq!(

@@ -111,10 +111,6 @@ pub mod sysvar_via_syscall {
     solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
 }
 
-pub mod check_duplicates_by_hash {
-    solana_sdk::declare_id!("8ZqTSYHgzyaYCcXJPMViRy6afCFSgNvYooPDeVdyj5GC");
-}
-
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
@@ -179,7 +175,6 @@ lazy_static! {
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
-        (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
