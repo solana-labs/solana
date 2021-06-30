@@ -3857,6 +3857,87 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
+### slotsUpdatesSubscribe - Unstable
+
+**This subscription is unstable; the format of this subscription may change in
+the future and it may not always be supported**
+
+Subscribe to receive a notification from the validator on a variety of updates
+on every slot
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"slotsUpdatesSubscribe"}
+
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+```bash
+{
+  "jsonrpc": "2.0",
+  "method": "slotsUpdatesNotification",
+  "params": {
+    "result": {
+      "parent": 75,
+      "slot": 76,
+      "timestamp": 1625081266243,
+      "type": "optimisticConfirmation"
+    },
+    "subscription": 0
+  }
+}
+```
+
+Types:
+- "firstShredReceived"
+- "completed"
+- "createdBank"
+- "frozen"
+- "dead"
+- "optimisticConfirmation"
+- "root"
+
+### slotsUpdatesUnsubscribe
+
+Unsubscribe from slot-update notifications
+
+#### Parameters:
+
+- `<integer>` - subscription id to cancel
+
+#### Results:
+
+- `<bool>` - unsubscribe success message
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"slotsUpdatesUnsubscribe", "params":[0]}
+
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
 ### rootSubscribe
 
 Subscribe to receive notification anytime a new root is set by the validator.
