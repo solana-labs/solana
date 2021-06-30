@@ -130,6 +130,23 @@ if let Err(ProgramError::ComputationalBudgetExceeded) = ret {
 }
 ```
 
+### Advanced: handling errors and rolling back invocations
+To protect developers from unintended consequences, `invoke`, `invoke_signed`, `invoke_with_budget` and `invoke_signed_with_budget` will all fail unrecoverably if the invocation throws an error.
+
+However, users who would like to continue execution can utilise the `invoke_with_rollback` method, which rolls back any account changes made by the invocation, but which allows account changes made by the calling context prior to the invocation to persist.
+
+```rust, ignore
+let ret = invoke_with_rollback(
+    &instruction,
+    Some(25_000), // set the compute budget for the instruction to be 25,000
+    accounts,
+    &[&["seed"]],
+);
+if let Err(InvokeError(ProgramError::Custom(inner_program::Error::ThisError))) {
+  msg!("inner program failed with ThisError!");
+}
+```
+
 ### Call Depth
 
 Cross-program invocations allow programs to invoke other programs directly but
