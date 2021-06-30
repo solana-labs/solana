@@ -2616,8 +2616,17 @@ impl Bank {
         &'a self,
         tx: &'b Transaction,
     ) -> TransactionBatch<'a, 'b> {
+        let check_transaction = |tx: &Transaction| -> Result<()> {
+            tx.sanitize().map_err(TransactionError::from)?;
+            if Accounts::has_duplicates(&tx.message.account_keys) {
+                Err(TransactionError::AccountLoadedTwice)
+            } else {
+                Ok(())
+            }
+        };
+
         let mut batch = TransactionBatch::new(
-            vec![tx.sanitize().map_err(|e| e.into())],
+            vec![check_transaction(tx)],
             self,
             Cow::Owned(vec![HashedTransaction::from(tx)]),
         );

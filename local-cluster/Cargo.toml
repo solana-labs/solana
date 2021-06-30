@@ -14,7 +14,7 @@ crossbeam-channel = "0.5"
 itertools = "0.10.1"
 gag = "1.0.0"
 fs_extra = "1.2.0"
-log = "0.4.11"
+log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
 solana-config-program = { path = "../programs/config", version = "=1.8.0" }
