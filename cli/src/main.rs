@@ -10,7 +10,7 @@ use solana_clap_utils::{
 };
 use solana_cli::cli::{
     app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
-    DEFAULT_RPC_TIMEOUT_SECONDS,
+    DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS, DEFAULT_RPC_TIMEOUT_SECONDS,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_cli_output::{display::println_name_value, OutputFormat};
@@ -167,6 +167,11 @@ pub fn parse_args<'a>(
     let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
     let rpc_timeout = Duration::from_secs(rpc_timeout);
 
+    let confirm_transaction_initial_timeout =
+        value_t_or_exit!(matches, "confirm_transaction_initial_timeout", u64);
+    let confirm_transaction_initial_timeout =
+        Duration::from_secs(confirm_transaction_initial_timeout);
+
     let (_, websocket_url) = CliConfig::compute_websocket_url_setting(
         matches.value_of("websocket_url").unwrap_or(""),
         &config.websocket_url,
@@ -235,6 +240,7 @@ pub fn parse_args<'a>(
                 preflight_commitment: Some(commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
+            confirm_transaction_initial_timeout,
             address_labels,
         },
         signers,
@@ -349,6 +355,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .hidden(true)
             .help("Timeout value for RPC requests"),
+    )
+    .arg(
+        Arg::with_name("confirm_transaction_initial_timeout")
+            .long("confirm-timeout")
+            .value_name("SECONDS")
+            .takes_value(true)
+            .default_value(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS)
+            .global(true)
+            .hidden(true)
+            .help("Timeout value for initial transaction status"),
     )
     .subcommand(
         SubCommand::with_name("config")
