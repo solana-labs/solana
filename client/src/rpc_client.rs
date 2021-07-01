@@ -1012,35 +1012,43 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
-        let signature = self.send_transaction(transaction)?;
+        const SEND_RETRIES: usize = 1;
+        const GET_STATUS_RETRIES: usize = usize::MAX;
 
-        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            let (recent_blockhash, ..) = self
-                .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                .value;
-            recent_blockhash
-        } else {
-            transaction.message.recent_blockhash
-        };
+        'sending: for _ in 0..SEND_RETRIES {
+            let signature = self.send_transaction(transaction)?;
 
-        loop {
-            match self.get_signature_status(&signature)? {
-                Some(Ok(_)) => return Ok(signature),
-                Some(Err(e)) => return Err(e.into()),
-                None => {
-                    let fee_calculator = self
-                        .get_fee_calculator_for_blockhash_with_commitment(
-                            &recent_blockhash,
-                            CommitmentConfig::processed(),
-                        )?
-                        .value;
-                    if fee_calculator.is_none() {
-                        // Block hash is not found by some reason
-                        break;
-                    } else if cfg!(not(test)) {
-                        // Retry twice a second
-                        sleep(Duration::from_millis(500));
-                        continue;
+            let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+                let (recent_blockhash, ..) = self
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
+                    .value;
+                recent_blockhash
+            } else {
+                transaction.message.recent_blockhash
+            };
+
+            for status_retry in 0..GET_STATUS_RETRIES {
+                match self.get_signature_status(&signature)? {
+                    Some(Ok(_)) => return Ok(signature),
+                    Some(Err(e)) => return Err(e.into()),
+                    None => {
+                        let fee_calculator = self
+                            .get_fee_calculator_for_blockhash_with_commitment(
+                                &recent_blockhash,
+                                CommitmentConfig::processed(),
+                            )?
+                            .value;
+                        if fee_calculator.is_none() {
+                            // Block hash is not found by some reason
+                            break 'sending;
+                        } else if cfg!(not(test))
+                            // Ignore sleep at last step.
+                            && status_retry < GET_STATUS_RETRIES
+                        {
+                            // Retry twice a second
+                            sleep(Duration::from_millis(500));
+                            continue;
+                        }
                     }
                 }
             }
