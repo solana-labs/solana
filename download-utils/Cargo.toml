@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-download-utils"
 edition = "2018"
 
 [dependencies]
-bzip2 = "0.3.3"
+bzip2 = "0.4.3"
 console = "0.14.1"
 indicatif = "0.16.2"
 log = "0.4.14"
