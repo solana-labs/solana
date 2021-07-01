@@ -11769,6 +11769,7 @@ pub(crate) mod tests {
         assert_eq!(sample_sysvar.lamports(), excess_lamports);
     }
 
+    // this test can be removed after rent_for_sysvars activation on mainnet-beta
     #[test]
     fn test_no_deletion_due_to_rent_upon_rent_for_sysvar_activation() {
         solana_logger::setup();
@@ -11802,6 +11803,7 @@ pub(crate) mod tests {
         assert_eq!(bank2.get_program_accounts(&sysvar::id()).unwrap().len(), 8);
     }
 
+    // this test can be removed after rent_for_sysvars activation on mainnet-beta
     #[test]
     fn test_rent_for_sysvars_adjustment_minimum_genesis_set() {
         solana_logger::setup();
@@ -11873,6 +11875,7 @@ pub(crate) mod tests {
         }
     }
 
+    // this test can be removed after rent_for_sysvars activation on mainnet-beta
     #[test]
     fn test_rent_for_sysvars_adjustment_full_set() {
         solana_logger::setup();
