@@ -11,7 +11,7 @@ use log::*;
 use solana_runtime::{
     bank_forks::BankForks,
     snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, ArchiveFormat},
+    snapshot_utils::{self, SnapshotArchiveInfo},
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result};
@@ -53,11 +53,9 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        if let Some((archive_filename, (archive_slot, archive_hash, archive_format))) =
-            snapshot_utils::get_highest_snapshot_archive_path(
-                &snapshot_config.snapshot_package_output_path,
-            )
-        {
+        if let Some(snapshot_archive_info) = snapshot_utils::get_highest_snapshot_archive_info(
+            &snapshot_config.snapshot_package_output_path,
+        ) {
             return load_from_snapshot(
                 genesis_config,
                 blockstore,
@@ -67,10 +65,7 @@ pub fn load(
                 process_options,
                 transaction_status_sender,
                 cache_block_meta_sender,
-                archive_filename,
-                archive_slot,
-                archive_hash,
-                archive_format,
+                &snapshot_archive_info,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -118,12 +113,12 @@ fn load_from_snapshot(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    archive_filename: PathBuf,
-    archive_slot: Slot,
-    archive_hash: Hash,
-    archive_format: ArchiveFormat,
+    snapshot_archive_info: &SnapshotArchiveInfo,
 ) -> LoadResult {
-    info!("Loading snapshot package: {:?}", archive_filename);
+    info!(
+        "Loading snapshot package: {:?}",
+        &snapshot_archive_info.path
+    );
 
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
@@ -131,12 +126,12 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings) = snapshot_utils::bank_from_archive(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archive(
         &account_paths,
         &process_options.frozen_accounts,
         &snapshot_config.snapshot_path,
-        &archive_filename,
-        archive_format,
+        &snapshot_archive_info.path,
+        snapshot_archive_info.archive_format,
         genesis_config,
         process_options.debug_keys.clone(),
         Some(&crate::builtins::get(process_options.bpf_jit)),
@@ -156,10 +151,11 @@ fn load_from_snapshot(
         deserialized_bank.get_accounts_hash(),
     );
 
-    if deserialized_bank_slot_and_hash != (archive_slot, archive_hash) {
+    if deserialized_bank_slot_and_hash != (snapshot_archive_info.slot, snapshot_archive_info.hash) {
         error!(
             "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
-            archive_hash, deserialized_bank_slot_and_hash
+            (snapshot_archive_info.slot, snapshot_archive_info.hash),
+            deserialized_bank_slot_and_hash
         );
         process::exit(1);
     }

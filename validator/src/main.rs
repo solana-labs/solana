@@ -48,10 +48,7 @@ use {
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{
-            get_highest_snapshot_archive_path, ArchiveFormat, SnapshotVersion,
-            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -471,8 +468,9 @@ fn get_rpc_node(
         blacklist_timeout = Instant::now();
 
         let mut highest_snapshot_hash: Option<(Slot, Hash)> =
-            get_highest_snapshot_archive_path(snapshot_output_dir)
-                .map(|(_path, (slot, hash, _compression))| (slot, hash));
+            snapshot_utils::get_highest_snapshot_archive_info(snapshot_output_dir).map(
+                |snapshot_archive_info| (snapshot_archive_info.slot, snapshot_archive_info.hash),
+            );
         let eligible_rpc_peers = if snapshot_not_required {
             rpc_peers
         } else {
@@ -853,8 +851,7 @@ fn rpc_bootstrap(
                 let mut use_local_snapshot = false;
 
                 if let Some(highest_local_snapshot_slot) =
-                    get_highest_snapshot_archive_path(snapshot_output_dir)
-                        .map(|(_path, (slot, _hash, _compression))| slot)
+                    snapshot_utils::get_highest_snapshot_archive_slot(snapshot_output_dir)
                 {
                     if highest_local_snapshot_slot
                         > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)

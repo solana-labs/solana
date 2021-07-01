@@ -1671,12 +1671,13 @@ fn test_snapshot_download() {
         wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
     trace!("found: {:?}", archive_filename);
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
             .to_path_buf(),
-        &archive_snapshot_hash,
+        archive_snapshot_hash.0,
+        &archive_snapshot_hash.1,
         ArchiveFormat::TarBzip2,
     );
 
@@ -1746,12 +1747,13 @@ fn test_snapshot_restart_tower() {
         wait_for_next_snapshot(&cluster, snapshot_package_output_path);
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
             .to_path_buf(),
-        &archive_snapshot_hash,
+        archive_snapshot_hash.0,
+        &archive_snapshot_hash.1,
         ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
@@ -1806,9 +1808,9 @@ fn test_snapshots_blockstore_floor() {
 
     trace!("Waiting for snapshot tar to be generated with slot",);
 
-    let (archive_filename, (archive_slot, archive_hash, _)) = loop {
+    let archive_info = loop {
         let archive =
-            snapshot_utils::get_highest_snapshot_archive_path(&snapshot_package_output_path);
+            snapshot_utils::get_highest_snapshot_archive_info(&snapshot_package_output_path);
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
@@ -1817,16 +1819,17 @@ fn test_snapshots_blockstore_floor() {
     };
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
         validator_snapshot_test_config
             .snapshot_output_path
             .path()
             .to_path_buf(),
-        &(archive_slot, archive_hash),
+        archive_info.slot,
+        &archive_info.hash,
         ArchiveFormat::TarBzip2,
     );
-    fs::hard_link(archive_filename, &validator_archive_path).unwrap();
-    let slot_floor = archive_slot;
+    fs::hard_link(archive_info.path, &validator_archive_path).unwrap();
+    let slot_floor = archive_info.slot;
 
     // Start up a new node from a snapshot
     let validator_stake = 5;
@@ -3122,14 +3125,21 @@ fn wait_for_next_snapshot(
         last_slot
     );
     loop {
-        if let Some((filename, (slot, hash, _))) =
-            snapshot_utils::get_highest_snapshot_archive_path(snapshot_package_output_path)
+        if let Some(snapshot_archive_info) =
+            snapshot_utils::get_highest_snapshot_archive_info(snapshot_package_output_path)
         {
-            trace!("snapshot for slot {} exists", slot);
-            if slot >= last_slot {
-                return (filename, (slot, hash));
+            trace!("snapshot for slot {} exists", snapshot_archive_info.slot);
+            if snapshot_archive_info.slot >= last_slot {
+                return (
+                    snapshot_archive_info.path,
+                    (snapshot_archive_info.slot, snapshot_archive_info.hash),
+                );
             }
-            trace!("snapshot slot {} < last_slot {}", slot, last_slot);
+            trace!(
+                "snapshot slot {} < last_slot {}",
+                snapshot_archive_info.slot,
+                last_slot
+            );
         }
         sleep(Duration::from_millis(5000));
     }
