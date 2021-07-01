@@ -27,7 +27,6 @@ pub const ACCOUNT_MAX_COST: u64 = 100_000_000;
 pub const BLOCK_MAX_COST: u64 = 2_500_000_000;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
-const DEMOTE_SYSVAR_WRITE_LOCKS: bool = true;
 
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
@@ -97,7 +96,7 @@ impl CostModel {
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
             let is_signer = message.is_signer(i);
-            let is_writable = message.is_writable(i, DEMOTE_SYSVAR_WRITE_LOCKS);
+            let is_writable = message.is_writable(i);
 
             if is_signer && is_writable {
                 self.transaction_cost.writable_accounts.push(*k);
