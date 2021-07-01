@@ -49,7 +49,7 @@ pub fn compress(method: CompressionMethod, data: &[u8]) -> Result<Vec<u8>, io::E
     compressed_data.extend(
         match method {
             CompressionMethod::Bzip2 => {
-                let mut e = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::Best);
+                let mut e = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
                 e.write_all(data)?;
                 e.finish()?
             }
