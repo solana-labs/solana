@@ -12,11 +12,14 @@ use log::*;
 use solana_sdk::{message::Message, pubkey::Pubkey, transaction::Transaction};
 use std::collections::HashMap;
 
-// Guestimated from mainnet-beta data, sigver averages 1us, read averages 7us and write avergae 25us
-const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 1 + 25;
-const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1 + 7;
-const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+// Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
+const SIGVER_COST: u64 = 1;
 const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 7;
+const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
 
 // Sampled from mainnet-beta, the instruction execution timings stats are (in us):
 // min=194, max=62164, avg=8214.49, med=2243
