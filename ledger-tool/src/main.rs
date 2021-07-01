@@ -60,7 +60,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 mod bigtable;
@@ -737,14 +737,15 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut transactions = 0;
     let mut programs = 0;
     let mut program_ids = HashMap::new();
-    let cost_model = CostModel::new(ACCOUNT_MAX_COST, BLOCK_MAX_COST);
-    let mut cost_tracker = CostTracker::new(
-        cost_model.get_account_cost_limit(),
-        cost_model.get_block_cost_limit(),
-    );
+    let cost_model = Arc::new(RwLock::new(CostModel::new(
+        ACCOUNT_MAX_COST,
+        BLOCK_MAX_COST,
+    )));
+    let mut cost_tracker = CostTracker::new(cost_model.clone());
 
     for entry in &entries {
         transactions += entry.transactions.len();
+        let mut cost_model = cost_model.write().unwrap();
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction);
