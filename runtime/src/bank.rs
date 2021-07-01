@@ -1535,7 +1535,13 @@ impl Bank {
         let mut new_account = updater(&old_account);
 
         if self.rent_for_sysvars() {
-            // always re-calculate for possible data size change
+            // When new sysvar comes into existence (with RENT_UNADJUSTED_INITIAL_BALANCE lamports),
+            // this code ensures that the sysvar's balance is adjusted to be rent-exempt.
+            // Note that all of existing sysvar balances must be adjusted immediately (i.e. reset) upon
+            // the `rent_for_sysvars` feature activation (ref: reset_all_sysvar_balances).
+            //
+            // More generally, this code always re-calculates for possible sysvar data size change,
+            // although there is no such sysvars currently.
             self.adjust_sysvar_balance_for_rent(&mut new_account);
         }
 
@@ -1546,8 +1552,13 @@ impl Bank {
         &self,
         old_account: &Option<AccountSharedData>,
     ) -> InheritableAccountFields {
+        const RENT_UNADJUSTED_INITIAL_BALANCE: u64 = 1;
+
         (
-            old_account.as_ref().map(|a| a.lamports()).unwrap_or(1),
+            old_account
+                .as_ref()
+                .map(|a| a.lamports())
+                .unwrap_or(RENT_UNADJUSTED_INITIAL_BALANCE),
             if !self.rent_for_sysvars() {
                 INITIAL_RENT_EPOCH
             } else {
