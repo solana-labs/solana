@@ -363,9 +363,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let keyed_accounts = keyed_accounts
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
-                self.message
-                    .account_keys
-                    .iter()
+                // REFACTOR: account_deps unification
+                (0..self.message.account_keys.len())
+                    .map(|index| &self.accounts[index].0)
                     .chain(self.account_deps.iter().map(|(key, _account)| key))
                     .position(|key| key == *search_key)
                     .map(|mut index| {
@@ -374,7 +374,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                         // before calling MessageProcessor::process_cross_program_instruction
                         // Ideally we would recycle the existing accounts here.
                         let key = if index < self.message.account_keys.len() {
-                            &self.message.account_keys[index]
+                            // REFACTOR: account_deps unification
+                            &self.accounts[index].0
                             // &self.accounts[index] as &RefCell<AccountSharedData>,
                         } else {
                             index = index.saturating_sub(self.message.account_keys.len());
@@ -471,11 +472,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        if let Some(index) =
-            (0..self.message.account_keys.len()).position(|index| self.accounts[index].0 == *pubkey)
-        {
-            // REFACTOR: account_deps unification
-            return Some(self.accounts[index].1.clone());
+        // REFACTOR: account_deps unification
+        for index in 0..self.message.account_keys.len() {
+            if self.accounts[index].0 == *pubkey {
+                return Some(self.accounts[index].1.clone());
+            }
         }
         self.account_deps.iter().find_map(|(key, account)| {
             if key == pubkey {
