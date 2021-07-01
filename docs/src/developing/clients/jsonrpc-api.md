@@ -3897,6 +3897,20 @@ Result:
 
 #### Notification Format:
 
+The notification will be an object with the following fields:
+
+- `parent: <u64>` - The parent slot
+- `slot: <u64>` - The newly updated slot
+- `timestamp: <i64>` - The Unix timestamp of the update
+- `type: <string>` - The update type, one of:
+  - "firstShredReceived"
+  - "completed"
+  - "createdBank"
+  - "frozen"
+  - "dead"
+  - "optimisticConfirmation"
+  - "root"
+
 ```bash
 {
   "jsonrpc": "2.0",
@@ -3912,15 +3926,6 @@ Result:
   }
 }
 ```
-
-Types:
-- "firstShredReceived"
-- "completed"
-- "createdBank"
-- "frozen"
-- "dead"
-- "optimisticConfirmation"
-- "root"
 
 ### slotsUpdatesUnsubscribe
 
@@ -4045,7 +4050,10 @@ Result:
 
 #### Notification Format:
 
-The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
+The notification will be an object with the following fields:
+- `hash: <string>` - The vote hash
+- `slots: <array>` - The slots covered by the vote, as an array of u64 integers
+- `timestamp: <i64 | null>` - The timestamp of the vote
 
 ```json
 {
