@@ -147,6 +147,10 @@ pub mod verify_tx_signatures_len {
     solana_sdk::declare_id!("EVW9B5xD9FFK7vw1SBARwMA4s5eRo5eKJdKpsBikzKBz");
 }
 
+pub mod vote_stake_checked_instructions {
+    solana_sdk::declare_id!("BcWknVcgvonN8sL4HE4XFuEVgfcee5MwxWPAgP6ZV89X");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -183,6 +187,7 @@ lazy_static! {
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
+        (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
