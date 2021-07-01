@@ -111,6 +111,18 @@ pub enum VoteInstruction {
     ///   2. [] Clock sysvar
     ///   3. [SIGNER] Vote authority
     VoteSwitch(Vote, Hash),
+
+    /// Authorize a key to send votes or issue a withdrawal
+    ///
+    /// This instruction behaves like `Authorize` with the additional requirement that the new vote
+    /// or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] Vote or withdraw authority
+    ///   3. [SIGNER] New vote or withdraw authority
+    AuthorizeChecked(VoteAuthorize),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -178,6 +190,26 @@ pub fn authorize(
     Instruction::new_with_bincode(
         id(),
         &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
+        account_metas,
+    )
+}
+
+pub fn authorize_checked(
+    vote_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey, // currently authorized
+    new_authorized_pubkey: &Pubkey,
+    vote_authorize: VoteAuthorize,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::AuthorizeChecked(vote_authorize),
         account_metas,
     )
 }
@@ -334,6 +366,23 @@ pub fn process_instruction(
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;
             vote_state::withdraw(me, lamports, to, &signers)
+        }
+        VoteInstruction::AuthorizeChecked(vote_authorize) => {
+            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            {
+                let voter_pubkey = &keyed_account_at_index(keyed_accounts, 3)?
+                    .signer_key()
+                    .ok_or(InstructionError::MissingRequiredSignature)?;
+                vote_state::authorize(
+                    me,
+                    voter_pubkey,
+                    vote_authorize,
+                    &signers,
+                    &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
         }
     }
 }
