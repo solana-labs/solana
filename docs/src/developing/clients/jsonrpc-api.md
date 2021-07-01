@@ -3373,6 +3373,8 @@ Result:
 
 #### Notification Format:
 
+The notification format is the same as seen in the [getAccountInfo](jsonrpc-api.md#getAccountInfo) RPC HTTP method.
+
 Base58 encoding:
 ```json
 {
@@ -3505,7 +3507,14 @@ Result:
 
 #### Notification Format:
 
-Base58 encoding:
+The notification will be an RpcResponse JSON object with value equal to:
+
+- `signature: <string>` - The transaction signature base58 encoded.
+- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+
+Example:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -3545,7 +3554,6 @@ Unsubscribe from transaction logging
 Request:
 ```json
 {"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
-
 ```
 
 Result:
@@ -3621,6 +3629,8 @@ Result:
 ```
 
 #### Notification Format:
+
+The notification format is a <b>single</b> program account object as seen in the [getProgramAccounts](jsonrpc-api.md#getProgramAccounts) RPC HTTP method.
 
 Base58 encoding:
 ```json
@@ -3756,7 +3766,12 @@ Result:
 ```
 
 #### Notification Format:
-```bash
+
+The notification will be an RpcResponse JSON object with value containing an object with:
+- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+
+Example:
+```json
 {
   "jsonrpc": "2.0",
   "method": "signatureNotification",
@@ -3826,7 +3841,14 @@ Result:
 
 #### Notification Format:
 
-```bash
+The notification will be an object with the following fields:
+
+- `parent: <u64>` - The parent slot
+- `root: <u64>` - The current root slot
+- `slot: <u64>` - The newly set slot value
+
+Example:
+```json
 {
   "jsonrpc": "2.0",
   "method": "slotNotification",
@@ -3976,7 +3998,7 @@ Result:
 
 The result is the latest root slot number.
 
-```bash
+```json
 {
   "jsonrpc": "2.0",
   "method": "rootNotification",
