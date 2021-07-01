@@ -11836,7 +11836,7 @@ pub(crate) mod tests {
             assert!(sysvars
                 .iter()
                 .map(|(_pubkey, account)| account.lamports())
-                .all(|l| l == 1));
+                .all(|lamports| lamports == 1));
         }
 
         // 8 sysvars should be reset by reset_all_sysvar_balances()
@@ -11869,7 +11869,7 @@ pub(crate) mod tests {
             assert!(sysvars
                 .iter()
                 .map(|(_pubkey, account)| account.lamports())
-                .all(|l| l > 1));
+                .all(|lamports| lamports > 1));
         }
     }
 
@@ -11945,7 +11945,7 @@ pub(crate) mod tests {
             assert!(sysvars
                 .iter()
                 .map(|(_pubkey, account)| account.lamports())
-                .all(|l| l == 1));
+                .all(|lamports| lamports == 1));
         }
 
         // 9 sysvars should be reset by reset_all_sysvar_balances()
@@ -11978,7 +11978,7 @@ pub(crate) mod tests {
             assert!(sysvars
                 .iter()
                 .map(|(_pubkey, account)| account.lamports())
-                .all(|l| l > 1));
+                .all(|lamports| lamports > 1));
         }
     }
 
