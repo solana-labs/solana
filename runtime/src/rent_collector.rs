@@ -64,7 +64,7 @@ impl RentCollector {
     ) -> u64 {
         if account.executable() // executable accounts must be rent-exempt balance
             || account.rent_epoch() > self.epoch
-            || (!rent_for_sysvars && sysvar::check_id(&account.owner()))
+            || (!rent_for_sysvars && sysvar::check_id(account.owner()))
             || *address == incinerator::id()
         {
             0

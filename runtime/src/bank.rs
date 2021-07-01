@@ -5993,7 +5993,7 @@ pub(crate) mod tests {
         let bank = updater();
         let new = bank.capitalization();
         asserter(old, new);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
         bank
     }
 
@@ -11782,13 +11782,13 @@ pub(crate) mod tests {
 
         let bank2 =
             Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch());
-        assert_eq!(bank2.get_program_accounts(&sysvar::id()).len(), 8);
+        assert_eq!(bank2.get_program_accounts(&sysvar::id()).unwrap().len(), 8);
 
         // force rent collection for sysvars
         bank2.collect_rent_in_partition((0, 0, 1)); // all range
 
         // no sysvar should be deleted due to rent
-        assert_eq!(bank2.get_program_accounts(&sysvar::id()).len(), 8);
+        assert_eq!(bank2.get_program_accounts(&sysvar::id()).unwrap().len(), 8);
     }
 
     #[test]
@@ -11820,7 +11820,7 @@ pub(crate) mod tests {
         );
 
         {
-            let sysvars = bank1.get_program_accounts(&sysvar::id());
+            let sysvars = bank1.get_program_accounts(&sysvar::id()).unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
                 .iter()
@@ -11853,7 +11853,7 @@ pub(crate) mod tests {
         );
 
         {
-            let sysvars = bank2.get_program_accounts(&sysvar::id());
+            let sysvars = bank2.get_program_accounts(&sysvar::id()).unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
                 .iter()
@@ -11913,6 +11913,8 @@ pub(crate) mod tests {
             Some(&builtins),
             AccountSecondaryIndexes::default(),
             false,
+            AccountShrinkThreshold::default(),
+            false,
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(
@@ -11927,7 +11929,7 @@ pub(crate) mod tests {
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
         );
         {
-            let sysvars = bank1.get_program_accounts(&sysvar::id());
+            let sysvars = bank1.get_program_accounts(&sysvar::id()).unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
                 .iter()
@@ -11960,7 +11962,7 @@ pub(crate) mod tests {
             },
         );
         {
-            let sysvars = bank2.get_program_accounts(&sysvar::id());
+            let sysvars = bank2.get_program_accounts(&sysvar::id()).unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
                 .iter()
