@@ -38,7 +38,7 @@ tungstenite = "0.13.0"
 url = "2.2.2"
 
 [dev-dependencies]
-assert_matches = "1.3.0"
+assert_matches = "1.5.0"
 jsonrpc-http-server = "17.0.0"
 solana-logger = { path = "../logger", version = "=1.8.0" }
 
