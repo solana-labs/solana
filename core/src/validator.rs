@@ -57,9 +57,10 @@ use solana_runtime::{
     accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
-    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_config::SnapshotConfig,
 };
 use solana_sdk::{
     clock::Slot,

@@ -37,8 +37,8 @@ use solana_local_cluster::{
     validator_configs::*,
 };
 use solana_runtime::{
-    bank_forks::{ArchiveFormat, SnapshotConfig},
-    snapshot_utils,
+    snapshot_config::SnapshotConfig,
+    snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{
     account::AccountSharedData,

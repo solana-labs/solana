@@ -3,7 +3,6 @@ use {
         accounts_db::{AccountShrinkThreshold, AccountsDb},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
-        bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
             bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
@@ -101,6 +100,15 @@ impl SnapshotVersion {
     fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
         version_string.parse::<Self>().ok()
     }
+}
+
+/// The different archive formats used for snapshots
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ArchiveFormat {
+    TarBzip2,
+    TarGzip,
+    TarZstd,
+    Tar,
 }
 
 #[derive(PartialEq, Eq, Debug)]

@@ -40,8 +40,9 @@ use solana_runtime::{
     },
     accounts_db::AccountShrinkThreshold,
     bank::ExecuteTimings,
-    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     commitment::BlockCommitmentCache,
+    snapshot_config::SnapshotConfig,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
