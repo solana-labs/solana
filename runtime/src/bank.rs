@@ -11753,20 +11753,27 @@ pub(crate) mod tests {
     fn test_adjust_sysvar_balance_for_rent() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let bank = Bank::new(&genesis_config);
-        let mut sample_sysvar = bank.get_account(&sysvar::clock::id()).unwrap();
-        assert_eq!(sample_sysvar.lamports(), 1);
-        bank.adjust_sysvar_balance_for_rent(&mut sample_sysvar);
-        let rent_exempt_balance_for_sysvar_clock = 1169280;
+        let mut smaller_sample_sysvar = bank.get_account(&sysvar::clock::id()).unwrap();
+        assert_eq!(smaller_sample_sysvar.lamports(), 1);
+        bank.adjust_sysvar_balance_for_rent(&mut smaller_sample_sysvar);
         assert_eq!(
-            sample_sysvar.lamports(),
-            rent_exempt_balance_for_sysvar_clock
+            smaller_sample_sysvar.lamports(),
+            bank.get_minimum_balance_for_rent_exemption(smaller_sample_sysvar.data().len()),
         );
 
+        let mut bigger_sample_sysvar = AccountSharedData::new(
+            1,
+            smaller_sample_sysvar.data().len() + 1,
+            &Pubkey::default(),
+        );
+        bank.adjust_sysvar_balance_for_rent(&mut bigger_sample_sysvar);
+        assert!(smaller_sample_sysvar.lamports() < bigger_sample_sysvar.lamports());
+
         // excess lamports shouldn't be reduced by adjust_sysvar_balance_for_rent()
-        let excess_lamports = 9_999_999;
-        sample_sysvar.set_lamports(excess_lamports);
-        bank.adjust_sysvar_balance_for_rent(&mut sample_sysvar);
-        assert_eq!(sample_sysvar.lamports(), excess_lamports);
+        let excess_lamports = smaller_sample_sysvar.lamports() + 999;
+        smaller_sample_sysvar.set_lamports(excess_lamports);
+        bank.adjust_sysvar_balance_for_rent(&mut smaller_sample_sysvar);
+        assert_eq!(smaller_sample_sysvar.lamports(), excess_lamports);
     }
 
     // this test can be removed after rent_for_sysvars activation on mainnet-beta
