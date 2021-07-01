@@ -690,7 +690,7 @@ impl ReplayStage {
                     let poh_bank = poh_recorder.lock().unwrap().bank();
                     // Dump any duplicate slots that have been confirmed by the network in
                     // anticipation of repairing the confirmed version of the slot.
-                    // 
+                    //
                     // Has to be before `maybe_start_leader()`. Otherwise, `ancestors` and `descendants`
                     // will be outdated, and we cannot assume `poh_bank` will be in either of these maps.
                     Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()));
