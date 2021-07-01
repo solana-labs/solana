@@ -654,6 +654,15 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
+<<<<<<< HEAD
+=======
+        let cost_model = Arc::new(RwLock::new(CostModel::new(
+            ACCOUNT_MAX_COST,
+            BLOCK_MAX_COST,
+        )));
+        Self::initiate_cost_model(&cost_model, &blockstore.read_program_costs().unwrap());
+
+>>>>>>> 5e424826b (Persist cost table to blockstore (#18123))
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
@@ -872,6 +881,31 @@ impl Validator {
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }
+    }
+
+    fn initiate_cost_model(cost_model: &RwLock<CostModel>, cost_table: &[(Pubkey, u64)]) {
+        let mut cost_model_mutable = cost_model.write().unwrap();
+        for (program_id, cost) in cost_table {
+            match cost_model_mutable.upsert_instruction_cost(program_id, cost) {
+                Ok(c) => {
+                    debug!(
+                        "initiating cost table, instruction {:?} has cost {}",
+                        program_id, c
+                    );
+                }
+                Err(err) => {
+                    debug!(
+                        "initiating cost table, failed for instruction {:?}, err: {}",
+                        program_id, err
+                    );
+                }
+            }
+        }
+        drop(cost_model_mutable);
+        debug!(
+            "restored cost model instruction cost table from blockstore, current values: {:?}",
+            cost_model.read().unwrap().get_instruction_cost_table()
+        );
     }
 }
 

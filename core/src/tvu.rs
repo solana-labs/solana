@@ -12,6 +12,11 @@ use crate::{
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
+<<<<<<< HEAD
+=======
+    cost_model::CostModel,
+    cost_update_service::CostUpdateService,
+>>>>>>> 5e424826b (Persist cost table to blockstore (#18123))
     ledger_cleanup_service::LedgerCleanupService,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -38,7 +43,12 @@ use solana_runtime::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
+<<<<<<< HEAD
     bank_forks::{BankForks, SnapshotConfig},
+=======
+    bank::ExecuteTimings,
+    bank_forks::BankForks,
+>>>>>>> 5e424826b (Persist cost table to blockstore (#18123))
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
 };
@@ -52,7 +62,7 @@ use std::{
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
-        mpsc::{channel, Receiver},
+        mpsc::{channel, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
     thread,
@@ -66,6 +76,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
+    cost_update_service: CostUpdateService,
 }
 
 pub struct Sockets {
@@ -276,6 +287,17 @@ impl Tvu {
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
         };
 
+        let (cost_update_sender, cost_update_receiver): (
+            Sender<ExecuteTimings>,
+            Receiver<ExecuteTimings>,
+        ) = channel();
+        let cost_update_service = CostUpdateService::new(
+            exit.clone(),
+            blockstore.clone(),
+            cost_model.clone(),
+            cost_update_receiver,
+        );
+
         let replay_stage = ReplayStage::new(
             replay_stage_config,
             blockstore.clone(),
@@ -293,6 +315,10 @@ impl Tvu {
             gossip_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
+<<<<<<< HEAD
+=======
+            cost_update_sender,
+>>>>>>> 5e424826b (Persist cost table to blockstore (#18123))
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -323,6 +349,7 @@ impl Tvu {
             ledger_cleanup_service,
             accounts_background_service,
             accounts_hash_verifier,
+            cost_update_service,
         }
     }
 
@@ -336,6 +363,7 @@ impl Tvu {
         self.accounts_background_service.join()?;
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
+        self.cost_update_service.join()?;
         Ok(())
     }
 }

@@ -19,6 +19,13 @@ pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
+<<<<<<< HEAD
+=======
+pub mod cost_model;
+pub mod cost_tracker;
+pub mod cost_update_service;
+pub mod execute_cost_table;
+>>>>>>> 5e424826b (Persist cost table to blockstore (#18123))
 pub mod fetch_stage;
 pub mod fork_choice;
 pub mod gen_keys;
