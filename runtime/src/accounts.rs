@@ -280,6 +280,8 @@ impl Accounts {
                 accounts.push((*key, account));
             }
             debug_assert_eq!(accounts.len(), message.account_keys.len());
+            // REFACTOR: account_deps unification
+            accounts.append(&mut account_deps.clone());
 
             if let Some(payer_index) = payer_index {
                 if payer_index != 0 {

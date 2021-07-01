@@ -2949,15 +2949,14 @@ impl Bank {
         accounts: &mut TransactionAccounts,
         account_deps: &mut TransactionAccountDeps,
         loaders: &mut TransactionLoaders,
-        message: &Message,
     ) -> (
         TransactionAccountRefCells,
         TransactionAccountDepRefCells,
         TransactionLoaderRefCells,
     ) {
-        let account_refcells: Vec<_> = (0..message.account_keys.len())
-            .zip(accounts.drain(..))
-            .map(|(_i, (pubkey, account))| {
+        let account_refcells: Vec<_> = accounts
+            .drain(..)
+            .map(|(pubkey, account)| {
                 // REFACTOR: account_deps unification
                 (pubkey, Rc::new(RefCell::new(account)))
             })
@@ -3152,7 +3151,6 @@ impl Bank {
                             &mut loaded_transaction.accounts,
                             &mut loaded_transaction.account_deps,
                             &mut loaded_transaction.loaders,
-                            &tx.message,
                         );
 
                     let instruction_recorders = if enable_cpi_recording {
