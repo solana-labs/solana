@@ -651,7 +651,7 @@ impl Tower {
                     // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
                     // should then have a special case continue building an alternate fork from this ancestor, NOT
                     // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
-                    // on latest vote. See `select_vote_and_reset_forks()` for more details.
+                    // on latest vote. See `ReplayStage:;select_vote_and_reset_forks()` for more details.
                     if heaviest_subtree_fork_choice.is_ancestor_slot(switch_slot, &(last_voted_slot, last_voted_hash)) {
                         return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
                     }
