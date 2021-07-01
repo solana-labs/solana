@@ -1520,14 +1520,14 @@ impl Bank {
         let old_account = if !self.rent_for_sysvars() {
             // This old behavior is being retired for simpler reasoning for the benefits of all.
             // Specifically, get_sysvar_account_with_fixed_root() doesn't work nicely with eager
-            // rent collection, which becomes applicable for sysvars after rent_for_sysvars
-            // activation. That's because get_sysvar_account_with_fixed_root() called by both
+            // rent collection, which becomes significant for sysvars after rent_for_sysvars
+            // activation. That's because get_sysvar_account_with_fixed_root() invocations by both
             // update_slot_history() and update_recent_blockhashes() ignores any updates
-            // done by eager rent collection in this slot.
+            // by eager rent collection in this slot.
             // Also, it turned out that get_sysvar_account_with_fixed_root()'s special
             // behavior (idempotent) isn't needed to begin with, because we're fairly certain that
             // we don't call new_from_parent() with same child slot multiple times in the
-            // production code...
+            // production code (except after proper handling of duplicate slot dumping)...
             self.get_sysvar_account_with_fixed_root(pubkey)
         } else {
             self.get_account_with_fixed_root(pubkey)
