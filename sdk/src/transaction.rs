@@ -363,7 +363,7 @@ impl Transaction {
 
     /// Verify the length of signatures matches the value in the message header
     pub fn verify_signatures_len(&self) -> bool {
-        self.signatures.len() == transaction.message.header.num_required_signatures as usize
+        self.signatures.len() == self.message.header.num_required_signatures as usize
     }
 
     /// Verify the transaction and hash its message
