@@ -3095,7 +3095,7 @@ impl Blockstore {
                     return Ok(());
                 }
                 trace!("{:?}", chunk);
-                self.set_roots(roots_to_fix.iter())?;
+                self.set_roots(chunk.iter())?;
             }
         } else {
             debug!(
