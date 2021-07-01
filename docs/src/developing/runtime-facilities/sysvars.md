@@ -97,7 +97,9 @@ other instructions in the same transaction. Read more information on
 ## RecentBlockhashes
 
 The RecentBlockhashes sysvar contains the active recent blockhashes as well as
-their associated fee calculators. It is updated every slot.
+their associated fee calculators. It is updated every slot. Entries are ordered
+by descending block height, so the first entry holds the most recent block hash,
+and the last entry holds an old block hash.
 
 - Address: `SysvarRecentB1ockHashes11111111111111111111`
 - Layout:
