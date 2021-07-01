@@ -2926,9 +2926,11 @@ impl Blockstore {
         }
     }
 
-    pub fn set_roots(&self, rooted_slots: &[u64]) -> Result<()> {
+    pub fn set_roots<'a>(&self, rooted_slots: impl Iterator<Item = &'a Slot>) -> Result<()> {
         let mut write_batch = self.db.batch()?;
+        let mut max_new_rooted_slot = 0;
         for slot in rooted_slots {
+            max_new_rooted_slot = std::cmp::max(max_new_rooted_slot, *slot);
             write_batch.put::<cf::Root>(*slot, &true)?;
         }
 
@@ -2938,7 +2940,7 @@ impl Blockstore {
         if *last_root == std::u64::MAX {
             *last_root = 0;
         }
-        *last_root = cmp::max(*rooted_slots.iter().max().unwrap(), *last_root);
+        *last_root = cmp::max(max_new_rooted_slot, *last_root);
         Ok(())
     }
 
@@ -3093,7 +3095,7 @@ impl Blockstore {
                     return Ok(());
                 }
                 trace!("{:?}", chunk);
-                self.set_roots(chunk)?;
+                self.set_roots(roots_to_fix.iter())?;
             }
         } else {
             debug!(
@@ -3617,7 +3619,7 @@ pub fn create_new_ledger(
     assert!(shreds.last().unwrap().last_in_slot());
 
     blockstore.insert_shreds(shreds, None, false)?;
-    blockstore.set_roots(&[0])?;
+    blockstore.set_roots(std::iter::once(&0))?;
     // Explicitly close the blockstore before we create the archived genesis file
     drop(blockstore);
 
@@ -5868,7 +5870,7 @@ pub mod tests {
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
         assert_eq!(blockstore.last_root(), 0);
 
-        blockstore.set_roots(&chained_slots).unwrap();
+        blockstore.set_roots(chained_slots.iter()).unwrap();
 
         assert_eq!(blockstore.last_root(), 15);
 
@@ -5885,7 +5887,7 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let roots = vec![2, 4, 7, 12, 15];
-        blockstore.set_roots(&roots).unwrap();
+        blockstore.set_roots(roots.iter()).unwrap();
 
         for i in 0..20 {
             if i < 2 || roots.contains(&i) || i > 15 {
@@ -6054,7 +6056,7 @@ pub mod tests {
         let last_root = 100;
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            blockstore.set_roots(&[last_root]).unwrap();
+            blockstore.set_roots(std::iter::once(&last_root)).unwrap();
 
             // Insert will fail, slot < root
             blockstore
@@ -6083,7 +6085,9 @@ pub mod tests {
         ledger.insert_shreds(shreds, None, false).unwrap();
         ledger.insert_shreds(more_shreds, None, false).unwrap();
         ledger.insert_shreds(unrooted_shreds, None, false).unwrap();
-        ledger.set_roots(&[slot - 1, slot, slot + 1]).unwrap();
+        ledger
+            .set_roots(vec![slot - 1, slot, slot + 1].iter())
+            .unwrap();
 
         let parent_meta = SlotMeta {
             parent_slot: std::u64::MAX,
@@ -6638,7 +6642,7 @@ pub mod tests {
             let meta3 = SlotMeta::new(3, 2);
             blockstore.meta_cf.put(3, &meta3).unwrap();
 
-            blockstore.set_roots(&[0, 2]).unwrap();
+            blockstore.set_roots(vec![0, 2].iter()).unwrap();
 
             // Initialize index 0, including:
             //   signature2 in non-root and root,
@@ -6823,7 +6827,7 @@ pub mod tests {
             let meta3 = SlotMeta::new(3, 2);
             blockstore.meta_cf.put(3, &meta3).unwrap();
 
-            blockstore.set_roots(&[0, 1, 2, 3]).unwrap();
+            blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
 
             let lowest_cleanup_slot = 1;
             let lowest_available_slot = lowest_cleanup_slot + 1;
@@ -6961,7 +6965,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        blockstore.set_roots(&[slot - 1, slot]).unwrap();
+        blockstore.set_roots(vec![slot - 1, slot].iter()).unwrap();
 
         let expected_transactions: Vec<TransactionWithStatusMeta> = entries
             .iter()
@@ -7149,7 +7153,7 @@ pub mod tests {
     fn test_empty_transaction_status() {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_roots(&[0]).unwrap();
+        blockstore.set_roots(std::iter::once(&0)).unwrap();
         assert_eq!(
             blockstore
                 .get_rooted_transaction(Signature::default())
@@ -7195,7 +7199,7 @@ pub mod tests {
                     )
                     .unwrap();
             }
-            blockstore.set_roots(&[slot0, slot1]).unwrap();
+            blockstore.set_roots(vec![slot0, slot1].iter()).unwrap();
 
             let all0 = blockstore
                 .get_confirmed_signatures_for_address(address0, 0, 50)
@@ -7288,7 +7292,7 @@ pub mod tests {
                     )
                     .unwrap();
             }
-            blockstore.set_roots(&[21, 22, 23, 24]).unwrap();
+            blockstore.set_roots(vec![21, 22, 23, 24].iter()).unwrap();
             let mut past_slot = 0;
             for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
                 assert!(slot >= past_slot);
@@ -7360,7 +7364,7 @@ pub mod tests {
                     )
                     .unwrap();
             }
-            blockstore.set_roots(&[slot1]).unwrap();
+            blockstore.set_roots(std::iter::once(&slot1)).unwrap();
 
             let slot1_signatures = blockstore
                 .find_address_signatures_for_slot(address0, 1)
@@ -7466,7 +7470,9 @@ pub mod tests {
             }
 
             // Leave one slot unrooted to test only returns confirmed signatures
-            blockstore.set_roots(&[1, 2, 4, 5, 6, 7, 8]).unwrap();
+            blockstore
+                .set_roots(vec![1, 2, 4, 5, 6, 7, 8].iter())
+                .unwrap();
             let highest_confirmed_root = 8;
 
             // Fetch all rooted signatures for address 0 at once...
