@@ -198,13 +198,14 @@ impl RequestMiddleware for RpcRequestMiddleware {
         if let Some(ref snapshot_config) = self.snapshot_config {
             if request.uri().path() == "/snapshot.tar.bz2" {
                 // Convenience redirect to the latest snapshot
-                return if let Some((snapshot_archive, _)) =
-                    snapshot_utils::get_highest_snapshot_archive_path(
+                return if let Some(snapshot_archive_info) =
+                    snapshot_utils::get_highest_snapshot_archive_info(
                         &snapshot_config.snapshot_package_output_path,
                     ) {
                     RpcRequestMiddleware::redirect(&format!(
                         "/{}",
-                        snapshot_archive
+                        snapshot_archive_info
+                            .path
                             .file_name()
                             .unwrap_or_else(|| std::ffi::OsStr::new(""))
                             .to_str()

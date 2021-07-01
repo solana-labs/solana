@@ -148,7 +148,7 @@ mod tests {
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
-        let (deserialized_bank, _timing) = snapshot_utils::bank_from_archive(
+        let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archive(
             account_paths,
             &[],
             &old_bank_forks
@@ -156,9 +156,10 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::get_snapshot_archive_path(
+            snapshot_utils::build_snapshot_archive_path(
                 snapshot_package_output_path.to_path_buf(),
-                &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
+                old_last_bank.slot(),
+                &old_last_bank.get_accounts_hash(),
                 ArchiveFormat::TarBzip2,
             ),
             ArchiveFormat::TarBzip2,
@@ -418,9 +419,10 @@ mod tests {
                 let options = CopyOptions::new();
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
-                saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
+                saved_archive_path = Some(snapshot_utils::build_snapshot_archive_path(
                     snapshot_package_output_path.to_path_buf(),
-                    &(slot, accounts_hash),
+                    slot,
+                    &accounts_hash,
                     ArchiveFormat::TarBzip2,
                 ));
             }
