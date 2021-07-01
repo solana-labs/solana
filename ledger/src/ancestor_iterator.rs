@@ -1,5 +1,5 @@
 use crate::blockstore::*;
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, hash::Hash};
 
 pub struct AncestorIterator<'a> {
     current: Option<Slot>,
@@ -47,6 +47,28 @@ impl<'a> Iterator for AncestorIterator<'a> {
             }
             slot
         })
+    }
+}
+
+pub struct AncestorIteratorWithHash<'a> {
+    ancestor_iterator: AncestorIterator<'a>,
+}
+impl<'a> From<AncestorIterator<'a>> for AncestorIteratorWithHash<'a> {
+    fn from(ancestor_iterator: AncestorIterator<'a>) -> Self {
+        Self { ancestor_iterator }
+    }
+}
+impl<'a> Iterator for AncestorIteratorWithHash<'a> {
+    type Item = (Slot, Hash);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ancestor_iterator
+            .next()
+            .and_then(|next_ancestor_slot| {
+                self.ancestor_iterator
+                    .blockstore
+                    .get_bank_hash(next_ancestor_slot)
+                    .map(|next_ancestor_hash| (next_ancestor_slot, next_ancestor_hash))
+            })
     }
 }
 
