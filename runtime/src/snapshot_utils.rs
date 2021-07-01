@@ -362,7 +362,7 @@ pub fn archive_snapshot_package(
             match snapshot_package.archive_format {
                 ArchiveFormat::TarBzip2 => {
                     let mut encoder =
-                        bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::Best);
+                        bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
                     io::copy(tar_output, &mut encoder)?;
                     let _ = encoder.finish()?;
                 }
