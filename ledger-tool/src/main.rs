@@ -27,10 +27,10 @@ use solana_ledger::{
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_utils,
-    snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+    snapshot_config::SnapshotConfig,
+    snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
