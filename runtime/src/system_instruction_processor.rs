@@ -121,7 +121,7 @@ fn assign(
     }
 
     // bpf programs are allowed to do this; so this is inconsistent...
-    // Thus, we're starting to remove this restricition from system instruction
+    // Thus, we're starting to remove this restriction from system instruction
     // processor for consistency and fewer special casing by piggybacking onto
     // the related feature gate..
     let rent_for_sysvars = invoke_context.is_feature_active(&feature_set::rent_for_sysvars::id());
