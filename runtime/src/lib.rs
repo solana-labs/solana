@@ -33,6 +33,7 @@ mod read_only_accounts_cache;
 pub mod rent_collector;
 pub mod secondary_index;
 pub mod serde_snapshot;
+mod shared_buffer_reader;
 pub mod snapshot_config;
 pub mod snapshot_package;
 pub mod snapshot_runtime_info;
@@ -45,6 +46,7 @@ mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod vote_account;
 pub mod vote_sender_types;
+pub mod waitable_condvar;
 
 #[macro_use]
 extern crate solana_metrics;
