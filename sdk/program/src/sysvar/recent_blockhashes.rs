@@ -53,6 +53,10 @@ impl<'a> PartialOrd for IterItem<'a> {
     }
 }
 
+/// Contains recent block hashes and fee calculators.
+///
+/// The entries are ordered by descending block height, so the first entry holds
+/// the most recent block hash, and the last entry holds an old block hash.
 #[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RecentBlockhashes(Vec<Entry>);
