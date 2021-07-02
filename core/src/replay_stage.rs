@@ -13,13 +13,11 @@ use crate::{
     consensus::{
         ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
     },
-    cost_model::CostModel,
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
-    result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     window_service::DuplicateSlotReceiver,
@@ -276,7 +274,7 @@ impl ReplayTiming {
                     "process_duplicate_slots_elapsed",
                     self.process_duplicate_slots_elapsed as i64,
                     i64
-                )
+                ),
             );
 
             *self = ReplayTiming::default();
@@ -286,7 +284,7 @@ impl ReplayTiming {
 }
 
 pub struct ReplayStage {
-    t_replay: JoinHandle<Result<()>>,
+    t_replay: JoinHandle<()>,
     commitment_service: AggregateCommitmentService,
 }
 
@@ -309,7 +307,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
-        cost_model: Arc<RwLock<CostModel>>,
+        cost_update_sender: Sender<ExecuteTimings>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -341,7 +339,8 @@ impl ReplayStage {
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
-                let my_pubkey = cluster_info.id();
+                let mut identity_keypair = cluster_info.keypair().clone();
+                let mut my_pubkey = identity_keypair.pubkey();
                 let (
                     mut progress,
                     mut heaviest_subtree_fork_choice,
@@ -406,7 +405,7 @@ impl ReplayStage {
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
-                        &cost_model,
+                        &cost_update_sender,
                     );
                     replay_active_banks_time.stop();
 
@@ -517,6 +516,7 @@ impl ReplayStage {
                                                     heaviest_bank_on_same_voted_fork,
                                                     &poh_recorder, my_latest_landed_vote,
                                                     &vote_account,
+                                                    &identity_keypair,
                                                     &authorized_voter_keypairs.read().unwrap(),
                                                     &mut voted_signatures,
                                                     has_new_vote_been_rooted, &mut
@@ -584,6 +584,7 @@ impl ReplayStage {
                             &mut tower,
                             &mut progress,
                             &vote_account,
+                            &identity_keypair,
                             &authorized_voter_keypairs.read().unwrap(),
                             &cluster_info,
                             &blockstore,
@@ -629,6 +630,14 @@ impl ReplayStage {
                                     i64
                                 ),
                             );
+
+                            if my_pubkey != cluster_info.id() {
+                                identity_keypair = cluster_info.keypair().clone();
+                                let my_old_pubkey = my_pubkey;
+                                my_pubkey = identity_keypair.pubkey();
+                                warn!("Identity changed from {} to {}", my_old_pubkey, my_pubkey);
+                            }
+
                             Self::reset_poh_recorder(
                                 &my_pubkey,
                                 &blockstore,
@@ -734,7 +743,6 @@ impl ReplayStage {
                         process_duplicate_slots_time.as_us(),
                     );
                 }
-                Ok(())
             })
             .unwrap();
 
@@ -1293,6 +1301,7 @@ impl ReplayStage {
         tower: &mut Tower,
         progress: &mut ProgressMap,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         cluster_info: &Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
@@ -1317,7 +1326,7 @@ impl ReplayStage {
         trace!("handle votable bank {}", bank.slot());
         let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
 
-        if let Err(err) = tower.save(&cluster_info.keypair) {
+        if let Err(err) = tower.save(identity_keypair) {
             error!("Unable to save tower: {:?}", err);
             std::process::exit(1);
         }
@@ -1389,6 +1398,7 @@ impl ReplayStage {
             bank,
             poh_recorder,
             vote_account_pubkey,
+            identity_keypair,
             authorized_voter_keypairs,
             tower,
             switch_fork_decision,
@@ -1399,7 +1409,7 @@ impl ReplayStage {
     }
 
     fn generate_vote_tx(
-        node_keypair: &Arc<Keypair>,
+        node_keypair: &Keypair,
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
@@ -1468,7 +1478,7 @@ impl ReplayStage {
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
         let blockhash = bank.last_blockhash();
-        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+        vote_tx.partial_sign(&[node_keypair], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
 
         if !has_new_vote_been_rooted {
@@ -1491,6 +1501,7 @@ impl ReplayStage {
         poh_recorder: &Mutex<PohRecorder>,
         my_latest_landed_vote: Slot,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
@@ -1529,7 +1540,7 @@ impl ReplayStage {
         // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
         // have changed from the original timestamp of the vote.
         let vote_tx = Self::generate_vote_tx(
-            &cluster_info.keypair,
+            identity_keypair,
             heaviest_bank_on_same_fork,
             vote_account_pubkey,
             authorized_voter_keypairs,
@@ -1566,6 +1577,7 @@ impl ReplayStage {
         bank: &Bank,
         poh_recorder: &Mutex<PohRecorder>,
         vote_account_pubkey: &Pubkey,
+        identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         tower: &mut Tower,
         switch_fork_decision: &SwitchForkDecision,
@@ -1575,7 +1587,7 @@ impl ReplayStage {
     ) {
         let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
-            &cluster_info.keypair,
+            identity_keypair,
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
@@ -1668,10 +1680,11 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
-        cost_model: &RwLock<CostModel>,
+        cost_update_sender: &Sender<ExecuteTimings>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
+        let mut execute_timings = ExecuteTimings::default();
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -1719,7 +1732,7 @@ impl ReplayStage {
                     replay_vote_sender,
                     verify_recyclers,
                 );
-                Self::update_cost_model(cost_model, &bank_progress.replay_stats.execute_timings);
+                execute_timings.accumulate(&bank_progress.replay_stats.execute_timings);
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -1804,6 +1817,12 @@ impl ReplayStage {
                 );
             }
         }
+
+        // send accumulated excute-timings to cost_update_service
+        cost_update_sender
+            .send(execute_timings)
+            .expect("send execution cost update to cost_model");
+
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
@@ -1908,44 +1927,6 @@ impl ReplayStage {
             stats.is_recent = tower.is_recent(bank_slot);
         }
         new_stats
-    }
-
-    fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) {
-        let mut update_cost_model_time = Measure::start("update_cost_model_time");
-        let mut cost_model_mutable = cost_model.write().unwrap();
-        for (program_id, stats) in &execute_timings.details.per_program_timings {
-            let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
-                Ok(c) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} has averaged cost {}",
-                        program_id, c
-                    );
-                }
-                Err(err) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} failed to update cost, err: {}",
-                        program_id, err
-                    );
-                }
-            }
-        }
-        drop(cost_model_mutable);
-        debug!(
-           "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
-           cost_model.read().unwrap().get_instruction_cost_table()
-        );
-        update_cost_model_time.stop();
-
-        inc_new_counter_info!("replay_stage-update_cost_model", 1);
-        datapoint_info!(
-            "replay-loop-timing-stats",
-            (
-                "update_cost_model_elapsed",
-                update_cost_model_time.as_us() as i64,
-                i64
-            )
-        );
     }
 
     fn update_propagation_status(
@@ -4702,6 +4683,7 @@ mod tests {
         let has_new_vote_been_rooted = false;
         let mut voted_signatures = vec![];
 
+        let identity_keypair = cluster_info.keypair().clone();
         let my_vote_keypair = vec![Arc::new(
             validator_keypairs.remove(&my_pubkey).unwrap().vote_keypair,
         )];
@@ -4727,6 +4709,7 @@ mod tests {
             &bank0,
             &poh_recorder,
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
@@ -4757,6 +4740,7 @@ mod tests {
                 &poh_recorder,
                 Tower::last_voted_slot_in_bank(refresh_bank, &my_vote_pubkey).unwrap(),
                 &my_vote_pubkey,
+                &identity_keypair,
                 &my_vote_keypair,
                 &mut voted_signatures,
                 has_new_vote_been_rooted,
@@ -4779,6 +4763,7 @@ mod tests {
             &bank1,
             &poh_recorder,
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
@@ -4802,6 +4787,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&bank2, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -4838,6 +4824,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&expired_bank, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -4894,6 +4881,7 @@ mod tests {
             &poh_recorder,
             Tower::last_voted_slot_in_bank(&expired_bank_sibling, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
+            &identity_keypair,
             &my_vote_keypair,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -4911,91 +4899,6 @@ mod tests {
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
     }
-
-    #[test]
-    fn test_update_cost_model_with_empty_execute_timings() {
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let empty_execute_timings = ExecuteTimings::default();
-        ReplayStage::update_cost_model(&cost_model, &empty_execute_timings);
-
-        assert_eq!(
-            0,
-            cost_model
-                .read()
-                .unwrap()
-                .get_instruction_cost_table()
-                .len()
-        );
-    }
-
-    #[test]
-    fn test_update_cost_model_with_execute_timings() {
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let mut execute_timings = ExecuteTimings::default();
-
-        let program_key_1 = Pubkey::new_unique();
-        let mut expected_cost: u64;
-
-        // add new program
-        {
-            let accumulated_us: u64 = 1000;
-            let count: u32 = 10;
-            expected_cost = accumulated_us / count as u64;
-
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
-            ReplayStage::update_cost_model(&cost_model, &execute_timings);
-            assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
-            );
-            assert_eq!(
-                Some(&expected_cost),
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
-            );
-        }
-
-        // update program
-        {
-            let accumulated_us: u64 = 2000;
-            let count: u32 = 10;
-            // to expect new cost is Average(new_value, existing_value)
-            expected_cost = ((accumulated_us / count as u64) + expected_cost) / 2;
-
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
-            ReplayStage::update_cost_model(&cost_model, &execute_timings);
-            assert_eq!(
-                1,
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .len()
-            );
-            assert_eq!(
-                Some(&expected_cost),
-                cost_model
-                    .read()
-                    .unwrap()
-                    .get_instruction_cost_table()
-                    .get(&program_key_1)
-            );
-        }
-    }
-
     fn run_compute_and_select_forks(
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,

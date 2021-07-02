@@ -166,6 +166,9 @@ struct GenerateIndexTimings {
     pub index_time: u64,
     pub scan_time: u64,
     pub insertion_time_us: u64,
+    pub min_bin_size: usize,
+    pub max_bin_size: usize,
+    pub total_items: usize,
 }
 
 impl GenerateIndexTimings {
@@ -176,6 +179,9 @@ impl GenerateIndexTimings {
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
             ("insertion_time_us", self.insertion_time_us, i64),
+            ("min_bin_size", self.min_bin_size as i64, i64),
+            ("max_bin_size", self.max_bin_size as i64, i64),
+            ("total_items", self.total_items as i64, i64),
         );
     }
 }
@@ -5945,10 +5951,28 @@ impl AccountsDb {
             })
             .sum();
         index_time.stop();
+
+        let mut min_bin_size = usize::MAX;
+        let mut max_bin_size = usize::MIN;
+        let total_items = self
+            .accounts_index
+            .account_maps
+            .iter()
+            .map(|i| {
+                let len = i.read().unwrap().len();
+                min_bin_size = std::cmp::min(min_bin_size, len);
+                max_bin_size = std::cmp::max(max_bin_size, len);
+                len
+            })
+            .sum();
+
         let timings = GenerateIndexTimings {
             scan_time,
             index_time: index_time.as_us(),
             insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
+            min_bin_size,
+            max_bin_size,
+            total_items,
         };
         timings.report();
 

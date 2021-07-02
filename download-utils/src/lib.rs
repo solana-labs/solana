@@ -2,7 +2,7 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
-use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
+use solana_runtime::{snapshot_utils, snapshot_utils::ArchiveFormat};
 use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
 use std::fs::{self, File};
 use std::io;
@@ -259,9 +259,10 @@ pub fn download_snapshot<'a, 'b>(
         ArchiveFormat::TarGzip,
         ArchiveFormat::TarBzip2,
     ] {
-        let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
+        let desired_snapshot_package = snapshot_utils::build_snapshot_archive_path(
             snapshot_output_dir.to_path_buf(),
-            &desired_snapshot_hash,
+            desired_snapshot_hash.0,
+            &desired_snapshot_hash.1,
             *compression,
         );
 

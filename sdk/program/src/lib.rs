@@ -49,6 +49,18 @@ pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
 
+pub mod config {
+    pub mod program {
+        crate::declare_id!("Config1111111111111111111111111111111111111");
+    }
+}
+
+pub mod vote {
+    pub mod program {
+        crate::declare_id!("Vote111111111111111111111111111111111111111");
+    }
+}
+
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
 /// Input: a single literal base58 string representation of a program's id
