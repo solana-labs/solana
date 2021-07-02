@@ -12,7 +12,7 @@ use solana_sdk::{
     stake::config::Config as StakeConfig,
 };
 
-solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
+pub use solana_sdk::config::program::id;
 
 pub trait ConfigState: serde::Serialize + Default {
     /// Maximum space that the serialized representation will require

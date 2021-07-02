@@ -41,7 +41,8 @@ impl Default for Config<'_> {
                 .parent()
                 .expect("Unable to get parent directory")
                 .to_path_buf()
-                .join("sdk/bpf"),
+                .join("sdk")
+                .join("bpf"),
             bpf_out_dir: None,
             dump: false,
             features: vec![],
@@ -602,6 +603,13 @@ fn main() {
         .about(crate_description!())
         .version(crate_version!())
         .arg(
+            Arg::with_name("bpf_out_dir")
+                .long("bpf-out-dir")
+                .value_name("DIRECTORY")
+                .takes_value(true)
+                .help("Place final BPF build artifacts in this directory"),
+        )
+        .arg(
             Arg::with_name("bpf_sdk")
                 .long("bpf-sdk")
                 .value_name("PATH")
@@ -610,10 +618,37 @@ fn main() {
                 .help("Path to the Solana BPF SDK"),
         )
         .arg(
+            Arg::with_name("cargo_args")
+                .help("Arguments passed directly to `cargo build`")
+                .multiple(true)
+                .last(true),
+        )
+        .arg(
             Arg::with_name("dump")
                 .long("dump")
                 .takes_value(false)
                 .help("Dump ELF information to a text file on success"),
+        )
+        .arg(
+            Arg::with_name("features")
+                .long("features")
+                .value_name("FEATURES")
+                .takes_value(true)
+                .multiple(true)
+                .help("Space-separated list of features to activate"),
+        )
+        .arg(
+            Arg::with_name("manifest_path")
+                .long("manifest-path")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("Path to Cargo.toml"),
+        )
+        .arg(
+            Arg::with_name("no_default_features")
+                .long("no-default-features")
+                .takes_value(false)
+                .help("Do not activate the `default` feature"),
         )
         .arg(
             Arg::with_name("offline")
@@ -629,41 +664,12 @@ fn main() {
                 .help("Use verbose output"),
         )
         .arg(
-            Arg::with_name("features")
-                .long("features")
-                .value_name("FEATURES")
-                .takes_value(true)
-                .multiple(true)
-                .help("Space-separated list of features to activate"),
-        )
-        .arg(
-            Arg::with_name("no_default_features")
-                .long("no-default-features")
-                .takes_value(false)
-                .help("Do not activate the `default` feature"),
-        )
-        .arg(
-            Arg::with_name("manifest_path")
-                .long("manifest-path")
-                .value_name("PATH")
-                .takes_value(true)
-                .help("Path to Cargo.toml"),
-        )
-        .arg(
-            Arg::with_name("bpf_out_dir")
-                .long("bpf-out-dir")
-                .value_name("DIRECTORY")
-                .takes_value(true)
-                .help("Place final BPF build artifacts in this directory"),
-        )
-        .arg(
             Arg::with_name("workspace")
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
                 .help("Build all BPF packages in the workspace"),
         )
-        .arg(Arg::with_name("cargo_args").multiple(true).last(true))
         .get_matches_from(args);
 
     let bpf_sdk = value_t_or_exit!(matches, "bpf_sdk", PathBuf);

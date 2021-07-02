@@ -32,7 +32,6 @@ use std::{
         Deref,
     },
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use thiserror::Error;
 
@@ -1190,7 +1189,7 @@ impl Tower {
         path.with_extension("bin.new")
     }
 
-    pub fn save(&self, node_keypair: &Arc<Keypair>) -> Result<()> {
+    pub fn save(&self, node_keypair: &Keypair) -> Result<()> {
         let mut measure = Measure::start("tower_save-ms");
 
         if self.node_pubkey != node_keypair.pubkey() {
@@ -1293,7 +1292,7 @@ pub struct SavedTower {
 }
 
 impl SavedTower {
-    pub fn new<T: Signer>(tower: &Tower, keypair: &Arc<T>) -> Result<Self> {
+    pub fn new<T: Signer>(tower: &Tower, keypair: &T) -> Result<Self> {
         let data = bincode::serialize(tower)?;
         let signature = keypair.sign_message(&data);
         Ok(Self { signature, data })
@@ -1391,7 +1390,7 @@ pub mod test {
         collections::HashMap,
         fs::{remove_file, OpenOptions},
         io::{Read, Seek, SeekFrom, Write},
-        sync::RwLock,
+        sync::{Arc, RwLock},
     };
     use tempfile::TempDir;
     use trees::{tr, Tree, TreeWalk};
@@ -1439,9 +1438,6 @@ pub mod test {
 
             while let Some(visit) = walk.get() {
                 let slot = *visit.node().data();
-                self.progress
-                    .entry(slot)
-                    .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
                 if self.bank_forks.read().unwrap().get(slot).is_some() {
                     walk.forward();
                     continue;
@@ -1449,6 +1445,9 @@ pub mod test {
                 let parent = *walk.get_parent().unwrap().data();
                 let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
                 let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
+                self.progress
+                    .entry(slot)
+                    .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
                 for (pubkey, vote) in cluster_votes.iter() {
                     if vote.contains(&parent) {
                         let keypairs = self.validator_keypairs.get(pubkey).unwrap();
@@ -1701,7 +1700,14 @@ pub mod test {
         let mut progress = ProgressMap::default();
         progress.insert(
             0,
-            ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
+            ForkProgress::new_from_bank(
+                &bank0,
+                bank0.collector_id(),
+                &Pubkey::default(),
+                None,
+                0,
+                0,
+            ),
         );
         let bank_forks = BankForks::new(bank0);
         let heaviest_subtree_fork_choice =

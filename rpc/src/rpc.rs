@@ -44,11 +44,12 @@ use {
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
         bank::Bank,
-        bank_forks::{BankForks, SnapshotConfig},
+        bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
-        snapshot_utils::get_highest_snapshot_archive_path,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -1898,6 +1899,10 @@ fn verify_transaction(transaction: &Transaction) -> Result<()> {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
+    if !transaction.verify_signatures_len() {
+        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+    }
+
     Ok(())
 }
 
@@ -2254,8 +2259,9 @@ pub mod rpc_minimal {
 
             meta.snapshot_config
                 .and_then(|snapshot_config| {
-                    get_highest_snapshot_archive_path(&snapshot_config.snapshot_package_output_path)
-                        .map(|(_, (slot, _, _))| slot)
+                    snapshot_utils::get_highest_snapshot_archive_slot(
+                        &snapshot_config.snapshot_package_output_path,
+                    )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }
