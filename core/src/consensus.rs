@@ -654,6 +654,10 @@ impl Tower {
                     // on latest vote. See `ReplayStage:;select_vote_and_reset_forks()` for more details.
                     if heaviest_subtree_fork_choice.is_ancestor_slot(switch_slot, &(last_voted_slot, last_voted_hash)) {
                         return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
+                    } else if !ancestors.contains_key(&last_voted_slot) {
+                        // Our last vote slot was purged because it was on a duplicate fork, don't continue below
+                        // where the `last_vote_ancestors` check will panic
+                        return SwitchForkDecision::SwitchProof(Hash::default());
                     }
                 }
 
@@ -1407,7 +1411,7 @@ pub mod test {
         pub validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
         pub node_pubkeys: Vec<Pubkey>,
         pub vote_pubkeys: Vec<Pubkey>,
-        pub bank_forks: RwLock<BankForks>,
+        pub bank_forks: Arc<RwLock<BankForks>>,
         pub progress: ProgressMap,
         pub heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         pub latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks,
@@ -1427,7 +1431,7 @@ pub mod test {
                 validator_keypairs,
                 node_pubkeys,
                 vote_pubkeys,
-                bank_forks: RwLock::new(bank_forks),
+                bank_forks: Arc::new(RwLock::new(bank_forks)),
                 progress,
                 heaviest_subtree_fork_choice,
                 latest_validator_votes_for_frozen_banks:
@@ -1480,6 +1484,7 @@ pub mod test {
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),
                 );
                 self.bank_forks.write().unwrap().insert(new_bank);
+
                 walk.forward();
             }
         }

@@ -2725,7 +2725,7 @@ mod tests {
 
     #[test]
     fn test_is_partition_detected() {
-        let (VoteSimulator { bank_forks, .. }, _) = setup_default_forks(1);
+        let (VoteSimulator { bank_forks, .. }, _) = setup_default_forks(1, None::<GenerateVotes>);
         let ancestors = bank_forks.read().unwrap().ancestors();
         // Last vote 1 is an ancestor of the heaviest slot 3, no partition
         assert!(!ReplayStage::is_partition_detected(&ancestors, 1, 3));
@@ -2742,31 +2742,34 @@ mod tests {
     struct ReplayBlockstoreComponents {
         blockstore: Arc<Blockstore>,
         validator_node_to_vote_keys: HashMap<Pubkey, Pubkey>,
-        validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
         my_pubkey: Pubkey,
-        progress: ProgressMap,
         cluster_info: ClusterInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         poh_recorder: Mutex<PohRecorder>,
-        bank_forks: Arc<RwLock<BankForks>>,
         tower: Tower,
         rpc_subscriptions: Arc<RpcSubscriptions>,
+        vote_simulator: VoteSimulator,
     }
 
-    fn replay_blockstore_components(forks: Option<Tree<Slot>>) -> ReplayBlockstoreComponents {
+    fn replay_blockstore_components(
+        forks: Option<Tree<Slot>>,
+        num_validators: usize,
+        generate_votes: Option<GenerateVotes>,
+    ) -> ReplayBlockstoreComponents {
         // Setup blockstore
-        let (vote_simulator, blockstore) =
-            setup_forks_from_tree(forks.unwrap_or_else(|| tr(0)), 20);
+        let (vote_simulator, blockstore) = setup_forks_from_tree(
+            forks.unwrap_or_else(|| tr(0)),
+            num_validators,
+            generate_votes,
+        );
 
         let VoteSimulator {
-            validator_keypairs,
-            progress,
-            bank_forks,
+            ref validator_keypairs,
+            ref bank_forks,
             ..
         } = vote_simulator;
 
         let blockstore = Arc::new(blockstore);
-        let bank_forks = Arc::new(bank_forks);
         let validator_node_to_vote_keys: HashMap<Pubkey, Pubkey> = validator_keypairs
             .iter()
             .map(|(_, keypairs)| {
@@ -2831,15 +2834,13 @@ mod tests {
         ReplayBlockstoreComponents {
             blockstore,
             validator_node_to_vote_keys,
-            validator_keypairs,
             my_pubkey,
-            progress,
             cluster_info,
             leader_schedule_cache,
             poh_recorder,
-            bank_forks,
             tower,
             rpc_subscriptions,
+            vote_simulator,
         }
     }
 
@@ -2848,12 +2849,17 @@ mod tests {
         let ReplayBlockstoreComponents {
             blockstore,
             validator_node_to_vote_keys,
-            mut progress,
-            bank_forks,
+            vote_simulator,
             leader_schedule_cache,
             rpc_subscriptions,
             ..
-        } = replay_blockstore_components(None);
+        } = replay_blockstore_components(None, 1, None::<GenerateVotes>);
+
+        let VoteSimulator {
+            mut progress,
+            bank_forks,
+            ..
+        } = vote_simulator;
 
         // Insert a non-root bank so that the propagation logic will update this
         // bank
@@ -4453,7 +4459,7 @@ mod tests {
 
     #[test]
     fn test_purge_unconfirmed_duplicate_slot() {
-        let (vote_simulator, blockstore) = setup_default_forks(2);
+        let (vote_simulator, blockstore) = setup_default_forks(2, None::<GenerateVotes>);
         let VoteSimulator {
             bank_forks,
             node_pubkeys,
@@ -4593,7 +4599,7 @@ mod tests {
 
     #[test]
     fn test_purge_ancestors_descendants() {
-        let (VoteSimulator { bank_forks, .. }, _) = setup_default_forks(1);
+        let (VoteSimulator { bank_forks, .. }, _) = setup_default_forks(1, None::<GenerateVotes>);
 
         // Purge branch rooted at slot 2
         let mut descendants = bank_forks.read().unwrap().descendants().clone();
@@ -4647,11 +4653,16 @@ mod tests {
     fn test_leader_snapshot_restart_propagation() {
         let ReplayBlockstoreComponents {
             validator_node_to_vote_keys,
+            leader_schedule_cache,
+            vote_simulator,
+            ..
+        } = replay_blockstore_components(None, 1, None::<GenerateVotes>);
+
+        let VoteSimulator {
             mut progress,
             bank_forks,
-            leader_schedule_cache,
             ..
-        } = replay_blockstore_components(None);
+        } = vote_simulator;
 
         let root_bank = bank_forks.read().unwrap().root_bank();
         let my_pubkey = leader_schedule_cache
@@ -4726,7 +4737,7 @@ mod tests {
         */
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4)))) / (tr(5) / (tr(6))));
 
-        // Make enough validators for vote switch thrshold later
+        // Make enough validators for vote switch threshold later
         let mut vote_simulator = VoteSimulator::new(2);
         let validator_votes: HashMap<Pubkey, Vec<u64>> = vec![
             (vote_simulator.node_pubkeys[0], vec![5]),
@@ -4852,6 +4863,205 @@ mod tests {
         assert_eq!(reset_fork.unwrap(), 4);
     }
 
+    struct RollbackTest {
+        replay_components: ReplayBlockstoreComponents,
+        ancestors: HashMap<Slot, HashSet<Slot>>,
+        descendants: HashMap<Slot, HashSet<Slot>>,
+    }
+
+    fn setup_vote_then_rollback(first_vote: Slot) -> RollbackTest {
+        /*
+            Build fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |      |
+            slot 3    |
+               |      |
+            slot 6    |
+                    slot 5
+                      |
+                    slot 7
+        */
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(6)))) / (tr(5) / (tr(7))));
+
+        let mut replay_components = replay_blockstore_components(
+            Some(forks),
+            2,
+            Some(Box::new(|node_keys| {
+                // Simulate everyone else voting on 5, so we have enough to
+                // make a switch
+                node_keys.into_iter().map(|k| (k, vec![5])).collect()
+            })),
+        );
+
+        let ReplayBlockstoreComponents {
+            ref mut tower,
+            ref blockstore,
+            ref mut vote_simulator,
+            ..
+        } = replay_components;
+
+        let VoteSimulator {
+            ref mut progress,
+            ref bank_forks,
+            ref mut heaviest_subtree_fork_choice,
+            ..
+        } = vote_simulator;
+
+        tower.record_bank_vote(
+            bank_forks.read().unwrap().get(first_vote).unwrap(),
+            &Pubkey::default(),
+        );
+
+        // Simulate another version of slot 2 was duplicate confirmed
+        let our_bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
+        let duplicate_confirmed_bank2_hash = Hash::new_unique();
+        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        gossip_duplicate_confirmed_slots.insert(2, duplicate_confirmed_bank2_hash);
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+
+        // Mark fork choice branch as invalid so select forks below doesn't panic
+        // on a nonexistent `heaviest_bank_on_same_fork` after we dump the duplciate fork.
+        check_slot_agrees_with_cluster(
+            2,
+            bank_forks.read().unwrap().root(),
+            Some(our_bank2_hash),
+            &mut duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &progress,
+            heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
+            SlotStateUpdate::DuplicateConfirmed,
+        );
+        assert!(duplicate_slots_to_repair.contains(&(2, duplicate_confirmed_bank2_hash)));
+        let mut ancestors = bank_forks.read().unwrap().ancestors();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
+        let old_descendants_of_2 = descendants.get(&2).unwrap().clone();
+
+        ReplayStage::dump_then_repair_correct_slots(
+            &mut duplicate_slots_to_repair,
+            &mut ancestors,
+            &mut descendants,
+            progress,
+            &bank_forks,
+            &blockstore,
+            None,
+        );
+
+        // Check everything was purged properly
+        for purged_slot in std::iter::once(&2).chain(old_descendants_of_2.iter()) {
+            assert!(!ancestors.contains_key(purged_slot));
+            assert!(!descendants.contains_key(purged_slot));
+        }
+
+        RollbackTest {
+            replay_components,
+            ancestors,
+            descendants,
+        }
+    }
+
+    fn run_test_duplicate_rollback_then_vote(first_vote: Slot) -> SelectVoteAndResetForkResult {
+        let RollbackTest {
+            replay_components,
+            ancestors,
+            descendants,
+        } = setup_vote_then_rollback(first_vote);
+
+        let ReplayBlockstoreComponents {
+            mut tower,
+            vote_simulator,
+            ..
+        } = replay_components;
+
+        let VoteSimulator {
+            mut progress,
+            bank_forks,
+            mut heaviest_subtree_fork_choice,
+            mut latest_validator_votes_for_frozen_banks,
+            ..
+        } = vote_simulator;
+
+        // Try to switch to vote to slot 7, return switching result
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        ReplayStage::compute_bank_stats(
+            &Pubkey::new_unique(),
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+            &VoteTracker::default(),
+            &ClusterSlots::default(),
+            &bank_forks,
+            &mut heaviest_subtree_fork_choice,
+            &mut latest_validator_votes_for_frozen_banks,
+        );
+
+        let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
+            .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
+        assert_eq!(heaviest_bank.slot(), 7);
+        assert!(heaviest_bank_on_same_fork.is_none());
+        ReplayStage::select_vote_and_reset_forks(
+            &heaviest_bank,
+            heaviest_bank_on_same_fork.as_ref(),
+            &ancestors,
+            &descendants,
+            &progress,
+            &mut tower,
+            &latest_validator_votes_for_frozen_banks,
+            &heaviest_subtree_fork_choice,
+        )
+    }
+
+    #[test]
+    fn test_duplicate_rollback_then_vote_locked_out() {
+        let SelectVoteAndResetForkResult {
+            vote_bank,
+            reset_bank,
+            heaviest_fork_failures,
+        } = run_test_duplicate_rollback_then_vote(6);
+
+        // If we vote on 6 first then try to vote on 7, we should be locked out,
+        // despite the rollback
+        assert!(vote_bank.is_none());
+        assert_eq!(reset_bank.unwrap().slot(), 7);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![HeaviestForkFailures::LockedOut(7)]
+        );
+    }
+
+    #[test]
+    fn test_duplicate_rollback_then_vote_success() {
+        let SelectVoteAndResetForkResult {
+            vote_bank,
+            reset_bank,
+            heaviest_fork_failures,
+        } = run_test_duplicate_rollback_then_vote(3);
+
+        // If we vote on 3 first then try to vote on 7, we should succeed
+        assert_matches!(
+            vote_bank
+                .map(|(bank, switch_decision)| (bank.slot(), switch_decision))
+                .unwrap(),
+            (7, SwitchForkDecision::SwitchProof(_))
+        );
+        assert_eq!(reset_bank.unwrap().slot(), 7);
+        assert!(heaviest_fork_failures.is_empty());
+    }
+
     #[test]
     fn test_gossip_vote_doesnt_affect_fork_choice() {
         let (
@@ -4863,7 +5073,7 @@ mod tests {
                 ..
             },
             _,
-        ) = setup_default_forks(1);
+        ) = setup_default_forks(1, None::<GenerateVotes>);
 
         let vote_pubkey = vote_pubkeys[0];
         let mut unfrozen_gossip_verified_vote_hashes = UnfrozenGossipVerifiedVoteHashes::default();
@@ -4899,14 +5109,19 @@ mod tests {
     #[test]
     fn test_replay_stage_refresh_last_vote() {
         let ReplayBlockstoreComponents {
-            mut validator_keypairs,
             cluster_info,
             poh_recorder,
-            bank_forks,
             mut tower,
             my_pubkey,
+            vote_simulator,
             ..
-        } = replay_blockstore_components(None);
+        } = replay_blockstore_components(None, 10, None::<GenerateVotes>);
+
+        let VoteSimulator {
+            mut validator_keypairs,
+            bank_forks,
+            ..
+        } = vote_simulator;
 
         let mut last_vote_refresh_time = LastVoteRefreshTime {
             last_refresh_time: Instant::now(),
@@ -5131,6 +5346,7 @@ mod tests {
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
     }
+
     fn run_compute_and_select_forks(
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -5182,16 +5398,33 @@ mod tests {
         )
     }
 
-    fn setup_forks_from_tree(tree: Tree<Slot>, num_keys: usize) -> (VoteSimulator, Blockstore) {
+    type GenerateVotes = Box<dyn Fn(Vec<Pubkey>) -> HashMap<Pubkey, Vec<u64>>>;
+
+    fn setup_forks_from_tree(
+        tree: Tree<Slot>,
+        num_keys: usize,
+        generate_votes: Option<GenerateVotes>,
+    ) -> (VoteSimulator, Blockstore) {
         let mut vote_simulator = VoteSimulator::new(num_keys);
-        vote_simulator.fill_bank_forks(tree.clone(), &HashMap::new());
+        let pubkeys: Vec<Pubkey> = vote_simulator
+            .validator_keypairs
+            .values()
+            .map(|k| k.node_keypair.pubkey())
+            .collect();
+        let cluster_votes = generate_votes
+            .map(|generate_votes| generate_votes(pubkeys))
+            .unwrap_or_default();
+        vote_simulator.fill_bank_forks(tree.clone(), &cluster_votes);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         blockstore.add_tree(tree, false, true, 2, Hash::default());
         (vote_simulator, blockstore)
     }
 
-    fn setup_default_forks(num_keys: usize) -> (VoteSimulator, Blockstore) {
+    fn setup_default_forks(
+        num_keys: usize,
+        generate_votes: Option<GenerateVotes>,
+    ) -> (VoteSimulator, Blockstore) {
         /*
             Build fork structure:
 
@@ -5208,7 +5441,7 @@ mod tests {
         */
 
         let tree = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
-        setup_forks_from_tree(tree, num_keys)
+        setup_forks_from_tree(tree, num_keys, generate_votes)
     }
 
     fn check_map_eq<K: Eq + std::hash::Hash + std::fmt::Debug, T: PartialEq + std::fmt::Debug>(

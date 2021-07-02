@@ -309,7 +309,7 @@ mod test {
     use solana_runtime::bank_forks::BankForks;
     use std::{
         collections::{HashMap, HashSet},
-        sync::RwLock,
+        sync::{Arc, RwLock},
     };
     use trees::tr;
 
@@ -317,7 +317,7 @@ mod test {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         progress: ProgressMap,
         descendants: HashMap<Slot, HashSet<Slot>>,
-        bank_forks: RwLock<BankForks>,
+        bank_forks: Arc<RwLock<BankForks>>,
     }
 
     fn setup() -> InitialState {
