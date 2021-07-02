@@ -857,17 +857,13 @@ impl ReplayStage {
                     ancestors
                         .get(&poh_bank_slot)
                         .expect("Poh bank should exist in BankForks and thus in ancestors map")
-                        .contains(&duplicate_slot)
+                        .contains(duplicate_slot)
                 })
                 .unwrap_or(false);
 
             let did_purge_repair = {
                 if !is_poh_building_on_duplicate_fork {
-                    let frozen_hash = bank_forks
-                        .read()
-                        .unwrap()
-                        .get(*duplicate_slot)
-                        .map(|bank| bank.hash());
+                    let frozen_hash = bank_forks.read().unwrap().bank_hash(*duplicate_slot);
                     if let Some(frozen_hash) = frozen_hash {
                         if frozen_hash == *correct_hash {
                             warn!(
@@ -1071,11 +1067,7 @@ impl ReplayStage {
                 check_slot_agrees_with_cluster(
                     confirmed_slot,
                     root,
-                    bank_forks
-                        .read()
-                        .unwrap()
-                        .get(confirmed_slot)
-                        .map(|b| b.hash()),
+                    bank_forks.read().unwrap().bank_hash(confirmed_slot),
                     duplicate_slots_tracker,
                     gossip_duplicate_confirmed_slots,
                     progress,
@@ -1121,7 +1113,7 @@ impl ReplayStage {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank_hashes: Vec<Option<Hash>> = new_duplicate_slots
                 .iter()
-                .map(|duplicate_slot| r_bank_forks.get(*duplicate_slot).map(|bank| bank.hash()))
+                .map(|duplicate_slot| r_bank_forks.bank_hash(*duplicate_slot))
                 .collect();
 
             (r_bank_forks.root(), bank_hashes)
@@ -2451,7 +2443,7 @@ impl ReplayStage {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank_hashes: Vec<Option<Hash>> = confirmed_forks
                 .iter()
-                .map(|slot| r_bank_forks.get(*slot).map(|bank| bank.hash()))
+                .map(|slot| r_bank_forks.bank_hash(*slot))
                 .collect();
 
             (r_bank_forks.root(), bank_hashes)
@@ -2676,6 +2668,7 @@ mod tests {
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
+        tree_diff::TreeDiff,
     };
     use crossbeam_channel::unbounded;
     use solana_gossip::{cluster_info::Node, crds::Cursor};
@@ -2822,7 +2815,7 @@ mod tests {
 
         // RpcSubscriptions
         let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
@@ -4777,7 +4770,7 @@ mod tests {
         blockstore.store_duplicate_slot(4, vec![], vec![]).unwrap();
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
-        let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
+        let bank4_hash = bank_forks.read().unwrap().bank_hash(4).unwrap();
         assert_ne!(bank4_hash, Hash::default());
         check_slot_agrees_with_cluster(
             4,
@@ -4803,7 +4796,7 @@ mod tests {
 
         // Now mark 2, an ancestor of 4, as duplicate
         blockstore.store_duplicate_slot(2, vec![], vec![]).unwrap();
-        let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
+        let bank2_hash = bank_forks.read().unwrap().bank_hash(2).unwrap();
         assert_ne!(bank2_hash, Hash::default());
         check_slot_agrees_with_cluster(
             2,
@@ -4863,13 +4856,11 @@ mod tests {
         assert_eq!(reset_fork.unwrap(), 4);
     }
 
-    struct RollbackTest {
-        replay_components: ReplayBlockstoreComponents,
-        ancestors: HashMap<Slot, HashSet<Slot>>,
-        descendants: HashMap<Slot, HashSet<Slot>>,
-    }
-
-    fn setup_vote_then_rollback(first_vote: Slot) -> RollbackTest {
+    fn setup_vote_then_rollback(
+        first_vote: Slot,
+        num_validators: usize,
+        generate_votes: Option<GenerateVotes>,
+    ) -> ReplayBlockstoreComponents {
         /*
             Build fork structure:
 
@@ -4881,22 +4872,17 @@ mod tests {
                |      |
             slot 3    |
                |      |
-            slot 6    |
-                    slot 5
+            slot 4    |
+               |      |
+            slot 5    |
+                    slot 6
                       |
                     slot 7
         */
-        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(6)))) / (tr(5) / (tr(7))));
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / (tr(5))))) / (tr(6) / (tr(7))));
 
-        let mut replay_components = replay_blockstore_components(
-            Some(forks),
-            2,
-            Some(Box::new(|node_keys| {
-                // Simulate everyone else voting on 5, so we have enough to
-                // make a switch
-                node_keys.into_iter().map(|k| (k, vec![5])).collect()
-            })),
-        );
+        let mut replay_components =
+            replay_blockstore_components(Some(forks), num_validators, generate_votes);
 
         let ReplayBlockstoreComponents {
             ref mut tower,
@@ -4918,7 +4904,7 @@ mod tests {
         );
 
         // Simulate another version of slot 2 was duplicate confirmed
-        let our_bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
+        let our_bank2_hash = bank_forks.read().unwrap().bank_hash(2).unwrap();
         let duplicate_confirmed_bank2_hash = Hash::new_unique();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         gossip_duplicate_confirmed_slots.insert(2, duplicate_confirmed_bank2_hash);
@@ -4933,7 +4919,7 @@ mod tests {
             Some(our_bank2_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
-            &progress,
+            progress,
             heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             SlotStateUpdate::DuplicateConfirmed,
@@ -4948,8 +4934,8 @@ mod tests {
             &mut ancestors,
             &mut descendants,
             progress,
-            &bank_forks,
-            &blockstore,
+            bank_forks,
+            blockstore,
             None,
         );
 
@@ -4959,19 +4945,19 @@ mod tests {
             assert!(!descendants.contains_key(purged_slot));
         }
 
-        RollbackTest {
-            replay_components,
-            ancestors,
-            descendants,
-        }
+        replay_components
     }
 
     fn run_test_duplicate_rollback_then_vote(first_vote: Slot) -> SelectVoteAndResetForkResult {
-        let RollbackTest {
-            replay_components,
-            ancestors,
-            descendants,
-        } = setup_vote_then_rollback(first_vote);
+        let replay_components = setup_vote_then_rollback(
+            first_vote,
+            2,
+            Some(Box::new(|node_keys| {
+                // Simulate everyone else voting on 6, so we have enough to
+                // make a switch to the other fork
+                node_keys.into_iter().map(|k| (k, vec![6])).collect()
+            })),
+        );
 
         let ReplayBlockstoreComponents {
             mut tower,
@@ -4987,7 +4973,6 @@ mod tests {
             ..
         } = vote_simulator;
 
-        // Try to switch to vote to slot 7, return switching result
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
             .unwrap()
@@ -4995,6 +4980,9 @@ mod tests {
             .values()
             .cloned()
             .collect();
+
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let descendants = bank_forks.read().unwrap().descendants().clone();
 
         ReplayStage::compute_bank_stats(
             &Pubkey::new_unique(),
@@ -5009,6 +4997,7 @@ mod tests {
             &mut latest_validator_votes_for_frozen_banks,
         );
 
+        // Try to switch to vote to the heaviest slot 6, then return the vote results
         let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
             .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
         assert_eq!(heaviest_bank.slot(), 7);
@@ -5031,9 +5020,9 @@ mod tests {
             vote_bank,
             reset_bank,
             heaviest_fork_failures,
-        } = run_test_duplicate_rollback_then_vote(6);
+        } = run_test_duplicate_rollback_then_vote(5);
 
-        // If we vote on 6 first then try to vote on 7, we should be locked out,
+        // If we vote on 5 first then try to vote on 7, we should be locked out,
         // despite the rollback
         assert!(vote_bank.is_none());
         assert_eq!(reset_bank.unwrap().slot(), 7);
@@ -5049,9 +5038,9 @@ mod tests {
             vote_bank,
             reset_bank,
             heaviest_fork_failures,
-        } = run_test_duplicate_rollback_then_vote(3);
+        } = run_test_duplicate_rollback_then_vote(4);
 
-        // If we vote on 3 first then try to vote on 7, we should succeed
+        // If we vote on 4 first then try to vote on 7, we should succeed
         assert_matches!(
             vote_bank
                 .map(|(bank, switch_decision)| (bank.slot(), switch_decision))
@@ -5060,6 +5049,152 @@ mod tests {
         );
         assert_eq!(reset_bank.unwrap().slot(), 7);
         assert!(heaviest_fork_failures.is_empty());
+    }
+
+    fn run_test_duplicate_rollback_then_vote_on_other_duplicate(
+        first_vote: Slot,
+    ) -> SelectVoteAndResetForkResult {
+        let replay_components = setup_vote_then_rollback(first_vote, 10, None::<GenerateVotes>);
+
+        let ReplayBlockstoreComponents {
+            mut tower,
+            mut vote_simulator,
+            ..
+        } = replay_components;
+
+        // Simulate repairing an alternate version of slot 2, 3 and 4 that we just dumped. Because
+        // we're including votes this time for slot 1, it should generate a different
+        // version of 2.
+        let cluster_votes: HashMap<Pubkey, Vec<Slot>> = vote_simulator
+            .node_pubkeys
+            .iter()
+            .map(|k| (*k, vec![1, 2]))
+            .collect();
+
+        // Create new versions of slots 2, 3, 4, 5, with parent slot 1
+        vote_simulator.create_and_vote_new_branch(
+            1,
+            5,
+            &cluster_votes,
+            &HashSet::new(),
+            &Pubkey::new_unique(),
+            &mut tower,
+        );
+
+        let VoteSimulator {
+            mut progress,
+            bank_forks,
+            mut heaviest_subtree_fork_choice,
+            mut latest_validator_votes_for_frozen_banks,
+            ..
+        } = vote_simulator;
+
+        // Check that the new branch with slot 2 is different than the original version.
+        let bank_1_hash = bank_forks.read().unwrap().bank_hash(1).unwrap();
+        let children_of_1 = heaviest_subtree_fork_choice
+            .children(&(1, bank_1_hash))
+            .unwrap();
+        let duplicate_versions_of_2 = children_of_1
+            .iter()
+            .filter(|(slot, _hash)| *slot == 2)
+            .count();
+        assert_eq!(duplicate_versions_of_2, 2);
+
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let descendants = bank_forks.read().unwrap().descendants().clone();
+
+        ReplayStage::compute_bank_stats(
+            &Pubkey::new_unique(),
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+            &VoteTracker::default(),
+            &ClusterSlots::default(),
+            &bank_forks,
+            &mut heaviest_subtree_fork_choice,
+            &mut latest_validator_votes_for_frozen_banks,
+        );
+
+        // Try to switch to vote to the heaviest slot 5, then return the vote results
+        let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
+            .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
+        assert_eq!(heaviest_bank.slot(), 5);
+        assert!(heaviest_bank_on_same_fork.is_none());
+        ReplayStage::select_vote_and_reset_forks(
+            &heaviest_bank,
+            heaviest_bank_on_same_fork.as_ref(),
+            &ancestors,
+            &descendants,
+            &progress,
+            &mut tower,
+            &latest_validator_votes_for_frozen_banks,
+            &heaviest_subtree_fork_choice,
+        )
+    }
+
+    #[test]
+    fn test_duplicate_rollback_then_vote_on_other_duplicate_success() {
+        let SelectVoteAndResetForkResult {
+            vote_bank,
+            reset_bank,
+            heaviest_fork_failures,
+        } = run_test_duplicate_rollback_then_vote_on_other_duplicate(3);
+
+        // If we vote on 2 first then try to vote on 5, we should succeed
+        assert_matches!(
+            vote_bank
+                .map(|(bank, switch_decision)| (bank.slot(), switch_decision))
+                .unwrap(),
+            (5, SwitchForkDecision::SwitchProof(_))
+        );
+        assert_eq!(reset_bank.unwrap().slot(), 5);
+        assert!(heaviest_fork_failures.is_empty());
+    }
+
+    #[test]
+    fn test_duplicate_rollback_then_vote_on_other_duplicate_same_slot_locked_out() {
+        let SelectVoteAndResetForkResult {
+            vote_bank,
+            reset_bank,
+            heaviest_fork_failures,
+        } = run_test_duplicate_rollback_then_vote_on_other_duplicate(5);
+
+        // If we vote on 5 first then try to vote on another version of 5,
+        // lockout should fail
+        assert!(vote_bank.is_none());
+        assert_eq!(reset_bank.unwrap().slot(), 5);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![HeaviestForkFailures::LockedOut(5)]
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn test_duplicate_rollback_then_vote_on_other_duplicate_different_slot_locked_out() {
+        let SelectVoteAndResetForkResult {
+            vote_bank,
+            reset_bank,
+            heaviest_fork_failures,
+        } = run_test_duplicate_rollback_then_vote_on_other_duplicate(4);
+
+        // If we vote on 4 first then try to vote on 5 descended from another version
+        // of 4, lockout should fail
+        assert!(vote_bank.is_none());
+        assert_eq!(reset_bank.unwrap().slot(), 5);
+        assert_eq!(
+            heaviest_fork_failures,
+            vec![HeaviestForkFailures::LockedOut(5)]
+        );
     }
 
     #[test]
@@ -5398,7 +5533,7 @@ mod tests {
         )
     }
 
-    type GenerateVotes = Box<dyn Fn(Vec<Pubkey>) -> HashMap<Pubkey, Vec<u64>>>;
+    type GenerateVotes = Box<dyn Fn(Vec<Pubkey>) -> HashMap<Pubkey, Vec<Slot>>>;
 
     fn setup_forks_from_tree(
         tree: Tree<Slot>,

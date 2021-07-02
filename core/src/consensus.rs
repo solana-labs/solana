@@ -570,7 +570,7 @@ impl Tower {
     #[allow(clippy::too_many_arguments)]
     fn make_check_switch_threshold_decision(
         &self,
-        switch_slot: u64,
+        switch_slot: Slot,
         ancestors: &HashMap<Slot, HashSet<u64>>,
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
@@ -645,18 +645,26 @@ impl Tower {
                 // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
                 // being a duplicate because `ancestors`/`descendants`/`progress` structurs may be missing this slot due
                 // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
+                //
+                // TODO: Handle if the last vote is on a dupe, and then we restart. The dupe won't be in
+                // heaviest_subtree_fork_choice, so `heaviest_subtree_fork_choice.latest_invalid_ancestor()` will return
+                // None, but the last vote will be persisted in tower.
+                let switch_hash = progress.get_hash(switch_slot).expect("Slot we're trying to switch to must exist AND be frozen in progress map");
                 if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice.latest_invalid_ancestor(&(last_voted_slot, last_voted_hash)) {
                     // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
                     // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
                     // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
                     // should then have a special case continue building an alternate fork from this ancestor, NOT
                     // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
-                    // on latest vote. See `ReplayStage:;select_vote_and_reset_forks()` for more details.
-                    if heaviest_subtree_fork_choice.is_ancestor_slot(switch_slot, &(last_voted_slot, last_voted_hash)) {
+                    // on latest vote. See `ReplayStage::select_vote_and_reset_forks()` for more details.
+                    if heaviest_subtree_fork_choice.is_strict_ancestor(&(switch_slot, switch_hash), &(last_voted_slot, last_voted_hash)) {
                         return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
-                    } else if !ancestors.contains_key(&last_voted_slot) {
+                    } else if progress.get_hash(last_voted_slot).map(|current_slot_hash| current_slot_hash != last_voted_hash).unwrap_or(true) {
                         // Our last vote slot was purged because it was on a duplicate fork, don't continue below
-                        // where the `last_vote_ancestors` check will panic
+                        // where checks may panic. We allow a freebie vote here that may violate switching
+                        // thresholds
+                        // TODO: Properly handle this case
+                        info!("Allowing switch vote on {:?} because last vote {:?} was rolled back", (switch_slot, switch_hash), (last_voted_slot, last_voted_hash));
                         return SwitchForkDecision::SwitchProof(Hash::default());
                     }
                 }
@@ -832,7 +840,7 @@ impl Tower {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn check_switch_threshold(
         &mut self,
-        switch_slot: u64,
+        switch_slot: Slot,
         ancestors: &HashMap<Slot, HashSet<u64>>,
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
@@ -1575,7 +1583,7 @@ pub mod test {
             )
         }
 
-        fn create_and_vote_new_branch(
+        pub fn create_and_vote_new_branch(
             &mut self,
             start_slot: Slot,
             end_slot: Slot,
