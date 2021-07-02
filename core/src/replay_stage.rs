@@ -1821,7 +1821,7 @@ impl ReplayStage {
         // send accumulated excute-timings to cost_update_service
         cost_update_sender
             .send(execute_timings)
-            .expect("send execution cost update to cost_model");
+            .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
 
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
