@@ -59,8 +59,18 @@ pub trait InvokeContext {
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
-    /// Verify and update PreAccount state based on program execution
-    fn verify_and_update(
+    /// Verify and update PreAccount state based on program execution before pushing
+    /// an InvokeContextStackFrame onto the stack
+    fn verify_and_update_push(
+        &mut self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        accounts: &[Rc<RefCell<AccountSharedData>>],
+        caller_pivileges: Option<&[bool]>,
+    ) -> Result<(), InstructionError>;
+    /// Verify and update PreAccount state based on program execution before popping
+    /// an InvokeContextStackFrame off the stack
+    fn verify_and_update_pop(
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
@@ -399,7 +409,16 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
     }
-    fn verify_and_update(
+    fn verify_and_update_push(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _accounts: &[Rc<RefCell<AccountSharedData>>],
+        _caller_pivileges: Option<&[bool]>,
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn verify_and_update_pop(
         &mut self,
         _message: &Message,
         _instruction: &CompiledInstruction,
