@@ -1336,7 +1336,7 @@ pub fn reconcile_blockstore_roots_with_tower(
                 "Reconciling slots as root based on tower root: {:?} ({}..{}) ",
                 new_roots, tower_root, last_blockstore_root
             );
-            blockstore.set_roots(&new_roots)?;
+            blockstore.set_roots(new_roots.iter())?;
         } else {
             // This indicates we're in bad state; but still don't panic here.
             // That's because we might have a chance of recovering properly with
@@ -3176,7 +3176,7 @@ pub mod test {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let (shreds, _) = make_slot_entries(4, 1, 42);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            blockstore.set_roots(&[3]).unwrap();
+            blockstore.set_roots(std::iter::once(&3)).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
             assert!(blockstore.is_root(3));

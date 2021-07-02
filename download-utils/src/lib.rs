@@ -258,6 +258,7 @@ pub fn download_snapshot<'a, 'b>(
         ArchiveFormat::TarZstd,
         ArchiveFormat::TarGzip,
         ArchiveFormat::TarBzip2,
+        ArchiveFormat::Tar, // `solana-test-validator` creates uncompressed snapshots
     ] {
         let desired_snapshot_package = snapshot_utils::build_snapshot_archive_path(
             snapshot_output_dir.to_path_buf(),
@@ -270,7 +271,7 @@ pub fn download_snapshot<'a, 'b>(
             return Ok(());
         }
 
-        if download_file(
+        match download_file(
             &format!(
                 "http://{}/{}",
                 rpc_addr,
@@ -283,11 +284,13 @@ pub fn download_snapshot<'a, 'b>(
             &desired_snapshot_package,
             use_progress_bar,
             progress_notify_callback,
-        )
-        .is_ok()
-        {
-            return Ok(());
+        ) {
+            Ok(()) => return Ok(()),
+            Err(err) => info!("{}", err),
         }
     }
-    Err("Snapshot couldn't be downloaded".to_string())
+    Err(format!(
+        "Failed to download a snapshot for slot {} from {}",
+        desired_snapshot_hash.0, rpc_addr
+    ))
 }

@@ -2985,10 +2985,12 @@ fn main() {
                 eprintln!("{} slots to be rooted", roots_to_fix.len());
                 for chunk in roots_to_fix.chunks(100) {
                     eprintln!("{:?}", chunk);
-                    blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
-                        eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
-                        exit(1);
-                    });
+                    blockstore
+                        .set_roots(roots_to_fix.iter())
+                        .unwrap_or_else(|err| {
+                            eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                            exit(1);
+                        });
                 }
             } else {
                 println!(

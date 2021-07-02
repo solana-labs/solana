@@ -2639,7 +2639,7 @@ mod tests {
 
             let shreds = entries_to_test_shreds(entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            blockstore.set_roots(&[bank.slot()]).unwrap();
+            blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 
             let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(

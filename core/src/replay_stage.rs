@@ -1348,7 +1348,7 @@ impl ReplayStage {
             // get dropped.
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             blockstore
-                .set_roots(&rooted_slots)
+                .set_roots(rooted_slots.iter())
                 .expect("Ledger set roots failed");
             let highest_confirmed_root = Some(
                 block_commitment_cache
@@ -1821,7 +1821,7 @@ impl ReplayStage {
         // send accumulated excute-timings to cost_update_service
         cost_update_sender
             .send(execute_timings)
-            .expect("send execution cost update to cost_model");
+            .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
 
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank

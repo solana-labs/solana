@@ -8706,8 +8706,12 @@ pub mod tests {
             hash: &hash,
         };
         let account = stored_account.clone_account();
-        let expected_account_hash =
-            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap();
+
+        let expected_account_hash = if cfg!(debug_assertions) {
+            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap()
+        } else {
+            Hash::from_str("33ruy7m3Xto7irYfsBSN74aAzQwCQxsfoZxXuZy2Rra3").unwrap()
+        };
 
         assert_eq!(
             AccountsDb::hash_stored_account(slot, &stored_account),
