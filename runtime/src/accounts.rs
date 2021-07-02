@@ -98,13 +98,11 @@ pub struct Accounts {
 
 // for the load instructions
 pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
-pub type TransactionAccountDeps = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData)>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
-    pub account_deps: TransactionAccountDeps,
     pub loaders: TransactionLoaders,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
@@ -281,7 +279,7 @@ impl Accounts {
             }
             debug_assert_eq!(accounts.len(), message.account_keys.len());
             // REFACTOR: account_deps unification
-            accounts.append(&mut account_deps.clone());
+            accounts.append(&mut account_deps);
 
             if let Some(payer_index) = payer_index {
                 if payer_index != 0 {
@@ -332,7 +330,6 @@ impl Accounts {
                             .collect::<Result<TransactionLoaders>>()?;
                         Ok(LoadedTransaction {
                             accounts,
-                            account_deps,
                             loaders,
                             rent: tx_rent,
                             rent_debits,
@@ -2014,7 +2011,6 @@ mod tests {
         let loaded0 = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts0,
-                account_deps: vec![],
                 loaders: transaction_loaders0,
                 rent: transaction_rent0,
                 rent_debits: RentDebits::default(),
@@ -2027,7 +2023,6 @@ mod tests {
         let loaded1 = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts1,
-                account_deps: vec![],
                 loaders: transaction_loaders1,
                 rent: transaction_rent1,
                 rent_debits: RentDebits::default(),
@@ -2411,7 +2406,6 @@ mod tests {
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
                 rent_debits: RentDebits::default(),
@@ -2529,7 +2523,6 @@ mod tests {
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                account_deps: vec![],
                 loaders: transaction_loaders,
                 rent: transaction_rent,
                 rent_debits: RentDebits::default(),

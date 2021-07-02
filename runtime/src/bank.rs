@@ -35,8 +35,8 @@
 //! already been signed and verified.
 use crate::{
     accounts::{
-        AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
-        TransactionLoadResult, TransactionLoaders,
+        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
+        TransactionLoaders,
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
@@ -178,7 +178,6 @@ type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "F3Ubz2Sx973pKSYNHTEmj6LY3te1DKUo3fs3cgzQ1uqJ")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
-type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -2947,23 +2946,14 @@ impl Bank {
     /// ownership by draining the source
     fn accounts_to_refcells(
         accounts: &mut TransactionAccounts,
-        account_deps: &mut TransactionAccountDeps,
         loaders: &mut TransactionLoaders,
-    ) -> (
-        TransactionAccountRefCells,
-        TransactionAccountDepRefCells,
-        TransactionLoaderRefCells,
-    ) {
+    ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
         let account_refcells: Vec<_> = accounts
             .drain(..)
             .map(|(pubkey, account)| {
                 // REFACTOR: account_deps unification
                 (pubkey, Rc::new(RefCell::new(account)))
             })
-            .collect();
-        let account_dep_refcells: Vec<_> = account_deps
-            .drain(..)
-            .map(|(pubkey, account_dep)| (pubkey, Rc::new(RefCell::new(account_dep))))
             .collect();
         let loader_refcells: Vec<Vec<_>> = loaders
             .iter_mut()
@@ -2973,7 +2963,7 @@ impl Bank {
                     .collect()
             })
             .collect();
-        (account_refcells, account_dep_refcells, loader_refcells)
+        (account_refcells, loader_refcells)
     }
 
     /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
@@ -3146,12 +3136,10 @@ impl Bank {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
-                    let (account_refcells, account_dep_refcells, loader_refcells) =
-                        Self::accounts_to_refcells(
-                            &mut loaded_transaction.accounts,
-                            &mut loaded_transaction.account_deps,
-                            &mut loaded_transaction.loaders,
-                        );
+                    let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
+                        &mut loaded_transaction.accounts,
+                        &mut loaded_transaction.loaders,
+                    );
 
                     let instruction_recorders = if enable_cpi_recording {
                         let ix_count = tx.message.instructions.len();
@@ -3172,7 +3160,6 @@ impl Bank {
                         tx.message(),
                         &loader_refcells,
                         &account_refcells,
-                        &account_dep_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
                         executors.clone(),

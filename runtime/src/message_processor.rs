@@ -260,10 +260,8 @@ impl ComputeMeter for ThisComputeMeter {
 pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
-    message: &'a Message,
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -286,7 +284,6 @@ impl<'a> ThisInvokeContext<'a> {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -307,10 +304,8 @@ impl<'a> ThisInvokeContext<'a> {
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
-            message,
             pre_accounts,
             accounts,
-            account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -364,25 +359,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
                 // REFACTOR: account_deps unification
-                (0..self.message.account_keys.len())
-                    .map(|index| &self.accounts[index].0)
-                    .chain(self.account_deps.iter().map(|(key, _account)| key))
-                    .position(|key| key == *search_key)
-                    .map(|mut index| {
+                self.accounts
+                    .iter()
+                    .position(|(key, _account)| key == *search_key)
+                    .map(|index| {
                         // TODO
                         // Currently we are constructing new accounts on the stack
                         // before calling MessageProcessor::process_cross_program_instruction
                         // Ideally we would recycle the existing accounts here.
-                        let key = if index < self.message.account_keys.len() {
-                            // REFACTOR: account_deps unification
-                            &self.accounts[index].0
-                            // &self.accounts[index] as &RefCell<AccountSharedData>,
-                        } else {
-                            index = index.saturating_sub(self.message.account_keys.len());
-                            &self.account_deps[index].0
-                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
-                        };
-                        (*is_signer, *is_writable, key, transmute_lifetime(*account))
+                        (
+                            *is_signer,
+                            *is_writable,
+                            &self.accounts[index].0,
+                            // &self.accounts[index] as &RefCell<AccountSharedData>
+                            transmute_lifetime(*account),
+                        )
                     })
             })
             .collect::<Option<Vec<_>>>()
@@ -473,12 +464,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         // REFACTOR: account_deps unification
-        for index in 0..self.message.account_keys.len() {
-            if self.accounts[index].0 == *pubkey {
-                return Some(self.accounts[index].1.clone());
-            }
-        }
-        self.account_deps.iter().find_map(|(key, account)| {
+        self.accounts.iter().find_map(|(key, account)| {
             if key == pubkey {
                 Some(account.clone())
             } else {
@@ -1148,7 +1134,6 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1185,7 +1170,6 @@ impl MessageProcessor {
             instruction,
             executable_accounts,
             accounts,
-            account_deps,
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -1223,7 +1207,6 @@ impl MessageProcessor {
         message: &Message,
         loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1246,7 +1229,6 @@ impl MessageProcessor {
                     instruction,
                     &loaders[instruction_index],
                     accounts,
-                    account_deps,
                     rent_collector,
                     log_collector.clone(),
                     executors.clone(),
@@ -1325,7 +1307,6 @@ mod tests {
             &message.instructions[0],
             &[],
             &accounts,
-            &[],
             &[],
             None,
             BpfComputeBudget::default(),
@@ -1918,7 +1899,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1946,7 +1926,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1978,7 +1957,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors,
@@ -2102,7 +2080,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -2134,7 +2111,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -2164,7 +2140,6 @@ mod tests {
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors,
@@ -2269,7 +2244,6 @@ mod tests {
             &compiled_instruction,
             &executable_accounts,
             &accounts,
-            &[],
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2328,7 +2302,6 @@ mod tests {
                 &compiled_instruction,
                 &executable_accounts,
                 &accounts,
-                &[],
                 programs.as_slice(),
                 None,
                 BpfComputeBudget::default(),
