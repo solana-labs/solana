@@ -4203,7 +4203,7 @@ mod tests {
             &progress_map,
         ));
     }
-   
+
     #[test]
     fn test_leader_snapshot_restart_propagation() {
         let ReplayBlockstoreComponents {
