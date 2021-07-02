@@ -4203,72 +4203,7 @@ mod tests {
             &progress_map,
         ));
     }
-
-    #[test]
-    fn test_purge_unconfirmed_duplicate_slot() {
-        let (vote_simulator, _) = setup_default_forks(2);
-        let VoteSimulator {
-            bank_forks,
-            mut progress,
-            ..
-        } = vote_simulator;
-        let mut descendants = bank_forks.read().unwrap().descendants().clone();
-        let mut ancestors = bank_forks.read().unwrap().ancestors();
-
-        // Purging slot 5 should purge only slots 5 and its descendant 6
-        ReplayStage::purge_unconfirmed_duplicate_slot(
-            5,
-            &mut ancestors,
-            &mut descendants,
-            &mut progress,
-            &bank_forks,
-        );
-        for i in 5..=6 {
-            assert!(bank_forks.read().unwrap().get(i).is_none());
-            assert!(progress.get(&i).is_none());
-        }
-        for i in 0..=4 {
-            assert!(bank_forks.read().unwrap().get(i).is_some());
-            assert!(progress.get(&i).is_some());
-        }
-
-        // Purging slot 4 should purge only slot 4
-        let mut descendants = bank_forks.read().unwrap().descendants().clone();
-        let mut ancestors = bank_forks.read().unwrap().ancestors();
-        ReplayStage::purge_unconfirmed_duplicate_slot(
-            4,
-            &mut ancestors,
-            &mut descendants,
-            &mut progress,
-            &bank_forks,
-        );
-        for i in 4..=6 {
-            assert!(bank_forks.read().unwrap().get(i).is_none());
-            assert!(progress.get(&i).is_none());
-        }
-        for i in 0..=3 {
-            assert!(bank_forks.read().unwrap().get(i).is_some());
-            assert!(progress.get(&i).is_some());
-        }
-
-        // Purging slot 1 should purge both forks 2 and 3
-        let mut descendants = bank_forks.read().unwrap().descendants().clone();
-        let mut ancestors = bank_forks.read().unwrap().ancestors();
-        ReplayStage::purge_unconfirmed_duplicate_slot(
-            1,
-            &mut ancestors,
-            &mut descendants,
-            &mut progress,
-            &bank_forks,
-        );
-        for i in 1..=6 {
-            assert!(bank_forks.read().unwrap().get(i).is_none());
-            assert!(progress.get(&i).is_none());
-        }
-        assert!(bank_forks.read().unwrap().get(0).is_some());
-        assert!(progress.get(&0).is_some());
-    }
-
+   
     #[test]
     fn test_leader_snapshot_restart_propagation() {
         let ReplayBlockstoreComponents {
