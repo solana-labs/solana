@@ -121,6 +121,19 @@ pub fn parse_vote(
                 }),
             })
         }
+        VoteInstruction::AuthorizeChecked(authority_type) => {
+            check_num_vote_accounts(&instruction.accounts, 4)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeChecked".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "authority": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "newAuthority": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "authorityType": authority_type,
+                }),
+            })
+        }
     }
 }
 
@@ -290,6 +303,25 @@ mod test {
                         "timestamp": 1_234_567_890,
                     },
                     "hash": proof_hash.to_string(),
+                }),
+            }
+        );
+        assert!(parse_vote(&message.instructions[0], &keys[0..3]).is_err());
+
+        let authority_type = VoteAuthorize::Voter;
+        let instruction =
+            vote_instruction::authorize_checked(&keys[1], &keys[0], &keys[3], authority_type);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_vote(&message.instructions[0], &keys[0..4]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeChecked".to_string(),
+                info: json!({
+                    "voteAccount": keys[2].to_string(),
+                    "clockSysvar": keys[3].to_string(),
+                    "authority": keys[0].to_string(),
+                    "newAuthority": keys[1].to_string(),
+                    "authorityType": authority_type,
                 }),
             }
         );
