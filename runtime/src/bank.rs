@@ -2675,9 +2675,7 @@ impl Bank {
         );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = log_messages
-            .get(0)
-            .map_or(vec![], |messages| messages.to_vec());
+        let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
         let post_transaction_accounts = loaded_txs
             .into_iter()
             .next()
@@ -2992,17 +2990,22 @@ impl Bank {
         Ok(())
     }
 
+    fn collect_log_messages(
+        log_collector: Option<Rc<LogCollector>>,
+    ) -> Option<TransactionLogMessages> {
+        log_collector.and_then(|log_collector| Rc::try_unwrap(log_collector).map(Into::into).ok())
+    }
+
     fn compile_recorded_instructions(
-        inner_instructions: &mut Vec<Option<InnerInstructionsList>>,
         instruction_recorders: Option<Vec<InstructionRecorder>>,
         message: &Message,
-    ) {
-        inner_instructions.push(instruction_recorders.map(|instruction_recorders| {
+    ) -> Option<InnerInstructionsList> {
+        instruction_recorders.map(|instruction_recorders| {
             instruction_recorders
                 .into_iter()
                 .map(|r| r.compile_instructions(message))
                 .collect()
-        }));
+        })
     }
 
     /// Get any cached executors needed by the transaction
@@ -3069,7 +3072,7 @@ impl Bank {
         Vec<TransactionLoadResult>,
         Vec<TransactionExecutionResult>,
         Vec<Option<InnerInstructionsList>>,
-        Vec<TransactionLogMessages>,
+        Vec<Option<TransactionLogMessages>>,
         Vec<usize>,
         u64,
         u64,
@@ -3118,7 +3121,8 @@ impl Bank {
         let mut signature_count: u64 = 0;
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(hashed_txs.len());
-        let mut transaction_log_messages = Vec::with_capacity(hashed_txs.len());
+        let mut transaction_log_messages: Vec<Option<Vec<String>>> =
+            Vec::with_capacity(hashed_txs.len());
         let bpf_compute_budget = self
             .bpf_compute_budget
             .unwrap_or_else(BpfComputeBudget::new);
@@ -3127,7 +3131,11 @@ impl Bank {
             .iter_mut()
             .zip(hashed_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
-                (Err(e), _nonce_rollback) => (Err(e.clone()), None),
+                (Err(e), _nonce_rollback) => {
+                    inner_instructions.push(None);
+                    transaction_log_messages.push(None);
+                    (Err(e.clone()), None)
+                }
                 (Ok(loaded_transaction), nonce_rollback) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
@@ -3167,20 +3175,11 @@ impl Bank {
                         &self.ancestors,
                     );
 
-                    if enable_log_recording {
-                        let log_messages: TransactionLogMessages =
-                            Rc::try_unwrap(log_collector.unwrap_or_default())
-                                .unwrap_or_default()
-                                .into();
-
-                        transaction_log_messages.push(log_messages);
-                    }
-
-                    Self::compile_recorded_instructions(
-                        &mut inner_instructions,
+                    transaction_log_messages.push(Self::collect_log_messages(log_collector));
+                    inner_instructions.push(Self::compile_recorded_instructions(
                         instruction_recorders,
                         &tx.message,
-                    );
+                    ));
 
                     if let Err(e) = Self::refcells_to_accounts(
                         &mut loaded_transaction.accounts,
@@ -3266,7 +3265,6 @@ impl Bank {
                 }
 
                 let is_vote = is_simple_vote_transaction(tx);
-
                 let store = match transaction_log_collector_config.filter {
                     TransactionLogCollectorFilter::All => !is_vote || mentioned_address,
                     TransactionLogCollectorFilter::AllWithVotes => true,
@@ -3275,12 +3273,14 @@ impl Bank {
                 };
 
                 if store {
-                    transaction_log_collector.logs.push(TransactionLogInfo {
-                        signature: tx.signatures[0],
-                        result: r.clone(),
-                        is_vote,
-                        log_messages: transaction_log_messages.get(i).cloned().unwrap_or_default(),
-                    });
+                    if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
+                        transaction_log_collector.logs.push(TransactionLogInfo {
+                            signature: tx.signatures[0],
+                            result: r.clone(),
+                            is_vote,
+                            log_messages,
+                        });
+                    }
                 }
             }
 
@@ -4036,7 +4036,7 @@ impl Bank {
         TransactionResults,
         TransactionBalancesSet,
         Vec<Option<InnerInstructionsList>>,
-        Vec<TransactionLogMessages>,
+        Vec<Option<TransactionLogMessages>>,
     ) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
@@ -10135,9 +10135,11 @@ pub(crate) mod tests {
                 &mut ExecuteTimings::default(),
             );
 
-        assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
-        assert_eq!(transaction_logs.len(), 0);
+        assert!(inner_instructions.iter().all(Option::is_none));
+        assert!(transaction_logs.iter().all(Option::is_none));
 
+        assert_eq!(inner_instructions.len(), 3);
+        assert_eq!(transaction_logs.len(), 3);
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
@@ -12926,7 +12928,9 @@ pub(crate) mod tests {
         let success_sig = tx0.signatures[0];
         let tx1 = system_transaction::transfer(&sender1, &recipient1, 110, blockhash); // Should produce insufficient funds log
         let failure_sig = tx1.signatures[0];
-        let txs = vec![tx1, tx0];
+        let mut invalid_tx = system_transaction::transfer(&sender1, &recipient1, 10, blockhash);
+        invalid_tx.message.header.num_required_signatures = 0; // this tx won't be processed because it has no signers
+        let txs = vec![invalid_tx, tx1, tx0];
         let batch = bank.prepare_batch(txs.iter());
 
         let log_results = bank
@@ -12939,17 +12943,10 @@ pub(crate) mod tests {
                 &mut ExecuteTimings::default(),
             )
             .3;
-        assert_eq!(log_results.len(), 2);
-        assert!(log_results[0]
-            .clone()
-            .pop()
-            .unwrap()
-            .contains(&"failed".to_string()));
-        assert!(log_results[1]
-            .clone()
-            .pop()
-            .unwrap()
-            .contains(&"success".to_string()));
+        assert_eq!(log_results.len(), 3);
+        assert!(log_results[0].as_ref().is_none());
+        assert!(log_results[1].as_ref().unwrap()[2].contains(&"failed".to_string()));
+        assert!(log_results[2].as_ref().unwrap()[1].contains(&"success".to_string()));
 
         let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
         let success_log_info = stored_logs
