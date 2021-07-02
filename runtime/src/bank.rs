@@ -630,7 +630,6 @@ impl NonceRollbackFull {
             nonce_address,
             nonce_account,
         } = partial;
-        // REFACTOR: account_deps unification
         let fee_payer = (0..message.account_keys.len()).find_map(|i| {
             if let Some((k, a)) = &accounts.get(i) {
                 if message.is_non_loader_key(k, i) {
@@ -2950,10 +2949,7 @@ impl Bank {
     ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
         let account_refcells: Vec<_> = accounts
             .drain(..)
-            .map(|(pubkey, account)| {
-                // REFACTOR: account_deps unification
-                (pubkey, Rc::new(RefCell::new(account)))
-            })
+            .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
             .collect();
         let loader_refcells: Vec<Vec<_>> = loaders
             .iter_mut()
@@ -4804,7 +4800,6 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
-                // REFACTOR: account_deps unification
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,

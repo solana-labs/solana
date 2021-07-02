@@ -3090,7 +3090,6 @@ pub mod rpc_full {
                     accounts.push(if result.is_err() {
                         None
                     } else {
-                        // REFACTOR: account_deps unification
                         (0..transaction.message.account_keys.len())
                             .position(|i| {
                                 post_simulation_accounts

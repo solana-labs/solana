@@ -358,7 +358,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let keyed_accounts = keyed_accounts
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
-                // REFACTOR: account_deps unification
                 self.accounts
                     .iter()
                     .position(|(key, _account)| key == *search_key)
@@ -463,7 +462,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        // REFACTOR: account_deps unification
         self.accounts.iter().find_map(|(key, account)| {
             if key == pubkey {
                 Some(account.clone())
@@ -622,7 +620,6 @@ impl MessageProcessor {
             .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
-                // REFACTOR: account_deps unification
                 (
                     message.is_signer(index),
                     message.is_writable(index, demote_sysvar_write_locks),
@@ -978,7 +975,6 @@ impl MessageProcessor {
             let mut work = |_unique_index: usize, account_index: usize| {
                 if account_index < message.account_keys.len() && account_index < accounts.len() {
                     let account = accounts[account_index].1.borrow();
-                    // REFACTOR: account_deps unification
                     pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
                     return Ok(());
                 }
@@ -1080,7 +1076,6 @@ impl MessageProcessor {
         let mut work = |_unique_index: usize, account_index: usize| {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
                 let (key, account) = &accounts[account_index];
-                // REFACTOR: account_deps unification
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[account_index]
                 } else {
@@ -1151,7 +1146,6 @@ impl MessageProcessor {
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
                 if instructions::check_id(pubkey) {
-                    // REFACTOR: account_deps unification
                     let mut mut_account_ref = accont.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),

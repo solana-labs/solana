@@ -278,7 +278,11 @@ impl Accounts {
                 accounts.push((*key, account));
             }
             debug_assert_eq!(accounts.len(), message.account_keys.len());
-            // REFACTOR: account_deps unification
+            // Appends the account_deps at the end of the accounts,
+            // this way they can be accessed in a uniform way.
+            // At places where only the accounts are needed,
+            // the account_deps are truncated using e.g:
+            // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
             if let Some(payer_index) = payer_index {
@@ -996,7 +1000,6 @@ impl Accounts {
                 .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|(i, (key, _account))| message.is_non_loader_key(key, *i))
             {
-                // REFACTOR: account_deps unification
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
                     key,

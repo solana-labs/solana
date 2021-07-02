@@ -336,7 +336,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        // REFACTOR: account_deps unification
         for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
             if !message.is_writable(i, true) {
                 continue;
