@@ -1200,7 +1200,7 @@ impl MessageProcessor {
                             })?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports());
-                        if is_writable && !account.executable() {
+                        if is_writable && !pre_account.executable() {
                             if update_push {
                                 pre_account.update_push(&account, invoke_depth);
                             } else {
