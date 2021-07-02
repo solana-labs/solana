@@ -186,6 +186,86 @@ pub fn parse_stake(
                 info: value,
             })
         }
+        StakeInstruction::InitializeChecked => {
+            check_num_stake_accounts(&instruction.accounts, 4)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeChecked".to_string(),
+                info: json!({
+                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "rentSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "staker": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "withdrawer": account_keys[instruction.accounts[3] as usize].to_string(),
+                }),
+            })
+        }
+        StakeInstruction::AuthorizeChecked(authority_type) => {
+            check_num_stake_accounts(&instruction.accounts, 4)?;
+            let mut value = json!({
+                "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                "authority": account_keys[instruction.accounts[2] as usize].to_string(),
+                "newAuthority": account_keys[instruction.accounts[3] as usize].to_string(),
+                "authorityType": authority_type,
+            });
+            let map = value.as_object_mut().unwrap();
+            if instruction.accounts.len() >= 5 {
+                map.insert(
+                    "custodian".to_string(),
+                    json!(account_keys[instruction.accounts[4] as usize].to_string()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeChecked".to_string(),
+                info: value,
+            })
+        }
+        StakeInstruction::AuthorizeCheckedWithSeed(args) => {
+            check_num_stake_accounts(&instruction.accounts, 4)?;
+            let mut value = json!({
+                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "authorityBase": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "newAuthorized": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "authorityType": args.stake_authorize,
+                    "authoritySeed": args.authority_seed,
+                    "authorityOwner": args.authority_owner.to_string(),
+            });
+            let map = value.as_object_mut().unwrap();
+            if instruction.accounts.len() >= 5 {
+                map.insert(
+                    "custodian".to_string(),
+                    json!(account_keys[instruction.accounts[4] as usize].to_string()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeCheckedWithSeed".to_string(),
+                info: value,
+            })
+        }
+        StakeInstruction::SetLockupChecked(lockup_args) => {
+            check_num_stake_accounts(&instruction.accounts, 2)?;
+            let mut lockup_map = Map::new();
+            if let Some(timestamp) = lockup_args.unix_timestamp {
+                lockup_map.insert("unixTimestamp".to_string(), json!(timestamp));
+            }
+            if let Some(epoch) = lockup_args.epoch {
+                lockup_map.insert("epoch".to_string(), json!(epoch));
+            }
+            if instruction.accounts.len() >= 3 {
+                lockup_map.insert(
+                    "custodian".to_string(),
+                    json!(account_keys[instruction.accounts[2] as usize].to_string()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "setLockupChecked".to_string(),
+                info: json!({
+                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "custodian": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "lockup": lockup_map,
+                }),
+            })
+        }
     }
 }
 
@@ -267,22 +347,22 @@ mod test {
         assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
 
         let instruction = instruction::authorize(
-            &keys[1],
+            &keys[2],
             &keys[0],
-            &keys[3],
+            &keys[4],
             StakeAuthorize::Withdrawer,
             Some(&keys[1]),
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
+            parse_stake(&message.instructions[0], &keys[0..4]).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorize".to_string(),
                 info: json!({
-                    "stakeAccount": keys[1].to_string(),
-                    "clockSysvar": keys[2].to_string(),
+                    "stakeAccount": keys[2].to_string(),
+                    "clockSysvar": keys[3].to_string(),
                     "authority": keys[0].to_string(),
-                    "newAuthority": keys[3].to_string(),
+                    "newAuthority": keys[4].to_string(),
                     "authorityType": StakeAuthorize::Withdrawer,
                     "custodian": keys[1].to_string(),
                 }),
@@ -401,7 +481,7 @@ mod test {
             &keys[1],
             &keys[0],
             seed.to_string(),
-            &keys[2],
+            &keys[0],
             &keys[3],
             StakeAuthorize::Staker,
             None,
@@ -413,7 +493,7 @@ mod test {
                 instruction_type: "authorizeWithSeed".to_string(),
                 info: json!({
                     "stakeAccount": keys[1].to_string(),
-                    "authorityOwner": keys[2].to_string(),
+                    "authorityOwner": keys[0].to_string(),
                     "newAuthorized": keys[3].to_string(),
                     "authorityBase": keys[0].to_string(),
                     "authoritySeed": seed,
@@ -422,26 +502,26 @@ mod test {
                 }),
             }
         );
-        assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
 
         let instruction = instruction::authorize_with_seed(
-            &keys[1],
+            &keys[2],
             &keys[0],
             seed.to_string(),
-            &keys[2],
-            &keys[3],
+            &keys[0],
+            &keys[4],
             StakeAuthorize::Withdrawer,
-            Some(&keys[4]),
+            Some(&keys[1]),
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_stake(&message.instructions[0], &keys[0..5]).unwrap(),
+            parse_stake(&message.instructions[0], &keys[0..4]).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeWithSeed".to_string(),
                 info: json!({
                     "stakeAccount": keys[2].to_string(),
-                    "authorityOwner": keys[2].to_string(),
-                    "newAuthorized": keys[3].to_string(),
+                    "authorityOwner": keys[0].to_string(),
+                    "newAuthorized": keys[4].to_string(),
                     "authorityBase": keys[0].to_string(),
                     "authoritySeed": seed,
                     "authorityType": StakeAuthorize::Withdrawer,
@@ -450,14 +530,14 @@ mod test {
                 }),
             }
         );
-        assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_stake(&message.instructions[0], &keys[0..3]).is_err());
     }
 
     #[test]
     #[allow(clippy::same_item_push)]
-    fn test_parse_set_lockup() {
+    fn test_parse_stake_set_lockup() {
         let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..2 {
+        for _ in 0..3 {
             keys.push(Pubkey::new_unique());
         }
         let unix_timestamp = 1_234_567_890;
@@ -531,5 +611,208 @@ mod test {
         );
 
         assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+
+        let lockup = LockupArgs {
+            unix_timestamp: Some(unix_timestamp),
+            epoch: None,
+            custodian: None,
+        };
+        let instruction = instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "setLockupChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[1].to_string(),
+                    "custodian": keys[0].to_string(),
+                    "lockup": {
+                        "unixTimestamp": unix_timestamp
+                    }
+                }),
+            }
+        );
+
+        let lockup = LockupArgs {
+            unix_timestamp: Some(unix_timestamp),
+            epoch: Some(epoch),
+            custodian: None,
+        };
+        let instruction = instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "setLockupChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[1].to_string(),
+                    "custodian": keys[0].to_string(),
+                    "lockup": {
+                        "unixTimestamp": unix_timestamp,
+                        "epoch": epoch,
+                    }
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+
+        let lockup = LockupArgs {
+            unix_timestamp: Some(unix_timestamp),
+            epoch: Some(epoch),
+            custodian: Some(keys[1]),
+        };
+        let instruction = instruction::set_lockup_checked(&keys[2], &lockup, &keys[0]);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "setLockupChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[2].to_string(),
+                    "custodian": keys[0].to_string(),
+                    "lockup": {
+                        "unixTimestamp": unix_timestamp,
+                        "epoch": epoch,
+                        "custodian": keys[1].to_string(),
+                    }
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
+    }
+
+    #[test]
+    #[allow(clippy::same_item_push)]
+    fn test_parse_stake_checked_instructions() {
+        let mut keys: Vec<Pubkey> = vec![];
+        for _ in 0..6 {
+            keys.push(Pubkey::new_unique());
+        }
+
+        let authorized = Authorized {
+            staker: keys[3],
+            withdrawer: keys[0],
+        };
+        let lamports = 55;
+
+        let instructions =
+            instruction::create_account_checked(&keys[0], &keys[1], &authorized, lamports);
+        let message = Message::new(&instructions, None);
+        assert_eq!(
+            parse_stake(&message.instructions[1], &keys[0..4]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "initializeChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[1].to_string(),
+                    "rentSysvar": keys[2].to_string(),
+                    "staker": keys[3].to_string(),
+                    "withdrawer": keys[0].to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[1], &keys[0..3]).is_err());
+
+        let instruction = instruction::authorize_checked(
+            &keys[2],
+            &keys[0],
+            &keys[1],
+            StakeAuthorize::Staker,
+            None,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..4]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[2].to_string(),
+                    "clockSysvar": keys[3].to_string(),
+                    "authority": keys[0].to_string(),
+                    "newAuthority": keys[1].to_string(),
+                    "authorityType": StakeAuthorize::Staker,
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..3]).is_err());
+
+        let instruction = instruction::authorize_checked(
+            &keys[3],
+            &keys[0],
+            &keys[1],
+            StakeAuthorize::Withdrawer,
+            Some(&keys[2]),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..5]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeChecked".to_string(),
+                info: json!({
+                    "stakeAccount": keys[3].to_string(),
+                    "clockSysvar": keys[4].to_string(),
+                    "authority": keys[0].to_string(),
+                    "newAuthority": keys[1].to_string(),
+                    "authorityType": StakeAuthorize::Withdrawer,
+                    "custodian": keys[2].to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..4]).is_err());
+
+        let seed = "test_seed";
+        let instruction = instruction::authorize_checked_with_seed(
+            &keys[2],
+            &keys[0],
+            seed.to_string(),
+            &keys[0],
+            &keys[1],
+            StakeAuthorize::Staker,
+            None,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..4]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeCheckedWithSeed".to_string(),
+                info: json!({
+                    "stakeAccount": keys[2].to_string(),
+                    "authorityOwner": keys[0].to_string(),
+                    "newAuthorized": keys[1].to_string(),
+                    "authorityBase": keys[0].to_string(),
+                    "authoritySeed": seed,
+                    "authorityType": StakeAuthorize::Staker,
+                    "clockSysvar": keys[3].to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..3]).is_err());
+
+        let instruction = instruction::authorize_checked_with_seed(
+            &keys[3],
+            &keys[0],
+            seed.to_string(),
+            &keys[0],
+            &keys[1],
+            StakeAuthorize::Withdrawer,
+            Some(&keys[2]),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..5]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeCheckedWithSeed".to_string(),
+                info: json!({
+                    "stakeAccount": keys[3].to_string(),
+                    "authorityOwner": keys[0].to_string(),
+                    "newAuthorized": keys[1].to_string(),
+                    "authorityBase": keys[0].to_string(),
+                    "authoritySeed": seed,
+                    "authorityType": StakeAuthorize::Withdrawer,
+                    "clockSysvar": keys[4].to_string(),
+                    "custodian": keys[2].to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..4]).is_err());
     }
 }
