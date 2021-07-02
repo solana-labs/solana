@@ -113,7 +113,9 @@ invoke_signed(
 
 Programs can limit the compute budget available to the invocation via the
 `invoke_with_budget` and `invoke_signed_with_budget` calls.
-If the invocation fails to complete or fully consumes its compute budget, `invoke_with_budget` and `invoke_signed_with_budget` will return an error  `ProgramError::ComputationalBudgetExceeded`. This error can then be handled by the caller.
+If the invocation fails to complete or fully consumes its compute budget,
+`invoke_with_budget` and `invoke_signed_with_budget` will return an error
+`ProgramError::ComputationalBudgetExceeded`. This error can then be handled by the caller.
 
 ```rust, ignore
 let ret = invoke_signed_with_budget(
