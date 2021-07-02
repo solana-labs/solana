@@ -137,7 +137,7 @@ async function fetchRewards(
   }
 
   const results = await Promise.all(requests);
-  const lowestFetchedEpoch = fromEpoch - requests.length;
+  const lowestFetchedEpoch = fromEpoch - requests.length + 1;
 
   dispatch({
     type: ActionType.Update,

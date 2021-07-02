@@ -164,7 +164,11 @@ impl RpcRequestMiddleware {
             should_validate_hosts: true,
             response: Box::pin(async {
                 match Self::open_no_follow(filename).await {
-                    Err(_) => Ok(Self::internal_server_error()),
+                    Err(err) => Ok(if err.kind() == std::io::ErrorKind::NotFound {
+                        Self::not_found()
+                    } else {
+                        Self::internal_server_error()
+                    }),
                     Ok(file) => {
                         let stream =
                             FramedRead::new(file, BytesCodec::new()).map_ok(|b| b.freeze());

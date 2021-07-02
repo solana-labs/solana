@@ -34,11 +34,14 @@ fn test_build() {
     assert!(output.status.success());
 }
 
-// This test requires rustfilt.
-// TODO: Add a check for rustfilt, and install it if not available.
-#[ignore]
 #[test]
 fn test_dump() {
+    // This test requires rustfilt.
+    assert!(Command::new("cargo")
+        .args(&["install", "rustfilt"])
+        .status()
+        .expect("Unable to install rustfilt required for --dump option")
+        .success());
     let output = run_cargo_build(&["--dump"]);
     if !output.status.success() {
         eprintln!("--- stdout ---");

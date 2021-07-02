@@ -3861,7 +3861,7 @@ pub fn create_test_transactions_and_populate_blockstore(
         0,
     );
     blockstore.insert_shreds(shreds, None, false).unwrap();
-    blockstore.set_roots(&[slot]).unwrap();
+    blockstore.set_roots(std::iter::once(&slot)).unwrap();
 
     let (transaction_status_sender, transaction_status_receiver) = crossbeam_channel::unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = crossbeam_channel::unbounded();
@@ -4025,7 +4025,7 @@ pub mod tests {
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(&blockstore, 5, *root, parent, Hash::default());
             }
-            blockstore.set_roots(&roots).unwrap();
+            blockstore.set_roots(roots.iter()).unwrap();
             let new_bank = Bank::new_from_parent(
                 &parent_bank,
                 parent_bank.collector_id(),
@@ -6699,7 +6699,7 @@ pub mod tests {
         let bank = Arc::new(Bank::default());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(&[0, 1]).unwrap();
+        blockstore.set_roots(vec![0, 1].iter()).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);
