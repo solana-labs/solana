@@ -1348,7 +1348,7 @@ impl ReplayStage {
             // get dropped.
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             blockstore
-                .set_roots(&rooted_slots)
+                .set_roots(rooted_slots.iter())
                 .expect("Ledger set roots failed");
             let highest_confirmed_root = Some(
                 block_commitment_cache

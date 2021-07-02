@@ -485,7 +485,7 @@ fn do_process_blockstore_from_root(
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
-            .set_roots(&[start_slot])
+            .set_roots(std::iter::once(&start_slot))
             .expect("Couldn't set root slot on startup");
     } else if !blockstore.is_root(start_slot) {
         panic!("starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
@@ -1030,13 +1030,13 @@ fn load_frozen_forks(
                                 if new_root_bank.slot() == *root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > *root);
 
-                                rooted_slots.push(new_root_bank.slot());
+                                rooted_slots.push((new_root_bank.slot(), new_root_bank.hash()));
                                 // As noted, the cluster confirmed root should be descended from
                                 // our last root; therefore parent should be set
                                 new_root_bank = new_root_bank.parent().unwrap();
                             }
                             inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
-                            blockstore.set_roots(&rooted_slots).expect("Blockstore::set_roots should succeed");
+                            blockstore.set_roots(rooted_slots.iter().map(|(slot, _hash)| slot)).expect("Blockstore::set_roots should succeed");
                             Some(cluster_root_bank)
                         } else {
                             None
@@ -1640,7 +1640,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(&[0, 1, 4]).unwrap();
+        blockstore.set_roots(vec![0, 1, 4].iter()).unwrap();
 
         let opts = ProcessOptions {
             poh_verify: true,
@@ -1720,7 +1720,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blockstore.set_roots(&[0, 1]).unwrap();
+        blockstore.set_roots(vec![0, 1].iter()).unwrap();
 
         let opts = ProcessOptions {
             poh_verify: true,
@@ -1930,11 +1930,13 @@ pub mod tests {
         }
 
         // Set a root on the last slot of the last confirmed epoch
-        let rooted_slots: Vec<_> = (0..=last_slot).collect();
-        blockstore.set_roots(&rooted_slots).unwrap();
+        let rooted_slots: Vec<Slot> = (0..=last_slot).collect();
+        blockstore.set_roots(rooted_slots.iter()).unwrap();
 
         // Set a root on the next slot of the confirmed epoch
-        blockstore.set_roots(&[last_slot + 1]).unwrap();
+        blockstore
+            .set_roots(std::iter::once(&(last_slot + 1)))
+            .unwrap();
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
@@ -2860,7 +2862,7 @@ pub mod tests {
             genesis_config.ticks_per_slot,
             genesis_config.hash(),
         );
-        blockstore.set_roots(&[0, 1]).unwrap();
+        blockstore.set_roots(vec![0, 1].iter()).unwrap();
 
         // Specify halting at slot 0
         let opts = ProcessOptions {
@@ -2911,7 +2913,7 @@ pub mod tests {
             last_hash =
                 fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i + 1, i, last_hash);
         }
-        blockstore.set_roots(&[3, 5]).unwrap();
+        blockstore.set_roots(vec![3, 5].iter()).unwrap();
 
         // Set up bank1
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -3367,7 +3369,9 @@ pub mod tests {
         blockstore.add_tree(forks, false, true, ticks_per_slot, genesis_config.hash());
 
         if let Some(blockstore_root) = blockstore_root {
-            blockstore.set_roots(&[blockstore_root]).unwrap();
+            blockstore
+                .set_roots(std::iter::once(&blockstore_root))
+                .unwrap();
         }
 
         let opts = ProcessOptions {
