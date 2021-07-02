@@ -43,7 +43,7 @@ mod tests {
     fn test_next_slots_iterator() {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_roots(&[0]).unwrap();
+        blockstore.set_roots(std::iter::once(&0)).unwrap();
         let ticks_per_slot = 5;
         /*
             Build a blockstore in the ledger with the following fork structure:
