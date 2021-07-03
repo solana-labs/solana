@@ -1484,6 +1484,18 @@ pub mod test {
                         );
                         info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
                         new_bank.process_transaction(&vote_tx).unwrap();
+
+                        // Check the vote landed
+                        let vote_account = new_bank
+                            .get_vote_account(&keypairs.vote_keypair.pubkey())
+                            .unwrap();
+                        let state = vote_account.1.vote_state();
+                        assert!(state
+                            .as_ref()
+                            .unwrap()
+                            .votes
+                            .iter()
+                            .any(|lockout| lockout.slot == parent));
                     }
                 }
                 new_bank.freeze();
