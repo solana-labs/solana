@@ -794,6 +794,9 @@ impl JsonRpcRequestProcessor {
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?;
         let default_vote_state = VoteState::default();
+        let delinquent_validator_slot_distance = config
+            .delinquent_slot_distance
+            .unwrap_or(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
         let (current_vote_accounts, delinquent_vote_accounts): (
             Vec<RpcVoteAccountInfo>,
             Vec<RpcVoteAccountInfo>,
@@ -837,22 +840,27 @@ impl JsonRpcRequestProcessor {
                 })
             })
             .partition(|vote_account_info| {
-                if bank.slot() >= DELINQUENT_VALIDATOR_SLOT_DISTANCE as u64 {
+                if bank.slot() >= delinquent_validator_slot_distance as u64 {
                     vote_account_info.last_vote
-                        > bank.slot() - DELINQUENT_VALIDATOR_SLOT_DISTANCE as u64
+                        > bank.slot() - delinquent_validator_slot_distance as u64
                 } else {
                     vote_account_info.last_vote > 0
                 }
             });
 
-        let delinquent_staked_vote_accounts = delinquent_vote_accounts
-            .into_iter()
-            .filter(|vote_account_info| vote_account_info.activated_stake > 0)
-            .collect::<Vec<_>>();
+        let keep_unstaked_delinquents = config.keep_unstaked_delinquents.unwrap_or_default();
+        let delinquent_vote_accounts = if !keep_unstaked_delinquents {
+            delinquent_vote_accounts
+                .into_iter()
+                .filter(|vote_account_info| vote_account_info.activated_stake > 0)
+                .collect::<Vec<_>>()
+        } else {
+            delinquent_vote_accounts
+        };
 
         Ok(RpcVoteAccountStatus {
             current: current_vote_accounts,
-            delinquent: delinquent_staked_vote_accounts,
+            delinquent: delinquent_vote_accounts,
         })
     }
 
@@ -6621,7 +6629,8 @@ pub mod tests {
                 r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts","params":{}}}"#,
                 json!([RpcGetVoteAccountsConfig {
                     vote_pubkey: Some(leader_vote_keypair.pubkey().to_string()),
-                    commitment: Some(CommitmentConfig::processed())
+                    commitment: Some(CommitmentConfig::processed()),
+                    ..RpcGetVoteAccountsConfig::default()
                 }])
             );
 
