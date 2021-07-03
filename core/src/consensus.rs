@@ -1487,6 +1487,10 @@ pub mod test {
                     }
                 }
                 new_bank.freeze();
+                self.progress
+                    .get_fork_stats_mut(new_bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .bank_hash = Some(new_bank.hash());
                 self.heaviest_subtree_fork_choice.add_new_leaf_slot(
                     (new_bank.slot(), new_bank.hash()),
                     Some((new_bank.parent_slot(), new_bank.parent_hash())),

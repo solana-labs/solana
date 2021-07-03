@@ -1913,6 +1913,10 @@ impl ReplayStage {
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
+                progress
+                    .get_fork_stats_mut(bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .bank_hash = Some(bank.hash());
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),
@@ -2019,7 +2023,6 @@ impl ReplayStage {
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
-                    stats.bank_hash = Some(bank.hash());
                     stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
                     new_stats.push(bank_slot);

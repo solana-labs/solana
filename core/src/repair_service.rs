@@ -568,19 +568,19 @@ impl RepairService {
         new_duplicate_slots: &[(Slot, BankId)],
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
-        _root_bank: &Bank,
-        _blockstore: &Blockstore,
+        root_bank: &Bank,
+        blockstore: &Blockstore,
         serve_repair: &ServeRepair,
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         repair_validators: &Option<HashSet<Pubkey>>,
     ) {
-        for (slot, _bank_id) in new_duplicate_slots {
+        for (slot, bank_id) in new_duplicate_slots {
             warn!(
                 "Cluster confirmed slot: {}, dumping our current version and repairing",
                 slot
             );
             // Clear the slot signatures from status cache for this slot
-            /*root_bank.clear_slot_signatures(*slot);
+            root_bank.clear_slot_signatures(*slot);
 
             // Clear the accounts for this slot
             root_bank.remove_unrooted_slots(&[(*slot, *bank_id)]);
@@ -589,7 +589,7 @@ impl RepairService {
             // 1) Clear old shreds allowing new ones to be inserted
             // 2) Clear the "dead" flag allowing ReplayStage to start replaying
             // this slot
-            blockstore.clear_unconfirmed_slot(*slot);*/
+            blockstore.clear_unconfirmed_slot(*slot);
 
             // Signal ReplayStage to clear its progress map so that a different
             // version of this slot can be replayed

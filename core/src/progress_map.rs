@@ -211,6 +211,7 @@ impl ForkProgress {
                 )
             })
             .unwrap_or((false, 0, HashSet::new(), false, 0));
+
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
@@ -250,13 +251,18 @@ impl ForkProgress {
             }
         };
 
-        Self::new(
+        let mut new_progress = Self::new(
             bank.last_blockhash(),
             prev_leader_slot,
             validator_stake_info,
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
-        )
+        );
+
+        if bank.is_frozen() {
+            new_progress.fork_stats.bank_hash = Some(bank.hash());
+        }
+        new_progress
     }
 }
 
