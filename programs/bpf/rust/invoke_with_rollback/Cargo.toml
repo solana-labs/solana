@@ -1,5 +1,5 @@
 [package]
-name = "cpi-budgeted-early-termination"
+name = "invoke-with-rollback"
 version = "1.8.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
