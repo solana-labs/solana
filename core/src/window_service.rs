@@ -188,9 +188,14 @@ where
     }
 
     prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
+    let repairs: Vec<_> = repair_infos
+        .iter()
+        .map(|repair_info| repair_info.is_some())
+        .collect();
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
+        repairs,
         Some(leader_schedule_cache),
         false,
         &handle_duplicate,

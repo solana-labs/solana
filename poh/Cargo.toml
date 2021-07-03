@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-log = "0.4.11"
+log = "0.4.14"
 solana-ledger = { path = "../ledger", version = "=1.8.0" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }

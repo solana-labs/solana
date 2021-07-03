@@ -12,16 +12,21 @@ use log::*;
 use solana_sdk::{message::Message, pubkey::Pubkey, transaction::Transaction};
 use std::collections::HashMap;
 
-// Guestimated from mainnet-beta data, sigver averages 1us, read averages 7us and write avergae 25us
-const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 1 + 25;
-const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1 + 7;
-const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+// Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
+const SIGVER_COST: u64 = 1;
 const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 7;
+const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
 
 // Sampled from mainnet-beta, the instruction execution timings stats are (in us):
 // min=194, max=62164, avg=8214.49, med=2243
 pub const ACCOUNT_MAX_COST: u64 = 100_000_000;
 pub const BLOCK_MAX_COST: u64 = 2_500_000_000;
+
+const DEMOTE_SYSVAR_WRITE_LOCKS: bool = true;
 
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
@@ -34,6 +39,21 @@ pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
     pub account_access_cost: u64,
     pub execution_cost: u64,
+}
+
+impl TransactionCost {
+    pub fn new_with_capacity(capacity: usize) -> Self {
+        Self {
+            writable_accounts: Vec::with_capacity(capacity),
+            ..Self::default()
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.writable_accounts.clear();
+        self.account_access_cost = 0;
+        self.execution_cost = 0;
+    }
 }
 
 #[derive(Debug)]
@@ -88,6 +108,34 @@ impl CostModel {
         cost.writable_accounts.extend(&non_signed_writable_accounts);
         debug!("transaction {:?} has cost {:?}", transaction, cost);
         cost
+    }
+
+    // calculate `transaction` cost, the result is passed back to caller via mutable
+    // parameter `cost`. Existing content in `cost` will be erased before adding new content
+    // This is to allow this function to reuse pre-allocated memory, as this function
+    // is often on hot-path.
+    pub fn calculate_cost_no_alloc(&self, transaction: &Transaction, cost: &mut TransactionCost) {
+        cost.reset();
+
+        let message = transaction.message();
+        message.account_keys.iter().enumerate().for_each(|(i, k)| {
+            let is_signer = message.is_signer(i);
+            let is_writable = message.is_writable(i, DEMOTE_SYSVAR_WRITE_LOCKS);
+
+            if is_signer && is_writable {
+                cost.writable_accounts.push(*k);
+                cost.account_access_cost += SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+            } else if is_signer && !is_writable {
+                cost.account_access_cost += SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+            } else if !is_signer && is_writable {
+                cost.writable_accounts.push(*k);
+                cost.account_access_cost += NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+            } else {
+                cost.account_access_cost += NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+            }
+        });
+        cost.execution_cost = self.find_transaction_cost(transaction);
+        debug!("transaction {:?} has cost {:?}", transaction, cost);
     }
 
     // To update or insert instruction cost to table.
@@ -395,6 +443,33 @@ mod tests {
             .upsert_instruction_cost(&system_program::id(), &expected_execution_cost)
             .unwrap();
         let tx_cost = cost_model.calculate_cost(&tx);
+        assert_eq!(expected_account_cost, tx_cost.account_access_cost);
+        assert_eq!(expected_execution_cost, tx_cost.execution_cost);
+        assert_eq!(2, tx_cost.writable_accounts.len());
+    }
+
+    #[test]
+    fn test_cost_model_calculate_cost_no_alloc() {
+        let (mint_keypair, start_hash) = test_setup();
+        let tx =
+            system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash);
+
+        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
+            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
+            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+        let expected_execution_cost = 8;
+
+        let mut cost_model = CostModel::default();
+        cost_model
+            .upsert_instruction_cost(&system_program::id(), &expected_execution_cost)
+            .unwrap();
+
+        // allocate cost, set some random number
+        let mut tx_cost = TransactionCost::new_with_capacity(8);
+        tx_cost.execution_cost = 101;
+        tx_cost.writable_accounts.push(Pubkey::new_unique());
+
+        cost_model.calculate_cost_no_alloc(&tx, &mut tx_cost);
         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());

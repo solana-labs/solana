@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 env_logger = "0.8.4"
 lazy_static = "1.4.0"
-log = "0.4.11"
+log = "0.4.14"
 
 [lib]
 name = "solana_logger"

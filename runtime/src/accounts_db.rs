@@ -166,6 +166,9 @@ struct GenerateIndexTimings {
     pub index_time: u64,
     pub scan_time: u64,
     pub insertion_time_us: u64,
+    pub min_bin_size: usize,
+    pub max_bin_size: usize,
+    pub total_items: usize,
 }
 
 impl GenerateIndexTimings {
@@ -176,6 +179,9 @@ impl GenerateIndexTimings {
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
             ("insertion_time_us", self.insertion_time_us, i64),
+            ("min_bin_size", self.min_bin_size as i64, i64),
+            ("max_bin_size", self.max_bin_size as i64, i64),
+            ("total_items", self.total_items as i64, i64),
         );
     }
 }
@@ -2097,7 +2103,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2139,23 +2145,10 @@ impl AccountsDb {
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let mut alive_total = 0;
 
-        let accounts_index_map_lock = if is_startup {
-            // at startup, there is nobody else to contend with the accounts_index read lock, so it is more efficient for us to keep it held
-            Some(self.accounts_index.get_account_maps_read_lock())
-        } else {
-            None
-        };
-        let accounts_index_map_lock_ref = accounts_index_map_lock.as_ref();
-
         let mut alive_accounts: Vec<_> = Vec::with_capacity(stored_accounts.len());
         let mut unrefed_pubkeys = vec![];
         for (pubkey, stored_account) in &stored_accounts {
-            let lookup = if is_startup {
-                self.accounts_index
-                    .get_account_read_entry_with_lock(pubkey, accounts_index_map_lock_ref.unwrap())
-            } else {
-                self.accounts_index.get_account_read_entry(pubkey)
-            };
+            let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
                 let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
                     i.store_id == stored_account.store_id
@@ -2175,7 +2168,6 @@ impl AccountsDb {
             }
         }
 
-        drop(accounts_index_map_lock);
         index_read_elapsed.stop();
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
@@ -4458,10 +4450,9 @@ impl AccountsDb {
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
-            .read()
-            .unwrap()
-            .keys()
-            .cloned()
+            .iter()
+            .map(|btree| btree.read().unwrap().keys().cloned().collect::<Vec<_>>())
+            .flatten()
             .collect();
         collect.stop();
 
@@ -5960,10 +5951,28 @@ impl AccountsDb {
             })
             .sum();
         index_time.stop();
+
+        let mut min_bin_size = usize::MAX;
+        let mut max_bin_size = usize::MIN;
+        let total_items = self
+            .accounts_index
+            .account_maps
+            .iter()
+            .map(|i| {
+                let len = i.read().unwrap().len();
+                min_bin_size = std::cmp::min(min_bin_size, len);
+                max_bin_size = std::cmp::max(max_bin_size, len);
+                len
+            })
+            .sum();
+
         let timings = GenerateIndexTimings {
             scan_time,
             index_time: index_time.as_us(),
             insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
+            min_bin_size,
+            max_bin_size,
+            total_items,
         };
         timings.report();
 
@@ -5973,7 +5982,13 @@ impl AccountsDb {
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
-        for account_entry in self.accounts_index.account_maps.read().unwrap().values() {
+        for account_entry in self
+            .accounts_index
+            .account_maps
+            .iter()
+            .map(|i| i.read().unwrap().values().cloned().collect::<Vec<_>>())
+            .flatten()
+        {
             for (_slot, account_entry) in account_entry.slot_list.read().unwrap().iter() {
                 let storage_entry_meta = stored_sizes_and_counts
                     .entry(account_entry.store_id)
@@ -6022,13 +6037,15 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
-        for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
-            info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
-            info!(
-                "      slots: {:?}",
-                *account_entry.slot_list.read().unwrap()
-            );
-        }
+        self.accounts_index.account_maps.iter().for_each(|i| {
+            for (pubkey, account_entry) in i.read().unwrap().iter() {
+                info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
+                info!(
+                    "      slots: {:?}",
+                    *account_entry.slot_list.read().unwrap()
+                );
+            }
+        });
     }
 
     fn print_count_and_status(&self, label: &str) {
@@ -8689,8 +8706,12 @@ pub mod tests {
             hash: &hash,
         };
         let account = stored_account.clone_account();
-        let expected_account_hash =
-            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap();
+
+        let expected_account_hash = if cfg!(debug_assertions) {
+            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap()
+        } else {
+            Hash::from_str("33ruy7m3Xto7irYfsBSN74aAzQwCQxsfoZxXuZy2Rra3").unwrap()
+        };
 
         assert_eq!(
             AccountsDb::hash_stored_account(slot, &stored_account),
@@ -11704,5 +11725,55 @@ pub mod tests {
         assert!(accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(&entry));
+    }
+
+    #[test]
+    fn test_purge_alive_unrooted_slots_after_clean() {
+        let accounts = AccountsDb::new_single();
+
+        // Key shared between rooted and nonrooted slot
+        let shared_key = solana_sdk::pubkey::new_rand();
+        // Key to keep the storage entry for the unrooted slot alive
+        let unrooted_key = solana_sdk::pubkey::new_rand();
+        let slot0 = 0;
+        let slot1 = 1;
+
+        // Store accounts with greater than 0 lamports
+        let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
+        accounts.store_uncached(slot0, &[(&shared_key, &account)]);
+        accounts.store_uncached(slot0, &[(&unrooted_key, &account)]);
+
+        // Simulate adding dirty pubkeys on bank freeze. Note this is
+        // not a rooted slot
+        accounts.get_accounts_delta_hash(slot0);
+
+        // On the next *rooted* slot, update the `shared_key` account to zero lamports
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        accounts.store_uncached(slot1, &[(&shared_key, &zero_lamport_account)]);
+
+        // Simulate adding dirty pubkeys on bank freeze, set root
+        accounts.get_accounts_delta_hash(slot1);
+        accounts.add_root(slot1);
+
+        // The later rooted zero-lamport update to `shared_key` cannot be cleaned
+        // because it is kept alive by the unrooted slot.
+        accounts.clean_accounts(None, false);
+        assert!(accounts
+            .accounts_index
+            .get_account_read_entry(&shared_key)
+            .is_some());
+
+        // Simulate purge_slot() all from AccountsBackgroundService
+        let is_from_abs = true;
+        accounts.purge_slot(slot0, 0, is_from_abs);
+
+        // Now clean should clean up the remaining key
+        accounts.clean_accounts(None, false);
+        assert!(accounts
+            .accounts_index
+            .get_account_read_entry(&shared_key)
+            .is_none());
+        assert!(accounts.storage.get_slot_storage_entries(slot0).is_none());
     }
 }

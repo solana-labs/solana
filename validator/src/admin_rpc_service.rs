@@ -6,6 +6,7 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     solana_core::validator::ValidatorStartProgress,
+    solana_gossip::cluster_info::ClusterInfo,
     solana_sdk::{
         exit::Exit,
         signature::{read_keypair_file, Keypair, Signer},
@@ -26,6 +27,7 @@ pub struct AdminRpcRequestMetadata {
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub cluster_info: Arc<RwLock<Option<Arc<ClusterInfo>>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -53,6 +55,9 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "removeAllAuthorizedVoters")]
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
+
+    #[rpc(meta, name = "setIdentity")]
+    fn set_identity(&self, meta: Self::Metadata, keypair_file: String) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -127,6 +132,24 @@ impl AdminRpc for AdminRpcImpl {
         debug!("remove_all_authorized_voters received");
         meta.authorized_voter_keypairs.write().unwrap().clear();
         Ok(())
+    }
+
+    fn set_identity(&self, meta: Self::Metadata, keypair_file: String) -> Result<()> {
+        debug!("set_identity request received");
+
+        let identity_keypair = read_keypair_file(keypair_file)
+            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+
+        if let Some(cluster_info) = meta.cluster_info.read().unwrap().as_ref() {
+            solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
+            cluster_info.set_keypair(Arc::new(identity_keypair));
+            warn!("Identity set to {}", cluster_info.id());
+            Ok(())
+        } else {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Retry once validator start up is complete",
+            ))
+        }
     }
 }
 
