@@ -82,7 +82,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE ACCOUNT pubkey")
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-voter")
@@ -109,7 +109,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .required(true),
                         "New authorized vote signer. "),
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-withdrawer")
@@ -136,7 +136,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .required(true),
                         "New authorized withdrawer. "),
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
         .subcommand(
             SubCommand::with_name("vote-update-validator")
@@ -166,7 +166,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
         .subcommand(
             SubCommand::with_name("vote-update-commission")
@@ -196,7 +196,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
         .subcommand(
             SubCommand::with_name("vote-account")
@@ -266,7 +266,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer [default: cli config keypair]"),
                 )
-		.arg(memo_arg())
+                .arg(memo_arg())
         )
     }
 }
