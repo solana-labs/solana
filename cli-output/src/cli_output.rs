@@ -2450,6 +2450,10 @@ mod tests {
             fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
                 Ok(Signature::new(&[1u8; 64]))
             }
+
+            fn is_interactive(&self) -> bool {
+                false
+            }
         }
 
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
