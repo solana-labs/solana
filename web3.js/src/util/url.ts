@@ -11,7 +11,7 @@ export function makeWebsocketUrl(endpoint: string) {
   // When the endpoint omits the port, we're connecting to the protocol
   // default ports: http(80) or https(443) and it's assumed we're behind a reverse
   // proxy which manages WebSocket upgrade and backend port redirection.
-  if (url.port !== null) {
+  if (url.port !== '') {
     url.port = String(Number(url.port) + 1);
   }
   return url.toString();
