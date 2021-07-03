@@ -42,12 +42,12 @@ pub fn process_instruction(
         }
         {
             let ix = Instruction::new_with_bincode(*inner_program_info.key, &[0], vec![]);
-            let ret =
-                invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..]);
-            if let Err(ProgramError::ComputationalBudgetExceeded) = ret {
-                msg!("invoke_with_budget: inner CPI exceeded computational budget, rolled back");
-            } else {
-                ret?;
+            match invoke_signed_with_budget(&ix, 25_000, &[inner_program_info.clone()], &vec![][..])
+            {
+                Err(ProgramError::ComputationalBudgetExceeded) => {
+                    msg!("invoke_with_budget: inner CPI exceeded computational budget, rolled back")
+                }
+                ret => ret?,
             }
         }
     }

@@ -35,7 +35,7 @@ pub fn process_instruction_exceeds_budget(
 }
 
 #[tokio::test]
-async fn test_cpi_budgeted_early_termination() {
+async fn test_invoke_with_budget_and_rollback() {
     let program_id = Pubkey::from_str("outer11111111111111111111111111111111111111").unwrap();
     let mut prog_test = ProgramTest::new(
         "outer",
