@@ -12,7 +12,7 @@ use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
-    memo::MEMO_ARG,
+    memo::{memo_arg, MEMO_ARG},
     nonce::*,
 };
 use solana_cli_output::CliNonceAccount;
@@ -56,7 +56,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .required(true),
                         "Account to be granted authority of the nonce account. "),
                 )
-                .arg(nonce_authority_arg()),
+                .arg(nonce_authority_arg())
+                .arg(memo_arg()),
         )
         .subcommand(
             SubCommand::with_name("create-nonce-account")
@@ -91,7 +92,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("STRING")
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
-                ),
+                )
+                .arg(memo_arg()),
         )
         .subcommand(
             SubCommand::with_name("nonce")
@@ -115,7 +117,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .required(true),
                         "Address of the nonce account. "),
                 )
-                .arg(nonce_authority_arg()),
+                .arg(nonce_authority_arg())
+                .arg(memo_arg()),
         )
         .subcommand(
             SubCommand::with_name("nonce-account")
@@ -161,7 +164,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .validator(is_amount)
                         .help("The amount to withdraw from the nonce account, in SOL"),
                 )
-                .arg(nonce_authority_arg()),
+                .arg(nonce_authority_arg())
+                .arg(memo_arg()),
         )
     }
 }
