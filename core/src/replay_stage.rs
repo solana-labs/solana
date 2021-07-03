@@ -4762,11 +4762,4 @@ mod tests {
         let tree = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
         setup_forks_from_tree(tree, num_keys)
     }
-
-    fn check_map_eq<K: Eq + std::hash::Hash + std::fmt::Debug, T: PartialEq + std::fmt::Debug>(
-        map1: &HashMap<K, T>,
-        map2: &HashMap<K, T>,
-    ) -> bool {
-        map1.len() == map2.len() && map1.iter().all(|(k, v)| map2.get(k).unwrap() == v)
-    }
 }
