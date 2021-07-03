@@ -52,7 +52,16 @@ pub enum ProgramError {
     #[error("Program failed to complete")]
     ProgramFailedToComplete,
 }
-
+// this is required to prevent error pollution across multiple invocations
+pub struct InvokeError(pub ProgramError);
+impl From<InvokeError> for ProgramError {
+    fn from(e: InvokeError) -> Self {
+        match e.0 {
+            ProgramError::Custom(_) => ProgramError::ProgramFailedToComplete,
+            err => err,
+        }
+    }
+}
 pub trait PrintProgramError {
     fn print<E>(&self)
     where

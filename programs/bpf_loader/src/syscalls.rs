@@ -168,13 +168,13 @@ pub fn register_syscalls(
 
     // Budgeted versions of cross-program invocation syscalls
     syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_with_budget_rust",
-        SyscallInvokeSignedWithBudgetRust::call,
+        b"sol_invoke_signed_with_options_rust",
+        SyscallInvokeSignedWithOptionsRust::call,
     )?;
 
     syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_with_budget_c",
-        SyscallInvokeSignedWithBudgetC::call,
+        b"sol_invoke_signed_with_options_c",
+        SyscallInvokeSignedWithOptionsC::call,
     )?;
 
     // Memory allocator
@@ -402,7 +402,7 @@ pub fn bind_syscall_context_objects<'a>(
     bind_feature_gated_syscall_context_object!(
         vm,
         expanded_compute_unit_syscalls,
-        Box::new(SyscallInvokeSignedWithBudgetRust {
+        Box::new(SyscallInvokeSignedWithOptionsRust {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -411,7 +411,7 @@ pub fn bind_syscall_context_objects<'a>(
     bind_feature_gated_syscall_context_object!(
         vm,
         expanded_compute_unit_syscalls,
-        Box::new(SyscallInvokeSignedWithBudgetC {
+        Box::new(SyscallInvokeSignedWithOptionsC {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -1483,11 +1483,11 @@ trait SyscallInvokeSigned<'a> {
 }
 
 /// Budgeted version of cross-program invocation called from Rust
-pub struct SyscallInvokeSignedWithBudgetRust<'a> {
+pub struct SyscallInvokeSignedWithOptionsRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
+impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithOptionsRust<'a> {
     fn call(
         &mut self,
         instruction_with_options_addr: u64,
@@ -1498,7 +1498,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = call_with_budget(
+        *result = call_with_options(
             &mut SyscallInvokeSignedRust {
                 invoke_context: self.invoke_context.clone(),
                 loader_id: self.loader_id,
@@ -1514,11 +1514,11 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetRust<'a> {
 }
 
 /// Budgeted version of cross-program invocation called from Rust
-pub struct SyscallInvokeSignedWithBudgetC<'a> {
+pub struct SyscallInvokeSignedWithOptionsC<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
+impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithOptionsC<'a> {
     fn call(
         &mut self,
         instruction_with_options_addr: u64,
@@ -1529,7 +1529,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        *result = call_with_budget(
+        *result = call_with_options(
             &mut SyscallInvokeSignedC {
                 invoke_context: self.invoke_context.clone(),
                 loader_id: self.loader_id,
@@ -1544,7 +1544,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedWithBudgetC<'a> {
     }
 }
 
-fn call_with_budget<'a>(
+fn call_with_options<'a>(
     inner_invoke_syscall: &mut dyn SyscallInvokeSigned<'a>,
     instruction_with_options_addr: u64,
     account_infos_addr: u64,

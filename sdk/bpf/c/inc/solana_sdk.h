@@ -623,7 +623,7 @@ static uint64_t sol_invoke(
 /**
  * Internal cross-program invocation function
  */
-uint64_t sol_invoke_signed_with_budget_c(
+uint64_t sol_invoke_signed_with_options_c(
   const SolInstructionWithOptions *instruction_with_options,
   const SolAccountInfo *account_infos,
   int account_infos_len,
@@ -650,7 +650,7 @@ static uint64_t sol_invoke_with_rollback(
     int signers_seeds_len
 ) {
   const SolInstructionWithOptions instruction_with_options = { (uint64_t)instruction, (uint64_t)budget, false };
-  return sol_invoke_signed_with_budget_c(
+  return sol_invoke_signed_with_options_c(
     &instruction_with_options,
     account_infos,
     account_infos_len,
@@ -677,8 +677,8 @@ static uint64_t sol_invoke_signed_with_budget(
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  const SolInstructionWithOptions instruction_with_options = { (uint64_t)instruction, (uint64_t)budget, false };
-  return sol_invoke_signed_with_budget_c(
+  const SolInstructionWithOptions instruction_with_options = { (uint64_t)instruction, (uint64_t)budget, true };
+  return sol_invoke_signed_with_options_c(
     &instruction_with_options,
     account_infos,
     account_infos_len,
