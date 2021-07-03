@@ -81,6 +81,8 @@ pub struct RpcGetVoteAccountsConfig {
     pub vote_pubkey: Option<String>, // validator vote address, as a base-58 encoded string
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub keep_unstaked_delinquents: Option<bool>,
+    pub delinquent_slot_distance: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
