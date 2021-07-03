@@ -46,6 +46,10 @@ impl Signer for Presigner {
             Err(PresignerError::VerificationFailure.into())
         }
     }
+
+    fn is_interactive(&self) -> bool {
+        false
+    }
 }
 
 impl<T> PartialEq<T> for Presigner
