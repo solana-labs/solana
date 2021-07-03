@@ -1603,7 +1603,7 @@ mod tests {
             // First, we try to recover from the invocation at depth 4
             let (message, these_accounts) = &invoke_call_stack[current_depth - 1];
             invoke_context
-                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .verify_and_update_pop(message, &message.instructions[0], these_accounts, None)
                 .unwrap();
             invoke_context.pop();
 
@@ -1640,7 +1640,7 @@ mod tests {
 
             // verify and update against pre_accounts' update stacks
             invoke_context
-                .verify_and_update_push(&message, &message.instructions[0], these_accounts, None)
+                .verify_and_update_push(message, &message.instructions[0], these_accounts, None)
                 .unwrap();
 
             assert_eq!(
@@ -1667,7 +1667,7 @@ mod tests {
             // First, we try to recover from the invocation at depth 4
             let (message, these_accounts) = &invoke_call_stack[current_depth - 1];
             invoke_context
-                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .verify_and_update_pop(message, &message.instructions[0], these_accounts, None)
                 .unwrap();
 
             invoke_context.pop();
@@ -1698,7 +1698,7 @@ mod tests {
             // were successfully rolled back.
             let (message, these_accounts) = &invoke_call_stack[0];
             invoke_context
-                .verify_and_update_push(&message, &message.instructions[0], these_accounts, None)
+                .verify_and_update_push(message, &message.instructions[0], these_accounts, None)
                 .unwrap();
 
             assert_eq!(
@@ -1729,7 +1729,7 @@ mod tests {
 
             // return from the level 2 invocation
             invoke_context
-                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .verify_and_update_pop(message, &message.instructions[0], these_accounts, None)
                 .unwrap();
             invoke_context.pop();
 
