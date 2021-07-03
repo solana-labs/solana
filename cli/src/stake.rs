@@ -240,16 +240,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
-<<<<<<< HEAD
-=======
-                .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
-                )
                 .arg(memo_arg())
->>>>>>> 1dd730d68 (Cli: expose `--with-memo` to nonce and stake commands (#18404))
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
