@@ -1492,6 +1492,288 @@ mod tests {
     }
 
     #[test]
+    fn test_preaccount_update_rollback() {
+        const MAX_DEPTH: usize = 4;
+        let mut invoke_stack = vec![];
+        let mut keys = vec![];
+        let mut accounts = vec![];
+        let mut metas = vec![];
+        let mut invoke_call_stack = Vec::<(Message, Vec<Rc<RefCell<AccountSharedData>>>)>::new();
+        for i in 0..MAX_DEPTH {
+            invoke_stack.push(solana_sdk::pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
+            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
+                i as u64,
+                1,
+                &invoke_stack[i],
+            ))));
+            metas.push(AccountMeta::new(keys[i], false));
+        }
+        for program_id in invoke_stack.iter() {
+            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
+                1,
+                1,
+                &solana_sdk::pubkey::Pubkey::default(),
+            ))));
+            metas.push(AccountMeta::new(*program_id, false));
+        }
+
+        let message = Message::new(
+            &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
+            None,
+        );
+        let ancestors = Ancestors::default();
+        let mut invoke_context = ThisInvokeContext::new(
+            &invoke_stack[0],
+            Rent::default(),
+            &message,
+            &message.instructions[0],
+            &[],
+            &accounts,
+            &[],
+            &[],
+            None,
+            BpfComputeBudget::default(),
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            Arc::new(FeatureSet::all_enabled()),
+            Arc::new(Accounts::default()),
+            &ancestors,
+        );
+
+        // modify account owned by the program at depth 1
+        accounts[0].borrow_mut().data_as_mut_slice()[0] = MAX_DEPTH as u8;
+
+        // Mock each invocation
+        for current_depth in 1..=3 {
+            // Clone the accounts, as would the bpf_loader when performing CPI
+            let mut these_accounts = accounts[current_depth - 1..=current_depth]
+                .iter()
+                .map(|acc| Rc::new(RefCell::new(acc.borrow().clone())))
+                .collect::<Vec<_>>();
+            if let Some(entry) = invoke_call_stack.last() {
+                these_accounts[0] = Rc::new(RefCell::new(entry.1[1].borrow().clone()));
+            }
+            these_accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
+                1,
+                1,
+                &solana_sdk::pubkey::Pubkey::default(),
+            ))));
+
+            // We then call a cross-program invocation, which constructs the message
+            let metas = vec![
+                AccountMeta::new(keys[current_depth - 1], false),
+                AccountMeta::new(keys[current_depth], false),
+            ];
+            let message = Message::new(
+                &[Instruction::new_with_bytes(
+                    invoke_stack[current_depth],
+                    &[0],
+                    metas,
+                )],
+                None,
+            );
+
+            invoke_call_stack.push((message.to_owned(), these_accounts.to_vec()));
+
+            // verify and update against pre_accounts' update stacks
+            invoke_context
+                .verify_and_update_push(&message, &message.instructions[0], &these_accounts, None)
+                .unwrap();
+
+            assert_eq!(
+                invoke_context.pre_accounts[current_depth - 1]
+                    .account()
+                    .borrow()
+                    .data()[0],
+                (MAX_DEPTH + current_depth - 1) as u8
+            );
+
+            // trigger the next invocation
+            invoke_context
+                .push(&invoke_stack[current_depth], &[])
+                .unwrap();
+
+            // modify account owned by the program
+            these_accounts[1].borrow_mut().data_as_mut_slice()[0] =
+                (MAX_DEPTH + current_depth) as u8;
+        }
+        {
+            let current_depth = 3;
+            // First, we try to recover from the invocation at depth 4
+            let (message, these_accounts) = &invoke_call_stack[current_depth - 1];
+            invoke_context
+                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .unwrap();
+            invoke_context.pop();
+
+            // We recover to depth 2 and
+            // verify that the invocation at depth 4 triggers a modification
+            // of the preaccounts appropriately
+            assert_eq!(
+                invoke_context.pre_accounts[current_depth]
+                    .account()
+                    .borrow()
+                    .data()[0],
+                (MAX_DEPTH + current_depth) as u8
+            );
+        }
+
+        {
+            let current_depth = 2;
+
+            let (_, caller_these_accounts) = &invoke_call_stack[current_depth - 1];
+
+            // At depth 2, modify account owned by the program
+            caller_these_accounts[1].borrow_mut().data_as_mut_slice()[0] =
+                (MAX_DEPTH * 2 + current_depth) as u8;
+
+            // Perform a cross-program invocation
+            let current_depth = 3;
+            let (message, these_accounts) = &invoke_call_stack[current_depth - 1];
+
+            // copy the changes made in the account by the caller
+            these_accounts[0]
+                .borrow_mut()
+                .data_as_mut_slice()
+                .copy_from_slice(caller_these_accounts[1].borrow().data());
+
+            // verify and update against pre_accounts' update stacks
+            invoke_context
+                .verify_and_update_push(&message, &message.instructions[0], these_accounts, None)
+                .unwrap();
+
+            assert_eq!(
+                invoke_context.pre_accounts[current_depth - 1]
+                    .account()
+                    .borrow()
+                    .data()[0],
+                (MAX_DEPTH * 2 + current_depth - 1) as u8
+            );
+
+            // trigger the next invocation
+            invoke_context
+                .push(&invoke_stack[current_depth], &[])
+                .unwrap();
+
+            // modify account owned by the program
+            these_accounts[1].borrow_mut().data_as_mut_slice()[0] =
+                (MAX_DEPTH * 2 + current_depth) as u8;
+        }
+
+        // Now we see if we can safely recover into depth 3 again
+        {
+            let current_depth = 3;
+            // First, we try to recover from the invocation at depth 4
+            let (message, these_accounts) = &invoke_call_stack[current_depth - 1];
+            invoke_context
+                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .unwrap();
+
+            invoke_context.pop();
+
+            let current_depth = 2;
+            // We verify that the invocation at depth 4 triggers a modification
+            // of the preaccounts appropriately
+            assert_eq!(
+                invoke_context.pre_accounts[current_depth + 1]
+                    .account()
+                    .borrow()
+                    .data()[0],
+                (MAX_DEPTH * 2 + current_depth + 1) as u8
+            );
+        }
+
+        // Now we want to test if triggering an error at depth 3 will successfully
+        // rollback the state of the preaccounts to what they were
+        // prior to that invocation.
+        {
+            // **Level 3 invocation triggers error**
+
+            // As !result.is_ok(), we do not update pre_accounts via `verify_and_update_pop`
+            invoke_context.pop();
+            // Level 3 invocation returns error to level 2, which handles the error
+
+            // we verify that the pre account updates from level 3 and below
+            // were successfully rolled back.
+            let (message, these_accounts) = &invoke_call_stack[0];
+            invoke_context
+                .verify_and_update_push(&message, &message.instructions[0], these_accounts, None)
+                .unwrap();
+
+            assert_eq!(
+                invoke_context.pre_accounts[3].account().borrow().data()[0],
+                0u8
+            );
+            assert_eq!(
+                invoke_context.pre_accounts[2].account().borrow().data()[0],
+                0u8
+            );
+            assert_eq!(
+                invoke_context.pre_accounts[1].account().borrow().data()[0],
+                (MAX_DEPTH + 1) as u8
+            );
+            assert_eq!(
+                invoke_context.pre_accounts[0].account().borrow().data()[0],
+                MAX_DEPTH as u8
+            );
+
+            // We trigger a second invocation from level 2 down to a new level 3,
+            // trigger the next invocation
+            invoke_context.push(&invoke_stack[1], &[]).unwrap();
+            // return from the invocation
+            invoke_context.pop();
+
+            // perform modifications as level 2
+            these_accounts[1].borrow_mut().data_as_mut_slice()[0] = (MAX_DEPTH * 2 + 1) as u8;
+
+            // return from the level 2 invocation
+            invoke_context
+                .verify_and_update_pop(&message, &message.instructions[0], these_accounts, None)
+                .unwrap();
+            invoke_context.pop();
+
+            // copy back the data from level 2 to level 1.
+            accounts[1]
+                .borrow_mut()
+                .data_as_mut_slice()
+                .copy_from_slice(these_accounts[1].borrow().data());
+        }
+
+        assert_eq!(invoke_context.invoke_depth(), 1);
+
+        assert_eq!(
+            invoke_context.pre_accounts[3].account().borrow().data()[0],
+            0u8
+        );
+        assert_eq!(
+            invoke_context.pre_accounts[2].account().borrow().data()[0],
+            0u8
+        );
+        assert_eq!(
+            invoke_context.pre_accounts[1].account().borrow().data()[0],
+            (MAX_DEPTH * 2 + 1) as u8
+        );
+        assert_eq!(
+            invoke_context.pre_accounts[0].account().borrow().data()[0],
+            MAX_DEPTH as u8
+        );
+        // Verification of top-level program
+        MessageProcessor::verify(
+            &message,
+            &message.instructions[0],
+            &invoke_context.pre_accounts,
+            &[],
+            &accounts,
+            &Rent::default(),
+            &mut ExecuteDetailsTimings::default(),
+            true,
+            invoke_context.get_logger(),
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn test_is_zeroed() {
         const ZEROS_LEN: usize = 1024;
         let mut buf = [0; ZEROS_LEN];
