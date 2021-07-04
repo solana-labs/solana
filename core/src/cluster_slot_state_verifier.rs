@@ -305,7 +305,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::consensus::test::VoteSimulator;
+    use crate::vote_simulator::VoteSimulator;
     use solana_runtime::bank_forks::BankForks;
     use std::{
         collections::{HashMap, HashSet},

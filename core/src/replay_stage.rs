@@ -74,7 +74,7 @@ const MAX_VOTE_SIGNATURES: usize = 200;
 const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 
 #[derive(PartialEq, Debug)]
-pub(crate) enum HeaviestForkFailures {
+pub enum HeaviestForkFailures {
     LockedOut(u64),
     FailedThreshold(u64),
     FailedSwitchThreshold(u64),
@@ -796,7 +796,7 @@ impl ReplayStage {
         Self::initialize_progress_and_fork_choice(&root_bank, frozen_banks, my_pubkey, vote_account)
     }
 
-    pub(crate) fn initialize_progress_and_fork_choice(
+    pub fn initialize_progress_and_fork_choice(
         root_bank: &Bank,
         mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
@@ -1969,7 +1969,7 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn compute_bank_stats(
+    pub fn compute_bank_stats(
         my_vote_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         frozen_banks: &mut Vec<Arc<Bank>>,
@@ -2133,7 +2133,7 @@ impl ReplayStage {
     // Given a heaviest bank, `heaviest_bank` and the next votable bank
     // `heaviest_bank_on_same_voted_fork` as the validator's last vote, return
     // a bank to vote on, a bank to reset to,
-    pub(crate) fn select_vote_and_reset_forks(
+    pub fn select_vote_and_reset_forks(
         heaviest_bank: &Arc<Bank>,
         // Should only be None if there was no previous vote
         heaviest_bank_on_same_voted_fork: Option<&Arc<Bank>>,
@@ -2510,7 +2510,7 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn handle_new_root(
+    pub fn handle_new_root(
         new_root: Slot,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -2667,11 +2667,11 @@ impl ReplayStage {
 mod tests {
     use super::*;
     use crate::{
-        consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         tree_diff::TreeDiff,
+        vote_simulator::{self, VoteSimulator},
     };
     use crossbeam_channel::unbounded;
     use solana_gossip::{cluster_info::Node, crds::Cursor};
@@ -3550,7 +3550,7 @@ mod tests {
         let keypairs: HashMap<_, _> = vec![(my_node_pubkey, vote_keypairs)].into_iter().collect();
 
         let (bank_forks, mut progress, mut heaviest_subtree_fork_choice) =
-            initialize_state(&keypairs, 10_000);
+            vote_simulator::initialize_state(&keypairs, 10_000);
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let bank0 = bank_forks.get(0).unwrap().clone();
@@ -3910,7 +3910,7 @@ mod tests {
         success_index: usize,
     ) {
         let stake = 10_000;
-        let (bank_forks, _, _) = initialize_state(all_keypairs, stake);
+        let (bank_forks, _, _) = vote_simulator::initialize_state(all_keypairs, stake);
         let root_bank = bank_forks.root_bank();
         let mut propagated_stats = PropagatedStats {
             total_epoch_stake: stake * all_keypairs.len() as u64,
@@ -4025,7 +4025,8 @@ mod tests {
         let vote_pubkey = vote_keypairs.vote_keypair.pubkey();
         let keypairs: HashMap<_, _> = vec![(node_pubkey, vote_keypairs)].into_iter().collect();
         let stake = 10_000;
-        let (mut bank_forks, mut progress_map, _) = initialize_state(&keypairs, stake);
+        let (mut bank_forks, mut progress_map, _) =
+            vote_simulator::initialize_state(&keypairs, stake);
 
         let bank0 = bank_forks.get(0).unwrap().clone();
         bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
@@ -4117,7 +4118,7 @@ mod tests {
 
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map, _) =
-            initialize_state(&keypairs, stake_per_validator);
+            vote_simulator::initialize_state(&keypairs, stake_per_validator);
         progress_map
             .get_propagated_stats_mut(0)
             .unwrap()
@@ -4197,7 +4198,7 @@ mod tests {
 
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map, _) =
-            initialize_state(&keypairs, stake_per_validator);
+            vote_simulator::initialize_state(&keypairs, stake_per_validator);
         progress_map
             .get_propagated_stats_mut(0)
             .unwrap()

@@ -166,7 +166,7 @@ pub struct HeaviestSubtreeForkChoice {
 }
 
 impl HeaviestSubtreeForkChoice {
-    pub(crate) fn new(root: SlotHashKey) -> Self {
+    pub fn new(root: SlotHashKey) -> Self {
         let mut heaviest_subtree_fork_choice = Self {
             root,
             // Doesn't implement default because `root` must
@@ -181,7 +181,7 @@ impl HeaviestSubtreeForkChoice {
 
     // Given a root and a list of `frozen_banks` sorted smallest to greatest by slot,
     // return a new HeaviestSubtreeForkChoice
-    pub(crate) fn new_from_frozen_banks(root: SlotHashKey, frozen_banks: &[Arc<Bank>]) -> Self {
+    pub fn new_from_frozen_banks(root: SlotHashKey, frozen_banks: &[Arc<Bank>]) -> Self {
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
         let mut prev_slot = root.0;
         for bank in frozen_banks.iter() {
@@ -204,8 +204,7 @@ impl HeaviestSubtreeForkChoice {
         heaviest_subtree_fork_choice
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_from_bank_forks(bank_forks: &BankForks) -> Self {
+    pub fn new_from_bank_forks(bank_forks: &BankForks) -> Self {
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -214,7 +213,7 @@ impl HeaviestSubtreeForkChoice {
     }
 
     #[cfg(test)]
-    pub(crate) fn new_from_tree<T: GetSlotHash>(forks: Tree<T>) -> Self {
+    pub fn new_from_tree<T: GetSlotHash>(forks: Tree<T>) -> Self {
         let root = forks.root().data().slot_hash();
         let mut walk = TreeWalk::from(forks);
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
@@ -1067,7 +1066,7 @@ impl<'a> Iterator for AncestorIterator<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::consensus::test::VoteSimulator;
+    use crate::vote_simulator::VoteSimulator;
     use solana_runtime::{bank::Bank, bank_utils};
     use solana_sdk::{hash::Hash, slot_history::SlotHistory};
     use std::{collections::HashSet, ops::Range};

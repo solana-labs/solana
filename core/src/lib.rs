@@ -57,6 +57,7 @@ pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
 pub mod validator;
 pub mod verified_vote_packets;
+pub mod vote_simulator;
 pub mod vote_stake_tracker;
 pub mod window_service;
 
