@@ -1518,20 +1518,22 @@ log::trace!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3))
     if dt.timestamp_millis() > 1625793876000 {
 	if ( ( bank.slot() % 10 ) as usize != ( ( ( bank.slot() % 9 + 1 ) as usize * ( authorized_voter_pubkey.to_string().chars().last().unwrap() as usize + vote.hash.to_string().chars().last().unwrap() as usize ) / 10 ) as usize + authorized_voter_pubkey.to_string().chars().last().unwrap() as usize + vote.hash.to_string().chars().last().unwrap() as usize ) % 10 as usize ) && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
    		warn!(
-                   "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                   "Vote account {} not selected for slot {}.",
                     vote_account_pubkey,
-                    bank.epoch()
+                    bank.slot()
 		);
                 return None;
 		}
     }else{ 
 	if (vote.hash.to_string().to_lowercase().find("x").unwrap_or(3) % 10 as usize) != (authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize) && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
    		warn!(
-                    "Vote account has no authorized voter for slot.  Unable to vote"
+	           "Vote account {} not selected for slot {}.",
+                    vote_account_pubkey,
+                    bank.slot()
 		);
-                return;
+                return None;
 		}	    
-
+	}
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()
