@@ -1,8 +1,0 @@
-/dependencies/criterion*
-/dependencies/hashbrown*
-/dependencies/llvm-native*
-/dependencies/rust-bpf*
-/dependencies/xargo*
-/dependencies/bin*
-/dependencies/.crates.toml
-/dependencies/.crates2.json
