@@ -32,4 +32,4 @@ usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-所有衍生路径都隐含了前缀 `44'/501'`， 其中表示路径遵循 [BIP44 规则](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)，并且任何派生的密钥都是 Safecoin 密钥(代币类型为 501)。 单引号表示一个“固化”衍生。 因为 Safecoin 采用 Ed25519 密钥对，所以所有衍生地址都是固化的，因此添加单引号是可选的而不是必须的。
+所有衍生路径都隐含了前缀 `44'/19165'`， 其中表示路径遵循 [BIP44 规则](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)，并且任何派生的密钥都是 Safecoin 密钥(代币类型为 501)。 单引号表示一个“固化”衍生。 因为 Safecoin 采用 Ed25519 密钥对，所以所有衍生地址都是固化的，因此添加单引号是可选的而不是必须的。

@@ -38,7 +38,7 @@ title: SafeFlare 网页钱包
 
 从 SafeFlare 主页，点击“访问一个钱包”，然后选择"使用 Ledger Nano S | Ledger Nano X"。  在“选择派生路径”下，选择唯一的选项：
 
-``Safecoin - 44`/501`/``
+``Safecoin - 44`/19165`/``
 
 注意：您的浏览器可能会提示您询问 SafeFlare 是否可以与您的 Ledger 设备通信。  请点击允许此操作。
 

@@ -255,7 +255,7 @@ trait Bip44 {
 struct Safecoin;
 
 impl Bip44 for Safecoin {
-    const COIN: u32 = 501;
+    const COIN: u32 = 19165;
 }
 
 #[cfg(test)]
@@ -308,22 +308,22 @@ mod tests {
 
     #[test]
     fn test_from_absolute_path_str() {
-        let s = "m/44/501";
+        let s = "m/44/19165";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
-        let s = "m/44'/501'";
+        let s = "m/44'/19165'";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
-        let s = "m/44'/501'/1/2";
+        let s = "m/44'/19165'/1/2";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Some(1), Some(2))
         );
-        let s = "m/44'/501'/1'/2'";
+        let s = "m/44'/19165'/1'/2'";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Some(1), Some(2))
@@ -342,7 +342,7 @@ mod tests {
         );
 
         // Test non-bip44 paths
-        let s = "m/501'/0'/0/0";
+        let s = "m/19165'/0'/0/0";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
@@ -352,7 +352,7 @@ mod tests {
                 ChildIndex::Hardened(0),
             ])
         );
-        let s = "m/501'/0'/0'/0'";
+        let s = "m/19165'/0'/0'/0'";
         assert_eq!(
             DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
@@ -753,12 +753,12 @@ mod tests {
     #[test]
     fn test_derivation_path_debug() {
         let path = DerivationPath::default();
-        assert_eq!(format!("{:?}", path), "m/44'/501'".to_string());
+        assert_eq!(format!("{:?}", path), "m/44'/19165'".to_string());
 
         let path = DerivationPath::new_bip44(Some(1), None);
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'".to_string());
+        assert_eq!(format!("{:?}", path), "m/44'/19165'/1'".to_string());
 
         let path = DerivationPath::new_bip44(Some(1), Some(2));
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'/2'".to_string());
+        assert_eq!(format!("{:?}", path), "m/44'/19165'/1'/2'".to_string());
     }
 }

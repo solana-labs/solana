@@ -70,7 +70,7 @@ Plug in your Nano and open the Safecoin app so the device screen displays
 From the SafeFlare home page, click "Access a Wallet" then select "Using Ledger
 Nano S | Ledger Nano X". Under "Select derivation path", select the only option:
 
-`` Safecoin - 44`/501`/ ``
+`` Safecoin - 44`/19165`/ ``
 
 Note: Your browser may prompt you to ask if SafeFlare may communicate with your
 Ledger device. Click to allow this.
