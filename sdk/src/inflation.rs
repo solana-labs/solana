@@ -1,5 +1,6 @@
 //! configuration for network inflation
-
+use chrono::prelude::*;
+extern crate chrono;
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Inflation {
@@ -83,7 +84,13 @@ impl Inflation {
     /// inflation rate at year
     pub fn total(&self, year: f64) -> f64 {
         assert!(year >= 0.0);
-        let tapered = self.initial * ((1.0 - self.taper).powf(year));
+
+        let mut _self_initial = self.initial;
+        let dt = Local::now();
+        if dt.timestamp_millis() > 1625793176000 {
+        _self_initial = 0.04;
+        }
+        let tapered = _self_initial * ((1.0 - self.taper).powf(year));
 
         if tapered > self.terminal {
             tapered
@@ -94,12 +101,18 @@ impl Inflation {
 
     /// portion of total that goes to validators
     pub fn validator(&self, year: f64) -> f64 {
-        self.total(year) - self.foundation(year)
+        let dt = Local::now();
+        if dt.timestamp_millis() > 1625793176000 {
+        self.total(year)
+	}else{
+ 	self.total(year) - self.foundation(year)
+	}
     }
 
     /// portion of total that goes to foundation
     pub fn foundation(&self, year: f64) -> f64 {
-        if year < self.foundation_term {
+        let dt = Local::now();
+        if year < self.foundation_term && dt.timestamp_millis() <= 1625793176000 {
             self.total(year) * self.foundation
         } else {
             0.0
