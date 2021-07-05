@@ -22,7 +22,7 @@ pub struct Sampler {
 impl Sampler {
     pub fn new(rpc_addr: &SocketAddr) -> Self {
         let (_, dummy_socket) =
-            solana_net_utils::bind_in_range(rpc_addr.ip(), (8000, 10_000)).unwrap();
+            solana_net_utils::bind_in_range(rpc_addr.ip(), (10_001, 12_000)).unwrap();
         let dummy_tpu_addr = *rpc_addr;
         let client = Arc::new(ThinClient::new(*rpc_addr, dummy_tpu_addr, dummy_socket));
 
