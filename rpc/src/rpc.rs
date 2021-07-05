@@ -3096,15 +3096,21 @@ pub mod rpc_full {
                     accounts.push(if result.is_err() {
                         None
                     } else {
-                        transaction
-                            .message
-                            .account_keys
-                            .iter()
-                            .position(|pubkey| *pubkey == address)
-                            .map(|i| post_simulation_accounts.get(i))
-                            .flatten()
-                            .map(|account| {
-                                UiAccount::encode(&address, account, accounts_encoding, None, None)
+                        (0..transaction.message.account_keys.len())
+                            .position(|i| {
+                                post_simulation_accounts
+                                    .get(i)
+                                    .map(|(key, _account)| *key == address)
+                                    .unwrap_or(false)
+                            })
+                            .map(|i| {
+                                UiAccount::encode(
+                                    &address,
+                                    &post_simulation_accounts[i].1,
+                                    accounts_encoding,
+                                    None,
+                                    None,
+                                )
                             })
                     });
                 }

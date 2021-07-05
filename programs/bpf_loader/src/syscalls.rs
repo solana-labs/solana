@@ -1417,7 +1417,7 @@ type TranslatedAccount<'a> = (
     Option<AccountReferences<'a>>,
 );
 type TranslatedAccounts<'a> = (
-    Vec<Rc<RefCell<AccountSharedData>>>,
+    Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     Vec<Option<AccountReferences<'a>>>,
 );
 
@@ -2062,7 +2062,7 @@ where
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
@@ -2077,7 +2077,7 @@ where
                 })
         {
             let (account, account_ref) = do_translate(account_info, invoke_context)?;
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(account_ref);
         } else {
             ic_msg!(
@@ -2266,6 +2266,7 @@ fn call<'a>(
                 ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
                 SyscallError::InstructionError(InstructionError::MissingAccount)
             })?
+            .1
             .clone();
         let programdata_executable =
             get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
@@ -2307,7 +2308,7 @@ fn call<'a>(
     // Copy results back to caller
     {
         let invoke_context = syscall.get_context()?;
-        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+        for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
