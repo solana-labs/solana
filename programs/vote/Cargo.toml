@@ -25,6 +25,7 @@ thiserror = "1.0"
 
 [build-dependencies]
 rustc_version = "0.2"
+chrono = "0.4.19"
 
 [lib]
 crate-type = ["lib"]

@@ -5603,6 +5603,7 @@ name = "solana-vote-program"
 version = "1.6.16"
 dependencies = [
  "bincode",
+ "chrono",
  "log 0.4.14",
  "num-derive",
  "num-traits",
