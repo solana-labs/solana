@@ -253,9 +253,8 @@ impl ComputeMeter for ThisComputeMeter {
 pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
-    message: &'a Message,
     pre_accounts: Vec<PreAccount>,
-    account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -277,8 +276,7 @@ impl<'a> ThisInvokeContext<'a> {
         message: &'a Message,
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &'a [Rc<RefCell<AccountSharedData>>],
-        account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -298,9 +296,8 @@ impl<'a> ThisInvokeContext<'a> {
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
-            message,
             pre_accounts,
-            account_deps,
+            accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -353,25 +350,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let keyed_accounts = keyed_accounts
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
-                self.account_deps
+                self.accounts
                     .iter()
-                    .map(|(key, _account)| key)
-                    .chain(self.message.account_keys.iter())
-                    .position(|key| key == *search_key)
-                    .map(|mut index| {
+                    .position(|(key, _account)| key == *search_key)
+                    .map(|index| {
                         // TODO
                         // Currently we are constructing new accounts on the stack
                         // before calling MessageProcessor::process_cross_program_instruction
                         // Ideally we would recycle the existing accounts here.
-                        let key = if index < self.account_deps.len() {
-                            &self.account_deps[index].0
-                            // &self.account_deps[index].1 as &RefCell<AccountSharedData>,
-                        } else {
-                            index = index.saturating_sub(self.account_deps.len());
-                            &self.message.account_keys[index]
-                            // &self.accounts[index] as &RefCell<AccountSharedData>,
-                        };
-                        (*is_signer, *is_writable, key, transmute_lifetime(*account))
+                        (
+                            *is_signer,
+                            *is_writable,
+                            &self.accounts[index].0,
+                            // &self.accounts[index] as &RefCell<AccountSharedData>
+                            transmute_lifetime(*account),
+                        )
                     })
             })
             .collect::<Option<Vec<_>>>()
@@ -392,7 +385,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         let stack_frame = self
@@ -460,16 +453,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
-            if pre.key == *pubkey {
-                Some(pre.account.clone())
-            } else {
-                None
-            }
-        }) {
-            return Some(account);
-        }
-        self.account_deps.iter().find_map(|(key, account)| {
+        self.accounts.iter().find_map(|(key, account)| {
             if key == pubkey {
                 Some(account.clone())
             } else {
@@ -619,7 +603,12 @@ impl MessageProcessor {
         message: &'a Message,
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+<<<<<<< HEAD
         accounts: &'a [Rc<RefCell<AccountSharedData>>],
+=======
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        demote_sysvar_write_locks: bool,
+>>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -628,9 +617,15 @@ impl MessageProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
+<<<<<<< HEAD
                     message.is_writable(index),
                     &message.account_keys[index],
                     &accounts[index] as &RefCell<AccountSharedData>,
+=======
+                    message.is_writable(index, demote_sysvar_write_locks),
+                    &accounts[index].0,
+                    &accounts[index].1 as &RefCell<AccountSharedData>,
+>>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
                 )
             }))
             .collect::<Vec<_>>()
@@ -789,7 +784,7 @@ impl MessageProcessor {
                 for keyed_account_index in keyed_account_indices {
                     let keyed_account = &keyed_accounts[*keyed_account_index];
                     if account_key == keyed_account.unsigned_key() {
-                        accounts.push(Rc::new(keyed_account.account.clone()));
+                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
                         keyed_account_indices_reordered.push(*keyed_account_index);
                         continue 'root;
                     }
@@ -874,7 +869,7 @@ impl MessageProcessor {
         {
             let invoke_context = invoke_context.borrow();
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            for (src_keyed_account_index, (account, dst_keyed_account_index)) in accounts
+            for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
                 .iter()
                 .zip(keyed_account_indices_reordered)
                 .enumerate()
@@ -914,7 +909,7 @@ impl MessageProcessor {
     pub fn process_cross_program_instruction(
         message: &Message,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -965,15 +960,17 @@ impl MessageProcessor {
     pub fn create_pre_accounts(
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Vec<PreAccount> {
         let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
             let mut work = |_unique_index: usize, account_index: usize| {
-                let key = &message.account_keys[account_index];
-                let account = accounts[account_index].borrow();
-                pre_accounts.push(PreAccount::new(key, &account));
-                Ok(())
+                if account_index < message.account_keys.len() && account_index < accounts.len() {
+                    let account = accounts[account_index].1.borrow();
+                    pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
+                    return Ok(());
+                }
+                Err(InstructionError::MissingAccount)
             };
             let _ = instruction.visit_each_account(&mut work);
         }
@@ -998,7 +995,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
@@ -1014,10 +1011,11 @@ impl MessageProcessor {
                 {
                     // Verify account has no outstanding references
                     let _ = accounts[account_index]
+                        .1
                         .try_borrow_mut()
                         .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                 }
-                let account = accounts[account_index].borrow();
+                let account = accounts[account_index].1.borrow();
                 pre_accounts[unique_index]
                     .verify(
                         program_id,
@@ -1056,7 +1054,7 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &mut [PreAccount],
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         program_id: &Pubkey,
         rent: &Rent,
         caller_write_privileges: Option<&[bool]>,
@@ -1067,8 +1065,7 @@ impl MessageProcessor {
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |_unique_index: usize, account_index: usize| {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
-                let key = &message.account_keys[account_index];
-                let account = &accounts[account_index];
+                let (key, account) = &accounts[account_index];
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[account_index]
                 } else {
@@ -1121,8 +1118,7 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[Rc<RefCell<AccountSharedData>>],
-        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1137,9 +1133,9 @@ impl MessageProcessor {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (i, key) in message.account_keys.iter().enumerate() {
-                if instructions::check_id(key) {
-                    let mut mut_account_ref = accounts[i].borrow_mut();
+            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+                if instructions::check_id(pubkey) {
+                    let mut mut_account_ref = accont.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
@@ -1157,7 +1153,6 @@ impl MessageProcessor {
             instruction,
             executable_accounts,
             accounts,
-            account_deps,
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -1193,8 +1188,7 @@ impl MessageProcessor {
         &self,
         message: &Message,
         loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
-        accounts: &[Rc<RefCell<AccountSharedData>>],
-        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1209,6 +1203,7 @@ impl MessageProcessor {
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
+<<<<<<< HEAD
             self.execute_instruction(
                 message,
                 instruction,
@@ -1227,6 +1222,35 @@ impl MessageProcessor {
                 ancestors,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+=======
+            let err = self
+                .execute_instruction(
+                    message,
+                    instruction,
+                    &loaders[instruction_index],
+                    accounts,
+                    rent_collector,
+                    log_collector.clone(),
+                    executors.clone(),
+                    instruction_recorder,
+                    instruction_index,
+                    feature_set.clone(),
+                    bpf_compute_budget,
+                    timings,
+                    demote_sysvar_write_locks,
+                    account_db.clone(),
+                    ancestors,
+                )
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+            time.stop();
+
+            let program_id = instruction.program_id(&message.account_keys);
+            let time_count = timings.per_program_timings.entry(*program_id).or_default();
+            time_count.0 += time.as_us();
+            time_count.1 += 1;
+
+            err?;
+>>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
         }
         Ok(())
     }
@@ -1246,25 +1270,29 @@ mod tests {
     fn test_invoke_context() {
         const MAX_DEPTH: usize = 10;
         let mut invoke_stack = vec![];
-        let mut keys = vec![];
         let mut accounts = vec![];
         let mut metas = vec![];
         for i in 0..MAX_DEPTH {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
-            keys.push(solana_sdk::pubkey::new_rand());
-            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
-                i as u64,
-                1,
-                &invoke_stack[i],
-            ))));
-            metas.push(AccountMeta::new(keys[i], false));
+            accounts.push((
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(AccountSharedData::new(
+                    i as u64,
+                    1,
+                    &invoke_stack[i],
+                ))),
+            ));
+            metas.push(AccountMeta::new(accounts[i].0, false));
         }
         for program_id in invoke_stack.iter() {
-            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
-                1,
-                1,
-                &solana_sdk::pubkey::Pubkey::default(),
-            ))));
+            accounts.push((
+                *program_id,
+                Rc::new(RefCell::new(AccountSharedData::new(
+                    1,
+                    1,
+                    &solana_sdk::pubkey::Pubkey::default(),
+                ))),
+            ));
             metas.push(AccountMeta::new(*program_id, false));
         }
 
@@ -1280,7 +1308,6 @@ mod tests {
             &message.instructions[0],
             &[],
             &accounts,
-            &[],
             &[],
             None,
             BpfComputeBudget::default(),
@@ -1306,8 +1333,8 @@ mod tests {
         for owned_index in (1..depth_reached).rev() {
             let not_owned_index = owned_index - 1;
             let metas = vec![
-                AccountMeta::new(keys[not_owned_index], false),
-                AccountMeta::new(keys[owned_index], false),
+                AccountMeta::new(accounts[not_owned_index].0, false),
+                AccountMeta::new(accounts[owned_index].0, false),
             ];
             let message = Message::new(
                 &[Instruction::new_with_bytes(
@@ -1319,14 +1346,17 @@ mod tests {
             );
 
             // modify account owned by the program
-            accounts[owned_index].borrow_mut().data_as_mut_slice()[0] =
+            accounts[owned_index].1.borrow_mut().data_as_mut_slice()[0] =
                 (MAX_DEPTH + owned_index) as u8;
             let mut these_accounts = accounts[not_owned_index..owned_index + 1].to_vec();
-            these_accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
-                1,
-                1,
-                &solana_sdk::pubkey::Pubkey::default(),
-            ))));
+            these_accounts.push((
+                message.account_keys[2],
+                Rc::new(RefCell::new(AccountSharedData::new(
+                    1,
+                    1,
+                    &solana_sdk::pubkey::Pubkey::default(),
+                ))),
+            ));
             invoke_context
                 .verify_and_update(&message, &message.instructions[0], &these_accounts, None)
                 .unwrap();
@@ -1339,8 +1369,8 @@ mod tests {
             );
 
             // modify account not owned by the program
-            let data = accounts[not_owned_index].borrow_mut().data()[0];
-            accounts[not_owned_index].borrow_mut().data_as_mut_slice()[0] =
+            let data = accounts[not_owned_index].1.borrow_mut().data()[0];
+            accounts[not_owned_index].1.borrow_mut().data_as_mut_slice()[0] =
                 (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
@@ -1358,7 +1388,7 @@ mod tests {
                     .data()[0],
                 data
             );
-            accounts[not_owned_index].borrow_mut().data_as_mut_slice()[0] = data;
+            accounts[not_owned_index].1.borrow_mut().data_as_mut_slice()[0] = data;
 
             invoke_context.pop();
         }
@@ -1834,26 +1864,28 @@ mod tests {
         let mut message_processor = MessageProcessor::default();
         message_processor.add_program(mock_system_program_id, mock_system_process_instruction);
 
-        let mut accounts: Vec<Rc<RefCell<AccountSharedData>>> = Vec::new();
-        let account = AccountSharedData::new_ref(100, 1, &mock_system_program_id);
-        accounts.push(account);
-        let account = AccountSharedData::new_ref(0, 1, &mock_system_program_id);
-        accounts.push(account);
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                AccountSharedData::new_ref(100, 1, &mock_system_program_id),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                AccountSharedData::new_ref(0, 1, &mock_system_program_id),
+            ),
+        ];
 
-        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
         let account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
         )));
-        loaders.push(vec![(mock_system_program_id, account)]);
+        let loaders = vec![vec![(mock_system_program_id, account)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
 
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let to_pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
-            AccountMeta::new(from_pubkey, true),
-            AccountMeta::new_readonly(to_pubkey, false),
+            AccountMeta::new(accounts[0].0, true),
+            AccountMeta::new_readonly(accounts[1].0, false),
         ];
         let message = Message::new(
             &[Instruction::new_with_bincode(
@@ -1861,14 +1893,13 @@ mod tests {
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
 
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1880,8 +1911,8 @@ mod tests {
             &ancestors,
         );
         assert_eq!(result, Ok(()));
-        assert_eq!(accounts[0].borrow().lamports(), 100);
-        assert_eq!(accounts[1].borrow().lamports(), 0);
+        assert_eq!(accounts[0].1.borrow().lamports(), 100);
+        assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
         let message = Message::new(
             &[Instruction::new_with_bincode(
@@ -1889,14 +1920,13 @@ mod tests {
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
 
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1921,14 +1951,13 @@ mod tests {
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
 
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors,
@@ -2014,28 +2043,29 @@ mod tests {
         let mut message_processor = MessageProcessor::default();
         message_processor.add_program(mock_program_id, mock_system_process_instruction);
 
-        let mut accounts: Vec<Rc<RefCell<AccountSharedData>>> = Vec::new();
-        let account = AccountSharedData::new_ref(100, 1, &mock_program_id);
-        accounts.push(account);
-        let account = AccountSharedData::new_ref(0, 1, &mock_program_id);
-        accounts.push(account);
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                AccountSharedData::new_ref(100, 1, &mock_program_id),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                AccountSharedData::new_ref(0, 1, &mock_program_id),
+            ),
+        ];
 
-        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
         let account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
         )));
-        loaders.push(vec![(mock_program_id, account)]);
+        let loaders = vec![vec![(mock_program_id, account)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
 
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let to_pubkey = solana_sdk::pubkey::new_rand();
-        let dup_pubkey = from_pubkey;
         let account_metas = vec![
-            AccountMeta::new(from_pubkey, true),
-            AccountMeta::new(to_pubkey, false),
-            AccountMeta::new(dup_pubkey, false),
+            AccountMeta::new(accounts[0].0, true),
+            AccountMeta::new(accounts[1].0, false),
+            AccountMeta::new(accounts[0].0, false),
         ];
 
         // Try to borrow mut the same account
@@ -2045,13 +2075,12 @@ mod tests {
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -2077,13 +2106,12 @@ mod tests {
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -2106,14 +2134,13 @@ mod tests {
                 },
                 account_metas,
             )],
-            Some(&from_pubkey),
+            Some(&accounts[0].0),
         );
         let ancestors = Ancestors::default();
         let result = message_processor.process_message(
             &message,
             &loaders,
             &accounts,
-            &[],
             &rent_collector,
             None,
             executors,
@@ -2125,9 +2152,9 @@ mod tests {
             &ancestors,
         );
         assert_eq!(result, Ok(()));
-        assert_eq!(accounts[0].borrow().lamports(), 80);
-        assert_eq!(accounts[1].borrow().lamports(), 20);
-        assert_eq!(accounts[0].borrow().data(), &vec![42]);
+        assert_eq!(accounts[0].1.borrow().lamports(), 80);
+        assert_eq!(accounts[1].1.borrow().lamports(), 20);
+        assert_eq!(accounts[0].1.borrow().data(), &vec![42]);
     }
 
     #[test]
@@ -2179,25 +2206,28 @@ mod tests {
             Rc::new(RefCell::new(program_account.clone())),
         )];
 
-        let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
-
-        let not_owned_key = solana_sdk::pubkey::new_rand();
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
 
         #[allow(unused_mut)]
-        let mut accounts = vec![
-            Rc::new(RefCell::new(owned_account)),
-            Rc::new(RefCell::new(not_owned_account)),
-            Rc::new(RefCell::new(program_account)),
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(not_owned_account)),
+            ),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
 
         let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let metas = vec![
-            AccountMeta::new(owned_key, false),
-            AccountMeta::new(not_owned_key, false),
+            AccountMeta::new(accounts[0].0, false),
+            AccountMeta::new(accounts[1].0, false),
         ];
 
         let instruction = Instruction::new_with_bincode(
@@ -2215,7 +2245,6 @@ mod tests {
             &compiled_instruction,
             &executable_accounts,
             &accounts,
-            &[],
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2233,7 +2262,7 @@ mod tests {
             .enumerate()
             .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
-        accounts[0].borrow_mut().data_as_mut_slice()[0] = 1;
+        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
             MessageProcessor::process_cross_program_instruction(
                 &message,
@@ -2244,7 +2273,7 @@ mod tests {
             ),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        accounts[0].borrow_mut().data_as_mut_slice()[0] = 0;
+        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
 
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),
@@ -2272,7 +2301,6 @@ mod tests {
                 &compiled_instruction,
                 &executable_accounts,
                 &accounts,
-                &[],
                 programs.as_slice(),
                 None,
                 BpfComputeBudget::default(),
