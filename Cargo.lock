@@ -5321,7 +5321,7 @@ dependencies = [
  "log 0.4.14",
  "num-derive",
  "num-traits",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "qstring",
  "semver 1.0.3",
  "solana-sdk",
