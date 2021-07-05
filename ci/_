@@ -1,0 +1,17 @@
+# Buildkite log management helper
+#
+# See https://buildkite.com/docs/pipelines/managing-log-output
+#
+# |source| me
+#
+
+base_dir=$(realpath --strip "$(dirname "$0")/..")
+
+_() {
+  if [[ $(pwd) = $base_dir ]]; then
+    echo "--- $*"
+  else
+    echo "--- $* (wd: $(pwd))"
+  fi
+  "$@"
+}

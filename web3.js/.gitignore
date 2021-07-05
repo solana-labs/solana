@@ -1,0 +1,33 @@
+# IDE & OS specific
+.DS_Store
+.idea
+
+# Logs
+logs
+*.log
+
+# Dependencies
+node_modules
+
+# Coverage
+coverage
+.nyc_output
+
+# Release
+lib
+
+# Generated docs
+doc
+
+# VIM swap files
+*.sw*
+
+# bpf-sdk
+/bpf-sdk
+/bpf-sdk.tar.bz2
+
+# fixtures
+/test/fixtures
+
+# `safecoin-test-validator` ledger location
+test-ledger/

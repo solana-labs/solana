@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# shellcheck source=ci/rust-version.sh
+here=$(dirname "$0")
+
+toolchain=
+case "$1" in
+  stable)
+    source "${here}"/ci/rust-version.sh stable
+    # shellcheck disable=SC2054 # rust_stable is sourced from rust-version.sh
+    toolchain="$rust_stable"
+    shift
+    ;;
+  nightly)
+    source "${here}"/ci/rust-version.sh nightly
+    # shellcheck disable=SC2054 # rust_nightly is sourced from rust-version.sh
+    toolchain="$rust_nightly"
+    shift
+    ;;
+  *)
+    source "${here}"/ci/rust-version.sh stable
+    # shellcheck disable=SC2054 # rust_stable is sourced from rust-version.sh
+    toolchain="$rust_stable"
+    ;;
+esac
+
+set -x
+exec cargo "+${toolchain}" "${@}"

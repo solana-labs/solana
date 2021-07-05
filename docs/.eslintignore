@@ -1,0 +1,8 @@
+node_modules
+build
+static
+html
+
+# FIXME
+src/pages/index.js
+src/theme/Footer/index.js

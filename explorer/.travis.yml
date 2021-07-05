@@ -1,0 +1,10 @@
+language: node_js
+node_js:
+  - "node"
+branches:
+  only:
+    - master
+script:
+  - npm run build
+  - npm run test
+  - npm run format

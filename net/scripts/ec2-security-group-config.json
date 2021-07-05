@@ -1,0 +1,137 @@
+{
+    "IpPermissions": [
+        {
+            "PrefixListIds": [],
+            "FromPort": 80,
+            "IpRanges": [
+                {
+                    "CidrIp": "0.0.0.0/0",
+                    "Description": "http for block explorer"
+                }
+            ],
+            "ToPort": 80,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "http for block explorer"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 8000,
+            "IpRanges": [
+                {
+                    "Description": "validator UDP range",
+                    "CidrIp": "0.0.0.0/0"
+                }
+            ],
+            "ToPort": 10000,
+            "IpProtocol": "udp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "validator UDP range"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 22,
+            "IpRanges": [
+                {
+                    "CidrIp": "0.0.0.0/0",
+                    "Description": "ssh"
+                }
+            ],
+            "ToPort": 22,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "ssh"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 3001,
+            "IpRanges": [
+                {
+                    "Description": "blockexplorer http API port",
+                    "CidrIp": "0.0.0.0/0"
+                }
+            ],
+            "ToPort": 3001,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "blockexplorer http API port"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 3443,
+            "IpRanges": [
+                {
+                    "Description": "blockexplorer https API port",
+                    "CidrIp": "0.0.0.0/0"
+                }
+            ],
+            "ToPort": 3443,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "blockexplorer https API port"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 8000,
+            "IpRanges": [
+                {
+                    "Description": "validator TCP range",
+                    "CidrIp": "0.0.0.0/0"
+                }
+            ],
+            "ToPort": 10000,
+            "IpProtocol": "tcp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "validator TCP range"
+                }
+            ]
+        },
+        {
+            "PrefixListIds": [],
+            "FromPort": 8,
+            "IpRanges": [
+                {
+                    "CidrIp": "0.0.0.0/0",
+                    "Description": "allow ping"
+                }
+            ],
+            "ToPort": -1,
+            "IpProtocol": "icmp",
+            "UserIdGroupPairs": [],
+            "Ipv6Ranges": [
+                {
+                    "CidrIpv6": "::/0",
+                    "Description": "allow ping"
+                }
+            ]
+        }
+    ]
+}

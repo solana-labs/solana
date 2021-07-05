@@ -1,0 +1,34 @@
+//
+// type.scss
+// Extended from Bootstrap
+//
+
+// Font size
+
+.font-size-base {
+  font-size: $font-size-base !important;
+}
+
+.font-size-sm {
+  font-size: $font-size-sm !important;
+}
+
+.font-size-lg {
+  font-size: $font-size-lg !important;
+}
+
+
+// Decoration
+
+.text-decoration-underline {
+  text-decoration: underline !important;
+}
+
+
+// Gray colors
+
+@each $color, $value in $grays {
+  .text-gray-#{$color} {
+    color: $value !important;
+  }
+}

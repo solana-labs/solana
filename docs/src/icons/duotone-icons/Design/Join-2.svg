@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24px" height="24px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.2 (67145) - http://www.bohemiancoding.com/sketch -->
+    <title>Stockholm-icons / Design / Join-2</title>
+    <desc>Created with Sketch.</desc>
+    <g id="Stockholm-icons-/-Design-/-Join-2" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="bound" x="0" y="0" width="24" height="24"></rect>
+        <path d="M5,12 L10,6 L18,6 L18,10 L12.1666667,10 L9,13.8 L9,19 L5,19 L5,12 Z" id="Combined-Shape" fill="#335EEA" transform="translate(11.500000, 12.500000) scale(-1, 1) translate(-11.500000, -12.500000) "></path>
+        <circle id="Oval" fill="#335EEA" opacity="0.3" cx="8" cy="16" r="2"></circle>
+    </g>
+</svg>

@@ -1,0 +1,45 @@
+{
+  "name": "solana-docs",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "docusaurus start",
+    "build": "docusaurus build",
+    "clear": "docusaurus clear",
+    "help": "docusaurus --help",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "docusaurus deploy",
+    "format": "prettier --check \"**/*.{js,jsx,json,md,scss}\"",
+    "format:fix": "prettier --write \"**/*.{js,jsx,json,md,scss}\"",
+    "lint": "set -ex; eslint .",
+    "lint:fix": "npm run lint -- --fix"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^2.0.0-alpha.74",
+    "@docusaurus/preset-classic": "^2.0.0-alpha.74",
+    "@docusaurus/theme-search-algolia": "^2.0.0-alpha.74",
+    "babel-eslint": "^10.1.0",
+    "clsx": "^1.1.1",
+    "eslint": "^7.3.1",
+    "eslint-plugin-react": "^7.20.0",
+    "postcss": "^8.2.13",
+    "postcss-loader": "^4.2.0",
+    "prettier": "^2.0.5",
+    "react": "^16.8.4",
+    "react-dom": "^16.8.4",
+    "rehype-katex": "^4.0.0",
+    "remark-math": "^3.0.1"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

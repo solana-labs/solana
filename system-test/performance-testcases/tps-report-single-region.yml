@@ -1,0 +1,23 @@
+steps:
+  - command: "buildkite-agent pipeline upload system-test/performance-testcases/gce-gpu-perf-5-node-single-region.yml"
+    name: "5 Node Test - TPS Report - Single Region"
+    agents:
+      - "queue=pipeline-uploader"
+  - wait: ~
+    continue_on_failure: true
+  - command: "buildkite-agent pipeline upload system-test/performance-testcases/gce-gpu-perf-10-node-single-region.yml"
+    name: "10 Node Test - TPS Report - Single Region"
+    agents:
+      - "queue=pipeline-uploader"
+  - wait: ~
+    continue_on_failure: true
+  - command: "buildkite-agent pipeline upload system-test/performance-testcases/gce-gpu-perf-25-node-single-region.yml"
+    name: "25 Node Test - TPS Report - Single Region"
+    agents:
+      - "queue=pipeline-uploader"
+  - wait: ~
+    continue_on_failure: true
+  - command: "buildkite-agent pipeline upload system-test/performance-testcases/gce-gpu-perf-50-node-single-region.yml"
+    name: "50 Node Test - TPS Report - Single Region"
+    agents:
+      - "queue=pipeline-uploader"

@@ -1,0 +1,30 @@
+{
+  "item.label.Program Library »": {
+    "message": "程序库",
+    "description": "Navbar item with label Program Library »"
+  },
+  "item.label.Develop": {
+    "message": "开发",
+    "description": "Navbar item with label Develop"
+  },
+  "item.label.Validate": {
+    "message": "验证",
+    "description": "Navbar item with label Validate"
+  },
+  "item.label.Integrate": {
+    "message": "集成",
+    "description": "Navbar item with label Integrate"
+  },
+  "item.label.Learn": {
+    "message": "学习资源",
+    "description": "Navbar item with label Learn"
+  },
+  "item.label.Chat": {
+    "message": "聊天室",
+    "description": "Navbar item with label Chat"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}

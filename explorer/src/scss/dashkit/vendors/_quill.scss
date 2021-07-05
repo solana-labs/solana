@@ -1,0 +1,283 @@
+//
+// quill.scss
+// Quill plugin overrides
+//
+
+.ql-container {
+  font-family: $font-family-base;
+}
+
+.ql-toolbar {
+  position: relative;
+  padding: $input-padding-y $input-padding-x;
+  background-color: $input-bg;
+  border: $input-border-width solid $input-border-color;
+  border-radius: $input-border-radius $input-border-radius 0 0;
+  color: $input-color;
+}
+
+.ql-toolbar + .ql-container {
+  margin-top: -$border-width;
+}
+
+.ql-toolbar + .ql-container .ql-editor {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.ql-editor {
+  min-height: $line-height-base * $font-size-base * 4;
+  display: block;
+  width: 100%;
+  padding: $input-padding-y $input-padding-x;
+  font-size: $font-size-base;
+  line-height: $input-line-height;
+  color: $input-color;
+  background-color: $input-bg;
+  background-clip: padding-box;
+  border: $input-border-width solid $input-border-color;
+
+  // Note: This has no effect on <select>s in some browsers, due to the limited stylability of `<select>`s in CSS.
+  @if $enable-rounded {
+    // Manually use the if/else instead of the mixin to account for iOS override
+    border-radius: $input-border-radius;
+  }
+
+  @else {
+    // Otherwise undo the iOS default
+    border-radius: 0;
+  }
+
+  @include box-shadow($input-box-shadow);
+  @include transition($input-transition);
+
+  // Unstyle the caret on `<select>`s in IE10+.
+  &::-ms-expand {
+    background-color: transparent;
+    border: 0;
+  }
+
+  // Customize the `:focus` state to imitate native WebKit styles.
+  @include form-control-focus($ignore-warning: true);
+}
+
+.ql-hidden {
+  position: absolute;
+  transform: scale(0);
+}
+
+
+// Placeholder
+
+.ql-editor.ql-blank::before {
+  top: $input-padding-y;
+  left: $input-padding-x;
+  font-style: normal;
+  color: $input-placeholder-color;
+}
+
+.ql-editor:focus::before {
+  display: none;
+}
+
+
+// Toolbar
+
+.ql-formats {
+  padding-left: .5rem;
+  padding-right: .5rem;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+  }
+}
+
+.ql-toolbar button {
+  padding: 0 .25rem;
+  background: none;
+  border: none;
+  color: $body-color;
+  cursor: pointer;
+  transition: $transition-base;
+
+  &:hover {
+    color: $primary;
+  }
+
+  &:first-child {
+    margin-left: -.25rem;
+  }
+}
+
+.ql-toolbar .ql-active {
+  color: $primary;
+}
+
+.ql-toolbar button svg {
+  height: $font-size-lg;
+  width: $font-size-lg;
+}
+
+.ql-toolbar .ql-stroke {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.ql-toolbar .ql-thin {
+  stroke-width: 1;
+}
+
+.ql-toolbar .ql-fill {
+  fill: currentColor;
+}
+
+.ql-toolbar input.ql-image {
+  position: absolute;
+  transform: scale(0);
+}
+
+
+// Tooltip
+
+.ql-tooltip {
+  position: absolute;
+  display: flex;
+  flex-wrap: nowrap;
+  width: 18.5rem;
+  background-color: $popover-bg;
+  border: $popover-border-width solid $popover-border-color;
+  border-radius: $popover-border-radius;
+  padding: $input-padding-y $input-padding-x;
+  margin-top: .6rem; // arrow width
+  box-shadow: $popover-box-shadow;
+
+  // Arrow
+
+  &:before, &:after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%);
+  }
+
+  &:before {
+    border-bottom: .6rem solid $popover-border-color;
+    border-left: .6rem solid transparent;
+    border-right: .6rem solid transparent;
+  }
+
+  &:after {
+    border-bottom: .5rem solid $popover-bg;
+    border-left: .5rem solid transparent;
+    border-right: .5rem solid transparent;
+  }
+}
+
+.ql-container .ql-tooltip:hover {
+  display: flex !important;
+}
+
+.ql-tooltip .ql-preview {
+  width: 100%;
+  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-line-height-sm, $btn-border-radius-sm);
+  @include transition($btn-transition);
+}
+
+.ql-tooltip.ql-editing .ql-preview {
+  display: none;
+}
+
+.ql-tooltip input {
+  display: none;
+  width: 100%;
+  padding-top: calc(#{$input-padding-y-sm} + #{$input-border-width});
+  padding-bottom: calc(#{$input-padding-y-sm} + #{$input-border-width});
+  background-color: transparent;
+  font-size: $font-size-sm;
+  line-height: $input-line-height-sm;
+  border: none;
+  color: $input-color;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.ql-tooltip.ql-editing input {
+  display: block;
+}
+
+
+.ql-tooltip .ql-action,
+.ql-tooltip .ql-remove {
+  margin-left: .25rem;
+}
+
+.ql-tooltip .ql-action::before,
+.ql-tooltip .ql-remove::before {
+  display: inline-block;
+  font-weight: $btn-font-weight;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+  border: $btn-border-width solid transparent;
+  cursor: pointer;
+  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-line-height-sm, $btn-border-radius-sm);
+  @include transition($btn-transition);
+
+  // Share hover and focus styles
+  @include hover-focus {
+    text-decoration: none;
+  }
+
+  &:focus,
+  &.focus {
+    outline: 0;
+    box-shadow: $btn-focus-box-shadow;
+  }
+}
+
+.ql-tooltip .ql-action::before,
+.ql-tooltip.ql-editing .ql-action::before {
+  @include button-variant($primary, $primary);
+}
+
+.ql-tooltip .ql-action::before {
+  content: 'Edit';
+}
+
+.ql-tooltip.ql-editing .ql-action::before {
+  content: 'Save';
+}
+
+.ql-tooltip .ql-remove::before {
+  @include button-variant($white, $white);
+  content: 'Remove';
+  border-color: $gray-300;
+}
+
+.ql-tooltip.ql-editing .ql-remove::before {
+  display: none;
+}
+
+
+// Formatting
+
+.ql-editor blockquote {
+  margin-bottom: $spacer;
+  font-size: $blockquote-font-size;
+}
+
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+}

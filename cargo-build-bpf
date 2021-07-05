@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+here=$(dirname "$0")
+
+maybe_bpf_sdk="--bpf-sdk $here/sdk/bpf"
+for a in "$@"; do
+  if [[ $a = --bpf-sdk ]]; then
+    maybe_bpf_sdk=
+  fi
+done
+
+set -x
+exec "$here"/cargo run --manifest-path "$here"/sdk/cargo-build-bpf/Cargo.toml -- $maybe_bpf_sdk "$@"

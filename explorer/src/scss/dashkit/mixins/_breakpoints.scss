@@ -1,0 +1,9 @@
+//
+// breakpoint.scss
+// Extended from Bootstrap
+//
+
+@function breakpoint-prev($name, $breakpoints: $grid-breakpoints, $breakpoint-names: map-keys($breakpoints)) {
+  $n: index($breakpoint-names, $name);
+  @return if($n != null and $n != 1, nth($breakpoint-names, $n - 1), null);
+}

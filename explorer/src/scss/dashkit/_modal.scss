@@ -1,0 +1,101 @@
+//
+// modal.scss
+// Extended from Bootstrap
+//
+
+//
+// Bootstrap Overrides =======================
+//
+
+.modal-dialog {
+
+  // When fading in the modal, animate it to slide down
+  .modal.fade & {
+    transform: translate(0, -150px);
+  }
+
+  .modal.show & {
+    transform: translate(0, 0);
+  }
+}
+
+.modal-header .close {
+  margin: -1.5rem -1.5rem -1.5rem auto;
+}
+
+
+//
+// Dashkit ===================================
+//
+
+// Modal dialog vertical
+//
+// Creates a vertically aligned version of the modal dialog
+
+.modal-dialog-vertical {
+  height: 100%;
+  max-width: $modal-dialog-vertical-width;
+  margin: 0;
+
+  .modal-content {
+    height: inherit;
+    border-width: 0 $modal-content-border-width 0 0;
+    border-radius: 0;
+  }
+
+  .modal-header {
+    border-radius: inherit;
+  }
+
+  .modal-body {
+    height: inherit;
+    overflow-y: auto;
+  }
+}
+
+.modal.fade .modal-dialog-vertical {
+  transform: translateX(-100%);
+}
+
+.modal.show .modal-dialog-vertical {
+  transform: translateX(0);
+}
+
+
+// Positioning
+
+.modal.fixed-right {
+  padding-right: 0 !important;
+}
+
+.modal.fixed-right .modal-dialog-vertical {
+  margin-left: auto;
+}
+
+.modal.fixed-right.fade .modal-dialog-vertical {
+  transform: translateX(100%);
+}
+
+.modal.fixed-right.show .modal-dialog-vertical {
+  transform: translateX(0);
+}
+
+
+// Modal card
+
+.modal-card {
+  margin-bottom: 0;
+
+  .card-body {
+    max-height: $modal-card-body-max-height;
+    overflow-y: auto;
+  }
+}
+
+
+// Modal tabs
+
+.modal-header-tabs {
+  margin-top: -$modal-header-padding-y;
+  margin-bottom: calc(-#{$modal-header-padding-y} - #{$border-width});
+}

@@ -1,0 +1,7 @@
+{
+  "buildpacks": [
+    {
+      "url": "https://github.com/solana-labs/create-react-app-buildpack.git"
+    }
+  ]
+}

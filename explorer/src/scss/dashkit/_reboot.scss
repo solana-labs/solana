@@ -1,0 +1,12 @@
+//
+// reboot.scss
+// Extended from Bootstrap
+//
+
+//
+// Remove the cancel buttons in Chrome and Safari on macOS.
+//
+
+[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}

@@ -1,0 +1,23 @@
+pull_request_rules:
+  - name: automatic merge on CI success
+    conditions:
+      - status-success=Travis CI - Pull Request
+      - label=automerge
+    actions:
+      merge:
+        method: rebase
+        strict: true
+  - name: remove automerge label on CI failure
+    conditions:
+      - status-failure=Travis CI - Pull Request
+      - label=automerge
+    actions:
+      label:
+        remove:
+          - automerge
+  - name: remove outdated reviews
+    conditions:
+      - base=master
+    actions:
+      dismiss_reviews:
+        changes_requested: true

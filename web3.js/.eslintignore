@@ -1,0 +1,10 @@
+/commitlint.config.js
+/coverage
+/deploy
+/doc
+/flow-typed
+/lib
+/module.flow.js
+/.eslintrc.js
+/test/.eslintrc.js
+/test/dist

@@ -1,0 +1,26 @@
+#
+# Build steps that run after the primary pipeline on pushes and tags.
+# Pull requests to not run these steps.
+steps:
+  - command: "ci/publish-tarball.sh"
+    agents:
+      - "queue=release-build"
+    timeout_in_minutes: 60
+    name: "publish tarball"
+  - command: "ci/publish-bpf-sdk.sh"
+    agents:
+      - "queue=release-build"
+    timeout_in_minutes: 5
+    name: "publish bpf sdk"
+  - wait
+  - command: "sdk/docker-solana/build.sh"
+    agents:
+      - "queue=release-build"
+    timeout_in_minutes: 60
+    name: "publish docker"
+  - command: "ci/publish-crate.sh"
+    agents:
+      - "queue=release-build"
+    timeout_in_minutes: 240
+    name: "publish crate"
+    branches: "!master"

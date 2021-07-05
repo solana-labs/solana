@@ -1,0 +1,128 @@
+//
+// select2.scss
+// Select2 plugin overrides
+//
+
+[class*="select2"] {
+  display: block;
+}
+
+.select2 {
+  width: 100% !important;
+}
+
+.select2-hidden-accessible {
+  display: none;
+}
+
+.select2-selection[aria-expanded="true"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.select2-container {
+  display: block;
+}
+
+.select2-dropdown {
+  margin-top: -$input-border-width;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.select2-search--dropdown {
+  padding: $dropdown-item-padding-y $input-padding-x;
+}
+
+.select2-search--dropdown .select2-search__field {
+  width: 100%;
+  height: $input-height-sm;
+  padding: $input-padding-y-sm $input-padding-x-sm;
+  background-color: $input-bg;
+  border: $input-border-width solid $input-border-color;
+  border-radius: $input-border-radius-sm;
+  line-height: $input-line-height-sm;
+  font-size: $input-font-size-sm;
+  color: $input-color;
+  transition: $input-transition;
+
+  &:focus {
+    border-color: $input-focus-border-color;
+    box-shadow: $input-focus-box-shadow;
+    outline: none;
+  }
+}
+
+.select2-results__options {
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.select2-results__option {
+  padding: $dropdown-item-padding-y $input-padding-x;
+  color: $dropdown-link-color;
+
+  &:not(.select2-results__message) {
+    cursor: pointer;
+
+    @include hover-focus {
+      color: $dropdown-link-hover-color;
+    }
+  }
+}
+
+.select2-results__option[aria-selected="true"],
+.select2-results__option--highlighted {
+  color: $dropdown-link-active-color;
+}
+
+.select2-selection--multiple {
+  height: auto;
+}
+
+.select2-selection__rendered {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin: 0 -.25rem -.25rem 0;
+}
+
+.select2-selection__choice {
+  display: inline-flex;
+  align-items: center;
+  padding-left: .375rem;
+  padding-right: .375rem;
+  margin: 0 .25rem .25rem 0;
+  font-size: $font-size-sm;
+  background-color: $light;
+  border-radius: $border-radius-xs;
+}
+
+.select2-selection__choice__remove {
+  order: 2;
+  margin-left: .5rem;
+  color: $text-muted;
+  cursor: pointer;
+
+  @include hover {
+    color: $body-color;
+  }
+}
+
+.select2-search--inline .select2-search__field {
+  height: calc(1em * #{$input-line-height});
+  padding-bottom: .25rem;
+  background-color: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  color: $input-color;
+
+  &::placeholder {
+    color: $input-placeholder-color;
+  }
+}
+
+.select2-selection__placeholder {
+  color: $input-placeholder-color;
+}

@@ -1,0 +1,79 @@
+//
+// chart.scss
+// Dashkit component
+//
+
+// Chart
+//
+// General styles
+
+.chart {
+  position: relative;
+  height: $chart-height;
+}
+
+.chart.chart-appended {
+  height: calc(#{$chart-height} - #{$chart-legend-height});
+}
+
+.chart-sm {
+  height: $chart-height-sm;
+}
+
+.chart-sm.chart-appended {
+  height: calc(#{$chart-height-sm} - #{$chart-legend-height});
+}
+
+
+// Sparkline
+
+.chart-sparkline {
+  width: $chart-sparkline-width;
+  height: $chart-sparkline-height;
+}
+
+
+// Legend
+//
+// Custom legend
+
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  margin-top: $chart-legend-margin-top;
+  font-size: $chart-legend-font-size;
+  text-align: center;
+  color: $chart-legend-color;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+
+  + .chart-legend-item {
+    margin-left: 1rem;
+  }
+}
+
+.chart-legend-indicator {
+  display: inline-block;
+  width: .5rem;
+  height: .5rem;
+  margin-right: 0.375rem;
+  border-radius: 50%;
+}
+
+
+// Tooltip
+//
+// Custom tooltip
+
+#chart-tooltip {
+  z-index: 0;
+}
+
+#chart-tooltip .arrow {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateX(-.5rem);
+}

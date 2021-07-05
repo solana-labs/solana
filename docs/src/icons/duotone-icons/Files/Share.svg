@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24px" height="24px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.2 (67145) - http://www.bohemiancoding.com/sketch -->
+    <title>Stockholm-icons / Files / Share</title>
+    <desc>Created with Sketch.</desc>
+    <g id="Stockholm-icons-/-Files-/-Share" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="bound" x="0" y="0" width="24" height="24"></rect>
+        <path d="M15.1231569,19.0111815 L7.83785094,14.818972 C8.31992102,14.3336937 8.67836566,13.7254559 8.86199856,13.0454449 L16.0980947,17.246999 C15.6352738,17.7346932 15.2940944,18.3389541 15.1231569,19.0111815 Z M7.75585639,9.10080708 L15.0774983,4.78750147 C15.2169157,5.48579221 15.5381369,6.11848298 15.9897205,6.63413231 L8.86499752,10.9657252 C8.67212677,10.2431476 8.28201274,9.60110795 7.75585639,9.10080708 Z" id="Combined-Shape" fill="#335EEA"></path>
+        <circle id="Oval-77" fill="#335EEA" opacity="0.3" cx="19" cy="4" r="3"></circle>
+        <circle id="Oval-77-Copy" fill="#335EEA" opacity="0.3" cx="19" cy="20" r="3"></circle>
+        <circle id="Oval-77-Copy-2" fill="#335EEA" opacity="0.3" cx="5" cy="12" r="3"></circle>
+    </g>
+</svg>
