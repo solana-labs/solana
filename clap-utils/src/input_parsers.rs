@@ -358,7 +358,7 @@ mod tests {
         let matches = app()
             .clone()
             .get_matches_from(vec!["test", "--single", "1.5"]);
-        assert_eq!(lamports_of_sol(&matches, "single"), Some(1_500_000_000));
+        assert_eq!(lamports_of_sol(&matches, "single"), Some(1_33_370_166));
         assert_eq!(lamports_of_sol(&matches, "multiple"), None);
         let matches = app()
             .clone()

@@ -112,7 +112,7 @@ if [[ -n $keypair ]]; then
 fi
 
 if ! [[ -f "$stake_account" ]]; then
-  $solana_keygen new --no-passphrase -so "$stake_account"
+  $safecoin_keygen new --no-passphrase -so "$stake_account"
 else
   echo "$stake_account already exists! Using it"
 fi

@@ -1,12 +1,12 @@
 [package]
 name = "solana-core"
-description = "Blockchain, Rebuilt for Scale"
+description = "Safecoin: Enterprise Security for the Community by the Community"
 version = "1.6.16"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-core"
 readme = "../README.md"
 repository = "https://github.com/solana-labs/solana"
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"
 edition = "2018"
 

@@ -293,8 +293,8 @@ setup_validator_accounts() {
 
 rpc_url=$($safecoin_gossip rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
 
-[[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
-[[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
+[[ -r "$identity" ]] || $safecoin_keygen new --no-passphrase -so "$identity"
+[[ -r "$vote_account" ]] || $safecoin_keygen new --no-passphrase -so "$vote_account"
 
 setup_validator_accounts "$node_sol"
 

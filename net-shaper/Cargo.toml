@@ -1,5 +1,5 @@
 [package]
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "safecoin-net-shaper"
 description = "The safecoin cluster network shaping tool"

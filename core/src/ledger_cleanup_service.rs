@@ -21,10 +21,10 @@ use std::time::Duration;
 // - A validator to download a snapshot from a peer and boot from it
 // - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
 //   to catch back up to where it was when it stopped
-pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
+pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 5_000_000;
 
 // Allow down to 50m, or 3.5 days at idle, 1hr at 50k load, around ~100GB
-pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
+pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 2_000_000;
 
 // Check for removing slots at this interval so we don't purge too often
 // and starve other blockstore users.

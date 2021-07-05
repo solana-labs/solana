@@ -1,5 +1,5 @@
 [package]
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "safecoin-ramp-tps"
 description = "Safecoin Tour de SAFE - TPS ramp up"

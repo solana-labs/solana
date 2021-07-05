@@ -814,7 +814,7 @@ describe('Connection', () => {
                   accounts: ['va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf'],
                   data:
                     '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
-                  programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+                  programId: 'HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1',
                 },
               ],
               recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
@@ -846,7 +846,7 @@ describe('Connection', () => {
         value: getMockData({
           parsed: {},
           program: 'spl-token',
-          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          programId: 'HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1',
         }),
       });
 
@@ -874,7 +874,7 @@ describe('Connection', () => {
             '6tVrjJhFm5SAvvdh6tysjotQurCSELpxuW3JaAAYeC1m',
           ],
           data: 'ai3535',
-          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          programId: 'HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1',
         }),
       });
 
@@ -1125,7 +1125,7 @@ describe('Connection', () => {
   });
 
   const TOKEN_PROGRAM_ID = new PublicKey(
-    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    'HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1',
   );
 
   if (process.env.TEST_LIVE) {

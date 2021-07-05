@@ -2826,7 +2826,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_pubkey() {
-        let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
+        let pubkey = Pubkey::from_str("BNwVU7MhnDnGEQGAqpJ1dGKVtaYw4SvxbTvoACcdENd2").unwrap();
         let addr = &pubkey.as_ref()[0] as *const _ as u64;
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
@@ -2859,7 +2859,7 @@ mod tests {
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(
             log.borrow()[0],
-            "Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN"
+            "Program log: BNwVU7MhnDnGEQGAqpJ1dGKVtaYw4SvxbTvoACcdENd2"
         );
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_pubkey.call(

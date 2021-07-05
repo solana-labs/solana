@@ -1,7 +1,7 @@
 [package]
 name = "safecoin-stake-accounts"
-description = "Blockchain, Rebuilt for Scale"
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+description = "Safecoin: Enterprise Security for the Community by the Community"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 version = "1.6.16"
 repository = "https://github.com/solana-labs/solana"
