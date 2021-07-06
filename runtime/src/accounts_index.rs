@@ -1376,11 +1376,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
     // But, does NOT update secondary index
     // This is designed to be called at startup time.
     #[allow(clippy::needless_collect)]
-    pub(crate) fn insert_new_if_missing_into_primary_index<'a>(
-        &'a self,
+    pub(crate) fn insert_new_if_missing_into_primary_index(
+        &self,
         slot: Slot,
         item_len: usize,
-        items: impl Iterator<Item = (&'a Pubkey, T)>,
+        items: impl Iterator<Item = (Pubkey, T)>,
     ) -> (Vec<Pubkey>, u64) {
         let expected_items_per_bin = item_len * 2 / BINS; // big enough so not likely to re-allocate, small enough to not over-allocate
         let mut binned = (0..BINS)
@@ -1388,10 +1388,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
             .map(|pubkey_bin| (pubkey_bin, Vec::with_capacity(expected_items_per_bin)))
             .collect::<Vec<_>>();
         items.for_each(|(pubkey, account_info)| {
-            let bin = get_bin_pubkey(pubkey);
+            let bin = get_bin_pubkey(&pubkey);
             // this value is equivalent to what update() below would have created if we inserted a new item
             let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-            binned[bin].1.push((*pubkey, info));
+            binned[bin].1.push((pubkey, info));
         });
         binned.retain(|x| !x.1.is_empty());
 
@@ -2550,7 +2550,7 @@ pub mod tests {
 
         let index = AccountsIndex::<bool>::default();
         let account_info = true;
-        let items = vec![(pubkey, account_info)];
+        let items = vec![(*pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
@@ -2569,7 +2569,7 @@ pub mod tests {
         // not zero lamports
         let index = AccountsIndex::<AccountInfoTest>::default();
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
-        let items = vec![(pubkey, account_info)];
+        let items = vec![(*pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
@@ -2621,7 +2621,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default();
         let account_infos = [true, false];
 
-        let items = vec![(&key0, account_infos[0]), (&key1, account_infos[1])];
+        let items = vec![(key0, account_infos[0]), (key1, account_infos[1])];
         index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
 
         for (i, key) in [key0, key1].iter().enumerate() {
@@ -2664,7 +2664,7 @@ pub mod tests {
                 &mut gc,
             );
         } else {
-            let items = vec![(&key, account_infos[0].clone())];
+            let items = vec![(key, account_infos[0].clone())];
             index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
         }
         assert!(gc.is_empty());
@@ -2698,7 +2698,7 @@ pub mod tests {
                 &mut gc,
             );
         } else {
-            let items = vec![(&key, account_infos[1].clone())];
+            let items = vec![(key, account_infos[1].clone())];
             index.insert_new_if_missing_into_primary_index(slot1, items.len(), items.into_iter());
         }
         assert!(gc.is_empty());

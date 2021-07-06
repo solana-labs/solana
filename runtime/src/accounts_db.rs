@@ -1402,7 +1402,7 @@ impl Default for AccountsDb {
 }
 
 type GenerateIndexAccountsMap<'a> =
-    HashMap<&'a Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
@@ -5845,7 +5845,7 @@ impl AccountsDb {
             let accounts = storage.all_accounts();
             accounts.into_iter().for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
-                match accounts_map.entry(&stored_account.meta.pubkey) {
+                match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert((this_version, storage.append_vec_id(), stored_account));
                     }
@@ -5872,14 +5872,25 @@ impl AccountsDb {
             return 0;
         }
 
+        let secondary = !self.account_indexes.is_empty();
+
         let len = accounts_map.len();
         let items = accounts_map
-            .iter()
+            .into_iter()
             .map(|(pubkey, (_, store_id, stored_account))| {
+                if secondary {
+                    self.accounts_index.update_secondary_indexes(
+                        &pubkey,
+                        &stored_account.account_meta.owner,
+                        stored_account.data,
+                        &self.account_indexes,
+                    );
+                }
+
                 (
-                    *pubkey,
+                    pubkey,
                     AccountInfo {
-                        store_id: *store_id,
+                        store_id,
                         offset: stored_account.offset,
                         stored_size: stored_account.stored_size,
                         lamports: stored_account.account_meta.lamports,
@@ -5896,17 +5907,6 @@ impl AccountsDb {
         // be done on that pubkey. Use only those pubkeys with multiple updates.
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
-        }
-
-        if !self.account_indexes.is_empty() {
-            for (pubkey, (_, _store_id, stored_account)) in accounts_map.iter() {
-                self.accounts_index.update_secondary_indexes(
-                    pubkey,
-                    &stored_account.account_meta.owner,
-                    stored_account.data,
-                    &self.account_indexes,
-                );
-            }
         }
         insert_us
     }
