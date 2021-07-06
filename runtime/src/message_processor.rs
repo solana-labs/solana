@@ -9,7 +9,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_sysvar_write_locks, instructions_sysvar_enabled, FeatureSet},
+    feature_set::{instructions_sysvar_enabled, FeatureSet},
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
@@ -299,7 +299,6 @@ impl<'a> ThisInvokeContext<'a> {
             instruction,
             executable_accounts,
             accounts,
-            feature_set.is_active(&demote_sysvar_write_locks::id()),
         );
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
@@ -410,7 +409,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             &self.rent,
             caller_write_privileges,
             &mut self.timings,
-            self.feature_set.is_active(&demote_sysvar_write_locks::id()),
             logger,
         )
     }
@@ -613,7 +611,6 @@ impl MessageProcessor {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        demote_sysvar_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -622,7 +619,7 @@ impl MessageProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
-                    message.is_writable(index, demote_sysvar_write_locks),
+                    message.is_writable(index),
                     &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
                 )
@@ -759,7 +756,6 @@ impl MessageProcessor {
             accounts,
             keyed_account_indices_reordered,
             caller_write_privileges,
-            demote_sysvar_write_locks,
         ) = {
             let invoke_context = invoke_context.borrow();
 
@@ -852,7 +848,6 @@ impl MessageProcessor {
                 accounts,
                 keyed_account_indices_reordered,
                 caller_write_privileges,
-                invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
             )
         };
 
@@ -877,9 +872,7 @@ impl MessageProcessor {
             {
                 let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
                 let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index, demote_sysvar_write_locks)
-                    && !src_keyed_account.executable()
-                {
+                if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
                     if dst_keyed_account.data_len()? != src_keyed_account.data().len()
                         && dst_keyed_account.data_len()? != 0
                     {
@@ -928,13 +921,8 @@ impl MessageProcessor {
             )?;
 
             // Construct keyed accounts
-            let keyed_accounts = Self::create_keyed_accounts(
-                message,
-                instruction,
-                executable_accounts,
-                accounts,
-                invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
-            );
+            let keyed_accounts =
+                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
 
             // Invoke callee
             invoke_context.push(program_id, &keyed_accounts)?;
@@ -1006,7 +994,6 @@ impl MessageProcessor {
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
-        demote_sysvar_write_locks: bool,
         logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
@@ -1028,7 +1015,7 @@ impl MessageProcessor {
                 pre_accounts[unique_index]
                     .verify(
                         program_id,
-                        message.is_writable(account_index, demote_sysvar_write_locks),
+                        message.is_writable(account_index),
                         rent,
                         &account,
                         timings,
@@ -1068,7 +1055,6 @@ impl MessageProcessor {
         rent: &Rent,
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
-        demote_sysvar_write_locks: bool,
         logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
@@ -1079,7 +1065,7 @@ impl MessageProcessor {
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[account_index]
                 } else {
-                    message.is_writable(account_index, demote_sysvar_write_locks)
+                    message.is_writable(account_index)
                 };
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
@@ -1137,7 +1123,6 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         timings: &mut ExecuteDetailsTimings,
-        demote_sysvar_write_locks: bool,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
@@ -1182,7 +1167,6 @@ impl MessageProcessor {
             accounts,
             &rent_collector.rent,
             timings,
-            demote_sysvar_write_locks,
             invoke_context.get_logger(),
         )?;
 
@@ -1211,7 +1195,6 @@ impl MessageProcessor {
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), TransactionError> {
-        let demote_sysvar_write_locks = feature_set.is_active(&demote_sysvar_write_locks::id());
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let mut time = Measure::start("execute_instruction");
             let instruction_recorder = instruction_recorders
@@ -1231,7 +1214,6 @@ impl MessageProcessor {
                     feature_set.clone(),
                     bpf_compute_budget,
                     timings,
-                    demote_sysvar_write_locks,
                     account_db.clone(),
                     ancestors,
                 )
@@ -2249,13 +2231,11 @@ mod tests {
         );
 
         // not owned account modified by the caller (before the invoke)
-        let demote_sysvar_write_locks =
-            invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
+            .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
@@ -2310,7 +2290,7 @@ mod tests {
                 .account_keys
                 .iter()
                 .enumerate()
-                .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
+                .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();
             assert_eq!(
                 MessageProcessor::process_cross_program_instruction(
