@@ -4,7 +4,11 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+<<<<<<< HEAD
 use solana_core::banking_stage::BankingStage;
+=======
+use solana_core::{banking_stage::BankingStage, cost_model::CostModel, cost_tracker::CostTracker};
+>>>>>>> 0e039b409 (Aggregate cost_model into cost_tracker (#18374))
 use solana_gossip::{cluster_info::ClusterInfo, cluster_info::Node};
 use solana_ledger::{
     blockstore::Blockstore,
@@ -224,6 +228,12 @@ fn main() {
             vote_receiver,
             None,
             replay_vote_sender,
+<<<<<<< HEAD
+=======
+            Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                CostModel::default(),
+            ))))),
+>>>>>>> 0e039b409 (Aggregate cost_model into cost_tracker (#18374))
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

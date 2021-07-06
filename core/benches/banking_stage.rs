@@ -91,6 +91,12 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
+<<<<<<< HEAD
+=======
+                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                    CostModel::new(std::u64::MAX, std::u64::MAX),
+                ))))),
+>>>>>>> 0e039b409 (Aggregate cost_model into cost_tracker (#18374))
             );
         });
 
@@ -211,6 +217,12 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
+<<<<<<< HEAD
+=======
+            Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                CostModel::new(std::u64::MAX, std::u64::MAX),
+            ))))),
+>>>>>>> 0e039b409 (Aggregate cost_model into cost_tracker (#18374))
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
