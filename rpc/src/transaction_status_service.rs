@@ -5,7 +5,9 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{Bank, NonceRollbackInfo},
+    solana_runtime::bank::{
+        Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
+    },
     solana_transaction_status::{InnerInstructions, Reward, TransactionStatusMeta},
     std::{
         sync::{
@@ -65,6 +67,20 @@ impl TransactionStatusService {
                 rent_debits,
             }) => {
                 let slot = bank.slot();
+                let inner_instructions_iter: Box<
+                    dyn Iterator<Item = Option<InnerInstructionsList>>,
+                > = if let Some(inner_instructions) = inner_instructions {
+                    Box::new(inner_instructions.into_iter())
+                } else {
+                    Box::new(std::iter::repeat_with(|| None))
+                };
+                let transaction_logs_iter: Box<
+                    dyn Iterator<Item = Option<TransactionLogMessages>>,
+                > = if let Some(transaction_logs) = transaction_logs {
+                    Box::new(transaction_logs.into_iter())
+                } else {
+                    Box::new(std::iter::repeat_with(|| None))
+                };
                 for (
                     transaction,
                     (status, nonce_rollback),
@@ -82,8 +98,8 @@ impl TransactionStatusService {
                     balances.post_balances,
                     token_balances.pre_token_balances,
                     token_balances.post_token_balances,
-                    inner_instructions.into_iter(),
-                    transaction_logs.into_iter(),
+                    inner_instructions_iter,
+                    transaction_logs_iter,
                     rent_debits.into_iter(),
                 ) {
                     if Bank::can_commit(&status) && !transaction.signatures.is_empty() {

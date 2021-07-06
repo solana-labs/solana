@@ -1198,8 +1198,8 @@ pub struct TransactionStatusBatch {
     pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
-    pub inner_instructions: Vec<Option<InnerInstructionsList>>,
-    pub transaction_logs: Vec<Option<TransactionLogMessages>>,
+    pub inner_instructions: Option<Vec<Option<InnerInstructionsList>>>,
+    pub transaction_logs: Option<Vec<Option<TransactionLogMessages>>>,
     pub rent_debits: Vec<RentDebits>,
 }
 
@@ -1222,6 +1222,11 @@ impl TransactionStatusSender {
         rent_debits: Vec<RentDebits>,
     ) {
         let slot = bank.slot();
+        let (inner_instructions, transaction_logs) = if !self.enable_cpi_and_log_storage {
+            (None, None)
+        } else {
+            (Some(inner_instructions), Some(transaction_logs))
+        };
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
