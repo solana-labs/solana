@@ -2167,7 +2167,7 @@ dependencies = [
  "jsonrpc-server-utils",
  "log 0.4.14",
  "net2",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "unicase 2.6.0",
 ]
 
@@ -2182,7 +2182,7 @@ dependencies = [
  "jsonrpc-server-utils",
  "log 0.4.14",
  "parity-tokio-ipc",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "tower-service",
 ]
 
@@ -2196,7 +2196,7 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log 0.4.14",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "rand 0.7.3",
  "serde",
 ]
@@ -2229,7 +2229,7 @@ dependencies = [
  "jsonrpc-server-utils",
  "log 0.4.14",
  "parity-ws",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "slab",
 ]
 
@@ -2741,7 +2741,7 @@ version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13bd41f508810a131401606d54ac32a467c97172d74ba7662562ebba5ad07fa0"
 dependencies = [
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
 ]
 
 [[package]]
@@ -2891,9 +2891,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4893845fa2ca272e647da5d0e46660a314ead9c2fdd9a883aabc32e481a8733"
+checksum = "6d7744ac029df22dca6284efe4e898991d28e3085c706c972bcd7da4a27a15eb"
 dependencies = [
  "instant",
  "lock_api 0.4.1",
@@ -3947,7 +3947,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.0",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -5321,7 +5321,7 @@ dependencies = [
  "log 0.4.14",
  "num-derive",
  "num-traits",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "qstring",
  "semver 1.0.3",
  "solana-sdk",
@@ -6316,7 +6316,7 @@ dependencies = [
  "mio 0.7.13",
  "num_cpus",
  "once_cell",
- "parking_lot 0.11.0",
+ "parking_lot 0.11.1",
  "pin-project-lite 0.2.4",
  "signal-hook-registry",
  "tokio-macros 1.2.0",
