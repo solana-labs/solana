@@ -5315,33 +5315,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "solana-stake-monitor"
-version = "1.7.5"
-dependencies = [
- "clap",
- "console 0.14.1",
- "log 0.4.11",
- "serde",
- "serde_yaml",
- "serial_test",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-client",
- "solana-core",
- "solana-local-cluster",
- "solana-logger 1.7.5",
- "solana-metrics",
- "solana-rpc",
- "solana-sdk",
- "solana-transaction-status",
- "solana-version",
- "tempfile",
-]
-
-[[package]]
-=======
->>>>>>> f859a39b8 (Remove obsolete stake-monitor command)
 name = "solana-stake-program"
 version = "1.7.5"
 dependencies = [
