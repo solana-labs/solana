@@ -831,26 +831,15 @@ impl Accounts {
 
     fn unlock_account(
         &self,
-        tx: &Transaction,
-        result: &Result<()>,
-        locks: &mut AccountLocks,
-        demote_sysvar_write_locks: bool,
+        account_locks: &mut AccountLocks,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
     ) {
-        match result {
-            Err(TransactionError::AccountInUse) => (),
-            Err(TransactionError::SanitizeFailure) => (),
-            Err(TransactionError::AccountLoadedTwice) => (),
-            _ => {
-                let (writable_keys, readonly_keys) = &tx
-                    .message()
-                    .get_account_keys_by_lock_type(demote_sysvar_write_locks);
-                for k in writable_keys {
-                    locks.unlock_write(k);
-                }
-                for k in readonly_keys {
-                    locks.unlock_readonly(k);
-                }
-            }
+        for k in writable_keys {
+            account_locks.unlock_write(k);
+        }
+        for k in readonly_keys {
+            account_locks.unlock_readonly(k);
         }
     }
 
@@ -904,22 +893,30 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
+    #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         results: &[Result<()>],
         demote_sysvar_write_locks: bool,
     ) {
+        let keys: Vec<_> = txs
+            .zip(results)
+            .filter_map(|(tx, res)| match res {
+                Err(TransactionError::AccountInUse) => None,
+                Err(TransactionError::SanitizeFailure) => None,
+                Err(TransactionError::AccountLoadedTwice) => None,
+                _ => Some(
+                    tx.message
+                        .get_account_keys_by_lock_type(demote_sysvar_write_locks),
+                ),
+            })
+            .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        for (tx, lock_result) in txs.zip(results) {
-            self.unlock_account(
-                tx,
-                lock_result,
-                &mut account_locks,
-                demote_sysvar_write_locks,
-            );
-        }
+        keys.into_iter().for_each(|(writable_keys, readonly_keys)| {
+            self.unlock_account(&mut account_locks, writable_keys, readonly_keys);
+        });
     }
 
     /// Store the accounts into the DB
