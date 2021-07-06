@@ -275,10 +275,11 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stake_state::{Meta, StakeState};
     use bincode::serialize;
     use solana_sdk::{
         account::{self, Account, AccountSharedData, WritableAccount},
-        instruction::Instruction,
+        instruction::{AccountMeta, Instruction},
         keyed_account::KeyedAccount,
         process_instruction::{mock_set_sysvar, MockInvokeContext},
         rent::Rent,
@@ -289,8 +290,7 @@ mod tests {
         },
         sysvar::stake_history::StakeHistory,
     };
-    use std::cell::RefCell;
-    use std::str::FromStr;
+    use std::{cell::RefCell, rc::Rc, str::FromStr};
 
     fn create_default_account() -> RefCell<AccountSharedData> {
         RefCell::new(AccountSharedData::default())
@@ -789,6 +789,272 @@ mod tests {
                 &mut MockInvokeContext::new(vec![])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
+        );
+    }
+
+    #[test]
+    fn test_stake_checked_instructions() {
+        let stake_address = Pubkey::new_unique();
+        let staker = Pubkey::new_unique();
+        let withdrawer = Pubkey::new_unique();
+
+        // Test InitializeChecked with non-signing withdrawer
+        let mut instruction =
+            initialize_checked(&stake_address, &Authorized { staker, withdrawer });
+        instruction.accounts[3] = AccountMeta::new_readonly(withdrawer, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test InitializeChecked with withdrawer signer
+        let stake_account = AccountSharedData::new_ref(
+            1_000_000_000,
+            std::mem::size_of::<crate::stake_state::StakeState>(),
+            &id(),
+        );
+        let rent_address = sysvar::rent::id();
+        let rent_account = RefCell::new(account::create_account_shared_data_for_test(
+            &Rent::default(),
+        ));
+        let staker_account = create_default_account();
+        let withdrawer_account = create_default_account();
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&rent_address, false, &rent_account),
+            KeyedAccount::new(&staker, false, &staker_account),
+            KeyedAccount::new(&withdrawer, true, &withdrawer_account),
+        ];
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::InitializeChecked).unwrap(),
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        // Test AuthorizeChecked with non-signing authority
+        let authorized_address = Pubkey::new_unique();
+        let mut instruction = authorize_checked(
+            &stake_address,
+            &authorized_address,
+            &staker,
+            StakeAuthorize::Staker,
+            None,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        let mut instruction = authorize_checked(
+            &stake_address,
+            &authorized_address,
+            &withdrawer,
+            StakeAuthorize::Withdrawer,
+            None,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(withdrawer, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test AuthorizeChecked with authority signer
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            42,
+            &StakeState::Initialized(Meta::auto(&authorized_address)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let clock_address = sysvar::clock::id();
+        let clock_account = RefCell::new(account::create_account_shared_data_for_test(
+            &Clock::default(),
+        ));
+        let authorized_account = create_default_account();
+        let new_authorized_account = create_default_account();
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&authorized_address, true, &authorized_account),
+            KeyedAccount::new(&staker, true, &new_authorized_account),
+        ];
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::AuthorizeChecked(StakeAuthorize::Staker)).unwrap(),
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&authorized_address, true, &authorized_account),
+            KeyedAccount::new(&withdrawer, true, &new_authorized_account),
+        ];
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::AuthorizeChecked(
+                    StakeAuthorize::Withdrawer
+                ))
+                .unwrap(),
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        // Test AuthorizeCheckedWithSeed with non-signing authority
+        let authorized_owner = Pubkey::new_unique();
+        let seed = "test seed";
+        let address_with_seed =
+            Pubkey::create_with_seed(&authorized_owner, seed, &authorized_owner).unwrap();
+        let mut instruction = authorize_checked_with_seed(
+            &stake_address,
+            &authorized_owner,
+            seed.to_string(),
+            &authorized_owner,
+            &staker,
+            StakeAuthorize::Staker,
+            None,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        let mut instruction = authorize_checked_with_seed(
+            &stake_address,
+            &authorized_owner,
+            seed.to_string(),
+            &authorized_owner,
+            &staker,
+            StakeAuthorize::Withdrawer,
+            None,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test AuthorizeCheckedWithSeed with authority signer
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            42,
+            &StakeState::Initialized(Meta::auto(&address_with_seed)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let keyed_accounts = vec![
+            KeyedAccount::new(&address_with_seed, false, &stake_account),
+            KeyedAccount::new(&authorized_owner, true, &authorized_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&staker, true, &new_authorized_account),
+        ];
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
+                    AuthorizeCheckedWithSeedArgs {
+                        stake_authorize: StakeAuthorize::Staker,
+                        authority_seed: seed.to_string(),
+                        authority_owner: authorized_owner,
+                    }
+                ))
+                .unwrap(),
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&address_with_seed, false, &stake_account),
+            KeyedAccount::new(&authorized_owner, true, &authorized_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&withdrawer, true, &new_authorized_account),
+        ];
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
+                    AuthorizeCheckedWithSeedArgs {
+                        stake_authorize: StakeAuthorize::Withdrawer,
+                        authority_seed: seed.to_string(),
+                        authority_owner: authorized_owner,
+                    }
+                ))
+                .unwrap(),
+                &mut MockInvokeContext::new(keyed_accounts)
+            ),
+            Ok(()),
+        );
+
+        // Test SetLockupChecked with non-signing lockup custodian
+        let custodian = Pubkey::new_unique();
+        let mut instruction = set_lockup_checked(
+            &stake_address,
+            &LockupArgs {
+                unix_timestamp: None,
+                epoch: Some(1),
+                custodian: Some(custodian),
+            },
+            &withdrawer,
+        );
+        instruction.accounts[2] = AccountMeta::new_readonly(custodian, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test SetLockupChecked with lockup custodian signer
+        let stake_account = AccountSharedData::new_ref_data_with_space(
+            42,
+            &StakeState::Initialized(Meta::auto(&withdrawer)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+        let custodian_account = create_default_account();
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&withdrawer, true, &withdrawer_account),
+            KeyedAccount::new(&custodian, true, &custodian_account),
+        ];
+
+        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+        let clock = Clock::default();
+        let mut data = vec![];
+        bincode::serialize_into(&mut data, &clock).unwrap();
+        invoke_context
+            .sysvars
+            .push((sysvar::clock::id(), Some(Rc::new(data))));
+
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&StakeInstruction::SetLockupChecked(LockupCheckedArgs {
+                    unix_timestamp: None,
+                    epoch: Some(1),
+                }))
+                .unwrap(),
+                &mut invoke_context
+            ),
+            Ok(()),
         );
     }
 }
