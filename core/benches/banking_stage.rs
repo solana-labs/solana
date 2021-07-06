@@ -93,8 +93,9 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostModel::default())),
-                &Arc::new(RwLock::new(CostTracker::new(std::u64::MAX, std::u64::MAX))),
+                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                    CostModel::new(std::u64::MAX, std::u64::MAX),
+                ))))),
             );
         });
 
@@ -208,14 +209,16 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
-        let _banking_stage = BankingStage::new_with_cost_limit(
+        let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
             verified_receiver,
             vote_receiver,
             None,
             s,
-            &Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
+            Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                CostModel::new(std::u64::MAX, std::u64::MAX),
+            ))))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
