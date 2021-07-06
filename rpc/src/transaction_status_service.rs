@@ -74,12 +74,13 @@ impl TransactionStatusService {
                 } else {
                     Box::new(std::iter::repeat_with(|| None))
                 };
-                let transaction_logs_iter: Box<dyn Iterator<Item = TransactionLogMessages>> =
-                    if let Some(transaction_logs) = transaction_logs {
-                        Box::new(transaction_logs.into_iter())
-                    } else {
-                        Box::new(std::iter::repeat_with(Vec::new))
-                    };
+                let transaction_logs_iter: Box<
+                    dyn Iterator<Item = Option<TransactionLogMessages>>,
+                > = if let Some(transaction_logs) = transaction_logs {
+                    Box::new(transaction_logs.into_iter())
+                } else {
+                    Box::new(std::iter::repeat_with(|| None))
+                };
                 for (
                     transaction,
                     (status, nonce_rollback),
@@ -125,7 +126,6 @@ impl TransactionStatusService {
                                 .collect()
                         });
 
-                        let log_messages = Some(log_messages);
                         let pre_token_balances = Some(pre_token_balances);
                         let post_token_balances = Some(post_token_balances);
                         let rewards = Some(

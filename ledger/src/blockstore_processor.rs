@@ -1199,7 +1199,7 @@ pub struct TransactionStatusBatch {
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub inner_instructions: Option<Vec<Option<InnerInstructionsList>>>,
-    pub transaction_logs: Option<Vec<TransactionLogMessages>>,
+    pub transaction_logs: Option<Vec<Option<TransactionLogMessages>>>,
     pub rent_debits: Vec<RentDebits>,
 }
 
@@ -1218,7 +1218,7 @@ impl TransactionStatusSender {
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         inner_instructions: Vec<Option<InnerInstructionsList>>,
-        transaction_logs: Vec<TransactionLogMessages>,
+        transaction_logs: Vec<Option<TransactionLogMessages>>,
         rent_debits: Vec<RentDebits>,
     ) {
         let slot = bank.slot();
