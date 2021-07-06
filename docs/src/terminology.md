@@ -128,7 +128,7 @@ See [cross-program invocation](terminology.md#cross-program-invocation).
 
 ## instruction
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction). Within its processing code, an instruction may contain one or more [cross-program invocations](terminology.md#cross-program-invocation).
+The code that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction). 
 
 ## keypair
 
