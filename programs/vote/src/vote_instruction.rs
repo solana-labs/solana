@@ -370,7 +370,9 @@ pub fn process_instruction(
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let voter_pubkey = &keyed_account_at_index(keyed_accounts, 3)?
+                let clock = next_keyed_account(keyed_accounts)?;
+                let _current_authority = next_keyed_account(keyed_accounts)?;
+                let voter_pubkey = &next_keyed_account(keyed_accounts)?
                     .signer_key()
                     .ok_or(InstructionError::MissingRequiredSignature)?;
                 vote_state::authorize(
@@ -378,7 +380,7 @@ pub fn process_instruction(
                     voter_pubkey,
                     vote_authorize,
                     &signers,
-                    &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
+                    &from_keyed_account::<Clock>(clock)?,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
@@ -619,8 +621,9 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&VoteInstruction::AuthorizeChecked(VoteAuthorize::Voter)).unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(())
         );
@@ -634,11 +637,12 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&VoteInstruction::AuthorizeChecked(
                     VoteAuthorize::Withdrawer
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(())
         );

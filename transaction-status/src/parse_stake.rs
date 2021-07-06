@@ -347,13 +347,8 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
 
-<<<<<<< HEAD
         let instruction = stake_instruction::authorize(
-            &keys[1],
-=======
-        let instruction = instruction::authorize(
             &keys[2],
->>>>>>> 9b302ac0b (Add parsing for new stake instructions; clean up confusing test args)
             &keys[0],
             &keys[4],
             StakeAuthorize::Withdrawer,
@@ -510,13 +505,8 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
 
-<<<<<<< HEAD
         let instruction = stake_instruction::authorize_with_seed(
-            &keys[1],
-=======
-        let instruction = instruction::authorize_with_seed(
             &keys[2],
->>>>>>> 9b302ac0b (Add parsing for new stake instructions; clean up confusing test args)
             &keys[0],
             seed.to_string(),
             &keys[0],
@@ -628,7 +618,7 @@ mod test {
             epoch: None,
             custodian: None,
         };
-        let instruction = instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
+        let instruction = stake_instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
@@ -649,7 +639,7 @@ mod test {
             epoch: Some(epoch),
             custodian: None,
         };
-        let instruction = instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
+        let instruction = stake_instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
@@ -672,7 +662,7 @@ mod test {
             epoch: Some(epoch),
             custodian: Some(keys[1]),
         };
-        let instruction = instruction::set_lockup_checked(&keys[2], &lockup, &keys[0]);
+        let instruction = stake_instruction::set_lockup_checked(&keys[2], &lockup, &keys[0]);
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
@@ -707,7 +697,7 @@ mod test {
         let lamports = 55;
 
         let instructions =
-            instruction::create_account_checked(&keys[0], &keys[1], &authorized, lamports);
+            stake_instruction::create_account_checked(&keys[0], &keys[1], &authorized, lamports);
         let message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(&message.instructions[1], &keys[0..4]).unwrap(),
@@ -723,7 +713,7 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[1], &keys[0..3]).is_err());
 
-        let instruction = instruction::authorize_checked(
+        let instruction = stake_instruction::authorize_checked(
             &keys[2],
             &keys[0],
             &keys[1],
@@ -746,7 +736,7 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..3]).is_err());
 
-        let instruction = instruction::authorize_checked(
+        let instruction = stake_instruction::authorize_checked(
             &keys[3],
             &keys[0],
             &keys[1],
@@ -771,7 +761,7 @@ mod test {
         assert!(parse_stake(&message.instructions[0], &keys[0..4]).is_err());
 
         let seed = "test_seed";
-        let instruction = instruction::authorize_checked_with_seed(
+        let instruction = stake_instruction::authorize_checked_with_seed(
             &keys[2],
             &keys[0],
             seed.to_string(),
@@ -798,7 +788,7 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..3]).is_err());
 
-        let instruction = instruction::authorize_checked_with_seed(
+        let instruction = stake_instruction::authorize_checked_with_seed(
             &keys[3],
             &keys[0],
             seed.to_string(),

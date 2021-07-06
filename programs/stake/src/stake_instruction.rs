@@ -1,26 +1,6 @@
-<<<<<<< HEAD
 use crate::{
     config, id,
     stake_state::{Authorized, Lockup, StakeAccount, StakeAuthorize, StakeState},
-=======
-use {
-    crate::{config, stake_state::StakeAccount},
-    log::*,
-    solana_sdk::{
-        feature_set,
-        instruction::InstructionError,
-        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
-        process_instruction::{get_sysvar, InvokeContext},
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-        stake::{
-            instruction::StakeInstruction,
-            program::id,
-            state::{Authorized, Lockup},
-        },
-        sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
-    },
->>>>>>> ee219ffa4 (Add vote/stake checked instructions)
 };
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -189,6 +169,61 @@ pub enum StakeInstruction {
     ///   3. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
     ///      lockup expiration
     AuthorizeWithSeed(AuthorizeWithSeedArgs),
+
+    /// Initialize a stake with authorization information
+    ///
+    /// This instruction is similar to `Initialize` except that the withdraw authority
+    /// must be a signer, and no lockup is applied to the account.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Uninitialized stake account
+    ///   1. [] Rent sysvar
+    ///   2. [] The stake authority
+    ///   3. [SIGNER] The withdraw authority
+    ///
+    InitializeChecked,
+
+    /// Authorize a key to manage stake or withdrawal
+    ///
+    /// This instruction behaves like `Authorize` with the additional requirement that the new
+    /// stake or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] The stake or withdraw authority
+    ///   3. [SIGNER] The new stake or withdraw authority
+    ///   4. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
+    AuthorizeChecked(StakeAuthorize),
+
+    /// Authorize a key to manage stake or withdrawal with a derived key
+    ///
+    /// This instruction behaves like `AuthorizeWithSeed` with the additional requirement that
+    /// the new stake or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [SIGNER] Base key of stake or withdraw authority
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] The new stake or withdraw authority
+    ///   4. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
+    AuthorizeCheckedWithSeed(AuthorizeCheckedWithSeedArgs),
+
+    /// Set stake lockup
+    ///
+    /// This instruction behaves like `SetLockup` with the additional requirement that
+    /// the new lockup authority also be a signer.
+    ///
+    /// If a lockup is not active, the withdraw authority may set a new lockup
+    /// If a lockup is active, the lockup custodian may update the lockup parameters
+    ///
+    /// # Account references
+    ///   0. [WRITE] Initialized stake account
+    ///   1. [SIGNER] Lockup authority or withdraw authority
+    ///   2. Optional: [SIGNER] New lockup authority
+    SetLockupChecked(LockupCheckedArgs),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -198,9 +233,22 @@ pub struct LockupArgs {
     pub custodian: Option<Pubkey>,
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub struct LockupCheckedArgs {
+    pub unix_timestamp: Option<UnixTimestamp>,
+    pub epoch: Option<Epoch>,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct AuthorizeWithSeedArgs {
     pub new_authorized_pubkey: Pubkey,
+    pub stake_authorize: StakeAuthorize,
+    pub authority_seed: String,
+    pub authority_owner: Pubkey,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct AuthorizeCheckedWithSeedArgs {
     pub stake_authorize: StakeAuthorize,
     pub authority_seed: String,
     pub authority_owner: Pubkey,
@@ -213,6 +261,19 @@ pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Locku
         vec![
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
+        ],
+    )
+}
+
+pub fn initialize_checked(stake_pubkey: &Pubkey, authorized: &Authorized) -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::InitializeChecked,
+        vec![
+            AccountMeta::new(*stake_pubkey, false),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+            AccountMeta::new_readonly(authorized.staker, false),
+            AccountMeta::new_readonly(authorized.withdrawer, true),
         ],
     )
 }
@@ -237,6 +298,46 @@ pub fn create_account_with_seed(
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
+    ]
+}
+
+pub fn create_account_with_seed_checked(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
+    authorized: &Authorized,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account_with_seed(
+            from_pubkey,
+            stake_pubkey,
+            base,
+            seed,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        initialize_checked(stake_pubkey, authorized),
+    ]
+}
+
+pub fn create_account_checked(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    authorized: &Authorized,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            from_pubkey,
+            stake_pubkey,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        initialize_checked(stake_pubkey, authorized),
     ]
 }
 
@@ -405,6 +506,31 @@ pub fn authorize(
     )
 }
 
+pub fn authorize_checked(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
+
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::AuthorizeChecked(stake_authorize),
+        account_metas,
+    )
+}
+
 pub fn authorize_with_seed(
     stake_pubkey: &Pubkey,
     authority_base: &Pubkey,
@@ -434,6 +560,39 @@ pub fn authorize_with_seed(
     Instruction::new_with_bincode(
         id(),
         &StakeInstruction::AuthorizeWithSeed(args),
+        account_metas,
+    )
+}
+
+pub fn authorize_checked_with_seed(
+    stake_pubkey: &Pubkey,
+    authority_base: &Pubkey,
+    authority_seed: String,
+    authority_owner: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*authority_base, true),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
+
+    let args = AuthorizeCheckedWithSeedArgs {
+        stake_authorize,
+        authority_seed,
+        authority_owner: *authority_owner,
+    };
+
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::AuthorizeCheckedWithSeed(args),
         account_metas,
     )
 }
@@ -497,6 +656,30 @@ pub fn set_lockup(
     Instruction::new_with_bincode(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
 }
 
+pub fn set_lockup_checked(
+    stake_pubkey: &Pubkey,
+    lockup: &LockupArgs,
+    custodian_pubkey: &Pubkey,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*custodian_pubkey, true),
+    ];
+
+    let lockup_checked = LockupCheckedArgs {
+        unix_timestamp: lockup.unix_timestamp,
+        epoch: lockup.epoch,
+    };
+    if let Some(new_custodian) = lockup.custodian {
+        account_metas.push(AccountMeta::new_readonly(new_custodian, true));
+    }
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::SetLockupChecked(lockup_checked),
+        account_metas,
+    )
+}
+
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
@@ -531,18 +714,9 @@ pub fn process_instruction(
             );
 
             if require_custodian_for_locked_stake_authorize {
-<<<<<<< HEAD
                 let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
                 let _current_authority = next_keyed_account(keyed_accounts)?;
                 let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
-=======
-                let clock =
-                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?;
-                let _current_authority = keyed_account_at_index(keyed_accounts, 2)?;
-                let custodian = keyed_account_at_index(keyed_accounts, 3)
-                    .ok()
-                    .map(|ka| ka.unsigned_key());
->>>>>>> ee219ffa4 (Add vote/stake checked instructions)
 
                 me.authorize(
                     &signers,
@@ -570,16 +744,8 @@ pub fn process_instruction(
             );
 
             if require_custodian_for_locked_stake_authorize {
-<<<<<<< HEAD
                 let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
                 let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
-=======
-                let clock =
-                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?;
-                let custodian = keyed_account_at_index(keyed_accounts, 3)
-                    .ok()
-                    .map(|ka| ka.unsigned_key());
->>>>>>> ee219ffa4 (Add vote/stake checked instructions)
 
                 me.authorize_with_seed(
                     &authority_base,
@@ -662,9 +828,12 @@ pub fn process_instruction(
         StakeInstruction::InitializeChecked => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
+                let rent = next_keyed_account(keyed_accounts)?;
+                let staker = next_keyed_account(keyed_accounts)?;
+                let withdrawer = next_keyed_account(keyed_accounts)?;
                 let authorized = Authorized {
-                    staker: *keyed_account_at_index(keyed_accounts, 2)?.unsigned_key(),
-                    withdrawer: *keyed_account_at_index(keyed_accounts, 3)?
+                    staker: *staker.unsigned_key(),
+                    withdrawer: *withdrawer
                         .signer_key()
                         .ok_or(InstructionError::MissingRequiredSignature)?,
                 };
@@ -672,7 +841,7 @@ pub fn process_instruction(
                 me.initialize(
                     &authorized,
                     &Lockup::default(),
-                    &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 1)?)?,
+                    &from_keyed_account::<Rent>(rent)?,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
@@ -681,15 +850,12 @@ pub fn process_instruction(
         StakeInstruction::AuthorizeChecked(stake_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let clock =
-                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?;
-                let _current_authority = keyed_account_at_index(keyed_accounts, 2)?;
-                let authorized_pubkey = &keyed_account_at_index(keyed_accounts, 3)?
+                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
+                let _current_authority = next_keyed_account(keyed_accounts)?;
+                let authorized_pubkey = &next_keyed_account(keyed_accounts)?
                     .signer_key()
                     .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian = keyed_account_at_index(keyed_accounts, 4)
-                    .ok()
-                    .map(|ka| ka.unsigned_key());
+                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
 
                 me.authorize(
                     &signers,
@@ -706,15 +872,12 @@ pub fn process_instruction(
         StakeInstruction::AuthorizeCheckedWithSeed(args) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let authority_base = keyed_account_at_index(keyed_accounts, 1)?;
-                let clock =
-                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?;
-                let authorized_pubkey = &keyed_account_at_index(keyed_accounts, 3)?
+                let authority_base = next_keyed_account(keyed_accounts)?;
+                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
+                let authorized_pubkey = &next_keyed_account(keyed_accounts)?
                     .signer_key()
                     .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian = keyed_account_at_index(keyed_accounts, 4)
-                    .ok()
-                    .map(|ka| ka.unsigned_key());
+                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
 
                 me.authorize_with_seed(
                     authority_base,
@@ -733,7 +896,9 @@ pub fn process_instruction(
         StakeInstruction::SetLockupChecked(lockup_checked) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian = if let Ok(custodian) = keyed_account_at_index(keyed_accounts, 2) {
+                let _current_authority = next_keyed_account(keyed_accounts)?;
+
+                let custodian = if let Some(custodian) = keyed_accounts.next() {
                     Some(
                         *custodian
                             .signer_key()
@@ -763,13 +928,7 @@ mod tests {
     use crate::stake_state::{Meta, StakeState};
     use bincode::serialize;
     use solana_sdk::{
-<<<<<<< HEAD
         account::{self, Account, AccountSharedData},
-=======
-        account::{self, Account, AccountSharedData, WritableAccount},
-        instruction::{AccountMeta, Instruction},
-        keyed_account::KeyedAccount,
->>>>>>> 74e89a3e3 (Add Stake checked tests)
         process_instruction::{mock_set_sysvar, MockInvokeContext},
         rent::Rent,
         sysvar::stake_history::StakeHistory,
@@ -1285,7 +1444,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_custom_error_decode() {
         use num_traits::FromPrimitive;
         fn pretty_err<T>(err: InstructionError) -> String
@@ -1309,7 +1467,9 @@ mod tests {
             "Custom(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
             pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
         )
-=======
+    }
+
+    #[test]
     fn test_stake_checked_instructions() {
         let stake_address = Pubkey::new_unique();
         let staker = Pubkey::new_unique();
@@ -1347,8 +1507,9 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::InitializeChecked).unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -1406,8 +1567,9 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::AuthorizeChecked(StakeAuthorize::Staker)).unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -1422,11 +1584,12 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::AuthorizeChecked(
                     StakeAuthorize::Withdrawer
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -1484,6 +1647,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
                     AuthorizeCheckedWithSeedArgs {
                         stake_authorize: StakeAuthorize::Staker,
@@ -1492,7 +1656,7 @@ mod tests {
                     }
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -1507,6 +1671,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
                     AuthorizeCheckedWithSeedArgs {
                         stake_authorize: StakeAuthorize::Withdrawer,
@@ -1515,7 +1680,7 @@ mod tests {
                     }
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(keyed_accounts)
+                &mut MockInvokeContext::default()
             ),
             Ok(()),
         );
@@ -1553,7 +1718,7 @@ mod tests {
             KeyedAccount::new(&custodian, true, &custodian_account),
         ];
 
-        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+        let mut invoke_context = MockInvokeContext::default();
         let clock = Clock::default();
         let mut data = vec![];
         bincode::serialize_into(&mut data, &clock).unwrap();
@@ -1564,6 +1729,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                &keyed_accounts,
                 &serialize(&StakeInstruction::SetLockupChecked(LockupCheckedArgs {
                     unix_timestamp: None,
                     epoch: Some(1),
@@ -1573,6 +1739,5 @@ mod tests {
             ),
             Ok(()),
         );
->>>>>>> 74e89a3e3 (Add Stake checked tests)
     }
 }
