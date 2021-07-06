@@ -99,11 +99,7 @@ else
       solana-dos
       solana-install-init
       solana-stake-accounts
-<<<<<<< HEAD
-      solana-stake-monitor
       solana-stake-o-matic
-=======
->>>>>>> f859a39b8 (Remove obsolete stake-monitor command)
       solana-test-validator
       solana-tokens
       solana-watchtower
