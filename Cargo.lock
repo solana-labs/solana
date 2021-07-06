@@ -4367,6 +4367,7 @@ dependencies = [
  "cargo_metadata",
  "clap 2.33.3",
  "regex",
+ "serial_test 0.4.0",
  "solana-download-utils",
  "solana-sdk",
  "tar",

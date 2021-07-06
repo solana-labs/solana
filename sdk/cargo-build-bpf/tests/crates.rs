@@ -4,6 +4,9 @@ use std::{
     process::{Command, Output},
 };
 
+#[macro_use]
+extern crate serial_test;
+
 fn run_cargo_build(extra_args: &[&str]) -> Output {
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let root = cwd
@@ -22,19 +25,29 @@ fn run_cargo_build(extra_args: &[&str]) -> Output {
         args.push(arg);
     }
     let cargo_build_bpf = root.join("target").join("debug").join("cargo-build-bpf");
-    Command::new(cargo_build_bpf)
+    let output = Command::new(cargo_build_bpf)
         .args(&args)
         .output()
-        .expect("Error running cargo-build-bpf")
+        .expect("Error running cargo-build-bpf");
+    if !output.status.success() {
+        eprintln!("--- stdout ---");
+        io::stderr().write_all(&output.stdout).unwrap();
+        eprintln!("--- stderr ---");
+        io::stderr().write_all(&output.stderr).unwrap();
+        eprintln!("--------------");
+    }
+    output
 }
 
 #[test]
+#[serial]
 fn test_build() {
     let output = run_cargo_build(&[]);
     assert!(output.status.success());
 }
 
 #[test]
+#[serial]
 fn test_dump() {
     // This test requires rustfilt.
     assert!(Command::new("cargo")
@@ -43,13 +56,6 @@ fn test_dump() {
         .expect("Unable to install rustfilt required for --dump option")
         .success());
     let output = run_cargo_build(&["--dump"]);
-    if !output.status.success() {
-        eprintln!("--- stdout ---");
-        io::stderr().write_all(&output.stdout).unwrap();
-        eprintln!("--- stderr ---");
-        io::stderr().write_all(&output.stderr).unwrap();
-        eprintln!("--------------");
-    }
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
@@ -63,6 +69,7 @@ fn test_dump() {
 }
 
 #[test]
+#[serial]
 fn test_out_dir() {
     let output = run_cargo_build(&["--bpf-out-dir", "tmp_out"]);
     assert!(output.status.success());
