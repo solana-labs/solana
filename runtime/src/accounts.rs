@@ -893,6 +893,7 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
+    #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
