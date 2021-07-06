@@ -22,7 +22,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A unique value ([hash](terminology.md#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](terminology.md#entry-id) of the block.
+A fingerprint ([hash](terminology.md#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](terminology.md#entry-id) of the block.
 
 ## block height
 
@@ -199,7 +199,7 @@ The code that interprets [instructions](terminology.md#instruction).
 
 The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
 
-## Proof of History (PoH)
+## proof of history (PoH)
 
 A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
 
@@ -214,6 +214,10 @@ A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached 
 ## runtime
 
 The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
+
+##Sealevel 
+
+Solana's parallel smart contracts run-time.
 
 ## shred
 
@@ -239,11 +243,15 @@ Collectively, slots create a logical clock. Slots are ordered sequentially and n
 
 ## smart contract
 
-A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
+A program on a blockchain. 
 
 ## sol
 
 The [native token](terminology.md#native-token) of a Solana [cluster](terminology.md#cluster).
+
+## Solana Program Library (SPL)
+
+A library of smart contracts on Solana such as spl-token that facilitates tasks such as creating and using tokens
 
 ## stake
 
@@ -272,6 +280,10 @@ The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 ## token
 
 A digitally transferable asset.
+
+## tower BFT
+
+The Solana consensus mechanism.  A proof-of-history optimized version of byzantine fault tolerance (PBFT) so named because it acts as a 'watch tower' over the Solana network, assuring validators that any attempt to cheat the proof-of-history clock will be punished.
 
 ## tps
 
