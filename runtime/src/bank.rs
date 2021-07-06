@@ -2670,15 +2670,8 @@ impl Bank {
         );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
-<<<<<<< HEAD
-        let log_messages = log_messages
-            .get(0)
-            .map_or(vec![], |messages| messages.to_vec());
-        let post_transaction_accounts = loaded_accounts
-=======
         let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_txs
->>>>>>> 5dd399daf (Fix transaction logs and inner ixs for leader nodes (#18395))
+        let post_transaction_accounts = loaded_accounts
             .into_iter()
             .next()
             .unwrap()
