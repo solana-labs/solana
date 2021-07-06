@@ -727,6 +727,59 @@ fn load_bank_forks(
     )
 }
 
+fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+
+    let mut transactions = 0;
+    let mut programs = 0;
+    let mut program_ids = HashMap::new();
+    let cost_model = Arc::new(RwLock::new(CostModel::new(
+        ACCOUNT_MAX_COST,
+        BLOCK_MAX_COST,
+    )));
+    let mut cost_tracker = CostTracker::new(cost_model.clone());
+
+    for entry in &entries {
+        transactions += entry.transactions.len();
+        let mut cost_model = cost_model.write().unwrap();
+        for transaction in &entry.transactions {
+            programs += transaction.message().instructions.len();
+            let tx_cost = cost_model.calculate_cost(transaction);
+            if cost_tracker.try_add(tx_cost).is_err() {
+                println!(
+                    "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
+                    slot,
+                    transaction,
+                    cost_tracker.get_stats()
+                );
+            }
+            for instruction in &transaction.message().instructions {
+                let program_id =
+                    transaction.message().account_keys[instruction.program_id_index as usize];
+                *program_ids.entry(program_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    println!(
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
+        slot,
+        entries.len(),
+        transactions,
+        programs,
+        cost_tracker.get_stats()
+    );
+    println!("  Programs: {:?}", program_ids);
+
+    Ok(())
+}
+
 fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);

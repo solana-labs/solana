@@ -9,6 +9,7 @@ use crate::{
         VerifiedVoteSender, VoteTracker,
     },
     cost_model::CostModel,
+    cost_tracker::CostTracker,
     fetch_stage::FetchStage,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
@@ -122,6 +123,7 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
+        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
@@ -130,7 +132,7 @@ impl Tpu {
             verified_gossip_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_model,
+            cost_tracker,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
