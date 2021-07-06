@@ -30,6 +30,7 @@ To run an api node:
 ```bash
 solana-validator \
   --ledger <LEDGER_PATH> \
+  --identity <VALIDATOR_IDENTITY_KEYPAIR> \
   --entrypoint <CLUSTER_ENTRYPOINT> \
   --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
   --rpc-port 8899 \
