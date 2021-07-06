@@ -60,7 +60,7 @@ pub struct CostModel {
     block_cost_limit: u64,
     instruction_execution_cost_table: ExecuteCostTable,
 
-    // reuseble variables
+    // reusable variables
     transaction_cost: TransactionCost,
 }
 

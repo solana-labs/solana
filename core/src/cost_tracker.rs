@@ -25,18 +25,18 @@ pub struct CostTracker {
 
 impl CostTracker {
     pub fn new(cost_model: Arc<RwLock<CostModel>>) -> Self {
-        let (chain_max, package_max) = {
+        let (account_cost_limit, block_cost_limit) = {
             let cost_model = cost_model.read().unwrap();
             (
                 cost_model.get_account_cost_limit(),
                 cost_model.get_block_cost_limit(),
             )
         };
-        assert!(chain_max <= package_max);
+        assert!(account_cost_limit <= block_cost_limit);
         Self {
             cost_model,
-            account_cost_limit: chain_max,
-            block_cost_limit: package_max,
+            account_cost_limit,
+            block_cost_limit,
             current_bank_slot: 0,
             cost_by_writable_accounts: HashMap::with_capacity(WRITABLE_ACCOUNTS_PER_BLOCK),
             block_cost: 0,

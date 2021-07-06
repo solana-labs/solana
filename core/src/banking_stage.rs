@@ -1219,7 +1219,7 @@ impl BankingStage {
         // applying cost of processed transactions to shared cost_tracker
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         transactions.iter().enumerate().for_each(|(index, tx)| {
-            if !unprocessed_tx_indexes.iter().any(|&i| i == index) {
+            if unprocessed_tx_indexes.iter().all(|&i| i != index) {
                 cost_tracker
                     .write()
                     .unwrap()
