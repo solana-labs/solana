@@ -10,6 +10,7 @@ use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use tempfile::NamedTempFile;
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");
@@ -65,17 +66,9 @@ pub fn download_file<'a, 'b>(
 
     fs::create_dir_all(destination_file.parent().expect("parent"))
         .map_err(|err| err.to_string())?;
-
-    let mut temp_destination_file = destination_file.to_path_buf();
-    temp_destination_file.set_file_name(format!(
-        "tmp-{}",
-        destination_file
-            .file_name()
-            .expect("file_name")
-            .to_str()
-            .expect("to_str")
-    ));
-
+    let temp_destination_file = NamedTempFile::new()
+        .map_err(|err| err.to_string())?;
+    let temp_destination_file = temp_destination_file.into_temp_path();
     let progress_bar = new_spinner_progress_bar();
     if use_progress_bar {
         progress_bar.set_message(format!("{}Downloading {}...", TRUCK, url));
