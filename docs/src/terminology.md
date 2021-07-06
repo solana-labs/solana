@@ -34,11 +34,11 @@ The server node ([validator](terminology.md#validator)) that produces the genesi
 
 ## CBC block
 
-Thee smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+The smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
 ## client
 
-A computer program that accesses the Solana server network (such as the Solana )[cluster](terminology.md#cluster)).    
+A computer program that accesses the Solana server network [cluster](terminology.md#cluster).    
 
 ## cluster
 
@@ -50,7 +50,7 @@ The wallclock duration between a [leader](terminology.md#leader) creating a [tic
 
 ## confirmed block
 
-A grouping of transactions and other data ([block](terminology.md#block)) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
+A record of transactions and other data ([block](terminology.md#block)) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
 
 ## control plane
 
@@ -66,7 +66,7 @@ See [vote credit](terminology.md#vote-credit).
 
 ## cross-program invocation (CPI)
 
-An [instruction](terminology.md#instruction) called from within an instruction. Put differently, it is how a program calls into another program. For more information, see [calling between programs](developing/programming-model/calling-between-programs.md).
+A call from one smart contract program to another. For more information, see [calling between programs](developing/programming-model/calling-between-programs.md).
 
 ## data plane
 
