@@ -248,7 +248,7 @@ pub fn process_instruction(
         StakeInstruction::SetLockupChecked(lockup_checked) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian = if let Ok(custodian) = keyed_account_at_index(keyed_accounts, 4) {
+                let custodian = if let Ok(custodian) = keyed_account_at_index(keyed_accounts, 2) {
                     Some(
                         *custodian
                             .signer_key()
