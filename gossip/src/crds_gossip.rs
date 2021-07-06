@@ -32,34 +32,14 @@ use {
     },
 };
 
+#[derive(Default)]
 pub struct CrdsGossip {
     pub crds: Crds,
-    pub id: Pubkey,
-    pub shred_version: u16,
     pub push: CrdsGossipPush,
     pub pull: CrdsGossipPull,
 }
 
-impl Default for CrdsGossip {
-    fn default() -> Self {
-        CrdsGossip {
-            crds: Crds::default(),
-            id: Pubkey::default(),
-            shred_version: 0,
-            push: CrdsGossipPush::default(),
-            pull: CrdsGossipPull::default(),
-        }
-    }
-}
-
 impl CrdsGossip {
-    pub fn set_self(&mut self, id: &Pubkey) {
-        self.id = *id;
-    }
-    pub fn set_shred_version(&mut self, shred_version: u16) {
-        self.shred_version = shred_version;
-    }
-
     /// process a push message to the network
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
@@ -83,18 +63,18 @@ impl CrdsGossip {
     /// remove redundant paths in the network
     pub fn prune_received_cache<I>(
         &mut self,
+        self_pubkey: &Pubkey,
         origins: I, // Unique pubkeys of crds values' owners.
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap</*gossip peer:*/ Pubkey, /*origins:*/ Vec<Pubkey>>
     where
         I: IntoIterator<Item = Pubkey>,
     {
-        let self_pubkey = self.id;
         origins
             .into_iter()
             .flat_map(|origin| {
                 self.push
-                    .prune_received_cache(&self_pubkey, &origin, stakes)
+                    .prune_received_cache(self_pubkey, &origin, stakes)
                     .into_iter()
                     .zip(std::iter::repeat(origin))
             })
@@ -179,6 +159,7 @@ impl CrdsGossip {
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(
         &self,
+        self_pubkey: &Pubkey,
         peer: &Pubkey,
         destination: &Pubkey,
         origin: &[Pubkey],
@@ -189,8 +170,8 @@ impl CrdsGossip {
         if expired {
             return Err(CrdsGossipError::PruneMessageTimeout);
         }
-        if self.id == *destination {
-            self.push.process_prune_msg(&self.id, peer, origin);
+        if self_pubkey == destination {
+            self.push.process_prune_msg(self_pubkey, peer, origin);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)
@@ -201,6 +182,8 @@ impl CrdsGossip {
     /// * ratio - number of actives to rotate
     pub fn refresh_push_active_set(
         &mut self,
+        self_pubkey: &Pubkey,
+        self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
     ) {
@@ -208,18 +191,20 @@ impl CrdsGossip {
             &self.crds,
             stakes,
             gossip_validators,
-            &self.id,
-            self.shred_version,
+            self_pubkey,
+            self_shred_version,
             self.crds.num_nodes(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
     }
 
     /// generate a random request
+    #[allow(clippy::too_many_arguments)]
     pub fn new_pull_request(
         &self,
         thread_pool: &ThreadPool,
         self_keypair: &Keypair,
+        self_shred_version: u16,
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
@@ -231,7 +216,7 @@ impl CrdsGossip {
             thread_pool,
             &self.crds,
             self_keypair,
-            self.shred_version,
+            self_shred_version,
             now,
             gossip_validators,
             stakes,
@@ -305,14 +290,16 @@ impl CrdsGossip {
 
     pub fn make_timeouts(
         &self,
+        self_pubkey: Pubkey,
         stakes: &HashMap<Pubkey, u64>,
         epoch_duration: Duration,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.make_timeouts(self.id, stakes, epoch_duration)
+        self.pull.make_timeouts(self_pubkey, stakes, epoch_duration)
     }
 
     pub fn purge(
         &mut self,
+        self_pubkey: &Pubkey,
         thread_pool: &ThreadPool,
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
@@ -324,7 +311,7 @@ impl CrdsGossip {
         }
         if now > self.pull.crds_timeout {
             //sanity check
-            assert_eq!(timeouts[&self.id], std::u64::MAX);
+            assert_eq!(timeouts[self_pubkey], std::u64::MAX);
             assert!(timeouts.contains_key(&Pubkey::default()));
             rv = self
                 .pull
@@ -342,7 +329,6 @@ impl CrdsGossip {
             crds: self.crds.clone(),
             push: self.push.mock_clone(),
             pull: self.pull.mock_clone(),
-            ..*self
         }
     }
 }
@@ -374,11 +360,8 @@ mod test {
 
     #[test]
     fn test_prune_errors() {
-        let mut crds_gossip = CrdsGossip {
-            id: Pubkey::new(&[0; 32]),
-            ..CrdsGossip::default()
-        };
-        let id = crds_gossip.id;
+        let mut crds_gossip = CrdsGossip::default();
+        let id = Pubkey::new(&[0; 32]);
         let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
@@ -388,10 +371,16 @@ mod test {
                 0,
             )
             .unwrap();
-        crds_gossip.refresh_push_active_set(&HashMap::new(), None);
+        crds_gossip.refresh_push_active_set(
+            &id,
+            0,               // shred version
+            &HashMap::new(), // stakes
+            None,            // gossip validators
+        );
         let now = timestamp();
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(
+            &id,
             &ci.id,
             &Pubkey::new(hash(&[1; 32]).as_ref()),
             &[prune_pubkey],
@@ -400,11 +389,25 @@ mod test {
         );
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
-        res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, now);
+        res = crds_gossip.process_prune_msg(
+            &id,             // self_pubkey
+            &ci.id,          // peer
+            &id,             // destination
+            &[prune_pubkey], // origins
+            now,
+            now,
+        );
         res.unwrap();
         //test timeout
         let timeout = now + crds_gossip.push.prune_timeout * 2;
-        res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, timeout);
+        res = crds_gossip.process_prune_msg(
+            &id,             // self_pubkey
+            &ci.id,          // peer
+            &id,             // destination
+            &[prune_pubkey], // origins
+            now,
+            timeout,
+        );
         assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }
 }

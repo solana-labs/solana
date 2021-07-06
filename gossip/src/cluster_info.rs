@@ -485,11 +485,6 @@ impl ClusterInfo {
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
         };
-        {
-            let mut gossip = me.gossip.write().unwrap();
-            gossip.set_self(&id);
-            gossip.set_shred_version(me.my_shred_version());
-        }
         me.insert_self();
         me.push_self(&HashMap::new(), None);
         me
@@ -497,8 +492,7 @@ impl ClusterInfo {
 
     // Should only be used by tests and simulations
     pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let mut gossip = self.gossip.read().unwrap().mock_clone();
-        gossip.id = *new_id;
+        let gossip = self.gossip.read().unwrap().mock_clone();
         let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
         my_contact_info.id = *new_id;
         ClusterInfo {
@@ -545,10 +539,17 @@ impl ClusterInfo {
             .lock()
             .unwrap()
             .extend(entries);
-        self.gossip
-            .write()
-            .unwrap()
-            .refresh_push_active_set(stakes, gossip_validators);
+        let ContactInfo {
+            id: self_pubkey,
+            shred_version,
+            ..
+        } = *self.my_contact_info.read().unwrap();
+        self.gossip.write().unwrap().refresh_push_active_set(
+            &self_pubkey,
+            shred_version,
+            stakes,
+            gossip_validators,
+        );
     }
 
     // TODO kill insert_info, only used by tests
@@ -686,8 +687,6 @@ impl ClusterInfo {
 
     pub fn set_keypair(&self, new_keypair: Arc<Keypair>) {
         let id = new_keypair.pubkey();
-
-        self.gossip.write().unwrap().set_self(&id);
         {
             let mut instance = self.instance.write().unwrap();
             *instance = NodeInstance::new(&mut thread_rng(), id, timestamp());
@@ -1499,6 +1498,7 @@ impl ClusterInfo {
             match gossip.new_pull_request(
                 thread_pool,
                 self.keypair().deref(),
+                self.my_shred_version(),
                 now,
                 gossip_validators,
                 stakes,
@@ -1676,10 +1676,6 @@ impl ClusterInfo {
                     entrypoint.shred_version, entrypoint.id
                 );
                 self.my_contact_info.write().unwrap().shred_version = entrypoint.shred_version;
-                self.gossip
-                    .write()
-                    .unwrap()
-                    .set_shred_version(entrypoint.shred_version);
             }
         }
         self.my_shred_version() != 0
@@ -1694,14 +1690,15 @@ impl ClusterInfo {
         bank_forks: Option<&RwLock<BankForks>>,
         stakes: &HashMap<Pubkey, u64>,
     ) {
+        let self_pubkey = self.id();
         let epoch_duration = get_epoch_duration(bank_forks);
         let timeouts = {
             let gossip = self.gossip.read().unwrap();
-            gossip.make_timeouts(stakes, epoch_duration)
+            gossip.make_timeouts(self_pubkey, stakes, epoch_duration)
         };
         let num_purged = self
             .time_gossip_write_lock("purge", &self.stats.purge)
-            .purge(thread_pool, timestamp(), &timeouts);
+            .purge(&self_pubkey, thread_pool, timestamp(), &timeouts);
         inc_new_counter_info!("cluster_info-purge-count", num_purged);
     }
 
@@ -1849,11 +1846,13 @@ impl ClusterInfo {
         );
         let mut prune_message_timeout = 0;
         let mut bad_prune_destination = 0;
+        let self_pubkey = self.id();
         {
             let gossip = self.time_gossip_read_lock("process_prune", &self.stats.process_prune);
             let now = timestamp();
             for (from, data) in messages {
                 match gossip.process_prune_msg(
+                    &self_pubkey,
                     &from,
                     &data.destination,
                     &data.prunes,
@@ -2140,9 +2139,10 @@ impl ClusterInfo {
                 .reduce(HashMap::new, merge)
         });
         if !responses.is_empty() {
+            let self_pubkey = self.id();
             let timeouts = {
                 let gossip = self.gossip.read().unwrap();
-                gossip.make_timeouts(stakes, epoch_duration)
+                gossip.make_timeouts(self_pubkey, stakes, epoch_duration)
             };
             for (from, data) in responses {
                 self.handle_pull_response(&from, data, &timeouts);
@@ -2290,9 +2290,10 @@ impl ClusterInfo {
                 .collect()
         };
         // Generate prune messages.
+        let self_pubkey = self.id();
         let prunes = self
             .time_gossip_write_lock("prune_received_cache", &self.stats.prune_received_cache)
-            .prune_received_cache(origins, stakes);
+            .prune_received_cache(&self_pubkey, origins, stakes);
         let prunes: Vec<(Pubkey /*from*/, Vec<Pubkey> /*origins*/)> = prunes
             .into_iter()
             .flat_map(|(from, prunes)| {
@@ -3377,17 +3378,21 @@ mod tests {
         let (spy, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         cluster_info.insert_info(spy);
-        cluster_info
-            .gossip
-            .write()
-            .unwrap()
-            .refresh_push_active_set(&HashMap::new(), None);
+        {
+            let mut gossip = cluster_info.gossip.write().unwrap();
+            gossip.refresh_push_active_set(
+                &cluster_info.id(),
+                cluster_info.my_shred_version(),
+                &HashMap::new(), // stakes
+                None,            // gossip validators
+            );
+        }
         let reqs = cluster_info.generate_new_gossip_requests(
             &thread_pool,
-            None, // gossip_validators
-            &HashMap::new(),
-            true,  // generate_pull_requests
-            false, // require_stake_for_gossip
+            None,            // gossip_validators
+            &HashMap::new(), // stakes
+            true,            // generate_pull_requests
+            false,           // require_stake_for_gossip
         );
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
@@ -3493,11 +3498,15 @@ mod tests {
             .unwrap()
             .mock_pong(peer.id, peer.gossip, Instant::now());
         cluster_info.insert_info(peer);
-        cluster_info
-            .gossip
-            .write()
-            .unwrap()
-            .refresh_push_active_set(&HashMap::new(), None);
+        {
+            let mut gossip = cluster_info.gossip.write().unwrap();
+            gossip.refresh_push_active_set(
+                &cluster_info.id(),
+                cluster_info.my_shred_version(),
+                &HashMap::new(), // stakes
+                None,            // gossip validators
+            );
+        }
         //check that all types of gossip messages are signed correctly
         let push_messages = cluster_info
             .gossip
@@ -3518,6 +3527,7 @@ mod tests {
             .new_pull_request(
                 &thread_pool,
                 cluster_info.keypair().deref(),
+                cluster_info.my_shred_version(),
                 timestamp(),
                 None,
                 &HashMap::new(),
@@ -3818,6 +3828,7 @@ mod tests {
         let timeouts = {
             let gossip = cluster_info.gossip.read().unwrap();
             gossip.make_timeouts(
+                cluster_info.id(),
                 &HashMap::default(), // stakes,
                 Duration::from_millis(gossip.pull.crds_timeout),
             )
