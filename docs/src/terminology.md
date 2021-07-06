@@ -6,7 +6,7 @@ The following terms are used throughout the documentation.
 
 ## account
 
-A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
+A record in the Solana ledger. Like an account at a traditional bank, it may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key](terminology.md#public-key) (public key or pubkey). Accounts exist in the memory of Solana validators.
 
 ## app
 
@@ -22,7 +22,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+A unique value ([hash](terminology.md#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](terminology.md#entry-id) of the block.
 
 ## block height
 
@@ -30,15 +30,15 @@ The number of [blocks](terminology.md#block) beneath the current block. The firs
 
 ## bootstrap validator
 
-The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
+The server node ([validator](terminology.md#validator)) that produces the genesis (first) [block](terminology.md#block) of a block chain.
 
 ## CBC block
 
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+Thee smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
 ## client
 
-A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
+A computer program that accesses the Solana server network (such as the Solana )[cluster](terminology.md#cluster)).    
 
 ## cluster
 
@@ -50,7 +50,7 @@ The wallclock duration between a [leader](terminology.md#leader) creating a [tic
 
 ## confirmed block
 
-A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+A grouping of transactions and other data ([block](terminology.md#block)) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
 
 ## control plane
 
@@ -64,7 +64,7 @@ Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake
 
 See [vote credit](terminology.md#vote-credit).
 
-## cross-program invocation
+## cross-program invocation (CPI)
 
 An [instruction](terminology.md#instruction) called from within an instruction. Put differently, it is how a program calls into another program. For more information, see [calling between programs](developing/programming-model/calling-between-programs.md).
 
@@ -88,7 +88,7 @@ A preimage resistant [hash](terminology.md#hash) over the final contents of an e
 - The specified [transactions](terminology.md#transaction) are those included in the entry
 - The entry's position with respect to other entries in [ledger](terminology.md#ledger)
 
-See [Proof of History](terminology.md#proof-of-history).
+See [proof of history](terminology.md#proof-of-history).
 
 ## epoch
 
@@ -132,7 +132,7 @@ The smallest unit of a [program](terminology.md#program) that a [client](termino
 
 ## keypair
 
-A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key).
+A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key) for accessing an account.
 
 ## lamport
 
@@ -199,7 +199,7 @@ The code that interprets [instructions](terminology.md#instruction).
 
 The public key of the [account](terminology.md#account) containing a [program](terminology.md#program).
 
-## Proof of History
+## Proof of History (PoH)
 
 A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
 
@@ -243,7 +243,7 @@ A set of constraints that once satisfied, signal to a program that some predefin
 
 ## sol
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+The [native token](terminology.md#native-token) of a Solana [cluster](terminology.md#cluster).
 
 ## stake
 
@@ -255,7 +255,7 @@ Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator]
 
 ## sysvar
 
-An [account](terminology.md#account) maintained by the runtime and provided to programs which provide cluster state such as current tick height, rewards [points](terminology.md#point) values, etc.  Sysvars can either be [passed to the program as an account or queried by the program via a syscall](developing/runtime-facilities/sysvars.md).
+A system [account](terminology.md#account).  [Sysvars](developing/runtime-facilities/sysvars.md) provide cluster state information such as current tick height, rewards [points](terminology.md#point) values, etc.  Programs can access Sysvars via a Sysvar account (pubkey) or by querying via a syscall.
 
 ## thin client
 
@@ -271,7 +271,7 @@ The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 
 ## token
 
-A scarce, fungible member of a set of tokens.
+A digitally transferable asset.
 
 ## tps
 
@@ -279,7 +279,7 @@ A scarce, fungible member of a set of tokens.
 
 ## transaction
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
+One or more [instructions](terminology.md#instruction) signed by a [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
 ## transaction id
 
@@ -295,15 +295,15 @@ A set of [transactions](terminology.md#transaction) that may be executed in para
 
 ## validator
 
-A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
+A full participant in a Solana network [cluster](terminology.md#cluster) that produces new [blocks](terminology.md#block).  A validator validates the transactions added to the [ledger](terminology.md#ledger) 
 
 ## VDF
 
 See [verifiable delay function](terminology.md#verifiable-delay-function).
 
-## verifiable delay function
+## verifiable delay function (VDF)
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+A function that Solana uses to encode the passage of time.   The Solana VDF takes a fixed amount of time to execute and produces a proof that it ran, which can then be verified in less time than it took to produce.
 
 ## vote
 
@@ -315,7 +315,7 @@ A reward tally for [validators](terminology.md#validator). A vote credit is awar
 
 ## wallet
 
-A collection of [keypairs](terminology.md#keypair).
+A collection of [keypairs](terminology.md#keypair) that allows users to manage their funds.
 
 ## warmup period
 
