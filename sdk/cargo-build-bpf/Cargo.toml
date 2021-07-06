@@ -18,6 +18,9 @@ solana-sdk = { path = "..", version = "=1.8.0" }
 solana-download-utils = { path = "../../download-utils", version = "=1.8.0" }
 tar = "0.4.35"
 
+[dev-dependencies]
+serial_test = "*"
+
 [features]
 program = []
 
