@@ -261,7 +261,7 @@ Collectively, slots create a logical clock. Slots are ordered sequentially and n
 
 ## smart contract
 
-A program on a blockchain that allows updates to accounts.
+A program on a blockchain.
 
 ## sol
 
@@ -298,10 +298,6 @@ The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 ## token
 
 A digitally transferable asset.
-
-## tower BFT
-
-The Solana consensus mechanism.  A proof-of-history optimized version of byzantine fault tolerance (PBFT) so named because it acts as a 'watch tower' over the Solana network, assuring validators that any attempt to cheat the proof-of-history clock will be punished.
 
 ## tps
 
