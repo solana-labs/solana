@@ -477,29 +477,19 @@ mod tests {
     #[test]
     fn test_cost_model_init_cost_table() {
         // build cost table
-        let instruction_ids = vec![
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
+        let cost_table = vec![
+            (Pubkey::new_unique(), 10),
+            (Pubkey::new_unique(), 20),
+            (Pubkey::new_unique(), 30),
         ];
-        let instruction_costs = vec![10, 20, 30];
-        let cost_table: Vec<(Pubkey, u64)> = instruction_ids
-            .iter()
-            .enumerate()
-            .map(|(index, id)| (*id, instruction_costs[index]))
-            .collect();
 
         // init cost model
         let mut cost_model = CostModel::default();
         cost_model.initialize_cost_table(&cost_table);
-        let cost_model = Arc::new(RwLock::new(cost_model));
 
         // verify
-        instruction_ids.iter().enumerate().for_each(|(index, id)| {
-            assert_eq!(
-                instruction_costs[index],
-                cost_model.read().unwrap().find_instruction_cost(id)
-            );
-        });
+        for (id, cost) in cost_table.iter() {
+            assert_eq!(*cost, cost_model.find_instruction_cost(id));
+        }
     }
 }
