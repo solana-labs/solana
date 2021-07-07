@@ -2752,6 +2752,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
+ "libsecp256k1",
  "log",
  "num-derive",
  "num-traits",
@@ -3013,6 +3014,13 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-sanity"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-secp256k1-recover"
 version = "1.8.0"
 dependencies = [
  "solana-program 1.8.0",
@@ -3370,6 +3378,7 @@ dependencies = [
  "hex",
  "itertools 0.10.1",
  "lazy_static",
+ "libsecp256k1",
  "log",
  "num-derive",
  "num-traits",

@@ -86,6 +86,7 @@ fn main() {
             "ro_modify",
             "ro_account_modify",
             "sanity",
+            "secp256k1_recover",
             "sha",
             "spoof1",
             "spoof1_system",

@@ -127,6 +127,10 @@ pub mod memory_ops_syscalls {
     solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
+pub mod secp256k1_recover_syscall_enabled {
+    solana_sdk::declare_id!("6RvdSWHh8oh72Dp7wMTS2DBkf3fRPtChfNrAo3cZZoXJ");
+}
+
 pub mod add_missing_program_error_mappings {
     solana_sdk::declare_id!("3QEUpjhgPEt92nz3Mqf6pABkHPGCQwSvKtyGMq4SuQyL");
 }
@@ -187,6 +191,7 @@ lazy_static! {
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
+        (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),

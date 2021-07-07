@@ -4344,6 +4344,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder",
+ "libsecp256k1",
  "log 0.4.14",
  "num-derive",
  "num-traits",
@@ -5258,6 +5259,7 @@ dependencies = [
  "hex",
  "itertools 0.10.1",
  "lazy_static",
+ "libsecp256k1",
  "log 0.4.14",
  "num-derive",
  "num-traits",
