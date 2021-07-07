@@ -8,8 +8,25 @@ use crate::{
     weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
+<<<<<<< HEAD
 use rand::distributions::{Distribution, WeightedIndex};
 use solana_ledger::{blockstore::Blockstore, shred::Nonce};
+=======
+use lru::LruCache;
+use rand::{
+    distributions::{Distribution, WeightedError, WeightedIndex},
+    Rng,
+};
+use solana_gossip::{
+    cluster_info::{ClusterInfo, ClusterInfoError},
+    contact_info::ContactInfo,
+    weighted_shuffle::weighted_best,
+};
+use solana_ledger::{
+    blockstore::Blockstore,
+    shred::{Nonce, Shred},
+};
+>>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
@@ -22,7 +39,7 @@ use solana_sdk::{
 };
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::HashSet,
     net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -32,7 +49,14 @@ use std::{
 
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
+<<<<<<< HEAD
 pub const DEFAULT_NONCE: u32 = 42;
+=======
+// Number of slots to cache their respective repair peers and sampling weights.
+pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
+// Limit cache entries ttl in order to avoid re-using outdated data.
+const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
+>>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RepairType {
@@ -81,7 +105,38 @@ pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
 }
 
-type RepairCache = HashMap<Slot, (Vec<ContactInfo>, WeightedIndex<u64>)>;
+// Cache entry for repair peers for a slot.
+pub(crate) struct RepairPeers {
+    asof: Instant,
+    peers: Vec<(Pubkey, /*ContactInfo.serve_repair:*/ SocketAddr)>,
+    weighted_index: WeightedIndex<u64>,
+}
+
+impl RepairPeers {
+    fn new(asof: Instant, peers: &[ContactInfo], weights: &[u64]) -> Result<Self> {
+        if peers.is_empty() {
+            return Err(Error::from(ClusterInfoError::NoPeers));
+        }
+        if peers.len() != weights.len() {
+            return Err(Error::from(WeightedError::InvalidWeight));
+        }
+        let weighted_index = WeightedIndex::new(weights)?;
+        let peers = peers
+            .iter()
+            .map(|peer| (peer.id, peer.serve_repair))
+            .collect();
+        Ok(Self {
+            asof,
+            peers,
+            weighted_index,
+        })
+    }
+
+    fn sample<R: Rng>(&self, rng: &mut R) -> (Pubkey, SocketAddr) {
+        let index = self.weighted_index.sample(rng);
+        self.peers[index]
+    }
+}
 
 impl ServeRepair {
     /// Without a valid keypair gossip will not function. Only useful for tests.
@@ -377,17 +432,18 @@ impl ServeRepair {
         Ok(out)
     }
 
-    pub fn repair_request(
+    pub(crate) fn repair_request(
         &self,
         cluster_slots: &ClusterSlots,
         repair_request: RepairType,
-        cache: &mut RepairCache,
+        peers_cache: &mut LruCache<Slot, RepairPeers>,
         repair_stats: &mut RepairStats,
         repair_validators: &Option<HashSet<Pubkey>>,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
+<<<<<<< HEAD
         let (repair_peers, weighted_index) = match cache.entry(slot) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
@@ -395,12 +451,20 @@ impl ServeRepair {
                 if repair_peers.is_empty() {
                     return Err(Error::from(ClusterInfoError::NoPeers));
                 }
+=======
+        let repair_peers = match peers_cache.get(&slot) {
+            Some(entry) if entry.asof.elapsed() < REPAIR_PEERS_CACHE_TTL => entry,
+            _ => {
+                peers_cache.pop(&slot);
+                let repair_peers = self.repair_peers(repair_validators, slot);
+>>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
                 let weights = cluster_slots.compute_weights(slot, &repair_peers);
-                debug_assert_eq!(weights.len(), repair_peers.len());
-                let weighted_index = WeightedIndex::new(weights)?;
-                entry.insert((repair_peers, weighted_index))
+                let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
+                peers_cache.put(slot, repair_peers);
+                peers_cache.get(&slot).unwrap()
             }
         };
+<<<<<<< HEAD
         let n = weighted_index.sample(&mut rand::thread_rng());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
         let repair_peer_id = repair_peers[n].id;
@@ -410,6 +474,12 @@ impl ServeRepair {
             repair_stats,
             DEFAULT_NONCE,
         )?;
+=======
+        let (peer, addr) = repair_peers.sample(&mut rand::thread_rng());
+        let nonce =
+            outstanding_requests.add_request(repair_request, solana_sdk::timing::timestamp());
+        let out = self.map_repair_request(&repair_request, &peer, repair_stats, nonce)?;
+>>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
         Ok((addr, out))
     }
 
@@ -755,7 +825,7 @@ mod tests {
         let rv = serve_repair.repair_request(
             &cluster_slots,
             RepairType::Shred(0, 0),
-            &mut HashMap::new(),
+            &mut LruCache::new(100),
             &mut RepairStats::default(),
             &None,
         );
@@ -782,7 +852,7 @@ mod tests {
             .repair_request(
                 &cluster_slots,
                 RepairType::Shred(0, 0),
-                &mut HashMap::new(),
+                &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &None,
             )
@@ -815,7 +885,7 @@ mod tests {
                 .repair_request(
                     &cluster_slots,
                     RepairType::Shred(0, 0),
-                    &mut HashMap::new(),
+                    &mut LruCache::new(100),
                     &mut RepairStats::default(),
                     &None,
                 )
@@ -991,7 +1061,7 @@ mod tests {
                 .repair_request(
                     &cluster_slots,
                     RepairType::Shred(0, 0),
-                    &mut HashMap::new(),
+                    &mut LruCache::new(100),
                     &mut RepairStats::default(),
                     &trusted_validators,
                 )
@@ -1007,7 +1077,7 @@ mod tests {
             .repair_request(
                 &cluster_slots,
                 RepairType::Shred(0, 0),
-                &mut HashMap::new(),
+                &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &trusted_validators,
             )
@@ -1027,7 +1097,7 @@ mod tests {
             .repair_request(
                 &cluster_slots,
                 RepairType::Shred(0, 0),
-                &mut HashMap::new(),
+                &mut LruCache::new(100),
                 &mut RepairStats::default(),
                 &None,
             )
