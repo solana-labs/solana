@@ -8,11 +8,16 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+<<<<<<< HEAD
     feature_set::{
         cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks, instructions_sysvar_enabled,
         FeatureSet,
     },
     ic_msg,
+=======
+    feature_set::{instructions_sysvar_enabled, updated_verify_policy, FeatureSet},
+    ic_logger_msg, ic_msg,
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
@@ -105,6 +110,11 @@ impl PreAccount {
         rent: &Rent,
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
+<<<<<<< HEAD
+=======
+        outermost_call: bool,
+        updated_verify_policy: bool,
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -173,9 +183,19 @@ impl PreAccount {
             if !rent.is_exempt(post.lamports, post.data().len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
+            let owner = if updated_verify_policy {
+                post.owner()
+            } else {
+                pre.owner()
+            };
             if !is_writable // line coverage used to get branch coverage
+<<<<<<< HEAD
                 || pre.executable
                 || *program_id != post.owner
+=======
+                || pre.executable()
+                || program_id != owner
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
             {
                 return Err(InstructionError::ExecutableModified);
             }
@@ -343,6 +363,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
+<<<<<<< HEAD
         match self.program_ids.last() {
             Some(program_id) => MessageProcessor::verify_and_update(
                 message,
@@ -357,6 +378,24 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             ),
             None => Err(InstructionError::GenericError), // Should never happen
         }
+=======
+        let stack_frame = self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        let logger = self.get_logger();
+        MessageProcessor::verify_and_update(
+            instruction,
+            &mut self.pre_accounts,
+            accounts,
+            &stack_frame.key,
+            &self.rent,
+            write_privileges,
+            &mut self.timings,
+            logger,
+            self.feature_set.is_active(&updated_verify_policy::id()),
+        )
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.program_ids
@@ -962,7 +1001,12 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
+<<<<<<< HEAD
         demote_sysvar_write_locks: bool,
+=======
+        logger: Rc<RefCell<dyn Logger>>,
+        updated_verify_policy: bool,
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -978,6 +1022,7 @@ impl MessageProcessor {
                         .try_borrow_mut()
                         .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                 }
+<<<<<<< HEAD
                 let account = accounts[account_index].borrow();
                 pre_accounts[unique_index].verify(
                     &program_id,
@@ -986,6 +1031,28 @@ impl MessageProcessor {
                     &account,
                     timings,
                 )?;
+=======
+                let account = accounts[account_index].1.borrow();
+                pre_accounts[unique_index]
+                    .verify(
+                        program_id,
+                        message.is_writable(account_index),
+                        rent,
+                        &account,
+                        timings,
+                        true,
+                        updated_verify_policy,
+                    )
+                    .map_err(|err| {
+                        ic_logger_msg!(
+                            logger,
+                            "failed to verify account {}: {}",
+                            pre_accounts[unique_index].key,
+                            err
+                        );
+                        err
+                    })?;
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
                 pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports);
                 Ok(())
@@ -1010,7 +1077,12 @@ impl MessageProcessor {
         rent: &Rent,
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
+<<<<<<< HEAD
         demote_sysvar_write_locks: bool,
+=======
+        logger: Rc<RefCell<dyn Logger>>,
+        updated_verify_policy: bool,
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -1033,7 +1105,24 @@ impl MessageProcessor {
                                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                         }
                         let account = account.borrow();
+<<<<<<< HEAD
                         pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
+=======
+                        pre_account
+                            .verify(
+                                program_id,
+                                is_writable,
+                                rent,
+                                &account,
+                                timings,
+                                false,
+                                updated_verify_policy,
+                            )
+                            .map_err(|err| {
+                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                err
+                            })?;
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
                         if is_writable && !pre_account.executable() {
@@ -1132,7 +1221,12 @@ impl MessageProcessor {
             accounts,
             &rent_collector.rent,
             timings,
+<<<<<<< HEAD
             demote_sysvar_write_locks,
+=======
+            invoke_context.get_logger(),
+            invoke_context.is_feature_active(&updated_verify_policy::id()),
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
         )?;
 
         timings.accumulate(&invoke_context.timings);
@@ -1414,6 +1508,11 @@ mod tests {
                 &self.rent,
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
+<<<<<<< HEAD
+=======
+                false,
+                true,
+>>>>>>> ccdf93e2b (featurize_policy_update (#18492))
             )
         }
     }
