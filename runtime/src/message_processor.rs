@@ -180,7 +180,7 @@ impl PreAccount {
             }
             if !is_writable // line coverage used to get branch coverage
                 || pre.executable()
-                || program_id != pre.owner()
+                || program_id != post.owner()
             {
                 return Err(InstructionError::ExecutableModified);
             }
@@ -1784,6 +1784,21 @@ mod tests {
                 .verify(),
             Ok(()),
             "system program should be able to change account data size"
+        );
+    }
+
+    #[test]
+    fn test_verify_account_changes_owner_executable() {
+        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let bob_program_id = solana_sdk::pubkey::new_rand();
+
+        assert_eq!(
+            Change::new(&alice_program_id, &alice_program_id)
+                .owner(&bob_program_id)
+                .executable(false, true)
+                .verify(),
+            Err(InstructionError::ExecutableModified),
+            "Program should not be able to change owner and executable at the same time"
         );
     }
 
