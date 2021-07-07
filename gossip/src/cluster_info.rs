@@ -1121,13 +1121,13 @@ impl ClusterInfo {
         }
     }
 
-    pub fn send_vote(
+    pub fn send_transaction(
         &self,
-        vote: &Transaction,
+        transaction: &Transaction,
         tpu: Option<SocketAddr>,
     ) -> Result<(), GossipError> {
         let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
-        let buf = serialize(vote)?;
+        let buf = serialize(transaction)?;
         self.socket.send_to(&buf, &tpu)?;
         Ok(())
     }

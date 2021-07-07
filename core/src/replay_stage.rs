@@ -1562,7 +1562,7 @@ impl ReplayStage {
                 ("target_bank_slot", heaviest_bank_on_same_fork.slot(), i64),
                 ("target_bank_hash", hash_string, String),
             );
-            let _ = cluster_info.send_vote(
+            let _ = cluster_info.send_transaction(
                 &vote_tx,
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
             );
@@ -1601,7 +1601,7 @@ impl ReplayStage {
         if let Some(vote_tx) = vote_tx {
             tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
             let mut send_time = Measure::start("send_vote");
-            let _ = cluster_info.send_vote(
+            let _ = cluster_info.send_transaction(
                 &vote_tx,
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
             );
