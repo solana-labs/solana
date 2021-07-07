@@ -132,6 +132,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         // Broadcast data
@@ -145,7 +146,12 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &cluster_nodes,
             &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
+<<<<<<< HEAD
             cluster_info.socket_addr_space(),
+=======
+            cluster_info.id(),
+            bank_forks,
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         )?;
 
         Ok(())

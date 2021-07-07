@@ -156,17 +156,19 @@ impl StandardBroadcastRun {
         sock: &UdpSocket,
         blockstore: &Arc<Blockstore>,
         receive_results: ReceiveResults,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
         self.process_receive_results(blockstore, &ssend, &bsend, receive_results)?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
+
         //data
-        let _ = self.transmit(&srecv, cluster_info, sock);
+        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks);
         let _ = self.record(&brecv, blockstore);
         //coding
-        let _ = self.transmit(&srecv, cluster_info, sock);
+        let _ = self.transmit(&srecv, cluster_info, sock, bank_forks);
         let _ = self.record(&brecv, blockstore);
         Ok(())
     }
@@ -338,6 +340,7 @@ impl StandardBroadcastRun {
         stakes: Option<&HashMap<Pubkey, u64>>,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         const BROADCAST_PEER_UPDATE_INTERVAL_MS: u64 = 1000;
         trace!("Broadcasting {:?} shreds", shreds.len());
@@ -358,13 +361,19 @@ impl StandardBroadcastRun {
         let mut transmit_stats = TransmitShredsStats::default();
         // Broadcast the shreds
         let mut transmit_time = Measure::start("broadcast_shreds");
+
         broadcast_shreds(
             sock,
             &shreds,
             &cluster_nodes,
             &self.last_datapoint_submit,
             &mut transmit_stats,
+<<<<<<< HEAD
             cluster_info.socket_addr_space(),
+=======
+            cluster_info.id(),
+            bank_forks,
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         )?;
         drop(cluster_nodes);
         transmit_time.stop();
@@ -469,9 +478,17 @@ impl BroadcastRun for StandardBroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((stakes, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
-        self.broadcast(sock, cluster_info, stakes.as_deref(), shreds, slot_start_ts)
+        self.broadcast(
+            sock,
+            cluster_info,
+            stakes.as_deref(),
+            shreds,
+            slot_start_ts,
+            bank_forks,
+        )
     }
     fn record(
         &mut self,
@@ -502,6 +519,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
 
+    #[allow(clippy::type_complexity)]
     fn setup(
         num_shreds_per_slot: Slot,
     ) -> (
@@ -511,6 +529,7 @@ mod test {
         Arc<Bank>,
         Arc<Keypair>,
         UdpSocket,
+        Arc<RwLock<BankForks>>,
     ) {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
@@ -528,7 +547,10 @@ mod test {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank0 = bank_forks.read().unwrap().root_bank();
         (
             blockstore,
             genesis_config,
@@ -536,6 +558,7 @@ mod test {
             bank0,
             leader_keypair,
             socket,
+            bank_forks,
         )
     }
 
@@ -578,7 +601,7 @@ mod test {
     fn test_slot_interrupt() {
         // Setup
         let num_shreds_per_slot = 2;
-        let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket) =
+        let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
 
         // Insert 1 less than the number of ticks needed to finish the slot
@@ -593,7 +616,18 @@ mod test {
         // Step 1: Make an incomplete transmission for slot 0
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone(), 0);
         standard_broadcast_run
+<<<<<<< HEAD
             .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
+=======
+            .test_process_receive_results(
+                &leader_keypair,
+                &cluster_info,
+                &socket,
+                &blockstore,
+                receive_results,
+                &bank_forks,
+            )
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
         assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
@@ -651,7 +685,18 @@ mod test {
             last_tick_height: (ticks1.len() - 1) as u64,
         };
         standard_broadcast_run
+<<<<<<< HEAD
             .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
+=======
+            .test_process_receive_results(
+                &leader_keypair,
+                &cluster_info,
+                &socket,
+                &blockstore,
+                receive_results,
+                &bank_forks,
+            )
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
 
@@ -692,7 +737,7 @@ mod test {
     #[test]
     fn test_buffer_data_shreds() {
         let num_shreds_per_slot = 2;
-        let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket) =
+        let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
             setup(num_shreds_per_slot);
         let (bsend, brecv) = channel();
         let (ssend, _srecv) = channel();
@@ -737,7 +782,7 @@ mod test {
     fn test_slot_finish() {
         // Setup
         let num_shreds_per_slot = 2;
-        let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket) =
+        let (blockstore, genesis_config, cluster_info, bank0, leader_keypair, socket, bank_forks) =
             setup(num_shreds_per_slot);
 
         // Insert complete slot of ticks needed to finish the slot
@@ -751,7 +796,18 @@ mod test {
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
         standard_broadcast_run
+<<<<<<< HEAD
             .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
+=======
+            .test_process_receive_results(
+                &leader_keypair,
+                &cluster_info,
+                &socket,
+                &blockstore,
+                receive_results,
+                &bank_forks,
+            )
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
     }

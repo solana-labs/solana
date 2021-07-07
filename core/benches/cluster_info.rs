@@ -11,11 +11,25 @@ use solana_gossip::{
     cluster_info::{ClusterInfo, Node},
     contact_info::ContactInfo,
 };
+<<<<<<< HEAD
 use solana_ledger::shred::Shred;
 use solana_sdk::{
     pubkey,
     signature::Keypair,
     timing::{timestamp, AtomicInterval},
+=======
+use solana_ledger::{
+    genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    shred::Shred,
+};
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_sdk::pubkey;
+use solana_sdk::timing::timestamp;
+use std::{
+    collections::HashMap,
+    net::UdpSocket,
+    sync::{atomic::AtomicU64, Arc, RwLock},
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
 };
 use solana_streamer::socket::SocketAddrSpace;
 use std::{collections::HashMap, net::UdpSocket, sync::Arc};
@@ -32,6 +46,10 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         SocketAddrSpace::Unspecified,
     );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+    let bank = Bank::new(&genesis_config);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
     const NUM_SHREDS: usize = 32;
     let shreds = vec![Shred::new_empty_data_shred(); NUM_SHREDS];
@@ -55,7 +73,12 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &cluster_nodes,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
+<<<<<<< HEAD
             &SocketAddrSpace::Unspecified,
+=======
+            cluster_info.id(),
+            &bank_forks,
+>>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         )
         .unwrap();
     });

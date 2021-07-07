@@ -93,7 +93,7 @@ impl Tpu {
             verified_vote_packets_sender,
             poh_recorder,
             vote_tracker,
-            bank_forks,
+            bank_forks.clone(),
             subscriptions.clone(),
             verified_vote_sender,
             gossip_verified_vote_hash_sender,
@@ -119,6 +119,7 @@ impl Tpu {
             retransmit_slots_receiver,
             exit,
             blockstore,
+            &bank_forks,
             shred_version,
         );
 
