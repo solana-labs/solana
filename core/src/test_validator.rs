@@ -1,15 +1,19 @@
 use {
     crate::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     solana_client::rpc_client::RpcClient,
-    solana_gossip::{cluster_info::Node, gossip_service::discover_cluster, socketaddr},
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        gossip_service::discover_cluster,
+        socketaddr,
+    },
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
     solana_rpc::rpc::JsonRpcConfig,
     solana_runtime::{
-        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -69,7 +73,7 @@ impl Default for TestValidatorNodeConfig {
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
-    rent: Rent,
+    pub rent: Rent,
     rpc_config: JsonRpcConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
@@ -502,7 +506,7 @@ impl TestValidator {
 
         let validator = Some(Validator::new(
             node,
-            &Arc::new(validator_identity),
+            Arc::new(validator_identity),
             &ledger_path,
             &vote_account_address,
             config.authorized_voter_keypairs.clone(),
@@ -598,6 +602,10 @@ impl TestValidator {
         if let Some(validator) = self.validator.take() {
             validator.join();
         }
+    }
+
+    pub fn cluster_info(&self) -> Arc<ClusterInfo> {
+        self.validator.as_ref().unwrap().cluster_info.clone()
     }
 }
 

@@ -5,6 +5,8 @@
  */
 #include <solana_sdk.h>
 
+extern double log2(double arg);
+
 extern uint64_t entrypoint(const uint8_t *input) {
   SolAccountInfo ka[1];
   SolParameters params = (SolParameters) { .ka = ka };
@@ -22,6 +24,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
   double value = (double)new_data + 1.0;
   value /= -2.0;
   sol_assert(value < 0.0);
+
+  /* test that standard math functions are available */
+  value = *data + 1.0;
+  sol_assert(log2(value) == 1.0);
 
   return SUCCESS;
 }

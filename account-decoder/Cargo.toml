@@ -24,7 +24,7 @@ solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.1.1", features = ["no-entrypoint"] }
 thiserror = "1.0"
-zstd = "0.5.1"
+zstd = "0.9.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

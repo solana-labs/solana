@@ -78,9 +78,8 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        bank_forks::ArchiveFormat,
         snapshot_package::AccountsPackage,
-        snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
     use std::{
@@ -157,9 +156,10 @@ mod tests {
         }
 
         // Create a packageable snapshot
-        let output_tar_path = snapshot_utils::get_snapshot_archive_path(
+        let output_tar_path = snapshot_utils::build_snapshot_archive_path(
             snapshot_package_output_path,
-            &(42, Hash::default()),
+            42,
+            &Hash::default(),
             ArchiveFormat::TarBzip2,
         );
         let snapshot_package = AccountsPackage::new(

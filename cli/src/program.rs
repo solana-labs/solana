@@ -9,7 +9,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{BpfError, ThisInstructionMeter};
+use solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
@@ -42,6 +42,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     native_token::Sol,
+    process_instruction::MockInvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signer},
     signers::Signers,
@@ -1785,12 +1786,17 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
+    let mut invoke_context = MockInvokeContext::new(vec![]);
 
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
         Some(|x| verifier::check(x)),
-        Config::default(),
+        Config {
+            reject_unresolved_syscalls: true,
+            ..Config::default()
+        },
+        register_syscalls(&mut invoke_context).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 

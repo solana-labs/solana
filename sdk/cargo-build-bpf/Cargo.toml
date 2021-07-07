@@ -10,7 +10,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-bzip2 = "0.3.3"
+bzip2 = "0.4.3"
 clap = "2.33.3"
 regex = "1.5.4"
 cargo_metadata = "0.13.1"

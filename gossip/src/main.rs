@@ -15,7 +15,6 @@ use {
         error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         process::exit,
-        sync::Arc,
         time::Duration,
     },
 };
@@ -225,7 +224,7 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
         .value_of("node_pubkey")
         .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
-    let identity_keypair = keypair_of(matches, "identity").map(Arc::new);
+    let identity_keypair = keypair_of(matches, "identity");
 
     let entrypoint_addr = parse_entrypoint(matches);
 
