@@ -1382,7 +1382,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         item_len: usize,
         items: impl Iterator<Item = (Pubkey, T)>,
     ) -> (Vec<Pubkey>, u64) {
-        let expected_items_per_bin = item_len * 2 / BINS; // big enough so not likely to re-allocate, small enough to not over-allocate
+        // big enough so not likely to re-allocate, small enough to not over-allocate by too much
+        // this assumes the largest bin contains twice the expected amount of the average size per bin
+        let expected_items_per_bin = item_len * 2 / BINS;
         let mut binned = (0..BINS)
             .into_iter()
             .map(|pubkey_bin| (pubkey_bin, Vec::with_capacity(expected_items_per_bin)))
@@ -1401,9 +1403,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
             .into_par_iter()
             .map(|(pubkey_bin, items)| {
                 let mut _reclaims = SlotList::new();
+
+                // big enough so not likely to re-allocate, small enough to not over-allocate by too much
+                // this assumes 10% of keys are duplicates. This vector will be flattened below.
+                let mut duplicate_keys = Vec::with_capacity(items.len() / 10);
                 let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
-                let mut insert_time = Measure::start("insert_into_primary_index"); // really should be in each loop
-                let mut duplicate_keys = Vec::with_capacity(items.len());
+                let mut insert_time = Measure::start("insert_into_primary_index");
                 items.into_iter().for_each(|(pubkey, new_item)| {
                     let already_exists = self.insert_new_entry_if_missing_with_lock(
                         pubkey,
