@@ -91,6 +91,29 @@ impl CostModel {
         self.block_cost_limit
     }
 
+    pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
+        for (program_id, cost) in cost_table {
+            match self.upsert_instruction_cost(program_id, cost) {
+                Ok(c) => {
+                    debug!(
+                        "initiating cost table, instruction {:?} has cost {}",
+                        program_id, c
+                    );
+                }
+                Err(err) => {
+                    debug!(
+                        "initiating cost table, failed for instruction {:?}, err: {}",
+                        program_id, err
+                    );
+                }
+            }
+        }
+        debug!(
+            "restored cost model instruction cost table from blockstore, current values: {:?}",
+            self.get_instruction_cost_table()
+        );
+    }
+
     pub fn calculate_cost(&mut self, transaction: &Transaction) -> &TransactionCost {
         self.transaction_cost.reset();
 
@@ -449,5 +472,34 @@ mod tests {
         for th in thread_handlers {
             th.join().unwrap();
         }
+    }
+
+    #[test]
+    fn test_cost_model_init_cost_table() {
+        // build cost table
+        let instruction_ids = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
+        let instruction_costs = vec![10, 20, 30];
+        let cost_table: Vec<(Pubkey, u64)> = instruction_ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (*id, instruction_costs[index]))
+            .collect();
+
+        // init cost model
+        let mut cost_model = CostModel::default();
+        cost_model.initialize_cost_table(&cost_table);
+        let cost_model = Arc::new(RwLock::new(cost_model));
+
+        // verify
+        instruction_ids.iter().enumerate().for_each(|(index, id)| {
+            assert_eq!(
+                instruction_costs[index],
+                cost_model.read().unwrap().find_instruction_cost(id)
+            );
+        });
     }
 }

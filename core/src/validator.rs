@@ -6,7 +6,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
-    cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST},
+    cost_model::CostModel,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
@@ -659,11 +659,9 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
-        let cost_model = Arc::new(RwLock::new(CostModel::new(
-            ACCOUNT_MAX_COST,
-            BLOCK_MAX_COST,
-        )));
-        Self::initiate_cost_model(&cost_model, &blockstore.read_program_costs().unwrap());
+        let mut cost_model = CostModel::default();
+        cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+        let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
@@ -896,31 +894,6 @@ impl Validator {
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }
-    }
-
-    fn initiate_cost_model(cost_model: &RwLock<CostModel>, cost_table: &[(Pubkey, u64)]) {
-        let mut cost_model_mutable = cost_model.write().unwrap();
-        for (program_id, cost) in cost_table {
-            match cost_model_mutable.upsert_instruction_cost(program_id, cost) {
-                Ok(c) => {
-                    debug!(
-                        "initiating cost table, instruction {:?} has cost {}",
-                        program_id, c
-                    );
-                }
-                Err(err) => {
-                    debug!(
-                        "initiating cost table, failed for instruction {:?}, err: {}",
-                        program_id, err
-                    );
-                }
-            }
-        }
-        drop(cost_model_mutable);
-        debug!(
-            "restored cost model instruction cost table from blockstore, current values: {:?}",
-            cost_model.read().unwrap().get_instruction_cost_table()
-        );
     }
 }
 

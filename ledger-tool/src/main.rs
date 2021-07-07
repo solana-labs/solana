@@ -14,7 +14,7 @@ use solana_clap_utils::{
         is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
-use solana_core::cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST};
+use solana_core::cost_model::CostModel;
 use solana_core::cost_tracker::CostTracker;
 use solana_ledger::entry::Entry;
 use solana_ledger::{
@@ -737,35 +737,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut transactions = 0;
     let mut programs = 0;
     let mut program_ids = HashMap::new();
-    let cost_model = Arc::new(RwLock::new(CostModel::new(
-        ACCOUNT_MAX_COST,
-        BLOCK_MAX_COST,
-    )));
-    // init cost_model from blockstore
-    {
-        let cost_table = &blockstore.read_program_costs().unwrap();
-        let mut cost_model = cost_model.write().unwrap();
-        for (program_id, cost) in cost_table {
-            match cost_model.upsert_instruction_cost(program_id, cost) {
-                Ok(c) => {
-                    debug!(
-                        "initiating cost table, instruction {:?} has cost {}",
-                        program_id, c
-                    );
-                }
-                Err(err) => {
-                    debug!(
-                        "initiating cost table, failed for instruction {:?}, err: {}",
-                        program_id, err
-                    );
-                }
-            }
-        }
-    }
-    debug!(
-        "restored cost model instruction cost table from blockstore, current values: {:?}",
-        cost_model.read().unwrap().get_instruction_cost_table()
-    );
+    let mut cost_model = CostModel::default();
+    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    let cost_model = Arc::new(RwLock::new(cost_model));
     let mut cost_tracker = CostTracker::new(cost_model.clone());
 
     for entry in &entries {
