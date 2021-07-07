@@ -4125,7 +4125,12 @@ version = "1.7.5"
 dependencies = [
  "bincode",
  "byteorder",
+<<<<<<< HEAD
  "log 0.4.11",
+=======
+ "libsecp256k1",
+ "log 0.4.14",
+>>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5036,7 +5041,12 @@ dependencies = [
  "hex",
  "itertools",
  "lazy_static",
+<<<<<<< HEAD
  "log 0.4.11",
+=======
+ "libsecp256k1",
+ "log 0.4.14",
+>>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
  "num-derive",
  "num-traits",
  "rand 0.7.3",

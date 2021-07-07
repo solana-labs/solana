@@ -2800,7 +2800,12 @@ name = "solana-bpf-loader-program"
 version = "1.7.5"
 dependencies = [
  "bincode",
+<<<<<<< HEAD
  "byteorder 1.3.4",
+=======
+ "byteorder 1.4.3",
+ "libsecp256k1",
+>>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
  "log",
  "num-derive 0.3.0",
  "num-traits",
@@ -3064,6 +3069,13 @@ name = "solana-bpf-rust-sanity"
 version = "1.7.5"
 dependencies = [
  "solana-program 1.7.5",
+]
+
+[[package]]
+name = "solana-bpf-rust-secp256k1-recover"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
 ]
 
 [[package]]
@@ -3417,6 +3429,7 @@ dependencies = [
  "hex",
  "itertools 0.9.0",
  "lazy_static",
+ "libsecp256k1",
  "log",
  "num-derive 0.3.0",
  "num-traits",

@@ -73,6 +73,7 @@ members = [
     "rust/ro_modify",
     "rust/ro_account_modify",
     "rust/sanity",
+    "rust/secp256k1_recover",
     "rust/sha",
     "rust/spoof1",
     "rust/spoof1_system",
