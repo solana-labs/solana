@@ -1383,7 +1383,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     "id": 1,
     "method": "getInflationReward",
     "params": [
-       ["6dmNQ5jwLeLk5REvio1JcMshcbvkYMwy26sJ8pbkvStu", "BGsqMegLpV6n6Ve146sSX2dTjUMj3M92HnU8BbNRMhF2"], 2
+       ["6dmNQ5jwLeLk5REvio1JcMshcbvkYMwy26sJ8pbkvStu", "BGsqMegLpV6n6Ve146sSX2dTjUMj3M92HnU8BbNRMhF2"], {"epoch": 2}
     ]
   }
 '
