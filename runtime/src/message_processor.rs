@@ -1346,11 +1346,7 @@ mod tests {
                 .map(|i| message.is_writable(i))
                 .collect();
             invoke_context
-                .verify_and_update(
-                    &message.instructions[0],
-                    &these_accounts,
-                    &write_privileges,
-                )
+                .verify_and_update(&message.instructions[0], &these_accounts, &write_privileges)
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index]
