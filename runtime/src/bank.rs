@@ -2670,15 +2670,8 @@ impl Bank {
         );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
-<<<<<<< HEAD
         let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_accounts
-=======
-        let log_messages = log_messages
-            .get(0)
-            .map_or(vec![], |messages| messages.to_vec());
         let post_transaction_accounts = loaded_txs
->>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
             .into_iter()
             .next()
             .unwrap()

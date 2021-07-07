@@ -603,12 +603,7 @@ impl MessageProcessor {
         message: &'a Message,
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-<<<<<<< HEAD
-        accounts: &'a [Rc<RefCell<AccountSharedData>>],
-=======
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        demote_sysvar_write_locks: bool,
->>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -617,15 +612,9 @@ impl MessageProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
-<<<<<<< HEAD
                     message.is_writable(index),
-                    &message.account_keys[index],
-                    &accounts[index] as &RefCell<AccountSharedData>,
-=======
-                    message.is_writable(index, demote_sysvar_write_locks),
                     &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
->>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
                 )
             }))
             .collect::<Vec<_>>()
@@ -1203,13 +1192,11 @@ impl MessageProcessor {
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
-<<<<<<< HEAD
             self.execute_instruction(
                 message,
                 instruction,
                 &loaders[instruction_index],
                 accounts,
-                account_deps,
                 rent_collector,
                 log_collector.clone(),
                 executors.clone(),
@@ -1222,35 +1209,6 @@ impl MessageProcessor {
                 ancestors,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
-=======
-            let err = self
-                .execute_instruction(
-                    message,
-                    instruction,
-                    &loaders[instruction_index],
-                    accounts,
-                    rent_collector,
-                    log_collector.clone(),
-                    executors.clone(),
-                    instruction_recorder,
-                    instruction_index,
-                    feature_set.clone(),
-                    bpf_compute_budget,
-                    timings,
-                    demote_sysvar_write_locks,
-                    account_db.clone(),
-                    ancestors,
-                )
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
-            time.stop();
-
-            let program_id = instruction.program_id(&message.account_keys);
-            let time_count = timings.per_program_timings.entry(*program_id).or_default();
-            time_count.0 += time.as_us();
-            time_count.1 += 1;
-
-            err?;
->>>>>>> 7462c27d0 (Refactoring: Unify account_deps and accounts (#17898))
         }
         Ok(())
     }
