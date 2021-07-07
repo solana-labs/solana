@@ -10,6 +10,7 @@ pub trait Signers {
     fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError>;
     fn sign_message(&self, message: &[u8]) -> Vec<Signature>;
     fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError>;
+    fn is_interactive(&self) -> bool;
 }
 
 macro_rules! default_keypairs_impl {
@@ -38,6 +39,10 @@ macro_rules! default_keypairs_impl {
                 signatures.push(keypair.try_sign_message(message)?);
             }
             Ok(signatures)
+        }
+
+        fn is_interactive(&self) -> bool {
+            self.iter().any(|s| s.is_interactive())
         }
     };
 }
@@ -118,6 +123,9 @@ mod tests {
         fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
             Ok(Signature::default())
         }
+        fn is_interactive(&self) -> bool {
+            false
+        }
     }
 
     struct Bar;
@@ -127,6 +135,9 @@ mod tests {
         }
         fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
             Ok(Signature::default())
+        }
+        fn is_interactive(&self) -> bool {
+            false
         }
     }
 

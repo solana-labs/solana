@@ -53,6 +53,10 @@ impl Signer for RemoteKeypair {
                 .map_err(|e| e.into()),
         }
     }
+
+    fn is_interactive(&self) -> bool {
+        true
+    }
 }
 
 pub fn generate_remote_keypair(

@@ -28,6 +28,10 @@ impl Signer for NullSigner {
     fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
         Ok(Signature::default())
     }
+
+    fn is_interactive(&self) -> bool {
+        false
+    }
 }
 
 impl<T> PartialEq<T> for NullSigner

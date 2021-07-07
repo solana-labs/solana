@@ -167,6 +167,61 @@ pub enum StakeInstruction {
     ///   3. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
     ///      lockup expiration
     AuthorizeWithSeed(AuthorizeWithSeedArgs),
+
+    /// Initialize a stake with authorization information
+    ///
+    /// This instruction is similar to `Initialize` except that the withdraw authority
+    /// must be a signer, and no lockup is applied to the account.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Uninitialized stake account
+    ///   1. [] Rent sysvar
+    ///   2. [] The stake authority
+    ///   3. [SIGNER] The withdraw authority
+    ///
+    InitializeChecked,
+
+    /// Authorize a key to manage stake or withdrawal
+    ///
+    /// This instruction behaves like `Authorize` with the additional requirement that the new
+    /// stake or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] The stake or withdraw authority
+    ///   3. [SIGNER] The new stake or withdraw authority
+    ///   4. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
+    AuthorizeChecked(StakeAuthorize),
+
+    /// Authorize a key to manage stake or withdrawal with a derived key
+    ///
+    /// This instruction behaves like `AuthorizeWithSeed` with the additional requirement that
+    /// the new stake or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [SIGNER] Base key of stake or withdraw authority
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] The new stake or withdraw authority
+    ///   4. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
+    AuthorizeCheckedWithSeed(AuthorizeCheckedWithSeedArgs),
+
+    /// Set stake lockup
+    ///
+    /// This instruction behaves like `SetLockup` with the additional requirement that
+    /// the new lockup authority also be a signer.
+    ///
+    /// If a lockup is not active, the withdraw authority may set a new lockup
+    /// If a lockup is active, the lockup custodian may update the lockup parameters
+    ///
+    /// # Account references
+    ///   0. [WRITE] Initialized stake account
+    ///   1. [SIGNER] Lockup authority or withdraw authority
+    ///   2. Optional: [SIGNER] New lockup authority
+    SetLockupChecked(LockupCheckedArgs),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -176,9 +231,22 @@ pub struct LockupArgs {
     pub custodian: Option<Pubkey>,
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub struct LockupCheckedArgs {
+    pub unix_timestamp: Option<UnixTimestamp>,
+    pub epoch: Option<Epoch>,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct AuthorizeWithSeedArgs {
     pub new_authorized_pubkey: Pubkey,
+    pub stake_authorize: StakeAuthorize,
+    pub authority_seed: String,
+    pub authority_owner: Pubkey,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct AuthorizeCheckedWithSeedArgs {
     pub stake_authorize: StakeAuthorize,
     pub authority_seed: String,
     pub authority_owner: Pubkey,
@@ -191,6 +259,19 @@ pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Locku
         vec![
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
+        ],
+    )
+}
+
+pub fn initialize_checked(stake_pubkey: &Pubkey, authorized: &Authorized) -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::InitializeChecked,
+        vec![
+            AccountMeta::new(*stake_pubkey, false),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+            AccountMeta::new_readonly(authorized.staker, false),
+            AccountMeta::new_readonly(authorized.withdrawer, true),
         ],
     )
 }
@@ -234,6 +315,46 @@ pub fn create_account(
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
+    ]
+}
+
+pub fn create_account_with_seed_checked(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
+    authorized: &Authorized,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account_with_seed(
+            from_pubkey,
+            stake_pubkey,
+            base,
+            seed,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        initialize_checked(stake_pubkey, authorized),
+    ]
+}
+
+pub fn create_account_checked(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    authorized: &Authorized,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            from_pubkey,
+            stake_pubkey,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        initialize_checked(stake_pubkey, authorized),
     ]
 }
 
@@ -383,6 +504,31 @@ pub fn authorize(
     )
 }
 
+pub fn authorize_checked(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
+
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::AuthorizeChecked(stake_authorize),
+        account_metas,
+    )
+}
+
 pub fn authorize_with_seed(
     stake_pubkey: &Pubkey,
     authority_base: &Pubkey,
@@ -412,6 +558,39 @@ pub fn authorize_with_seed(
     Instruction::new_with_bincode(
         id(),
         &StakeInstruction::AuthorizeWithSeed(args),
+        account_metas,
+    )
+}
+
+pub fn authorize_checked_with_seed(
+    stake_pubkey: &Pubkey,
+    authority_base: &Pubkey,
+    authority_seed: String,
+    authority_owner: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*authority_base, true),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
+
+    let args = AuthorizeCheckedWithSeedArgs {
+        stake_authorize,
+        authority_seed,
+        authority_owner: *authority_owner,
+    };
+
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::AuthorizeCheckedWithSeed(args),
         account_metas,
     )
 }
@@ -473,6 +652,30 @@ pub fn set_lockup(
         AccountMeta::new_readonly(*custodian_pubkey, true),
     ];
     Instruction::new_with_bincode(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
+}
+
+pub fn set_lockup_checked(
+    stake_pubkey: &Pubkey,
+    lockup: &LockupArgs,
+    custodian_pubkey: &Pubkey,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*custodian_pubkey, true),
+    ];
+
+    let lockup_checked = LockupCheckedArgs {
+        unix_timestamp: lockup.unix_timestamp,
+        epoch: lockup.epoch,
+    };
+    if let Some(new_custodian) = lockup.custodian {
+        account_metas.push(AccountMeta::new_readonly(new_custodian, true));
+    }
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::SetLockupChecked(lockup_checked),
+        account_metas,
+    )
 }
 
 #[cfg(test)]

@@ -2250,7 +2250,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .offline_args()
                 .nonce_args(false)
-		.arg(memo_arg())
+                .arg(memo_arg())
                 .arg(fee_payer_arg()),
         )
         .subcommand(

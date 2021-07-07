@@ -19,9 +19,8 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        sysvar_via_syscall, update_data_on_realloc,
+        blake3_syscall_enabled, cpi_data_cost, enforce_aligned_host_addrs,
+        keccak256_syscall_enabled, memory_ops_syscalls, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -1417,7 +1416,7 @@ type TranslatedAccount<'a> = (
     Option<AccountReferences<'a>>,
 );
 type TranslatedAccounts<'a> = (
-    Vec<Rc<RefCell<AccountSharedData>>>,
+    Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     Vec<Option<AccountReferences<'a>>>,
 );
 
@@ -2062,7 +2061,7 @@ where
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
@@ -2077,7 +2076,7 @@ where
                 })
         {
             let (account, account_ref) = do_translate(account_info, invoke_context)?;
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(account_ref);
         } else {
             ic_msg!(
@@ -2187,14 +2186,7 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (
-        message,
-        executables,
-        accounts,
-        account_refs,
-        caller_write_privileges,
-        demote_sysvar_write_locks,
-    ) = {
+    let (message, executables, accounts, account_refs, caller_write_privileges) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -2266,6 +2258,7 @@ fn call<'a>(
                 ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
                 SyscallError::InstructionError(InstructionError::MissingAccount)
             })?
+            .1
             .clone();
         let programdata_executable =
             get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
@@ -2284,7 +2277,6 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
-            invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
         )
     };
 
@@ -2307,10 +2299,10 @@ fn call<'a>(
     // Copy results back to caller
     {
         let invoke_context = syscall.get_context()?;
-        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+        for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
+                if message.is_writable(i) && !account.executable() {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {
