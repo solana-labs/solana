@@ -35,8 +35,8 @@
 //! already been signed and verified.
 use crate::{
     accounts::{
-        AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
-        TransactionLoadResult, TransactionLoaders,
+        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
+        TransactionLoaders,
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
@@ -177,8 +177,7 @@ impl ExecuteTimings {
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "HhY4tMP5KZU9fw9VLpMMUikfvNVCLksocZBUKjt8ZjYH")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
-type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
-type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
+type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -625,30 +624,32 @@ impl NonceRollbackFull {
     pub fn from_partial(
         partial: NonceRollbackPartial,
         message: &Message,
-        accounts: &[AccountSharedData],
+        accounts: &[(Pubkey, AccountSharedData)],
     ) -> Result<Self> {
         let NonceRollbackPartial {
             nonce_address,
             nonce_account,
         } = partial;
-        let fee_payer = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .find(|(i, k)| message.is_non_loader_key(k, *i))
-            .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
+        let fee_payer = (0..message.account_keys.len()).find_map(|i| {
+            if let Some((k, a)) = &accounts.get(i) {
+                if message.is_non_loader_key(k, i) {
+                    return Some((k, a));
+                }
+            }
+            None
+        });
         if let Some((fee_pubkey, fee_account)) = fee_payer {
-            if fee_pubkey == nonce_address {
+            if *fee_pubkey == nonce_address {
                 Ok(Self {
                     nonce_address,
-                    nonce_account: fee_account,
+                    nonce_account: fee_account.clone(),
                     fee_account: None,
                 })
             } else {
                 Ok(Self {
                     nonce_address,
                     nonce_account,
-                    fee_account: Some(fee_account),
+                    fee_account: Some(fee_account.clone()),
                 })
             }
         } else {
@@ -2638,7 +2639,11 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: &Transaction,
-    ) -> (Result<()>, TransactionLogMessages, Vec<AccountSharedData>) {
+    ) -> (
+        Result<()>,
+        TransactionLogMessages,
+        Vec<(Pubkey, AccountSharedData)>,
+    ) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let batch = self.prepare_simulation_batch(transaction);
@@ -2646,7 +2651,7 @@ impl Bank {
         let mut timings = ExecuteTimings::default();
 
         let (
-            loaded_accounts,
+            loaded_txs,
             executed,
             _inner_instructions,
             log_messages,
@@ -2666,7 +2671,7 @@ impl Bank {
 
         let transaction_result = executed[0].0.clone().map(|_| ());
         let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_accounts
+        let post_transaction_accounts = loaded_txs
             .into_iter()
             .next()
             .unwrap()
@@ -2931,20 +2936,11 @@ impl Bank {
     /// ownership by draining the source
     fn accounts_to_refcells(
         accounts: &mut TransactionAccounts,
-        account_deps: &mut TransactionAccountDeps,
         loaders: &mut TransactionLoaders,
-    ) -> (
-        TransactionAccountRefCells,
-        TransactionAccountDepRefCells,
-        TransactionLoaderRefCells,
-    ) {
+    ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
         let account_refcells: Vec<_> = accounts
             .drain(..)
-            .map(|account| Rc::new(RefCell::new(account)))
-            .collect();
-        let account_dep_refcells: Vec<_> = account_deps
-            .drain(..)
-            .map(|(pubkey, account_dep)| (pubkey, Rc::new(RefCell::new(account_dep))))
+            .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
             .collect();
         let loader_refcells: Vec<Vec<_>> = loaders
             .iter_mut()
@@ -2954,7 +2950,7 @@ impl Bank {
                     .collect()
             })
             .collect();
-        (account_refcells, account_dep_refcells, loader_refcells)
+        (account_refcells, loader_refcells)
     }
 
     /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
@@ -2965,12 +2961,13 @@ impl Bank {
         mut account_refcells: TransactionAccountRefCells,
         loader_refcells: TransactionLoaderRefCells,
     ) -> std::result::Result<(), TransactionError> {
-        for account_refcell in account_refcells.drain(..) {
-            accounts.push(
+        for (pubkey, account_refcell) in account_refcells.drain(..) {
+            accounts.push((
+                pubkey,
                 Rc::try_unwrap(account_refcell)
                     .map_err(|_| TransactionError::AccountBorrowOutstanding)?
                     .into_inner(),
-            )
+            ))
         }
         for (ls, mut lrcs) in loaders.iter_mut().zip(loader_refcells) {
             for (pubkey, lrc) in lrcs.drain(..) {
@@ -3102,7 +3099,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_accounts = self.rc.accounts.load_accounts(
+        let mut loaded_txs = self.rc.accounts.load_accounts(
             &self.ancestors,
             hashed_txs.as_transactions_iter(),
             check_results,
@@ -3123,7 +3120,7 @@ impl Bank {
             .bpf_compute_budget
             .unwrap_or_else(BpfComputeBudget::new);
 
-        let executed: Vec<TransactionExecutionResult> = loaded_accounts
+        let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(hashed_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
@@ -3136,12 +3133,10 @@ impl Bank {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
-                    let (account_refcells, account_dep_refcells, loader_refcells) =
-                        Self::accounts_to_refcells(
-                            &mut loaded_transaction.accounts,
-                            &mut loaded_transaction.account_deps,
-                            &mut loaded_transaction.loaders,
-                        );
+                    let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
+                        &mut loaded_transaction.accounts,
+                        &mut loaded_transaction.loaders,
+                    );
 
                     let instruction_recorders = if enable_cpi_recording {
                         let ix_count = tx.message.instructions.len();
@@ -3162,7 +3157,6 @@ impl Bank {
                         tx.message(),
                         &loader_refcells,
                         &account_refcells,
-                        &account_dep_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
                         executors.clone(),
@@ -3301,7 +3295,7 @@ impl Bank {
         }
         Self::update_error_counters(&error_counters);
         (
-            loaded_accounts,
+            loaded_txs,
             executed,
             inner_instructions,
             transaction_log_messages,
@@ -3373,7 +3367,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         hashed_txs: &[HashedTransaction],
-        loaded_accounts: &mut [TransactionLoadResult],
+        loaded_txs: &mut [TransactionLoadResult],
         executed: &[TransactionExecutionResult],
         tx_count: u64,
         signature_count: u64,
@@ -3412,18 +3406,15 @@ impl Bank {
             self.slot(),
             hashed_txs.as_transactions_iter(),
             executed,
-            loaded_accounts,
+            loaded_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
         );
-        let rent_debits = self.collect_rent(executed, loaded_accounts);
+        let rent_debits = self.collect_rent(executed, loaded_txs);
 
-        let overwritten_vote_accounts = self.update_cached_accounts(
-            hashed_txs.as_transactions_iter(),
-            executed,
-            loaded_accounts,
-        );
+        let overwritten_vote_accounts =
+            self.update_cached_accounts(hashed_txs.as_transactions_iter(), executed, loaded_txs);
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -3603,11 +3594,11 @@ impl Bank {
     fn collect_rent(
         &self,
         res: &[TransactionExecutionResult],
-        loaded_accounts: &mut [TransactionLoadResult],
+        loaded_txs: &mut [TransactionLoadResult],
     ) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
-        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_accounts.len());
-        for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter_mut().enumerate() {
+        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_txs.len());
+        for (i, (raccs, _nonce_rollback)) in loaded_txs.iter_mut().enumerate() {
             let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 rent_debits.push(RentDebits::default());
@@ -4046,7 +4037,7 @@ impl Bank {
         };
 
         let (
-            mut loaded_accounts,
+            mut loaded_txs,
             executed,
             inner_instructions,
             transaction_logs,
@@ -4063,7 +4054,7 @@ impl Bank {
 
         let results = self.commit_transactions(
             batch.hashed_transactions(),
-            &mut loaded_accounts,
+            &mut loaded_txs,
             &executed,
             tx_count,
             signature_count,
@@ -4785,10 +4776,10 @@ impl Bank {
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         res: &[TransactionExecutionResult],
-        loaded: &[TransactionLoadResult],
+        loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
         let mut overwritten_vote_accounts = vec![];
-        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded.iter().zip(txs).enumerate() {
+        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;
@@ -4797,11 +4788,9 @@ impl Bank {
             let message = &tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (pubkey, account) in message
-                .account_keys
-                .iter()
+            for (_i, (pubkey, account)) in (0..message.account_keys.len())
                 .zip(loaded_transaction.accounts.iter())
-                .filter(|(_key, account)| (Stakes::is_stake(account)))
+                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
@@ -5425,10 +5414,13 @@ pub(crate) mod tests {
         let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
         let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
         let accounts = [
-            from_account.clone(),
-            nonce_account.clone(),
-            to_account.clone(),
-            recent_blockhashes_sysvar_account.clone(),
+            (message.account_keys[0], from_account.clone()),
+            (message.account_keys[1], nonce_account.clone()),
+            (message.account_keys[2], to_account.clone()),
+            (
+                message.account_keys[3],
+                recent_blockhashes_sysvar_account.clone(),
+            ),
         ];
 
         // NonceRollbackFull create + NonceRollbackInfo impl
@@ -5440,10 +5432,10 @@ pub(crate) mod tests {
 
         let message = Message::new(&instructions, Some(&nonce_address));
         let accounts = [
-            nonce_account,
-            from_account,
-            to_account,
-            recent_blockhashes_sysvar_account,
+            (message.account_keys[0], nonce_account),
+            (message.account_keys[1], from_account),
+            (message.account_keys[2], to_account),
+            (message.account_keys[3], recent_blockhashes_sysvar_account),
         ];
 
         // Nonce account is fee-payer
