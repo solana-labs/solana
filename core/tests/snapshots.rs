@@ -181,7 +181,7 @@ mod tests {
             .clone();
         assert_eq!(*bank, deserialized_bank);
 
-        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_path);
+        let slot_snapshot_paths = snapshot_utils::get_slot_snapshot_paths(&snapshot_path);
 
         for p in slot_snapshot_paths {
             snapshot_utils::remove_snapshot(p.slot, &snapshot_path).unwrap();
@@ -235,7 +235,7 @@ mod tests {
         let last_bank = bank_forks.get(last_slot).unwrap();
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let snapshot_path = &snapshot_config.snapshot_path;
-        let last_slot_snapshot_path = snapshot_utils::get_snapshot_paths(snapshot_path)
+        let last_slot_snapshot_path = snapshot_utils::get_sorted_slot_snapshot_paths(snapshot_path)
             .pop()
             .expect("no snapshots found in path");
         let snapshot_package = snapshot_utils::package_snapshot(
@@ -432,10 +432,12 @@ mod tests {
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
         snapshot_utils::purge_old_snapshots(snapshot_path);
-        assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
-            .into_iter()
-            .map(|path| path.slot)
-            .eq(3..=snapshot_utils::MAX_SNAPSHOTS as u64 + 2));
+        assert!(
+            snapshot_utils::get_sorted_slot_snapshot_paths(&snapshots_dir)
+                .into_iter()
+                .map(|path| path.slot)
+                .eq(3..=snapshot_utils::MAX_SNAPSHOTS as u64 + 2)
+        );
 
         // Create a SnapshotPackagerService to create tarballs from all the pending
         // SnapshotPackage's on the channel. By the time this service starts, we have already
