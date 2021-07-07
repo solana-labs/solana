@@ -82,15 +82,20 @@ pub fn create_executor(
     let config = Config {
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
-        enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
+        ..Config::default()
     };
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
         let account = program.try_account_ref()?;
         let data = &account.data()[program_data_offset..];
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(data, None, config)
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+            data,
+            None,
+            config,
+            syscall_registry,
+        )
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
@@ -98,7 +103,6 @@ pub fn create_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verifier::check(elf_bytes)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
-    executable.set_syscall_registry(syscall_registry);
     if use_jit {
         if let Err(err) = executable.jit_compile() {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
@@ -853,6 +857,7 @@ impl Executor for BpfExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
+    use solana_rbpf::vm::SyscallRegistry;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
         account::{
@@ -905,9 +910,10 @@ mod tests {
         solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
         let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
             program,
-            bpf_functions,
             None,
             Config::default(),
+            SyscallRegistry::default(),
+            bpf_functions,
         )
         .unwrap();
         let mut vm =
