@@ -169,6 +169,9 @@ struct GenerateIndexTimings {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub total_items: usize,
+    pub storage_size_accounts_map_us: u64,
+    pub storage_size_storages_us: u64,
+    pub storage_size_accounts_map_flatten_us: u64,
 }
 
 impl GenerateIndexTimings {
@@ -181,7 +184,21 @@ impl GenerateIndexTimings {
             ("insertion_time_us", self.insertion_time_us, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
-            ("total_items", self.total_items as i64, i64),
+            (
+                "storage_size_accounts_map_us",
+                self.storage_size_accounts_map_us as i64,
+                i64
+            ),
+            (
+                "storage_size_storages_us",
+                self.storage_size_storages_us as i64,
+                i64
+            ),
+            (
+                "storage_size_accounts_map_flatten_us",
+                self.storage_size_accounts_map_flatten_us as i64,
+                i64
+            ),
         );
     }
 }
@@ -6000,52 +6017,85 @@ impl AccountsDb {
                 })
                 .sum();
 
-            let timings = GenerateIndexTimings {
+            let mut timings = GenerateIndexTimings {
                 scan_time,
                 index_time: index_time.as_us(),
                 insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
                 min_bin_size,
                 max_bin_size,
                 total_items,
+                ..GenerateIndexTimings::default()
             };
-            timings.report();
-        }
 
-        // Need to add these last, otherwise older updates will be cleaned
-        for slot in slots {
-            self.accounts_index.add_root(slot, false);
-        }
-
-        let mut stored_sizes_and_counts = HashMap::new();
-        self.accounts_index.account_maps.iter().for_each(|i| {
-            i.read().unwrap().values().for_each(|entry| {
-                entry
-                    .slot_list
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .for_each(|(_slot, account_entry)| {
-                        let storage_entry_meta = stored_sizes_and_counts
-                            .entry(account_entry.store_id)
-                            .or_insert((0, 0));
-                        storage_entry_meta.0 += account_entry.stored_size;
-                        storage_entry_meta.1 += 1;
-                    })
-            })
-        });
-        for slot_stores in self.storage.0.iter() {
-            for (id, store) in slot_stores.value().read().unwrap().iter() {
-                // Should be default at this point
-                assert_eq!(store.alive_bytes(), 0);
-                if let Some((stored_size, count)) = stored_sizes_and_counts.get(id) {
-                    trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
-                    store.count_and_status.write().unwrap().0 = *count;
-                    store.alive_bytes.store(*stored_size, Ordering::SeqCst);
-                } else {
-                    trace!("id: {} clearing count", id);
-                    store.count_and_status.write().unwrap().0 = 0;
+            if pass == 0 {
+                // Need to add these last, otherwise older updates will be cleaned
+                for slot in &slots {
+                    self.accounts_index.add_root(*slot, false);
                 }
+
+                // look at every account in the account index and calculate for each storage: stored_size and count
+                let mut storage_size_accounts_map_time =
+                    Measure::start("storage_size_accounts_map");
+                let mut maps = self
+                    .accounts_index
+                    .account_maps
+                    .par_iter()
+                    .map(|i| {
+                        let mut stored_sizes_and_counts = HashMap::new();
+                        i.read().unwrap().values().for_each(|entry| {
+                            entry.slot_list.read().unwrap().iter().for_each(
+                                |(_slot, account_entry)| {
+                                    let storage_entry_meta = stored_sizes_and_counts
+                                        .entry(account_entry.store_id)
+                                        .or_insert((0, 0));
+                                    storage_entry_meta.0 += account_entry.stored_size;
+                                    storage_entry_meta.1 += 1;
+                                },
+                            )
+                        });
+                        stored_sizes_and_counts
+                    })
+                    .collect::<Vec<_>>();
+                storage_size_accounts_map_time.stop();
+                timings.storage_size_accounts_map_us = storage_size_accounts_map_time.as_us();
+
+                // flatten/merge the HashMaps from the parallel iteration above
+                let mut storage_size_accounts_map_flatten_time =
+                    Measure::start("storage_size_accounts_map_flatten_time");
+                let mut stored_sizes_and_counts = maps.pop().unwrap_or_default();
+                for map in maps {
+                    for (store_id, meta) in map.into_iter() {
+                        let storage_entry_meta =
+                            stored_sizes_and_counts.entry(store_id).or_insert((0, 0));
+                        storage_entry_meta.0 += meta.0;
+                        storage_entry_meta.1 += meta.1;
+                    }
+                }
+                storage_size_accounts_map_flatten_time.stop();
+                timings.storage_size_accounts_map_flatten_us =
+                    storage_size_accounts_map_flatten_time.as_us();
+
+                // store count and size for each storage
+                let mut storage_size_storages_time = Measure::start("storage_size_storages");
+                for slot_stores in self.storage.0.iter() {
+                    for (id, store) in slot_stores.value().read().unwrap().iter() {
+                        // Should be default at this point
+                        assert_eq!(store.alive_bytes(), 0);
+                        if let Some((stored_size, count)) = stored_sizes_and_counts.get(id) {
+                            trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
+                            store.count_and_status.write().unwrap().0 = *count;
+                            store.alive_bytes.store(*stored_size, Ordering::SeqCst);
+                        } else {
+                            trace!("id: {} clearing count", id);
+                            store.count_and_status.write().unwrap().0 = 0;
+                        }
+                    }
+                }
+                storage_size_storages_time.stop();
+                timings.storage_size_storages_us = storage_size_storages_time.as_us();
             }
+
+            timings.report();
         }
     }
 
