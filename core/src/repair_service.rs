@@ -7,9 +7,10 @@ use crate::{
     repair_weight::RepairWeight,
     replay_stage::DUPLICATE_THRESHOLD,
     result::Result,
-    serve_repair::{RepairType, ServeRepair},
+    serve_repair::{RepairType, ServeRepair, REPAIR_PEERS_CACHE_CAPACITY},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use lru::LruCache;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     blockstore::{Blockstore, SlotMeta},
@@ -193,6 +194,7 @@ impl RepairService {
         let mut last_stats = Instant::now();
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
+        let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -272,14 +274,13 @@ impl RepairService {
                 )
             };
 
-            let mut cache = HashMap::new();
             let mut send_repairs_elapsed = Measure::start("send_repairs_elapsed");
             let mut outstanding_requests = outstanding_requests.write().unwrap();
             repairs.into_iter().for_each(|repair_request| {
                 if let Ok((to, req)) = serve_repair.repair_request(
                     cluster_slots,
                     repair_request,
-                    &mut cache,
+                    &mut peers_cache,
                     &mut repair_stats,
                     &repair_info.repair_validators,
                     &mut outstanding_requests,
