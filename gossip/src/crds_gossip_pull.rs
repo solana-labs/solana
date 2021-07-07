@@ -18,7 +18,7 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
-        weighted_shuffle::weighted_shuffle,
+        weighted_shuffle::WeightedShuffle,
     },
     itertools::Itertools,
     lru::LruCache,
@@ -235,13 +235,10 @@ impl CrdsGossipPull {
         if peers.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
-        let mut peers = {
-            let mut rng = rand::thread_rng();
-            let mut seed = [0u8; 32];
-            rng.fill(&mut seed[..]);
-            let index = weighted_shuffle(&weights, seed);
-            index.into_iter().map(|i| peers[i])
-        };
+        let mut rng = rand::thread_rng();
+        let mut peers = WeightedShuffle::new(&mut rng, &weights)
+            .unwrap()
+            .map(|i| peers[i]);
         let peer = {
             let mut rng = rand::thread_rng();
             let mut ping_cache = ping_cache.lock().unwrap();
@@ -273,7 +270,7 @@ impl CrdsGossipPull {
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Vec<(f32, &'a ContactInfo)> {
+    ) -> Vec<(u64, &'a ContactInfo)> {
         let mut rng = rand::thread_rng();
         let active_cutoff = now.saturating_sub(PULL_ACTIVE_TIMEOUT_MS);
         crds.get_nodes()
@@ -307,7 +304,9 @@ impl CrdsGossipPull {
                 let since = (now.saturating_sub(req_time).min(3600 * 1000) / 1024) as u32;
                 let stake = get_stake(&item.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
-                (weight, item)
+                // Weights are bounded by max_weight defined above.
+                // So this type-cast should be safe.
+                ((weight * 100.0) as u64, item)
             })
             .collect()
     }

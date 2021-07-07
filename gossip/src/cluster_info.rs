@@ -29,7 +29,7 @@ use {
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
         socketaddr, socketaddr_any,
-        weighted_shuffle::weighted_shuffle,
+        weighted_shuffle::{weighted_shuffle, WeightedShuffle},
     },
     bincode::{serialize, serialized_size},
     itertools::Itertools,
@@ -2043,11 +2043,8 @@ impl ClusterInfo {
         if responses.is_empty() {
             return packets;
         }
-        let shuffle = {
-            let mut seed = [0; 32];
-            rand::thread_rng().fill(&mut seed[..]);
-            weighted_shuffle(&scores, seed).into_iter()
-        };
+        let mut rng = rand::thread_rng();
+        let shuffle = WeightedShuffle::new(&mut rng, &scores).unwrap();
         let mut total_bytes = 0;
         let mut sent = 0;
         for (addr, response) in shuffle.map(|i| &responses[i]) {
