@@ -111,6 +111,18 @@ pub enum VoteInstruction {
     ///   2. [] Clock sysvar
     ///   3. [SIGNER] Vote authority
     VoteSwitch(Vote, Hash),
+
+    /// Authorize a key to send votes or issue a withdrawal
+    ///
+    /// This instruction behaves like `Authorize` with the additional requirement that the new vote
+    /// or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] Vote or withdraw authority
+    ///   3. [SIGNER] New vote or withdraw authority
+    AuthorizeChecked(VoteAuthorize),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -178,6 +190,26 @@ pub fn authorize(
     Instruction::new_with_bincode(
         id(),
         &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
+        account_metas,
+    )
+}
+
+pub fn authorize_checked(
+    vote_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey, // currently authorized
+    new_authorized_pubkey: &Pubkey,
+    vote_authorize: VoteAuthorize,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+        AccountMeta::new_readonly(*new_authorized_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::AuthorizeChecked(vote_authorize),
         account_metas,
     )
 }
@@ -335,12 +367,32 @@ pub fn process_instruction(
             let to = next_keyed_account(keyed_accounts)?;
             vote_state::withdraw(me, lamports, to, &signers)
         }
+        VoteInstruction::AuthorizeChecked(vote_authorize) => {
+            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            {
+                let clock = next_keyed_account(keyed_accounts)?;
+                let _current_authority = next_keyed_account(keyed_accounts)?;
+                let voter_pubkey = &next_keyed_account(keyed_accounts)?
+                    .signer_key()
+                    .ok_or(InstructionError::MissingRequiredSignature)?;
+                vote_state::authorize(
+                    me,
+                    voter_pubkey,
+                    vote_authorize,
+                    &signers,
+                    &from_keyed_account::<Clock>(clock)?,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::serialize;
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
         process_instruction::MockInvokeContext,
@@ -348,6 +400,10 @@ mod tests {
     };
     use std::cell::RefCell;
     use std::str::FromStr;
+
+    fn create_default_account() -> RefCell<AccountSharedData> {
+        RefCell::new(AccountSharedData::default())
+    }
 
     // these are for 100% coverage in this file
     #[test]
@@ -488,6 +544,107 @@ mod tests {
                 &Pubkey::default()
             )),
             Err(InstructionError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_vote_authorize_checked() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_pubkey = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+
+        // Test with vanilla authorize accounts
+        let mut instruction = authorize_checked(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            VoteAuthorize::Voter,
+        );
+        instruction.accounts = instruction.accounts[0..2].to_vec();
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        let mut instruction = authorize_checked(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            VoteAuthorize::Withdrawer,
+        );
+        instruction.accounts = instruction.accounts[0..2].to_vec();
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Test with non-signing new_authorized_pubkey
+        let mut instruction = authorize_checked(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            VoteAuthorize::Voter,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(new_authorized_pubkey, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        let mut instruction = authorize_checked(
+            &vote_pubkey,
+            &authorized_pubkey,
+            &new_authorized_pubkey,
+            VoteAuthorize::Withdrawer,
+        );
+        instruction.accounts[3] = AccountMeta::new_readonly(new_authorized_pubkey, false);
+        assert_eq!(
+            process_instruction(&instruction),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Test with new_authorized_pubkey signer
+        let vote_account = AccountSharedData::new_ref(100, VoteState::size_of(), &id());
+        let clock_address = sysvar::clock::id();
+        let clock_account = RefCell::new(account::create_account_shared_data_for_test(
+            &Clock::default(),
+        ));
+        let default_authorized_pubkey = Pubkey::default();
+        let authorized_account = create_default_account();
+        let new_authorized_account = create_default_account();
+        let keyed_accounts = vec![
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&default_authorized_pubkey, true, &authorized_account),
+            KeyedAccount::new(&new_authorized_pubkey, true, &new_authorized_account),
+        ];
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &keyed_accounts,
+                &serialize(&VoteInstruction::AuthorizeChecked(VoteAuthorize::Voter)).unwrap(),
+                &mut MockInvokeContext::default()
+            ),
+            Ok(())
+        );
+
+        let keyed_accounts = vec![
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&default_authorized_pubkey, true, &authorized_account),
+            KeyedAccount::new(&new_authorized_pubkey, true, &new_authorized_account),
+        ];
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &keyed_accounts,
+                &serialize(&VoteInstruction::AuthorizeChecked(
+                    VoteAuthorize::Withdrawer
+                ))
+                .unwrap(),
+                &mut MockInvokeContext::default()
+            ),
+            Ok(())
         );
     }
 
