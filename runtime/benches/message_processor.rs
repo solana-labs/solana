@@ -24,13 +24,8 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
             false,
             &Rent::default(),
             &post,
-<<<<<<< HEAD
-            &mut ExecuteDetailsTimings::default()
-=======
             &mut ExecuteDetailsTimings::default(),
-            false,
-            true,
->>>>>>> ccdf93e2b (featurize_policy_update (#18492))
+            true
         ),
         Ok(())
     );
@@ -43,11 +38,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
             &Rent::default(),
             &post,
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-=======
-            false,
             true,
->>>>>>> ccdf93e2b (featurize_policy_update (#18492))
         )
         .unwrap();
     });
@@ -71,11 +62,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
             &Rent::default(),
             &post,
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-=======
-            false,
             true,
->>>>>>> ccdf93e2b (featurize_policy_update (#18492))
         )
         .unwrap();
     });
