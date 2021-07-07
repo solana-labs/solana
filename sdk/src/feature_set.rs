@@ -143,6 +143,10 @@ pub mod dedupe_config_program_signers {
     solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
 }
 
+pub mod deterministic_shred_seed_enabled {
+    solana_sdk::declare_id!("FjSRMpFe7mofQ3WrEMT7Smjk2sME1XdAoRxcv55V6M44");
+}
+
 pub mod verify_tx_signatures_len {
     solana_sdk::declare_id!("EVW9B5xD9FFK7vw1SBARwMA4s5eRo5eKJdKpsBikzKBz");
 }
@@ -187,6 +191,7 @@ lazy_static! {
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
+        (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
