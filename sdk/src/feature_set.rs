@@ -159,6 +159,10 @@ pub mod vote_stake_checked_instructions {
     solana_sdk::declare_id!("BcWknVcgvonN8sL4HE4XFuEVgfcee5MwxWPAgP6ZV89X");
 }
 
+pub mod updated_verify_policy {
+    solana_sdk::declare_id!("k15tVxtkgsmo7dy6iJ56N5hBCxuQAtqRgYwoTDuwbia");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -198,6 +202,7 @@ lazy_static! {
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
         (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
+        (updated_verify_policy::id(), "Update verify policy"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
